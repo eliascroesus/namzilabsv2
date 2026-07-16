@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { withAuth, getSignInUrl, getSignUpUrl } from "@workos-inc/authkit-nextjs";
+import { withAuth } from "@workos-inc/authkit-nextjs";
 
 export default async function Home() {
   const { user } = await withAuth();
-  const [signInUrl, signUpUrl] = await Promise.all([getSignInUrl(), getSignUpUrl()]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -16,10 +15,10 @@ export default async function Home() {
             </Link>
           ) : (
             <>
-              <a className="text-neutral-600 hover:text-neutral-900" href={signInUrl}>
+              <a className="text-neutral-600 hover:text-neutral-900" href="/sign-in">
                 Sign in
               </a>
-              <a className="rounded-md bg-neutral-900 px-4 py-2 font-medium text-white" href={signUpUrl}>
+              <a className="rounded-md bg-neutral-900 px-4 py-2 font-medium text-white" href="/sign-up">
                 Get started
               </a>
             </>
@@ -39,12 +38,12 @@ export default async function Home() {
         <div className="mt-10 flex items-center gap-4">
           <a
             className="rounded-md bg-neutral-900 px-6 py-3 font-medium text-white hover:bg-neutral-800"
-            href={user ? "/admin" : signUpUrl}
+            href={user ? "/admin" : "/sign-up"}
           >
             {user ? "Go to dashboard" : "Start free"}
           </a>
           {!user && (
-            <a className="px-6 py-3 font-medium text-neutral-700 hover:text-neutral-900" href={signInUrl}>
+            <a className="px-6 py-3 font-medium text-neutral-700 hover:text-neutral-900" href="/sign-in">
               Sign in
             </a>
           )}
