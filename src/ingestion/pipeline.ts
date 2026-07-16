@@ -136,9 +136,19 @@ export async function deadLetterRawEvent(
 /**
  * Re-run processing for a raw event (from the DLQ or the admin UI) and mark any
  * matching dead-letter rows resolved. Safe to call repeatedly — dedup protects
- * the events table.
+ * the events table. When `orgId` is supplied, the raw event must belong to that
+ * organization or the replay is refused (tenant isolation).
  */
-export async function replayRawEvent(db: DB, rawEventId: string): Promise<ProcessResult> {
+export async function replayRawEvent(db: DB, rawEventId: string, orgId?: string): Promise<ProcessResult> {
+  if (orgId) {
+    const [raw] = await db
+      .select({ orgId: rawEvents.orgId })
+      .from(rawEvents)
+      .where(eq(rawEvents.id, rawEventId))
+      .limit(1);
+    if (!raw) throw new Error(`raw event ${rawEventId} not found`);
+    if (raw.orgId !== orgId) throw new Error("forbidden: cross-tenant replay");
+  }
   const result = await processRawEvent(db, rawEventId);
   await db
     .update(deadLetter)

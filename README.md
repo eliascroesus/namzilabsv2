@@ -16,7 +16,7 @@ them on one dashboard.
 - **Neon Postgres** via **Drizzle ORM** (migrations in `drizzle/`)
 - **Inngest** for durable execution — retries with exponential backoff, cron,
   step memoization, dead-letter handling (the reliability backbone)
-- **Clerk** for auth + organizations (bypassed automatically when keys are unset)
+- **WorkOS AuthKit** for auth + organizations (the tenant/workspace model)
 - **AES-256-GCM** encryption for all stored third-party credentials/secrets
 - **Vitest + PGlite** (real in-process Postgres) for the test suite
 
@@ -46,14 +46,33 @@ API allows.
 ```
 src/
   db/           schema (canonical `events` + raw + DLQ + sync state), client, migrate
-  lib/          crypto (AES-256-GCM), stable ids, HMAC signatures, http
+  lib/          crypto (AES-256-GCM), stable ids, HMAC signatures, http, auth (WorkOS)
   connectors/   Connector interface + generic Catch-Hook + registry
   ingestion/    raw-store, pipeline (dedup/DLQ/replay), reconcile
   inngest/      durable functions: process-event, reconcile
-  app/          API routes (webhooks, inngest, replay, health) + admin observability
+  components/   app header + organization switcher
+  proxy.ts      Next.js 16 proxy: WorkOS AuthKit + route protection
+  app/          marketing (/ , /terms, /privacy), auth (/callback, /onboarding),
+                admin observability, API routes (webhooks, inngest, replay, health)
 drizzle/        generated SQL migrations
-tests/          27 tests: crypto, ids, signatures, dedup, DLQ+replay, reconciliation
+tests/          28 tests: crypto, ids, signatures, dedup, DLQ+replay, reconciliation, tenant isolation
 ```
+
+## Auth & tenancy (WorkOS AuthKit)
+
+- **Organizations are the tenant/workspace model.** Every domain row carries an
+  `orgId`, and `orgId` is derived **only** from the authenticated WorkOS session
+  (`src/lib/auth.ts`) — never from the browser. Every user-facing query is
+  org-scoped; a cross-tenant replay is refused and covered by a test.
+- **Route protection** lives in `src/proxy.ts`: `/admin`, `/onboarding` and
+  protected `/api/*` routes require a session; the machine endpoints
+  (`/api/webhooks`, `/api/inngest`, `/api/health`) and the marketing/legal pages
+  are public.
+- **Flows:** sign-in / sign-up (hosted AuthKit), sign-out, organization creation
+  (`/onboarding`), and organization switching (header switcher) — all via the
+  WorkOS SDK (`getWorkOS()`) and `switchToOrganization`.
+- Set `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_COOKIE_PASSWORD` (32+ chars),
+  and `NEXT_PUBLIC_WORKOS_REDIRECT_URI` (→ `/callback`). See `.env.example`.
 
 ## Getting started
 
@@ -87,8 +106,10 @@ same payload is a no-op; a forced failure lands in the DLQ and is replayable via
 ## Deploy (Vercel + Neon + Inngest)
 
 1. Create a Neon project; set `DATABASE_URL` (pooled) in Vercel env.
-2. Set `ENCRYPTION_KEY`, and (for prod) `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY`,
-   Clerk keys, `INTERNAL_API_SECRET`.
+2. Set `ENCRYPTION_KEY`, `WORKOS_API_KEY` / `WORKOS_CLIENT_ID` / `WORKOS_COOKIE_PASSWORD` /
+   `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, and (for prod) `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY`.
+   In the WorkOS dashboard, set the redirect URI to `https://<domain>/callback` and the
+   post-sign-out redirect to your home URL.
 3. Run `pnpm db:migrate` against Neon (locally or as a deploy step).
 4. Register the Inngest app pointing at `https://<domain>/api/inngest`. The
    reconciliation cron is scheduled by Inngest — no Vercel Cron needed.

@@ -1,101 +1,123 @@
-import { desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { connections, deliveryLog, deadLetter, events } from "@/db/schema";
+import { requireOrg } from "@/lib/auth";
+import { AppHeader } from "@/components/app-header";
 
 export const dynamic = "force-dynamic";
 
-async function loadData() {
+/**
+ * Every query is scoped to `orgId`, which is derived solely from the
+ * authenticated WorkOS session (see requireOrg). No query runs without the
+ * tenant filter — this is where organization isolation is enforced.
+ */
+async function loadData(orgId: string) {
   const db = getDb();
   const [conns, recentDeliveries, dlq, recentEvents] = await Promise.all([
-    db.select().from(connections).orderBy(desc(connections.createdAt)).limit(50),
-    db.select().from(deliveryLog).orderBy(desc(deliveryLog.createdAt)).limit(25),
-    db.select().from(deadLetter).where(isNull(deadLetter.resolvedAt)).orderBy(desc(deadLetter.createdAt)).limit(25),
-    db.select().from(events).orderBy(desc(events.receivedAt)).limit(10),
+    db.select().from(connections).where(eq(connections.orgId, orgId)).orderBy(desc(connections.createdAt)).limit(50),
+    db
+      .select()
+      .from(deliveryLog)
+      .where(eq(deliveryLog.orgId, orgId))
+      .orderBy(desc(deliveryLog.createdAt))
+      .limit(25),
+    db
+      .select()
+      .from(deadLetter)
+      .where(and(eq(deadLetter.orgId, orgId), isNull(deadLetter.resolvedAt)))
+      .orderBy(desc(deadLetter.createdAt))
+      .limit(25),
+    db.select().from(events).where(eq(events.orgId, orgId)).orderBy(desc(events.receivedAt)).limit(10),
   ]);
   return { conns, recentDeliveries, dlq, recentEvents };
 }
 
 export default async function AdminPage() {
+  const { orgId, userId, auth } = await requireOrg();
+
   let data: Awaited<ReturnType<typeof loadData>> | null = null;
   let error: string | null = null;
   try {
-    data = await loadData();
+    data = await loadData(orgId);
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <h1 className="text-2xl font-semibold tracking-tight">Engine Admin</h1>
-      <p className="mt-1 text-sm text-neutral-500">
-        Internal observability for the ingestion engine: connections, deliveries and the dead-letter queue.
-      </p>
+    <>
+      <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
+      <main className="mx-auto max-w-5xl px-6 py-10">
+        <h1 className="text-2xl font-semibold tracking-tight">Engine Admin</h1>
+        <p className="mt-1 text-sm text-neutral-500">
+          Internal observability for this workspace: connections, deliveries and the dead-letter queue.
+        </p>
 
-      {error && (
-        <div className="mt-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
-          Database not reachable ({error}). Set <code>DATABASE_URL</code> to view live data.
-        </div>
-      )}
+        {error && (
+          <div className="mt-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+            Database not reachable ({error}). Set <code>DATABASE_URL</code> to view live data.
+          </div>
+        )}
 
-      {data && (
-        <div className="mt-8 space-y-10">
-          <Section title={`Connections (${data.conns.length})`}>
-            <Table
-              head={["Source", "Name", "Status", "Last event", "Last error"]}
-              rows={data.conns.map((c) => [
-                c.source,
-                c.name,
-                <Badge key={c.id} status={c.status} />,
-                c.lastEventAt ? new Date(c.lastEventAt).toLocaleString() : "—",
-                c.lastError ?? "—",
-              ])}
-              empty="No connections yet."
-            />
-          </Section>
+        {data && (
+          <div className="mt-8 space-y-10">
+            <Section title={`Connections (${data.conns.length})`}>
+              <Table
+                head={["Source", "Name", "Status", "Last event", "Last error"]}
+                rows={data.conns.map((c) => [
+                  c.source,
+                  c.name,
+                  <Badge key={c.id} status={c.status} />,
+                  c.lastEventAt ? new Date(c.lastEventAt).toLocaleString() : "—",
+                  c.lastError ?? "—",
+                ])}
+                empty="No connections yet."
+              />
+            </Section>
 
-          <Section title={`Dead-letter queue (${data.dlq.length} unresolved)`}>
-            <Table
-              head={["Raw event", "Attempts", "Error", "When"]}
-              rows={data.dlq.map((d) => [
-                d.rawEventId ?? "—",
-                String(d.attempts),
-                d.error,
-                new Date(d.createdAt).toLocaleString(),
-              ])}
-              empty="Dead-letter queue is empty. 🎉"
-            />
-          </Section>
+            <Section title={`Dead-letter queue (${data.dlq.length} unresolved)`}>
+              <Table
+                head={["Raw event", "Attempts", "Error", "When"]}
+                rows={data.dlq.map((d) => [
+                  d.rawEventId ?? "—",
+                  String(d.attempts),
+                  d.error,
+                  new Date(d.createdAt).toLocaleString(),
+                ])}
+                empty="Dead-letter queue is empty. 🎉"
+              />
+            </Section>
 
-          <Section title="Recent deliveries">
-            <Table
-              head={["Status", "Attempt", "Raw event", "Error", "When"]}
-              rows={data.recentDeliveries.map((d) => [
-                <Badge key={d.id} status={d.status} />,
-                String(d.attempt),
-                d.rawEventId ?? "—",
-                d.error ?? "—",
-                new Date(d.createdAt).toLocaleString(),
-              ])}
-              empty="No deliveries yet."
-            />
-          </Section>
+            <Section title="Recent deliveries">
+              <Table
+                head={["Status", "Attempt", "Raw event", "Error", "When"]}
+                rows={data.recentDeliveries.map((d) => [
+                  <Badge key={d.id} status={d.status} />,
+                  String(d.attempt),
+                  d.rawEventId ?? "—",
+                  d.error ?? "—",
+                  new Date(d.createdAt).toLocaleString(),
+                ])}
+                empty="No deliveries yet."
+              />
+            </Section>
 
-          <Section title="Latest canonical events">
-            <Table
-              head={["Source", "Type", "Subject", "Occurred", "Event id"]}
-              rows={data.recentEvents.map((e) => [
-                e.source,
-                e.eventType,
-                e.subject ?? "—",
-                new Date(e.occurredAt).toLocaleString(),
-                e.eventId,
-              ])}
-              empty="No events ingested yet."
-            />
-          </Section>
-        </div>
-      )}
-    </main>
+            <Section title="Latest canonical events">
+              <Table
+                head={["Source", "Type", "Subject", "Occurred", "Event id"]}
+                rows={data.recentEvents.map((e) => [
+                  e.source,
+                  e.eventType,
+                  e.subject ?? "—",
+                  new Date(e.occurredAt).toLocaleString(),
+                  e.eventId,
+                ])}
+                empty="No events ingested yet."
+              />
+            </Section>
+          </div>
+        )}
+      </main>
+    </>
   );
 }
 

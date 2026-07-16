@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { replayRawEvent } from "@/ingestion/pipeline";
+import { getOrgContext } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 /**
- * Replay a raw event through the pipeline (e.g. from the DLQ). Protected by a
- * shared internal secret when INTERNAL_API_SECRET is set.
+ * Replay a raw event through the pipeline (e.g. from the DLQ). Requires an
+ * authenticated session; the raw event must belong to the caller's organization
+ * (enforced in replayRawEvent).
  */
 export async function POST(req: Request) {
-  const required = process.env.INTERNAL_API_SECRET;
-  if (required && req.headers.get("x-internal-secret") !== required) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const ctx = await getOrgContext();
+  if (!ctx) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   let body: { rawEventId?: string };
   try {
@@ -26,9 +26,11 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await replayRawEvent(getDb(), body.rawEventId);
+    const result = await replayRawEvent(getDb(), body.rawEventId, ctx.orgId);
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith("forbidden") ? 403 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }
