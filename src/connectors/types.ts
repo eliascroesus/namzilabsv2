@@ -41,6 +41,20 @@ export type PollResult = {
   nextCursor: string | null;
 };
 
+export type RegisterWebhookArgs = {
+  connectionId: string;
+  webhookUrl: string;
+  credentials: Record<string, unknown>;
+  config?: Record<string, unknown>;
+};
+
+export type RegisterWebhookResult = {
+  /** Signing secret the provider returns (stored encrypted, used to verify). */
+  signingSecret?: string;
+  /** Provider-side subscription id, for later teardown. */
+  externalId?: string;
+};
+
 /**
  * The contract every integration implements. `verifySignature` + `normalize`
  * power the instant (webhook) path; `poll` powers the reconciliation/backfill
@@ -58,4 +72,6 @@ export interface Connector {
   poll?(args: PollArgs): Promise<PollResult>;
   /** Optional: latest N records for the connect-time preview. */
   testFetchLatest?(n: number, args: PollArgs): Promise<CanonicalEvent[]>;
+  /** Optional: auto-create the provider's webhook subscription at connect time. */
+  registerWebhook?(args: RegisterWebhookArgs): Promise<RegisterWebhookResult>;
 }

@@ -54,11 +54,26 @@ describe("dead-letter queue + replay", () => {
     });
     await deadLetterRawEvent(db, raw.id, 6, "transient outage");
 
-    const res = await replayRawEvent(db, raw.id);
+    const res = await replayRawEvent(db, raw.id, "org_test");
     expect(res.inserted).toBe(1);
     expect(await db.select().from(events)).toHaveLength(1);
 
     const unresolved = await db.select().from(deadLetter).where(isNull(deadLetter.resolvedAt));
     expect(unresolved).toHaveLength(0);
+  });
+
+  it("refuses a cross-tenant replay (organization isolation)", async () => {
+    const connectionId = await seedConnection(db, { orgId: "org_a" });
+    const raw = await storeRawEvent(db, {
+      orgId: "org_a",
+      connectionId,
+      source: "webhook",
+      headers: {},
+      payload: { id: "e1", type: "booked" },
+      signatureValid: true,
+    });
+    // A caller from a different org must not be able to replay this event.
+    await expect(replayRawEvent(db, raw.id, "org_b")).rejects.toThrow(/forbidden/);
+    expect(await db.select().from(events)).toHaveLength(0);
   });
 });

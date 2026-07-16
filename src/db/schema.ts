@@ -12,8 +12,10 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * Multi-tenant identity. `organizations.id` / `users.id` are the Clerk ids
- * (strings), so we don't fight Clerk for id ownership.
+ * Multi-tenant identity. `organizations.id` / `users.id` are the WorkOS ids
+ * (strings), so WorkOS remains the source of truth for identity and membership.
+ * `orgId` on every domain table is the WorkOS organization id and is the tenant
+ * isolation key — it is only ever derived from the authenticated session.
  */
 export const organizations = pgTable("organizations", {
   id: text("id").primaryKey(),

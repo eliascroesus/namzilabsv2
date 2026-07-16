@@ -65,7 +65,7 @@ The **one architectural fact that shapes everything:** Vercel serverless functio
 | App framework | **Next.js (App Router, TypeScript)** on Vercel | One repo for UI + API routes; native to Vercel. |
 | Database | **Neon Postgres + Drizzle ORM** | Type-safe schema + migrations; serverless-friendly Postgres. |
 | **Durable execution / queue** | **Inngest** (primary recommendation) — or Upstash QStash + Vercel Cron | Gives us out-of-the-box: retries with backoff, concurrency limits, **scheduled functions (the polling + reconciliation loops)**, step-level idempotency, and a DLQ view. This is the reliability engine; do not hand-roll it. |
-| Auth & multi-tenancy | **Clerk** (Organizations = teams) — or Auth.js | Billion-dollar customers = teams/roles out of the box. |
+| Auth & multi-tenancy | **WorkOS AuthKit** (Organizations = workspaces) | Enterprise-grade SSO/orgs out of the box; `orgId` derived only from the session. |
 | Secret/token storage | **AES-256-GCM encryption at rest** for all OAuth tokens & API keys; key in env/KMS | Never store third-party credentials in plaintext. |
 | UI | **Tailwind + shadcn/ui**, charts via **Tremor / Recharts** | Clean, simple, fast to build; Zapier-level polish. |
 | Validation | **Zod** at every boundary (webhooks, API, forms) | No malformed data ever enters the pipeline. |
@@ -106,14 +106,14 @@ This single table is what makes "one platform, all the data" possible — every 
 ```
 You are building the reliability core of a data-unification SaaS on Next.js (App Router,
 TypeScript) + Neon Postgres (Drizzle ORM) + Inngest (durable execution), deployed on Vercel.
-Multi-tenant with Clerk Organizations. This phase builds NO product UI and NO specific
+Multi-tenant with WorkOS AuthKit Organizations. This phase builds NO product UI and NO specific
 integrations yet — it builds the source-agnostic engine every future integration plugs into.
 Correctness and reliability are the only goals. Do not cut corners on the pipeline.
 
 GOAL: A generic ingestion → normalization → storage engine with Zapier-grade reliability.
 
 Build, in order:
-1. Project scaffold: Next.js + TS + Tailwind + shadcn/ui + Drizzle + Zod + Clerk + Inngest,
+1. Project scaffold: Next.js + TS + Tailwind + shadcn/ui + Drizzle + Zod + WorkOS AuthKit + Inngest,
    with env validation and a health endpoint. Wire Neon + Inngest locally and on Vercel.
 2. Database schema (Drizzle migrations) exactly as: organizations, users, memberships,
    connections, webhook_endpoints, raw_events (IMMUTABLE), events (canonical), sync_state,
@@ -280,7 +280,7 @@ app to a number on the dashboard.
 
 **Decisions to confirm before/while building (defaults chosen so you're not blocked):**
 - **Sendblue vs Brevo** — I assumed Sendblue.co (iMessage/SMS). Confirm.
-- **Auth:** Clerk (recommended, teams built-in) vs Auth.js.
+- **Auth:** WorkOS AuthKit (chosen) — organizations as the workspace/tenant model.
 - **Durable layer:** Inngest (recommended) vs Upstash QStash + Vercel Cron.
 - **v1 connector set:** the six above + Catch Hook — confirm nothing critical is missing.
 
