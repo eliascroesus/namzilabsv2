@@ -1,5 +1,11 @@
 import type { Connector } from "./types";
 import { catchHookConnector } from "./catch-hook";
+import { calendlyConnector } from "./calendly";
+import { closeConnector } from "./close";
+import { instantlyConnector } from "./instantly";
+import { sendblueConnector } from "./sendblue";
+import { googleSheetsConnector } from "./google-sheets";
+import { googleCalendarConnector } from "./google-calendar";
 
 const registry = new Map<string, Connector>();
 
@@ -15,6 +21,15 @@ export function listConnectors(): Connector[] {
   return [...registry.values()];
 }
 
-// Built-in connectors. Prompt 2 registers Calendly / Close / Instantly /
-// Sendblue / Google here — each is purely additive.
-registerConnector(catchHookConnector);
+// Built-in connectors.
+for (const connector of [
+  catchHookConnector,
+  calendlyConnector,
+  closeConnector,
+  instantlyConnector,
+  sendblueConnector,
+  googleSheetsConnector,
+  googleCalendarConnector,
+]) {
+  registerConnector(connector);
+}

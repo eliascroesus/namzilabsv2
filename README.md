@@ -5,10 +5,32 @@ SaaS: connect many external apps, ingest their data live and reliably, normalize
 everything into one canonical event model, then build custom metrics and watch
 them on one dashboard.
 
-> **Status — Phase 1 (Reliability Core) complete.** The source-agnostic
-> ingestion engine is built and verified. Integrations (Phase 2) and the metric
-> builder + dashboard (Phase 3) plug into it without touching the core. See
+> **Status — Phases 1 & 2 complete.** The source-agnostic ingestion engine
+> (Phase 1) and the integrations layer (Phase 2: six connectors + the Zapier-style
+> connect → preview UX) are built and verified. The metric builder + dashboard
+> (Phase 3) plug into the same canonical events with no core changes. See
 > [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) for the full three-phase spec.
+
+## Integrations (Phase 2)
+
+Connectors live in `src/connectors/`, each implementing the `Connector` contract
+(`verifySignature` + `normalize` for the instant path; `poll` / `testFetchLatest`
+for backfill and preview). Adding one is additive — the engine never changes.
+
+| Source | Instant (webhook) | Signature | Poll / backfill | Auto-registers webhook |
+|---|---|---|---|---|
+| **Calendly** | ✔ invitee.*/no-show | HMAC `t=,v1=` over `t.body` | ✔ scheduled events | ✔ (subscription API) |
+| **Close** | ✔ event log | HMAC `close-sig-hash` over `ts+body` | ✔ event log | ✔ (webhook API) |
+| **Instantly** | ✔ email/reply events | optional HMAC `x-instantly-signature` | — | manual URL + secret |
+| **Sendblue** | ✔ status/inbound | shared secret in header | — | manual URL + secret |
+| **Google Sheets** | (Apps Script push, optional) | HMAC | ✔ **poll-primary**, row cursor | n/a (OAuth) |
+| **Google Calendar** | — | — | ✔ incremental `syncToken` | n/a (OAuth) |
+| **Custom Webhook** | ✔ any app | optional HMAC | — | manual URL + secret |
+
+**Connect UX:** `/integrations` (gallery) → connect via API key or Google OAuth →
+webhook auto-registers where supported → `/connections/[id]` shows health, the
+inbound URL + signing secret, a **"Preview latest records"** pull, **Re-sync now**
+(fires reconciliation), and Disconnect. All connection data is org-scoped.
 
 ## Stack
 
@@ -47,15 +69,17 @@ API allows.
 src/
   db/           schema (canonical `events` + raw + DLQ + sync state), client, migrate
   lib/          crypto (AES-256-GCM), stable ids, HMAC signatures, http, auth (WorkOS)
-  connectors/   Connector interface + generic Catch-Hook + registry
+  connectors/   Connector interface + 6 connectors + catch-hook + catalog + registry
   ingestion/    raw-store, pipeline (dedup/DLQ/replay), reconcile
   inngest/      durable functions: process-event, reconcile
   components/   app header + organization switcher
   proxy.ts      Next.js 16 proxy: WorkOS AuthKit + route protection
   app/          marketing (/ , /terms, /privacy), auth (/callback, /onboarding),
-                admin observability, API routes (webhooks, inngest, replay, health)
+                integrations gallery, connection detail, admin observability,
+                API routes (webhooks, inngest, replay, health, google oauth)
 drizzle/        generated SQL migrations
-tests/          28 tests: crypto, ids, signatures, dedup, DLQ+replay, reconciliation, tenant isolation
+tests/          49 tests: crypto, ids, signatures, dedup, DLQ+replay, reconciliation,
+                tenant isolation, per-connector signature/normalize/poll
 ```
 
 ## Auth & tenancy (WorkOS AuthKit)
@@ -116,7 +140,10 @@ same payload is a no-op; a forced failure lands in the DLQ and is replayable via
 
 ## What's next (from `docs/BUILD_PLAN.md`)
 
-- **Phase 2 — Integrations:** Calendly, Close, Instantly, Sendblue, Google
-  Sheets/Calendar connectors + the Zapier-style connect → preview-latest UX.
-  Each is an additive `Connector` module; the core doesn't change.
-- **Phase 3 — Product:** metric builder + live dashboard over the canonical events.
+- **Phase 3 — Product:** the no-code metric builder + live dashboard over the
+  canonical `events` table (counts, sums, rates, funnels), with bottleneck and
+  goal-vs-target views. Adding it requires no connector or engine changes.
+
+Phase 2 note: connector poll/webhook logic is unit-tested against each provider's
+documented payloads; exercising the live OAuth/webhook round-trips needs real
+provider credentials (see `.env.example`).
