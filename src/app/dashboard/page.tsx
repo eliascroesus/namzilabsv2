@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { connections, deadLetter, events } from "@/db/schema";
+import { connections, deadLetter, events, flowResults } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { FunnelView } from "@/components/funnel-view";
+import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
 import { listMetrics, type Metric } from "@/lib/metrics/store";
 import { parseDefinition } from "@/lib/metrics/types";
 import {
@@ -76,6 +77,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     }),
   );
 
+  // Published-flow tiles come from stored (materialized) results — no live recompute.
+  let flowTiles: FlowResultRow[] = [];
+  try {
+    flowTiles = await db
+      .select({
+        flowId: flowResults.flowId,
+        outputNodeId: flowResults.outputNodeId,
+        tile: flowResults.tile,
+        status: flowResults.status,
+        computedAt: flowResults.computedAt,
+      })
+      .from(flowResults)
+      .where(eq(flowResults.orgId, orgId));
+  } catch {
+    // flow_results may not exist before migration 0002 is applied; ignore.
+  }
+  const hasTiles = tiles.length > 0 || flowTiles.length > 0;
+
   const qs = (over: Record<string, string>) => {
     const p = new URLSearchParams();
     p.set("range", over.range ?? rangeKey);
@@ -131,8 +150,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </div>
         )}
 
-        {/* Metric tiles */}
-        {tiles.length === 0 ? (
+        {/* Metric tiles: materialized flow outputs + legacy metrics */}
+        {!hasTiles ? (
           <div className="mt-8 rounded-lg border border-dashed border-neutral-300 p-10 text-center">
             <p className="text-neutral-600">No metrics yet.</p>
             <p className="mt-1 text-sm text-neutral-500">
@@ -156,6 +175,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </div>
         ) : (
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            {flowTiles.map((row) => (
+              <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} />
+            ))}
             {tiles.map((tile) => (
               <MetricTile key={tile.metric.id} tile={tile} />
             ))}

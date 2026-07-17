@@ -161,10 +161,27 @@ same payload is a no-op; a forced failure lands in the DLQ and is replayable via
    reconciliation cron is scheduled by Inngest — no Vercel Cron needed.
 5. Run `docs/SMOKE_TEST.md` against the deploy.
 
-## What's next
+## Visual flow builder (in progress)
 
-- **Metric materialization:** move on-read compute to an incremental
-  `metric_values` table (Inngest) once event volume warrants it.
+Replacing the form-based metric/funnel builders with a drag-and-drop node canvas
+(App → Filter → Aggregate → Output, plus advanced nodes). Delivered in milestones —
+see `.claude/plans/` and the code under `src/lib/flow/`.
+
+- **M1 (done):** `flows` / `flow_versions` / `flow_results` tables; the flow graph
+  types + **validation** (`src/lib/flow/validate.ts`); the execution **engine**
+  (`src/lib/flow/engine.ts`) for the core App/Filter/Aggregate/Output nodes over
+  synced `events`; **draft vs immutable published version** store
+  (`src/lib/flow/store.ts`); a **materializer** (`src/lib/flow/materialize.ts` +
+  Inngest) that stores each Output's latest result in `flow_results`; and the
+  dashboard rendering those **stored** results (fast — no live recompute) alongside
+  existing metric tiles. Editing a draft never changes the live dashboard until
+  republish.
+- **Next:** M2 canvas (React Flow) + per-node live testing + variable picker; M3
+  advanced nodes (Time, Formula, Combine, Paths, Group, Formatter); M4 sync system
+  (historical backfill, statuses, versioned/safe full re-sync).
+
+## Other follow-ups
+
 - **Live webhook round-trips:** connector poll/webhook logic is unit-tested
   against each provider's documented payloads; exercising the real OAuth/webhook
   flows needs live provider credentials (see `.env.example` and `docs/SMOKE_TEST.md`).

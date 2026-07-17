@@ -60,6 +60,11 @@ export const connections = pgTable(
     config: jsonb("config").$type<Record<string, unknown>>().default({}).notNull(),
     lastError: text("last_error"),
     lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+    // Data freshness for the canvas + integrations: importing | live | synced | outdated | error
+    syncStatus: text("sync_status").notNull().default("synced"),
+    // Incremented by a full re-sync; events are tagged with the generation they were last seen in.
+    syncGeneration: integer("sync_generation").notNull().default(0),
+    historicalSyncedAt: timestamp("historical_synced_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -126,11 +131,16 @@ export const events = pgTable(
     currency: text("currency"),
     properties: jsonb("properties").$type<Record<string, unknown>>().default({}).notNull(),
     rawEventId: uuid("raw_event_id"),
+    // Full-sync generation this row was last seen in (for versioned/safe re-sync).
+    syncGeneration: integer("sync_generation").notNull().default(0),
+    // Soft-delete: set when a full re-sync no longer sees a previously-synced record.
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("events_event_id_uq").on(t.eventId),
     index("events_org_type_idx").on(t.orgId, t.eventType),
     index("events_occurred_idx").on(t.occurredAt),
+    index("events_conn_idx").on(t.connectionId),
   ],
 );
 
@@ -201,4 +211,76 @@ export const metrics = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index("metrics_org_idx").on(t.orgId)],
+);
+
+/**
+ * A visual metrics flow (the canvas document). `draftGraph` is the editable
+ * working copy (autosaved). Publishing snapshots it into an immutable
+ * `flow_versions` row; the live dashboard only ever reads the published version,
+ * so draft edits never change dashboard output until republish.
+ */
+export const flows = pgTable(
+  "flows",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    draftGraph: jsonb("draft_graph")
+      .$type<Record<string, unknown>>()
+      .default({ nodes: [], edges: [] })
+      .notNull(),
+    status: text("status").notNull().default("draft"), // draft | published
+    publishedVersion: integer("published_version"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("flows_org_idx").on(t.orgId)],
+);
+
+/** Immutable published snapshots of a flow graph. */
+export const flowVersions = pgTable(
+  "flow_versions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    flowId: uuid("flow_id")
+      .notNull()
+      .references(() => flows.id, { onDelete: "cascade" }),
+    orgId: text("org_id").notNull(),
+    version: integer("version").notNull(),
+    graph: jsonb("graph").$type<Record<string, unknown>>().notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("flow_versions_flow_version_uq").on(t.flowId, t.version),
+    index("flow_versions_org_idx").on(t.orgId),
+  ],
+);
+
+/**
+ * Materialized latest result for each Output node of a published flow. The
+ * dashboard reads these (fast) instead of recomputing flows on every load; a
+ * materializer refreshes them on publish, on relevant new data, on a schedule,
+ * or on manual refresh.
+ */
+export const flowResults = pgTable(
+  "flow_results",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    flowId: uuid("flow_id")
+      .notNull()
+      .references(() => flows.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    outputNodeId: text("output_node_id").notNull(),
+    tile: jsonb("tile").$type<Record<string, unknown>>(),
+    status: text("status").notNull().default("stale"), // fresh | stale | computing | error
+    error: text("error"),
+    computedAt: timestamp("computed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("flow_results_flow_output_uq").on(t.flowId, t.outputNodeId),
+    index("flow_results_org_idx").on(t.orgId),
+  ],
 );
