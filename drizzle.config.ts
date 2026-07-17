@@ -5,6 +5,10 @@ export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./drizzle",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgresql://user:pass@localhost:5432/db",
+    // Use the direct (non-pooled) connection for migrations when available.
+    url:
+      process.env.DATABASE_MIGRATION_URL ??
+      process.env.DATABASE_URL ??
+      "postgresql://user:pass@localhost:5432/db",
   },
 });

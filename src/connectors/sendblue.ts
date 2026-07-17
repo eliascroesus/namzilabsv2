@@ -3,7 +3,14 @@ import { safeEqual } from "@/lib/signatures";
 import { hashId } from "@/lib/ids";
 
 /** Candidate headers Sendblue may place the configured signing secret in. */
-const SECRET_HEADERS = ["sendblue-signing-secret", "sb-signing-secret", "x-sendblue-secret", "signing-secret"];
+const SECRET_HEADERS = [
+  "sendblue-signing-secret",
+  "sb-signing-secret",
+  "sb-secret",
+  "x-sendblue-secret",
+  "x-sendblue-signing-secret",
+  "signing-secret",
+];
 
 /**
  * Sendblue (iMessage/SMS). Webhook-primary source. When a signing secret is
@@ -30,19 +37,16 @@ export const sendblueConnector: Connector = {
     // webhooks always include a `status`.
     const isInbound = body["is_outbound"] === false || (status === "" && str(body["date_received"]) !== null);
     const eventType = statusToType(status, isInbound);
-    const naturalId = str(body["message_handle"]) ?? str(body["handle"]) ?? undefined;
+    // Sendblue docs: dedupe on message_handle.
+    const naturalId = str(body["message_handle"]) ?? str(body["handle"]) ?? str(body["message_id"]) ?? undefined;
     const eventId = naturalId
       ? `sendblue:${ctx.connectionId}:${eventType}:${naturalId}`
       : hashId(`sendblue:${ctx.connectionId}`, body);
-    return [
-      {
-        eventId,
-        eventType,
-        subject: str(body["to_number"]) ?? str(body["from_number"]) ?? null,
-        occurredAt: parseDate(str(body["date_sent"]) ?? str(body["date_received"])) ?? new Date(),
-        properties: body,
-      },
-    ];
+    const subject =
+      str(body["to_number"]) ?? str(body["from_number"]) ?? str(body["number"]) ?? str(body["phone"]) ?? null;
+    const occurredAt =
+      parseDate(str(body["date_sent"]) ?? str(body["date_received"]) ?? str(body["date_updated"])) ?? new Date();
+    return [{ eventId, eventType, subject, occurredAt, properties: body }];
   },
 };
 

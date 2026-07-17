@@ -43,7 +43,7 @@ export const instantlyConnector: Connector = {
         eventId,
         eventType: EVENT_TYPE_MAP[eventType] ?? eventType,
         subject: str(body["lead_email"]) ?? null,
-        occurredAt: parseDate(str(body["timestamp"])) ?? new Date(),
+        occurredAt: parseDate(str(body["timestamp"]) ?? str(body["timestamp_created"])) ?? new Date(),
         properties: body,
       },
     ];

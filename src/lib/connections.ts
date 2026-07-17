@@ -6,7 +6,7 @@ import { connections } from "@/db/schema";
 import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
 import { getConnector } from "@/connectors/registry";
 import { catalogEntry } from "@/connectors/catalog";
-import { refreshGoogleToken } from "@/lib/google-oauth";
+import { getConnectionCredentials } from "@/lib/credentials";
 import type { CanonicalEvent } from "@/connectors/types";
 
 export type Connection = typeof connections.$inferSelect;
@@ -133,30 +133,6 @@ export function getSigningSecret(conn: Connection): string | null {
   }
 }
 
-/**
- * Decrypt credentials, refreshing (and persisting) an expired Google OAuth
- * access token when needed, so poll/preview always use a valid token.
- */
-export async function getFreshCredentials(conn: Connection): Promise<Record<string, unknown>> {
-  const key = getEncryptionKey();
-  const creds: Record<string, unknown> = conn.credentialsEncrypted
-    ? JSON.parse(decrypt(conn.credentialsEncrypted, key))
-    : {};
-
-  const isGoogle = conn.source === "gsheets" || conn.source === "gcal";
-  const expiresAt = typeof creds.expiresAt === "number" ? creds.expiresAt : 0;
-  if (isGoogle && typeof creds.refreshToken === "string" && expiresAt < Date.now() + 60_000) {
-    const refreshed = await refreshGoogleToken(creds.refreshToken);
-    const merged = { ...creds, ...refreshed };
-    await getDb()
-      .update(connections)
-      .set({ credentialsEncrypted: encrypt(JSON.stringify(merged), key), updatedAt: new Date() })
-      .where(eq(connections.id, conn.id));
-    return merged;
-  }
-  return creds;
-}
-
 /** The connect-time "preview latest records" feature. */
 export async function previewLatest(orgId: string, id: string, n = 3): Promise<CanonicalEvent[]> {
   const conn = await getConnection(orgId, id);
@@ -165,7 +141,7 @@ export async function previewLatest(orgId: string, id: string, n = 3): Promise<C
   if (!connector?.testFetchLatest) {
     throw new Error("Preview isn't available for this source (it's webhook-only — send a test event instead).");
   }
-  const credentials = await getFreshCredentials(conn);
+  const credentials = await getConnectionCredentials(getDb(), conn);
   return connector.testFetchLatest(n, {
     connectionId: conn.id,
     cursor: null,

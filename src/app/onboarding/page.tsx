@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function OnboardingPage() {
   const auth = await withAuth({ ensureSignedIn: true });
-  if (auth.organizationId) redirect("/admin");
+  if (auth.organizationId) redirect("/dashboard");
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">

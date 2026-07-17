@@ -28,7 +28,7 @@ export async function createOrganizationAction(formData: FormData): Promise<void
     // DATABASE_URL may be unset in some environments; WorkOS remains source of truth.
   }
 
-  await switchToOrganization(org.id, { returnTo: "/admin" });
+  await switchToOrganization(org.id, { returnTo: "/dashboard" });
 }
 
 /**
@@ -38,7 +38,7 @@ export async function createOrganizationAction(formData: FormData): Promise<void
 export async function switchOrgAction(formData: FormData): Promise<void> {
   const organizationId = String(formData.get("organizationId") ?? "");
   if (!organizationId) return;
-  await switchToOrganization(organizationId, { returnTo: "/admin" });
+  await switchToOrganization(organizationId, { returnTo: "/dashboard" });
 }
 
 /** End the session and return to the marketing home. */

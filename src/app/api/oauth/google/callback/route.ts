@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { getOrgContext } from "@/lib/auth";
 import { exchangeGoogleCode } from "@/lib/google-oauth";
 import { createConnection } from "@/lib/connections";
+import { parseOAuthState, isValidOAuthState, OAUTH_STATE_COOKIE } from "@/lib/oauth-state";
 
 export const runtime = "nodejs";
 
 /**
  * Google OAuth callback. The organization is derived ONLY from the authenticated
- * session — the browser cannot influence which org the connection lands in.
+ * session — the browser cannot influence which org the connection lands in — and
+ * the state nonce must match the session cookie set at the start of the flow.
  */
 export async function GET(req: Request) {
   const ctx = await getOrgContext();
@@ -15,9 +18,22 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
-  if (!code) return NextResponse.redirect(new URL("/integrations?error=oauth_denied", req.url));
+  const stateParam = url.searchParams.get("state");
 
-  const source = decodeSource(url.searchParams.get("state"));
+  const jar = await cookies();
+  const cookieNonce = jar.get(OAUTH_STATE_COOKIE)?.value;
+
+  const clearStateCookie = (res: NextResponse) => {
+    res.cookies.set(OAUTH_STATE_COOKIE, "", { path: "/", maxAge: 0 });
+    return res;
+  };
+
+  if (!code) return clearStateCookie(NextResponse.redirect(new URL("/integrations?error=oauth_denied", req.url)));
+  if (!isValidOAuthState(stateParam, cookieNonce)) {
+    return clearStateCookie(NextResponse.redirect(new URL("/integrations?error=state_mismatch", req.url)));
+  }
+
+  const { source } = parseOAuthState(stateParam);
 
   try {
     const tokens = await exchangeGoogleCode(code);
@@ -29,17 +45,8 @@ export async function GET(req: Request) {
       credentials: tokens as unknown as Record<string, unknown>,
       config: {},
     });
-    return NextResponse.redirect(new URL(`/connections/${conn.id}`, req.url));
+    return clearStateCookie(NextResponse.redirect(new URL(`/connections/${conn.id}`, req.url)));
   } catch {
-    return NextResponse.redirect(new URL("/integrations?error=oauth_exchange", req.url));
-  }
-}
-
-function decodeSource(state: string | null): "gsheets" | "gcal" {
-  try {
-    const parsed = JSON.parse(Buffer.from(state ?? "", "base64url").toString("utf8"));
-    return parsed?.source === "gcal" ? "gcal" : "gsheets";
-  } catch {
-    return "gsheets";
+    return clearStateCookie(NextResponse.redirect(new URL("/integrations?error=oauth_exchange", req.url)));
   }
 }

@@ -11,7 +11,7 @@ import { authkit, handleAuthkitHeaders } from "@workos-inc/authkit-nextjs";
  * legal pages ("/", "/terms", "/privacy") are matched (so the header can render
  * auth-aware) but are not in the protected list, so anonymous users see them.
  */
-const PROTECTED_PAGE_PREFIXES = ["/admin", "/onboarding", "/app", "/integrations", "/connections"];
+const PROTECTED_PAGE_PREFIXES = ["/dashboard", "/onboarding", "/app", "/integrations", "/connections"];
 const PROTECTED_API_PREFIXES = ["/api/replay", "/api/reconcile", "/api/connections", "/api/org", "/api/oauth"];
 
 function isProtected(pathname: string): boolean {

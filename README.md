@@ -75,7 +75,7 @@ src/
   components/   app header + organization switcher
   proxy.ts      Next.js 16 proxy: WorkOS AuthKit + route protection
   app/          marketing (/ , /terms, /privacy), auth (/callback, /onboarding),
-                integrations gallery, connection detail, admin observability,
+                integrations gallery, connection detail, dashboard,
                 API routes (webhooks, inngest, replay, health, google oauth)
 drizzle/        generated SQL migrations
 tests/          49 tests: crypto, ids, signatures, dedup, DLQ+replay, reconciliation,
@@ -88,7 +88,7 @@ tests/          49 tests: crypto, ids, signatures, dedup, DLQ+replay, reconcilia
   `orgId`, and `orgId` is derived **only** from the authenticated WorkOS session
   (`src/lib/auth.ts`) — never from the browser. Every user-facing query is
   org-scoped; a cross-tenant replay is refused and covered by a test.
-- **Route protection** lives in `src/proxy.ts`: `/admin`, `/onboarding` and
+- **Route protection** lives in `src/proxy.ts`: `/dashboard`, `/onboarding` and
   protected `/api/*` routes require a session; the machine endpoints
   (`/api/webhooks`, `/api/inngest`, `/api/health`) and the marketing/legal pages
   are public.
@@ -104,7 +104,7 @@ tests/          49 tests: crypto, ids, signatures, dedup, DLQ+replay, reconcilia
 pnpm install
 cp .env.example .env          # fill in DATABASE_URL + ENCRYPTION_KEY at minimum
 pnpm db:generate              # (already generated; regenerate after schema edits)
-pnpm db:migrate               # apply migrations to your Neon database
+pnpm db:migrate               # apply migrations (uses DATABASE_MIGRATION_URL, the DIRECT Neon URL)
 pnpm dev                      # Next.js
 pnpm inngest:dev              # Inngest dev server (separate terminal)
 ```
@@ -123,20 +123,22 @@ pnpm build       # production build
 To exercise the live path end-to-end: create a `webhook`-source connection,
 then POST JSON to `/api/webhooks/<connectionId>`. With a signing secret set,
 sign the body with `X-Namzilabs-Signature: sha256=<hex hmac>`. The event appears,
-deduped, in the canonical `events` table (visible at `/admin`). Replaying the
+deduped, in the canonical `events` table (visible at `/dashboard`). Replaying the
 same payload is a no-op; a forced failure lands in the DLQ and is replayable via
 `/api/replay`.
 
 ## Deploy (Vercel + Neon + Inngest)
 
-1. Create a Neon project; set `DATABASE_URL` (pooled) in Vercel env.
+1. Create a Neon project; set `DATABASE_URL` (**pooled**, host has `-pooler`) and
+   `DATABASE_MIGRATION_URL` (**direct**, no `-pooler`) in Vercel env.
 2. Set `ENCRYPTION_KEY`, `WORKOS_API_KEY` / `WORKOS_CLIENT_ID` / `WORKOS_COOKIE_PASSWORD` /
-   `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, and (for prod) `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY`.
-   In the WorkOS dashboard, set the redirect URI to `https://<domain>/callback` and the
-   post-sign-out redirect to your home URL.
-3. Run `pnpm db:migrate` against Neon (locally or as a deploy step).
+   `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, and
+   (for prod) `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY`. In the WorkOS dashboard, set the
+   redirect URI to `https://<domain>/callback` and the post-sign-out redirect to your home URL.
+3. Run `pnpm db:migrate` (uses `DATABASE_MIGRATION_URL`), locally or as a deploy step.
 4. Register the Inngest app pointing at `https://<domain>/api/inngest`. The
    reconciliation cron is scheduled by Inngest — no Vercel Cron needed.
+5. Run `docs/SMOKE_TEST.md` against the deploy.
 
 ## What's next (from `docs/BUILD_PLAN.md`)
 

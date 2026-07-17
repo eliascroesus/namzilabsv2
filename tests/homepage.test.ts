@@ -21,6 +21,6 @@ describe("homepage (logged out)", () => {
     const html = renderToStaticMarkup(element);
     expect(html).toContain('href="/sign-in"');
     expect(html).toContain('href="/sign-up"');
-    expect(html).not.toContain('href="/admin"');
+    expect(html).not.toContain('href="/dashboard"');
   });
 });

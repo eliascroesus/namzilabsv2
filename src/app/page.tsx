@@ -10,7 +10,7 @@ export default async function Home() {
         <span className="text-lg font-semibold tracking-tight">Namzilabs</span>
         <nav className="flex items-center gap-4 text-sm">
           {user ? (
-            <Link className="rounded-md bg-neutral-900 px-4 py-2 font-medium text-white" href="/admin">
+            <Link className="rounded-md bg-neutral-900 px-4 py-2 font-medium text-white" href="/dashboard">
               Dashboard
             </Link>
           ) : (
@@ -38,7 +38,7 @@ export default async function Home() {
         <div className="mt-10 flex items-center gap-4">
           <a
             className="rounded-md bg-neutral-900 px-6 py-3 font-medium text-white hover:bg-neutral-800"
-            href={user ? "/admin" : "/sign-up"}
+            href={user ? "/dashboard" : "/sign-up"}
           >
             {user ? "Go to dashboard" : "Start free"}
           </a>
