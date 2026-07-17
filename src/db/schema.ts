@@ -180,3 +180,25 @@ export const deadLetter = pgTable(
   },
   (t) => [index("dead_letter_conn_idx").on(t.connectionId)],
 );
+
+/**
+ * User-defined metric definitions (no-code). `definition` holds the full builder
+ * config (source/event_type/filters/aggregation, or funnel stages), validated by
+ * the Zod schema in src/lib/metrics/types.ts. Metrics are computed on-read over
+ * the canonical `events` table, always org-scoped.
+ */
+export const metrics = pgTable(
+  "metrics",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind").notNull(), // aggregate | funnel
+    display: text("display").notNull().default("number"), // number | trend | bar | funnel
+    unit: text("unit"),
+    target: numeric("target"),
+    definition: jsonb("definition").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("metrics_org_idx").on(t.orgId)],
+);

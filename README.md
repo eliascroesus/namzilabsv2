@@ -5,11 +5,29 @@ SaaS: connect many external apps, ingest their data live and reliably, normalize
 everything into one canonical event model, then build custom metrics and watch
 them on one dashboard.
 
-> **Status — Phases 1 & 2 complete.** The source-agnostic ingestion engine
-> (Phase 1) and the integrations layer (Phase 2: six connectors + the Zapier-style
-> connect → preview UX) are built and verified. The metric builder + dashboard
-> (Phase 3) plug into the same canonical events with no core changes. See
+> **Status — Phases 1–3 complete.** The source-agnostic ingestion engine
+> (Phase 1), the integrations layer (Phase 2: six connectors + the Zapier-style
+> connect → preview UX), and the no-code metric builder + live dashboard
+> (Phase 3) are built and verified. See
 > [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) for the full three-phase spec.
+
+## Metrics & dashboard (Phase 3)
+
+A no-code builder over the canonical `events` table (`src/lib/metrics/`):
+
+- **Aggregate metrics** — `count` / `sum(value)` / `count distinct`, optional
+  filter rules (columns or `properties.*`, AND/OR), and time-bucketed **trends**.
+- **Funnels** — ordered stages counting distinct subjects, with per-stage
+  conversion and the **biggest drop-off (bottleneck)** flagged.
+- **Builder UX** — `/dashboard/metrics/new` and `/dashboard/funnels/new` show a
+  **live preview** (value + latest matching records) from your real data before saving.
+- **Dashboard** (`/dashboard`) — metric tiles, trend bars, funnel views, **goal
+  vs. target** bars, a date-range + source filter across the board, and
+  **drill-down** to the underlying real events.
+
+Metrics compute **on-read** over the org-scoped, indexed `events` table (correct
+and simple); incremental materialization into a `metric_values` table is the
+next scale optimization. Every query is tenant-isolated.
 
 ## Integrations (Phase 2)
 
@@ -68,18 +86,21 @@ API allows.
 ```
 src/
   db/           schema (canonical `events` + raw + DLQ + sync state), client, migrate
-  lib/          crypto (AES-256-GCM), stable ids, HMAC signatures, http, auth (WorkOS)
+  lib/          crypto, ids, signatures, http, auth (WorkOS), credentials,
+                oauth-state, connections, google-oauth, metrics/ (types, compute, store)
   connectors/   Connector interface + 6 connectors + catch-hook + catalog + registry
   ingestion/    raw-store, pipeline (dedup/DLQ/replay), reconcile
   inngest/      durable functions: process-event, reconcile
-  components/   app header + organization switcher
+  components/   app header, organization switcher, funnel view
   proxy.ts      Next.js 16 proxy: WorkOS AuthKit + route protection
   app/          marketing (/ , /terms, /privacy), auth (/callback, /onboarding),
-                integrations gallery, connection detail, dashboard,
-                API routes (webhooks, inngest, replay, health, google oauth)
+                integrations gallery, connection detail, dashboard + metric/funnel
+                builders + drill-down, API routes (webhooks, inngest, replay,
+                health, google oauth)
 drizzle/        generated SQL migrations
-tests/          49 tests: crypto, ids, signatures, dedup, DLQ+replay, reconciliation,
-                tenant isolation, per-connector signature/normalize/poll
+tests/          69 tests: crypto, ids, signatures, dedup, DLQ+replay, reconciliation
+                (incl. credential decrypt), tenant isolation, per-connector
+                signature/normalize/poll, oauth-state, metric compute + funnels
 ```
 
 ## Auth & tenancy (WorkOS AuthKit)
@@ -140,12 +161,10 @@ same payload is a no-op; a forced failure lands in the DLQ and is replayable via
    reconciliation cron is scheduled by Inngest — no Vercel Cron needed.
 5. Run `docs/SMOKE_TEST.md` against the deploy.
 
-## What's next (from `docs/BUILD_PLAN.md`)
+## What's next
 
-- **Phase 3 — Product:** the no-code metric builder + live dashboard over the
-  canonical `events` table (counts, sums, rates, funnels), with bottleneck and
-  goal-vs-target views. Adding it requires no connector or engine changes.
-
-Phase 2 note: connector poll/webhook logic is unit-tested against each provider's
-documented payloads; exercising the live OAuth/webhook round-trips needs real
-provider credentials (see `.env.example`).
+- **Metric materialization:** move on-read compute to an incremental
+  `metric_values` table (Inngest) once event volume warrants it.
+- **Live webhook round-trips:** connector poll/webhook logic is unit-tested
+  against each provider's documented payloads; exercising the real OAuth/webhook
+  flows needs live provider credentials (see `.env.example` and `docs/SMOKE_TEST.md`).
