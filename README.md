@@ -176,9 +176,15 @@ see `.claude/plans/` and the code under `src/lib/flow/`.
   dashboard rendering those **stored** results (fast — no live recompute) alongside
   existing metric tiles. Editing a draft never changes the live dashboard until
   republish.
-- **Next:** M2 canvas (React Flow) + per-node live testing + variable picker; M3
-  advanced nodes (Time, Formula, Combine, Paths, Group, Formatter); M4 sync system
-  (historical backfill, statuses, versioned/safe full re-sync).
+- **M2 (done):** the React Flow canvas at `/dashboard/flows` — drag/connect/zoom/pan,
+  minimap, the App/Filter/Aggregate/Output nodes, a config panel (Setup/Configure/
+  Test), **per-node live testing on real synced data** (records-in/out + samples),
+  a **variable picker** (fields from previous nodes), autosave-to-draft, undo/redo,
+  and **Publish** (validates → snapshots an immutable version → materializes tiles).
+  The dashboard's primary "New flow" opens the canvas; the classic form builder
+  remains as a secondary option.
+- **Next:** M3 advanced nodes (Time, Formula, Combine, Paths, Group, Formatter);
+  M4 sync system (historical backfill, statuses, versioned/safe full re-sync).
 
 ## Other follow-ups
 

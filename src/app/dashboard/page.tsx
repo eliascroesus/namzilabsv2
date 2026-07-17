@@ -109,11 +109,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <div className="flex gap-2">
-            <Link href="/dashboard/metrics/new" className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
-              New metric
+            <Link href="/dashboard/flows" className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+              New flow
             </Link>
-            <Link href="/dashboard/funnels/new" className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
-              New funnel
+            <Link href="/dashboard/metrics/new" className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
+              Classic metric
             </Link>
           </div>
         </div>
@@ -165,9 +165,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 </>
               ) : (
                 <>
-                  Build your first metric, e.g. &ldquo;Booked leads this week&rdquo;.{" "}
-                  <Link href="/dashboard/metrics/new" className="text-blue-600 hover:underline">
-                    New metric
+                  Build your first metric visually, e.g. &ldquo;Booked leads this week&rdquo;.{" "}
+                  <Link href="/dashboard/flows" className="text-blue-600 hover:underline">
+                    New flow
                   </Link>
                 </>
               )}
