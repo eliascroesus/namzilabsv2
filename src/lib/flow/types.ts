@@ -93,6 +93,102 @@ export const OutputConfigSchema = z.object({
 });
 export type OutputConfig = z.infer<typeof OutputConfigSchema>;
 
+// ---------- Time (advanced) ----------
+export const TIME_PRESETS = [
+  "today",
+  "yesterday",
+  "this_week",
+  "last_week",
+  "this_month",
+  "last_month",
+  "last_7_days",
+  "last_30_days",
+  "last_90_days",
+  "last_365_days",
+] as const;
+export const TimeConfigSchema = z.object({
+  dateField: z.string().default("occurredAt"),
+  mode: z.enum(["preset", "between", "rolling"]).default("preset"),
+  preset: z.enum(TIME_PRESETS).default("last_30_days"),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  days: z.number().int().positive().default(30),
+});
+export type TimeConfig = z.infer<typeof TimeConfigSchema>;
+
+// ---------- Formula (advanced) ----------
+export const FORMULA_OPS = [
+  "add",
+  "subtract",
+  "multiply",
+  "divide",
+  "percentage",
+  "percent_change",
+  "difference",
+  "ratio",
+  "average",
+] as const;
+export const FormulaConfigSchema = z.object({
+  op: z.enum(FORMULA_OPS).default("percentage"),
+});
+export type FormulaConfig = z.infer<typeof FormulaConfigSchema>;
+
+// ---------- Combine (advanced) ----------
+export const CombineConfigSchema = z.object({
+  mode: z.enum(["stack", "dedupe", "match"]).default("stack"),
+  identityField: z.string().default("subject"),
+  keep: z.enum(["all", "matched", "unmatched"]).default("all"),
+  sourceWins: z.enum(["first", "last"]).default("first"),
+});
+export type CombineConfig = z.infer<typeof CombineConfigSchema>;
+
+// ---------- Group / Category (advanced) ----------
+export const GroupConfigSchema = z.object({
+  mode: z.enum(["field", "categories"]).default("field"),
+  field: z.string().default("source"),
+  aggregation: z.enum(["count", "sum", "count_distinct"]).default("count"),
+  valueField: z.string().default("value"),
+  distinctField: z.string().default("subject"),
+  categories: z.array(z.object({ label: z.string().min(1), filters: FilterConfigSchema })).default([]),
+  fallbackLabel: z.string().default("Other"),
+});
+export type GroupConfig = z.infer<typeof GroupConfigSchema>;
+
+// ---------- Formatter (advanced) ----------
+export const FORMATTER_OPS = [
+  "to_number",
+  "to_text",
+  "round",
+  "uppercase",
+  "lowercase",
+  "trim",
+  "normalize_email",
+  "normalize_phone",
+  "replace",
+  "default",
+  "multiply",
+  "divide",
+] as const;
+export const FormatterConfigSchema = z.object({
+  field: z.string().default("value"),
+  op: z.enum(FORMATTER_OPS).default("round"),
+  decimals: z.number().int().min(0).max(6).default(2),
+  find: z.string().optional(),
+  replaceWith: z.string().optional(),
+  defaultValue: z.string().optional(),
+  factor: z.number().optional(),
+  outputField: z.string().optional(),
+});
+export type FormatterConfig = z.infer<typeof FormatterConfigSchema>;
+
+// ---------- Paths (advanced) ----------
+export const PathsConfigSchema = z.object({
+  paths: z.array(z.object({ id: z.string().min(1), label: z.string().min(1), filters: FilterConfigSchema })).default([]),
+  fallbackId: z.string().default("fallback"),
+  fallbackLabel: z.string().default("Fallback"),
+});
+export type PathsConfig = z.infer<typeof PathsConfigSchema>;
+
 // ---------- Graph ----------
 export const FlowNodeSchema = z.object({
   id: z.string().min(1),

@@ -1,20 +1,24 @@
-import { AppConfigSchema, CORE_NODE_TYPES, type FlowGraph, type FlowNode } from "./types";
+import { AppConfigSchema, FormulaConfigSchema, PathsConfigSchema, GroupConfigSchema, NODE_TYPES, type FlowGraph, type FlowNode } from "./types";
 
 export type ValidationIssue = { nodeId?: string; message: string };
 
 type ShapeKind = "dataset" | "value" | "none";
 
-/** The output shape kind a core node produces. */
+/** Nodes that emit a record set. */
+const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths"]);
+/** Nodes that emit a computed value/series/grouped. */
+const VALUE_PRODUCERS = new Set(["aggregate", "formula", "group"]);
+/** Nodes that consume record sets. */
+const DATASET_CONSUMERS = new Set(["filter", "aggregate", "time", "formatter", "group", "paths", "combine"]);
+/** Nodes that consume computed values. */
+const VALUE_CONSUMERS = new Set(["formula"]);
+
+const NEEDS_TWO_INPUTS = new Set(["subtract", "difference", "divide", "ratio", "percentage", "percent_change"]);
+
 function outputKind(node: FlowNode): ShapeKind {
-  switch (node.type) {
-    case "app":
-    case "filter":
-      return "dataset";
-    case "aggregate":
-      return "value";
-    default:
-      return "none"; // output is terminal
-  }
+  if (DATASET_PRODUCERS.has(node.type)) return "dataset";
+  if (VALUE_PRODUCERS.has(node.type)) return "value";
+  return "none";
 }
 
 /**
@@ -26,18 +30,14 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
 
-  if (graph.nodes.length === 0) {
-    return [{ message: "The flow is empty. Add an App and an Output node." }];
-  }
+  if (graph.nodes.length === 0) return [{ message: "The flow is empty. Add an App and an Output node." }];
 
-  // Only the core node types are executable today.
   for (const n of graph.nodes) {
-    if (!(CORE_NODE_TYPES as readonly string[]).includes(n.type)) {
-      issues.push({ nodeId: n.id, message: `The "${n.type}" node isn't available yet.` });
+    if (!(NODE_TYPES as readonly string[]).includes(n.type)) {
+      issues.push({ nodeId: n.id, message: `Unknown node type "${n.type}".` });
     }
   }
 
-  // Edges must reference existing nodes.
   for (const e of graph.edges) {
     if (!byId.has(e.source)) issues.push({ message: `An edge references a missing node (${e.source}).` });
     if (!byId.has(e.target)) issues.push({ message: `An edge references a missing node (${e.target}).` });
@@ -49,20 +49,21 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
     incoming.get(e.target)!.push(e.source);
   }
 
-  // Cycle detection.
   if (hasCycle(graph)) issues.push({ message: "The flow has a loop; connections must flow in one direction." });
 
-  // Per-node checks.
   for (const node of graph.nodes) {
     const ins = incoming.get(node.id) ?? [];
+
     if (node.type === "app") {
       if (ins.length > 0) issues.push({ nodeId: node.id, message: "App nodes can't have an input." });
       const cfg = AppConfigSchema.safeParse(node.data.config ?? {});
       if (!cfg.success || (!cfg.data.connectionId && !cfg.data.source)) {
         issues.push({ nodeId: node.id, message: "App node needs a connected account or a source." });
       }
+      continue;
     }
-    if (node.type === "filter" || node.type === "aggregate") {
+
+    if (DATASET_CONSUMERS.has(node.type)) {
       if (ins.length === 0) issues.push({ nodeId: node.id, message: `${cap(node.type)} node needs a connected input.` });
       for (const srcId of ins) {
         const src = byId.get(srcId);
@@ -71,13 +72,45 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
         }
       }
     }
-    if (node.type === "output") {
-      if (ins.length === 0) issues.push({ nodeId: node.id, message: "Output node needs a connected input." });
+
+    if (VALUE_CONSUMERS.has(node.type)) {
+      if (ins.length === 0) issues.push({ nodeId: node.id, message: `${cap(node.type)} node needs a connected number.` });
+      for (const srcId of ins) {
+        const src = byId.get(srcId);
+        if (src && outputKind(src) !== "value") {
+          issues.push({ nodeId: node.id, message: `${cap(node.type)} needs numbers as input (connect Aggregate nodes).` });
+        }
+      }
+      if (node.type === "formula") {
+        const cfg = FormulaConfigSchema.safeParse(node.data.config ?? {});
+        if (cfg.success && NEEDS_TWO_INPUTS.has(cfg.data.op) && ins.length < 2) {
+          issues.push({ nodeId: node.id, message: `Formula "${cfg.data.op}" needs two connected numbers.` });
+        }
+      }
+    }
+
+    if (node.type === "paths") {
+      const cfg = PathsConfigSchema.safeParse(node.data.config ?? {});
+      if (!cfg.success || cfg.data.paths.length === 0) {
+        issues.push({ nodeId: node.id, message: "Paths node needs at least one path with conditions." });
+      }
+    }
+
+    if (node.type === "group") {
+      const cfg = GroupConfigSchema.safeParse(node.data.config ?? {});
+      if (cfg.success && cfg.data.mode === "categories" && cfg.data.categories.length === 0) {
+        issues.push({ nodeId: node.id, message: "Group node needs at least one category." });
+      }
+    }
+
+    if (node.type === "output" && ins.length === 0) {
+      issues.push({ nodeId: node.id, message: "Output node needs a connected input." });
     }
   }
 
-  const outputs = graph.nodes.filter((n) => n.type === "output");
-  if (outputs.length === 0) issues.push({ message: "Add an Output node to save a result to the dashboard." });
+  if (graph.nodes.filter((n) => n.type === "output").length === 0) {
+    issues.push({ message: "Add an Output node to save a result to the dashboard." });
+  }
 
   return issues;
 }

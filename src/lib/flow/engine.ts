@@ -8,10 +8,17 @@ import {
   FilterConfigSchema,
   AggregateConfigSchema,
   OutputConfigSchema,
+  TimeConfigSchema,
+  FormulaConfigSchema,
+  CombineConfigSchema,
+  GroupConfigSchema,
+  FormatterConfigSchema,
+  PathsConfigSchema,
   type FlowGraph,
   type FlowNode,
   type FilterConfig,
   type AggregateConfig,
+  type GroupConfig,
   type Shape,
   type Dataset,
   type Scalar,
@@ -26,6 +33,8 @@ export type NodeExecOk = {
   status: "ok";
   nodeType: string;
   shape: Shape;
+  /** Extra outputs keyed by source-handle id (Paths uses this). */
+  outputs?: Record<string, Shape>;
   recordsIn: number;
   recordsOut: number;
   sample: FlowRecord[];
@@ -43,6 +52,8 @@ export type NodeExecErr = {
 };
 export type NodeExec = NodeExecOk | NodeExecErr;
 
+type ResolvedInput = { shape: Shape; exec: NodeExecOk };
+
 export type RunResult = {
   nodes: Map<string, NodeExec>;
   outputs: Array<{ nodeId: string; tile: TileSpec }>;
@@ -50,20 +61,15 @@ export type RunResult = {
 
 const APP_LOAD_CAP = 20_000;
 
-/**
- * Execute a flow graph over the org's synced events. Topologically ordered;
- * when `untilNodeId` is set, only that node and its ancestors run (so testing a
- * single node doesn't touch unrelated branches).
- */
 export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNodeId?: string } = {}): Promise<RunResult> {
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
-  const incoming = new Map<string, string[]>(); // node -> source node ids (in edge order)
+  const incomingBy = new Map<string, FlowGraph["edges"]>();
   for (const e of graph.edges) {
-    if (!incoming.has(e.target)) incoming.set(e.target, []);
-    incoming.get(e.target)!.push(e.source);
+    if (!incomingBy.has(e.target)) incomingBy.set(e.target, []);
+    incomingBy.get(e.target)!.push(e);
   }
 
-  const wanted = opts.untilNodeId ? ancestorsOf(opts.untilNodeId, incoming) : new Set(graph.nodes.map((n) => n.id));
+  const wanted = opts.untilNodeId ? ancestorsOf(opts.untilNodeId, incomingBy) : new Set(graph.nodes.map((n) => n.id));
   const order = topoSort(graph).filter((id) => wanted.has(id));
 
   const nodes = new Map<string, NodeExec>();
@@ -72,8 +78,20 @@ export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNod
   for (const id of order) {
     const node = nodeById.get(id);
     if (!node) continue;
-    const inputExecs = (incoming.get(id) ?? []).map((src) => nodes.get(src)).filter(Boolean) as NodeExec[];
-    const exec = await execNode(ctx, node, inputExecs);
+
+    const inputs: ResolvedInput[] = [];
+    let inputError = false;
+    for (const e of incomingBy.get(id) ?? []) {
+      const se = nodes.get(e.source);
+      if (!se || se.status !== "ok") {
+        inputError = true;
+        continue;
+      }
+      const shape = e.sourceHandle && se.outputs?.[e.sourceHandle] ? se.outputs[e.sourceHandle] : se.shape;
+      inputs.push({ shape, exec: se });
+    }
+
+    const exec = await execNode(ctx, node, inputs, inputError);
     nodes.set(id, exec);
     if (node.type === "output" && exec.status === "ok" && exec.tile) {
       outputs.push({ nodeId: id, tile: exec.tile });
@@ -83,7 +101,7 @@ export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNod
   return { nodes, outputs };
 }
 
-async function execNode(ctx: EngineCtx, node: FlowNode, inputs: NodeExec[]): Promise<NodeExec> {
+async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[], inputError: boolean): Promise<NodeExec> {
   const err = (message: string): NodeExecErr => ({
     status: "error",
     nodeType: node.type,
@@ -94,14 +112,28 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: NodeExec[]): Pro
     outputSchema: [],
   });
 
+  if (node.type !== "app" && inputError) return err("An input node has an error — fix it first.");
+
   try {
     switch (node.type) {
       case "app":
         return await execApp(ctx, node);
       case "filter":
         return execFilter(node, inputs);
+      case "time":
+        return execTime(node, inputs);
+      case "formatter":
+        return execFormatter(node, inputs);
+      case "combine":
+        return execCombine(node, inputs);
+      case "paths":
+        return execPaths(node, inputs);
+      case "group":
+        return execGroup(node, inputs);
       case "aggregate":
         return execAggregate(node, inputs);
+      case "formula":
+        return execFormula(node, inputs);
       case "output":
         return execOutput(node, inputs);
       default:
@@ -128,30 +160,229 @@ async function execApp(ctx: EngineCtx, node: FlowNode): Promise<NodeExec> {
     .limit(APP_LOAD_CAP);
 
   const records = rows.map(eventToRecord);
-  return {
-    status: "ok",
-    nodeType: "app",
-    shape: { kind: "dataset", records },
-    recordsIn: 0,
-    recordsOut: records.length,
-    sample: records.slice(0, 3),
-    outputSchema: inferSchema(records),
-  };
+  return datasetExec("app", records, 0);
 }
 
 // ---------- Filter ----------
-function execFilter(node: FlowNode, inputs: NodeExec[]): NodeExec {
+function execFilter(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = FilterConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Filter");
   const passed = input.records.filter((r) => evalRules(r, cfg));
+  return datasetExec("filter", passed, input.records.length);
+}
+
+// ---------- Time ----------
+function execTime(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = TimeConfigSchema.parse(node.data.config ?? {});
+  const input = requireDataset(inputs, "Time");
+  const { start, end } = timeWindow(cfg);
+  const passed = input.records.filter((r) => {
+    const t = dateMs(getField(r, cfg.dateField));
+    return t != null && t >= start && t <= end;
+  });
+  return datasetExec("time", passed, input.records.length);
+}
+
+// ---------- Formatter ----------
+function execFormatter(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = FormatterConfigSchema.parse(node.data.config ?? {});
+  const input = requireDataset(inputs, "Formatter");
+  const out = cfg.outputField || cfg.field;
+  const records = input.records.map((r) => {
+    const copy: FlowRecord = { ...r, properties: { ...r.properties } };
+    setField(copy, out, formatValue(getField(r, cfg.field), cfg));
+    return copy;
+  });
+  return datasetExec("formatter", records, input.records.length);
+}
+
+// ---------- Combine ----------
+function execCombine(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = CombineConfigSchema.parse(node.data.config ?? {});
+  const datasets = inputs.map((i) => {
+    if (i.shape.kind !== "dataset") throw new Error("Combine only accepts record inputs.");
+    return i.shape.records;
+  });
+  const totalIn = datasets.reduce((a, d) => a + d.length, 0);
+
+  let records: FlowRecord[];
+  if (cfg.mode === "stack") {
+    records = datasets.flat();
+  } else if (cfg.mode === "dedupe") {
+    records = dedupeBy(datasets.flat(), cfg.identityField, cfg.sourceWins);
+  } else {
+    records = matchJoin(datasets, cfg.identityField, cfg.keep, cfg.sourceWins);
+  }
+  return datasetExec("combine", records, totalIn);
+}
+
+// ---------- Paths ----------
+function execPaths(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = PathsConfigSchema.parse(node.data.config ?? {});
+  const input = requireDataset(inputs, "Paths");
+  const outputs: Record<string, Shape> = {};
+  const assigned = new Set<FlowRecord>();
+  for (const p of cfg.paths) {
+    const matched = input.records.filter((r) => {
+      const ok = evalRules(r, p.filters);
+      if (ok) assigned.add(r);
+      return ok;
+    });
+    outputs[p.id] = { kind: "dataset", records: matched };
+  }
+  outputs[cfg.fallbackId] = { kind: "dataset", records: input.records.filter((r) => !assigned.has(r)) };
+
   return {
     status: "ok",
-    nodeType: "filter",
-    shape: { kind: "dataset", records: passed },
+    nodeType: "paths",
+    shape: { kind: "dataset", records: input.records },
+    outputs,
     recordsIn: input.records.length,
-    recordsOut: passed.length,
-    sample: passed.slice(0, 3),
-    outputSchema: inferSchema(passed),
+    recordsOut: input.records.length,
+    sample: input.records.slice(0, 3),
+    outputSchema: inferSchema(input.records),
+  };
+}
+
+// ---------- Group ----------
+function execGroup(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = GroupConfigSchema.parse(node.data.config ?? {});
+  const input = requireDataset(inputs, "Group");
+  const groups = cfg.mode === "field" ? groupByField(input.records, cfg) : groupByCategories(input.records, cfg);
+  return {
+    status: "ok",
+    nodeType: "group",
+    shape: { kind: "grouped", groups },
+    recordsIn: input.records.length,
+    recordsOut: groups.length,
+    sample: input.records.slice(0, 3),
+    outputSchema: [],
+  };
+}
+
+// ---------- Aggregate ----------
+function execAggregate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = AggregateConfigSchema.parse(node.data.config ?? {});
+  const input = requireDataset(inputs, "Aggregate");
+  const shape = aggregate(input.records, cfg);
+  const recordsOut = shape.kind === "scalar" ? 1 : shape.kind === "series" ? shape.series.length : shape.groups.length;
+  return {
+    status: "ok",
+    nodeType: "aggregate",
+    shape,
+    recordsIn: input.records.length,
+    recordsOut,
+    sample: input.records.slice(0, 3),
+    outputSchema: [],
+  };
+}
+
+// ---------- Formula ----------
+function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = FormulaConfigSchema.parse(node.data.config ?? {});
+  const values: number[] = [];
+  for (const i of inputs) {
+    if (i.shape.kind !== "scalar") throw new Error("Formula inputs must be single numbers (connect Aggregate nodes).");
+    values.push(i.shape.value);
+  }
+  if (values.length === 0) throw new Error("Formula needs at least one connected number.");
+  const a = values[0];
+  const b = values[1] ?? 0;
+  const divGuard = (x: number, y: number) => {
+    if (y === 0) throw new Error("Division by zero — check the denominator input.");
+    return x / y;
+  };
+  let value: number;
+  switch (cfg.op) {
+    case "add":
+      value = values.reduce((x, y) => x + y, 0);
+      break;
+    case "average":
+      value = values.reduce((x, y) => x + y, 0) / values.length;
+      break;
+    case "subtract":
+    case "difference":
+      value = a - b;
+      break;
+    case "multiply":
+      value = values.reduce((x, y) => x * y, 1);
+      break;
+    case "divide":
+    case "ratio":
+      value = divGuard(a, b);
+      break;
+    case "percentage":
+      value = divGuard(a, b) * 100;
+      break;
+    case "percent_change":
+      value = divGuard(a - b, b) * 100;
+      break;
+  }
+  return {
+    status: "ok",
+    nodeType: "formula",
+    shape: { kind: "scalar", value: round(value) },
+    recordsIn: values.length,
+    recordsOut: 1,
+    sample: [],
+    outputSchema: [],
+  };
+}
+
+// ---------- Output ----------
+function execOutput(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = OutputConfigSchema.parse(node.data.config ?? {});
+  const input = inputs[0];
+  if (!input) {
+    return { status: "error", nodeType: "output", error: "Output needs one connected input.", recordsIn: 0, recordsOut: 0, sample: [], outputSchema: [] };
+  }
+
+  const tile: TileSpec = {
+    name: cfg.name,
+    description: cfg.description,
+    viz: cfg.viz,
+    format: cfg.format,
+    unit: cfg.unit,
+    currency: cfg.currency,
+    precision: cfg.precision,
+    target: cfg.target,
+    sample: input.exec.sample,
+  };
+  const shape = input.shape;
+  if (shape.kind === "scalar") tile.value = shape.value;
+  else if (shape.kind === "series") {
+    tile.series = shape.series;
+    tile.value = round(shape.series.reduce((a, b) => a + b.value, 0));
+  } else if (shape.kind === "grouped") {
+    tile.groups = shape.groups;
+    tile.value = round(shape.groups.reduce((a, b) => a + b.value, 0));
+  } else {
+    tile.value = shape.records.length;
+    tile.sample = shape.records.slice(0, 5);
+  }
+
+  return {
+    status: "ok",
+    nodeType: "output",
+    shape: input.shape,
+    recordsIn: input.exec.recordsOut,
+    recordsOut: 1,
+    sample: input.exec.sample,
+    outputSchema: [],
+    tile,
+  };
+}
+
+// ---------- shared executors helpers ----------
+function datasetExec(nodeType: string, records: FlowRecord[], recordsIn: number): NodeExecOk {
+  return {
+    status: "ok",
+    nodeType,
+    shape: { kind: "dataset", records },
+    recordsIn,
+    recordsOut: records.length,
+    sample: records.slice(0, 3),
+    outputSchema: inferSchema(records),
   };
 }
 
@@ -175,7 +406,7 @@ function evalRule(rec: FlowRecord, rule: { field: string; op: string; value: str
     case "not_contains":
       return !str.toLowerCase().includes(v.toLowerCase());
     case "gt":
-      return num(raw) != null && Number(v) != null && (num(raw) as number) > Number(v);
+      return num(raw) != null && (num(raw) as number) > Number(v);
     case "lt":
       return num(raw) != null && (num(raw) as number) < Number(v);
     case "gte":
@@ -196,36 +427,17 @@ function evalRule(rec: FlowRecord, rule: { field: string; op: string; value: str
       return dateMs(raw) != null && (dateMs(raw) as number) > (dateMs(v) ?? -Infinity);
     case "between": {
       const t = dateMs(raw);
-      const a = dateMs(v);
-      const b = dateMs(rule.value2 ?? "");
-      return t != null && a != null && b != null && t >= a && t <= b;
+      const lo = dateMs(v);
+      const hi = dateMs(rule.value2 ?? "");
+      return t != null && lo != null && hi != null && t >= lo && t <= hi;
     }
     default:
       return false;
   }
 }
 
-// ---------- Aggregate ----------
-function execAggregate(node: FlowNode, inputs: NodeExec[]): NodeExec {
-  const cfg = AggregateConfigSchema.parse(node.data.config ?? {});
-  const input = requireDataset(inputs, "Aggregate");
-  const shape = aggregate(input.records, cfg);
-  const recordsOut = shape.kind === "scalar" ? 1 : shape.kind === "series" ? shape.series.length : shape.groups.length;
-  return {
-    status: "ok",
-    nodeType: "aggregate",
-    shape,
-    recordsIn: input.records.length,
-    recordsOut,
-    sample: input.records.slice(0, 3),
-    outputSchema: [],
-  };
-}
-
 function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series | Grouped {
-  if (!cfg.groupBy) {
-    return { kind: "scalar", value: computeAgg(records, cfg) };
-  }
+  if (!cfg.groupBy) return { kind: "scalar", value: computeAgg(records, cfg.aggregation, cfg.field, cfg.distinctField) };
   if (cfg.groupBy.type === "time") {
     const unit = cfg.groupBy.unit;
     const buckets = new Map<string, FlowRecord[]>();
@@ -234,12 +446,11 @@ function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(r);
     }
-    const series = [...buckets.entries()]
-      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-      .map(([bucket, recs]) => ({ bucket, value: computeAgg(recs, cfg) }));
-    return { kind: "series", series };
+    return {
+      kind: "series",
+      series: [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([bucket, recs]) => ({ bucket, value: computeAgg(recs, cfg.aggregation, cfg.field, cfg.distinctField) })),
+    };
   }
-  // group by field
   const field = cfg.groupBy.field;
   const groups = new Map<string, FlowRecord[]>();
   for (const r of records) {
@@ -247,101 +458,210 @@ function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
-  return {
-    kind: "grouped",
-    groups: [...groups.entries()]
-      .map(([label, recs]) => ({ label, value: computeAgg(recs, cfg) }))
-      .sort((a, b) => b.value - a.value),
-  };
+  return { kind: "grouped", groups: [...groups.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.field, cfg.distinctField) })).sort((a, b) => b.value - a.value) };
 }
 
-function computeAgg(records: FlowRecord[], cfg: AggregateConfig): number {
-  switch (cfg.aggregation) {
+function computeAgg(records: FlowRecord[], aggregation: string, field: string, distinctField: string): number {
+  switch (aggregation) {
     case "count":
       return records.length;
     case "count_distinct": {
       const set = new Set<string>();
       for (const r of records) {
-        const v = getField(r, cfg.distinctField);
+        const v = getField(r, distinctField);
         if (v != null && v !== "") set.add(String(v));
       }
       return set.size;
     }
-    case "sum":
-    case "avg":
-    case "min":
-    case "max": {
-      const nums = records.map((r) => num(getField(r, cfg.field))).filter((n): n is number => n != null);
+    default: {
+      const nums = records.map((r) => num(getField(r, field))).filter((n): n is number => n != null);
       if (nums.length === 0) return 0;
-      if (cfg.aggregation === "sum") return round(nums.reduce((a, b) => a + b, 0));
-      if (cfg.aggregation === "avg") return round(nums.reduce((a, b) => a + b, 0) / nums.length);
-      if (cfg.aggregation === "min") return Math.min(...nums);
+      if (aggregation === "sum") return round(nums.reduce((a, b) => a + b, 0));
+      if (aggregation === "avg") return round(nums.reduce((a, b) => a + b, 0) / nums.length);
+      if (aggregation === "min") return Math.min(...nums);
       return Math.max(...nums);
     }
   }
 }
 
-// ---------- Output ----------
-function execOutput(node: FlowNode, inputs: NodeExec[]): NodeExec {
-  const cfg = OutputConfigSchema.parse(node.data.config ?? {});
-  const input = inputs[0];
-  if (!input || input.status !== "ok") {
-    return {
-      status: "error",
-      nodeType: "output",
-      error: "Output needs one connected input.",
-      recordsIn: 0,
-      recordsOut: 0,
-      sample: [],
-      outputSchema: [],
-    };
+function groupByField(records: FlowRecord[], cfg: GroupConfig): Array<{ label: string; value: number }> {
+  const groups = new Map<string, FlowRecord[]>();
+  for (const r of records) {
+    const key = String(getField(r, cfg.field) ?? "—");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
   }
+  return [...groups.entries()]
+    .map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.valueField, cfg.distinctField) }))
+    .sort((a, b) => b.value - a.value);
+}
 
-  const tile: TileSpec = {
-    name: cfg.name,
-    description: cfg.description,
-    viz: cfg.viz,
-    format: cfg.format,
-    unit: cfg.unit,
-    currency: cfg.currency,
-    precision: cfg.precision,
-    target: cfg.target,
-    sample: input.sample,
-  };
-  const shape = input.shape;
-  if (shape.kind === "scalar") tile.value = shape.value;
-  else if (shape.kind === "series") {
-    tile.series = shape.series;
-    tile.value = round(shape.series.reduce((a, b) => a + b.value, 0));
-  } else if (shape.kind === "grouped") {
-    tile.groups = shape.groups;
-    tile.value = round(shape.groups.reduce((a, b) => a + b.value, 0));
-  } else {
-    tile.value = shape.records.length;
-    tile.sample = shape.records.slice(0, 5);
+function groupByCategories(records: FlowRecord[], cfg: GroupConfig): Array<{ label: string; value: number }> {
+  const buckets = new Map<string, FlowRecord[]>();
+  for (const c of cfg.categories) buckets.set(c.label, []);
+  buckets.set(cfg.fallbackLabel, []);
+  for (const r of records) {
+    const cat = cfg.categories.find((c) => evalRules(r, c.filters));
+    buckets.get(cat ? cat.label : cfg.fallbackLabel)!.push(r);
   }
+  return [...buckets.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.valueField, cfg.distinctField) }));
+}
 
+function dedupeBy(records: FlowRecord[], idField: string, sourceWins: "first" | "last"): FlowRecord[] {
+  const map = new Map<string, FlowRecord>();
+  for (const r of records) {
+    const key = String(getField(r, idField) ?? "");
+    if (key === "") continue;
+    if (!map.has(key)) map.set(key, r);
+    else if (sourceWins === "last") map.set(key, mergeRecords(map.get(key)!, r));
+    else map.set(key, mergeRecords(r, map.get(key)!));
+  }
+  return [...map.values()];
+}
+
+function matchJoin(datasets: FlowRecord[][], idField: string, keep: "all" | "matched" | "unmatched", sourceWins: "first" | "last"): FlowRecord[] {
+  const base = datasets[0] ?? [];
+  const others = datasets.slice(1).flat();
+  const otherKeys = new Map<string, FlowRecord[]>();
+  for (const r of others) {
+    const k = String(getField(r, idField) ?? "");
+    if (!k) continue;
+    if (!otherKeys.has(k)) otherKeys.set(k, []);
+    otherKeys.get(k)!.push(r);
+  }
+  const out: FlowRecord[] = [];
+  for (const r of base) {
+    const k = String(getField(r, idField) ?? "");
+    const matches = k ? (otherKeys.get(k) ?? []) : [];
+    const hasMatch = matches.length > 0;
+    if (keep === "matched" && !hasMatch) continue;
+    if (keep === "unmatched" && hasMatch) continue;
+    let merged = r;
+    if (hasMatch && keep !== "unmatched") {
+      for (const m of matches) merged = sourceWins === "last" ? mergeRecords(merged, m) : mergeRecords(m, merged);
+    }
+    out.push(merged);
+  }
+  return out;
+}
+
+/** winner's non-null fields/properties take precedence. */
+function mergeRecords(winner: FlowRecord, loser: FlowRecord): FlowRecord {
   return {
-    status: "ok",
-    nodeType: "output",
-    shape: input.shape,
-    recordsIn: input.recordsOut,
-    recordsOut: 1,
-    sample: input.sample,
-    outputSchema: [],
-    tile,
+    ...loser,
+    ...winner,
+    subject: winner.subject ?? loser.subject,
+    value: winner.value ?? loser.value,
+    properties: { ...loser.properties, ...winner.properties },
   };
 }
 
-// ---------- helpers ----------
-function requireDataset(inputs: NodeExec[], nodeName: string): Dataset {
+function formatValue(raw: unknown, cfg: { op: string; decimals: number; find?: string; replaceWith?: string; defaultValue?: string; factor?: number }): unknown {
+  const str = raw == null ? "" : String(raw);
+  switch (cfg.op) {
+    case "to_number":
+      return num(raw) ?? 0;
+    case "to_text":
+      return str;
+    case "round": {
+      const n = num(raw);
+      return n == null ? raw : Number(n.toFixed(cfg.decimals));
+    }
+    case "uppercase":
+      return str.toUpperCase();
+    case "lowercase":
+      return str.toLowerCase();
+    case "trim":
+      return str.trim();
+    case "normalize_email":
+      return str.trim().toLowerCase();
+    case "normalize_phone":
+      return str.replace(/[^\d]/g, "");
+    case "replace":
+      return cfg.find != null ? str.split(cfg.find).join(cfg.replaceWith ?? "") : str;
+    case "default":
+      return raw == null || str === "" ? (cfg.defaultValue ?? "") : raw;
+    case "multiply": {
+      const n = num(raw);
+      return n == null ? raw : round(n * (cfg.factor ?? 1));
+    }
+    case "divide": {
+      const n = num(raw);
+      return n == null || (cfg.factor ?? 0) === 0 ? raw : round(n / (cfg.factor ?? 1));
+    }
+    default:
+      return raw;
+  }
+}
+
+function setField(rec: FlowRecord, path: string, value: unknown): void {
+  switch (path) {
+    case "subject":
+      rec.subject = value == null ? null : String(value);
+      break;
+    case "value":
+      rec.value = typeof value === "number" ? value : num(value);
+      break;
+    case "source":
+      rec.source = String(value);
+      break;
+    case "eventType":
+      rec.eventType = String(value);
+      break;
+    default: {
+      const key = path.startsWith("properties.") ? path.slice("properties.".length) : path;
+      rec.properties[key] = value;
+    }
+  }
+}
+
+// ---------- time windows ----------
+function timeWindow(cfg: { mode: string; preset: string; from?: string; to?: string; days: number }): { start: number; end: number } {
+  const now = Date.now();
+  if (cfg.mode === "between") return { start: dateMs(cfg.from ?? "") ?? 0, end: dateMs(cfg.to ?? "") ?? now };
+  if (cfg.mode === "rolling") return { start: now - cfg.days * 86_400_000, end: now };
+
+  const d = new Date();
+  const startOfDay = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const dow = (d.getUTCDay() + 6) % 7; // Monday=0
+  const startOfWeek = startOfDay - dow * 86_400_000;
+  const startOfMonth = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+  const day = 86_400_000;
+  switch (cfg.preset) {
+    case "today":
+      return { start: startOfDay, end: now };
+    case "yesterday":
+      return { start: startOfDay - day, end: startOfDay - 1 };
+    case "this_week":
+      return { start: startOfWeek, end: now };
+    case "last_week":
+      return { start: startOfWeek - 7 * day, end: startOfWeek - 1 };
+    case "this_month":
+      return { start: startOfMonth, end: now };
+    case "last_month": {
+      const startPrev = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1);
+      return { start: startPrev, end: startOfMonth - 1 };
+    }
+    case "last_7_days":
+      return { start: now - 7 * day, end: now };
+    case "last_30_days":
+      return { start: now - 30 * day, end: now };
+    case "last_90_days":
+      return { start: now - 90 * day, end: now };
+    case "last_365_days":
+      return { start: now - 365 * day, end: now };
+    default:
+      return { start: 0, end: now };
+  }
+}
+
+// ---------- generic helpers ----------
+function requireDataset(inputs: ResolvedInput[], nodeName: string): Dataset {
   const input = inputs[0];
   if (!input) throw new Error(`${nodeName} needs a connected input.`);
-  if (input.status !== "ok") throw new Error(`${nodeName}'s input has an error.`);
   if (input.shape.kind !== "dataset") throw new Error(`${nodeName} expects records, not a ${input.shape.kind}.`);
   return input.shape;
 }
-
 function num(v: unknown): number | null {
   return toNumber(v);
 }
@@ -368,8 +688,8 @@ function bucketKey(iso: string, unit: "day" | "week" | "month" | "quarter" | "ye
     case "quarter":
       return `${y}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
     case "week": {
-      const week = isoWeek(d);
-      return `${week.year}-W${String(week.week).padStart(2, "0")}`;
+      const w = isoWeek(d);
+      return `${w.year}-W${String(w.week).padStart(2, "0")}`;
     }
     case "day":
     default:
@@ -386,7 +706,6 @@ function isoWeek(date: Date): { year: number; week: number } {
   return { year: d.getUTCFullYear(), week };
 }
 
-/** Kahn topological sort; ignores nodes in cycles (validation catches those). */
 function topoSort(graph: FlowGraph): string[] {
   const indeg = new Map<string, number>();
   const adj = new Map<string, string[]>();
@@ -412,15 +731,15 @@ function topoSort(graph: FlowGraph): string[] {
   return order;
 }
 
-function ancestorsOf(target: string, incoming: Map<string, string[]>): Set<string> {
+function ancestorsOf(target: string, incoming: Map<string, FlowGraph["edges"]>): Set<string> {
   const seen = new Set<string>([target]);
   const stack = [target];
   while (stack.length) {
     const id = stack.pop()!;
-    for (const src of incoming.get(id) ?? []) {
-      if (!seen.has(src)) {
-        seen.add(src);
-        stack.push(src);
+    for (const e of incoming.get(id) ?? []) {
+      if (!seen.has(e.source)) {
+        seen.add(e.source);
+        stack.push(e.source);
       }
     }
   }

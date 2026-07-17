@@ -19,7 +19,7 @@ import {
   type Connection,
   type NodeProps,
 } from "@xyflow/react";
-import { FLOW_FILTER_OPS, AGGREGATIONS, TIME_UNITS, VIZ_TYPES, type NodeType } from "@/lib/flow/types";
+import { FLOW_FILTER_OPS, AGGREGATIONS, TIME_UNITS, VIZ_TYPES, TIME_PRESETS, FORMULA_OPS, FORMATTER_OPS, type NodeType } from "@/lib/flow/types";
 import {
   saveDraftAction,
   testNodeAction,
@@ -37,6 +37,9 @@ type NodeData = {
   [k: string]: unknown;
 };
 type FNode = Node<NodeData>;
+type Rule = { field: string; op: string; value: string; value2?: string };
+type Filters = { combinator: string; rules: Rule[] };
+type UpstreamField = { path: string; label: string; from: string };
 
 type Graph = { nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>; edges: Array<{ id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }> };
 
@@ -45,14 +48,14 @@ const NODE_META: Record<NodeType, { label: string; blurb: string; accent: string
   filter: { label: "Filter", blurb: "Keep only matching records", accent: "border-amber-300" },
   aggregate: { label: "Aggregate", blurb: "Turn records into a number", accent: "border-violet-300" },
   output: { label: "Output", blurb: "Save a metric to the dashboard", accent: "border-green-300" },
-  combine: { label: "Combine", blurb: "Coming soon", accent: "border-neutral-300" },
-  paths: { label: "Paths", blurb: "Coming soon", accent: "border-neutral-300" },
-  group: { label: "Group", blurb: "Coming soon", accent: "border-neutral-300" },
-  formula: { label: "Formula", blurb: "Coming soon", accent: "border-neutral-300" },
-  formatter: { label: "Formatter", blurb: "Coming soon", accent: "border-neutral-300" },
-  time: { label: "Time", blurb: "Coming soon", accent: "border-neutral-300" },
+  combine: { label: "Combine", blurb: "Merge records from multiple inputs", accent: "border-cyan-300" },
+  paths: { label: "Paths", blurb: "Split records into branches", accent: "border-pink-300" },
+  group: { label: "Group", blurb: "Group records into categories", accent: "border-orange-300" },
+  formula: { label: "Formula", blurb: "Calculate with numbers", accent: "border-indigo-300" },
+  formatter: { label: "Formatter", blurb: "Clean & reshape field values", accent: "border-teal-300" },
+  time: { label: "Time", blurb: "Limit records to a time window", accent: "border-sky-300" },
 };
-const CORE: NodeType[] = ["app", "filter", "aggregate", "output"];
+const PALETTE: NodeType[] = ["app", "time", "filter", "formatter", "combine", "paths", "group", "aggregate", "formula", "output"];
 
 function defaultConfig(type: NodeType): Record<string, unknown> {
   switch (type) {
@@ -64,6 +67,18 @@ function defaultConfig(type: NodeType): Record<string, unknown> {
       return { aggregation: "count", field: "value", distinctField: "subject", groupBy: null };
     case "output":
       return { name: "New metric", viz: "number", format: "number", precision: 0, target: null };
+    case "time":
+      return { dateField: "occurredAt", mode: "preset", preset: "last_30_days", days: 30 };
+    case "formula":
+      return { op: "percentage" };
+    case "combine":
+      return { mode: "stack", identityField: "subject", keep: "all", sourceWins: "first" };
+    case "group":
+      return { mode: "field", field: "source", aggregation: "count", valueField: "value", distinctField: "subject", categories: [], fallbackLabel: "Other" };
+    case "formatter":
+      return { field: "value", op: "round", decimals: 2 };
+    case "paths":
+      return { paths: [{ id: "p1", label: "Path 1", filters: { combinator: "and", rules: [] } }], fallbackId: "fallback", fallbackLabel: "Fallback" };
     default:
       return {};
   }
@@ -80,6 +95,15 @@ function summary(type: string, data: NodeData): string {
     return `${agg}${by}`;
   }
   if (type === "output") return `${(c.name as string) ?? "Output"} · ${(c.viz as string) ?? "number"}`;
+  if (type === "time") {
+    const mode = String(c.mode ?? "preset");
+    return mode === "preset" ? String(c.preset ?? "last_30_days").replace(/_/g, " ") : mode === "rolling" ? `last ${c.days ?? 30} days` : "between dates";
+  }
+  if (type === "formula") return String(c.op ?? "percentage").replace(/_/g, " ");
+  if (type === "combine") return `${String(c.mode ?? "stack")} on ${String(c.identityField ?? "subject")}`;
+  if (type === "group") return String(c.mode) === "field" ? `by ${String(c.field ?? "source")}` : `${((c.categories as unknown[]) ?? []).length} categories`;
+  if (type === "formatter") return `${String(c.op ?? "round")} · ${String(c.field ?? "value")}`;
+  if (type === "paths") return `${((c.paths as unknown[]) ?? []).length} path(s) + fallback`;
   return "";
 }
 
@@ -103,6 +127,15 @@ function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       </div>
       <div className="px-3 py-2">
         <p className="truncate text-sm font-medium text-neutral-800">{summary(type, data)}</p>
+        {type === "paths" && (
+          <ul className="mt-1 space-y-0.5">
+            {pathHandles(data).map((h) => (
+              <li key={h.id} className="truncate text-right text-[10px] text-neutral-500">
+                {h.label} &rarr;
+              </li>
+            ))}
+          </ul>
+        )}
         {t && t.status === "ok" && (
           <p className="mt-1 text-xs text-neutral-500">
             {t.recordsIn}&rarr;{t.recordsOut}
@@ -111,12 +144,34 @@ function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         )}
         {t && t.status === "error" && <p className="mt-1 truncate text-xs text-red-600">{t.error}</p>}
       </div>
-      {type !== "output" && <Handle type="source" position={Position.Right} />}
+      {type === "paths" ? (
+        pathHandles(data).map((h, i, arr) => (
+          <Handle key={h.id} type="source" id={h.id} position={Position.Right} title={h.label} style={{ top: `${((i + 1) / (arr.length + 1)) * 100}%` }} />
+        ))
+      ) : type !== "output" ? (
+        <Handle type="source" position={Position.Right} />
+      ) : null}
     </div>
   );
 }
 
-const nodeTypes = { app: FlowNodeCard, filter: FlowNodeCard, aggregate: FlowNodeCard, output: FlowNodeCard };
+function pathHandles(data: NodeData): Array<{ id: string; label: string }> {
+  const paths = (data.config.paths as Array<{ id: string; label: string }>) ?? [];
+  return [...paths, { id: String(data.config.fallbackId ?? "fallback"), label: String(data.config.fallbackLabel ?? "Fallback") }];
+}
+
+const nodeTypes = {
+  app: FlowNodeCard,
+  filter: FlowNodeCard,
+  aggregate: FlowNodeCard,
+  output: FlowNodeCard,
+  time: FlowNodeCard,
+  formatter: FlowNodeCard,
+  combine: FlowNodeCard,
+  paths: FlowNodeCard,
+  group: FlowNodeCard,
+  formula: FlowNodeCard,
+};
 
 export function FlowCanvas(props: {
   flowId: string;
@@ -384,10 +439,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
       <div className="flex min-h-0 flex-1">
         {/* Palette */}
-        <aside className="w-44 shrink-0 border-r border-neutral-200 bg-white p-3">
+        <aside className="w-44 shrink-0 overflow-y-auto border-r border-neutral-200 bg-white p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Add node</p>
           <div className="space-y-1.5">
-            {CORE.map((t) => (
+            {PALETTE.map((t) => (
               <button
                 key={t}
                 onClick={() => addNode(t)}
@@ -398,7 +453,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
               </button>
             ))}
           </div>
-          <p className="mt-4 text-xs text-neutral-400">More nodes (Time, Formula, Combine, Paths, Group, Formatter) arrive next.</p>
         </aside>
 
         {/* Canvas */}
@@ -563,41 +617,230 @@ function ConfigureTab({
   }
 
   if (type === "filter") {
-    const rules = (cfg.rules as Array<{ field: string; op: string; value: string; value2?: string }>) ?? [];
-    const set = (i: number, patch: Record<string, unknown>) => {
-      const next = rules.map((r, j) => (j === i ? { ...r, ...patch } : r));
-      onChange({ rules: next });
-    };
+    const fc: Filters = { combinator: (cfg.combinator as string) ?? "and", rules: (cfg.rules as Rule[]) ?? [] };
+    return <RulesEditor value={fc} upstreamFields={upstreamFields} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />;
+  }
+
+  if (type === "time") {
+    const mode = (cfg.mode as string) ?? "preset";
     return (
       <div className="space-y-3 text-sm">
-        <Field label="Combine rules with">
-          <select value={(cfg.combinator as string) ?? "and"} onChange={(e) => onChange({ combinator: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
-            <option value="and">AND (all must match)</option>
-            <option value="or">OR (any can match)</option>
+        <Field label="Date field">
+          <FieldPicker value={(cfg.dateField as string) ?? "occurredAt"} upstreamFields={upstreamFields} onChange={(v) => onChange({ dateField: v })} />
+        </Field>
+        <Field label="Window">
+          <select value={mode} onChange={(e) => onChange({ mode: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+            <option value="preset">Preset period</option>
+            <option value="rolling">Rolling (last N days)</option>
+            <option value="between">Between two dates</option>
           </select>
         </Field>
-        {rules.map((r, i) => (
-          <div key={i} className="space-y-1 rounded border border-neutral-200 p-2">
-            <FieldPicker value={r.field} upstreamFields={upstreamFields} onChange={(v) => set(i, { field: v })} />
-            <div className="flex gap-1">
-              <select value={r.op} onChange={(e) => set(i, { op: e.target.value })} className="rounded-md border border-neutral-300 px-1 py-1 text-xs">
-                {FLOW_FILTER_OPS.map((o) => (
-                  <option key={o} value={o}>{o.replace(/_/g, " ")}</option>
-                ))}
-              </select>
-              <input value={r.value ?? ""} placeholder="value" onChange={(e) => set(i, { value: e.target.value })} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs" />
-              {r.op === "between" && (
-                <input value={r.value2 ?? ""} placeholder="to" onChange={(e) => set(i, { value2: e.target.value })} className="w-16 rounded-md border border-neutral-300 px-2 py-1 text-xs" />
-              )}
-            </div>
-            <button onClick={() => onChange({ rules: rules.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
-              Remove rule
-            </button>
+        {mode === "preset" && (
+          <Field label="Period">
+            <select value={(cfg.preset as string) ?? "last_30_days"} onChange={(e) => onChange({ preset: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+              {TIME_PRESETS.map((p) => (
+                <option key={p} value={p}>{p.replace(/_/g, " ")}</option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {mode === "rolling" && (
+          <Field label="Last N days">
+            <input type="number" value={Number(cfg.days ?? 30)} onChange={(e) => onChange({ days: Number(e.target.value) })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+          </Field>
+        )}
+        {mode === "between" && (
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="From">
+              <input type="date" value={(cfg.from as string) ?? ""} onChange={(e) => onChange({ from: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+            </Field>
+            <Field label="To">
+              <input type="date" value={(cfg.to as string) ?? ""} onChange={(e) => onChange({ to: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+            </Field>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (type === "formula") {
+    return (
+      <div className="space-y-3 text-sm">
+        <Field label="Calculation">
+          <select value={(cfg.op as string) ?? "percentage"} onChange={(e) => onChange({ op: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+            {FORMULA_OPS.map((o) => (
+              <option key={o} value={o}>{o.replace(/_/g, " ")}</option>
+            ))}
+          </select>
+        </Field>
+        <p className="rounded border border-neutral-200 bg-neutral-50 p-2 text-xs text-neutral-600">
+          Connect Aggregate (or Formula) nodes as inputs. The first connected input is A, the second is B. Percentage = A ÷ B × 100.
+        </p>
+      </div>
+    );
+  }
+
+  if (type === "combine") {
+    const mode = (cfg.mode as string) ?? "stack";
+    return (
+      <div className="space-y-3 text-sm">
+        <Field label="Mode">
+          <select value={mode} onChange={(e) => onChange({ mode: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+            <option value="stack">Stack (combine all records)</option>
+            <option value="dedupe">De-duplicate by identity</option>
+            <option value="match">Match records by identity</option>
+          </select>
+        </Field>
+        {(mode === "dedupe" || mode === "match") && (
+          <Field label="Identity field">
+            <FieldPicker value={(cfg.identityField as string) ?? "subject"} upstreamFields={upstreamFields} onChange={(v) => onChange({ identityField: v })} />
+          </Field>
+        )}
+        {mode === "match" && (
+          <Field label="Keep">
+            <select value={(cfg.keep as string) ?? "all"} onChange={(e) => onChange({ keep: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+              <option value="all">All base records</option>
+              <option value="matched">Only matched</option>
+              <option value="unmatched">Only unmatched</option>
+            </select>
+          </Field>
+        )}
+        {(mode === "dedupe" || mode === "match") && (
+          <Field label="When duplicated, which source wins">
+            <select value={(cfg.sourceWins as string) ?? "first"} onChange={(e) => onChange({ sourceWins: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+              <option value="first">First connected input</option>
+              <option value="last">Last connected input</option>
+            </select>
+          </Field>
+        )}
+      </div>
+    );
+  }
+
+  if (type === "paths") {
+    const paths = (cfg.paths as Array<{ id: string; label: string; filters: Filters }>) ?? [];
+    const setPath = (i: number, patch: Record<string, unknown>) => onChange({ paths: paths.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
+    return (
+      <div className="space-y-3 text-sm">
+        {paths.map((p, i) => (
+          <div key={p.id} className="space-y-2 rounded border border-neutral-200 p-2">
+            <input value={p.label} onChange={(e) => setPath(i, { label: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
+            <RulesEditor value={p.filters ?? { combinator: "and", rules: [] }} upstreamFields={upstreamFields} onChange={(v) => setPath(i, { filters: v })} />
+            {paths.length > 1 && (
+              <button onClick={() => onChange({ paths: paths.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
+                Remove path
+              </button>
+            )}
           </div>
         ))}
-        <button onClick={() => onChange({ rules: [...rules, { field: "eventType", op: "equals", value: "" }] })} className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">
-          + Add rule
+        <button
+          onClick={() => onChange({ paths: [...paths, { id: `p${Math.random().toString(36).slice(2, 7)}`, label: `Path ${paths.length + 1}`, filters: { combinator: "and", rules: [] } }] })}
+          className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+        >
+          + Add path
         </button>
+        <Field label="Fallback label (unmatched records)">
+          <input value={(cfg.fallbackLabel as string) ?? "Fallback"} onChange={(e) => onChange({ fallbackLabel: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+        </Field>
+      </div>
+    );
+  }
+
+  if (type === "group") {
+    const mode = (cfg.mode as string) ?? "field";
+    const agg = (cfg.aggregation as string) ?? "count";
+    const cats = (cfg.categories as Array<{ label: string; filters: Filters }>) ?? [];
+    const setCat = (i: number, patch: Record<string, unknown>) => onChange({ categories: cats.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
+    return (
+      <div className="space-y-3 text-sm">
+        <Field label="Group by">
+          <select value={mode} onChange={(e) => onChange({ mode: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+            <option value="field">A field value</option>
+            <option value="categories">Custom categories</option>
+          </select>
+        </Field>
+        {mode === "field" && (
+          <Field label="Field">
+            <FieldPicker value={(cfg.field as string) ?? "source"} upstreamFields={upstreamFields} onChange={(v) => onChange({ field: v })} />
+          </Field>
+        )}
+        {mode === "categories" && (
+          <div className="space-y-2">
+            {cats.map((c, i) => (
+              <div key={i} className="space-y-2 rounded border border-neutral-200 p-2">
+                <input value={c.label} placeholder="Category name" onChange={(e) => setCat(i, { label: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
+                <RulesEditor value={c.filters ?? { combinator: "and", rules: [] }} upstreamFields={upstreamFields} onChange={(v) => setCat(i, { filters: v })} />
+                <button onClick={() => onChange({ categories: cats.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
+                  Remove category
+                </button>
+              </div>
+            ))}
+            <button onClick={() => onChange({ categories: [...cats, { label: `Category ${cats.length + 1}`, filters: { combinator: "and", rules: [] } }] })} className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">
+              + Add category
+            </button>
+            <Field label="Fallback label">
+              <input value={(cfg.fallbackLabel as string) ?? "Other"} onChange={(e) => onChange({ fallbackLabel: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+            </Field>
+          </div>
+        )}
+        <Field label="Value per group">
+          <select value={agg} onChange={(e) => onChange({ aggregation: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+            <option value="count">Count</option>
+            <option value="sum">Sum of a field</option>
+            <option value="count_distinct">Count distinct</option>
+          </select>
+        </Field>
+        {agg === "sum" && (
+          <Field label="Sum field">
+            <FieldPicker value={(cfg.valueField as string) ?? "value"} upstreamFields={upstreamFields} onChange={(v) => onChange({ valueField: v })} />
+          </Field>
+        )}
+      </div>
+    );
+  }
+
+  if (type === "formatter") {
+    const op = (cfg.op as string) ?? "round";
+    return (
+      <div className="space-y-3 text-sm">
+        <Field label="Field to format">
+          <FieldPicker value={(cfg.field as string) ?? "value"} upstreamFields={upstreamFields} onChange={(v) => onChange({ field: v })} />
+        </Field>
+        <Field label="Operation">
+          <select value={op} onChange={(e) => onChange({ op: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+            {FORMATTER_OPS.map((o) => (
+              <option key={o} value={o}>{o.replace(/_/g, " ")}</option>
+            ))}
+          </select>
+        </Field>
+        {op === "round" && (
+          <Field label="Decimals">
+            <input type="number" value={Number(cfg.decimals ?? 2)} onChange={(e) => onChange({ decimals: Number(e.target.value) })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+          </Field>
+        )}
+        {op === "replace" && (
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Find">
+              <input value={(cfg.find as string) ?? ""} onChange={(e) => onChange({ find: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+            </Field>
+            <Field label="Replace with">
+              <input value={(cfg.replaceWith as string) ?? ""} onChange={(e) => onChange({ replaceWith: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+            </Field>
+          </div>
+        )}
+        {op === "default" && (
+          <Field label="Value for empty">
+            <input value={(cfg.defaultValue as string) ?? ""} onChange={(e) => onChange({ defaultValue: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+          </Field>
+        )}
+        {(op === "multiply" || op === "divide") && (
+          <Field label="Factor">
+            <input type="number" value={cfg.factor != null ? Number(cfg.factor) : ""} onChange={(e) => onChange({ factor: e.target.value === "" ? undefined : Number(e.target.value) })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+          </Field>
+        )}
+        <Field label="Save to field (optional — defaults to same field)">
+          <input value={(cfg.outputField as string) ?? ""} onChange={(e) => onChange({ outputField: e.target.value || undefined })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+        </Field>
       </div>
     );
   }
@@ -735,6 +978,44 @@ function TestTab({ node, testing, onTest }: { node: FNode; testing: boolean; onT
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Reusable AND/OR rule list, used by Filter, Paths, and Group categories. */
+function RulesEditor({ value, upstreamFields, onChange }: { value: Filters; upstreamFields: UpstreamField[]; onChange: (v: Filters) => void }) {
+  const rules = value.rules ?? [];
+  const setRule = (i: number, patch: Partial<Rule>) => onChange({ ...value, rules: rules.map((r, j) => (j === i ? { ...r, ...patch } : r)) });
+  return (
+    <div className="space-y-2 text-sm">
+      {rules.length > 1 && (
+        <select value={value.combinator} onChange={(e) => onChange({ ...value, combinator: e.target.value })} className="rounded-md border border-neutral-300 px-2 py-1 text-xs">
+          <option value="and">Match ALL rules</option>
+          <option value="or">Match ANY rule</option>
+        </select>
+      )}
+      {rules.map((r, i) => (
+        <div key={i} className="space-y-1 rounded border border-neutral-200 p-2">
+          <FieldPicker value={r.field} upstreamFields={upstreamFields} onChange={(v) => setRule(i, { field: v })} />
+          <div className="flex gap-1">
+            <select value={r.op} onChange={(e) => setRule(i, { op: e.target.value })} className="rounded-md border border-neutral-300 px-1 py-1 text-xs">
+              {FLOW_FILTER_OPS.map((o) => (
+                <option key={o} value={o}>{o.replace(/_/g, " ")}</option>
+              ))}
+            </select>
+            <input value={r.value ?? ""} placeholder="value" onChange={(e) => setRule(i, { value: e.target.value })} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs" />
+            {r.op === "between" && (
+              <input value={r.value2 ?? ""} placeholder="to" onChange={(e) => setRule(i, { value2: e.target.value })} className="w-14 rounded-md border border-neutral-300 px-1 py-1 text-xs" />
+            )}
+          </div>
+          <button onClick={() => onChange({ ...value, rules: rules.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
+            Remove
+          </button>
+        </div>
+      ))}
+      <button onClick={() => onChange({ ...value, rules: [...rules, { field: "eventType", op: "equals", value: "" }] })} className="rounded border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50">
+        + Add rule
+      </button>
     </div>
   );
 }

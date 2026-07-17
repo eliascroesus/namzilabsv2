@@ -183,8 +183,16 @@ see `.claude/plans/` and the code under `src/lib/flow/`.
   and **Publish** (validates → snapshots an immutable version → materializes tiles).
   The dashboard's primary "New flow" opens the canvas; the classic form builder
   remains as a secondary option.
-- **Next:** M3 advanced nodes (Time, Formula, Combine, Paths, Group, Formatter);
-  M4 sync system (historical backfill, statuses, versioned/safe full re-sync).
+- **M3 (done):** the six advanced nodes, each with an engine executor, config UI,
+  and tests — **Time** (preset/rolling/between windows), **Formula** (add/subtract/
+  multiply/divide/percentage/percent-change/ratio/average over connected numbers,
+  with divide-by-zero errors), **Combine** (stack / dedupe / match with keep
+  matched|unmatched), **Group** (by field or custom categories + fallback),
+  **Formatter** (round/case/trim/normalize/replace/scale/rename), and **Paths**
+  (conditional branches with per-path source handles + fallback). Validation
+  enforces per-node input shapes across all 10 node types.
+- **Next:** M4 sync system (historical backfill, live/importing/outdated statuses,
+  versioned/safe full re-sync, Reprocess) + polish.
 
 ## Other follow-ups
 
