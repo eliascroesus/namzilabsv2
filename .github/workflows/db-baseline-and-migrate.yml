@@ -1,0 +1,52 @@
+name: DB Baseline + Migrate 0002 (one-time)
+
+# Manual only. Never runs on push.
+on:
+  workflow_dispatch:
+
+# No write access to the repo needed; this only talks to the database.
+permissions:
+  contents: read
+
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+
+jobs:
+  baseline-and-migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # 1) Verify existing schema + baseline 0000/0001 into Drizzle history (no data changes).
+      - name: Pre-flight + baseline 0000/0001
+        env:
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+        run: pnpm exec tsx scripts/db-baseline.ts
+
+      # 2) Normal repo migration command — applies ONLY the pending migration (0002).
+      - name: Apply pending migrations
+        env:
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+        run: pnpm db:migrate
+
+      # 3) Verify 0002 is fully applied and recorded.
+      - name: Verify 0002
+        env:
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+        run: pnpm exec tsx scripts/db-verify-0002.ts
+
+      - name: Summary
+        if: ${{ success() }}
+        run: echo "✅ Production database is baselined and migration 0002 is applied." >> "$GITHUB_STEP_SUMMARY"

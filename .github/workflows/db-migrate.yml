@@ -1,0 +1,40 @@
+name: DB Migrate (production)
+
+# Permanent, manual-only migration runner for all FUTURE migrations.
+# Never runs on push. Applies any pending Drizzle migrations via the normal
+# repo command using the DATABASE_MIGRATION_URL secret (direct, non-pooled).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Apply pending migrations
+        env:
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+        run: pnpm db:migrate
+
+      - name: Summary
+        if: ${{ success() }}
+        run: echo "✅ Pending database migrations applied." >> "$GITHUB_STEP_SUMMARY"
