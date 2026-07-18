@@ -17,20 +17,23 @@ import {
   type Connection,
 } from "@xyflow/react";
 import { type NodeType } from "@/lib/flow/types";
-import { STANDARD_FIELDS } from "@/lib/flow/records";
 import { saveDraftAction, testNodeAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 import {
+  bridgeEdgeFor,
+  buildFieldGroups,
   computeLayout,
   computeStepNumbers,
+  describeInputs,
   descendantsOf,
+  isValidFlowConnection,
   type ConnMeta,
   type FieldGroup,
   type FNode,
   type Graph,
+  type InputDescriptor,
   type LibraryCtx,
-  type PickField,
 } from "./graph-utils";
-import { ALL_TYPES, STD_META, defaultConfig, nodeTitle } from "./node-meta";
+import { ALL_TYPES, defaultConfig, nodeTitle } from "./node-meta";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
 import { ConfigPanel } from "./ConfigPanel";
@@ -229,6 +232,30 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [commit, setNodes, setEdges],
   );
 
+  /** Remove a node with exactly one in + one out edge, bridging prev→next. */
+  const deleteAndReconnect = useCallback(
+    (id: string) => {
+      const bridge = bridgeEdgeFor(id, edges);
+      if (!bridge) return deleteNode(id);
+      commit();
+      setEdges((es) => [...es.filter((e) => e.source !== id && e.target !== id), bridge]);
+      setNodes((ns) => ns.map((n) => (n.id === bridge.target ? { ...n, data: { ...n.data, dirty: true } } : n)).filter((n) => n.id !== id));
+      setSelectedId(null);
+    },
+    [edges, commit, setEdges, setNodes, deleteNode],
+  );
+
+  /** Block shape-incompatible connections (e.g. records into a Formula input). */
+  const isValidConnection = useCallback(
+    (c: Connection | Edge) => {
+      const s = nodes.find((n) => n.id === c.source);
+      const t = nodes.find((n) => n.id === c.target);
+      if (!s || !t) return true;
+      return isValidFlowConnection(String(s.type), String(t.type));
+    },
+    [nodes],
+  );
+
   const duplicateNode = useCallback(
     (id: string) => {
       const src = nodes.find((n) => n.id === id);
@@ -317,33 +344,26 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const selected = nodes.find((n) => n.id === selectedId) ?? null;
   const stepNoById = useMemo(() => computeStepNumbers(nodes, edges), [nodes, edges]);
 
-  // Fields available to the selected node's variable picker: canonical baseline
-  // first, then custom (integration) fields from tested upstream nodes.
-  const fieldGroups = useMemo<FieldGroup[]>(() => {
-    const standard: PickField[] = STANDARD_FIELDS.map((p) => ({ path: p, label: STD_META[p]?.label ?? p, type: STD_META[p]?.type }));
-    const stdSet = new Set<string>(STANDARD_FIELDS);
-    const groups: FieldGroup[] = [];
-    if (selected) {
-      const sourceIds = edges.filter((e) => e.target === selected.id).map((e) => e.source);
-      for (const sid of sourceIds) {
-        const sn = nodes.find((n) => n.id === sid);
-        const schema = sn?.data.lastTest?.outputSchema ?? [];
-        const custom: PickField[] = [];
-        for (const f of schema) {
-          if (stdSet.has(f.path)) {
-            const std = standard.find((s) => s.path === f.path);
-            if (std && std.example === undefined) std.example = f.example;
-          } else {
-            custom.push({ path: f.path, label: f.label, type: f.type, example: f.example });
-          }
-        }
-        if (custom.length && sn) {
-          groups.push({ from: nodeTitle(String(sn.type) as NodeType, sn.data), stepNo: stepNoById.get(sid), fields: custom });
-        }
-      }
-    }
-    return [{ from: "Standard fields", fields: standard }, ...groups];
-  }, [selected, edges, nodes, stepNoById]);
+  // Fields for the selected node's variable picker: real upstream source fields
+  // first (with values from each source's chosen sample record), canonical/system
+  // fields collapsed at the end.
+  const fieldGroups = useMemo<FieldGroup[]>(
+    () =>
+      buildFieldGroups({
+        selectedId: selected?.id ?? null,
+        nodes,
+        edges,
+        stepNoById,
+        titleOf: (n) => nodeTitle(String(n.type) as NodeType, n.data),
+        sampleIndexOf: (n) => Number((n.data.config as { sampleIndex?: unknown }).sampleIndex ?? 0),
+      }),
+    [selected, edges, nodes, stepNoById],
+  );
+
+  const selectedInputs = useMemo<InputDescriptor[]>(
+    () => (selected ? describeInputs({ selectedId: selected.id, nodes, edges, titleOf: (n) => nodeTitle(String(n.type) as NodeType, n.data) }) : []),
+    [selected, nodes, edges],
+  );
 
   // Inject transient display data + hide collapsed branches.
   const hiddenIds = useMemo(() => {
@@ -433,6 +453,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             onConnect={onConnect}
             onNodeClick={(_, n) => setSelectedId(n.id)}
             onPaneClick={() => setSelectedId(null)}
+            isValidConnection={isValidConnection}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             defaultEdgeOptions={{ type: "insert" }}
@@ -464,12 +485,15 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             stepNo={stepNoById.get(selected.id)}
             connections={connections}
             fieldGroups={fieldGroups}
+            inputs={selectedInputs}
             inputCount={edges.filter((e) => e.target === selected.id).length}
             testing={testingId === selected.id}
+            canReconnect={bridgeEdgeFor(selected.id, edges) !== null}
             onChange={(patch) => updateConfig(selected.id, patch)}
             onRename={(v) => renameNode(selected.id, v)}
             onTest={() => testNode(selected.id)}
             onDelete={() => deleteNode(selected.id)}
+            onDeleteReconnect={() => deleteAndReconnect(selected.id)}
             onDuplicate={() => duplicateNode(selected.id)}
           />
         )}

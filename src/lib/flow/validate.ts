@@ -91,6 +91,13 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
         if (aCount !== 1 || bCount !== 1) {
           issues.push({ nodeId: node.id, message: "Formula needs one number in input A and one in input B." });
         }
+        // A/B must be scalars — only Aggregate or Formula produce a single number.
+        for (const e of fEdges) {
+          const src = byId.get(e.source);
+          if (src && src.type !== "aggregate" && src.type !== "formula") {
+            issues.push({ nodeId: node.id, message: "Formula inputs must come from Aggregate or Formula steps (a single number)." });
+          }
+        }
       }
     }
 

@@ -1,0 +1,143 @@
+import { describe, it, expect } from "vitest";
+import type { Edge } from "@xyflow/react";
+import {
+  bridgeEdgeFor,
+  isValidFlowConnection,
+  buildFieldGroups,
+  resolveSampleField,
+  describeInputs,
+  collidingFields,
+  type FNode,
+} from "@/components/flow/graph-utils";
+
+// Minimal node/edge builders for the pure helpers.
+const N = (id: string, type: string, data: Partial<FNode["data"]> = {}): FNode =>
+  ({ id, type, position: { x: 0, y: 0 }, data: { config: {}, ...data } }) as FNode;
+const E = (source: string, target: string, extra: Partial<Edge> = {}): Edge => ({ id: `${source}->${target}`, source, target, ...extra });
+const titleOf = (n: FNode) => (typeof n.data.label === "string" && n.data.label) || String(n.type);
+
+describe("isValidFlowConnection", () => {
+  it("only allows scalar producers into a Formula", () => {
+    expect(isValidFlowConnection("aggregate", "formula")).toBe(true);
+    expect(isValidFlowConnection("formula", "formula")).toBe(true);
+    expect(isValidFlowConnection("app", "formula")).toBe(false);
+    expect(isValidFlowConnection("filter", "formula")).toBe(false);
+    expect(isValidFlowConnection("group", "formula")).toBe(false);
+  });
+  it("only allows dataset producers into dataset consumers", () => {
+    expect(isValidFlowConnection("app", "filter")).toBe(true);
+    expect(isValidFlowConnection("filter", "aggregate")).toBe(true);
+    expect(isValidFlowConnection("aggregate", "filter")).toBe(false); // scalar into a dataset consumer
+  });
+  it("lets anything meaningful into Output but nothing into App", () => {
+    expect(isValidFlowConnection("aggregate", "output")).toBe(true);
+    expect(isValidFlowConnection("filter", "output")).toBe(true);
+    expect(isValidFlowConnection("filter", "app")).toBe(false);
+  });
+});
+
+describe("bridgeEdgeFor (delete & reconnect)", () => {
+  it("bridges a node with exactly one in and one out edge", () => {
+    const edges = [E("a", "b"), E("b", "c")];
+    const bridge = bridgeEdgeFor("b", edges);
+    expect(bridge).not.toBeNull();
+    expect(bridge!.source).toBe("a");
+    expect(bridge!.target).toBe("c");
+  });
+  it("preserves the incoming sourceHandle and outgoing targetHandle", () => {
+    const edges = [E("p", "b", { sourceHandle: "x" }), E("b", "f", { targetHandle: "a" })];
+    const bridge = bridgeEdgeFor("b", edges)!;
+    expect(bridge.sourceHandle).toBe("x");
+    expect(bridge.targetHandle).toBe("a");
+  });
+  it("returns null for multiple inputs or outputs", () => {
+    expect(bridgeEdgeFor("b", [E("a", "b"), E("a2", "b"), E("b", "c")])).toBeNull();
+    expect(bridgeEdgeFor("b", [E("a", "b"), E("b", "c"), E("b", "c2")])).toBeNull();
+    expect(bridgeEdgeFor("b", [E("b", "c")])).toBeNull(); // no input
+  });
+});
+
+describe("resolveSampleField", () => {
+  const rec = { source: "gsheets", eventType: "row_added", subject: "a@b.com", value: 10, properties: { plan: "pro", seats: 4 } };
+  it("resolves standard columns and property paths", () => {
+    expect(resolveSampleField(rec, "source")).toBe("gsheets");
+    expect(resolveSampleField(rec, "value")).toBe(10);
+    expect(resolveSampleField(rec, "plan")).toBe("pro");
+    expect(resolveSampleField(rec, "properties.seats")).toBe(4);
+    expect(resolveSampleField(rec, "missing")).toBeUndefined();
+  });
+});
+
+describe("buildFieldGroups (variable picker)", () => {
+  const schema = [
+    { path: "subject", label: "Subject", type: "text" },
+    { path: "plan", label: "plan", type: "text" },
+    { path: "properties.seats", label: "seats", type: "number" },
+  ];
+  const app = N("app1", "app", {
+    lastTest: {
+      status: "ok",
+      recordsIn: 3,
+      recordsOut: 3,
+      sample: [
+        { source: "gsheets", subject: "first", properties: { plan: "pro", seats: 4 } },
+        { source: "gsheets", subject: "second", properties: { plan: "free", seats: 1 } },
+      ],
+      inputSample: [],
+      outputSchema: schema,
+    },
+  });
+  const filter = N("f1", "filter");
+  const nodes = [app, filter];
+  const edges = [E("app1", "f1")];
+  const stepNoById = new Map([["app1", 1], ["f1", 2]]);
+
+  it("shows source fields first and puts canonical fields in a trailing System group", () => {
+    const groups = buildFieldGroups({ selectedId: "f1", nodes, edges, stepNoById, titleOf });
+    // First group = the upstream source's custom fields (subject is standard, so excluded here).
+    expect(groups[0].from).toBe("app");
+    expect(groups[0].fields.map((f) => f.path)).toEqual(["plan", "properties.seats"]);
+    // Last group = collapsed System fields.
+    const last = groups[groups.length - 1];
+    expect(last.system).toBe(true);
+    expect(last.from).toBe("System fields");
+    expect(last.fields.map((f) => f.path)).toContain("source");
+    expect(last.fields.map((f) => f.path)).toContain("occurredAt");
+  });
+
+  it("uses the chosen sample record for example values", () => {
+    const first = buildFieldGroups({ selectedId: "f1", nodes, edges, stepNoById, titleOf, sampleIndexOf: () => 0 });
+    const second = buildFieldGroups({ selectedId: "f1", nodes, edges, stepNoById, titleOf, sampleIndexOf: () => 1 });
+    const planFirst = first[0].fields.find((f) => f.path === "plan");
+    const planSecond = second[0].fields.find((f) => f.path === "plan");
+    expect(planFirst?.example).toBe("pro");
+    expect(planSecond?.example).toBe("free");
+  });
+});
+
+describe("describeInputs / collidingFields (Combine + Formula panels)", () => {
+  const mk = (id: string, src: string) =>
+    N(id, "app", {
+      config: { source: src, connectionName: `${src} acct`, eventType: "row_added" },
+      lastTest: { status: "ok", recordsIn: 2, recordsOut: 2, sample: [], inputSample: [], outputSchema: [{ path: "email", label: "email", type: "text" }] },
+    });
+  const a = mk("a", "gsheets");
+  const b = mk("b", "close");
+  const combine = N("c", "combine");
+  const nodes = [a, b, combine];
+  const edges = [E("a", "c"), E("b", "c")];
+
+  it("describes each connected source with app + record count", () => {
+    const inputs = describeInputs({ selectedId: "c", nodes, edges, titleOf });
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0].appSource).toBe("gsheets");
+    expect(inputs[0].recordCount).toBe(2);
+    expect(inputs[0].status).toBe("ok");
+    expect(inputs[1].appSource).toBe("close");
+  });
+
+  it("flags fields shared across sources (overwrite warning)", () => {
+    const inputs = describeInputs({ selectedId: "c", nodes, edges, titleOf });
+    expect(collidingFields(inputs)).toContain("email");
+  });
+});

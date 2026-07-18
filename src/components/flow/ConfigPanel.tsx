@@ -14,9 +14,11 @@ import {
   type NodeType,
   type FlowFilterOp,
 } from "@/lib/flow/types";
-import type { ConnMeta, FieldGroup, FNode, Filters, Rule } from "./graph-utils";
-import { NODE_META, MORE_FILTER_OPS, defaultTitle, formulaExpression, formulaHandleLabels } from "./node-meta";
+import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor, Rule } from "./graph-utils";
+import { collidingFields } from "./graph-utils";
+import { NODE_META, MORE_FILTER_OPS, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { FieldPicker } from "./FieldPicker";
+import { RecordSamplePicker } from "./RecordSamplePicker";
 
 const SYNC_DOT: Record<string, string> = {
   live: "bg-green-500",
@@ -54,24 +56,30 @@ export function ConfigPanel({
   stepNo,
   connections,
   fieldGroups,
+  inputs,
   inputCount,
   testing,
+  canReconnect,
   onChange,
   onRename,
   onTest,
   onDelete,
+  onDeleteReconnect,
   onDuplicate,
 }: {
   node: FNode;
   stepNo?: number;
   connections: ConnMeta[];
   fieldGroups: FieldGroup[];
+  inputs: InputDescriptor[];
   inputCount: number;
   testing: boolean;
+  canReconnect: boolean;
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
   onTest: () => void;
   onDelete: () => void;
+  onDeleteReconnect: () => void;
   onDuplicate: () => void;
 }) {
   const type = String(node.type) as NodeType;
@@ -141,20 +149,25 @@ export function ConfigPanel({
             <p className="text-neutral-500">
               Node id: <code className="text-xs">{node.id}</code>
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button onClick={onDuplicate} className="rounded border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">
                 Duplicate
               </button>
               <button onClick={onDelete} className="rounded border border-red-300 px-3 py-1.5 text-red-700 hover:bg-red-50">
                 Delete
               </button>
+              {canReconnect && (
+                <button onClick={onDeleteReconnect} className="rounded border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50" title="Remove this step and connect the previous step straight to the next">
+                  Delete &amp; reconnect
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {tab === "configure" && <ConfigureTab type={type} cfg={cfg} connections={connections} fieldGroups={fieldGroups} inputCount={inputCount} onChange={onChange} />}
+        {tab === "configure" && <ConfigureTab type={type} cfg={cfg} connections={connections} fieldGroups={fieldGroups} inputs={inputs} onChange={onChange} />}
 
-        {tab === "test" && <TestTab node={node} testing={testing} onTest={onTest} />}
+        {tab === "test" && <TestTab node={node} testing={testing} onTest={onTest} onChange={onChange} />}
       </div>
 
       <div className="border-t border-neutral-200 p-3">
@@ -175,14 +188,14 @@ function ConfigureTab({
   cfg,
   connections,
   fieldGroups,
-  inputCount,
+  inputs,
   onChange,
 }: {
   type: NodeType;
   cfg: Record<string, unknown>;
   connections: ConnMeta[];
   fieldGroups: FieldGroup[];
-  inputCount: number;
+  inputs: InputDescriptor[];
   onChange: (patch: Record<string, unknown>) => void;
 }) {
   if (type === "app") {
@@ -294,6 +307,10 @@ function ConfigureTab({
   if (type === "formula") {
     const op = String(cfg.op ?? "percentage");
     const labels = formulaHandleLabels(op);
+    const inA = inputs.find((i) => i.targetHandle === "a");
+    const inB = inputs.find((i) => i.targetHandle === "b");
+    const nameA = inA?.title ?? labels.a;
+    const nameB = inB?.title ?? labels.b;
     return (
       <div className="space-y-3 text-sm">
         <Field label="Calculation">
@@ -304,17 +321,18 @@ function ConfigureTab({
           </select>
         </Field>
         <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
-          <p className="font-medium">{formulaExpression(op, labels.a, labels.b)}</p>
-          <p className="mt-1 text-indigo-700">
-            Connect one number to <b>{labels.a}</b> (input A) and one to <b>{labels.b}</b> (input B). {inputCount < 2 ? `Connected: ${inputCount}/2.` : "Both inputs connected."}
-          </p>
+          <p className="font-medium">{formulaExpression(op, nameA, nameB)}</p>
         </div>
+        <FormulaInput label={`${labels.a} (input A)`} desc={inA} />
+        <FormulaInput label={`${labels.b} (input B)`} desc={inB} />
+        <p className="text-xs text-neutral-400">Inputs A and B accept a single number from an Aggregate or Formula step.</p>
       </div>
     );
   }
 
   if (type === "combine") {
     const mode = (cfg.mode as string) ?? "stack";
+    const collisions = collidingFields(inputs);
     return (
       <div className="space-y-3 text-sm">
         <Field label="Mode">
@@ -324,6 +342,30 @@ function ConfigureTab({
             <option value="match">Match records by identity</option>
           </select>
         </Field>
+
+        <div>
+          <p className="mb-1 text-xs font-medium text-neutral-600">Connected sources ({inputs.length})</p>
+          {inputs.length === 0 && <p className="text-xs text-neutral-400">Connect two or more record steps (Apps, Filter, Time, …).</p>}
+          <div className="space-y-1.5">
+            {inputs.map((inp, i) => (
+              <SourceCard key={inp.nodeId} index={i + 1} desc={inp} isBase={mode === "match" && (cfg.baseSourceId as string) === inp.nodeId} />
+            ))}
+          </div>
+        </div>
+
+        {mode === "match" && (
+          <Field label="Base source (records kept & enriched)">
+            <select value={(cfg.baseSourceId as string) ?? ""} onChange={(e) => onChange({ baseSourceId: e.target.value || null })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+              <option value="">First connected input</option>
+              {inputs.map((inp, i) => (
+                <option key={inp.nodeId} value={inp.nodeId}>
+                  Source {i + 1}: {inp.title}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+
         {(mode === "dedupe" || mode === "match") && (
           <Field label="Match records using">
             <FieldPicker value={(cfg.identityField as string) ?? "subject"} fieldGroups={fieldGroups} onChange={(v) => onChange({ identityField: v })} />
@@ -338,6 +380,13 @@ function ConfigureTab({
             </select>
           </Field>
         )}
+
+        {(mode === "dedupe" || mode === "match") && collisions.length > 0 && (
+          <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+            Fields present in more than one source may overwrite each other: <b>{collisions.join(", ")}</b>. The winning source is set below.
+          </p>
+        )}
+
         {(mode === "dedupe" || mode === "match") && (
           <AdvancedSection>
             <Field label="When duplicated, which source wins">
@@ -574,9 +623,10 @@ function ConfigureTab({
   );
 }
 
-function TestTab({ node, testing, onTest }: { node: FNode; testing: boolean; onTest: () => void }) {
+function TestTab({ node, testing, onTest, onChange }: { node: FNode; testing: boolean; onTest: () => void; onChange: (patch: Record<string, unknown>) => void }) {
   const t = node.data.lastTest;
   const type = String(node.type);
+  const sampleIndex = Number((node.data.config as { sampleIndex?: unknown }).sampleIndex ?? 0);
   return (
     <div className="space-y-3 text-sm">
       <button onClick={onTest} disabled={testing} className="w-full rounded-md bg-neutral-900 px-4 py-2 font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
@@ -586,18 +636,12 @@ function TestTab({ node, testing, onTest }: { node: FNode; testing: boolean; onT
       {t && t.status === "error" && <p className="rounded border border-red-200 bg-red-50 p-2 text-red-700">{t.error}</p>}
       {t && t.status === "ok" && (
         <div className="space-y-3">
-          <p className="rounded border border-neutral-200 bg-neutral-50 p-2 text-center font-medium">
-            {type === "aggregate" || type === "formula" || type === "group"
-              ? `Result: ${t.tile != null ? String((t.tile as { value?: unknown }).value ?? "—") : "—"}`
-              : `${t.recordsOut} of ${t.recordsIn} records passed`}
-          </p>
-          {type === "output" && t.tile ? (
-            <div className="rounded border border-green-200 bg-green-50 p-2">
-              <span className="text-neutral-500">Dashboard value</span>{" "}
-              <span className="font-semibold">{String((t.tile as { value?: unknown }).value ?? "—")}</span>
-            </div>
-          ) : null}
-          <BeforeAfter before={t.inputSample ?? []} after={t.sample} />
+          <p className="rounded border border-neutral-200 bg-neutral-50 p-2 text-center font-medium">{resultLabel(type, t)}</p>
+          {type === "app" ? (
+            <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
+          ) : (
+            <BeforeAfter before={t.inputSample ?? []} after={t.sample} />
+          )}
         </div>
       )}
     </div>
@@ -605,10 +649,6 @@ function TestTab({ node, testing, onTest }: { node: FNode; testing: boolean; onT
 }
 
 function BeforeAfter({ before, after }: { before: unknown[]; after: unknown[] }) {
-  const render = (r: unknown) => {
-    const rec = r as { source?: string; eventType?: string; subject?: string; value?: unknown };
-    return `${rec.source ?? ""} · ${rec.eventType ?? ""}${rec.subject ? ` · ${rec.subject}` : ""}${rec.value != null ? ` · ${String(rec.value)}` : ""}`;
-  };
   return (
     <div className="grid grid-cols-2 gap-2">
       <div>
@@ -616,7 +656,7 @@ function BeforeAfter({ before, after }: { before: unknown[]; after: unknown[] })
         <div className="space-y-1">
           {before.length === 0 && <p className="text-xs text-neutral-400">—</p>}
           {before.slice(0, 3).map((r, i) => (
-            <div key={i} className="truncate rounded border border-neutral-100 bg-neutral-50 p-1.5 text-[11px]">{render(r)}</div>
+            <div key={i} className="truncate rounded border border-neutral-100 bg-neutral-50 p-1.5 text-[11px]">{sampleLine(r)}</div>
           ))}
         </div>
       </div>
@@ -625,7 +665,7 @@ function BeforeAfter({ before, after }: { before: unknown[]; after: unknown[] })
         <div className="space-y-1">
           {after.length === 0 && <p className="text-xs text-neutral-400">—</p>}
           {after.slice(0, 3).map((r, i) => (
-            <div key={i} className="truncate rounded border border-green-100 bg-green-50 p-1.5 text-[11px]">{render(r)}</div>
+            <div key={i} className="truncate rounded border border-green-100 bg-green-50 p-1.5 text-[11px]">{sampleLine(r)}</div>
           ))}
         </div>
       </div>
@@ -676,6 +716,72 @@ export function RulesEditor({ value, fieldGroups, onChange }: { value: Filters; 
       <button onClick={() => onChange({ ...value, rules: [...rules, { field: "eventType", op: "equals", value: "" }] })} className="rounded border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50">
         + Add rule
       </button>
+    </div>
+  );
+}
+
+function sampleLine(r: unknown): string {
+  const rec = r as { source?: string; eventType?: string; subject?: string; value?: unknown };
+  return `${rec.source ?? ""} · ${rec.eventType ?? ""}${rec.subject ? ` · ${rec.subject}` : ""}${rec.value != null ? ` · ${String(rec.value)}` : ""}`;
+}
+
+function StatusPill({ status, count }: { status: InputDescriptor["status"]; count?: number }) {
+  const cls: Record<string, string> = {
+    ok: "bg-green-100 text-green-700",
+    error: "bg-red-100 text-red-700",
+    dirty: "bg-amber-100 text-amber-700",
+    untested: "bg-neutral-100 text-neutral-500",
+  };
+  const label = status === "ok" ? (count != null ? `${count} recs` : "tested") : status === "error" ? "error" : status === "dirty" ? "retest" : "not tested";
+  return <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium ${cls[status]}`}>{label}</span>;
+}
+
+/** One connected Combine source, expandable to its origin + sample records. */
+function SourceCard({ index, desc, isBase }: { index: number; desc: InputDescriptor; isBase: boolean }) {
+  return (
+    <details className={`rounded border ${isBase ? "border-neutral-800" : "border-neutral-200"}`}>
+      <summary className="flex cursor-pointer items-center justify-between gap-2 px-2 py-1.5 text-xs">
+        <span className="min-w-0 truncate">
+          <span className="font-medium">Source {index}:</span> {desc.title}
+          {isBase && <span className="ml-1 rounded bg-neutral-800 px-1 text-[9px] text-white">BASE</span>}
+        </span>
+        <StatusPill status={desc.status} count={desc.recordCount} />
+      </summary>
+      <div className="space-y-1 border-t border-neutral-100 p-2 text-[11px] text-neutral-600">
+        {desc.appSource && (
+          <p>
+            App: {desc.appSource}
+            {desc.account ? ` · ${desc.account}` : ""}
+            {desc.eventType ? ` · ${desc.eventType}` : ""}
+          </p>
+        )}
+        {desc.chain.length > 0 && <p className="text-neutral-400">Chain: {desc.chain.join(" → ")}</p>}
+        {desc.sample.length > 0 && (
+          <div className="space-y-0.5">
+            {desc.sample.slice(0, 3).map((r, i) => (
+              <div key={i} className="truncate rounded bg-neutral-50 p-1">{sampleLine(r)}</div>
+            ))}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+/** One Formula input (A/B), showing the upstream step, its calculation, and value. */
+function FormulaInput({ label, desc }: { label: string; desc?: InputDescriptor }) {
+  return (
+    <div className="rounded border border-neutral-200 p-2 text-xs">
+      <p className="font-medium text-neutral-600">{label}</p>
+      {desc ? (
+        <p className="mt-0.5 text-neutral-700">
+          {desc.title}
+          {desc.calc ? ` — ${desc.calc}` : ""}
+          {desc.value != null ? ` = ${String(desc.value)}` : desc.status === "untested" ? " (test to see value)" : ""}
+        </p>
+      ) : (
+        <p className="mt-0.5 text-amber-700">Not connected — connect an Aggregate or Formula step.</p>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { NodeType } from "@/lib/flow/types";
 import type { FNode, NodeData } from "./graph-utils";
-import { NODE_META, formulaHandleLabels, nodeIcon, nodeTitle, pathHandles, statusOf, summary } from "./node-meta";
+import { NODE_META, formulaHandleLabels, nodeIcon, nodeTitle, pathHandles, resultLabel, statusOf, summary } from "./node-meta";
 
 export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const t = (type as NodeType) ?? "app";
@@ -55,14 +55,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           </ul>
         )}
 
-        {test && test.status === "ok" && (
-          <p className="mt-1 text-xs text-neutral-500">
-            {t === "aggregate" || t === "formula" || t === "group"
-              ? `= ${test.tile != null ? String((test.tile as { value?: unknown }).value ?? "") : test.recordsOut}`
-              : `${test.recordsOut} of ${test.recordsIn} records passed`}
-            {t === "output" && test.tile ? ` · ${String((test.tile as { value?: unknown }).value ?? "")}` : ""}
-          </p>
-        )}
+        {test && test.status === "ok" && <p className="mt-1 text-xs text-neutral-500">{resultLabel(t, test)}</p>}
         {test && test.status === "error" && <p className="mt-1 truncate text-xs text-red-600">{test.error}</p>}
       </div>
 
@@ -75,6 +68,8 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         <Handle type="source" position={Position.Right} />
       ) : null}
 
+      {/* "+" to add a downstream step — placed BELOW the output handle so it never
+          covers the draggable handle (users can still drag a connection). */}
       {t !== "output" && !isPaths && (
         <button
           onClick={(e) => {
@@ -82,7 +77,8 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             (data as NodeData).onAddFrom?.(id, null);
           }}
           title="Add a step after this one"
-          className="absolute -right-3 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-300 bg-white text-sm leading-none text-neutral-600 shadow-sm hover:bg-neutral-900 hover:text-white"
+          style={{ top: "calc(50% + 18px)" }}
+          className="nodrag absolute -right-3 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-neutral-300 bg-white text-sm leading-none text-neutral-600 shadow-sm hover:bg-neutral-900 hover:text-white"
         >
           +
         </button>

@@ -52,7 +52,7 @@ export type NodeExecErr = {
 };
 export type NodeExec = NodeExecOk | NodeExecErr;
 
-type ResolvedInput = { shape: Shape; exec: NodeExecOk; targetHandle: string | null };
+type ResolvedInput = { shape: Shape; exec: NodeExecOk; targetHandle: string | null; sourceNodeId: string };
 
 export type RunResult = {
   nodes: Map<string, NodeExec>;
@@ -88,7 +88,7 @@ export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNod
         continue;
       }
       const shape = e.sourceHandle && se.outputs?.[e.sourceHandle] ? se.outputs[e.sourceHandle] : se.shape;
-      inputs.push({ shape, exec: se, targetHandle: e.targetHandle ?? null });
+      inputs.push({ shape, exec: se, targetHandle: e.targetHandle ?? null, sourceNodeId: e.source });
     }
 
     const exec = await execNode(ctx, node, inputs, inputError);
@@ -199,7 +199,15 @@ function execFormatter(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
 // ---------- Combine ----------
 function execCombine(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = CombineConfigSchema.parse(node.data.config ?? {});
-  const datasets = inputs.map((i) => {
+  // In Match mode the base source controls which records are retained/enriched.
+  // Put the chosen base input first; otherwise keep the connection order.
+  let ordered = inputs;
+  if (cfg.mode === "match" && cfg.baseSourceId) {
+    const base = inputs.filter((i) => i.sourceNodeId === cfg.baseSourceId);
+    const rest = inputs.filter((i) => i.sourceNodeId !== cfg.baseSourceId);
+    if (base.length) ordered = [...base, ...rest];
+  }
+  const datasets = ordered.map((i) => {
     if (i.shape.kind !== "dataset") throw new Error("Combine only accepts record inputs.");
     return i.shape.records;
   });

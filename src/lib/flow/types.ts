@@ -179,6 +179,8 @@ export const CombineConfigSchema = z.object({
   identityField: z.string().default("subject"),
   keep: z.enum(["all", "matched", "unmatched"]).default("all"),
   sourceWins: z.enum(["first", "last"]).default("first"),
+  /** Match mode: id of the connected source node whose records are the base set. */
+  baseSourceId: z.string().nullable().default(null),
 });
 export type CombineConfig = z.infer<typeof CombineConfigSchema>;
 

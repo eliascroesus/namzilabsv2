@@ -29,17 +29,6 @@ export const SOURCE_ICON: Record<string, string> = {
 /** Filter operators shown under the "More" divider (everything not in the common set). */
 export const MORE_FILTER_OPS = (Object.keys(FILTER_OP_LABELS) as FlowFilterOp[]).filter((o) => !PRIMARY_FILTER_OPS.includes(o));
 
-/** Canonical (system) fields the picker groups under a collapsed "System fields" section. */
-export const STD_META: Record<string, { label: string; type: string }> = {
-  subject: { label: "Subject / person", type: "text" },
-  source: { label: "Source app", type: "text" },
-  eventType: { label: "Event type", type: "text" },
-  value: { label: "Value / amount", type: "number" },
-  currency: { label: "Currency", type: "text" },
-  occurredAt: { label: "Occurred at", type: "date" },
-  id: { label: "Record id", type: "text" },
-};
-
 export function defaultConfig(type: NodeType): Record<string, unknown> {
   switch (type) {
     case "app":
@@ -145,6 +134,35 @@ export function summary(type: string, data: NodeData): string {
   if (type === "formatter") return `${String(c.op ?? "round")} · ${String(c.field ?? "value")}`;
   if (type === "paths") return `${((c.paths as unknown[]) ?? []).length} path(s) + fallback`;
   return "";
+}
+
+/** Node-specific wording for a successful test result. */
+export function resultLabel(type: string, test: { recordsIn: number; recordsOut: number; tile?: unknown }): string {
+  const { recordsIn, recordsOut, tile } = test;
+  const val = tile != null ? String((tile as { value?: unknown }).value ?? "—") : String(recordsOut);
+  switch (type) {
+    case "app":
+      return `${recordsOut} records loaded`;
+    case "filter":
+      return `${recordsOut} of ${recordsIn} records matched`;
+    case "time":
+      return `${recordsOut} of ${recordsIn} within window`;
+    case "formatter":
+      return `${recordsOut} records formatted`;
+    case "combine":
+      return `${recordsOut} records combined`;
+    case "paths":
+      return `${recordsOut} records routed`;
+    case "group":
+      return `${recordsOut} groups`;
+    case "aggregate":
+    case "formula":
+      return `Result: ${val}`;
+    case "output":
+      return `Dashboard value: ${val}`;
+    default:
+      return `${recordsOut} of ${recordsIn} records`;
+  }
 }
 
 export function statusOf(data: NodeData): { label: string; cls: string } {

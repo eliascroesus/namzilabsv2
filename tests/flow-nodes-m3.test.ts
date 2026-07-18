@@ -167,6 +167,45 @@ describe("Combine node", () => {
     await seedTwoSources();
     expect((await run(base("match", { keep: "unmatched" }))).outputs[0].tile.value).toBe(1); // x
   });
+
+  it("stacks three or more sources", async () => {
+    await ev({ source: "a", eventType: "lead", subject: "x" });
+    await ev({ source: "b", eventType: "lead", subject: "y" });
+    await ev({ source: "d", eventType: "lead", subject: "z" });
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN, source: "a" }),
+        N("b", "app", { connectionId: CONN, source: "b" }),
+        N("d", "app", { connectionId: CONN, source: "d" }),
+        N("c", "combine", { mode: "stack" }),
+        N("agg", "aggregate", { aggregation: "count" }),
+        N("o", "output", {}),
+      ],
+      [E("a", "c"), E("b", "c"), E("d", "c"), E("c", "agg"), E("agg", "o")],
+    );
+    expect((await run(g)).outputs[0].tile.value).toBe(3);
+  });
+
+  it("Match mode: the chosen base source controls which records survive", async () => {
+    await ev({ source: "a", eventType: "lead", subject: "x" });
+    await ev({ source: "a", eventType: "lead", subject: "y" });
+    await ev({ source: "b", eventType: "lead", subject: "y" });
+    await ev({ source: "b", eventType: "lead", subject: "z" });
+    const mk = (baseSourceId: string) =>
+      G(
+        [
+          N("a", "app", { connectionId: CONN, source: "a" }),
+          N("b", "app", { connectionId: CONN, source: "b" }),
+          N("c", "combine", { mode: "match", identityField: "subject", keep: "unmatched", baseSourceId }),
+          N("o", "output", {}),
+        ],
+        [E("a", "c"), E("b", "c"), E("c", "o")],
+      );
+    const baseA = await run(mk("a"));
+    expect((baseA.nodes.get("c") as { sample: Array<{ subject: string }> }).sample[0].subject).toBe("x");
+    const baseB = await run(mk("b"));
+    expect((baseB.nodes.get("c") as { sample: Array<{ subject: string }> }).sample[0].subject).toBe("z");
+  });
 });
 
 describe("Group node", () => {
