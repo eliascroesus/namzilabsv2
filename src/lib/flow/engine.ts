@@ -299,7 +299,7 @@ function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const a = scalarAt("a");
   const b = scalarAt("b");
   const divGuard = (x: number, y: number) => {
-    if (y === 0) throw new Error("Division by zero — check the second (B / denominator) input.");
+    if (y === 0) throw new Error("the denominator (input B) is 0, so it can't be divided. Choose another denominator or add a fallback.");
     return x / y;
   };
   let value: number;

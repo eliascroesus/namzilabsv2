@@ -127,7 +127,7 @@ describe("materializer", () => {
 
     const res = await materializeFlow(db, ORG, flow.id);
     expect(res.ok).toBe(false);
-    expect(res.error).toMatch(/Division by zero/);
+    expect(res.error).toMatch(/denominator/i);
   });
 });
 

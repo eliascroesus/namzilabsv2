@@ -154,7 +154,7 @@ export function ConfigPanel({
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
         {tab === "setup" && <SetupFields type={type} cfg={cfg} connections={connections} fieldGroups={fieldGroups} inputs={inputs} inputCount={inputCount} missing={missing} onChange={onChange} />}
         {tab === "configure" && <ConfigureFields type={type} cfg={cfg} fieldGroups={fieldGroups} inputs={inputs} onChange={onChange} />}
-        {tab === "test" && <PreviewTab node={node} testing={testing} inputs={inputs} onChange={onChange} />}
+        {tab === "test" && <PreviewTab node={node} stepNo={stepNo} title={node.data.label?.trim() || defaultTitle(type, node.data)} testing={testing} inputs={inputs} onChange={onChange} />}
       </div>
 
       {/* Sticky primary action */}
@@ -691,19 +691,20 @@ function GroupPrimary({ cfg, fieldGroups, onChange }: { cfg: Record<string, unkn
 
 // ---------- Preview / Calculate preview ----------
 
-function PreviewTab({ node, testing, inputs, onChange }: { node: FNode; testing: boolean; inputs: InputDescriptor[]; onChange: (patch: Record<string, unknown>) => void }) {
+function PreviewTab({ node, stepNo, title, testing, inputs, onChange }: { node: FNode; stepNo?: number; title: string; testing: boolean; inputs: InputDescriptor[]; onChange: (patch: Record<string, unknown>) => void }) {
   const t = node.data.lastTest;
   const type = String(node.type);
   const isMetric = METRIC_STEPS.has(type as NodeType);
   const sampleIndex = Number((node.data.config as { sampleIndex?: unknown }).sampleIndex ?? 0);
   const excluded = t && t.status === "ok" ? Math.max(0, t.recordsIn - t.recordsOut) : 0;
+  const where = `Step ${stepNo != null ? stepNo : "?"} · ${title}`;
 
   return (
     <div className="space-y-4">
       {node.data.dirty && <p className="text-xs text-amber-700">This step changed — re-run the preview to refresh its data and the fields it offers downstream.</p>}
       {t && t.status === "error" && (
         <div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-800">
-          <p className="font-medium">Couldn&rsquo;t {isMetric ? "calculate" : "preview"} this step</p>
+          <p className="font-medium">{where} couldn&rsquo;t {isMetric ? "calculate" : "preview"}</p>
           <p className="mt-1">{t.error}</p>
         </div>
       )}

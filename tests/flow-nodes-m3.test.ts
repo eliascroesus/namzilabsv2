@@ -128,7 +128,7 @@ describe("Formula node", () => {
     );
     const r = await run(g);
     expect(r.nodes.get("div")!.status).toBe("error");
-    expect((r.nodes.get("div") as { error: string }).error).toMatch(/Division by zero/);
+    expect((r.nodes.get("div") as { error: string }).error).toMatch(/denominator/i);
   });
 });
 
