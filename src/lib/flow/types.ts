@@ -83,6 +83,7 @@ export const FilterRuleSchema = z.object({
   op: z.enum(FLOW_FILTER_OPS),
   value: z.string().default(""),
   value2: z.string().optional(), // for "between"
+  valueField: z.string().optional(), // compare against another field instead of a literal
 });
 export const FilterConfigSchema = z.object({
   combinator: z.enum(["and", "or"]).default("and"),

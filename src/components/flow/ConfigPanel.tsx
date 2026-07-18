@@ -18,7 +18,7 @@ import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor, Rule } from
 import { collidingFields } from "./graph-utils";
 import { NODE_META, MORE_FILTER_OPS, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { STEP_LABEL, stageOf } from "./outline";
-import { FieldPicker } from "./FieldPicker";
+import { FieldPicker, ValueInput } from "./FieldPicker";
 import { RecordSamplePicker } from "./RecordSamplePicker";
 
 const METRIC_STEPS = new Set<NodeType>(["aggregate", "formula", "group", "output"]);
@@ -852,7 +852,7 @@ export function RulesEditor({ value, fieldGroups, onChange }: { value: Filters; 
               </optgroup>
             </select>
             {!NO_VALUE_FILTER_OPS.includes(r.op as FlowFilterOp) && (
-              <input value={r.value ?? ""} placeholder="value" onChange={(e) => setRule(i, { value: e.target.value })} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs" />
+              <ValueInput value={r.value ?? ""} valueField={r.valueField} fieldGroups={fieldGroups} onChange={(patch) => setRule(i, patch)} />
             )}
             {r.op === "between" && (
               <input value={r.value2 ?? ""} placeholder="to" onChange={(e) => setRule(i, { value2: e.target.value })} className="w-14 rounded-md border border-neutral-300 px-1 py-1 text-xs" />

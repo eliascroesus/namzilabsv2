@@ -33,13 +33,14 @@ import {
   type InputDescriptor,
   type LibraryCtx,
 } from "./graph-utils";
-import { ALL_TYPES, defaultConfig, nodeTitle } from "./node-meta";
-import { nextOptions, buildOutcome, type OutcomeKey } from "./outline";
+import { ALL_TYPES, defaultConfig, nodeIcon, nodeTitle } from "./node-meta";
+import { nextOptions, buildOutcome, buildReview, type OutcomeKey } from "./outline";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
 import { ConfigPanel } from "./ConfigPanel";
 import { NodeLibraryModal } from "./NodeLibraryModal";
 import { OutlineView } from "./OutlineView";
+import { ReviewModal } from "./ReviewModal";
 
 export type { ConnMeta };
 
@@ -98,6 +99,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [library, setLibrary] = useState<{ open: boolean; ctx: LibraryCtx; allow?: { common: NodeType[]; advanced: NodeType[] } }>({ open: false, ctx: null });
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<"outline" | "canvas">("outline");
+  const [reviewing, setReviewing] = useState(false);
   const { fitView } = useReactFlow();
 
   const past = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
@@ -356,6 +358,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     if (r.ok) {
       setPublishState({ status: "published", version: r.version });
       if (r.warning) setPublishWarning(r.warning);
+      setReviewing(false);
     } else {
       setPublishError(r.error);
     }
@@ -384,6 +387,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         edges,
         stepNoById,
         titleOf: (n) => nodeTitle(String(n.type) as NodeType, n.data),
+        iconOf: (n) => nodeIcon(String(n.type) as NodeType, n.data),
         sampleIndexOf: (n) => Number((n.data.config as { sampleIndex?: unknown }).sampleIndex ?? 0),
       }),
     [selected, edges, nodes, stepNoById],
@@ -468,8 +472,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           {publishState.status === "published" && (
             <span className="rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800">Published v{publishState.version}</span>
           )}
-          <button onClick={publish} disabled={publishing} className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
-            {publishing ? "Publishing…" : "Publish"}
+          <button onClick={() => { setPublishError(null); setReviewing(true); }} disabled={publishing} className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
+            Review and publish
           </button>
         </div>
       </header>
@@ -564,6 +568,16 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             createNode(type, library.ctx);
             setLibrary({ open: false, ctx: null });
           }}
+        />
+      )}
+
+      {reviewing && (
+        <ReviewModal
+          summary={buildReview(nodes, stepNoById, (n) => nodeTitle(String(n.type) as NodeType, n.data))}
+          publishing={publishing}
+          error={publishError}
+          onPublish={publish}
+          onClose={() => setReviewing(false)}
         />
       )}
     </div>

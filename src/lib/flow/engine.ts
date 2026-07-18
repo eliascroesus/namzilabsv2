@@ -402,10 +402,11 @@ function evalRules(rec: FlowRecord, cfg: FilterConfig): boolean {
   return cfg.combinator === "or" ? results.some(Boolean) : results.every(Boolean);
 }
 
-function evalRule(rec: FlowRecord, rule: { field: string; op: string; value: string; value2?: string }): boolean {
+function evalRule(rec: FlowRecord, rule: { field: string; op: string; value: string; value2?: string; valueField?: string }): boolean {
   const raw = getField(rec, rule.field);
   const str = raw == null ? "" : String(raw);
-  const v = rule.value;
+  // The comparison value is a fixed literal, or another field when mapped.
+  const v = rule.valueField ? String(getField(rec, rule.valueField) ?? "") : rule.value;
   switch (rule.op) {
     case "equals":
       return str === v;

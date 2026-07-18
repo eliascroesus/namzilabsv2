@@ -18,11 +18,11 @@ export type NodeData = {
 };
 export type FNode = Node<NodeData>;
 
-export type Rule = { field: string; op: string; value: string; value2?: string };
+export type Rule = { field: string; op: string; value: string; value2?: string; valueField?: string };
 export type Filters = { combinator: string; rules: Rule[] };
 
 export type PickField = { path: string; label: string; type?: string; example?: unknown };
-export type FieldGroup = { from: string; stepNo?: number; system?: boolean; fields: PickField[] };
+export type FieldGroup = { from: string; stepNo?: number; system?: boolean; icon?: string; fields: PickField[] };
 
 export type Graph = {
   nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>;
@@ -176,8 +176,15 @@ export function resolveSampleField(rec: unknown, path: string): unknown {
       return r[path];
     default: {
       const props = r.properties as Record<string, unknown> | undefined;
-      const key = path.startsWith("properties.") ? path.slice("properties.".length) : path;
-      return props?.[key];
+      const raw = path.startsWith("properties.") ? path.slice("properties.".length) : path;
+      if (props == null) return undefined;
+      if (Object.prototype.hasOwnProperty.call(props, raw)) return props[raw];
+      let cur: unknown = props;
+      for (const seg of raw.split(".")) {
+        if (cur == null || typeof cur !== "object") return undefined;
+        cur = (cur as Record<string, unknown>)[seg];
+      }
+      return cur;
     }
   }
 }
@@ -194,9 +201,10 @@ export function buildFieldGroups(opts: {
   edges: Edge[];
   stepNoById: Map<string, number>;
   titleOf: (n: FNode) => string;
+  iconOf?: (n: FNode) => string;
   sampleIndexOf?: (n: FNode) => number;
 }): FieldGroup[] {
-  const { selectedId, nodes, edges, stepNoById, titleOf, sampleIndexOf } = opts;
+  const { selectedId, nodes, edges, stepNoById, titleOf, iconOf, sampleIndexOf } = opts;
   const stdSet = new Set<string>(STANDARD_FIELDS);
   const systemFields: PickField[] = STANDARD_FIELDS.map((p) => ({ path: p, label: STD_META[p]?.label ?? p, type: STD_META[p]?.type }));
   const groups: FieldGroup[] = [];
@@ -220,12 +228,12 @@ export function buildFieldGroups(opts: {
           custom.push({ path: f.path, label: f.label, type: f.type, example: ex });
         }
       }
-      if (custom.length) groups.push({ from: titleOf(sn), stepNo: stepNoById.get(sid), fields: custom });
+      if (custom.length) groups.push({ from: titleOf(sn), stepNo: stepNoById.get(sid), icon: iconOf?.(sn), fields: custom });
     }
   }
 
   // Source fields first; canonical/system fields last (rendered collapsed).
-  return [...groups, { from: "System fields", system: true, fields: systemFields }];
+  return [...groups, { from: "System fields", system: true, icon: "⚙️", fields: systemFields }];
 }
 
 // ---------- Input descriptors (Combine / Formula config panels) ----------

@@ -188,3 +188,43 @@ export function buildOutcome(key: OutcomeKey): { nodes: GNode[]; edges: Edge[] }
     }
   }
 }
+
+// ---------- Review & publish summary ----------
+
+export type ReviewSummary = {
+  metrics: Array<{ name: string; value?: string; format?: string }>;
+  sources: string[];
+  dateRules: string[];
+  calculations: string[];
+  untested: Array<{ step?: number; title: string }>;
+  stale: Array<{ step?: number; title: string }>;
+};
+
+/** Summarize a flow for the Review & publish step. */
+export function buildReview(nodes: FNode[], stepNoById: Map<string, number>, titleOf: (n: FNode) => string): ReviewSummary {
+  const metrics: ReviewSummary["metrics"] = [];
+  const sources = new Set<string>();
+  const dateRules: string[] = [];
+  const calculations: string[] = [];
+  const untested: ReviewSummary["untested"] = [];
+  const stale: ReviewSummary["stale"] = [];
+
+  for (const n of nodes) {
+    const type = n.type as NodeType;
+    const c = n.data.config as Record<string, unknown>;
+    const t = n.data.lastTest;
+    const ref = { step: stepNoById.get(n.id), title: titleOf(n) };
+
+    if (type === "output") {
+      metrics.push({ name: (c.name as string) || "Untitled metric", value: t?.tile != null ? String((t.tile as { value?: unknown }).value ?? "") : undefined, format: c.format as string });
+    }
+    if (type === "app") sources.add(`${(c.connectionName as string) || (c.source as string) || "a source"} · ${(c.eventType as string) || "all records"}`);
+    if (type === "time") dateRules.push(sentenceFor("time", n.data));
+    if (type === "aggregate" || type === "formula" || type === "group") calculations.push(sentenceFor(type, n.data));
+
+    if (!t || t.status !== "ok") untested.push(ref);
+    else if (n.data.dirty) stale.push(ref);
+  }
+
+  return { metrics, sources: [...sources], dateRules, calculations, untested, stale };
+}

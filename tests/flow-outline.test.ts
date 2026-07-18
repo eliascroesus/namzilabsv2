@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { STEP_LABEL, stageOf, sentenceFor, nextOptions, buildOutcome, OUTCOMES } from "@/components/flow/outline";
+import { STEP_LABEL, stageOf, sentenceFor, nextOptions, buildOutcome, buildReview, OUTCOMES } from "@/components/flow/outline";
 import type { FNode } from "@/components/flow/graph-utils";
 
 const data = (config: Record<string, unknown>) => ({ config }) as FNode["data"];
+const node = (id: string, type: string, cfg: Record<string, unknown>, extra: Partial<FNode["data"]> = {}): FNode =>
+  ({ id, type, position: { x: 0, y: 0 }, data: { config: cfg, ...extra } }) as FNode;
 
 describe("plain-language names + stages", () => {
   it("renames node types to business language", () => {
@@ -62,5 +64,21 @@ describe("buildOutcome", () => {
   });
   it("custom starts from a single data source", () => {
     expect(buildOutcome("custom").nodes.map((n) => n.type)).toEqual(["app"]);
+  });
+});
+
+describe("buildReview", () => {
+  it("summarizes metrics, sources, calculations and unready steps", () => {
+    const nodes: FNode[] = [
+      node("a", "app", { connectionName: "Calendly", eventType: "booked" }, { lastTest: { status: "ok", recordsIn: 3, recordsOut: 3, sample: [], inputSample: [], outputSchema: [] } }),
+      node("agg", "aggregate", { aggregation: "count" }), // untested
+      node("o", "output", { name: "Booked calls", format: "number" }, { lastTest: { status: "ok", recordsIn: 1, recordsOut: 1, sample: [], inputSample: [], outputSchema: [], tile: { value: 3 } } }),
+    ];
+    const stepNo = new Map([["a", 1], ["agg", 2], ["o", 3]]);
+    const r = buildReview(nodes, stepNo, (n) => String(n.type));
+    expect(r.metrics).toEqual([{ name: "Booked calls", value: "3", format: "number" }]);
+    expect(r.sources).toEqual(["Calendly · booked"]);
+    expect(r.calculations).toContain("Count matching records");
+    expect(r.untested.map((u) => u.step)).toContain(2);
   });
 });

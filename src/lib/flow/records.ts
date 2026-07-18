@@ -54,8 +54,18 @@ export function getField(rec: FlowRecord, path: string): unknown {
     case "id":
       return rec.id;
     default: {
-      const key = path.startsWith("properties.") ? path.slice("properties.".length) : path;
-      return rec.properties?.[key];
+      const raw = path.startsWith("properties.") ? path.slice("properties.".length) : path;
+      const props = rec.properties;
+      if (props == null) return undefined;
+      // Exact key first (keys may legitimately contain dots), then a nested walk
+      // so `a.b.c` descends objects and `items.0.name` indexes arrays.
+      if (Object.prototype.hasOwnProperty.call(props, raw)) return props[raw];
+      let cur: unknown = props;
+      for (const seg of raw.split(".")) {
+        if (cur == null || typeof cur !== "object") return undefined;
+        cur = (cur as Record<string, unknown>)[seg];
+      }
+      return cur;
     }
   }
 }

@@ -180,6 +180,38 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
     expect((await runFlow({ db, orgId: ORG }, ends)).outputs[0].tile.value).toBe(2);
   });
 
+  it("resolves nested object + array paths in filters", async () => {
+    await ev({ eventType: "signup", properties: { plan: { tier: "pro" }, items: [{ sku: "A" }] } });
+    await ev({ eventType: "signup", properties: { plan: { tier: "free" }, items: [{ sku: "B" }] } });
+    const g = (field: string, value: string) =>
+      G(
+        [
+          N("a", "app", { connectionId: CONN }),
+          N("f", "filter", { combinator: "and", rules: [{ field, op: "equals", value }] }),
+          N("agg", "aggregate", { aggregation: "count" }),
+          N("o", "output", {}),
+        ],
+        [E("a", "f"), E("f", "agg"), E("agg", "o")],
+      );
+    expect((await runFlow({ db, orgId: ORG }, g("properties.plan.tier", "pro"))).outputs[0].tile.value).toBe(1);
+    expect((await runFlow({ db, orgId: ORG }, g("properties.items.0.sku", "B"))).outputs[0].tile.value).toBe(1);
+  });
+
+  it("compares a field against another field (mapped value)", async () => {
+    await ev({ eventType: "e", subject: "a", properties: { owner: "a" } });
+    await ev({ eventType: "e", subject: "b", properties: { owner: "c" } });
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("f", "filter", { combinator: "and", rules: [{ field: "subject", op: "equals", value: "", valueField: "properties.owner" }] }),
+        N("agg", "aggregate", { aggregation: "count" }),
+        N("o", "output", {}),
+      ],
+      [E("a", "f"), E("f", "agg"), E("agg", "o")],
+    );
+    expect((await runFlow({ db, orgId: ORG }, g)).outputs[0].tile.value).toBe(1); // only subject==owner
+  });
+
   it("is tenant isolated", async () => {
     await ev({ eventType: "booked", subject: "mine" });
     await ev({ eventType: "booked", subject: "theirs", orgId: "org_other" });
