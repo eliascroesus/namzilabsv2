@@ -52,6 +52,22 @@ migrations applied (`pnpm db:migrate`), WorkOS + Google + Inngest env configured
 - [ ] Add a new row in the sheet → **Re-sync now** → the new row appears as a `row_added` event on `/dashboard`; re-syncing again does not duplicate it (row cursor).
 - [ ] Let the OAuth access token expire (>1h) → a later poll/preview still works (token auto-refreshed and persisted).
 
+## 5. Flows canvas + materialized dashboard (M1–M3)
+
+- [ ] `/dashboard/flows` → **New flow** opens the canvas.
+- [ ] Build **App → Filter → Aggregate → Output**; **Test** each node → shows records in/out + latest 3 samples; the variable picker lists upstream fields.
+- [ ] **Publish** → a stored tile appears on `/dashboard` with a freshness badge and `Updated …` time.
+- [ ] Edit the draft (e.g. change the filter) — the published dashboard tile does **not** change until you **Publish** again (immutable version).
+
+## 6. Sync / data system (M4)
+
+- [ ] Connect a poll-capable source → the connection page **Data status** shows `importing…` then `synced`/`live`; **Last full sync** gets a timestamp (initial historical backfill ran via Inngest `sync-connection`).
+- [ ] **Data & sync → Sync new** → an incremental `sync-connection` run completes; only new upstream records are added (no deletions).
+- [ ] Delete a record upstream, then **Full re-sync** → the working dataset stays visible during the run; afterward the removed record is soft-deleted (gone from `/dashboard` and node tests) while everything else is preserved (generation swap).
+- [ ] **Reprocess** → re-normalizes from stored raw events with no provider calls; canonical events are unchanged in count.
+- [ ] In a published flow that reads the synced source, land new data → its dashboard tile flips to **stale**; the `materialize-stale` cron (every 10 min) or a manual **Refresh** on the tile recomputes it back to **fresh**.
+- [ ] Open a flow in the canvas and select the **App** node → the Setup tab shows the connection's live **Data status** dot; an `outdated`/`error` connection links to **Manage**.
+
 ---
 
 If any box fails, capture the response/log and do not promote the deploy.

@@ -1,10 +1,12 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { getDb } from "@/db/client";
 import { requireOrg } from "@/lib/auth";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow } from "@/lib/flow/store";
 import { runFlow } from "@/lib/flow/engine";
+import { materializeFlow } from "@/lib/flow/materialize";
 import { parseGraph } from "@/lib/flow/types";
 import { validateGraph } from "@/lib/flow/validate";
 import { inngest } from "@/inngest/client";
@@ -78,6 +80,17 @@ export async function testNodeAction(graph: unknown, nodeId: string): Promise<No
 export async function validateFlowAction(graph: unknown): Promise<{ issues: Array<{ nodeId?: string; message: string }> }> {
   await requireOrg();
   return { issues: validateGraph(parseGraph(graph)) };
+}
+
+/**
+ * Manual "Refresh" from the dashboard: recompute a published flow's stored
+ * results now (org-scoped) so the tile shows current data on reload.
+ */
+export async function refreshFlowAction(formData: FormData): Promise<void> {
+  const { orgId } = await requireOrg();
+  const id = String(formData.get("flowId") ?? "");
+  if (id) await materializeFlow(getDb(), orgId, id);
+  revalidatePath("/dashboard");
 }
 
 export async function publishFlowAction(id: string): Promise<{ ok: true; version: number } | { ok: false; error: string }> {

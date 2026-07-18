@@ -36,6 +36,7 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
     name: c.name,
     source: c.source,
     eventTypes: (typesByConn.get(c.id) ?? []).sort(),
+    syncStatus: c.syncStatus,
   }));
 
   return (

@@ -60,6 +60,36 @@ export async function resyncAction(formData: FormData): Promise<void> {
   redirect(`/connections/${id}`);
 }
 
+/** Pull only new records since the last sync (additive). */
+export async function syncNewAction(formData: FormData): Promise<void> {
+  const { orgId } = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  const conn = await getConnection(orgId, id);
+  if (!conn) throw new Error("connection not found");
+  await inngest.send({ name: "sync/connection.requested", data: { connectionId: id, mode: "incremental" } });
+  redirect(`/connections/${id}`);
+}
+
+/** Rebuild the connection's dataset safely (versioned replacement; removes upstream-deleted records). */
+export async function fullResyncAction(formData: FormData): Promise<void> {
+  const { orgId } = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  const conn = await getConnection(orgId, id);
+  if (!conn) throw new Error("connection not found");
+  await inngest.send({ name: "sync/connection.requested", data: { connectionId: id, mode: "full" } });
+  redirect(`/connections/${id}`);
+}
+
+/** Re-run normalization from the stored raw events (no provider calls). */
+export async function reprocessAction(formData: FormData): Promise<void> {
+  const { orgId } = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  const conn = await getConnection(orgId, id);
+  if (!conn) throw new Error("connection not found");
+  await inngest.send({ name: "sync/reprocess.requested", data: { orgId, connectionId: id } });
+  redirect(`/connections/${id}`);
+}
+
 export async function disconnectAction(formData: FormData): Promise<void> {
   const { orgId } = await requireOrg();
   const id = String(formData.get("id") ?? "");

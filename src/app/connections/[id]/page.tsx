@@ -4,7 +4,13 @@ import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { getConnection, getSigningSecret, previewLatest, webhookUrlFor } from "@/lib/connections";
 import { catalogEntry } from "@/connectors/catalog";
-import { resyncAction, disconnectAction, updateConfigAction } from "@/app/integrations/actions";
+import {
+  disconnectAction,
+  updateConfigAction,
+  syncNewAction,
+  fullResyncAction,
+  reprocessAction,
+} from "@/app/integrations/actions";
 import type { CanonicalEvent } from "@/connectors/types";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +67,16 @@ export default async function ConnectionPage({
         )}
 
         <dl className="mt-6 grid grid-cols-2 gap-4 rounded-md border border-neutral-200 p-4 text-sm">
+          <div>
+            <dt className="text-neutral-500">Data status</dt>
+            <dd className="mt-0.5">
+              <SyncStatusBadge status={conn.syncStatus} />
+            </dd>
+          </div>
+          <Field
+            label="Last full sync"
+            value={conn.historicalSyncedAt ? new Date(conn.historicalSyncedAt).toLocaleString() : "Never"}
+          />
           <Field label="Last event" value={conn.lastEventAt ? new Date(conn.lastEventAt).toLocaleString() : "—"} />
           <Field label="Created" value={new Date(conn.createdAt).toLocaleString()} />
           <Field label="Instant webhook" value={entry?.instant ? "Yes" : "No"} />
@@ -120,13 +136,38 @@ export default async function ConnectionPage({
           {previewRows && <PreviewTable rows={previewRows} />}
         </section>
 
-        <div className="mt-10 flex gap-3">
-          <form action={resyncAction}>
-            <input type="hidden" name="id" value={conn.id} />
-            <button className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
-              Re-sync now
-            </button>
-          </form>
+        {/* Data & sync controls */}
+        <section className="mt-10">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Data &amp; sync</h2>
+          <div className="rounded-md border border-neutral-200 p-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              {entry?.poll && (
+                <SyncControl
+                  action={syncNewAction}
+                  id={conn.id}
+                  label="Sync new"
+                  hint="Pull records added since the last sync. Additive — nothing is removed."
+                />
+              )}
+              {entry?.poll && (
+                <SyncControl
+                  action={fullResyncAction}
+                  id={conn.id}
+                  label="Full re-sync"
+                  hint="Safely rebuild the full dataset and drop records deleted upstream. Your data stays live during the sync."
+                />
+              )}
+              <SyncControl
+                action={reprocessAction}
+                id={conn.id}
+                label="Reprocess"
+                hint="Re-run normalization from stored raw events. No provider calls."
+              />
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-8 flex justify-end">
           <form action={disconnectAction}>
             <input type="hidden" name="id" value={conn.id} />
             <button className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
@@ -199,4 +240,39 @@ function StatusBadge({ status }: { status: string }) {
         ? "bg-red-100 text-red-800"
         : "bg-neutral-100 text-neutral-700";
   return <span className={`rounded px-2 py-0.5 text-xs font-medium ${color}`}>{status}</span>;
+}
+
+const SYNC_STATUS_STYLES: Record<string, { label: string; className: string }> = {
+  live: { label: "Live", className: "bg-green-100 text-green-800" },
+  synced: { label: "Synced", className: "bg-green-100 text-green-800" },
+  importing: { label: "Importing…", className: "bg-blue-100 text-blue-800" },
+  outdated: { label: "Outdated", className: "bg-amber-100 text-amber-800" },
+  error: { label: "Sync error", className: "bg-red-100 text-red-800" },
+};
+
+function SyncStatusBadge({ status }: { status: string }) {
+  const s = SYNC_STATUS_STYLES[status] ?? { label: status, className: "bg-neutral-100 text-neutral-700" };
+  return <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${s.className}`}>{s.label}</span>;
+}
+
+function SyncControl({
+  action,
+  id,
+  label,
+  hint,
+}: {
+  action: (formData: FormData) => void | Promise<void>;
+  id: string;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <form action={action} className="flex flex-col gap-2">
+      <input type="hidden" name="id" value={id} />
+      <button className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
+        {label}
+      </button>
+      <p className="text-xs leading-relaxed text-neutral-500">{hint}</p>
+    </form>
+  );
 }

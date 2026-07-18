@@ -28,7 +28,7 @@ import {
   type NodeTestDTO,
 } from "@/app/dashboard/flows/actions";
 
-export type ConnMeta = { id: string; name: string; source: string; eventTypes: string[] };
+export type ConnMeta = { id: string; name: string; source: string; eventTypes: string[]; syncStatus?: string };
 
 type NodeData = {
   config: Record<string, unknown>;
@@ -158,6 +158,21 @@ function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
 function pathHandles(data: NodeData): Array<{ id: string; label: string }> {
   const paths = (data.config.paths as Array<{ id: string; label: string }>) ?? [];
   return [...paths, { id: String(data.config.fallbackId ?? "fallback"), label: String(data.config.fallbackLabel ?? "Fallback") }];
+}
+
+const SYNC_DOT: Record<string, string> = {
+  live: "bg-green-500",
+  synced: "bg-green-500",
+  importing: "bg-blue-500",
+  outdated: "bg-amber-500",
+  error: "bg-red-500",
+};
+function SyncDot({ status }: { status: string }) {
+  return <span className={`inline-block h-2 w-2 rounded-full align-middle ${SYNC_DOT[status] ?? "bg-neutral-400"}`} />;
+}
+function syncStatusLabel(status: string): string {
+  const map: Record<string, string> = { importing: "importing…", outdated: "outdated", error: "sync error" };
+  return map[status] ?? status;
 }
 
 const nodeTypes = {
@@ -596,6 +611,20 @@ function ConfigureTab({
             ))}
           </select>
         </Field>
+        {conn?.syncStatus && (
+          <p className="text-xs text-neutral-500">
+            Data status: <SyncDot status={conn.syncStatus} /> {syncStatusLabel(conn.syncStatus)}
+            {conn.syncStatus === "outdated" || conn.syncStatus === "error" ? (
+              <>
+                {" "}
+                &middot;{" "}
+                <a className="underline" href={`/connections/${conn.id}`}>
+                  Manage
+                </a>
+              </>
+            ) : null}
+          </p>
+        )}
         {connections.length === 0 && (
           <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
             No connected accounts yet. Connect one in <a className="underline" href="/integrations">Integrations</a>.

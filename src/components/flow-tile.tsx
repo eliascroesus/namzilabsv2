@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { refreshFlowAction } from "@/app/dashboard/flows/actions";
 
 type Tile = {
   name?: string;
@@ -46,6 +47,16 @@ export function FlowTile({ row }: { row: FlowResultRow }) {
         <h3 className="font-medium text-neutral-800">{t.name ?? "Metric"}</h3>
         <div className="flex items-center gap-2">
           <Freshness status={row.status} />
+          <form action={refreshFlowAction}>
+            <input type="hidden" name="flowId" value={row.flowId} />
+            <button
+              type="submit"
+              className="text-xs text-neutral-500 hover:text-neutral-800 hover:underline"
+              title="Recompute this tile now"
+            >
+              Refresh
+            </button>
+          </form>
           <Link href={`/dashboard/flows/${row.flowId}`} className="text-xs text-blue-600 hover:underline">
             Open →
           </Link>

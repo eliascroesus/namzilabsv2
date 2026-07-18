@@ -7,6 +7,7 @@ import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
 import { getConnector } from "@/connectors/registry";
 import { catalogEntry } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
+import { inngest } from "@/inngest/client";
 import type { CanonicalEvent } from "@/connectors/types";
 
 export type Connection = typeof connections.$inferSelect;
@@ -87,6 +88,15 @@ export async function createConnection(input: CreateConnectionInput): Promise<Co
       .update(connections)
       .set({ ...patch, updatedAt: new Date() })
       .where(eq(connections.id, created.id));
+  }
+
+  // Kick off the initial historical backfill for poll-capable sources.
+  if (connector?.poll) {
+    try {
+      await inngest.send({ name: "sync/connection.requested", data: { connectionId: created.id, mode: "full" } });
+    } catch {
+      // Inngest not configured (e.g. local dev without keys) — don't block connect.
+    }
   }
 
   return (await getConnection(input.orgId, created.id))!;

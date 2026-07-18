@@ -1,9 +1,9 @@
 import { and, eq, notInArray } from "drizzle-orm";
-import { flowResults } from "@/db/schema";
+import { flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { runFlow } from "./engine";
 import { getPublishedVersion } from "./store";
-import type { TileSpec } from "./types";
+import { parseGraph, type TileSpec } from "./types";
 
 /**
  * Compute the published version's Output results and store them in flow_results
@@ -34,6 +34,46 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
 /** Mark a published flow's stored results stale (e.g. when new events land). */
 export async function markFlowStale(db: DB, flowId: string): Promise<void> {
   await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.flowId, flowId));
+}
+
+/**
+ * Mark stale every published flow whose graph pulls from `source` (or the given
+ * connection). Called when new data lands so the dashboard shows freshness and a
+ * later recompute refreshes only what changed.
+ */
+export async function markStaleForSource(db: DB, orgId: string, source: string, connectionId?: string | null): Promise<string[]> {
+  const published = await db.select().from(flows).where(and(eq(flows.orgId, orgId), eq(flows.status, "published")));
+  const affected: string[] = [];
+  for (const f of published) {
+    if (!f.publishedVersion) continue;
+    const [ver] = await db
+      .select()
+      .from(flowVersions)
+      .where(and(eq(flowVersions.flowId, f.id), eq(flowVersions.version, f.publishedVersion)))
+      .limit(1);
+    if (!ver) continue;
+    const graph = parseGraph(ver.graph);
+    const uses = graph.nodes.some((n) => {
+      if (n.type !== "app") return false;
+      const c = (n.data.config ?? {}) as { source?: string; connectionId?: string };
+      return c.source === source || (connectionId != null && c.connectionId === connectionId);
+    });
+    if (uses) {
+      await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.flowId, f.id));
+      affected.push(f.id);
+    }
+  }
+  return affected;
+}
+
+/** Recompute every flow that currently has stale results (scheduled + on-demand). */
+export async function materializeStaleAll(db: DB): Promise<number> {
+  const stale = await db
+    .selectDistinct({ orgId: flowResults.orgId, flowId: flowResults.flowId })
+    .from(flowResults)
+    .where(eq(flowResults.status, "stale"));
+  for (const s of stale) await materializeFlow(db, s.orgId, s.flowId);
+  return stale.length;
 }
 
 async function upsertResult(

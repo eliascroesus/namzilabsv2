@@ -24,6 +24,10 @@ export const processEvent = inngest.createFunction(
   },
   async ({ event, step }) => {
     const { rawEventId } = event.data as { rawEventId: string };
-    return step.run("process-raw-event", () => processRawEvent(getDb(), rawEventId));
+    const res = await step.run("process-raw-event", () => processRawEvent(getDb(), rawEventId));
+    if (res.inserted > 0) {
+      await step.run("notify-flows", () => inngest.send({ name: "flow/data.changed", data: { rawEventId } }));
+    }
+    return res;
   },
 );
