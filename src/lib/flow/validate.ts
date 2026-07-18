@@ -1,4 +1,4 @@
-import { AppConfigSchema, FormulaConfigSchema, PathsConfigSchema, GroupConfigSchema, NODE_TYPES, type FlowGraph, type FlowNode } from "./types";
+import { AppConfigSchema, PathsConfigSchema, GroupConfigSchema, NODE_TYPES, type FlowGraph, type FlowNode } from "./types";
 
 export type ValidationIssue = { nodeId?: string; message: string };
 
@@ -13,7 +13,6 @@ const DATASET_CONSUMERS = new Set(["filter", "aggregate", "time", "formatter", "
 /** Nodes that consume computed values. */
 const VALUE_CONSUMERS = new Set(["formula"]);
 
-const NEEDS_TWO_INPUTS = new Set(["subtract", "difference", "divide", "ratio", "percentage", "percent_change"]);
 
 function outputKind(node: FlowNode): ShapeKind {
   if (DATASET_PRODUCERS.has(node.type)) return "dataset";
@@ -44,9 +43,12 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
   }
 
   const incoming = new Map<string, string[]>();
+  const incomingEdges = new Map<string, FlowGraph["edges"]>();
   for (const e of graph.edges) {
     if (!incoming.has(e.target)) incoming.set(e.target, []);
     incoming.get(e.target)!.push(e.source);
+    if (!incomingEdges.has(e.target)) incomingEdges.set(e.target, []);
+    incomingEdges.get(e.target)!.push(e);
   }
 
   if (hasCycle(graph)) issues.push({ message: "The flow has a loop; connections must flow in one direction." });
@@ -82,9 +84,12 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
         }
       }
       if (node.type === "formula") {
-        const cfg = FormulaConfigSchema.safeParse(node.data.config ?? {});
-        if (cfg.success && NEEDS_TWO_INPUTS.has(cfg.data.op) && ins.length < 2) {
-          issues.push({ nodeId: node.id, message: `Formula "${cfg.data.op}" needs two connected numbers.` });
+        // Formula is binary: exactly one number into handle "a" and one into "b".
+        const fEdges = incomingEdges.get(node.id) ?? [];
+        const aCount = fEdges.filter((e) => e.targetHandle === "a").length;
+        const bCount = fEdges.filter((e) => e.targetHandle === "b").length;
+        if (aCount !== 1 || bCount !== 1) {
+          issues.push({ nodeId: node.id, message: "Formula needs one number in input A and one in input B." });
         }
       }
     }

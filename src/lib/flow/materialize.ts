@@ -18,10 +18,15 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
   try {
     const { nodes, outputs } = await runFlow({ db, orgId }, graph);
     if (outputs.length === 0) {
-      // Every Output node failed to compute (its inputs errored). Surface why.
-      const outNode = graph.nodes.find((n) => n.type === "output");
-      const exec = outNode ? nodes.get(outNode.id) : undefined;
-      const message = exec && exec.status === "error" ? exec.error : "The flow produced no dashboard result.";
+      // No Output produced a result. Surface the earliest failing node's error
+      // (topological order) — that's the root cause, not the downstream fallout.
+      let message = "The flow produced no dashboard result.";
+      for (const [, n] of nodes) {
+        if (n.status === "error") {
+          message = n.error;
+          break;
+        }
+      }
       await db.update(flowResults).set({ status: "error", error: message }).where(eq(flowResults.flowId, flowId));
       return { ok: false, error: message };
     }

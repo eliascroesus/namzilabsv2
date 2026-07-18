@@ -68,6 +68,21 @@ migrations applied (`pnpm db:migrate`), WorkOS + Google + Inngest env configured
 - [ ] In a published flow that reads the synced source, land new data → its dashboard tile flips to **stale**; the `materialize-stale` cron (every 10 min) or a manual **Refresh** on the tile recomputes it back to **fresh**.
 - [ ] Open a flow in the canvas and select the **App** node → the Setup tab shows the connection's live **Data status** dot; an `outdated`/`error` connection links to **Manage**.
 
+## 7. Canvas v2 UX + fixes
+
+- [ ] Apply migration `0003` first — all previously-built flows are gone (expected; no back-compat).
+- [ ] Canvas has no permanent left palette. **+ Add step** (toolbar), the **+** on a node's right edge, and the **+** on a connection all open the searchable **Add a step** library; picking a tool adds/inserts it (auto-connected).
+- [ ] Nodes show **step number + icon + editable title** (e.g. "1. Google Sheets"), with the node type as secondary text; renaming in the config header updates the card.
+- [ ] Config tabs are a guided progression: **Setup / Configure / Test** with ✓ checkmarks, Test disabled until setup is complete, and one primary CTA that reads **Fix N required fields → Continue → Test node**.
+- [ ] Variable picker (the **+** by a field) shows **Standard fields before any test**, then adds each tested upstream step's custom fields with type + sample value pills, grouped by step.
+- [ ] Add a **Formula**: it has two labeled input handles (e.g. **Numerator / Denominator**); the card and Configure tab show the live expression (`A ÷ B × 100`); connecting Aggregate→A and Aggregate→B computes correctly regardless of connection order.
+- [ ] Filter operators read in plain language (Exactly matches, Does not match, Starts with, …); **is empty / is not empty** hide the value box.
+- [ ] Test tab shows **"56 of 74 records passed"** and a compact **Before / After** sample preview.
+- [ ] **Auto layout** tidies the graph left→right; **Fit**, **Align**, and **Collapse/Expand** work; edges are smoothstep (no overlap tangles).
+- [ ] Publishing a valid flow shows the tile immediately on `/dashboard`. Force a compute failure (e.g. divide by an empty field) → banner reads **"Flow published, but the dashboard result could not be calculated."** (not a publish failure).
+- [ ] Integrations connect form shows real field **labels** with example placeholders (nothing looks pre-filled); Calendly has a **Fetch meetings for** dropdown (User / Organization / Group).
+- [ ] Reload `/onboarding` as a user who already has a workspace → you're offered to **enter** an existing workspace, and creating is behind an explicit "Create another workspace" — no duplicate org is minted.
+
 ---
 
 If any box fails, capture the response/log and do not promote the deploy.

@@ -24,6 +24,7 @@ afterEach(async () => {
 
 const N = (id: string, type: string, config: unknown) => ({ id, type, data: { config } });
 const E = (s: string, t: string) => ({ id: `${s}->${t}`, source: s, target: t });
+const ET = (s: string, t: string, handle: string) => ({ id: `${s}->${t}:${handle}`, source: s, target: t, targetHandle: handle });
 const validGraph = {
   nodes: [
     N("a", "app", { connectionId: CONN }),
@@ -105,6 +106,28 @@ describe("materializer", () => {
     expect(rows[0].status).toBe("fresh");
     expect((rows[0].tile as { value: number }).value).toBe(5);
     expect(rows[0].computedAt).not.toBeNull();
+  });
+
+  it("reports ok:false when a published flow cannot be computed (drives the publish warning)", async () => {
+    await seedEvents(3);
+    // Passes validation (both formula handles connected) but divides by zero at runtime.
+    const graph = {
+      nodes: [
+        N("a", "app", { connectionId: CONN }),
+        N("num", "aggregate", { aggregation: "count" }),
+        N("den", "aggregate", { aggregation: "sum", field: "value" }), // sum of null = 0
+        N("div", "formula", { op: "divide" }),
+        N("o", "output", { name: "Bad" }),
+      ],
+      edges: [E("a", "num"), E("a", "den"), ET("num", "div", "a"), ET("den", "div", "b"), E("div", "o")],
+    };
+    const flow = await createFlow(db, ORG);
+    await saveDraft(db, ORG, flow.id, graph);
+    await publishFlow(db, ORG, flow.id); // publish itself succeeds
+
+    const res = await materializeFlow(db, ORG, flow.id);
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/Division by zero/);
   });
 });
 

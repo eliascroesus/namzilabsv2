@@ -35,6 +35,8 @@ async function ev(o: { source?: string; eventType: string; subject?: string | nu
 const N = (id: string, type: string, config: unknown) => ({ id, type, data: { config } });
 const E = (s: string, t: string) => ({ id: `${s}->${t}`, source: s, target: t });
 const EH = (s: string, t: string, handle: string) => ({ id: `${s}:${handle}->${t}`, source: s, target: t, sourceHandle: handle });
+/** Edge into a named target handle (Formula A/B). */
+const ET = (s: string, t: string, handle: string) => ({ id: `${s}->${t}:${handle}`, source: s, target: t, targetHandle: handle });
 const G = (nodes: unknown[], edges: unknown[]) => parseGraph({ nodes, edges });
 const run = (g: ReturnType<typeof G>) => runFlow({ db, orgId: ORG }, g);
 
@@ -73,10 +75,43 @@ describe("Formula node", () => {
         N("pct", "formula", { op: "percentage" }),
         N("o", "output", { name: "Booking rate", format: "percent", precision: 1 }),
       ],
-      [E("a", "f"), E("f", "aggBooked"), E("a", "aggTotal"), E("aggBooked", "pct"), E("aggTotal", "pct"), E("pct", "o")],
+      [E("a", "f"), E("f", "aggBooked"), E("a", "aggTotal"), ET("aggBooked", "pct", "a"), ET("aggTotal", "pct", "b"), E("pct", "o")],
     );
     const r = await run(g);
     expect(r.outputs[0].tile.value).toBe(75); // 3 / 4 * 100
+  });
+
+  it("resolves operands strictly by named handle (A/B), not edge order", async () => {
+    await ev({ eventType: "booked", value: 10 });
+    await ev({ eventType: "booked", value: 40 });
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("sum", "aggregate", { aggregation: "sum", field: "value" }), // 50
+        N("cnt", "aggregate", { aggregation: "count" }), // 2
+        N("div", "formula", { op: "divide" }),
+        N("o", "output", {}),
+      ],
+      // Wire cnt→B and sum→A even though cnt is listed/added first: A/B must win.
+      [E("a", "sum"), E("a", "cnt"), ET("cnt", "div", "b"), ET("sum", "div", "a"), E("div", "o")],
+    );
+    expect((await run(g)).outputs[0].tile.value).toBe(25); // 50 (A) / 2 (B)
+  });
+
+  it("errors when a Formula input handle is missing", async () => {
+    await ev({ eventType: "booked" });
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("cnt", "aggregate", { aggregation: "count" }),
+        N("div", "formula", { op: "divide" }),
+        N("o", "output", {}),
+      ],
+      [E("a", "cnt"), ET("cnt", "div", "a"), E("div", "o")], // only A connected
+    );
+    const r = await run(g);
+    expect(r.nodes.get("div")!.status).toBe("error");
+    expect((r.nodes.get("div") as { error: string }).error).toMatch(/input B/);
   });
 
   it("errors clearly on divide by zero", async () => {
@@ -89,7 +124,7 @@ describe("Formula node", () => {
         N("div", "formula", { op: "divide" }),
         N("o", "output", {}),
       ],
-      [E("a", "num"), E("a", "den"), E("num", "div"), E("den", "div"), E("div", "o")],
+      [E("a", "num"), E("a", "den"), ET("num", "div", "a"), ET("den", "div", "b"), E("div", "o")],
     );
     const r = await run(g);
     expect(r.nodes.get("div")!.status).toBe("error");

@@ -46,6 +46,8 @@ export type NodeTestDTO = {
   recordsIn: number;
   recordsOut: number;
   sample: unknown[];
+  /** Sample of the primary input (before) — for the before/after test preview. */
+  inputSample: unknown[];
   outputSchema: Array<{ path: string; label: string; type: string; example?: unknown }>;
   error?: string;
   tile?: unknown;
@@ -58,22 +60,27 @@ export async function testNodeAction(graph: unknown, nodeId: string): Promise<No
     const g = parseGraph(graph);
     const res = await runFlow({ db: getDb(), orgId }, g, { untilNodeId: nodeId });
     const exec = res.nodes.get(nodeId);
+    // The "before" side of the preview: the primary input node's output sample.
+    const inNodeId = g.edges.find((e) => e.target === nodeId)?.source;
+    const inExec = inNodeId ? res.nodes.get(inNodeId) : undefined;
+    const inputSample = inExec && inExec.status === "ok" ? inExec.sample : [];
     if (!exec) {
-      return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], outputSchema: [], error: "This node didn't run — check that its inputs are connected and tested." };
+      return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample, outputSchema: [], error: "This node didn't run — check that its inputs are connected and tested." };
     }
     if (exec.status === "error") {
-      return { status: "error", recordsIn: exec.recordsIn, recordsOut: exec.recordsOut, sample: [], outputSchema: [], error: exec.error };
+      return { status: "error", recordsIn: exec.recordsIn, recordsOut: exec.recordsOut, sample: [], inputSample, outputSchema: [], error: exec.error };
     }
     return {
       status: "ok",
       recordsIn: exec.recordsIn,
       recordsOut: exec.recordsOut,
       sample: exec.sample,
+      inputSample,
       outputSchema: exec.outputSchema,
       tile: exec.tile,
     };
   } catch (e) {
-    return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], outputSchema: [], error: e instanceof Error ? e.message : String(e) };
+    return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: e instanceof Error ? e.message : String(e) };
   }
 }
 

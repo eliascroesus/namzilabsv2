@@ -52,7 +52,7 @@ export type NodeExecErr = {
 };
 export type NodeExec = NodeExecOk | NodeExecErr;
 
-type ResolvedInput = { shape: Shape; exec: NodeExecOk };
+type ResolvedInput = { shape: Shape; exec: NodeExecOk; targetHandle: string | null };
 
 export type RunResult = {
   nodes: Map<string, NodeExec>;
@@ -88,7 +88,7 @@ export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNod
         continue;
       }
       const shape = e.sourceHandle && se.outputs?.[e.sourceHandle] ? se.outputs[e.sourceHandle] : se.shape;
-      inputs.push({ shape, exec: se });
+      inputs.push({ shape, exec: se, targetHandle: e.targetHandle ?? null });
     }
 
     const exec = await execNode(ctx, node, inputs, inputError);
@@ -278,34 +278,36 @@ function execAggregate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
 }
 
 // ---------- Formula ----------
+// A Formula is a binary operation over two named inputs: handle "a" and handle "b".
+// (No edge-order fallback — all pre-v2 flows are wiped in migration 0003.)
 function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = FormulaConfigSchema.parse(node.data.config ?? {});
-  const values: number[] = [];
-  for (const i of inputs) {
-    if (i.shape.kind !== "scalar") throw new Error("Formula inputs must be single numbers (connect Aggregate nodes).");
-    values.push(i.shape.value);
-  }
-  if (values.length === 0) throw new Error("Formula needs at least one connected number.");
-  const a = values[0];
-  const b = values[1] ?? 0;
+  const scalarAt = (handle: "a" | "b"): number => {
+    const found = inputs.find((i) => i.targetHandle === handle);
+    if (!found) throw new Error(`Formula needs a number connected to input ${handle.toUpperCase()}.`);
+    if (found.shape.kind !== "scalar") throw new Error("Formula inputs must be single numbers (connect Aggregate/Formula nodes).");
+    return found.shape.value;
+  };
+  const a = scalarAt("a");
+  const b = scalarAt("b");
   const divGuard = (x: number, y: number) => {
-    if (y === 0) throw new Error("Division by zero — check the denominator input.");
+    if (y === 0) throw new Error("Division by zero — check the second (B / denominator) input.");
     return x / y;
   };
   let value: number;
   switch (cfg.op) {
     case "add":
-      value = values.reduce((x, y) => x + y, 0);
+      value = a + b;
       break;
     case "average":
-      value = values.reduce((x, y) => x + y, 0) / values.length;
+      value = (a + b) / 2;
       break;
     case "subtract":
     case "difference":
       value = a - b;
       break;
     case "multiply":
-      value = values.reduce((x, y) => x * y, 1);
+      value = a * b;
       break;
     case "divide":
     case "ratio":
@@ -322,7 +324,7 @@ function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     status: "ok",
     nodeType: "formula",
     shape: { kind: "scalar", value: round(value) },
-    recordsIn: values.length,
+    recordsIn: 2,
     recordsOut: 1,
     sample: [],
     outputSchema: [],
