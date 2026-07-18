@@ -150,8 +150,8 @@ describe("graph validation", () => {
     });
     expect(validateGraph(g).some((i) => /records as input/.test(i.message))).toBe(true);
   });
-  it("flags a graph with no Output", () => {
+  it("flags a graph with no dashboard metric (no Summarize/Calculate/Breakdown step)", () => {
     const g = parseGraph({ nodes: [N("a", "app", { connectionId: CONN })], edges: [] });
-    expect(validateGraph(g).some((i) => /Output/.test(i.message))).toBe(true);
+    expect(validateGraph(g).some((i) => /dashboard metric/i.test(i.message))).toBe(true);
   });
 });

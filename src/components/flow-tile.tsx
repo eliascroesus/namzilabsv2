@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { refreshFlowAction } from "@/app/dashboard/flows/actions";
+import { formatMetric } from "@/lib/format";
 
 type Tile = {
   name?: string;
@@ -24,18 +25,7 @@ export type FlowResultRow = {
 };
 
 function fmt(value: number | undefined, t: Tile): string {
-  if (value == null) return "—";
-  const p = t.precision ?? 0;
-  if (t.format === "percent") return `${value.toFixed(p)}%`;
-  if (t.format === "currency") {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: t.currency || "USD",
-      maximumFractionDigits: p,
-    }).format(value);
-  }
-  const n = value.toLocaleString(undefined, { maximumFractionDigits: p });
-  return t.unit ? `${n} ${t.unit}` : n;
+  return formatMetric(value, t);
 }
 
 /** Renders one materialized flow Output as a dashboard tile. */

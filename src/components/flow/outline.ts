@@ -2,7 +2,7 @@ import type { NodeType } from "@/lib/flow/types";
 import type { Edge } from "@xyflow/react";
 import type { FNode, NodeData } from "./graph-utils";
 import { isValidFlowConnection } from "./graph-utils";
-import { ALL_TYPES, defaultConfig, formulaExpression } from "./node-meta";
+import { ADDABLE_TYPES, defaultConfig, formatResult, formulaExpression } from "./node-meta";
 
 // ---------- Plain-language step names ----------
 
@@ -104,7 +104,6 @@ export function sentenceFor(type: NodeType, data: NodeData): string {
 // ---------- Valid next actions (library filtering) ----------
 
 const ADVANCED_NEXT = new Set<NodeType>(["paths", "group"]);
-const VALUE_PRODUCERS = new Set<NodeType>(["aggregate", "formula", "group"]);
 
 /**
  * The step types that may follow `srcType`, split into the everyday ones and the
@@ -112,10 +111,9 @@ const VALUE_PRODUCERS = new Set<NodeType>(["aggregate", "formula", "group"]);
  * hides Dashboard metric until there is something to summarize/calculate.
  */
 export function nextOptions(srcType: NodeType): { common: NodeType[]; advanced: NodeType[] } {
-  const valid = ALL_TYPES.filter((t) => t !== "app" && isValidFlowConnection(srcType, t));
+  const valid = ADDABLE_TYPES.filter((t) => t !== "app" && isValidFlowConnection(srcType, t));
   const advanced = valid.filter((t) => ADVANCED_NEXT.has(t));
-  let common = valid.filter((t) => !ADVANCED_NEXT.has(t));
-  if (!VALUE_PRODUCERS.has(srcType)) common = common.filter((t) => t !== "output");
+  const common = valid.filter((t) => !ADVANCED_NEXT.has(t));
   return { common, advanced };
 }
 
@@ -147,39 +145,34 @@ export function buildOutcome(key: OutcomeKey): { nodes: GNode[]; edges: Edge[] }
   switch (key) {
     case "count": {
       const a = node("app", 60, 80);
-      const agg = node("aggregate", 360, 80, { aggregation: "count" });
-      const out = node("output", 660, 80, { name: "New count", viz: "number", format: "number" });
-      return { nodes: [a, agg, out], edges: [edge(a.id, agg.id), edge(agg.id, out.id)] };
+      const agg = node("aggregate", 360, 80, { aggregation: "count", name: "New count", viz: "number" });
+      return { nodes: [a, agg], edges: [edge(a.id, agg.id)] };
     }
     case "sum": {
       const a = node("app", 60, 80);
-      const agg = node("aggregate", 360, 80, { aggregation: "sum", field: "value" });
-      const out = node("output", 660, 80, { name: "New total", viz: "number", format: "number" });
-      return { nodes: [a, agg, out], edges: [edge(a.id, agg.id), edge(agg.id, out.id)] };
+      const agg = node("aggregate", 360, 80, { aggregation: "sum", field: "value", name: "New total", viz: "number" });
+      return { nodes: [a, agg], edges: [edge(a.id, agg.id)] };
     }
     case "rate": {
       const a = node("app", 60, 120);
       const filter = node("filter", 360, 40, { combinator: "and", rules: [] });
       const num = node("aggregate", 660, 40, { aggregation: "count" });
       const den = node("aggregate", 360, 220, { aggregation: "count" });
-      const calc = node("formula", 960, 120, { op: "percentage" });
-      const out = node("output", 1260, 120, { name: "Conversion rate", viz: "number", format: "percent", precision: 1 });
+      const calc = node("formula", 960, 120, { op: "percentage", name: "Conversion rate", format: "percent", precision: 2 });
       return {
-        nodes: [a, filter, num, den, calc, out],
-        edges: [edge(a.id, filter.id), edge(filter.id, num.id), edge(a.id, den.id), edge(num.id, calc.id, "a"), edge(den.id, calc.id, "b"), edge(calc.id, out.id)],
+        nodes: [a, filter, num, den, calc],
+        edges: [edge(a.id, filter.id), edge(filter.id, num.id), edge(a.id, den.id), edge(num.id, calc.id, "a"), edge(den.id, calc.id, "b")],
       };
     }
     case "breakdown": {
       const a = node("app", 60, 80);
-      const grp = node("group", 360, 80, { mode: "field", field: "source", aggregation: "count" });
-      const out = node("output", 660, 80, { name: "Breakdown", viz: "category" });
-      return { nodes: [a, grp, out], edges: [edge(a.id, grp.id), edge(grp.id, out.id)] };
+      const grp = node("group", 360, 80, { mode: "field", field: "source", aggregation: "count", name: "Breakdown", viz: "category" });
+      return { nodes: [a, grp], edges: [edge(a.id, grp.id)] };
     }
     case "trend": {
       const a = node("app", 60, 80);
-      const agg = node("aggregate", 360, 80, { aggregation: "count", groupBy: { type: "time", unit: "day" } });
-      const out = node("output", 660, 80, { name: "Trend", viz: "line" });
-      return { nodes: [a, agg, out], edges: [edge(a.id, agg.id), edge(agg.id, out.id)] };
+      const agg = node("aggregate", 360, 80, { aggregation: "count", groupBy: { type: "time", unit: "day" }, name: "Trend", viz: "line" });
+      return { nodes: [a, agg], edges: [edge(a.id, agg.id)] };
     }
     case "custom":
     default: {
@@ -200,14 +193,17 @@ export type ReviewSummary = {
   stale: Array<{ step?: number; title: string }>;
 };
 
+const CALC = new Set<string>(["aggregate", "formula", "group"]);
+
 /** Summarize a flow for the Review & publish step. */
-export function buildReview(nodes: FNode[], stepNoById: Map<string, number>, titleOf: (n: FNode) => string): ReviewSummary {
+export function buildReview(nodes: FNode[], edges: Edge[], stepNoById: Map<string, number>, titleOf: (n: FNode) => string): ReviewSummary {
   const metrics: ReviewSummary["metrics"] = [];
   const sources = new Set<string>();
   const dateRules: string[] = [];
   const calculations: string[] = [];
   const untested: ReviewSummary["untested"] = [];
   const stale: ReviewSummary["stale"] = [];
+  const hasOutgoing = new Set(edges.map((e) => e.source));
 
   for (const n of nodes) {
     const type = n.type as NodeType;
@@ -215,12 +211,18 @@ export function buildReview(nodes: FNode[], stepNoById: Map<string, number>, tit
     const t = n.data.lastTest;
     const ref = { step: stepNoById.get(n.id), title: titleOf(n) };
 
-    if (type === "output") {
-      metrics.push({ name: (c.name as string) || "Untitled metric", value: t?.tile != null ? String((t.tile as { value?: unknown }).value ?? "") : undefined, format: c.format as string });
+    // A calc node that ends a branch (or is opted in) is a dashboard metric.
+    const isDashboard = type === "output" || (CALC.has(type) && (!hasOutgoing.has(n.id) || c.addToDashboard === true));
+    if (isDashboard) {
+      metrics.push({
+        name: (c.name as string) || titleOf(n),
+        value: t?.status === "ok" ? formatResult(t.tile as never, t.recordsOut) : undefined,
+        format: c.format as string,
+      });
     }
     if (type === "app") sources.add(`${(c.connectionName as string) || (c.source as string) || "a source"} · ${(c.eventType as string) || "all records"}`);
     if (type === "time") dateRules.push(sentenceFor("time", n.data));
-    if (type === "aggregate" || type === "formula" || type === "group") calculations.push(sentenceFor(type, n.data));
+    if (CALC.has(type)) calculations.push(sentenceFor(type, n.data));
 
     if (!t || t.status !== "ok") untested.push(ref);
     else if (n.data.dirty) stale.push(ref);

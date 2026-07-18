@@ -103,6 +103,8 @@ export type AppConfig = z.infer<typeof AppConfigSchema>;
 // ---------- Aggregate ----------
 export const AGGREGATIONS = ["count", "count_distinct", "sum", "avg", "min", "max"] as const;
 export const TIME_UNITS = ["day", "week", "month", "quarter", "year"] as const;
+/** Dashboard visualization types (used by calculation nodes and the legacy Output). */
+export const VIZ_TYPES = ["number", "line", "bar", "category", "table", "progress", "funnel"] as const;
 
 export const GroupBySchema = z
   .discriminatedUnion("type", [
@@ -112,16 +114,34 @@ export const GroupBySchema = z
   .nullable()
   .default(null);
 
+/**
+ * Dashboard display settings. Calculation nodes (Aggregate / Formula / Group) can
+ * be shown on the dashboard directly — no separate Output node — so they carry the
+ * tile's name, visualization, and number formatting. `format`/`precision`/`viz`
+ * are optional so `metricDisplay` can pick smart defaults (e.g. % for percentages).
+ */
+export const DisplayShape = {
+  name: z.string().default(""),
+  viz: z.enum(VIZ_TYPES).optional(),
+  format: z.enum(["number", "percent", "currency"]).optional(),
+  precision: z.number().int().min(0).max(6).optional(),
+  currency: z.string().default("USD"),
+  unit: z.string().optional(),
+  target: z.number().nullable().default(null),
+  /** Show this node on the dashboard even when it isn't the final step. */
+  addToDashboard: z.boolean().default(false),
+};
+
 export const AggregateConfigSchema = z.object({
   aggregation: z.enum(AGGREGATIONS).default("count"),
   field: z.string().default("value"),
   distinctField: z.string().default("subject"),
   groupBy: GroupBySchema,
+  ...DisplayShape,
 });
 export type AggregateConfig = z.infer<typeof AggregateConfigSchema>;
 
-// ---------- Output ----------
-export const VIZ_TYPES = ["number", "line", "bar", "category", "table", "progress", "funnel"] as const;
+// ---------- Output (legacy — no longer addable; calc nodes carry the tile) ----------
 export const OutputConfigSchema = z.object({
   name: z.string().default("Untitled metric"),
   description: z.string().optional(),
@@ -171,6 +191,7 @@ export const FORMULA_OPS = [
 ] as const;
 export const FormulaConfigSchema = z.object({
   op: z.enum(FORMULA_OPS).default("percentage"),
+  ...DisplayShape,
 });
 export type FormulaConfig = z.infer<typeof FormulaConfigSchema>;
 
@@ -194,6 +215,7 @@ export const GroupConfigSchema = z.object({
   distinctField: z.string().default("subject"),
   categories: z.array(z.object({ label: z.string().min(1), filters: FilterConfigSchema })).default([]),
   fallbackLabel: z.string().default("Other"),
+  ...DisplayShape,
 });
 export type GroupConfig = z.infer<typeof GroupConfigSchema>;
 

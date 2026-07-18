@@ -120,8 +120,18 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
     }
   }
 
-  if (graph.nodes.filter((n) => n.type === "output").length === 0) {
-    issues.push({ message: "Add an Output node to save a result to the dashboard." });
+  // A flow needs at least one dashboard metric: a Summarize / Calculate / Breakdown
+  // step that ends a branch (or is opted in), or the legacy Output node.
+  const hasOutgoing = new Set(graph.edges.map((e) => e.source));
+  const CALC = new Set(["aggregate", "formula", "group"]);
+  const dashboardTiles = graph.nodes.filter((n) => {
+    if (n.type === "output") return true;
+    if (!CALC.has(n.type)) return false;
+    const cfg = (n.data.config ?? {}) as { addToDashboard?: boolean };
+    return !hasOutgoing.has(n.id) || cfg.addToDashboard === true;
+  });
+  if (dashboardTiles.length === 0) {
+    issues.push({ message: "Add a Summarize, Calculate, or Breakdown step — it becomes your dashboard metric." });
   }
 
   return issues;

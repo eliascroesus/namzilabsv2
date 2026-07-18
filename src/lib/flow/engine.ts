@@ -3,6 +3,7 @@ import { events } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { eventToRecord, getField, toNumber, type FlowRecord } from "./records";
 import { inferSchema, type FieldInfo } from "./schema-infer";
+import { metricDisplay } from "./display";
 import {
   AppConfigSchema,
   FilterConfigSchema,
@@ -71,6 +72,7 @@ export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNod
 
   const wanted = opts.untilNodeId ? ancestorsOf(opts.untilNodeId, incomingBy) : new Set(graph.nodes.map((n) => n.id));
   const order = topoSort(graph).filter((id) => wanted.has(id));
+  const hasOutgoing = new Set(graph.edges.map((e) => e.source));
 
   const nodes = new Map<string, NodeExec>();
   const outputs: RunResult["outputs"] = [];
@@ -93,12 +95,22 @@ export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNod
 
     const exec = await execNode(ctx, node, inputs, inputError);
     nodes.set(id, exec);
-    if (node.type === "output" && exec.status === "ok" && exec.tile) {
+    // A calculation node shows on the dashboard when it's the end of its branch,
+    // or when the user opted in. The legacy Output node always does.
+    if (exec.status === "ok" && exec.tile && isDashboardTile(node, hasOutgoing)) {
       outputs.push({ nodeId: id, tile: exec.tile });
     }
   }
 
   return { nodes, outputs };
+}
+
+const CALC_TYPES = new Set(["aggregate", "formula", "group"]);
+function isDashboardTile(node: FlowNode, hasOutgoing: Set<string>): boolean {
+  if (node.type === "output") return true;
+  if (!CALC_TYPES.has(node.type)) return false;
+  const cfg = (node.data.config ?? {}) as { addToDashboard?: boolean };
+  return !hasOutgoing.has(node.id) || cfg.addToDashboard === true;
 }
 
 async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[], inputError: boolean): Promise<NodeExec> {
@@ -257,14 +269,16 @@ function execGroup(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = GroupConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Group");
   const groups = cfg.mode === "field" ? groupByField(input.records, cfg) : groupByCategories(input.records, cfg);
+  const shape: Grouped = { kind: "grouped", groups };
   return {
     status: "ok",
     nodeType: "group",
-    shape: { kind: "grouped", groups },
+    shape,
     recordsIn: input.records.length,
     recordsOut: groups.length,
     sample: input.records.slice(0, 3),
     outputSchema: [],
+    tile: tileFromDisplay(node, shape, input.records.slice(0, 5)),
   };
 }
 
@@ -282,6 +296,7 @@ function execAggregate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     recordsOut,
     sample: input.records.slice(0, 3),
     outputSchema: [],
+    tile: tileFromDisplay(node, shape, input.records.slice(0, 5)),
   };
 }
 
@@ -328,14 +343,16 @@ function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
       value = divGuard(a - b, b) * 100;
       break;
   }
+  const shape: Scalar = { kind: "scalar", value: round(value) };
   return {
     status: "ok",
     nodeType: "formula",
-    shape: { kind: "scalar", value: round(value) },
+    shape,
     recordsIn: 2,
     recordsOut: 1,
     sample: [],
     outputSchema: [],
+    tile: tileFromDisplay(node, shape, []),
   };
 }
 
@@ -381,6 +398,32 @@ function execOutput(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     outputSchema: [],
     tile,
   };
+}
+
+/** Build a dashboard tile from a calculation node's display config + result shape. */
+function tileFromDisplay(node: FlowNode, shape: Shape, sample: FlowRecord[]): TileSpec {
+  const d = metricDisplay(node.type, (node.data.config ?? {}) as Record<string, unknown>);
+  const tile: TileSpec = {
+    name: d.name,
+    viz: d.viz as TileSpec["viz"],
+    format: d.format,
+    currency: d.currency,
+    unit: d.unit,
+    precision: d.precision,
+    target: d.target,
+    sample,
+  };
+  if (shape.kind === "scalar") tile.value = shape.value;
+  else if (shape.kind === "series") {
+    tile.series = shape.series;
+    tile.value = round(shape.series.reduce((a, b) => a + b.value, 0));
+  } else if (shape.kind === "grouped") {
+    tile.groups = shape.groups;
+    tile.value = round(shape.groups.reduce((a, b) => a + b.value, 0));
+  } else {
+    tile.value = shape.records.length;
+  }
+  return tile;
 }
 
 // ---------- shared executors helpers ----------

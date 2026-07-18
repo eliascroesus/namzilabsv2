@@ -148,6 +148,19 @@ export function isValidFlowConnection(sourceType: string, targetType: string): b
   return DATASET_PRODUCERS.has(sourceType); // dataset consumers
 }
 
+/**
+ * Plain-English reason a step can't connect directly after `sourceType`, or null
+ * if it can. Lets the Add-step picker show every step but explain what's needed.
+ */
+export function incompatReason(sourceType: string | undefined, targetType: string): string | null {
+  if (!sourceType) return targetType === "app" ? null : "Add a data source first.";
+  if (isValidFlowConnection(sourceType, targetType)) return null;
+  if (targetType === "app") return "A data source starts a flow — it has no input.";
+  if (targetType === "formula") return "Needs a single number. Add a Summarize or Calculate step before it.";
+  // dataset consumers
+  return "Needs records. Put it after a data step (Data source, Filter, Date range, …), not a number.";
+}
+
 // ---------- Variable picker fields ----------
 
 /** Canonical (system) fields, grouped under a collapsed "System fields" section. */

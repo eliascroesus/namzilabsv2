@@ -14,9 +14,10 @@ import {
   type NodeType,
   type FlowFilterOp,
 } from "@/lib/flow/types";
+import { metricDisplay } from "@/lib/flow/display";
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor, Rule } from "./graph-utils";
 import { collidingFields } from "./graph-utils";
-import { NODE_META, MORE_FILTER_OPS, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
+import { NODE_META, MORE_FILTER_OPS, defaultTitle, formatResult, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { STEP_LABEL, stageOf } from "./outline";
 import { FieldPicker, ValueInput } from "./FieldPicker";
 import { RecordSamplePicker } from "./RecordSamplePicker";
@@ -61,6 +62,7 @@ export function ConfigPanel({
   fieldGroups,
   inputs,
   inputCount,
+  hasOutgoing,
   testing,
   canReconnect,
   onChange,
@@ -76,6 +78,7 @@ export function ConfigPanel({
   fieldGroups: FieldGroup[];
   inputs: InputDescriptor[];
   inputCount: number;
+  hasOutgoing: boolean;
   testing: boolean;
   canReconnect: boolean;
   onChange: (patch: Record<string, unknown>) => void;
@@ -93,27 +96,41 @@ export function ConfigPanel({
   const isMetric = METRIC_STEPS.has(type);
   const previewLabelWord = isMetric ? "Calculate preview" : "Preview";
 
+  // Integration steps have no separate Configure tab — everything lives in Setup.
+  const tabs: Array<{ key: TabKey; label: string; done: boolean; enabled: boolean }> = (
+    type === "app"
+      ? ([
+          { key: "setup", label: "Setup", done: setupDone, enabled: true },
+          { key: "test", label: "Test data", done: tested, enabled: setupDone },
+        ] as const)
+      : ([
+          { key: "setup", label: "Setup", done: setupDone, enabled: true },
+          { key: "configure", label: "Configure", done: setupDone, enabled: true },
+          { key: "test", label: previewLabelWord, done: tested, enabled: setupDone },
+        ] as const)
+  ).map((t) => ({ ...t }));
+
   // Auto-open the first incomplete tab.
-  const initialTab: TabKey = !setupDone ? "setup" : !tested ? "test" : "configure";
+  const initialTab: TabKey = !setupDone ? "setup" : !tested ? "test" : type === "app" ? "setup" : "configure";
   const [tab, setTab] = useState<TabKey>(initialTab);
 
   const previewCount = type === "app" ? node.data.lastTest?.recordsOut : inputs[0]?.recordCount;
-  const previewCta = type === "output" ? "Preview dashboard value" : isMetric ? "Test calculation" : previewCount != null ? `Preview ${previewCount} records` : "Preview records";
+  const previewCta = isMetric ? "Test calculation" : previewCount != null ? `Preview ${previewCount} records` : "Preview records";
 
   // One primary action, worded for the step + current tab; surfaces the real missing item.
+  const idx = tabs.findIndex((t) => t.key === tab);
+  const nextTab = tabs[idx + 1];
   const cta: { label: string; run: () => void; warn?: boolean } = !setupDone
     ? { label: missing[0], run: () => setTab("setup"), warn: true }
-    : tab === "setup"
-      ? { label: "Continue to configure", run: () => setTab("configure") }
-      : tab === "configure"
-        ? { label: previewCta, run: () => { setTab("test"); onTest(); } }
-        : { label: testing ? "Working…" : tested ? "Re-run preview" : previewCta, run: onTest };
-
-  const tabs: Array<{ key: TabKey; label: string; done: boolean; enabled: boolean }> = [
-    { key: "setup", label: "Setup", done: setupDone, enabled: true },
-    { key: "configure", label: "Configure", done: setupDone, enabled: true },
-    { key: "test", label: previewLabelWord, done: tested, enabled: setupDone },
-  ];
+    : nextTab
+      ? {
+          label: nextTab.key === "configure" ? "Continue to configure" : previewCta,
+          run: () => {
+            setTab(nextTab.key);
+            if (nextTab.key === "test") onTest();
+          },
+        }
+      : { label: testing ? "Working…" : tested ? "Re-run preview" : previewCta, run: onTest };
 
   return (
     <aside className="flex w-[480px] shrink-0 flex-col border-l border-neutral-200 bg-white">
@@ -153,7 +170,7 @@ export function ConfigPanel({
       {/* Body */}
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
         {tab === "setup" && <SetupFields type={type} cfg={cfg} connections={connections} fieldGroups={fieldGroups} inputs={inputs} inputCount={inputCount} missing={missing} onChange={onChange} />}
-        {tab === "configure" && <ConfigureFields type={type} cfg={cfg} fieldGroups={fieldGroups} inputs={inputs} onChange={onChange} />}
+        {tab === "configure" && <ConfigureFields type={type} cfg={cfg} fieldGroups={fieldGroups} inputs={inputs} hasOutgoing={hasOutgoing} onChange={onChange} />}
         {tab === "test" && <PreviewTab node={node} stepNo={stepNo} title={node.data.label?.trim() || defaultTitle(type, node.data)} testing={testing} inputs={inputs} onChange={onChange} />}
       </div>
 
@@ -271,6 +288,12 @@ function SetupFields({
             ))}
           </select>
         </Field>
+        <AdvancedSection>
+          <Field label="Match records using">
+            <FieldPicker value={(cfg.identityField as string) ?? "subject"} fieldGroups={fieldGroups} onChange={(v) => onChange({ identityField: v })} />
+          </Field>
+          <p className="text-xs text-neutral-400">Used by downstream Combine / de-duplicate steps to recognise the same person. Provider settings (spreadsheet, calendar, scope) live on the connection in Integrations.</p>
+        </AdvancedSection>
       </div>
     );
   }
@@ -353,7 +376,7 @@ function SetupFields({
     <div className="space-y-5">
       {banner}
       {inputCount === 0 && <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Connect an input step first.</p>}
-      <ConfigureFields type={type} cfg={cfg} fieldGroups={fieldGroups} inputs={inputs} onChange={onChange} />
+      <ConfigureFields type={type} cfg={cfg} fieldGroups={fieldGroups} inputs={inputs} hasOutgoing={false} onChange={onChange} />
     </div>
   );
 }
@@ -367,25 +390,16 @@ function ConfigureFields({
   cfg,
   fieldGroups,
   inputs,
+  hasOutgoing,
   onChange,
 }: {
   type: NodeType;
   cfg: Record<string, unknown>;
   fieldGroups: FieldGroup[];
   inputs: InputDescriptor[];
+  hasOutgoing: boolean;
   onChange: (patch: Record<string, unknown>) => void;
 }) {
-  if (type === "app") {
-    return (
-      <AdvancedSection defaultOpen>
-        <Field label="Match records using">
-          <FieldPicker value={(cfg.identityField as string) ?? "subject"} fieldGroups={fieldGroups} onChange={(v) => onChange({ identityField: v })} />
-        </Field>
-        <p className="text-xs text-neutral-400">Used by downstream Combine / de-duplicate steps to recognise the same person.</p>
-      </AdvancedSection>
-    );
-  }
-
   if (type === "filter") {
     const fc: Filters = { combinator: (cfg.combinator as string) ?? "and", rules: (cfg.rules as Rule[]) ?? [] };
     return <RulesEditor value={fc} fieldGroups={fieldGroups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />;
@@ -441,6 +455,7 @@ function ConfigureFields({
         <FormulaInput label={`${labels.a} (input A)`} desc={inputs.find((i) => i.targetHandle === "a")} />
         <FormulaInput label={`${labels.b} (input B)`} desc={inputs.find((i) => i.targetHandle === "b")} />
         <p className="text-xs text-neutral-400">Inputs A and B accept a single number from an Aggregate or Formula step.</p>
+        <DashboardSection nodeType="formula" cfg={cfg} hasOutgoing={hasOutgoing} onChange={onChange} />
       </div>
     );
   }
@@ -608,6 +623,7 @@ function ConfigureFields({
             <FieldPicker value={gb.field ?? "source"} fieldGroups={fieldGroups} onChange={(v) => onChange({ groupBy: { type: "field", field: v } })} />
           </Field>
         )}
+        <DashboardSection nodeType="aggregate" cfg={cfg} hasOutgoing={hasOutgoing} onChange={onChange} />
       </div>
     );
   }
@@ -628,11 +644,12 @@ function ConfigureFields({
             <FieldPicker value={(cfg.valueField as string) ?? "value"} fieldGroups={fieldGroups} onChange={(v) => onChange({ valueField: v })} />
           </Field>
         )}
+        <DashboardSection nodeType="group" cfg={cfg} hasOutgoing={hasOutgoing} onChange={onChange} />
       </div>
     );
   }
 
-  // output
+  // output (legacy)
   return (
     <div className="space-y-4">
       <Field label="Display as">
@@ -649,6 +666,73 @@ function ConfigureFields({
       <Field label="Goal / target (optional)">
         <input type="number" value={cfg.target != null ? Number(cfg.target) : ""} onChange={(e) => onChange({ target: e.target.value === "" ? null : Number(e.target.value) })} className={INPUT} />
       </Field>
+    </div>
+  );
+}
+
+const VIZ_BY_TYPE: Record<string, string[]> = {
+  aggregate: ["number", "line", "bar", "table"],
+  formula: ["number", "progress"],
+  group: ["category", "bar", "table"],
+};
+
+/** Dashboard tile settings, now on the calculation node itself (no Output node). */
+function DashboardSection({ nodeType, cfg, hasOutgoing, onChange }: { nodeType: NodeType; cfg: Record<string, unknown>; hasOutgoing: boolean; onChange: (patch: Record<string, unknown>) => void }) {
+  const on = !hasOutgoing || cfg.addToDashboard === true;
+  const d = metricDisplay(nodeType, cfg); // effective defaults for placeholders
+  const vizOptions = VIZ_BY_TYPE[nodeType] ?? VIZ_TYPES.slice();
+  return (
+    <div className="space-y-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Dashboard tile</p>
+      {hasOutgoing ? (
+        <label className="flex items-center gap-2 text-xs text-neutral-600">
+          <input type="checkbox" checked={!!cfg.addToDashboard} onChange={(e) => onChange({ addToDashboard: e.target.checked })} />
+          Also show this step on the dashboard
+        </label>
+      ) : (
+        <p className="text-xs text-neutral-400">This ends the branch, so it becomes a dashboard metric.</p>
+      )}
+      {on && (
+        <div className="space-y-3">
+          <Field label="Metric name">
+            <input value={(cfg.name as string) ?? ""} onChange={(e) => onChange({ name: e.target.value })} placeholder="e.g. Today's booked calls" className={INPUT} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Show as">
+              <select value={(cfg.viz as string) ?? d.viz} onChange={(e) => onChange({ viz: e.target.value })} className={INPUT}>
+                {vizOptions.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Format">
+              <select value={(cfg.format as string) ?? ""} onChange={(e) => onChange({ format: e.target.value || undefined })} className={INPUT}>
+                <option value="">Auto ({d.format})</option>
+                <option value="number">Number</option>
+                <option value="percent">Percentage</option>
+                <option value="currency">Currency</option>
+              </select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Decimals">
+              <input type="number" min={0} max={6} value={cfg.precision != null ? Number(cfg.precision) : ""} placeholder={String(d.precision)} onChange={(e) => onChange({ precision: e.target.value === "" ? undefined : Number(e.target.value) })} className={INPUT} />
+            </Field>
+            {d.format === "currency" ? (
+              <Field label="Currency">
+                <input value={(cfg.currency as string) ?? "USD"} onChange={(e) => onChange({ currency: e.target.value })} className={INPUT} />
+              </Field>
+            ) : (
+              <Field label="Unit (optional)">
+                <input value={(cfg.unit as string) ?? ""} onChange={(e) => onChange({ unit: e.target.value })} className={INPUT} />
+              </Field>
+            )}
+          </div>
+          <Field label="Goal / target (optional)">
+            <input type="number" value={cfg.target != null ? Number(cfg.target) : ""} onChange={(e) => onChange({ target: e.target.value === "" ? null : Number(e.target.value) })} className={INPUT} />
+          </Field>
+        </div>
+      )}
     </div>
   );
 }
@@ -711,6 +795,19 @@ function PreviewTab({ node, stepNo, title, testing, inputs, onChange }: { node: 
       {t && t.status === "ok" && (
         <div className="space-y-4">
           <p className="rounded border border-neutral-200 bg-neutral-50 p-3 text-center text-base font-semibold">{resultLabel(type, t)}</p>
+
+          {/* Formula: show the completed equation with the actual input values. */}
+          {type === "formula" && (() => {
+            const a = inputs.find((i) => i.targetHandle === "a");
+            const b = inputs.find((i) => i.targetHandle === "b");
+            if (a?.value == null || b?.value == null) return null;
+            const op = String((node.data.config as { op?: unknown }).op ?? "percentage");
+            return (
+              <p className="rounded border border-indigo-200 bg-indigo-50 p-2.5 text-center text-sm text-indigo-900">
+                {formulaExpression(op, String(a.value), String(b.value))} = {formatResult(t.tile as never, t.recordsOut)}
+              </p>
+            );
+          })()}
 
           {!isMetric && (
             <p className="text-xs text-neutral-500">

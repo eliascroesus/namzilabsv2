@@ -38,11 +38,13 @@ describe("nextOptions (valid next actions)", () => {
     expect(common).not.toContain("paths");
     expect(advanced).toEqual(expect.arrayContaining(["paths", "group"]));
   });
-  it("after Summarize: calculate or dashboard metric", () => {
-    expect(nextOptions("aggregate").common).toEqual(expect.arrayContaining(["formula", "output"]));
+  it("after Summarize: Calculate (the Summarize step is itself the dashboard metric — no Output)", () => {
+    expect(nextOptions("aggregate").common).toContain("formula");
+    expect(nextOptions("aggregate").common).not.toContain("output");
   });
-  it("after Calculate: calculate again or dashboard metric", () => {
-    expect(nextOptions("formula").common).toEqual(expect.arrayContaining(["formula", "output"]));
+  it("after Calculate: Calculate again", () => {
+    expect(nextOptions("formula").common).toContain("formula");
+    expect(nextOptions("formula").common).not.toContain("output");
   });
 });
 
@@ -50,10 +52,11 @@ describe("buildOutcome", () => {
   it("offers six outcomes", () => {
     expect(OUTCOMES.map((o) => o.key)).toEqual(["count", "sum", "rate", "breakdown", "trend", "custom"]);
   });
-  it("count = app → summarize → dashboard", () => {
+  it("count = app → summarize (the Summarize step is the dashboard metric, no Output node)", () => {
     const g = buildOutcome("count");
-    expect(g.nodes.map((n) => n.type)).toEqual(["app", "aggregate", "output"]);
-    expect(g.edges).toHaveLength(2);
+    expect(g.nodes.map((n) => n.type)).toEqual(["app", "aggregate"]);
+    expect(g.nodes.some((n) => n.type === "output")).toBe(false);
+    expect(g.edges).toHaveLength(1);
   });
   it("conversion rate branches and converges through a Formula with A/B handles", () => {
     const g = buildOutcome("rate");
@@ -68,15 +71,15 @@ describe("buildOutcome", () => {
 });
 
 describe("buildReview", () => {
-  it("summarizes metrics, sources, calculations and unready steps", () => {
+  it("treats a terminal calc node as the dashboard metric (no Output node)", () => {
     const nodes: FNode[] = [
       node("a", "app", { connectionName: "Calendly", eventType: "booked" }, { lastTest: { status: "ok", recordsIn: 3, recordsOut: 3, sample: [], inputSample: [], outputSchema: [] } }),
-      node("agg", "aggregate", { aggregation: "count" }), // untested
-      node("o", "output", { name: "Booked calls", format: "number" }, { lastTest: { status: "ok", recordsIn: 1, recordsOut: 1, sample: [], inputSample: [], outputSchema: [], tile: { value: 3 } } }),
+      node("agg", "aggregate", { aggregation: "count", name: "Booked calls" }), // untested leaf → dashboard metric
     ];
-    const stepNo = new Map([["a", 1], ["agg", 2], ["o", 3]]);
-    const r = buildReview(nodes, stepNo, (n) => String(n.type));
-    expect(r.metrics).toEqual([{ name: "Booked calls", value: "3", format: "number" }]);
+    const edges = [{ id: "e1", source: "a", target: "agg" }] as never[];
+    const stepNo = new Map([["a", 1], ["agg", 2]]);
+    const r = buildReview(nodes, edges, stepNo, (n: FNode) => String(n.type));
+    expect(r.metrics.map((m) => m.name)).toEqual(["Booked calls"]);
     expect(r.sources).toEqual(["Calendly · booked"]);
     expect(r.calculations).toContain("Count matching records");
     expect(r.untested.map((u) => u.step)).toContain(2);

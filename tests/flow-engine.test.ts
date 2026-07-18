@@ -44,6 +44,7 @@ async function ev(o: {
 // graph helpers
 const N = (id: string, type: string, config: unknown) => ({ id, type, data: { config } });
 const E = (s: string, t: string) => ({ id: `${s}->${t}`, source: s, target: t });
+const ET = (s: string, t: string, handle: string) => ({ id: `${s}->${t}:${handle}`, source: s, target: t, targetHandle: handle });
 const G = (nodes: unknown[], edges: unknown[]) => parseGraph({ nodes, edges });
 
 describe("flow engine — App → Filter → Aggregate → Output", () => {
@@ -210,6 +211,38 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
       [E("a", "f"), E("f", "agg"), E("agg", "o")],
     );
     expect((await runFlow({ db, orgId: ORG }, g)).outputs[0].tile.value).toBe(1); // only subject==owner
+  });
+
+  it("a leaf Aggregate is itself the dashboard metric (no Output node) with the real value", async () => {
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "booked" });
+    const g = G([N("a", "app", { connectionId: CONN }), N("agg", "aggregate", { aggregation: "count", name: "Booked" })], [E("a", "agg")]);
+    const r = await runFlow({ db, orgId: ORG }, g);
+    expect(r.outputs).toHaveLength(1);
+    expect(r.outputs[0].nodeId).toBe("agg");
+    expect(r.outputs[0].tile.value).toBe(2); // the real scalar, not the record count of 1
+    expect(r.outputs[0].tile.name).toBe("Booked");
+  });
+
+  it("a leaf Formula percentage produces a percent tile with the real result", async () => {
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "canceled" });
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("f", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "booked" }] }),
+        N("num", "aggregate", { aggregation: "count" }),
+        N("den", "aggregate", { aggregation: "count" }),
+        N("calc", "formula", { op: "percentage", name: "Rate" }),
+      ],
+      [E("a", "f"), E("f", "num"), E("a", "den"), ET("num", "calc", "a"), ET("den", "calc", "b")],
+    );
+    const r = await runFlow({ db, orgId: ORG }, g);
+    const out = r.outputs.find((o) => o.nodeId === "calc")!;
+    expect(out.tile.value).toBeCloseTo(75); // 3/4*100
+    expect(out.tile.format).toBe("percent"); // percentage auto-formats as %
   });
 
   it("is tenant isolated", async () => {

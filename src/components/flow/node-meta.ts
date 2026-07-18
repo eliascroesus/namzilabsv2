@@ -1,4 +1,5 @@
 import { FILTER_OP_LABELS, PRIMARY_FILTER_OPS, type NodeType, type FlowFilterOp } from "@/lib/flow/types";
+import { formatMetric, type MetricFormat } from "@/lib/format";
 import type { NodeData } from "./graph-utils";
 
 export const NODE_META: Record<NodeType, { label: string; blurb: string; accent: string; icon: string; category: string; keywords: string }> = {
@@ -15,6 +16,8 @@ export const NODE_META: Record<NodeType, { label: string; blurb: string; accent:
 };
 export const LIBRARY_ORDER = ["Sources", "Transform", "Combine", "Branch", "Math", "Output"];
 export const ALL_TYPES = Object.keys(NODE_META) as NodeType[];
+/** Types a user can add. Output is legacy — calculation nodes carry the tile now. */
+export const ADDABLE_TYPES = ALL_TYPES.filter((t) => t !== "output");
 
 export const SOURCE_ICON: Record<string, string> = {
   calendly: "📅",
@@ -136,10 +139,20 @@ export function summary(type: string, data: NodeData): string {
   return "";
 }
 
+type ResultTile = MetricFormat & { value?: number; series?: unknown[]; groups?: unknown[] };
+
+/** Format a calculation node's result (the real scalar/series/grouped value). */
+export function formatResult(tile: ResultTile | undefined, recordsOut: number): string {
+  if (!tile) return String(recordsOut);
+  if (tile.series && tile.series.length) return `${tile.series.length}-point trend`;
+  if (tile.groups && tile.groups.length) return `${tile.groups.length} groups`;
+  return formatMetric(tile.value, tile);
+}
+
 /** Node-specific wording for a successful test result. */
 export function resultLabel(type: string, test: { recordsIn: number; recordsOut: number; tile?: unknown }): string {
   const { recordsIn, recordsOut, tile } = test;
-  const val = tile != null ? String((tile as { value?: unknown }).value ?? "—") : String(recordsOut);
+  const t = tile as ResultTile | undefined;
   switch (type) {
     case "app":
       return `${recordsOut} records loaded`;
@@ -154,12 +167,12 @@ export function resultLabel(type: string, test: { recordsIn: number; recordsOut:
     case "paths":
       return `${recordsOut} records routed`;
     case "group":
-      return `${recordsOut} groups`;
+      return `${t?.groups?.length ?? recordsOut} groups`;
     case "aggregate":
     case "formula":
-      return `Result: ${val}`;
+      return `Result: ${formatResult(t, recordsOut)}`;
     case "output":
-      return `Dashboard value: ${val}`;
+      return `Dashboard value: ${formatResult(t, recordsOut)}`;
     default:
       return `${recordsOut} of ${recordsIn} records`;
   }
