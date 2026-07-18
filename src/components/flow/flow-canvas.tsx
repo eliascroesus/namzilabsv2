@@ -34,10 +34,12 @@ import {
   type LibraryCtx,
 } from "./graph-utils";
 import { ALL_TYPES, defaultConfig, nodeTitle } from "./node-meta";
+import { nextOptions, buildOutcome, type OutcomeKey } from "./outline";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
 import { ConfigPanel } from "./ConfigPanel";
 import { NodeLibraryModal } from "./NodeLibraryModal";
+import { OutlineView } from "./OutlineView";
 
 export type { ConnMeta };
 
@@ -93,8 +95,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [publishWarning, setPublishWarning] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [library, setLibrary] = useState<{ open: boolean; ctx: LibraryCtx }>({ open: false, ctx: null });
+  const [library, setLibrary] = useState<{ open: boolean; ctx: LibraryCtx; allow?: { common: NodeType[]; advanced: NodeType[] } }>({ open: false, ctx: null });
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<"outline" | "canvas">("outline");
   const { fitView } = useReactFlow();
 
   const past = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
@@ -189,15 +192,41 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [commit, nodes, setNodes, setEdges],
   );
 
-  const addFromNode = useCallback((sourceNodeId: string, sourceHandle?: string | null) => {
-    setLibrary({ open: true, ctx: { fromNodeId: sourceNodeId, sourceHandle } });
-  }, []);
+  const addFromNode = useCallback(
+    (sourceNodeId: string, sourceHandle?: string | null) => {
+      const src = nodes.find((n) => n.id === sourceNodeId);
+      const allow = src ? nextOptions(src.type as NodeType) : undefined;
+      setLibrary({ open: true, ctx: { fromNodeId: sourceNodeId, sourceHandle }, allow });
+    },
+    [nodes],
+  );
   const insertOnEdge = useCallback(
     (edgeId: string) => {
       const edge = edges.find((e) => e.id === edgeId);
-      if (edge) setLibrary({ open: true, ctx: { onEdge: edge } });
+      if (!edge) return;
+      const src = nodes.find((n) => n.id === edge.source);
+      const allow = src ? nextOptions(src.type as NodeType) : undefined;
+      setLibrary({ open: true, ctx: { onEdge: edge }, allow });
     },
-    [edges],
+    [edges, nodes],
+  );
+
+  /** Toolbar add: continue after the selected step, or add a fresh data source. */
+  const addStepFromToolbar = useCallback(() => {
+    if (selectedId) addFromNode(selectedId);
+    else setLibrary({ open: true, ctx: null, allow: { common: ["app"], advanced: [] } });
+  }, [selectedId, addFromNode]);
+
+  /** Start a flow from an outcome template (the "What do you want to measure?" step). */
+  const pickOutcome = useCallback(
+    (key: OutcomeKey) => {
+      commit();
+      const g = buildOutcome(key);
+      setNodes(g.nodes.map((n) => ({ id: n.id, type: n.type, position: n.position, data: { config: n.data.config, lastTest: null, dirty: false } }) as FNode));
+      setEdges(g.edges);
+      setSelectedId(g.nodes[0]?.id ?? null);
+    },
+    [commit, setNodes, setEdges],
   );
 
   const updateConfig = useCallback(
@@ -412,14 +441,27 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setLibrary({ open: true, ctx: null })} className="rounded-md bg-neutral-900 px-3 py-1 text-sm font-medium text-white hover:bg-neutral-800">
+          {/* Outline (default) vs Advanced canvas */}
+          <div className="flex rounded-md border border-neutral-300 p-0.5 text-xs">
+            <button onClick={() => setViewMode("outline")} className={`rounded px-2 py-1 ${viewMode === "outline" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50"}`}>
+              Outline
+            </button>
+            <button onClick={() => setViewMode("canvas")} className={`rounded px-2 py-1 ${viewMode === "canvas" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50"}`}>
+              Advanced canvas
+            </button>
+          </div>
+          <button onClick={addStepFromToolbar} className="rounded-md bg-neutral-900 px-3 py-1 text-sm font-medium text-white hover:bg-neutral-800">
             + Add step
           </button>
-          <div className="mx-1 h-5 w-px bg-neutral-200" />
-          <ToolButton onClick={autoLayout}>Auto layout</ToolButton>
-          <ToolButton onClick={alignSelection}>Align</ToolButton>
-          <ToolButton onClick={toggleCollapse}>{selectedId && collapsed.has(selectedId) ? "Expand" : "Collapse"}</ToolButton>
-          <ToolButton onClick={() => fitView({ padding: 0.2, duration: 300 })}>Fit</ToolButton>
+          {viewMode === "canvas" && (
+            <>
+              <div className="mx-1 h-5 w-px bg-neutral-200" />
+              <ToolButton onClick={autoLayout}>Auto layout</ToolButton>
+              <ToolButton onClick={alignSelection}>Align</ToolButton>
+              <ToolButton onClick={toggleCollapse}>{selectedId && collapsed.has(selectedId) ? "Expand" : "Collapse"}</ToolButton>
+              <ToolButton onClick={() => fitView({ padding: 0.2, duration: 300 })}>Fit</ToolButton>
+            </>
+          )}
           <div className="mx-1 h-5 w-px bg-neutral-200" />
           <ToolButton onClick={undo}>Undo</ToolButton>
           <ToolButton onClick={redo}>Redo</ToolButton>
@@ -443,36 +485,51 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       )}
 
       <div className="flex min-h-0 flex-1">
-        {/* Canvas */}
-        <div className="relative min-w-0 flex-1">
-          <ReactFlow
-            nodes={displayNodes}
-            edges={displayEdges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={(_, n) => setSelectedId(n.id)}
-            onPaneClick={() => setSelectedId(null)}
-            isValidConnection={isValidConnection}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            defaultEdgeOptions={{ type: "insert" }}
-            fitView
-            deleteKeyCode={["Backspace", "Delete"]}
-          >
-            <Background />
-            <Controls />
-            <MiniMap pannable zoomable />
-          </ReactFlow>
+        {/* Builder surface: structured outline (default) or the advanced canvas */}
+        <div className="relative min-w-0 flex-1 overflow-y-auto bg-neutral-50">
+          {viewMode === "outline" ? (
+            <OutlineView
+              nodes={nodes}
+              edges={edges}
+              selectedId={selectedId}
+              stepNoById={stepNoById}
+              onSelect={setSelectedId}
+              onAddAfter={addFromNode}
+              onInsertBetween={insertOnEdge}
+              onPickOutcome={pickOutcome}
+            />
+          ) : (
+            <div className="h-full w-full">
+              <ReactFlow
+                nodes={displayNodes}
+                edges={displayEdges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onNodeClick={(_, n) => setSelectedId(n.id)}
+                onPaneClick={() => setSelectedId(null)}
+                isValidConnection={isValidConnection}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                defaultEdgeOptions={{ type: "insert" }}
+                fitView
+                deleteKeyCode={["Backspace", "Delete"]}
+              >
+                <Background />
+                <Controls />
+                <MiniMap pannable zoomable />
+              </ReactFlow>
 
-          {empty && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="pointer-events-auto rounded-lg border border-dashed border-neutral-300 bg-white/80 p-8 text-center">
-                <p className="text-sm text-neutral-600">Start by pulling data from an app.</p>
-                <button onClick={() => setLibrary({ open: true, ctx: null })} className="mt-3 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
-                  + Add your first step
-                </button>
-              </div>
+              {empty && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div className="pointer-events-auto rounded-lg border border-dashed border-neutral-300 bg-white/80 p-8 text-center">
+                    <p className="text-sm text-neutral-600">Switch to Outline to start from a template, or add a step.</p>
+                    <button onClick={addStepFromToolbar} className="mt-3 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+                      + Add a data source
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -501,6 +558,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
       {library.open && (
         <NodeLibraryModal
+          allow={library.allow}
           onClose={() => setLibrary({ open: false, ctx: null })}
           onPick={(type) => {
             createNode(type, library.ctx);
