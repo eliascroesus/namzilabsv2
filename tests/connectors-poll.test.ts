@@ -56,6 +56,42 @@ describe("Calendly polling", () => {
     expect(events[0].eventId).toBe("calendly:c1:https://api.calendly.com/scheduled_events/EVT1");
     expect(events[0].occurredAt.toISOString()).toBe("2026-02-01T10:00:00.000Z");
   });
+
+  /** Capture the /scheduled_events request URL for a given scope config. */
+  async function pollWith(config: Record<string, unknown> | undefined): Promise<string> {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        calls.push(url);
+        if (url.includes("/users/me"))
+          return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "https://api.calendly.com/organizations/O1" } });
+        if (url.includes("/scheduled_events")) return jsonResponse({ collection: [] });
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+    await calendlyConnector.poll!({ connectionId: "c1", cursor: null, credentials: { accessToken: "tok" }, config });
+    return calls.find((u) => u.includes("/scheduled_events"))!;
+  }
+
+  it("defaults to the user's own meetings", async () => {
+    const url = await pollWith(undefined);
+    expect(url).toContain("user=");
+    expect(url).not.toContain("organization=");
+  });
+
+  it("fetches organization meetings when scope=organization", async () => {
+    const url = await pollWith({ scope: "organization" });
+    expect(url).toContain("organization=");
+    expect(url).not.toContain("user=");
+  });
+
+  it("fetches group meetings when scope=group with a group URI", async () => {
+    const url = await pollWith({ scope: "group", groupUri: "https://api.calendly.com/groups/G1" });
+    expect(url).toContain("group=");
+    expect(url).toContain("organization=");
+  });
 });
 
 describe("Google Sheets polling", () => {

@@ -10,13 +10,21 @@ import { parseGraph, type TileSpec } from "./types";
  * (fast dashboard reads). Runs on publish, on a manual refresh, or when relevant
  * data changes. Never blocks the dashboard render.
  */
-export async function materializeFlow(db: DB, orgId: string, flowId: string): Promise<void> {
+export async function materializeFlow(db: DB, orgId: string, flowId: string): Promise<{ ok: boolean; error?: string }> {
   const published = await getPublishedVersion(db, orgId, flowId);
-  if (!published) return;
+  if (!published) return { ok: false, error: "Flow is not published." };
   const { version, graph } = published;
 
   try {
-    const { outputs } = await runFlow({ db, orgId }, graph);
+    const { nodes, outputs } = await runFlow({ db, orgId }, graph);
+    if (outputs.length === 0) {
+      // Every Output node failed to compute (its inputs errored). Surface why.
+      const outNode = graph.nodes.find((n) => n.type === "output");
+      const exec = outNode ? nodes.get(outNode.id) : undefined;
+      const message = exec && exec.status === "error" ? exec.error : "The flow produced no dashboard result.";
+      await db.update(flowResults).set({ status: "error", error: message }).where(eq(flowResults.flowId, flowId));
+      return { ok: false, error: message };
+    }
     for (const o of outputs) {
       await upsertResult(db, orgId, flowId, version, o.nodeId, o.tile, "fresh", null);
     }
@@ -25,9 +33,11 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
     await db
       .delete(flowResults)
       .where(keep.length ? and(eq(flowResults.flowId, flowId), notInArray(flowResults.outputNodeId, keep)) : eq(flowResults.flowId, flowId));
+    return { ok: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await db.update(flowResults).set({ status: "error", error: message }).where(eq(flowResults.flowId, flowId));
+    return { ok: false, error: message };
   }
 }
 

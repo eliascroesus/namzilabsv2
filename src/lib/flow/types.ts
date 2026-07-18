@@ -24,6 +24,8 @@ export const FLOW_FILTER_OPS = [
   "not_equals",
   "contains",
   "not_contains",
+  "starts_with",
+  "ends_with",
   "gt",
   "lt",
   "gte",
@@ -37,6 +39,44 @@ export const FLOW_FILTER_OPS = [
   "between",
 ] as const;
 export type FlowFilterOp = (typeof FLOW_FILTER_OPS)[number];
+
+/** Human-readable operator names shown in the builder (never the raw keys). */
+export const FILTER_OP_LABELS: Record<FlowFilterOp, string> = {
+  equals: "Exactly matches",
+  not_equals: "Does not match",
+  contains: "Contains",
+  not_contains: "Does not contain",
+  starts_with: "Starts with",
+  ends_with: "Ends with",
+  gt: "Greater than",
+  lt: "Less than",
+  gte: "Greater than or equal",
+  lte: "Less than or equal",
+  is_empty: "Is empty",
+  is_not_empty: "Is not empty",
+  is_one_of: "Is one of",
+  is_not_one_of: "Is not one of",
+  before: "Before (date)",
+  after: "After (date)",
+  between: "Between (dates)",
+};
+
+/** Everyday operators shown first; the rest appear under a "More" divider. */
+export const PRIMARY_FILTER_OPS: FlowFilterOp[] = [
+  "equals",
+  "not_equals",
+  "contains",
+  "not_contains",
+  "starts_with",
+  "ends_with",
+  "gt",
+  "lt",
+  "is_empty",
+  "is_not_empty",
+];
+
+/** Operators that take no value input (the value box is hidden for these). */
+export const NO_VALUE_FILTER_OPS: FlowFilterOp[] = ["is_empty", "is_not_empty"];
 
 export const FilterRuleSchema = z.object({
   field: z.string().min(1),

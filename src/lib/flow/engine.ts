@@ -405,6 +405,10 @@ function evalRule(rec: FlowRecord, rule: { field: string; op: string; value: str
       return str.toLowerCase().includes(v.toLowerCase());
     case "not_contains":
       return !str.toLowerCase().includes(v.toLowerCase());
+    case "starts_with":
+      return str.toLowerCase().startsWith(v.toLowerCase());
+    case "ends_with":
+      return str.toLowerCase().endsWith(v.toLowerCase());
     case "gt":
       return num(raw) != null && (num(raw) as number) > Number(v);
     case "lt":

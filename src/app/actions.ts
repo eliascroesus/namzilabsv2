@@ -15,6 +15,23 @@ export async function createOrganizationAction(formData: FormData): Promise<void
   if (!name) return;
 
   const workos = getWorkOS();
+
+  // Idempotency guard against the duplicate-workspace bug: a double-submit, a
+  // retry, or an org-less session landing back on /onboarding must NOT mint a
+  // second organization. If the user already belongs to an active org with this
+  // exact name, switch into it instead of creating another.
+  const existing = await workos.userManagement.listOrganizationMemberships({
+    userId: auth.user.id,
+    statuses: ["active"],
+  });
+  const dup = existing.data.find(
+    (m) => (m.organizationName ?? "").trim().toLowerCase() === name.toLowerCase(),
+  );
+  if (dup) {
+    await switchToOrganization(dup.organizationId, { returnTo: "/dashboard" });
+    return;
+  }
+
   const org = await workos.organizations.createOrganization({ name });
   await workos.userManagement.createOrganizationMembership({
     organizationId: org.id,

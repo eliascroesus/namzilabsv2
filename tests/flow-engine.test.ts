@@ -153,6 +153,33 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
     expect((await runFlow({ db, orgId: ORG }, g)).outputs[0].tile.value).toBe(1);
   });
 
+  it("supports starts_with / ends_with string operators", async () => {
+    await ev({ eventType: "signup", subject: "alice@acme.com" });
+    await ev({ eventType: "signup", subject: "bob@other.com" });
+    await ev({ eventType: "signup", subject: "carol@acme.com" });
+    const starts = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("f", "filter", { combinator: "and", rules: [{ field: "subject", op: "starts_with", value: "a" }] }),
+        N("agg", "aggregate", { aggregation: "count" }),
+        N("o", "output", {}),
+      ],
+      [E("a", "f"), E("f", "agg"), E("agg", "o")],
+    );
+    expect((await runFlow({ db, orgId: ORG }, starts)).outputs[0].tile.value).toBe(1);
+
+    const ends = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("f", "filter", { combinator: "and", rules: [{ field: "subject", op: "ends_with", value: "@acme.com" }] }),
+        N("agg", "aggregate", { aggregation: "count" }),
+        N("o", "output", {}),
+      ],
+      [E("a", "f"), E("f", "agg"), E("agg", "o")],
+    );
+    expect((await runFlow({ db, orgId: ORG }, ends)).outputs[0].tile.value).toBe(2);
+  });
+
   it("is tenant isolated", async () => {
     await ev({ eventType: "booked", subject: "mine" });
     await ev({ eventType: "booked", subject: "theirs", orgId: "org_other" });

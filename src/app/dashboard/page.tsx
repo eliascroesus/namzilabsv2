@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { connections, deadLetter, events, flowResults } from "@/db/schema";
+import { connections, deadLetter, events, flowResults, flows } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { FunnelView } from "@/components/funnel-view";
@@ -89,7 +89,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         computedAt: flowResults.computedAt,
       })
       .from(flowResults)
-      .where(eq(flowResults.orgId, orgId));
+      // Only render results for flows that are still published (guards orphans).
+      .innerJoin(flows, eq(flows.id, flowResults.flowId))
+      .where(and(eq(flowResults.orgId, orgId), eq(flows.status, "published")));
   } catch {
     // flow_results may not exist before migration 0002 is applied; ignore.
   }

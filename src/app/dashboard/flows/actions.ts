@@ -93,13 +93,32 @@ export async function refreshFlowAction(formData: FormData): Promise<void> {
   revalidatePath("/dashboard");
 }
 
-export async function publishFlowAction(id: string): Promise<{ ok: true; version: number } | { ok: false; error: string }> {
+export async function publishFlowAction(
+  id: string,
+): Promise<{ ok: true; version: number; warning?: string } | { ok: false; error: string }> {
   const { orgId } = await requireOrg();
+
+  // Publishing (validate + immutable version snapshot) is the only step that can
+  // report failure. A validation error here means the flow was NOT published.
+  let version: number;
   try {
-    const { version } = await publishFlow(getDb(), orgId, id);
-    await inngest.send({ name: "flow/materialize.requested", data: { orgId, flowId: id } });
-    return { ok: true, version };
+    ({ version } = await publishFlow(getDb(), orgId, id));
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+
+  // The flow IS published now. Materialize its dashboard result inline so the tile
+  // appears immediately (don't depend on async Inngest processing). If this fails
+  // the publish still stands — we only warn that the number couldn't be computed.
+  const mat = await materializeFlow(getDb(), orgId, id);
+  // Best-effort async recompute as a backup; never affects the publish outcome.
+  try {
+    await inngest.send({ name: "flow/materialize.requested", data: { orgId, flowId: id } });
+  } catch {
+    // Inngest not configured — the inline materialize above already ran.
+  }
+
+  return mat.ok
+    ? { ok: true, version }
+    : { ok: true, version, warning: "Flow published, but the dashboard result could not be calculated." };
 }

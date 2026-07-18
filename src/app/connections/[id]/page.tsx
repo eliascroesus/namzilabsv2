@@ -4,6 +4,7 @@ import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { getConnection, getSigningSecret, previewLatest, webhookUrlFor } from "@/lib/connections";
 import { catalogEntry } from "@/connectors/catalog";
+import { ConfigFieldInput } from "@/components/config-field-input";
 import {
   disconnectAction,
   updateConfigAction,
@@ -87,18 +88,14 @@ export default async function ConnectionPage({
         {entry?.configFields && entry.configFields.length > 0 && (
           <section className="mt-8">
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Configuration</h2>
-            <form action={updateConfigAction} className="space-y-2">
+            <form action={updateConfigAction} className="space-y-3">
               <input type="hidden" name="id" value={conn.id} />
               {entry.configFields.map((f) => (
-                <div key={f.key}>
-                  <label className="block text-sm text-neutral-600">{f.label}</label>
-                  <input
-                    name={`cfg_${f.key}`}
-                    defaultValue={typeof config[f.key] === "string" ? (config[f.key] as string) : ""}
-                    placeholder={f.placeholder}
-                    className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  />
-                </div>
+                <ConfigFieldInput
+                  key={f.key}
+                  field={f}
+                  defaultValue={typeof config[f.key] === "string" ? (config[f.key] as string) : ""}
+                />
               ))}
               <button className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
                 Save &amp; preview

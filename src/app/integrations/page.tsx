@@ -3,6 +3,7 @@ import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { listConnections } from "@/lib/connections";
 import { CONNECTOR_CATALOG, type ConnectorCatalogEntry } from "@/connectors/catalog";
+import { ConfigFieldInput } from "@/components/config-field-input";
 import { connectApiKeyAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -93,30 +94,30 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
             <summary className="cursor-pointer rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
               Connect
             </summary>
-            <form action={connectApiKeyAction} className="mt-3 space-y-2">
+            <form action={connectApiKeyAction} className="mt-3 space-y-3">
               <input type="hidden" name="source" value={entry.source} />
-              <input
-                name="name"
-                placeholder={`${entry.name} account name`}
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-              />
-              {entry.credentialFields.map((f) => (
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-neutral-600">Connection name</span>
                 <input
-                  key={f.key}
-                  name={`cred_${f.key}`}
-                  type="password"
-                  placeholder={f.label}
+                  name="name"
+                  placeholder={entry.name}
                   className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                 />
+              </label>
+              {entry.credentialFields.map((f) => (
+                <label key={f.key} className="block">
+                  <span className="mb-1 block text-xs font-medium text-neutral-600">{f.label}</span>
+                  <input
+                    name={`cred_${f.key}`}
+                    type="password"
+                    autoComplete="off"
+                    placeholder={f.placeholder ?? ""}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </label>
               ))}
               {(entry.configFields ?? []).map((f) => (
-                <input
-                  key={f.key}
-                  name={`cfg_${f.key}`}
-                  placeholder={f.label}
-                  required={f.required}
-                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                />
+                <ConfigFieldInput key={f.key} field={f} />
               ))}
               <button
                 type="submit"

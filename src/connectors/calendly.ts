@@ -81,31 +81,53 @@ export const calendlyConnector: Connector = {
     const me = await fetchJson<{ resource: { current_organization: string; uri: string } }>(`${API}/users/me`, {
       headers: { authorization: `Bearer ${token}` },
     });
+    const { scope, groupUri } = scopeOf(args.config);
+    const body: Record<string, unknown> = {
+      url: args.webhookUrl,
+      events: ["invitee.created", "invitee.canceled", "invitee_no_show.created"],
+      organization: me.resource.current_organization,
+      scope,
+    };
+    // Calendly requires the matching target for user/group-scoped subscriptions.
+    if (scope === "user") body.user = me.resource.uri;
+    if (scope === "group" && groupUri) body.group = groupUri;
     const res = await fetchJson<{ resource: { uri: string; signing_key?: string } }>(`${API}/webhook_subscriptions`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        url: args.webhookUrl,
-        events: ["invitee.created", "invitee.canceled", "invitee_no_show.created"],
-        organization: me.resource.current_organization,
-        scope: "organization",
-      }),
+      body: JSON.stringify(body),
     });
     return { signingSecret: res.resource.signing_key, externalId: res.resource.uri };
   },
 };
 
+/** Resolve the fetch scope from connection config (defaults to the user's own meetings). */
+function scopeOf(config?: Record<string, unknown> | null): { scope: "user" | "organization" | "group"; groupUri: string | null } {
+  const raw = str(config?.["scope"]);
+  const scope = raw === "organization" || raw === "group" ? raw : "user";
+  return { scope, groupUri: str(config?.["groupUri"]) };
+}
+
 async function listScheduledEvents(args: PollArgs, count: number, cursor: string | null): Promise<CanonicalEvent[]> {
   const token = token_(args.credentials);
-  const me = await fetchJson<{ resource: { uri: string } }>(`${API}/users/me`, {
+  const me = await fetchJson<{ resource: { uri: string; current_organization: string } }>(`${API}/users/me`, {
     headers: { authorization: `Bearer ${token}` },
   });
+  const { scope, groupUri } = scopeOf(args.config);
   const params = new URLSearchParams({
-    user: me.resource.uri,
     count: String(Math.min(count, 100)),
     sort: "start_time:desc",
     status: "active",
   });
+  // Calendly's /scheduled_events needs exactly one target: user, organization, or
+  // (organization + group). Pick it from the configured scope.
+  if (scope === "organization") {
+    params.set("organization", me.resource.current_organization);
+  } else if (scope === "group" && groupUri) {
+    params.set("organization", me.resource.current_organization);
+    params.set("group", groupUri);
+  } else {
+    params.set("user", me.resource.uri);
+  }
   if (cursor) params.set("min_start_time", cursor);
   const data = await fetchJson<{ collection: Array<Record<string, unknown>> }>(
     `${API}/scheduled_events?${params.toString()}`,

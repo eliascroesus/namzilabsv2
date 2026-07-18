@@ -19,7 +19,19 @@ import {
   type Connection,
   type NodeProps,
 } from "@xyflow/react";
-import { FLOW_FILTER_OPS, AGGREGATIONS, TIME_UNITS, VIZ_TYPES, TIME_PRESETS, FORMULA_OPS, FORMATTER_OPS, type NodeType } from "@/lib/flow/types";
+import {
+  FILTER_OP_LABELS,
+  PRIMARY_FILTER_OPS,
+  NO_VALUE_FILTER_OPS,
+  AGGREGATIONS,
+  TIME_UNITS,
+  VIZ_TYPES,
+  TIME_PRESETS,
+  FORMULA_OPS,
+  FORMATTER_OPS,
+  type NodeType,
+  type FlowFilterOp,
+} from "@/lib/flow/types";
 import {
   saveDraftAction,
   testNodeAction,
@@ -56,6 +68,9 @@ const NODE_META: Record<NodeType, { label: string; blurb: string; accent: string
   time: { label: "Time", blurb: "Limit records to a time window", accent: "border-sky-300" },
 };
 const PALETTE: NodeType[] = ["app", "time", "filter", "formatter", "combine", "paths", "group", "aggregate", "formula", "output"];
+
+/** Filter operators shown under the "More" divider (everything not in the common set). */
+const MORE_FILTER_OPS = (Object.keys(FILTER_OP_LABELS) as FlowFilterOp[]).filter((o) => !PRIMARY_FILTER_OPS.includes(o));
 
 function defaultConfig(type: NodeType): Record<string, unknown> {
   switch (type) {
@@ -229,6 +244,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
   const [publishState, setPublishState] = useState<{ status: string; version: number | null }>({ status, version: publishedVersion });
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishWarning, setPublishWarning] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
 
@@ -374,10 +390,15 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const publish = useCallback(async () => {
     setPublishing(true);
     setPublishError(null);
+    setPublishWarning(null);
     await saveDraftAction(flowId, toGraph());
     const r = await publishFlowAction(flowId);
-    if (r.ok) setPublishState({ status: "published", version: r.version });
-    else setPublishError(r.error);
+    if (r.ok) {
+      setPublishState({ status: "published", version: r.version });
+      if (r.warning) setPublishWarning(r.warning);
+    } else {
+      setPublishError(r.error);
+    }
     setPublishing(false);
   }, [flowId, toGraph]);
 
@@ -450,6 +471,14 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
       {publishError && (
         <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">Can&rsquo;t publish: {publishError}</div>
+      )}
+      {publishWarning && (
+        <div className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <span>{publishWarning}</span>
+          <button onClick={() => setPublishWarning(null)} className="text-amber-700 hover:text-amber-900">
+            Dismiss
+          </button>
+        </div>
       )}
 
       <div className="flex min-h-0 flex-1">
@@ -1028,11 +1057,20 @@ function RulesEditor({ value, upstreamFields, onChange }: { value: Filters; upst
           <FieldPicker value={r.field} upstreamFields={upstreamFields} onChange={(v) => setRule(i, { field: v })} />
           <div className="flex gap-1">
             <select value={r.op} onChange={(e) => setRule(i, { op: e.target.value })} className="rounded-md border border-neutral-300 px-1 py-1 text-xs">
-              {FLOW_FILTER_OPS.map((o) => (
-                <option key={o} value={o}>{o.replace(/_/g, " ")}</option>
-              ))}
+              <optgroup label="Common">
+                {PRIMARY_FILTER_OPS.map((o) => (
+                  <option key={o} value={o}>{FILTER_OP_LABELS[o]}</option>
+                ))}
+              </optgroup>
+              <optgroup label="More">
+                {MORE_FILTER_OPS.map((o) => (
+                  <option key={o} value={o}>{FILTER_OP_LABELS[o]}</option>
+                ))}
+              </optgroup>
             </select>
-            <input value={r.value ?? ""} placeholder="value" onChange={(e) => setRule(i, { value: e.target.value })} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs" />
+            {!NO_VALUE_FILTER_OPS.includes(r.op as FlowFilterOp) && (
+              <input value={r.value ?? ""} placeholder="value" onChange={(e) => setRule(i, { value: e.target.value })} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs" />
+            )}
             {r.op === "between" && (
               <input value={r.value2 ?? ""} placeholder="to" onChange={(e) => setRule(i, { value2: e.target.value })} className="w-14 rounded-md border border-neutral-300 px-1 py-1 text-xs" />
             )}

@@ -4,7 +4,16 @@
  * the UI stays data-driven — adding a connector is one entry here.
  */
 export type CredentialField = { key: string; label: string; placeholder?: string };
-export type ConfigField = { key: string; label: string; placeholder?: string; required?: boolean };
+export type ConfigField = {
+  key: string;
+  label: string;
+  placeholder?: string;
+  required?: boolean;
+  /** Optional short help text shown under the field. */
+  hint?: string;
+  /** When present, render a dropdown instead of a text input. */
+  options?: { value: string; label: string }[];
+};
 
 export type ConnectorCatalogEntry = {
   source: string;
@@ -32,6 +41,25 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     poll: true,
     autoWebhook: true,
     credentialFields: [{ key: "accessToken", label: "Personal Access Token", placeholder: "eyJ..." }],
+    configFields: [
+      {
+        key: "scope",
+        label: "Fetch meetings for",
+        required: true,
+        options: [
+          { value: "user", label: "Just me (User)" },
+          { value: "organization", label: "Whole organization" },
+          { value: "group", label: "A specific group" },
+        ],
+        hint: "Choose whose Calendly meetings to import.",
+      },
+      {
+        key: "groupUri",
+        label: "Group URI",
+        placeholder: "https://api.calendly.com/groups/…",
+        hint: "Only required when scope is a specific group.",
+      },
+    ],
   },
   {
     source: "close",
