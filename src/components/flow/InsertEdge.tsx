@@ -5,10 +5,22 @@ import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from "
 /** An edge whose "+" insert control appears only when you hover the midpoint. */
 export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }: EdgeProps) {
   const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
-  const onInsert = (data as { onInsert?: (edgeId: string) => void } | undefined)?.onInsert;
+  const d = data as { onInsert?: (edgeId: string) => void; label?: string } | undefined;
+  const onInsert = d?.onInsert;
+  const branchLabel = d?.label;
   return (
     <>
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} />
+      {branchLabel && (
+        <EdgeLabelRenderer>
+          <div
+            style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${sourceX}px, ${sourceY + 16}px)`, pointerEvents: "none" }}
+            className="max-w-[120px] truncate rounded-full border border-pink-200 bg-pink-50 px-2 py-0.5 text-[10px] font-medium text-pink-700"
+          >
+            {branchLabel}
+          </div>
+        </EdgeLabelRenderer>
+      )}
       <EdgeLabelRenderer>
         <div
           style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: "all" }}

@@ -45,11 +45,18 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         <p className="truncate text-sm text-neutral-700">{summary(t, data)}</p>
 
         {isPaths && (
-          <ul className="mt-1 space-y-0.5">
-            {pathHandles(data).map((h) => (
-              <li key={h.id} className="truncate text-[10px] text-neutral-500">↳ {h.label}</li>
+          <div className="mt-1.5 space-y-1 rounded-md border border-pink-100 bg-pink-50/50 p-1.5">
+            {((data.config.paths as Array<{ id: string; label: string; filters?: { rules?: unknown[] } }>) ?? []).map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-2 rounded bg-white px-1.5 py-0.5 text-[10px] text-neutral-700 shadow-sm">
+                <span className="truncate font-medium">{p.label}</span>
+                <span className="shrink-0 text-neutral-400">{(p.filters?.rules?.length ?? 0)} rule{(p.filters?.rules?.length ?? 0) === 1 ? "" : "s"}</span>
+              </div>
             ))}
-          </ul>
+            <div className="flex items-center justify-between gap-2 rounded px-1.5 py-0.5 text-[10px] text-neutral-500">
+              <span className="truncate">{String(data.config.fallbackLabel ?? "Fallback")}</span>
+              <span className="shrink-0 text-neutral-400">everything else</span>
+            </div>
+          </div>
         )}
 
         {/* The problem lives inside the affected step (no separate rail). */}

@@ -519,26 +519,32 @@ function ConfigureTab({
     const setPath = (i: number, patch: Record<string, unknown>) => onChange({ paths: paths.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
     return (
       <div className="space-y-3 text-sm">
+        <p className="text-xs text-neutral-500">Records are sent down the first branch whose conditions they match. Add as many branches as you need — each becomes its own path (and can be its own dashboard metric).</p>
         {paths.map((p, i) => (
-          <div key={p.id} className="space-y-2 rounded border border-neutral-200 p-2">
-            <input value={p.label} onChange={(e) => setPath(i, { label: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
+          <div key={p.id} className="space-y-2 rounded-md border border-pink-200 bg-pink-50/40 p-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-pink-700">Branch {i + 1}</span>
+              {paths.length > 1 && (
+                <button onClick={() => onChange({ paths: paths.filter((_, j) => j !== i) })} className="text-[11px] text-red-600 hover:underline">
+                  Remove
+                </button>
+              )}
+            </div>
+            <input value={p.label} placeholder={`Branch ${i + 1} name`} onChange={(e) => setPath(i, { label: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
             <RulesEditor value={p.filters ?? { combinator: "and", rules: [] }} fieldGroups={fieldGroups} onChange={(v) => setPath(i, { filters: v })} />
-            {paths.length > 1 && (
-              <button onClick={() => onChange({ paths: paths.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
-                Remove path
-              </button>
-            )}
           </div>
         ))}
         <button
-          onClick={() => onChange({ paths: [...paths, { id: `p${Math.random().toString(36).slice(2, 7)}`, label: `Path ${paths.length + 1}`, filters: { combinator: "and", rules: [] } }] })}
-          className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+          onClick={() => onChange({ paths: [...paths, { id: `p${Math.random().toString(36).slice(2, 7)}`, label: `Branch ${paths.length + 1}`, filters: { combinator: "and", rules: [] } }] })}
+          className="w-full rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
         >
-          + Add path
+          + Add branch
         </button>
-        <Field label="Fallback label (unmatched records)">
+        <div className="rounded-md border border-neutral-200 p-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Fallback branch</span>
+          <p className="mb-1 text-[11px] text-neutral-500">Everything that matches no branch above.</p>
           <input value={(cfg.fallbackLabel as string) ?? "Fallback"} onChange={(e) => onChange({ fallbackLabel: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
-        </Field>
+        </div>
       </div>
     );
   }
