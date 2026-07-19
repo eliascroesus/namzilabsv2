@@ -3,7 +3,18 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { NodeType } from "@/lib/flow/types";
 import type { FNode, NodeData } from "./graph-utils";
-import { NODE_META, formulaHandleLabels, nodeIcon, nodeTitle, pathHandles, resultLabel, statusOf, summary } from "./node-meta";
+import { NODE_META, formulaHandleLabels, nodeTitle, pathHandles, resultLabel, statusOf, summary } from "./node-meta";
+import { NodeGlyph } from "./icons";
+import { SourceBadge } from "./MappingChip";
+
+/** Border colour reserves colour for STATE only (blue configuring, green valid, amber stale, red error). */
+function stateBorder(data: NodeData, selected: boolean): string {
+  if (selected) return "border-blue-400 ring-2 ring-blue-500";
+  if (data.dirty) return "border-amber-300";
+  const t = data.lastTest;
+  if (!t) return "border-neutral-200";
+  return t.status === "error" ? "border-red-300" : "border-green-300";
+}
 
 export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const t = (type as NodeType) ?? "app";
@@ -15,7 +26,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const fHandles = isFormula ? formulaHandleLabels(String(data.config.op ?? "percentage")) : null;
 
   return (
-    <div className={`w-60 rounded-lg border bg-white shadow-sm ${meta.accent} ${selected ? "ring-2 ring-neutral-900" : ""}`}>
+    <div className={`w-60 rounded-lg border bg-white shadow-sm ${stateBorder(data, selected)}`}>
       {/* input handles */}
       {isFormula ? (
         <>
@@ -27,9 +38,11 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       ) : null}
 
       <div className="flex items-center justify-between border-b border-neutral-100 px-3 py-1.5">
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-neutral-700">
-          <span className="text-sm leading-none">{nodeIcon(t, data)}</span>
-          <span>{data.stepNo != null ? `${data.stepNo}. ` : ""}{nodeTitle(t, data)}</span>
+        <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-neutral-700">
+          <span className="shrink-0 text-neutral-500">
+            {t === "app" ? <SourceBadge source={String(data.config.source ?? "")} size={16} /> : <NodeGlyph type={t} className="h-4 w-4" />}
+          </span>
+          <span className="truncate">{data.stepNo != null ? `${data.stepNo}. ` : ""}{nodeTitle(t, data)}</span>
         </span>
         <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${s.cls}`}>{s.label}</span>
       </div>
@@ -59,7 +72,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         {test && test.status === "error" && <p className="mt-1 truncate text-xs text-red-600">{test.error}</p>}
       </div>
 
-      {/* output handle(s) + contextual add button */}
+      {/* output handle(s) */}
       {isPaths ? (
         pathHandles(data).map((h, i, arr) => (
           <Handle key={h.id} type="source" id={h.id} position={Position.Right} title={h.label} style={{ top: `${((i + 1) / (arr.length + 1)) * 100}%` }} />
@@ -68,19 +81,17 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         <Handle type="source" position={Position.Right} />
       ) : null}
 
-      {/* "+" to add a downstream step — placed BELOW the output handle so it never
-          covers the draggable handle (users can still drag a connection). */}
-      {t !== "output" && !isPaths && (
+      {/* One prominent "Add next step" control beneath the selected step (connectors stay secondary). */}
+      {selected && t !== "output" && !isPaths && (
         <button
           onClick={(e) => {
             e.stopPropagation();
             (data as NodeData).onAddFrom?.(id, null);
           }}
           title="Add a step after this one"
-          style={{ top: "calc(50% + 18px)" }}
-          className="nodrag absolute -right-3 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-neutral-300 bg-white text-sm leading-none text-neutral-600 shadow-sm hover:bg-neutral-900 hover:text-white"
+          className="nodrag absolute left-1/2 top-full z-10 mt-2 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 shadow-sm hover:bg-neutral-900 hover:text-white"
         >
-          +
+          + Add next step
         </button>
       )}
     </div>

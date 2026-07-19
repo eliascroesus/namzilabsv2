@@ -6,6 +6,7 @@ import {
   buildFieldGroups,
   resolveSampleField,
   fieldProvenance,
+  flowChecks,
   describeInputs,
   collidingFields,
   type FNode,
@@ -152,6 +153,25 @@ describe("buildFieldGroups — nearest-app example resolution + provenance", () 
     expect(prov.sample).toBe("google");
     expect(prov.label).toBe("source");
     expect(prov.stepNo).toBe(2);
+  });
+});
+
+describe("flowChecks (Flow check rail)", () => {
+  it("explains that a grouped aggregate can't feed a formula", () => {
+    const app = N("a", "app", { config: { connectionId: "c", source: "gsheets" } });
+    const agg = N("g", "aggregate", { config: { aggregation: "count", groupBy: { type: "time", unit: "week" } } });
+    const formula = N("f", "formula", { config: { op: "percentage" } });
+    const nodes = [app, agg, formula];
+    const edges = [E("a", "g"), E("g", "f", { targetHandle: "a" })];
+    const checks = flowChecks(nodes, edges, titleOf);
+    expect(checks.some((c) => c.nodeId === "g" && /grouped by week/.test(c.impact))).toBe(true);
+  });
+
+  it("flags a disconnected step and clears on a valid graph", () => {
+    const app = N("a", "app", { config: { connectionId: "c", source: "gsheets" } });
+    const out = N("o", "output", { config: { name: "Signups" } });
+    expect(flowChecks([app, out], [], titleOf).some((c) => c.nodeId === "o")).toBe(true);
+    expect(flowChecks([app, out], [E("a", "o")], titleOf)).toHaveLength(0);
   });
 });
 

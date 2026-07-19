@@ -306,6 +306,87 @@ export function fieldProvenance(
   return { label: lastSegment(path) };
 }
 
+// ---------- Flow check rail ----------
+
+export type FlowCheck = { nodeId?: string; title: string; impact: string; fixLabel: string };
+
+/** Count rules that map to a field but haven't chosen one. */
+function mappedGaps(filters: unknown): number {
+  const rules = ((filters as { rules?: Array<{ valueKind?: string; valueField?: string }> } | undefined)?.rules) ?? [];
+  return rules.filter((r) => r.valueKind === "field" && !(r.valueField ?? "").trim()).length;
+}
+
+/**
+ * Live, human-readable checks for the Flow check rail. Each item says what's wrong,
+ * what it changes, and offers one action that jumps to the exact step. Runs on the
+ * client so the rail updates as you build (no server round-trip).
+ */
+export function flowChecks(nodes: FNode[], edges: Edge[], titleOf: (n: FNode) => string): FlowCheck[] {
+  const checks: FlowCheck[] = [];
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const incoming = (id: string) => edges.filter((e) => e.target === id);
+
+  for (const n of nodes) {
+    const title = titleOf(n);
+    const cfg = n.data.config as Record<string, unknown>;
+    const ins = incoming(n.id);
+
+    if (n.type === "app") {
+      if (!cfg.connectionId && !cfg.source) {
+        checks.push({ nodeId: n.id, title: `“${title}” has no data source`, impact: "Nothing after it can run until this step loads data.", fixLabel: "Choose an account" });
+      }
+      continue;
+    }
+
+    if (ins.length === 0 && n.type !== "output") {
+      checks.push({ nodeId: n.id, title: `“${title}” isn’t connected to anything`, impact: "It has no records to work with, so it produces nothing.", fixLabel: "Connect an input" });
+    }
+
+    if (n.type === "formula") {
+      const aOk = ins.some((e) => e.targetHandle === "a");
+      const bOk = ins.some((e) => e.targetHandle === "b");
+      if (!aOk || !bOk) {
+        checks.push({ nodeId: n.id, title: `“${title}” needs two numbers`, impact: "A rate or ratio needs a number in both A and B.", fixLabel: "Connect A and B" });
+      }
+      for (const e of ins) {
+        const src = byId.get(e.source);
+        if (src?.type === "aggregate") {
+          const gb = (src.data.config as { groupBy?: { type?: string; unit?: string; field?: string } | null }).groupBy;
+          if (gb) {
+            const by = gb.type === "time" ? `by ${gb.unit}` : `by ${gb.field}`;
+            checks.push({
+              nodeId: src.id,
+              title: `“${title}” can’t be calculated`,
+              impact: `“${titleOf(src)}” is grouped ${by}, so it’s a series of numbers, not one total. Change it to one total number.`,
+              fixLabel: `Fix “${titleOf(src)}”`,
+            });
+          }
+        }
+      }
+    }
+
+    if (n.type === "output") {
+      if (ins.length === 0) checks.push({ nodeId: n.id, title: `“${title}” has nothing to show`, impact: "Connect a step that produces a number or records.", fixLabel: "Connect an input" });
+      if (!String(cfg.name ?? "").trim()) checks.push({ nodeId: n.id, title: "Your metric needs a name", impact: "This is the label it shows under on the dashboard.", fixLabel: "Name this metric" });
+    }
+
+    // Conditions that map to a field but no field is chosen.
+    let gaps = 0;
+    if (n.type === "filter") gaps = mappedGaps(cfg);
+    else if (n.type === "paths") gaps = ((cfg.paths as Array<{ filters?: unknown }>) ?? []).reduce((a, p) => a + mappedGaps(p.filters), 0);
+    else if (n.type === "group") gaps = ((cfg.categories as Array<{ filters?: unknown }>) ?? []).reduce((a, c) => a + mappedGaps(c.filters), 0);
+    if (gaps > 0) {
+      checks.push({ nodeId: n.id, title: `“${title}” compares against a field that isn’t chosen`, impact: "Pick the field to compare against, or switch back to a fixed value.", fixLabel: "Open step" });
+    }
+  }
+
+  if (!nodes.some((n) => n.type === "output")) {
+    checks.push({ title: "No dashboard tile yet", impact: "Add a “Show on dashboard” step to save a metric.", fixLabel: "Add a step" });
+  }
+
+  return checks;
+}
+
 // ---------- Input descriptors (Combine / Formula config panels) ----------
 
 export type InputDescriptor = {

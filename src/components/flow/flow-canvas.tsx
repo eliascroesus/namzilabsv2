@@ -25,6 +25,7 @@ import {
   computeStepNumbers,
   describeInputs,
   descendantsOf,
+  flowChecks,
   isValidFlowConnection,
   type ConnMeta,
   type FieldGroup,
@@ -38,6 +39,7 @@ import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
 import { ConfigPanel } from "./ConfigPanel";
 import { NodeLibraryModal } from "./NodeLibraryModal";
+import { FlowCheckRail } from "./FlowCheckRail";
 
 export type { ConnMeta };
 
@@ -95,6 +97,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [testingId, setTestingId] = useState<string | null>(null);
   const [library, setLibrary] = useState<{ open: boolean; ctx: LibraryCtx }>({ open: false, ctx: null });
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [showMinimap, setShowMinimap] = useState(false);
   const { fitView } = useReactFlow();
 
   const past = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
@@ -166,6 +169,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         const tgt = nodes.find((n) => n.id === ctx.onEdge!.target);
         if (src && tgt) position = { x: (src.position.x + tgt.position.x) / 2, y: (src.position.y + tgt.position.y) / 2 };
       }
+      // Snap to the 16px grid so steps line up cleanly (n8n-style).
+      position = { x: Math.round(position.x / 16) * 16, y: Math.round(position.y / 16) * 16 };
 
       const newNode: FNode = { id, type, position, data: { config: defaultConfig(type), lastTest: null, dirty: false } };
       setNodes((ns) => [...ns, newNode]);
@@ -399,6 +404,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
   const resultTitles = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, nodeTitle(String(n.type) as NodeType, n.data)])), [nodes]);
 
+  const checks = useMemo(() => flowChecks(nodes, edges, (n) => nodeTitle(String(n.type) as NodeType, n.data)), [nodes, edges]);
+
   // Inject transient display data + hide collapsed branches.
   const hiddenIds = useMemo(() => {
     const h = new Set<string>();
@@ -454,6 +461,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           <ToolButton onClick={alignSelection}>Align</ToolButton>
           <ToolButton onClick={toggleCollapse}>{selectedId && collapsed.has(selectedId) ? "Expand" : "Collapse"}</ToolButton>
           <ToolButton onClick={() => fitView({ padding: 0.2, duration: 300 })}>Fit</ToolButton>
+          <ToolButton onClick={() => setShowMinimap((v) => !v)}>{showMinimap ? "Hide map" : "Map"}</ToolButton>
           <div className="mx-1 h-5 w-px bg-neutral-200" />
           <ToolButton onClick={undo}>Undo</ToolButton>
           <ToolButton onClick={redo}>Redo</ToolButton>
@@ -491,12 +499,14 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             defaultEdgeOptions={{ type: "insert" }}
+            snapToGrid
+            snapGrid={[16, 16]}
             fitView
             deleteKeyCode={["Backspace", "Delete"]}
           >
-            <Background />
-            <Controls />
-            <MiniMap pannable zoomable />
+            <Background gap={16} />
+            <Controls showInteractive={false} />
+            {showMinimap && <MiniMap pannable zoomable />}
           </ReactFlow>
 
           {empty && (
@@ -509,6 +519,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
               </div>
             </div>
           )}
+
+          {!empty && <FlowCheckRail checks={checks} onFix={(id) => id && setSelectedId(id)} />}
         </div>
 
         {/* Config panel */}

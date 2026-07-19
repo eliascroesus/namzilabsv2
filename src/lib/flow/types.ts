@@ -95,9 +95,26 @@ export const FilterRuleSchema = z.object({
   /** When valueKind === "field": the upstream field path resolved per-record at runtime. */
   valueField: z.string().optional(),
 });
+/**
+ * A prominent "Date range" quick section lives inside Filter (a time window is a
+ * condition, not a separate concept). Internally it reuses the Time executor's
+ * window logic. The standalone Time node remains available under advanced steps.
+ */
+export const FilterDateRangeSchema = z.object({
+  enabled: z.boolean().default(false),
+  dateField: z.string().default("occurredAt"),
+  mode: z.enum(["preset", "rolling", "between"]).default("preset"),
+  preset: z.string().default("last_30_days"),
+  days: z.number().int().positive().default(30),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+export type FilterDateRange = z.infer<typeof FilterDateRangeSchema>;
+
 export const FilterConfigSchema = z.object({
   combinator: z.enum(["and", "or"]).default("and"),
   rules: z.array(FilterRuleSchema).default([]),
+  dateRange: FilterDateRangeSchema.optional(),
 });
 export type FilterConfig = z.infer<typeof FilterConfigSchema>;
 
@@ -217,6 +234,8 @@ export const FORMATTER_OPS = [
   "trim",
   "normalize_email",
   "normalize_phone",
+  "date_only",
+  "year_month",
   "replace",
   "default",
   "multiply",
@@ -227,8 +246,13 @@ export const FormatterConfigSchema = z.object({
   op: z.enum(FORMATTER_OPS).default("round"),
   decimals: z.number().int().min(0).max(6).default(2),
   find: z.string().optional(),
+  // "Replace with" and "Value for empty" support a fixed literal or a mapped field.
   replaceWith: z.string().optional(),
+  replaceWithKind: z.enum(VALUE_KINDS).default("fixed"),
+  replaceWithField: z.string().optional(),
   defaultValue: z.string().optional(),
+  defaultValueKind: z.enum(VALUE_KINDS).default("fixed"),
+  defaultValueField: z.string().optional(),
   factor: z.number().optional(),
   outputField: z.string().optional(),
 });

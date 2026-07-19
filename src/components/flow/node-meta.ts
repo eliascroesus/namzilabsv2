@@ -1,19 +1,23 @@
 import { FILTER_OP_LABELS, PRIMARY_FILTER_OPS, type NodeType, type FlowFilterOp } from "@/lib/flow/types";
 import type { NodeData } from "./graph-utils";
 
-export const NODE_META: Record<NodeType, { label: string; blurb: string; accent: string; icon: string; category: string; keywords: string }> = {
-  app: { label: "App", blurb: "Pull records from a connected app", accent: "border-blue-300", icon: "🔌", category: "Sources", keywords: "integration source connect data" },
-  time: { label: "Time", blurb: "Limit records to a time window", accent: "border-sky-300", icon: "🕒", category: "Transform", keywords: "date range window period" },
-  filter: { label: "Filter", blurb: "Keep only matching records", accent: "border-amber-300", icon: "🔎", category: "Transform", keywords: "condition where keep only match" },
-  formatter: { label: "Formatter", blurb: "Clean & reshape field values", accent: "border-teal-300", icon: "✨", category: "Transform", keywords: "format clean text number round" },
-  combine: { label: "Combine", blurb: "Merge records from multiple inputs", accent: "border-cyan-300", icon: "🔗", category: "Combine", keywords: "merge join dedupe union" },
-  paths: { label: "Paths", blurb: "Split records into branches", accent: "border-pink-300", icon: "🔀", category: "Branch", keywords: "split branch route condition" },
-  group: { label: "Group", blurb: "Group records into categories", accent: "border-orange-300", icon: "🗂️", category: "Branch", keywords: "category breakdown segment" },
-  aggregate: { label: "Aggregate", blurb: "Turn records into a number", accent: "border-violet-300", icon: "Σ", category: "Math", keywords: "count sum average metric number" },
-  formula: { label: "Formula", blurb: "Calculate with two numbers", accent: "border-indigo-300", icon: "🧮", category: "Math", keywords: "percentage ratio divide rate calculate" },
-  output: { label: "Output", blurb: "Save a metric to the dashboard", accent: "border-green-300", icon: "📊", category: "Output", keywords: "dashboard tile metric result" },
+/** The four visible stages a metric flows through, in order. */
+export const STAGES = ["Data", "Conditions", "Calculation", "Dashboard"] as const;
+export type Stage = (typeof STAGES)[number];
+
+/** Plain-English node metadata. Labels read like instructions, not jargon. */
+export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: Stage; advanced: boolean; keywords: string }> = {
+  app: { label: "Get data", blurb: "Pull records from a connected app", stage: "Data", advanced: false, keywords: "integration source connect data app get" },
+  combine: { label: "Combine sources", blurb: "Merge records from multiple steps", stage: "Data", advanced: true, keywords: "merge join dedupe union combine sources" },
+  filter: { label: "Filter records", blurb: "Keep only the records you want", stage: "Conditions", advanced: false, keywords: "condition where keep only match date range filter" },
+  time: { label: "Date range", blurb: "Limit records to a time window", stage: "Conditions", advanced: true, keywords: "date range window period time" },
+  paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", advanced: true, keywords: "split branch route condition paths" },
+  aggregate: { label: "Calculate a number", blurb: "Count, sum, or average records", stage: "Calculation", advanced: false, keywords: "count sum average metric number aggregate calculate" },
+  formula: { label: "Compare two numbers", blurb: "Rates, ratios, and % change", stage: "Calculation", advanced: false, keywords: "percentage ratio divide rate formula compare" },
+  group: { label: "Group into categories", blurb: "Break records into groups", stage: "Calculation", advanced: true, keywords: "category breakdown segment group" },
+  formatter: { label: "Clean up values", blurb: "Fix text, numbers, and dates", stage: "Calculation", advanced: true, keywords: "format clean text number round date formatter" },
+  output: { label: "Show on dashboard", blurb: "Save the metric as a dashboard tile", stage: "Dashboard", advanced: false, keywords: "dashboard tile metric result output show" },
 };
-export const LIBRARY_ORDER = ["Sources", "Transform", "Combine", "Branch", "Math", "Output"];
 export const ALL_TYPES = Object.keys(NODE_META) as NodeType[];
 
 export const SOURCE_ICON: Record<string, string> = {
@@ -78,14 +82,9 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
   }
 }
 
-export function nodeIcon(type: NodeType, data: NodeData): string {
-  if (type === "app") return SOURCE_ICON[String(data.config.source ?? "")] ?? NODE_META.app.icon;
-  return NODE_META[type].icon;
-}
-
 export function defaultTitle(type: NodeType, data: NodeData): string {
   const c = data.config;
-  if (type === "app") return (c.connectionName as string) || "New app step";
+  if (type === "app") return (c.connectionName as string) || "Get data";
   if (type === "output") return (c.name as string) || "New metric";
   return NODE_META[type].label;
 }

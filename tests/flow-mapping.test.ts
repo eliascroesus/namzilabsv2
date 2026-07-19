@@ -69,7 +69,7 @@ afterEach(async () => {
   await close();
 });
 
-async function ev(o: { eventType?: string; value?: number; properties?: Record<string, unknown> }) {
+async function ev(o: { eventType?: string; value?: number; properties?: Record<string, unknown>; daysAgo?: number }) {
   await db.insert(events).values({
     eventId: `webhook:${randomUUID()}`,
     orgId: ORG,
@@ -77,7 +77,7 @@ async function ev(o: { eventType?: string; value?: number; properties?: Record<s
     source: "webhook",
     eventType: o.eventType ?? "e",
     subject: null,
-    occurredAt: new Date(),
+    occurredAt: new Date(Date.now() - (o.daysAgo ?? 1) * 86_400_000),
     value: o.value != null ? String(o.value) : null,
     properties: o.properties ?? {},
   });
@@ -143,6 +143,49 @@ describe("engine — Filter with a mapped (field) comparison value", () => {
     });
     const res = await runFlow({ db, orgId: ORG }, g, { untilNodeId: "f" });
     expect(res.nodes.get("f")!.recordsOut).toBe(1);
+  });
+});
+
+describe("engine — Filter date range quick section", () => {
+  it("keeps only records within a rolling window", async () => {
+    await ev({ daysAgo: 2 });
+    await ev({ daysAgo: 400 });
+    const g = parseGraph({
+      nodes: [
+        N("a", "app", { connectionId: CONN }),
+        N("f", "filter", { combinator: "and", rules: [], dateRange: { enabled: true, dateField: "occurredAt", mode: "rolling", days: 30 } }),
+      ],
+      edges: [E("a", "f")],
+    });
+    const res = await runFlow({ db, orgId: ORG }, g, { untilNodeId: "f" });
+    expect(res.nodes.get("f")!.recordsOut).toBe(1);
+    expect(res.nodes.get("f")!.recordsIn).toBe(2);
+  });
+});
+
+describe("engine — Formatter date ops + mapped fallback", () => {
+  it("date_only strips the time portion", async () => {
+    await ev({});
+    const g = parseGraph({
+      nodes: [N("a", "app", { connectionId: CONN }), N("fm", "formatter", { field: "occurredAt", op: "date_only", outputField: "properties.day" })],
+      edges: [E("a", "fm")],
+    });
+    const res = await runFlow({ db, orgId: ORG }, g, { untilNodeId: "fm" });
+    const rec = res.nodes.get("fm")!.sample[0] as { properties: Record<string, unknown> };
+    expect(String(rec.properties.day)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+  it("fallback (default) can pull from another field", async () => {
+    await ev({ properties: { name: "", fallback: "Anon" } });
+    const g = parseGraph({
+      nodes: [
+        N("a", "app", { connectionId: CONN }),
+        N("fm", "formatter", { field: "properties.name", op: "default", defaultValueKind: "field", defaultValueField: "properties.fallback", outputField: "properties.name" }),
+      ],
+      edges: [E("a", "fm")],
+    });
+    const res = await runFlow({ db, orgId: ORG }, g, { untilNodeId: "fm" });
+    const rec = res.nodes.get("fm")!.sample[0] as { properties: Record<string, unknown> };
+    expect(rec.properties.name).toBe("Anon");
   });
 });
 

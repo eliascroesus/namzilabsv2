@@ -18,9 +18,11 @@ import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor, Rule } from
 import { collidingFields, fieldProvenance } from "./graph-utils";
 import { NODE_META, MORE_FILTER_OPS, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { FieldPicker } from "./FieldPicker";
-import { ValueInput } from "./ValueInput";
+import { ValueInput, type ValuePatch } from "./ValueInput";
 import { RecordSamplePicker } from "./RecordSamplePicker";
 import { ResultSoFar } from "./ResultSoFar";
+import { NodeGlyph } from "./icons";
+import { SourceBadge } from "./MappingChip";
 import type { ChainStepDTO } from "@/app/dashboard/flows/actions";
 
 const SYNC_DOT: Record<string, string> = {
@@ -67,6 +69,36 @@ export function nodeSteps(node: FNode, type: NodeType, cfg: Record<string, unkno
     steps.push({ id: "test", label: "Test this step", tab: "test", done: tested });
   }
   return steps;
+}
+
+/** Formatter operations grouped by user intent, so we show only relevant controls. */
+const FORMATTER_INTENTS: Array<{ id: string; label: string; ops: string[] }> = [
+  { id: "text", label: "Clean text", ops: ["trim", "uppercase", "lowercase", "normalize_email", "normalize_phone"] },
+  { id: "number", label: "Change number", ops: ["round", "multiply", "divide", "to_number"] },
+  { id: "date", label: "Change date", ops: ["date_only", "year_month"] },
+  { id: "replace", label: "Replace value", ops: ["replace"] },
+  { id: "fallback", label: "Use fallback", ops: ["default"] },
+  { id: "custom", label: "Custom", ops: [...FORMATTER_OPS] },
+];
+const FORMATTER_OP_LABELS: Record<string, string> = {
+  trim: "Trim spaces",
+  uppercase: "UPPERCASE",
+  lowercase: "lowercase",
+  normalize_email: "Normalize email",
+  normalize_phone: "Digits only (phone)",
+  round: "Round",
+  multiply: "Multiply",
+  divide: "Divide",
+  to_number: "Convert to number",
+  to_text: "Convert to text",
+  date_only: "Date only (YYYY-MM-DD)",
+  year_month: "Year & month (YYYY-MM)",
+  replace: "Find & replace",
+  default: "Fallback when empty",
+};
+function formatterIntentOf(op: string): string {
+  const found = FORMATTER_INTENTS.find((i) => i.id !== "custom" && i.ops.includes(op));
+  return found?.id ?? "custom";
 }
 
 export function ConfigPanel({
@@ -137,7 +169,9 @@ export function ConfigPanel({
     <aside className="flex w-[480px] shrink-0 flex-col border-l border-neutral-200 bg-white">
       <div className="border-b border-neutral-200 px-4 py-3">
         <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-          <span>{NODE_META[type].icon}</span>
+          <span className="text-neutral-500">
+            {type === "app" ? <SourceBadge source={String((node.data.config as { source?: unknown }).source ?? "")} size={16} /> : <NodeGlyph type={type} className="h-4 w-4" />}
+          </span>
           <span>{stepNo != null ? `Step ${stepNo} · ` : ""}{NODE_META[type].label}</span>
         </div>
         <input
@@ -231,6 +265,9 @@ function ConfigureTab({
   inputs: InputDescriptor[];
   onChange: (patch: Record<string, unknown>) => void;
 }) {
+  // Formatter shows controls by intent (Clean text / Change number / …), derived from the op.
+  const [fmtIntent, setFmtIntent] = useState(() => formatterIntentOf(String((cfg as { op?: unknown }).op ?? "round")));
+
   if (type === "app") {
     const connId = (cfg.connectionId as string) ?? "";
     const conn = connections.find((c) => c.id === connId);
@@ -299,7 +336,17 @@ function ConfigureTab({
 
   if (type === "filter") {
     const fc: Filters = { combinator: (cfg.combinator as string) ?? "and", rules: (cfg.rules as Rule[]) ?? [] };
-    return <RulesEditor value={fc} fieldGroups={fieldGroups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />;
+    const dr = (cfg.dateRange as DateRange) ?? { enabled: false, dateField: "occurredAt", mode: "preset", preset: "last_30_days", days: 30 };
+    const setDr = (patch: Partial<DateRange>) => onChange({ dateRange: { ...dr, ...patch } });
+    return (
+      <div className="space-y-4 text-sm">
+        <DateRangeSection dr={dr} setDr={setDr} fieldGroups={fieldGroups} />
+        <div>
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-neutral-400">Conditions</p>
+          <RulesEditor value={fc} fieldGroups={fieldGroups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />
+        </div>
+      </div>
+    );
   }
 
   if (type === "time") {
@@ -524,37 +571,77 @@ function ConfigureTab({
   }
 
   if (type === "formatter") {
-    const op = (cfg.op as string) ?? "round";
+    const op = String(cfg.op ?? "round");
+    const intent = FORMATTER_INTENTS.find((i) => i.id === fmtIntent) ?? FORMATTER_INTENTS[FORMATTER_INTENTS.length - 1];
+    const mapPatch = (patch: ValuePatch, prefix: "replaceWith" | "defaultValue"): Record<string, unknown> => {
+      const out: Record<string, unknown> = {};
+      if ("value" in patch) out[prefix] = patch.value;
+      if ("valueKind" in patch) out[`${prefix}Kind`] = patch.valueKind;
+      if ("valueField" in patch) out[`${prefix}Field`] = patch.valueField;
+      return out;
+    };
     return (
       <div className="space-y-3 text-sm">
-        <Field label="Field to format">
+        <Field label="Field to clean up">
           <FieldPicker value={(cfg.field as string) ?? "value"} fieldGroups={fieldGroups} onChange={(v) => onChange({ field: v })} />
         </Field>
-        <Field label="Operation">
-          <select value={op} onChange={(e) => onChange({ op: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
-            {FORMATTER_OPS.map((o) => (
-              <option key={o} value={o}>{o.replace(/_/g, " ")}</option>
+        <Field label="What do you want to do?">
+          <select
+            value={fmtIntent}
+            onChange={(e) => {
+              const ni = e.target.value;
+              setFmtIntent(ni);
+              const nextOps = FORMATTER_INTENTS.find((i) => i.id === ni)?.ops ?? [];
+              if (nextOps.length && !nextOps.includes(op)) onChange({ op: nextOps[0] });
+            }}
+            className="w-full rounded-md border border-neutral-300 px-2 py-1.5"
+          >
+            {FORMATTER_INTENTS.map((i) => (
+              <option key={i.id} value={i.id}>{i.label}</option>
             ))}
           </select>
         </Field>
+        {intent.ops.length > 1 && (
+          <Field label="Operation">
+            <select value={op} onChange={(e) => onChange({ op: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+              {intent.ops.map((o) => (
+                <option key={o} value={o}>{FORMATTER_OP_LABELS[o] ?? o.replace(/_/g, " ")}</option>
+              ))}
+            </select>
+          </Field>
+        )}
         {op === "round" && (
           <Field label="Decimals">
             <input type="number" value={Number(cfg.decimals ?? 2)} onChange={(e) => onChange({ decimals: Number(e.target.value) })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
           </Field>
         )}
         {op === "replace" && (
-          <div className="grid grid-cols-2 gap-2">
+          <>
             <Field label="Find">
               <input value={(cfg.find as string) ?? ""} onChange={(e) => onChange({ find: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
             </Field>
             <Field label="Replace with">
-              <input value={(cfg.replaceWith as string) ?? ""} onChange={(e) => onChange({ replaceWith: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+              <ValueInput
+                value={(cfg.replaceWith as string) ?? ""}
+                valueKind={cfg.replaceWithKind as "fixed" | "field" | undefined}
+                valueField={cfg.replaceWithField as string | undefined}
+                fieldGroups={fieldGroups}
+                placeholder="new value"
+                onChange={(p) => onChange(mapPatch(p, "replaceWith"))}
+              />
             </Field>
-          </div>
+          </>
         )}
         {op === "default" && (
           <Field label="Value for empty">
-            <input value={(cfg.defaultValue as string) ?? ""} onChange={(e) => onChange({ defaultValue: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+            <ValueInput
+              value={(cfg.defaultValue as string) ?? ""}
+              valueKind={cfg.defaultValueKind as "fixed" | "field" | undefined}
+              valueField={cfg.defaultValueField as string | undefined}
+              fieldGroups={fieldGroups}
+              placeholder="fallback value"
+              onChange={(p) => onChange(mapPatch(p, "defaultValue"))}
+            />
           </Field>
         )}
         {(op === "multiply" || op === "divide") && (
@@ -827,6 +914,60 @@ function FormulaInput({ label, desc }: { label: string; desc?: InputDescriptor }
         </p>
       ) : (
         <p className="mt-0.5 text-amber-700">Not connected — connect an Aggregate or Formula step.</p>
+      )}
+    </div>
+  );
+}
+
+type DateRange = { enabled?: boolean; dateField?: string; mode?: string; preset?: string; days?: number; from?: string; to?: string };
+
+/** Prominent "Date range" quick section shown at the top of Filter records. */
+function DateRangeSection({ dr, setDr, fieldGroups }: { dr: DateRange; setDr: (patch: Partial<DateRange>) => void; fieldGroups: FieldGroup[] }) {
+  const mode = dr.mode ?? "preset";
+  return (
+    <div className={`rounded-md border p-3 ${dr.enabled ? "border-blue-200 bg-blue-50/40" : "border-neutral-200"}`}>
+      <label className="flex cursor-pointer items-center justify-between">
+        <span className="text-sm font-medium">Date range</span>
+        <input type="checkbox" checked={!!dr.enabled} onChange={(e) => setDr({ enabled: e.target.checked })} className="h-4 w-4" />
+      </label>
+      <p className="mt-0.5 text-xs text-neutral-500">Only include records within a time window.</p>
+      {dr.enabled && (
+        <div className="mt-3 space-y-2">
+          <Field label="Date field">
+            <FieldPicker value={dr.dateField ?? "occurredAt"} fieldGroups={fieldGroups} onChange={(v) => setDr({ dateField: v })} />
+          </Field>
+          <Field label="Window">
+            <select value={mode} onChange={(e) => setDr({ mode: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+              <option value="preset">Preset period</option>
+              <option value="rolling">Rolling (last N days)</option>
+              <option value="between">Between two dates</option>
+            </select>
+          </Field>
+          {mode === "preset" && (
+            <Field label="Period">
+              <select value={dr.preset ?? "last_30_days"} onChange={(e) => setDr({ preset: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+                {TIME_PRESETS.map((p) => (
+                  <option key={p} value={p}>{p.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </Field>
+          )}
+          {mode === "rolling" && (
+            <Field label="Last N days">
+              <input type="number" value={Number(dr.days ?? 30)} onChange={(e) => setDr({ days: Number(e.target.value) })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+            </Field>
+          )}
+          {mode === "between" && (
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="From">
+                <input type="date" value={dr.from ?? ""} onChange={(e) => setDr({ from: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+              </Field>
+              <Field label="To">
+                <input type="date" value={dr.to ?? ""} onChange={(e) => setDr({ to: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+              </Field>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

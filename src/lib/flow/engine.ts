@@ -167,7 +167,17 @@ async function execApp(ctx: EngineCtx, node: FlowNode): Promise<NodeExec> {
 function execFilter(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = FilterConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Filter");
-  const passed = input.records.filter((r) => evalRules(r, cfg));
+  let recs = input.records;
+  // Optional prominent "Date range" quick section (reuses the Time window logic).
+  const dr = cfg.dateRange;
+  if (dr?.enabled) {
+    const { start, end } = timeWindow({ mode: dr.mode, preset: dr.preset, from: dr.from, to: dr.to, days: dr.days });
+    recs = recs.filter((r) => {
+      const t = dateMs(getField(r, dr.dateField));
+      return t != null && t >= start && t <= end;
+    });
+  }
+  const passed = recs.filter((r) => evalRules(r, cfg));
   return datasetExec("filter", passed, input.records.length);
 }
 
@@ -188,9 +198,16 @@ function execFormatter(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = FormatterConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Formatter");
   const out = cfg.outputField || cfg.field;
+  const asStr = (v: unknown): string | undefined => (v == null ? undefined : String(v));
   const records = input.records.map((r) => {
     const copy: FlowRecord = { ...r, properties: { ...r.properties } };
-    setField(copy, out, formatValue(getField(r, cfg.field), cfg));
+    // Resolve mapped "replace with" / "value for empty" against this record.
+    const eff = {
+      ...cfg,
+      replaceWith: cfg.replaceWithKind === "field" && cfg.replaceWithField ? asStr(getField(r, cfg.replaceWithField)) : cfg.replaceWith,
+      defaultValue: cfg.defaultValueKind === "field" && cfg.defaultValueField ? asStr(getField(r, cfg.defaultValueField)) : cfg.defaultValue,
+    };
+    setField(copy, out, formatValue(getField(r, cfg.field), eff));
     return copy;
   });
   return datasetExec("formatter", records, input.records.length);
@@ -597,6 +614,14 @@ function formatValue(raw: unknown, cfg: { op: string; decimals: number; find?: s
       return str.trim().toLowerCase();
     case "normalize_phone":
       return str.replace(/[^\d]/g, "");
+    case "date_only": {
+      const t = dateMs(raw);
+      return t == null ? raw : new Date(t).toISOString().slice(0, 10);
+    }
+    case "year_month": {
+      const t = dateMs(raw);
+      return t == null ? raw : new Date(t).toISOString().slice(0, 7);
+    }
     case "replace":
       return cfg.find != null ? str.split(cfg.find).join(cfg.replaceWith ?? "") : str;
     case "default":
