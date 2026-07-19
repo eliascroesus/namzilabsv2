@@ -3,7 +3,7 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { NodeType } from "@/lib/flow/types";
 import type { FNode, NodeData } from "./graph-utils";
-import { NODE_META, STATUS_META, formulaHandleLabels, nodeTitle, pathHandles, resultLabel, summary, type NodeStatus } from "./node-meta";
+import { NODE_META, STATUS_META, nodeTitle, pathHandles, resultLabel, summary, type NodeStatus } from "./node-meta";
 import { NodeGlyph } from "./icons";
 import { SourceBadge } from "./MappingChip";
 
@@ -14,15 +14,14 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const sm = STATUS_META[status];
   const test = data.lastTest;
   const isPaths = t === "paths";
-  const isFormula = t === "formula";
-  const fHandles = isFormula ? formulaHandleLabels(String(data.config.op ?? "percentage")) : null;
+  const isCompare = t === "formula" || (t === "calculate" && String(data.config.mode ?? "") === "compare");
   const border = selected ? "border-blue-400 ring-2 ring-blue-500" : sm.border;
   const freeHandles = (data.freeHandles as Array<{ id: string; label: string }> | undefined) ?? [];
 
   return (
     <div className={`w-64 rounded-lg border bg-white shadow-sm ${border}`}>
       {/* input handle(s) on top — hidden; edges are auto-managed, never dragged */}
-      {isFormula ? (
+      {isCompare ? (
         <>
           <Handle type="target" id="a" position={Position.Top} style={{ left: "35%" }} />
           <Handle type="target" id="b" position={Position.Top} style={{ left: "65%" }} />

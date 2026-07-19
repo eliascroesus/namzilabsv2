@@ -684,6 +684,163 @@ function ConfigureTab({
     );
   }
 
+  if (type === "calculate") {
+    const mode = String(cfg.mode ?? "number");
+    const agg = String(cfg.aggregation ?? "count");
+    const gb = (cfg.groupBy as { type?: string; unit?: string; field?: string } | null) ?? null;
+    const gbMode = gb ? gb.type : "none";
+    const op = String(cfg.op ?? "percentage");
+    const labels = formulaHandleLabels(op);
+    const inA = inputs.find((i) => i.targetHandle === "a");
+    const inB = inputs.find((i) => i.targetHandle === "b");
+    const bmode = String(cfg.breakdownMode ?? "field");
+    const cats = (cfg.categories as Array<{ label: string; filters: Filters }>) ?? [];
+    const setCat = (i: number, patch: Record<string, unknown>) => onChange({ categories: cats.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
+    const numberPicker = (handle: "a" | "b", label: string, desc?: InputDescriptor) => (
+      <Field label={label}>
+        <select value={desc?.nodeId ?? ""} onChange={(e) => onSetInput(handle, e.target.value || null)} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+          <option value="">Choose a number…</option>
+          {numberCandidates.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.stepNo != null ? `${c.stepNo}. ` : ""}{c.title}
+            </option>
+          ))}
+        </select>
+        {desc?.value != null && <p className="mt-1 text-xs text-neutral-500">= {String(desc.value)}</p>}
+      </Field>
+    );
+    return (
+      <div className="space-y-3 text-sm">
+        <Field label="What do you want to calculate?">
+          <select value={mode} onChange={(e) => onChange({ mode: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+            <option value="number">A single number</option>
+            <option value="breakdown">Break down by category</option>
+            <option value="compare">Compare two numbers</option>
+          </select>
+        </Field>
+
+        {mode === "number" && (
+          <>
+            <Field label="Calculation">
+              <select value={agg} onChange={(e) => onChange({ aggregation: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+                {AGGREGATIONS.map((a) => (
+                  <option key={a} value={a}>{a.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </Field>
+            {(agg === "sum" || agg === "avg" || agg === "min" || agg === "max") && (
+              <Field label="Number field">
+                <FieldPicker value={(cfg.field as string) ?? "value"} fieldGroups={fieldGroups} onChange={(v) => onChange({ field: v })} />
+              </Field>
+            )}
+            {agg === "count_distinct" && (
+              <Field label="Distinct by">
+                <FieldPicker value={(cfg.distinctField as string) ?? "subject"} fieldGroups={fieldGroups} onChange={(v) => onChange({ distinctField: v })} />
+              </Field>
+            )}
+            <Field label="Split over time?">
+              <select
+                value={gbMode}
+                onChange={(e) => {
+                  const m = e.target.value;
+                  if (m === "none") onChange({ groupBy: null });
+                  else if (m === "time") onChange({ groupBy: { type: "time", unit: "day" } });
+                  else onChange({ groupBy: { type: "field", field: "source" } });
+                }}
+                className="w-full rounded-md border border-neutral-300 px-2 py-1.5"
+              >
+                <option value="none">No — one total number</option>
+                <option value="time">Yes — a trend over time</option>
+                <option value="field">By a field (breakdown)</option>
+              </select>
+            </Field>
+            {gb?.type === "time" && (
+              <Field label="Period">
+                <select value={gb.unit} onChange={(e) => onChange({ groupBy: { type: "time", unit: e.target.value } })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+                  {TIME_UNITS.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            {gb?.type === "field" && (
+              <Field label="Field">
+                <FieldPicker value={gb.field ?? "source"} fieldGroups={fieldGroups} onChange={(v) => onChange({ groupBy: { type: "field", field: v } })} />
+              </Field>
+            )}
+          </>
+        )}
+
+        {mode === "breakdown" && (
+          <>
+            <Field label="Break down by">
+              <select value={bmode} onChange={(e) => onChange({ breakdownMode: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+                <option value="field">A field value</option>
+                <option value="categories">Custom categories</option>
+              </select>
+            </Field>
+            {bmode === "field" && (
+              <Field label="Field">
+                <FieldPicker value={(cfg.breakdownField as string) ?? "source"} fieldGroups={fieldGroups} onChange={(v) => onChange({ breakdownField: v })} />
+              </Field>
+            )}
+            {bmode === "categories" && (
+              <div className="space-y-2">
+                {cats.map((c, i) => (
+                  <div key={i} className="space-y-2 rounded border border-neutral-200 p-2">
+                    <input value={c.label} placeholder="Category name" onChange={(e) => setCat(i, { label: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
+                    <RulesEditor value={c.filters ?? { combinator: "and", rules: [] }} fieldGroups={fieldGroups} onChange={(v) => setCat(i, { filters: v })} />
+                    <button onClick={() => onChange({ categories: cats.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
+                      Remove category
+                    </button>
+                  </div>
+                ))}
+                <button onClick={() => onChange({ categories: [...cats, { label: `Category ${cats.length + 1}`, filters: { combinator: "and", rules: [] } }] })} className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">
+                  + Add category
+                </button>
+                <Field label="Fallback label">
+                  <input value={(cfg.fallbackLabel as string) ?? "Other"} onChange={(e) => onChange({ fallbackLabel: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
+                </Field>
+              </div>
+            )}
+            <Field label="Value per group">
+              <select value={agg} onChange={(e) => onChange({ aggregation: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+                <option value="count">Count</option>
+                <option value="sum">Sum of a field</option>
+                <option value="count_distinct">Count distinct</option>
+              </select>
+            </Field>
+            {agg === "sum" && (
+              <Field label="Sum field">
+                <FieldPicker value={(cfg.field as string) ?? "value"} fieldGroups={fieldGroups} onChange={(v) => onChange({ field: v })} />
+              </Field>
+            )}
+          </>
+        )}
+
+        {mode === "compare" && (
+          <>
+            <Field label="Calculation">
+              <select value={op} onChange={(e) => onChange({ op: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+                {FORMULA_OPS.map((o) => (
+                  <option key={o} value={o}>{o.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </Field>
+            <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
+              <p className="font-medium">{formulaExpression(op, inA?.title ?? "First number", inB?.title ?? "Second number")}</p>
+            </div>
+            {numberPicker("a", labels.a, inA)}
+            {numberPicker("b", labels.b, inB)}
+            {numberCandidates.length === 0 && (
+              <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Add a “Calculate a number” step earlier in the flow to compare.</p>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
   if (type === "aggregate") {
     const agg = (cfg.aggregation as string) ?? "count";
     const gb = (cfg.groupBy as { type?: string; unit?: string; field?: string } | null) ?? null;

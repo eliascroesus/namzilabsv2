@@ -170,6 +170,7 @@ export function terminalIds(nodes: FNode[], edges: Edge[]): Set<string> {
 export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, inputCount: number): boolean {
   if (type === "app") return !cfg.connectionId && !cfg.source;
   if (type === "formula") return inputCount < 2;
+  if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? inputCount < 2 : inputCount === 0;
   if (type === "output") return inputCount === 0 || !String(cfg.name ?? "").trim();
   return inputCount === 0;
 }

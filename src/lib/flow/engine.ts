@@ -12,6 +12,7 @@ import {
   FormulaConfigSchema,
   CombineConfigSchema,
   GroupConfigSchema,
+  CalculateConfigSchema,
   FormatterConfigSchema,
   PathsConfigSchema,
   type FlowGraph,
@@ -134,6 +135,8 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
         return execAggregate(node, inputs);
       case "formula":
         return execFormula(node, inputs);
+      case "calculate":
+        return execCalculate(node, inputs);
       case "output":
         return execOutput(node, inputs);
       default:
@@ -305,55 +308,79 @@ function execAggregate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
 // ---------- Formula ----------
 // A Formula is a binary operation over two named inputs: handle "a" and handle "b".
 // (No edge-order fallback — all pre-v2 flows are wiped in migration 0003.)
-function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
-  const cfg = FormulaConfigSchema.parse(node.data.config ?? {});
-  const scalarAt = (handle: "a" | "b"): number => {
-    const found = inputs.find((i) => i.targetHandle === handle);
-    if (!found) throw new Error(`Formula needs a number connected to input ${handle.toUpperCase()}.`);
-    if (found.shape.kind !== "scalar") throw new Error("Formula inputs must be single numbers (connect Aggregate/Formula nodes).");
-    return found.shape.value;
-  };
-  const a = scalarAt("a");
-  const b = scalarAt("b");
+/** Read a single number from a named input handle (a/b). Shared by Formula + Calculate. */
+function scalarAt(inputs: ResolvedInput[], handle: "a" | "b"): number {
+  const found = inputs.find((i) => i.targetHandle === handle);
+  if (!found) throw new Error(`Needs a number connected to input ${handle.toUpperCase()}.`);
+  if (found.shape.kind !== "scalar") throw new Error("Inputs must be single numbers (connect Calculate steps).");
+  return found.shape.value;
+}
+
+/** The binary calculation over two numbers. Shared by Formula + Calculate(compare). */
+function formulaValue(op: string, a: number, b: number): number {
   const divGuard = (x: number, y: number) => {
-    if (y === 0) throw new Error("Division by zero — check the second (B / denominator) input.");
+    if (y === 0) throw new Error("Division by zero — check the second (denominator) number.");
     return x / y;
   };
-  let value: number;
-  switch (cfg.op) {
+  switch (op) {
     case "add":
-      value = a + b;
-      break;
+      return a + b;
     case "average":
-      value = (a + b) / 2;
-      break;
+      return (a + b) / 2;
     case "subtract":
     case "difference":
-      value = a - b;
-      break;
+      return a - b;
     case "multiply":
-      value = a * b;
-      break;
+      return a * b;
     case "divide":
     case "ratio":
-      value = divGuard(a, b);
-      break;
+      return divGuard(a, b);
     case "percentage":
-      value = divGuard(a, b) * 100;
-      break;
+      return divGuard(a, b) * 100;
     case "percent_change":
-      value = divGuard(a - b, b) * 100;
-      break;
+      return divGuard(a - b, b) * 100;
+    default:
+      throw new Error(`Unknown calculation "${op}".`);
   }
-  return {
-    status: "ok",
-    nodeType: "formula",
-    shape: { kind: "scalar", value: round(value) },
-    recordsIn: 2,
-    recordsOut: 1,
-    sample: [],
-    outputSchema: [],
-  };
+}
+
+function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = FormulaConfigSchema.parse(node.data.config ?? {});
+  const value = formulaValue(cfg.op, scalarAt(inputs, "a"), scalarAt(inputs, "b"));
+  return { status: "ok", nodeType: "formula", shape: { kind: "scalar", value: round(value) }, recordsIn: 2, recordsOut: 1, sample: [], outputSchema: [] };
+}
+
+// ---------- Calculate (merged Aggregate + Formula + Group) ----------
+function execCalculate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = CalculateConfigSchema.parse(node.data.config ?? {});
+
+  if (cfg.mode === "compare") {
+    const value = formulaValue(cfg.op, scalarAt(inputs, "a"), scalarAt(inputs, "b"));
+    return { status: "ok", nodeType: "calculate", shape: { kind: "scalar", value: round(value) }, recordsIn: 2, recordsOut: 1, sample: [], outputSchema: [] };
+  }
+
+  const input = requireDataset(inputs, "Calculate");
+
+  if (cfg.mode === "breakdown") {
+    const groupAgg = cfg.aggregation === "sum" || cfg.aggregation === "count_distinct" ? cfg.aggregation : "count";
+    const gcfg: GroupConfig = {
+      mode: cfg.breakdownMode,
+      field: cfg.breakdownField,
+      aggregation: groupAgg,
+      valueField: cfg.field,
+      distinctField: cfg.distinctField,
+      categories: cfg.categories,
+      fallbackLabel: cfg.fallbackLabel,
+    };
+    const groups = cfg.breakdownMode === "field" ? groupByField(input.records, gcfg) : groupByCategories(input.records, gcfg);
+    return { status: "ok", nodeType: "calculate", shape: { kind: "grouped", groups }, recordsIn: input.records.length, recordsOut: groups.length, sample: input.records.slice(0, 3), outputSchema: [] };
+  }
+
+  // number
+  const acfg: AggregateConfig = { aggregation: cfg.aggregation, field: cfg.field, distinctField: cfg.distinctField, groupBy: cfg.groupBy };
+  const shape = aggregate(input.records, acfg);
+  const recordsOut = shape.kind === "scalar" ? 1 : shape.kind === "series" ? shape.series.length : shape.groups.length;
+  return { status: "ok", nodeType: "calculate", shape, recordsIn: input.records.length, recordsOut, sample: input.records.slice(0, 3), outputSchema: [] };
 }
 
 // ---------- Output ----------

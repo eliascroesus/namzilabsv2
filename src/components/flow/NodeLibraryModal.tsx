@@ -21,8 +21,8 @@ export function NodeLibraryModal({ onClose, onPick }: { onClose: () => void; onP
     return `${m.label} ${m.blurb} ${m.keywords} ${m.stage}`.toLowerCase().includes(query);
   };
 
-  const byStage = STAGES.map((stage) => ({ stage, types: ALL_TYPES.filter((t) => NODE_META[t].stage === stage && !NODE_META[t].advanced && matches(t)) })).filter((g) => g.types.length > 0);
-  const advanced = ALL_TYPES.filter((t) => NODE_META[t].advanced && matches(t));
+  const byStage = STAGES.map((stage) => ({ stage, types: ALL_TYPES.filter((t) => NODE_META[t].stage === stage && !NODE_META[t].advanced && !NODE_META[t].hidden && matches(t)) })).filter((g) => g.types.length > 0);
+  const advanced = ALL_TYPES.filter((t) => NODE_META[t].advanced && !NODE_META[t].hidden && matches(t));
 
   const card = (t: NodeType) => (
     <button key={t} onClick={() => onPick(t)} className="flex items-start gap-2.5 rounded-md border border-neutral-200 p-2.5 text-left hover:border-neutral-400 hover:bg-neutral-50">

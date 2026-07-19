@@ -12,6 +12,9 @@ export const NODE_TYPES = [
   "formula",
   "formatter",
   "time",
+  // "calculate" merges Aggregate + Formula + Group into one step. The three legacy
+  // types remain in the engine so existing flows keep loading/running unchanged.
+  "calculate",
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
@@ -223,6 +226,27 @@ export const GroupConfigSchema = z.object({
   fallbackLabel: z.string().default("Other"),
 });
 export type GroupConfig = z.infer<typeof GroupConfigSchema>;
+
+// ---------- Calculate (merged Aggregate + Formula + Group) ----------
+export const CALC_MODES = ["number", "breakdown", "compare"] as const;
+export type CalcMode = (typeof CALC_MODES)[number];
+
+export const CalculateConfigSchema = z.object({
+  mode: z.enum(CALC_MODES).default("number"),
+  // number (aggregate): count/sum/avg/… with an optional time trend
+  aggregation: z.enum(AGGREGATIONS).default("count"),
+  field: z.string().default("value"),
+  distinctField: z.string().default("subject"),
+  groupBy: GroupBySchema,
+  // breakdown (group): by a field or custom categories
+  breakdownMode: z.enum(["field", "categories"]).default("field"),
+  breakdownField: z.string().default("source"),
+  categories: z.array(z.object({ label: z.string().min(1), filters: FilterConfigSchema })).default([]),
+  fallbackLabel: z.string().default("Other"),
+  // compare (formula): a rate/ratio/… over two numbers chosen as pills (handles a/b)
+  op: z.enum(FORMULA_OPS).default("percentage"),
+});
+export type CalculateConfig = z.infer<typeof CalculateConfigSchema>;
 
 // ---------- Formatter (advanced) ----------
 export const FORMATTER_OPS = [

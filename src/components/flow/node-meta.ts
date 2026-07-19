@@ -6,17 +6,20 @@ export const STAGES = ["Data", "Conditions", "Calculation", "Dashboard"] as cons
 export type Stage = (typeof STAGES)[number];
 
 /** Plain-English node metadata. Labels read like instructions, not jargon. */
-export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: Stage; advanced: boolean; keywords: string }> = {
+export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: Stage; advanced: boolean; keywords: string; hidden?: boolean }> = {
   app: { label: "Get data", blurb: "Pull records from a connected app", stage: "Data", advanced: false, keywords: "integration source connect data app get" },
-  combine: { label: "Combine sources", blurb: "Merge records from multiple steps", stage: "Data", advanced: true, keywords: "merge join dedupe union combine sources" },
+  combine: { label: "Combine data", blurb: "Merge records from multiple steps", stage: "Data", advanced: true, keywords: "merge join dedupe union combine sources" },
   filter: { label: "Filter records", blurb: "Keep only the records you want", stage: "Conditions", advanced: false, keywords: "condition where keep only match date range filter" },
-  time: { label: "Date range", blurb: "Limit records to a time window", stage: "Conditions", advanced: true, keywords: "date range window period time" },
   paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", advanced: true, keywords: "split branch route condition paths" },
-  aggregate: { label: "Calculate a number", blurb: "Count, sum, or average records", stage: "Calculation", advanced: false, keywords: "count sum average metric number aggregate calculate" },
-  formula: { label: "Compare two numbers", blurb: "Rates, ratios, and % change", stage: "Calculation", advanced: false, keywords: "percentage ratio divide rate formula compare" },
-  group: { label: "Group into categories", blurb: "Break records into groups", stage: "Calculation", advanced: true, keywords: "category breakdown segment group" },
+  calculate: { label: "Calculate a number", blurb: "Count, compare, or break down", stage: "Calculation", advanced: false, keywords: "count sum average metric number compare rate ratio break down group calculate" },
   formatter: { label: "Clean up values", blurb: "Fix text, numbers, and dates", stage: "Calculation", advanced: true, keywords: "format clean text number round date formatter" },
   output: { label: "Show on dashboard", blurb: "Save the metric as a dashboard tile", stage: "Dashboard", advanced: false, keywords: "dashboard tile metric result output show" },
+  // Legacy steps — merged into Calculate / Filter. Kept so old flows still render + run,
+  // but hidden from the picker (new flows use Calculate + Filter's date range).
+  time: { label: "Date range", blurb: "Limit records to a time window", stage: "Conditions", advanced: true, keywords: "date range window period time", hidden: true },
+  aggregate: { label: "Calculate a number", blurb: "Count, sum, or average records", stage: "Calculation", advanced: false, keywords: "count sum average aggregate", hidden: true },
+  formula: { label: "Compare two numbers", blurb: "Rates, ratios, and % change", stage: "Calculation", advanced: false, keywords: "percentage ratio formula compare", hidden: true },
+  group: { label: "Group into categories", blurb: "Break records into groups", stage: "Calculation", advanced: true, keywords: "category breakdown segment group", hidden: true },
 };
 export const ALL_TYPES = Object.keys(NODE_META) as NodeType[];
 
@@ -63,6 +66,8 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
       return { combinator: "and", rules: [] };
     case "aggregate":
       return { aggregation: "count", field: "value", distinctField: "subject", groupBy: null };
+    case "calculate":
+      return { mode: "number", aggregation: "count", field: "value", distinctField: "subject", groupBy: null, breakdownMode: "field", breakdownField: "source", categories: [], fallbackLabel: "Other", op: "percentage" };
     case "output":
       return { name: "New metric", viz: "number", format: "number", precision: 0, target: null };
     case "time":
@@ -150,6 +155,14 @@ export function summary(type: string, data: NodeData): string {
     return mode === "preset" ? String(c.preset ?? "last_30_days").replace(/_/g, " ") : mode === "rolling" ? `last ${c.days ?? 30} days` : "between dates";
   }
   if (type === "formula") return formulaExpression(String(c.op ?? "percentage"), "A", "B");
+  if (type === "calculate") {
+    const mode = String(c.mode ?? "number");
+    if (mode === "compare") return formulaExpression(String(c.op ?? "percentage"), "First", "Second");
+    if (mode === "breakdown") return String(c.breakdownMode) === "field" ? `break down by ${String(c.breakdownField ?? "source")}` : `${((c.categories as unknown[]) ?? []).length} categories`;
+    const agg = String(c.aggregation ?? "count");
+    const gb = c.groupBy as { type?: string; unit?: string; field?: string } | null;
+    return `${agg}${gb ? ` by ${gb.type === "time" ? gb.unit : gb.field}` : ""}`;
+  }
   if (type === "combine") return `${String(c.mode ?? "stack")} on ${String(c.identityField ?? "subject")}`;
   if (type === "group") return String(c.mode) === "field" ? `by ${String(c.field ?? "source")}` : `${((c.categories as unknown[]) ?? []).length} categories`;
   if (type === "formatter") return `${String(c.op ?? "round")} · ${String(c.field ?? "value")}`;
@@ -178,6 +191,7 @@ export function resultLabel(type: string, test: { recordsIn: number; recordsOut:
       return `${recordsOut} groups`;
     case "aggregate":
     case "formula":
+    case "calculate":
       return `Result: ${val}`;
     case "output":
       return `Dashboard value: ${val}`;

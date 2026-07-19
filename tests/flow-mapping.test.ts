@@ -189,6 +189,59 @@ describe("engine — Formatter date ops + mapped fallback", () => {
   });
 });
 
+describe("engine — Calculate node (merged number / breakdown / compare)", () => {
+  it("number mode counts records", async () => {
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "canceled" });
+    const g = parseGraph({ nodes: [N("a", "app", { connectionId: CONN }), N("c", "calculate", { mode: "number", aggregation: "count" })], edges: [E("a", "c")] });
+    const c = (await runFlow({ db, orgId: ORG }, g, { untilNodeId: "c" })).nodes.get("c")!;
+    expect(c.status).toBe("ok");
+    if (c.status === "ok" && c.shape.kind === "scalar") expect(c.shape.value).toBe(3);
+    else throw new Error("expected scalar");
+  });
+
+  it("breakdown mode groups by a field", async () => {
+    await ev({ eventType: "booked", properties: { plan: "pro" } });
+    await ev({ eventType: "booked", properties: { plan: "free" } });
+    await ev({ eventType: "booked", properties: { plan: "pro" } });
+    const g = parseGraph({
+      nodes: [N("a", "app", { connectionId: CONN }), N("c", "calculate", { mode: "breakdown", breakdownMode: "field", breakdownField: "properties.plan", aggregation: "count" })],
+      edges: [E("a", "c")],
+    });
+    const c = (await runFlow({ db, orgId: ORG }, g, { untilNodeId: "c" })).nodes.get("c")!;
+    if (c.status === "ok" && c.shape.kind === "grouped") expect(c.shape.groups.find((x) => x.label === "pro")?.value).toBe(2);
+    else throw new Error("expected grouped");
+  });
+
+  it("compare mode divides two numbers as a percentage (show-up rate)", async () => {
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "canceled" });
+    const g = parseGraph({
+      nodes: [
+        N("a", "app", { connectionId: CONN }),
+        N("cA", "calculate", { mode: "number", aggregation: "count" }),
+        N("f", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "booked" }] }),
+        N("cB", "calculate", { mode: "number", aggregation: "count" }),
+        N("cmp", "calculate", { mode: "compare", op: "percentage" }),
+      ],
+      edges: [
+        E("a", "cA"),
+        E("a", "f"),
+        E("f", "cB"),
+        { id: "cB->cmp", source: "cB", target: "cmp", targetHandle: "a" },
+        { id: "cA->cmp", source: "cA", target: "cmp", targetHandle: "b" },
+      ],
+    });
+    const cmp = (await runFlow({ db, orgId: ORG }, g, { untilNodeId: "cmp" })).nodes.get("cmp")!;
+    expect(cmp.status).toBe("ok");
+    if (cmp.status === "ok" && cmp.shape.kind === "scalar") expect(cmp.shape.value).toBe(75);
+    else throw new Error("expected scalar");
+  });
+});
+
 describe("validateGraph — mapped rule without a chosen field", () => {
   it("flags a condition set to compare against a field with no field chosen", () => {
     const g = parseGraph({

@@ -1,4 +1,4 @@
-import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, NODE_TYPES, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
+import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, CalculateConfigSchema, NODE_TYPES, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
 
 export type ValidationIssue = { nodeId?: string; message: string };
 
@@ -13,7 +13,7 @@ type ShapeKind = "dataset" | "value" | "none";
 /** Nodes that emit a record set. */
 const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths"]);
 /** Nodes that emit a computed value/series/grouped. */
-const VALUE_PRODUCERS = new Set(["aggregate", "formula", "group"]);
+const VALUE_PRODUCERS = new Set(["aggregate", "formula", "group", "calculate"]);
 /** Nodes that consume record sets. */
 const DATASET_CONSUMERS = new Set(["filter", "aggregate", "time", "formatter", "group", "paths", "combine"]);
 /** Nodes that consume computed values. */
@@ -111,6 +111,26 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
       const cfg = FilterConfigSchema.safeParse(node.data.config ?? {});
       if (cfg.success && mappedRuleGaps(cfg.data) > 0) {
         issues.push({ nodeId: node.id, message: "A condition compares against a field, but no field is chosen." });
+      }
+    }
+
+    if (node.type === "calculate") {
+      const parsed = CalculateConfigSchema.safeParse(node.data.config ?? {});
+      const mode = parsed.success ? parsed.data.mode : "number";
+      if (mode === "compare") {
+        const cEdges = incomingEdges.get(node.id) ?? [];
+        const aCount = cEdges.filter((e) => e.targetHandle === "a").length;
+        const bCount = cEdges.filter((e) => e.targetHandle === "b").length;
+        if (aCount !== 1 || bCount !== 1) issues.push({ nodeId: node.id, message: "Compare needs one number in First and one in Second." });
+        for (const e of cEdges) {
+          const src = byId.get(e.source);
+          if (src && (e.targetHandle === "a" || e.targetHandle === "b") && outputKind(src) !== "value") {
+            issues.push({ nodeId: node.id, message: "Compare inputs must be numbers (connect Calculate steps)." });
+          }
+        }
+      } else {
+        const hasDataset = ins.map((sid) => byId.get(sid)).some((s) => s && outputKind(s) === "dataset");
+        if (!hasDataset) issues.push({ nodeId: node.id, message: "Calculate needs records as input." });
       }
     }
 

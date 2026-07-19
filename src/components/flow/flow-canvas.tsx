@@ -30,14 +30,25 @@ import { NodeLibraryModal } from "./NodeLibraryModal";
 
 export type { ConnMeta };
 
-const NUMBER_PRODUCERS = new Set(["aggregate", "formula"]);
 const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths"]);
 const rid = () => `e_${Math.random().toString(36).slice(2, 9)}`;
+
+/** A step that yields a single number, usable as a First/Second number in Compare. */
+function isNumberProducer(n: FNode): boolean {
+  const t = String(n.type);
+  if (t === "aggregate" || t === "formula") return true;
+  if (t === "calculate") {
+    const m = String((n.data.config as { mode?: unknown }).mode ?? "number");
+    return m === "number" || m === "compare";
+  }
+  return false;
+}
 
 /** Short "what to do next" hint shown inside a step that needs setup. */
 function setupHint(type: string, cfg: Record<string, unknown>, inputCount: number): string {
   if (type === "app") return "Choose an account to load data.";
   if (type === "formula") return "Pick a First and Second number.";
+  if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? "Pick a First and Second number." : "Connect an input.";
   if (type === "output") return inputCount === 0 ? "Connect an input." : "Name this metric.";
   return "Connect an input.";
 }
@@ -381,7 +392,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     const avail = nodes.filter((n) => n.id !== selected.id && !desc.has(n.id));
     const toItem = (n: FNode): StepRef => ({ id: n.id, title: nodeTitle(String(n.type) as NodeType, n.data), stepNo: stepNoById.get(n.id) });
     return {
-      number: avail.filter((n) => NUMBER_PRODUCERS.has(String(n.type))).map(toItem),
+      number: avail.filter(isNumberProducer).map(toItem),
       dataset: avail.filter((n) => DATASET_PRODUCERS.has(String(n.type))).map(toItem),
     };
   }, [selected, nodes, edges, stepNoById]);
