@@ -1,6 +1,12 @@
-import { AppConfigSchema, PathsConfigSchema, GroupConfigSchema, NODE_TYPES, type FlowGraph, type FlowNode } from "./types";
+import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, NODE_TYPES, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
 
 export type ValidationIssue = { nodeId?: string; message: string };
+
+/** Rules whose value is mapped to a field but no field was chosen. */
+function mappedRuleGaps(filters: FilterConfig | undefined): number {
+  if (!filters) return 0;
+  return filters.rules.filter((r) => r.valueKind === "field" && !(r.valueField ?? "").trim()).length;
+}
 
 type ShapeKind = "dataset" | "value" | "none";
 
@@ -101,10 +107,19 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
       }
     }
 
+    if (node.type === "filter") {
+      const cfg = FilterConfigSchema.safeParse(node.data.config ?? {});
+      if (cfg.success && mappedRuleGaps(cfg.data) > 0) {
+        issues.push({ nodeId: node.id, message: "A condition compares against a field, but no field is chosen." });
+      }
+    }
+
     if (node.type === "paths") {
       const cfg = PathsConfigSchema.safeParse(node.data.config ?? {});
       if (!cfg.success || cfg.data.paths.length === 0) {
         issues.push({ nodeId: node.id, message: "Paths node needs at least one path with conditions." });
+      } else if (cfg.data.paths.reduce((a, p) => a + mappedRuleGaps(p.filters), 0) > 0) {
+        issues.push({ nodeId: node.id, message: "A path condition compares against a field, but no field is chosen." });
       }
     }
 
@@ -112,6 +127,8 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
       const cfg = GroupConfigSchema.safeParse(node.data.config ?? {});
       if (cfg.success && cfg.data.mode === "categories" && cfg.data.categories.length === 0) {
         issues.push({ nodeId: node.id, message: "Group node needs at least one category." });
+      } else if (cfg.success && cfg.data.mode === "categories" && cfg.data.categories.reduce((a, c) => a + mappedRuleGaps(c.filters), 0) > 0) {
+        issues.push({ nodeId: node.id, message: "A category condition compares against a field, but no field is chosen." });
       }
     }
 

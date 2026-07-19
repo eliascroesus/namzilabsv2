@@ -17,7 +17,7 @@ import {
   type Connection,
 } from "@xyflow/react";
 import { type NodeType } from "@/lib/flow/types";
-import { saveDraftAction, testNodeAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
+import { saveDraftAction, testNodeAction, publishFlowAction, renameFlowAction, runChainAction, type NodeTestDTO, type ChainStepDTO } from "@/app/dashboard/flows/actions";
 import {
   bridgeEdgeFor,
   buildFieldGroups,
@@ -365,6 +365,40 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [selected, nodes, edges],
   );
 
+  // ---- Auto-recalc (W5): recompute the selected node's chain on a debounce ----
+  // Read-only over synced data, so downstream transforms never need a manual test.
+  // The key excludes lastTest/dirty so writing results back doesn't re-trigger the loop.
+  const [chainSteps, setChainSteps] = useState<ChainStepDTO[]>([]);
+  const [recalcLoading, setRecalcLoading] = useState(false);
+  const toGraphRef = useRef(toGraph);
+  toGraphRef.current = toGraph;
+  const recalcKey = useMemo(
+    () =>
+      JSON.stringify({
+        sel: selectedId,
+        edges: edges.map((e) => [e.source, e.target, e.sourceHandle ?? null, e.targetHandle ?? null]),
+        nodes: nodes.map((n) => [n.id, n.type, n.data.config]),
+      }),
+    [selectedId, edges, nodes],
+  );
+  useEffect(() => {
+    if (!selectedId) {
+      setChainSteps([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      setRecalcLoading(true);
+      const r = await runChainAction(toGraphRef.current(), selectedId);
+      setChainSteps(r.steps);
+      setNodes((ns) => ns.map((n) => (r.results[n.id] ? { ...n, data: { ...n.data, lastTest: r.results[n.id], dirty: false } } : n)));
+      setRecalcLoading(false);
+    }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recalcKey]);
+
+  const resultTitles = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, nodeTitle(String(n.type) as NodeType, n.data)])), [nodes]);
+
   // Inject transient display data + hide collapsed branches.
   const hiddenIds = useMemo(() => {
     const h = new Set<string>();
@@ -489,6 +523,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             inputCount={edges.filter((e) => e.target === selected.id).length}
             testing={testingId === selected.id}
             canReconnect={bridgeEdgeFor(selected.id, edges) !== null}
+            resultSteps={chainSteps}
+            resultTitles={resultTitles}
+            resultLoading={recalcLoading}
             onChange={(patch) => updateConfig(selected.id, patch)}
             onRename={(v) => renameNode(selected.id, v)}
             onTest={() => testNode(selected.id)}

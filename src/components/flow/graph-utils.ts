@@ -1,5 +1,5 @@
 import type { Node, Edge } from "@xyflow/react";
-import { STANDARD_FIELDS } from "@/lib/flow/records";
+import { STANDARD_FIELDS, walkPath } from "@/lib/flow/records";
 import type { NodeTestDTO } from "@/app/dashboard/flows/actions";
 
 // ---------- Shared editor types ----------
@@ -18,11 +18,20 @@ export type NodeData = {
 };
 export type FNode = Node<NodeData>;
 
-export type Rule = { field: string; op: string; value: string; value2?: string };
+export type Rule = { field: string; op: string; value: string; value2?: string; valueKind?: "fixed" | "field"; valueField?: string };
 export type Filters = { combinator: string; rules: Rule[] };
 
-export type PickField = { path: string; label: string; type?: string; example?: unknown };
-export type FieldGroup = { from: string; stepNo?: number; system?: boolean; fields: PickField[] };
+export type PickField = { path: string; label: string; type?: string; example?: unknown; container?: boolean };
+export type FieldGroup = {
+  from: string;
+  stepNo?: number;
+  system?: boolean;
+  /** Source app key of this group's nearest App ancestor (drives icon + brand colour). */
+  appSource?: string;
+  /** The selected preview record this group's examples were resolved from (for lazy nested expansion). */
+  sampleRecord?: unknown;
+  fields: PickField[];
+};
 
 export type Graph = {
   nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>;
@@ -161,7 +170,10 @@ export const STD_META: Record<string, { label: string; type: string }> = {
   id: { label: "Record id", type: "text" },
 };
 
-/** Resolve a field path against a sample record (client mirror of records.getField). */
+/**
+ * Resolve a field path against a sample record (client mirror of records.getField),
+ * including nested objects/arrays via dotted segments + numeric indices.
+ */
 export function resolveSampleField(rec: unknown, path: string): unknown {
   if (!rec || typeof rec !== "object") return undefined;
   const r = rec as Record<string, unknown>;
@@ -176,8 +188,10 @@ export function resolveSampleField(rec: unknown, path: string): unknown {
       return r[path];
     default: {
       const props = r.properties as Record<string, unknown> | undefined;
-      const key = path.startsWith("properties.") ? path.slice("properties.".length) : path;
-      return props?.[key];
+      if (props == null) return undefined;
+      const rest = path.startsWith("properties.") ? path.slice("properties.".length) : path;
+      if (Object.prototype.hasOwnProperty.call(props, rest)) return props[rest];
+      return walkPath(props, rest);
     }
   }
 }
@@ -207,25 +221,89 @@ export function buildFieldGroups(opts: {
       const sn = nodes.find((n) => n.id === sid);
       if (!sn) continue;
       const schema = sn.data.lastTest?.outputSchema ?? [];
-      const sample = (sn.data.lastTest?.sample ?? []) as unknown[];
-      const idx = sampleIndexOf ? sampleIndexOf(sn) : 0;
-      const chosen = sample[idx] ?? sample[0];
+      // W3b: examples come from the field's nearest App ancestor's *selected* preview
+      // record, so changing the record updates values everywhere. Transform-added fields
+      // (absent on the app record) fall back to the direct upstream's own sample.
+      const app = nearestAppAncestor(sn, nodes, edges);
+      const appChosen = app ? chosenSample(app, sampleIndexOf) : undefined;
+      const upChosen = chosenSample(sn, sampleIndexOf);
       const custom: PickField[] = [];
       for (const f of schema) {
-        const ex = chosen !== undefined ? resolveSampleField(chosen, f.path) : f.example;
+        let ex = appChosen !== undefined ? resolveSampleField(appChosen, f.path) : undefined;
+        if (ex === undefined) ex = upChosen !== undefined ? resolveSampleField(upChosen, f.path) : f.example;
         if (stdSet.has(f.path)) {
           const sys = systemFields.find((s) => s.path === f.path);
           if (sys && sys.example === undefined) sys.example = ex;
         } else {
-          custom.push({ path: f.path, label: f.label, type: f.type, example: ex });
+          custom.push({ path: f.path, label: f.label, type: f.type, example: ex, container: f.container });
         }
       }
-      if (custom.length) groups.push({ from: titleOf(sn), stepNo: stepNoById.get(sid), fields: custom });
+      if (custom.length) {
+        groups.push({
+          from: titleOf(sn),
+          stepNo: stepNoById.get(sid),
+          appSource: app ? String((app.data.config as { source?: unknown }).source ?? "") : undefined,
+          sampleRecord: appChosen ?? upChosen,
+          fields: custom,
+        });
+      }
     }
   }
 
   // Source fields first; canonical/system fields last (rendered collapsed).
   return [...groups, { from: "System fields", system: true, fields: systemFields }];
+}
+
+/** The selected preview record for a node (its `sampleIndex`, else the first sample). */
+function chosenSample(node: FNode, sampleIndexOf?: (n: FNode) => number): unknown {
+  const sample = (node.data.lastTest?.sample ?? []) as unknown[];
+  const idx = sampleIndexOf ? sampleIndexOf(node) : 0;
+  return sample[idx] ?? sample[0];
+}
+
+/** Walk upstream from a node to the nearest App source (itself if it is one). */
+function nearestAppAncestor(start: FNode, nodes: FNode[], edges: Edge[]): FNode | undefined {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const guard = new Set<string>();
+  let cur: FNode | undefined = start;
+  while (cur && !guard.has(cur.id)) {
+    guard.add(cur.id);
+    if (cur.type === "app") return cur;
+    const up = edges.find((e) => e.target === cur!.id);
+    cur = up ? byId.get(up.source) : undefined;
+  }
+  return undefined;
+}
+
+/** Last segment of a dotted path, used as a fallback label for nested fields. */
+export function lastSegment(path: string): string {
+  const seg = path.split(".").pop() ?? path;
+  return STD_META[path]?.label ?? seg;
+}
+
+/**
+ * Resolve a picked field path (including lazily-expanded nested paths not present in
+ * the flat field list) to its provenance: originating step, source app, human label,
+ * and the sample value from the selected preview record. Drives the data pill.
+ */
+export function fieldProvenance(
+  fieldGroups: FieldGroup[],
+  path: string,
+): { stepNo?: number; source?: string; from?: string; label: string; sample?: unknown; type?: string } {
+  for (const g of fieldGroups) {
+    const exact = g.fields.find((f) => f.path === path);
+    if (exact) return { stepNo: g.stepNo, source: g.appSource, from: g.from, label: exact.label, sample: exact.example, type: exact.type };
+  }
+  // Nested (drilled-into) path: find the owning group by resolving against its sample.
+  for (const g of fieldGroups) {
+    if (g.system) continue;
+    const val = resolveSampleField(g.sampleRecord, path);
+    if (val !== undefined) {
+      const type = Array.isArray(val) ? "list" : val && typeof val === "object" ? "object" : typeof val === "number" ? "number" : typeof val === "boolean" ? "boolean" : "text";
+      return { stepNo: g.stepNo, source: g.appSource, from: g.from, label: lastSegment(path), sample: val, type };
+    }
+  }
+  return { label: lastSegment(path) };
 }
 
 // ---------- Input descriptors (Combine / Formula config panels) ----------

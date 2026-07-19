@@ -78,11 +78,22 @@ export const PRIMARY_FILTER_OPS: FlowFilterOp[] = [
 /** Operators that take no value input (the value box is hidden for these). */
 export const NO_VALUE_FILTER_OPS: FlowFilterOp[] = ["is_empty", "is_not_empty"];
 
+/** How a comparison value is supplied: a literal, or a mapped upstream field. */
+export const VALUE_KINDS = ["fixed", "field"] as const;
+export type ValueKind = (typeof VALUE_KINDS)[number];
+
 export const FilterRuleSchema = z.object({
   field: z.string().min(1),
   op: z.enum(FLOW_FILTER_OPS),
   value: z.string().default(""),
   value2: z.string().optional(), // for "between"
+  /**
+   * Dynamic value mapping (Zapier-style). Defaults keep every pre-existing rule a
+   * fixed literal, so old graphs are byte-for-byte unchanged.
+   */
+  valueKind: z.enum(VALUE_KINDS).default("fixed"),
+  /** When valueKind === "field": the upstream field path resolved per-record at runtime. */
+  valueField: z.string().optional(),
 });
 export const FilterConfigSchema = z.object({
   combinator: z.enum(["and", "or"]).default("and"),

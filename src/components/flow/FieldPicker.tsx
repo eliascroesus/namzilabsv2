@@ -1,73 +1,163 @@
 "use client";
 
-import { useState } from "react";
-import type { FieldGroup } from "./graph-utils";
+import { useEffect, useRef, useState } from "react";
+import type { FieldGroup, PickField } from "./graph-utils";
+import { resolveSampleField } from "./graph-utils";
+import { SourceBadge } from "./MappingChip";
 
-/** Field input with a searchable variable picker grouped by previous step. */
-export function FieldPicker({ value, fieldGroups, onChange }: { value: string; fieldGroups: FieldGroup[]; onChange: (v: string) => void }) {
+function clientKind(v: unknown): string {
+  if (Array.isArray(v)) return "list";
+  if (v && typeof v === "object") return "object";
+  if (typeof v === "number") return "number";
+  if (typeof v === "boolean") return "boolean";
+  return "text";
+}
+function isContainer(v: unknown): boolean {
+  return Array.isArray(v) || (!!v && typeof v === "object");
+}
+/** Enumerate one level of nested children (object keys / array items) from the sample. */
+function childrenOf(sampleRecord: unknown, path: string): PickField[] {
+  const val = resolveSampleField(sampleRecord, path);
+  if (Array.isArray(val)) {
+    return val.slice(0, 10).map((item, i) => ({ path: `${path}.${i}`, label: `Item ${i + 1}`, type: clientKind(item), example: item, container: isContainer(item) }));
+  }
+  if (val && typeof val === "object") {
+    return Object.entries(val as Record<string, unknown>)
+      .slice(0, 50)
+      .map(([k, v]) => ({ path: `${path}.${k}`, label: k, type: clientKind(v), example: v, container: isContainer(v) }));
+  }
+  return [];
+}
+function fmt(ex: unknown): string | null {
+  if (ex == null || ex === "") return null;
+  const s = typeof ex === "object" ? JSON.stringify(ex) : String(ex);
+  return s.length > 28 ? `${s.slice(0, 28)}…` : s;
+}
+
+/**
+ * Field input with a Zapier-style "Insert data" browser: fields grouped by the app +
+ * step they come from (with a source badge), each row showing a human name, type, and
+ * the real sample value from the selected preview record. Multiple inputs start
+ * collapsed; nested objects/arrays expand in place. Clicking outside closes it.
+ */
+export function FieldPicker({
+  value,
+  fieldGroups,
+  onChange,
+  onCommit,
+}: {
+  value: string;
+  fieldGroups: FieldGroup[];
+  onChange: (v: string) => void;
+  /** Fired only when a field is picked from the browser (not on free-text typing). */
+  onCommit?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click / Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   const query = q.trim().toLowerCase();
   const groups = fieldGroups
     .map((g) => ({ ...g, fields: g.fields.filter((f) => !query || `${f.label} ${f.path}`.toLowerCase().includes(query)) }))
     .filter((g) => g.fields.length > 0);
+  const nonSystem = groups.filter((g) => !g.system);
+  const collapseGroups = nonSystem.length > 1; // multiple inputs → collapsed by default
 
-  const example = (ex: unknown) => {
-    if (ex == null) return null;
-    const s = String(ex);
-    return s.length > 22 ? `${s.slice(0, 22)}…` : s;
+  const pick = (f: PickField) => {
+    onChange(f.path);
+    onCommit?.();
+    setOpen(false);
+    setQ("");
   };
+  const toggle = (path: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+
+  const renderField = (g: FieldGroup, f: PickField, depth: number): React.ReactNode => (
+    <div key={`${g.from}:${f.path}`}>
+      <div className="flex items-center" style={{ paddingLeft: depth * 12 }}>
+        {f.container ? (
+          <button type="button" onClick={() => toggle(f.path)} className="w-4 shrink-0 text-neutral-400 hover:text-neutral-700" title="Expand">
+            {expanded.has(f.path) ? "▾" : "▸"}
+          </button>
+        ) : (
+          <span className="w-4 shrink-0" />
+        )}
+        <button type="button" onClick={() => pick(f)} className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-neutral-100">
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-neutral-700">{f.label}</span>
+            {fmt(f.example) != null && <span className="block truncate text-[10px] text-neutral-400">{fmt(f.example)}</span>}
+          </span>
+          {f.type && <span className="shrink-0 rounded bg-neutral-100 px-1 py-0.5 text-[9px] uppercase text-neutral-500">{f.type}</span>}
+        </button>
+      </div>
+      {f.container && expanded.has(f.path) && childrenOf(g.sampleRecord, f.path).map((c) => renderField(g, c, depth + 1))}
+    </div>
+  );
+
+  const groupHeader = (g: FieldGroup) => (
+    <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+      {!g.system && <SourceBadge source={g.appSource} size={14} />}
+      {g.stepNo != null ? `${g.stepNo}. ` : ""}
+      {g.from}
+    </span>
+  );
 
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapRef}>
       <div className="flex gap-1">
-        <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="field (e.g. subject or properties.plan)" className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs" />
-        <button type="button" onClick={() => setOpen((o) => !o)} title="Insert a field from a previous step" className="w-7 rounded-md border border-neutral-300 text-xs hover:bg-neutral-50">
-          +
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="field (e.g. subject or properties.plan)"
+          className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs"
+        />
+        <button type="button" onClick={() => setOpen((o) => !o)} title="Insert data from a previous step" className="shrink-0 rounded-md border border-neutral-300 px-2 text-xs hover:bg-neutral-50">
+          Insert data
         </button>
       </div>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 max-h-72 w-72 overflow-y-auto rounded-md border border-neutral-200 bg-white p-2 shadow-lg">
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search fields…" className="mb-2 w-full rounded border border-neutral-300 px-2 py-1 text-xs" />
-          {groups.length === 0 && <p className="p-2 text-center text-xs text-neutral-400">No fields. Test upstream steps to load their fields.</p>}
-          {(() => {
-            const pick = (f: { path: string }) => {
-              onChange(f.path);
-              setOpen(false);
-              setQ("");
-            };
-            const fieldButton = (g: { from: string }, f: (typeof groups)[number]["fields"][number]) => (
-              <button
-                key={`${g.from}:${f.path}`}
-                type="button"
-                onClick={() => pick(f)}
-                className="flex w-full items-center justify-between gap-2 rounded px-1.5 py-1 text-left text-xs hover:bg-neutral-100"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate font-medium text-neutral-700">{f.label}</span>
-                  {f.example != null && <span className="block truncate text-[10px] text-neutral-400">{example(f.example)}</span>}
-                </span>
-                {f.type && <span className="shrink-0 rounded bg-neutral-100 px-1 py-0.5 text-[9px] uppercase text-neutral-500">{f.type}</span>}
-              </button>
-            );
-            const onlyGroup = groups.length === 1;
-            return groups.map((g) =>
-              g.system ? (
-                // Canonical fields live in a collapsed section (open when it's all there is, or while searching).
-                <details key={g.from} open={onlyGroup || query.length > 0} className="mb-1">
-                  <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wide text-neutral-400">System fields</summary>
-                  <div className="mt-1 space-y-0.5">{g.fields.map((f) => fieldButton(g, f))}</div>
-                </details>
-              ) : (
-                <div key={g.from} className="mb-2">
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
-                    {g.stepNo != null ? `${g.stepNo}. ` : ""}{g.from}
-                  </p>
-                  <div className="space-y-0.5">{g.fields.map((f) => fieldButton(g, f))}</div>
-                </div>
-              ),
-            );
-          })()}
+        <div className="absolute right-0 z-30 mt-1 max-h-80 w-80 overflow-y-auto rounded-md border border-neutral-200 bg-white p-2 shadow-lg">
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search data…" className="mb-2 w-full rounded border border-neutral-300 px-2 py-1 text-xs" />
+          {groups.length === 0 && <p className="p-2 text-center text-xs text-neutral-400">No data yet. Test the earlier steps to load their fields.</p>}
+          {groups.map((g) =>
+            g.system ? (
+              <details key={g.from} open={nonSystem.length === 0 || query.length > 0} className="mb-1">
+                <summary className="cursor-pointer">{groupHeader(g)}</summary>
+                <div className="mt-1 space-y-0.5">{g.fields.map((f) => renderField(g, f, 0))}</div>
+              </details>
+            ) : collapseGroups ? (
+              <details key={g.from} open={query.length > 0} className="mb-1.5 rounded border border-neutral-100">
+                <summary className="cursor-pointer px-1.5 py-1">{groupHeader(g)}</summary>
+                <div className="space-y-0.5 px-1 pb-1">{g.fields.map((f) => renderField(g, f, 0))}</div>
+              </details>
+            ) : (
+              <div key={g.from} className="mb-2">
+                <p className="mb-1 px-1">{groupHeader(g)}</p>
+                <div className="space-y-0.5">{g.fields.map((f) => renderField(g, f, 0))}</div>
+              </div>
+            ),
+          )}
         </div>
       )}
     </div>

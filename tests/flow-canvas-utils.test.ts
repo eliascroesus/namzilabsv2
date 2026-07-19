@@ -5,6 +5,7 @@ import {
   isValidFlowConnection,
   buildFieldGroups,
   resolveSampleField,
+  fieldProvenance,
   describeInputs,
   collidingFields,
   type FNode,
@@ -66,6 +67,11 @@ describe("resolveSampleField", () => {
     expect(resolveSampleField(rec, "properties.seats")).toBe(4);
     expect(resolveSampleField(rec, "missing")).toBeUndefined();
   });
+  it("drills into nested objects and arrays", () => {
+    const nested = { properties: { utm: { source: "google" }, items: [{ price: 9 }, { price: 42 }] } };
+    expect(resolveSampleField(nested, "properties.utm.source")).toBe("google");
+    expect(resolveSampleField(nested, "properties.items.1.price")).toBe(42);
+  });
 });
 
 describe("buildFieldGroups (variable picker)", () => {
@@ -112,6 +118,40 @@ describe("buildFieldGroups (variable picker)", () => {
     const planSecond = second[0].fields.find((f) => f.path === "plan");
     expect(planFirst?.example).toBe("pro");
     expect(planSecond?.example).toBe("free");
+  });
+});
+
+describe("buildFieldGroups — nearest-app example resolution + provenance", () => {
+  const sample = [{ source: "gsheets", subject: "first", properties: { utm: { source: "google" }, plan: "pro" } }];
+  const app = N("appN", "app", {
+    config: { source: "gsheets" },
+    lastTest: { status: "ok", recordsIn: 1, recordsOut: 1, sample, inputSample: [], outputSchema: [{ path: "properties.utm", label: "utm", type: "object", container: true }, { path: "plan", label: "plan", type: "text" }] },
+  });
+  // A transform between the app and the selected node: its own sample is a subset, but
+  // app-origin field examples should still come from the app's selected record.
+  const filter = N("fN", "filter", {
+    lastTest: { status: "ok", recordsIn: 1, recordsOut: 1, sample, inputSample: [], outputSchema: [{ path: "properties.utm", label: "utm", type: "object", container: true }, { path: "plan", label: "plan", type: "text" }] },
+  });
+  const agg = N("aggN", "aggregate");
+  const nodes = [app, filter, agg];
+  const edges = [E("appN", "fN"), E("fN", "aggN")];
+  const stepNoById = new Map([["appN", 1], ["fN", 2], ["aggN", 3]]);
+
+  it("tags the group with its nearest-app source and a sample record", () => {
+    const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
+    expect(groups[0].appSource).toBe("gsheets");
+    expect(groups[0].sampleRecord).toBeDefined();
+    const plan = groups[0].fields.find((f) => f.path === "plan");
+    expect(plan?.example).toBe("pro"); // resolved from the app's selected record
+    expect(groups[0].fields.find((f) => f.path === "properties.utm")?.container).toBe(true);
+  });
+
+  it("fieldProvenance resolves a drilled-in nested path to its step + sample", () => {
+    const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
+    const prov = fieldProvenance(groups, "properties.utm.source");
+    expect(prov.sample).toBe("google");
+    expect(prov.label).toBe("source");
+    expect(prov.stepNo).toBe(2);
   });
 });
 

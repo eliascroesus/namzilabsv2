@@ -1,7 +1,10 @@
 import type { FlowRecord } from "./records";
 import { STANDARD_FIELDS, getField } from "./records";
 
-export type FieldType = "text" | "number" | "date" | "email" | "boolean" | "id" | "object" | "unknown";
+export type FieldType = "text" | "number" | "date" | "email" | "boolean" | "id" | "object" | "list" | "unknown";
+
+/** Types that hold structured children the data browser can expand into. */
+export const CONTAINER_TYPES: ReadonlySet<FieldType> = new Set<FieldType>(["object", "list"]);
 
 export type FieldInfo = {
   /** Field path usable by getField (e.g. "subject" or "properties.plan"). */
@@ -10,6 +13,8 @@ export type FieldInfo = {
   label: string;
   type: FieldType;
   example?: unknown;
+  /** True for objects/arrays — the data browser shows an expand affordance. */
+  container?: boolean;
 };
 
 function inferType(path: string, value: unknown): FieldType {
@@ -18,6 +23,7 @@ function inferType(path: string, value: unknown): FieldType {
   if (value == null) return "unknown";
   if (typeof value === "number") return "number";
   if (typeof value === "boolean") return "boolean";
+  if (Array.isArray(value)) return "list";
   if (typeof value === "object") return "object";
   if (typeof value === "string") {
     if (/@/.test(value) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "email";
@@ -46,7 +52,8 @@ export function inferSchema(records: FlowRecord[]): FieldInfo[] {
         break;
       }
     }
-    out.push({ path, label, type: inferType(path, example), example });
+    const type = inferType(path, example);
+    out.push({ path, label, type, example, container: CONTAINER_TYPES.has(type) });
   };
 
   for (const f of STANDARD_FIELDS) push(f, f);

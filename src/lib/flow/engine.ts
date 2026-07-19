@@ -402,10 +402,16 @@ function evalRules(rec: FlowRecord, cfg: FilterConfig): boolean {
   return cfg.combinator === "or" ? results.some(Boolean) : results.every(Boolean);
 }
 
-function evalRule(rec: FlowRecord, rule: { field: string; op: string; value: string; value2?: string }): boolean {
+type Rule = { field: string; op: string; value: string; value2?: string; valueKind?: string; valueField?: string };
+
+function evalRule(rec: FlowRecord, rule: Rule): boolean {
   const raw = getField(rec, rule.field);
   const str = raw == null ? "" : String(raw);
-  const v = rule.value;
+  // Comparison value: a mapped upstream field (resolved per-record) or a literal.
+  const rhsRaw: unknown = rule.valueKind === "field" && rule.valueField ? getField(rec, rule.valueField) : rule.value;
+  const v = rhsRaw == null ? "" : String(rhsRaw);
+  const rhsNum = num(rhsRaw);
+  const rhsDate = dateMs(rhsRaw);
   switch (rule.op) {
     case "equals":
       return str === v;
@@ -420,13 +426,13 @@ function evalRule(rec: FlowRecord, rule: { field: string; op: string; value: str
     case "ends_with":
       return str.toLowerCase().endsWith(v.toLowerCase());
     case "gt":
-      return num(raw) != null && (num(raw) as number) > Number(v);
+      return num(raw) != null && rhsNum != null && (num(raw) as number) > rhsNum;
     case "lt":
-      return num(raw) != null && (num(raw) as number) < Number(v);
+      return num(raw) != null && rhsNum != null && (num(raw) as number) < rhsNum;
     case "gte":
-      return num(raw) != null && (num(raw) as number) >= Number(v);
+      return num(raw) != null && rhsNum != null && (num(raw) as number) >= rhsNum;
     case "lte":
-      return num(raw) != null && (num(raw) as number) <= Number(v);
+      return num(raw) != null && rhsNum != null && (num(raw) as number) <= rhsNum;
     case "is_empty":
       return raw == null || str === "";
     case "is_not_empty":
@@ -436,12 +442,12 @@ function evalRule(rec: FlowRecord, rule: { field: string; op: string; value: str
     case "is_not_one_of":
       return !splitList(v).includes(str);
     case "before":
-      return dateMs(raw) != null && (dateMs(raw) as number) < (dateMs(v) ?? Infinity);
+      return dateMs(raw) != null && (dateMs(raw) as number) < (rhsDate ?? Infinity);
     case "after":
-      return dateMs(raw) != null && (dateMs(raw) as number) > (dateMs(v) ?? -Infinity);
+      return dateMs(raw) != null && (dateMs(raw) as number) > (rhsDate ?? -Infinity);
     case "between": {
       const t = dateMs(raw);
-      const lo = dateMs(v);
+      const lo = rhsDate;
       const hi = dateMs(rule.value2 ?? "");
       return t != null && lo != null && hi != null && t >= lo && t <= hi;
     }
@@ -720,7 +726,7 @@ function isoWeek(date: Date): { year: number; week: number } {
   return { year: d.getUTCFullYear(), week };
 }
 
-function topoSort(graph: FlowGraph): string[] {
+export function topoSort(graph: FlowGraph): string[] {
   const indeg = new Map<string, number>();
   const adj = new Map<string, string[]>();
   for (const n of graph.nodes) {

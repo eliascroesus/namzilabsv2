@@ -15,10 +15,13 @@ import {
   type FlowFilterOp,
 } from "@/lib/flow/types";
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor, Rule } from "./graph-utils";
-import { collidingFields } from "./graph-utils";
+import { collidingFields, fieldProvenance } from "./graph-utils";
 import { NODE_META, MORE_FILTER_OPS, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { FieldPicker } from "./FieldPicker";
+import { ValueInput } from "./ValueInput";
 import { RecordSamplePicker } from "./RecordSamplePicker";
+import { ResultSoFar } from "./ResultSoFar";
+import type { ChainStepDTO } from "@/app/dashboard/flows/actions";
 
 const SYNC_DOT: Record<string, string> = {
   live: "bg-green-500",
@@ -37,18 +40,33 @@ function syncStatusLabel(status: string): string {
 
 type TabKey = "setup" | "configure" | "test";
 
-/** Required setup still missing for this node (drives the guided CTA + checkmarks). */
-export function nodeRequirements(type: NodeType, cfg: Record<string, unknown>, inputCount: number): string[] {
-  const miss: string[] = [];
+export type GuidedStep = { id: string; label: string; tab: TabKey; done: boolean };
+
+/**
+ * Ordered guided steps for a node. Drives the single progressing CTA and the panel's
+ * auto-open-to-first-incomplete behaviour, so users never inspect tabs to find what's
+ * missing. Labels are app-agnostic (no hardcoded provider names).
+ */
+export function nodeSteps(node: FNode, type: NodeType, cfg: Record<string, unknown>, inputCount: number): GuidedStep[] {
+  const tested = !!node.data.lastTest && node.data.lastTest.status === "ok" && !node.data.dirty;
+  const steps: GuidedStep[] = [];
   if (type === "app") {
-    if (!cfg.connectionId && !cfg.source) miss.push("Choose a connected account");
+    const hasAccount = !!cfg.connectionId || !!cfg.source;
+    steps.push({ id: "account", label: "Choose an account", tab: "configure", done: hasAccount });
+    steps.push({ id: "event", label: "Choose which event", tab: "configure", done: hasAccount && typeof cfg.eventType === "string" });
+    steps.push({ id: "record", label: "Use this record", tab: "test", done: tested });
   } else if (type === "formula") {
-    if (inputCount < 2) miss.push("Connect a number to A and to B");
-  } else if (inputCount === 0) {
-    miss.push("Connect an input");
+    steps.push({ id: "inputs", label: "Connect a number to A and B", tab: "configure", done: inputCount >= 2 });
+    steps.push({ id: "test", label: "Test this step", tab: "test", done: tested });
+  } else if (type === "output") {
+    steps.push({ id: "input", label: "Connect an input", tab: "configure", done: inputCount > 0 });
+    steps.push({ id: "name", label: "Name this metric", tab: "configure", done: !!String(cfg.name ?? "").trim() });
+    steps.push({ id: "test", label: "Test this step", tab: "test", done: tested });
+  } else {
+    steps.push({ id: "input", label: "Connect an input", tab: "configure", done: inputCount > 0 });
+    steps.push({ id: "test", label: "Test this step", tab: "test", done: tested });
   }
-  if (type === "output" && !String(cfg.name ?? "").trim()) miss.push("Name this metric");
-  return miss;
+  return steps;
 }
 
 export function ConfigPanel({
@@ -60,6 +78,9 @@ export function ConfigPanel({
   inputCount,
   testing,
   canReconnect,
+  resultSteps,
+  resultTitles,
+  resultLoading,
   onChange,
   onRename,
   onTest,
@@ -75,6 +96,9 @@ export function ConfigPanel({
   inputCount: number;
   testing: boolean;
   canReconnect: boolean;
+  resultSteps: ChainStepDTO[];
+  resultTitles: Record<string, string>;
+  resultLoading: boolean;
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
   onTest: () => void;
@@ -84,26 +108,33 @@ export function ConfigPanel({
 }) {
   const type = String(node.type) as NodeType;
   const cfg = node.data.config;
-  const missing = nodeRequirements(type, cfg, inputCount);
-  const setupDone = missing.length === 0;
+  const steps = nodeSteps(node, type, cfg, inputCount);
+  const firstOpen = steps.find((s) => !s.done);
+  const configureDone = steps.filter((s) => s.tab === "configure").every((s) => s.done);
   const tested = !!node.data.lastTest && node.data.lastTest.status === "ok" && !node.data.dirty;
 
-  const [tab, setTab] = useState<TabKey>("configure");
+  const [tab, setTab] = useState<TabKey>(() => firstOpen?.tab ?? "configure");
 
   const tabs: Array<{ key: TabKey; label: string; done: boolean; enabled: boolean }> = [
-    { key: "setup", label: "Setup", done: setupDone, enabled: true },
-    { key: "configure", label: "Configure", done: setupDone, enabled: true },
-    { key: "test", label: "Test", done: tested, enabled: setupDone },
+    { key: "setup", label: "Guide", done: !firstOpen, enabled: true },
+    { key: "configure", label: "Configure", done: configureDone, enabled: true },
+    { key: "test", label: "Test", done: tested, enabled: configureDone },
   ];
 
-  const cta = !setupDone
-    ? { label: `Fix ${missing.length} required field${missing.length === 1 ? "" : "s"}`, run: () => setTab("configure") }
+  const cta = firstOpen
+    ? {
+        label: testing && firstOpen.tab === "test" ? "Testing…" : firstOpen.label,
+        run: () => {
+          setTab(firstOpen.tab);
+          if (firstOpen.tab === "test" && configureDone && !testing) onTest();
+        },
+      }
     : tab !== "test"
       ? { label: "Continue", run: () => setTab("test") }
-      : { label: testing ? "Testing…" : tested ? "Re-test node" : "Test node", run: onTest };
+      : { label: testing ? "Testing…" : "Re-test step", run: onTest };
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-neutral-200 bg-white">
+    <aside className="flex w-[480px] shrink-0 flex-col border-l border-neutral-200 bg-white">
       <div className="border-b border-neutral-200 px-4 py-3">
         <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-400">
           <span>{NODE_META[type].icon}</span>
@@ -113,7 +144,7 @@ export function ConfigPanel({
           value={node.data.label ?? ""}
           onChange={(e) => onRename(e.target.value)}
           placeholder={defaultTitle(type, node.data)}
-          className="mt-1 w-full rounded border border-transparent px-1 py-0.5 text-sm font-medium hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
+          className="mt-1 w-full rounded border border-transparent px-1 py-1 text-base font-medium hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
         />
       </div>
 
@@ -123,7 +154,7 @@ export function ConfigPanel({
             key={t.key}
             disabled={!t.enabled}
             onClick={() => t.enabled && setTab(t.key)}
-            className={`flex flex-1 items-center justify-center gap-1 px-3 py-2 ${tab === t.key ? "border-b-2 border-neutral-900 font-medium" : "text-neutral-500"} ${!t.enabled ? "cursor-not-allowed opacity-40" : ""}`}
+            className={`flex flex-1 items-center justify-center gap-1 px-3 py-2.5 ${tab === t.key ? "border-b-2 border-neutral-900 font-medium" : "text-neutral-500"} ${!t.enabled ? "cursor-not-allowed opacity-40" : ""}`}
           >
             {t.done ? <span className="text-green-600">✓</span> : null}
             {t.label}
@@ -131,24 +162,26 @@ export function ConfigPanel({
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <ResultSoFar steps={resultSteps} titles={resultTitles} loading={resultLoading} />
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-5">
         {tab === "setup" && (
-          <div className="space-y-3 text-sm">
-            {missing.length > 0 ? (
-              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                <p className="font-medium">Before this step works:</p>
-                <ul className="mt-1 list-disc pl-4">
-                  {missing.map((m) => (
-                    <li key={m}>{m}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="rounded border border-green-200 bg-green-50 p-2 text-xs text-green-800">Setup complete — configure and test this step.</p>
-            )}
-            <p className="text-neutral-500">
-              Node id: <code className="text-xs">{node.id}</code>
-            </p>
+          <div className="space-y-5 text-sm">
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Steps</p>
+              {steps.map((s, i) => (
+                <button
+                  key={s.id}
+                  onClick={() => setTab(s.tab)}
+                  className="flex w-full items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-left hover:bg-neutral-50"
+                >
+                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium ${s.done ? "bg-green-100 text-green-700" : "bg-neutral-100 text-neutral-500"}`}>
+                    {s.done ? "✓" : i + 1}
+                  </span>
+                  <span className={s.done ? "text-neutral-500" : "font-medium text-neutral-800"}>{s.label}</span>
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={onDuplicate} className="rounded border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">
                 Duplicate
@@ -174,7 +207,7 @@ export function ConfigPanel({
         <button
           onClick={cta.run}
           disabled={testing}
-          className={`w-full rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50 ${setupDone ? "bg-neutral-900 text-white hover:bg-neutral-800" : "bg-amber-500 text-white hover:bg-amber-600"}`}
+          className={`w-full rounded-md px-4 py-2.5 text-sm font-medium disabled:opacity-50 ${firstOpen ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-neutral-900 text-white hover:bg-neutral-800"}`}
         >
           {cta.label}
         </button>
@@ -239,8 +272,15 @@ function ConfigureTab({
             No connected accounts yet. Connect one in <a className="underline" href="/integrations">Integrations</a>.
           </p>
         )}
-        <Field label="Event type / data source">
-          <select value={(cfg.eventType as string) ?? ""} onChange={(e) => onChange({ eventType: e.target.value || null })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+        <Field label="Which event">
+          <select
+            value={typeof cfg.eventType === "string" ? (cfg.eventType as string) : "__none"}
+            onChange={(e) => onChange({ eventType: e.target.value === "__none" ? null : e.target.value })}
+            className="w-full rounded-md border border-neutral-300 px-2 py-1.5"
+          >
+            <option value="__none" disabled hidden>
+              Choose an event…
+            </option>
             <option value="">All events</option>
             {(conn?.eventTypes ?? []).map((t) => (
               <option key={t} value={t}>{t}</option>
@@ -686,28 +726,34 @@ export function RulesEditor({ value, fieldGroups, onChange }: { value: Filters; 
         </select>
       )}
       {rules.map((r, i) => (
-        <div key={i} className="space-y-1 rounded border border-neutral-200 p-2">
+        <div key={i} className="space-y-1.5 rounded border border-neutral-200 p-2">
           <FieldPicker value={r.field} fieldGroups={fieldGroups} onChange={(v) => setRule(i, { field: v })} />
-          <div className="flex gap-1">
-            <select value={r.op} onChange={(e) => setRule(i, { op: e.target.value })} className="rounded-md border border-neutral-300 px-1 py-1 text-xs">
-              <optgroup label="Common">
-                {PRIMARY_FILTER_OPS.map((o) => (
-                  <option key={o} value={o}>{FILTER_OP_LABELS[o]}</option>
-                ))}
-              </optgroup>
-              <optgroup label="More">
-                {MORE_FILTER_OPS.map((o) => (
-                  <option key={o} value={o}>{FILTER_OP_LABELS[o]}</option>
-                ))}
-              </optgroup>
-            </select>
-            {!NO_VALUE_FILTER_OPS.includes(r.op as FlowFilterOp) && (
-              <input value={r.value ?? ""} placeholder="value" onChange={(e) => setRule(i, { value: e.target.value })} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs" />
-            )}
-            {r.op === "between" && (
-              <input value={r.value2 ?? ""} placeholder="to" onChange={(e) => setRule(i, { value2: e.target.value })} className="w-14 rounded-md border border-neutral-300 px-1 py-1 text-xs" />
-            )}
-          </div>
+          <select value={r.op} onChange={(e) => setRule(i, { op: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs">
+            <optgroup label="Common">
+              {PRIMARY_FILTER_OPS.map((o) => (
+                <option key={o} value={o}>{FILTER_OP_LABELS[o]}</option>
+              ))}
+            </optgroup>
+            <optgroup label="More">
+              {MORE_FILTER_OPS.map((o) => (
+                <option key={o} value={o}>{FILTER_OP_LABELS[o]}</option>
+              ))}
+            </optgroup>
+          </select>
+          {!NO_VALUE_FILTER_OPS.includes(r.op as FlowFilterOp) && (
+            <ValueInput
+              value={r.value ?? ""}
+              valueKind={r.valueKind}
+              valueField={r.valueField}
+              fieldGroups={fieldGroups}
+              fieldType={fieldProvenance(fieldGroups, r.field).type}
+              placeholder="value"
+              onChange={(patch) => setRule(i, patch)}
+            />
+          )}
+          {r.op === "between" && (
+            <input value={r.value2 ?? ""} placeholder="to (date)" onChange={(e) => setRule(i, { value2: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs" />
+          )}
           <button onClick={() => onChange({ ...value, rules: rules.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">
             Remove
           </button>

@@ -35,7 +35,11 @@ export const STANDARD_FIELDS = ["subject", "source", "eventType", "value", "curr
 /**
  * Resolve a field path against a record. Reuses the metric convention:
  * standard columns by name, everything else read from `properties` (with or
- * without a leading "properties.").
+ * without a leading "properties."). Supports nested objects and arrays via
+ * dotted segments and numeric indices (e.g. `properties.utm.source` or
+ * `properties.items.0.price`) so the data browser can drill into structured
+ * payloads from any connector. Flat keys — including keys that literally contain
+ * a dot — keep their existing meaning (they are matched first).
  */
 export function getField(rec: FlowRecord, path: string): unknown {
   switch (path) {
@@ -54,10 +58,31 @@ export function getField(rec: FlowRecord, path: string): unknown {
     case "id":
       return rec.id;
     default: {
-      const key = path.startsWith("properties.") ? path.slice("properties.".length) : path;
-      return rec.properties?.[key];
+      const rest = path.startsWith("properties.") ? path.slice("properties.".length) : path;
+      const props = rec.properties;
+      if (props == null) return undefined;
+      // Exact literal key first, preserving keys that contain dots.
+      if (Object.prototype.hasOwnProperty.call(props, rest)) return props[rest];
+      return walkPath(props, rest);
     }
   }
+}
+
+/** Walk a dotted path (with numeric array indices) through nested objects/arrays. */
+export function walkPath(root: unknown, dotted: string): unknown {
+  let cur: unknown = root;
+  for (const seg of dotted.split(".")) {
+    if (cur == null) return undefined;
+    if (Array.isArray(cur)) {
+      const idx = Number(seg);
+      cur = Number.isInteger(idx) ? cur[idx] : undefined;
+    } else if (typeof cur === "object") {
+      cur = (cur as Record<string, unknown>)[seg];
+    } else {
+      return undefined;
+    }
+  }
+  return cur;
 }
 
 /** Coerce a resolved field into a finite number, or null. */
