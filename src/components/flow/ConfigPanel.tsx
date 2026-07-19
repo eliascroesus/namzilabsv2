@@ -20,10 +20,8 @@ import { NODE_META, STATUS_META, MORE_FILTER_OPS, defaultTitle, formulaExpressio
 import { FieldPicker } from "./FieldPicker";
 import { ValueInput, type ValuePatch } from "./ValueInput";
 import { RecordSamplePicker } from "./RecordSamplePicker";
-import { ResultSoFar } from "./ResultSoFar";
 import { NodeGlyph } from "./icons";
 import { SourceBadge } from "./MappingChip";
-import type { ChainStepDTO } from "@/app/dashboard/flows/actions";
 
 const SYNC_DOT: Record<string, string> = {
   live: "bg-green-500",
@@ -40,39 +38,8 @@ function syncStatusLabel(status: string): string {
   return map[status] ?? status;
 }
 
-type TabKey = "setup" | "configure" | "test";
-
-export type GuidedStep = { id: string; label: string; tab: TabKey; done: boolean };
-
 /** A reference to an earlier step, offered as a labeled pill for multi-input wiring. */
 export type StepRef = { id: string; title: string; stepNo?: number };
-
-/**
- * Ordered guided steps for a node. Drives the single progressing CTA and the panel's
- * auto-open-to-first-incomplete behaviour, so users never inspect tabs to find what's
- * missing. Labels are app-agnostic (no hardcoded provider names).
- */
-export function nodeSteps(node: FNode, type: NodeType, cfg: Record<string, unknown>, inputCount: number): GuidedStep[] {
-  const tested = !!node.data.lastTest && node.data.lastTest.status === "ok" && !node.data.dirty;
-  const steps: GuidedStep[] = [];
-  if (type === "app") {
-    const hasAccount = !!cfg.connectionId || !!cfg.source;
-    steps.push({ id: "account", label: "Choose an account", tab: "configure", done: hasAccount });
-    steps.push({ id: "event", label: "Choose which event", tab: "configure", done: hasAccount && typeof cfg.eventType === "string" });
-    steps.push({ id: "record", label: "Use this record", tab: "test", done: tested });
-  } else if (type === "formula") {
-    steps.push({ id: "inputs", label: "Connect a number to A and B", tab: "configure", done: inputCount >= 2 });
-    steps.push({ id: "test", label: "Test this step", tab: "test", done: tested });
-  } else if (type === "output") {
-    steps.push({ id: "input", label: "Connect an input", tab: "configure", done: inputCount > 0 });
-    steps.push({ id: "name", label: "Name this metric", tab: "configure", done: !!String(cfg.name ?? "").trim() });
-    steps.push({ id: "test", label: "Test this step", tab: "test", done: tested });
-  } else {
-    steps.push({ id: "input", label: "Connect an input", tab: "configure", done: inputCount > 0 });
-    steps.push({ id: "test", label: "Test this step", tab: "test", done: tested });
-  }
-  return steps;
-}
 
 /** Formatter operations grouped by user intent, so we show only relevant controls. */
 const FORMATTER_INTENTS: Array<{ id: string; label: string; ops: string[] }> = [
@@ -113,21 +80,17 @@ export function ConfigPanel({
   inputCount,
   testing,
   canReconnect,
-  resultSteps,
-  resultTitles,
-  resultLoading,
   numberCandidates,
   datasetCandidates,
-  isTerminal,
   onChange,
   onRename,
   onTest,
   onDelete,
   onDeleteReconnect,
   onDuplicate,
+  onAddNext,
   onSetInput,
   onSetSources,
-  onContinue,
 }: {
   node: FNode;
   stepNo?: number;
@@ -137,63 +100,56 @@ export function ConfigPanel({
   inputCount: number;
   testing: boolean;
   canReconnect: boolean;
-  resultSteps: ChainStepDTO[];
-  resultTitles: Record<string, string>;
-  resultLoading: boolean;
   numberCandidates: StepRef[];
   datasetCandidates: StepRef[];
-  isTerminal: boolean;
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
   onTest: () => void;
   onDelete: () => void;
   onDeleteReconnect: () => void;
   onDuplicate: () => void;
+  onAddNext: () => void;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
-  onContinue: () => void;
 }) {
   const type = String(node.type) as NodeType;
   const cfg = node.data.config;
-  const steps = nodeSteps(node, type, cfg, inputCount);
-  const firstOpen = steps.find((s) => !s.done);
-  const status = computeNodeStatus({ type, cfg, inputCount, lastTest: node.data.lastTest, dirty: node.data.dirty, updating: testing || resultLoading });
+  const status = computeNodeStatus({ type, cfg, inputCount, lastTest: node.data.lastTest, dirty: node.data.dirty, updating: testing });
   const sm = STATUS_META[status];
   const err = node.data.lastTest?.status === "error" ? node.data.lastTest.error : null;
+  const tested = status === "ready";
+
+  // Bottom action: complete setup → Test → (on pass) Add next step. No auto-testing.
+  const cta = testing
+    ? { label: "Testing…", disabled: true, run: () => {} }
+    : status === "setup"
+      ? { label: "Fill in the fields above", disabled: true, run: () => {} }
+      : tested
+        ? { label: "+ Add next step", disabled: false, run: onAddNext }
+        : { label: node.data.lastTest ? "Test again" : "Test this step", disabled: false, run: onTest };
 
   return (
     <aside className="flex w-[480px] shrink-0 flex-col border-l border-neutral-200 bg-white">
-      {/* Header + single status */}
+      {/* Minimal header: step number · name + one status. */}
       <div className="border-b border-neutral-200 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-            <span className="text-neutral-500">
-              {type === "app" ? <SourceBadge source={String((cfg as { source?: unknown }).source ?? "")} size={16} /> : <NodeGlyph type={type} className="h-4 w-4" />}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="shrink-0 text-neutral-500">
+              {type === "app" ? <SourceBadge source={String((cfg as { source?: unknown }).source ?? "")} size={18} /> : <NodeGlyph type={type} className="h-4.5 w-4.5" />}
             </span>
-            <span>{stepNo != null ? `Step ${stepNo} · ` : ""}{NODE_META[type].label}</span>
+            <input
+              value={node.data.label ?? ""}
+              onChange={(e) => onRename(e.target.value)}
+              placeholder={`${stepNo != null ? `${stepNo}. ` : ""}${defaultTitle(type, node.data)}`}
+              className="min-w-0 flex-1 rounded border border-transparent px-1 py-0.5 text-base font-medium hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
+            />
           </div>
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>
+          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>
         </div>
-        <input
-          value={node.data.label ?? ""}
-          onChange={(e) => onRename(e.target.value)}
-          placeholder={defaultTitle(type, node.data)}
-          className="mt-1 w-full rounded border border-transparent px-1 py-1 text-base font-medium hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
-        />
       </div>
 
-      <ResultSoFar steps={resultSteps} titles={resultTitles} loading={resultLoading} />
-
-      {/* One panel, logical sections. */}
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
-        {/* The one next action / problem, at the top. */}
-        {err ? (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>
-        ) : firstOpen ? (
-          <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-            <span className="font-medium">Next:</span> {firstOpen.label}
-          </div>
-        ) : null}
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+        {err && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>}
 
         <ConfigureTab
           type={type}
@@ -208,10 +164,8 @@ export function ConfigPanel({
           onSetSources={onSetSources}
         />
 
-        <div className="border-t border-neutral-100 pt-4">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">Preview</p>
-          <TestTab node={node} testing={testing} onTest={onTest} onChange={onChange} />
-        </div>
+        {/* Test results appear only after a manual test — never auto-computed. */}
+        {node.data.lastTest?.status === "ok" && <TestResults node={node} onChange={onChange} />}
 
         <details className="border-t border-neutral-100 pt-3">
           <summary className="cursor-pointer text-xs font-medium text-neutral-500">Step options</summary>
@@ -219,22 +173,20 @@ export function ConfigPanel({
             <button onClick={onDuplicate} className="rounded border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">
               Duplicate
             </button>
-            <button onClick={onDelete} className="rounded border border-red-300 px-3 py-1.5 text-red-700 hover:bg-red-50">
-              Delete
+            <button onClick={canReconnect ? onDeleteReconnect : onDelete} className="rounded border border-red-300 px-3 py-1.5 text-red-700 hover:bg-red-50" title={canReconnect ? "Remove this step and reconnect the steps around it" : "Delete this step"}>
+              Delete step
             </button>
-            {canReconnect && (
-              <button onClick={onDeleteReconnect} className="rounded border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50" title="Remove this step and connect the previous step straight to the next">
-                Delete &amp; reconnect
-              </button>
-            )}
           </div>
         </details>
       </div>
 
-      {/* Sticky primary action. */}
       <div className="border-t border-neutral-200 p-3">
-        <button onClick={onContinue} className="w-full rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800">
-          {isTerminal ? "Review & publish" : "Continue →"}
+        <button
+          onClick={cta.run}
+          disabled={cta.disabled}
+          className={`w-full rounded-md px-4 py-2.5 text-sm font-medium disabled:cursor-default disabled:opacity-50 ${tested ? "bg-neutral-900 text-white hover:bg-neutral-800" : "bg-neutral-900 text-white hover:bg-neutral-800"}`}
+        >
+          {cta.label}
         </button>
       </div>
     </aside>
@@ -339,11 +291,13 @@ function ConfigureTab({
     const setDr = (patch: Partial<DateRange>) => onChange({ dateRange: { ...dr, ...patch } });
     return (
       <div className="space-y-4 text-sm">
-        <DateRangeSection dr={dr} setDr={setDr} fieldGroups={fieldGroups} />
         <div>
-          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-neutral-400">Conditions</p>
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-neutral-400">Only continue if…</p>
           <RulesEditor value={fc} fieldGroups={fieldGroups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />
         </div>
+        <AdvancedSection>
+          <DateRangeSection dr={dr} setDr={setDr} fieldGroups={fieldGroups} />
+        </AdvancedSection>
       </div>
     );
   }
@@ -939,26 +893,25 @@ function ConfigureTab({
   );
 }
 
-function TestTab({ node, testing, onTest, onChange }: { node: FNode; testing: boolean; onTest: () => void; onChange: (patch: Record<string, unknown>) => void }) {
+/** Shown only after a successful manual test (never auto-computed). */
+function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record<string, unknown>) => void }) {
   const t = node.data.lastTest;
+  if (!t || t.status !== "ok") return null;
   const type = String(node.type);
   const sampleIndex = Number((node.data.config as { sampleIndex?: unknown }).sampleIndex ?? 0);
   return (
-    <div className="space-y-3 text-sm">
-      <button onClick={onTest} disabled={testing} className="w-full rounded-md bg-neutral-900 px-4 py-2 font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
-        {testing ? "Testing…" : node.data.lastTest ? "Test again" : "Test this node"}
-      </button>
-      {node.data.dirty && <p className="text-xs text-amber-700">This node changed — retest to refresh its data.</p>}
-      {t && t.status === "error" && <p className="rounded border border-red-200 bg-red-50 p-2 text-red-700">{t.error}</p>}
-      {t && t.status === "ok" && (
-        <div className="space-y-3">
-          <p className="rounded border border-neutral-200 bg-neutral-50 p-2 text-center font-medium">{resultLabel(type, t)}</p>
-          {type === "app" ? (
-            <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
-          ) : (
+    <div className="space-y-2 border-t border-neutral-100 pt-3 text-sm">
+      <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Test result</p>
+      <p className="rounded border border-neutral-200 bg-neutral-50 p-2 text-center font-medium">{resultLabel(type, t)}</p>
+      {type === "app" ? (
+        <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
+      ) : (
+        <details>
+          <summary className="cursor-pointer text-xs text-neutral-500">View sample data</summary>
+          <div className="mt-2">
             <BeforeAfter before={t.inputSample ?? []} after={t.sample} />
-          )}
-        </div>
+          </div>
+        </details>
       )}
     </div>
   );
@@ -1035,7 +988,7 @@ export function RulesEditor({ value, fieldGroups, onChange }: { value: Filters; 
           </button>
         </div>
       ))}
-      <button onClick={() => onChange({ ...value, rules: [...rules, { field: "eventType", op: "equals", value: "" }] })} className="rounded border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50">
+      <button onClick={() => onChange({ ...value, rules: [...rules, { field: "", op: "equals", value: "" }] })} className="rounded border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50">
         + Add rule
       </button>
     </div>

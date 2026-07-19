@@ -13,7 +13,7 @@ export type NodeData = {
   dirty?: boolean;
   // Transient (display-only) fields injected before render — never persisted:
   stepNo?: number;
-  status?: "ready" | "setup" | "updating" | "error";
+  status?: "ready" | "setup" | "untested" | "updating" | "error";
   isTerminal?: boolean;
   issue?: string;
   freeHandles?: Array<{ id: string; label: string }>;
@@ -185,12 +185,12 @@ export function computeNodeStatus(opts: {
   lastTest?: { status?: string } | null;
   dirty?: boolean;
   updating?: boolean;
-}): "ready" | "setup" | "updating" | "error" {
+}): "ready" | "setup" | "untested" | "updating" | "error" {
   const { type, cfg, inputCount, lastTest, dirty, updating } = opts;
   if (nodeNeedsSetup(type, cfg, inputCount)) return "setup";
   if (updating) return "updating";
   if (lastTest?.status === "error") return "error";
-  if (!lastTest || dirty) return "updating";
+  if (!lastTest || dirty) return "untested"; // configured but needs a manual test
   return "ready";
 }
 

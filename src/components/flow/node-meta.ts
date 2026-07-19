@@ -203,11 +203,12 @@ export function resultLabel(type: string, test: { recordsIn: number; recordsOut:
 }
 
 /** User-facing step status vocabulary (what the user should understand, not internals). */
-export type NodeStatus = "ready" | "setup" | "updating" | "error";
+export type NodeStatus = "ready" | "setup" | "untested" | "updating" | "error";
 export const STATUS_META: Record<NodeStatus, { label: string; cls: string; border: string }> = {
   ready: { label: "Ready", cls: "bg-green-100 text-green-700", border: "border-green-300" },
   setup: { label: "Needs setup", cls: "bg-neutral-100 text-neutral-600", border: "border-neutral-300" },
-  updating: { label: "Updating", cls: "bg-blue-100 text-blue-700", border: "border-blue-300" },
+  untested: { label: "Ready to test", cls: "bg-neutral-100 text-neutral-500", border: "border-neutral-300" },
+  updating: { label: "Testing…", cls: "bg-blue-100 text-blue-700", border: "border-blue-300" },
   error: { label: "Error", cls: "bg-red-100 text-red-700", border: "border-red-300" },
 };
 

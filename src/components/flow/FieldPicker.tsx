@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { FieldGroup, PickField } from "./graph-utils";
-import { resolveSampleField } from "./graph-utils";
-import { SourceBadge } from "./MappingChip";
+import { resolveSampleField, fieldProvenance } from "./graph-utils";
+import { SourceBadge, MappingChip } from "./MappingChip";
 
 function clientKind(v: unknown): string {
   if (Array.isArray(v)) return "list";
@@ -35,29 +35,16 @@ function fmt(ex: unknown): string | null {
 }
 
 /**
- * Field input with a Zapier-style "Insert data" browser: fields grouped by the app +
- * step they come from (with a source badge), each row showing a human name, type, and
- * the real sample value from the selected preview record. Multiple inputs start
- * collapsed; nested objects/arrays expand in place. Clicking outside closes it.
+ * A Zapier-style data field: empty shows "+ Insert data"; once chosen it renders as a
+ * data pill with the human field name (never a raw path). Clicking opens the Insert-data
+ * browser — fields grouped by app + step, with sample values and nested drill-in.
  */
-export function FieldPicker({
-  value,
-  fieldGroups,
-  onChange,
-  onCommit,
-}: {
-  value: string;
-  fieldGroups: FieldGroup[];
-  onChange: (v: string) => void;
-  /** Fired only when a field is picked from the browser (not on free-text typing). */
-  onCommit?: () => void;
-}) {
+export function FieldPicker({ value, fieldGroups, onChange, onCommit }: { value: string; fieldGroups: FieldGroup[]; onChange: (v: string) => void; onCommit?: () => void }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click / Escape.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
@@ -77,7 +64,8 @@ export function FieldPicker({
     .map((g) => ({ ...g, fields: g.fields.filter((f) => !query || `${f.label} ${f.path}`.toLowerCase().includes(query)) }))
     .filter((g) => g.fields.length > 0);
   const nonSystem = groups.filter((g) => !g.system);
-  const collapseGroups = nonSystem.length > 1; // multiple inputs → collapsed by default
+  const collapseGroups = nonSystem.length > 1;
+  const prov = value ? fieldProvenance(fieldGroups, value) : null;
 
   const pick = (f: PickField) => {
     onChange(f.path);
@@ -125,17 +113,17 @@ export function FieldPicker({
 
   return (
     <div className="relative" ref={wrapRef}>
-      <div className="flex gap-1">
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="field (e.g. subject or properties.plan)"
-          className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs"
-        />
-        <button type="button" onClick={() => setOpen((o) => !o)} title="Insert data from a previous step" className="shrink-0 rounded-md border border-neutral-300 px-2 text-xs hover:bg-neutral-50">
-          Insert data
+      {value ? (
+        <MappingChip stepNo={prov?.stepNo} source={prov?.source} label={prov?.label ?? value} sample={prov?.sample} onClick={() => setOpen((o) => !o)} onClear={() => onChange("")} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2 py-1 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-700"
+        >
+          <span className="text-sm leading-none">+</span> Insert data
         </button>
-      </div>
+      )}
       {open && (
         <div className="absolute right-0 z-30 mt-1 max-h-80 w-80 overflow-y-auto rounded-md border border-neutral-200 bg-white p-2 shadow-lg">
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search data…" className="mb-2 w-full rounded border border-neutral-300 px-2 py-1 text-xs" />

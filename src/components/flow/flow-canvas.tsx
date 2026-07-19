@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ReactFlow, ReactFlowProvider, Background, useNodesState, useEdgesState, type Edge } from "@xyflow/react";
 import { type NodeType } from "@/lib/flow/types";
-import { saveDraftAction, testNodeAction, publishFlowAction, renameFlowAction, runChainAction, type NodeTestDTO, type ChainStepDTO } from "@/app/dashboard/flows/actions";
+import { saveDraftAction, testNodeAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 import {
   bridgeEdgeFor,
   buildFieldGroups,
@@ -207,11 +207,13 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
   const updateConfig = useCallback(
     (id: string, patch: Record<string, unknown>) => {
+      // Display-only keys (e.g. which sample record feeds the pills) never invalidate a test.
+      const displayOnly = Object.keys(patch).length > 0 && Object.keys(patch).every((k) => k === "sampleIndex");
       commit();
-      const marks = descendants(id);
+      const marks = displayOnly ? new Set<string>() : descendants(id);
       setNodes((ns) =>
         ns.map((n) => {
-          if (n.id === id) return { ...n, data: { ...n.data, config: { ...n.data.config, ...patch }, dirty: true } };
+          if (n.id === id) return { ...n, data: { ...n.data, config: { ...n.data.config, ...patch }, dirty: displayOnly ? n.data.dirty : true } };
           if (marks.has(n.id)) return { ...n, data: { ...n.data, dirty: true } };
           return n;
         }),
@@ -270,6 +272,16 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       markDirtyFrom(nodeId);
     },
     [commit, setEdges, markDirtyFrom],
+  );
+
+  // Delete key: reconnect any in-between step's neighbours so the flow stays linear.
+  const onNodesDelete = useCallback(
+    (deleted: FNode[]) => {
+      const bridges = deleted.map((n) => bridgeEdgeFor(n.id, edges)).filter((b): b is Edge => b !== null);
+      if (bridges.length) setEdges((es) => [...es, ...bridges]);
+      setSelectedId((cur) => (cur && deleted.some((n) => n.id === cur) ? null : cur));
+    },
+    [edges, setEdges],
   );
 
   const duplicateNode = useCallback(
@@ -357,40 +369,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [selected, nodes, edges],
   );
 
-  // ---- Auto-recalc (W5): recompute the selected node's chain on a debounce ----
-  // Read-only over synced data, so downstream transforms never need a manual test.
-  // The key excludes lastTest/dirty so writing results back doesn't re-trigger the loop.
-  const [chainSteps, setChainSteps] = useState<ChainStepDTO[]>([]);
-  const [recalcLoading, setRecalcLoading] = useState(false);
-  const toGraphRef = useRef(toGraph);
-  toGraphRef.current = toGraph;
-  const recalcKey = useMemo(
-    () =>
-      JSON.stringify({
-        sel: selectedId,
-        edges: edges.map((e) => [e.source, e.target, e.sourceHandle ?? null, e.targetHandle ?? null]),
-        nodes: nodes.map((n) => [n.id, n.type, n.data.config]),
-      }),
-    [selectedId, edges, nodes],
-  );
-  useEffect(() => {
-    if (!selectedId) {
-      setChainSteps([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      setRecalcLoading(true);
-      const r = await runChainAction(toGraphRef.current(), selectedId);
-      setChainSteps(r.steps);
-      setNodes((ns) => ns.map((n) => (r.results[n.id] ? { ...n, data: { ...n.data, lastTest: r.results[n.id], dirty: false } } : n)));
-      setRecalcLoading(false);
-    }, 600);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recalcKey]);
-
-  const resultTitles = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, nodeTitle(String(n.type) as NodeType, n.data)])), [nodes]);
-
   // Candidate steps for wiring multi-input steps via labeled pills (exclude self + descendants).
   const candidates = useMemo(() => {
     if (!selected) return { number: [] as StepRef[], dataset: [] as StepRef[] };
@@ -442,8 +420,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     () =>
       nodes.map((n) => {
         const inputCount = inDegreeById.get(n.id) ?? 0;
-        const updating = testingId === n.id || (recalcLoading && n.id === selectedId);
-        const status = computeNodeStatus({ type: String(n.type), cfg: n.data.config, inputCount, lastTest: n.data.lastTest, dirty: n.data.dirty, updating });
+        const status = computeNodeStatus({ type: String(n.type), cfg: n.data.config, inputCount, lastTest: n.data.lastTest, dirty: n.data.dirty, updating: testingId === n.id });
         const issue = status === "setup" ? setupHint(String(n.type), n.data.config, inputCount) : undefined;
         let freeHandles: Array<{ id: string; label: string }> | undefined;
         if (n.type === "paths") {
@@ -456,7 +433,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           data: { ...n.data, stepNo: stepNoById.get(n.id), status, issue, isTerminal: terminals.has(n.id), freeHandles, onAddFrom: addFromNode },
         };
       }),
-    [nodes, layout, terminals, stepNoById, inDegreeById, usedHandles, addFromNode, testingId, recalcLoading, selectedId],
+    [nodes, layout, terminals, stepNoById, inDegreeById, usedHandles, addFromNode, testingId],
   );
   // Branch (Paths) edges are labeled with their path, so the fan-out reads as lanes.
   const pathLabels = useMemo(() => {
@@ -528,6 +505,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             edges={displayEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            onNodesDelete={onNodesDelete}
             onNodeClick={(_, n) => setSelectedId(n.id)}
             onPaneClick={() => setSelectedId(null)}
             nodeTypes={nodeTypes}
@@ -566,25 +544,17 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             inputCount={edges.filter((e) => e.target === selected.id).length}
             testing={testingId === selected.id}
             canReconnect={bridgeEdgeFor(selected.id, edges) !== null}
-            resultSteps={chainSteps}
-            resultTitles={resultTitles}
-            resultLoading={recalcLoading}
             numberCandidates={candidates.number}
             datasetCandidates={candidates.dataset}
-            isTerminal={terminals.has(selected.id)}
             onChange={(patch) => updateConfig(selected.id, patch)}
             onRename={(v) => renameNode(selected.id, v)}
             onTest={() => testNode(selected.id)}
             onDelete={() => deleteNode(selected.id)}
             onDeleteReconnect={() => deleteAndReconnect(selected.id)}
             onDuplicate={() => duplicateNode(selected.id)}
+            onAddNext={() => addFromNode(selected.id)}
             onSetInput={(handle, sourceId) => setFormulaInput(selected.id, handle, sourceId)}
             onSetSources={(ids) => setCombineSources(selected.id, ids)}
-            onContinue={() => {
-              const out = edges.find((e) => e.source === selected.id);
-              if (out) setSelectedId(out.target);
-              else openReview();
-            }}
           />
         )}
       </div>
