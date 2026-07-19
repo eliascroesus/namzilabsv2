@@ -3,30 +3,18 @@
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import {
-  ReactFlow,
-  ReactFlowProvider,
-  Background,
-  Controls,
-  MiniMap,
-  useNodesState,
-  useEdgesState,
-  useReactFlow,
-  addEdge,
-  type Edge,
-  type Connection,
-} from "@xyflow/react";
+import { ReactFlow, ReactFlowProvider, Background, useNodesState, useEdgesState, type Edge } from "@xyflow/react";
 import { type NodeType } from "@/lib/flow/types";
 import { saveDraftAction, testNodeAction, publishFlowAction, renameFlowAction, runChainAction, type NodeTestDTO, type ChainStepDTO } from "@/app/dashboard/flows/actions";
 import {
   bridgeEdgeFor,
   buildFieldGroups,
-  computeLayout,
+  computeNodeStatus,
   computeStepNumbers,
+  computeVerticalLayout,
   describeInputs,
   descendantsOf,
-  flowChecks,
-  isValidFlowConnection,
+  terminalIds,
   type ConnMeta,
   type FieldGroup,
   type FNode,
@@ -34,14 +22,25 @@ import {
   type InputDescriptor,
   type LibraryCtx,
 } from "./graph-utils";
-import { ALL_TYPES, defaultConfig, nodeTitle } from "./node-meta";
+import { ALL_TYPES, defaultConfig, nodeTitle, pathHandles } from "./node-meta";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
-import { ConfigPanel } from "./ConfigPanel";
+import { ConfigPanel, type StepRef } from "./ConfigPanel";
 import { NodeLibraryModal } from "./NodeLibraryModal";
-import { FlowCheckRail } from "./FlowCheckRail";
 
 export type { ConnMeta };
+
+const NUMBER_PRODUCERS = new Set(["aggregate", "formula"]);
+const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths"]);
+const rid = () => `e_${Math.random().toString(36).slice(2, 9)}`;
+
+/** Short "what to do next" hint shown inside a step that needs setup. */
+function setupHint(type: string, cfg: Record<string, unknown>, inputCount: number): string {
+  if (type === "app") return "Choose an account to load data.";
+  if (type === "formula") return "Pick a First and Second number.";
+  if (type === "output") return inputCount === 0 ? "Connect an input." : "Name this metric.";
+  return "Connect an input.";
+}
 
 const nodeTypes = Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])) as Record<string, typeof FlowNodeCard>;
 const edgeTypes = { insert: InsertEdge };
@@ -96,9 +95,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [publishing, setPublishing] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [library, setLibrary] = useState<{ open: boolean; ctx: LibraryCtx }>({ open: false, ctx: null });
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [showMinimap, setShowMinimap] = useState(false);
-  const { fitView } = useReactFlow();
 
   const past = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
   const future = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
@@ -144,16 +140,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [descendants, setNodes],
   );
 
-  const onConnect = useCallback(
-    (c: Connection) => {
-      commit();
-      setEdges((eds) => addEdge({ ...c, type: "insert", id: `e_${Math.random().toString(36).slice(2, 9)}` }, eds));
-      markDirtyFrom(c.target);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [commit],
-  );
-
   /** Create a node (optionally connected from a source or inserted on an edge). */
   const createNode = useCallback(
     (type: NodeType, ctx: LibraryCtx) => {
@@ -169,8 +155,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         const tgt = nodes.find((n) => n.id === ctx.onEdge!.target);
         if (src && tgt) position = { x: (src.position.x + tgt.position.x) / 2, y: (src.position.y + tgt.position.y) / 2 };
       }
-      // Snap to the 16px grid so steps line up cleanly (n8n-style).
-      position = { x: Math.round(position.x / 16) * 16, y: Math.round(position.y / 16) * 16 };
 
       const newNode: FNode = { id, type, position, data: { config: defaultConfig(type), lastTest: null, dirty: false } };
       setNodes((ns) => [...ns, newNode]);
@@ -250,15 +234,26 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [edges, commit, setEdges, setNodes, deleteNode],
   );
 
-  /** Block shape-incompatible connections (e.g. records into a Formula input). */
-  const isValidConnection = useCallback(
-    (c: Connection | Edge) => {
-      const s = nodes.find((n) => n.id === c.source);
-      const t = nodes.find((n) => n.id === c.target);
-      if (!s || !t) return true;
-      return isValidFlowConnection(String(s.type), String(t.type));
+  // Multi-input steps are wired from the config panel (labeled pills), never by
+  // dragging ports. These manage the underlying edges so the engine is unchanged.
+  const setFormulaInput = useCallback(
+    (nodeId: string, handle: "a" | "b", sourceId: string | null) => {
+      commit();
+      setEdges((es) => {
+        const kept = es.filter((e) => !(e.target === nodeId && (e.targetHandle ?? null) === handle));
+        return sourceId ? [...kept, { id: rid(), type: "insert", source: sourceId, target: nodeId, targetHandle: handle }] : kept;
+      });
+      markDirtyFrom(nodeId);
     },
-    [nodes],
+    [commit, setEdges, markDirtyFrom],
+  );
+  const setCombineSources = useCallback(
+    (nodeId: string, sourceIds: string[]) => {
+      commit();
+      setEdges((es) => [...es.filter((e) => e.target !== nodeId), ...sourceIds.map((sid) => ({ id: rid(), type: "insert", source: sid, target: nodeId }))]);
+      markDirtyFrom(nodeId);
+    },
+    [commit, setEdges, markDirtyFrom],
   );
 
   const duplicateNode = useCallback(
@@ -297,31 +292,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     setNodes(next.nodes);
     setEdges(next.edges);
   }, [snapshot, setNodes, setEdges]);
-
-  const autoLayout = useCallback(() => {
-    commit();
-    const pos = computeLayout(nodes, edges);
-    setNodes((ns) => ns.map((n) => ({ ...n, position: pos.get(n.id) ?? n.position })));
-    setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 60);
-  }, [commit, nodes, edges, setNodes, fitView]);
-
-  const alignSelection = useCallback(() => {
-    const sel = nodes.filter((n) => n.selected);
-    if (sel.length < 2) return;
-    commit();
-    const y = Math.min(...sel.map((n) => n.position.y));
-    setNodes((ns) => ns.map((n) => (n.selected ? { ...n, position: { ...n.position, y } } : n)));
-  }, [commit, nodes, setNodes]);
-
-  const toggleCollapse = useCallback(() => {
-    if (!selectedId) return;
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(selectedId)) next.delete(selectedId);
-      else next.add(selectedId);
-      return next;
-    });
-  }, [selectedId]);
 
   const publish = useCallback(async () => {
     setPublishing(true);
@@ -404,33 +374,60 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
   const resultTitles = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, nodeTitle(String(n.type) as NodeType, n.data)])), [nodes]);
 
-  const checks = useMemo(() => flowChecks(nodes, edges, (n) => nodeTitle(String(n.type) as NodeType, n.data)), [nodes, edges]);
+  // Candidate steps for wiring multi-input steps via labeled pills (exclude self + descendants).
+  const candidates = useMemo(() => {
+    if (!selected) return { number: [] as StepRef[], dataset: [] as StepRef[] };
+    const desc = descendantsOf(selected.id, edges);
+    const avail = nodes.filter((n) => n.id !== selected.id && !desc.has(n.id));
+    const toItem = (n: FNode): StepRef => ({ id: n.id, title: nodeTitle(String(n.type) as NodeType, n.data), stepNo: stepNoById.get(n.id) });
+    return {
+      number: avail.filter((n) => NUMBER_PRODUCERS.has(String(n.type))).map(toItem),
+      dataset: avail.filter((n) => DATASET_PRODUCERS.has(String(n.type))).map(toItem),
+    };
+  }, [selected, nodes, edges, stepNoById]);
 
-  // Inject transient display data + hide collapsed branches.
-  const hiddenIds = useMemo(() => {
-    const h = new Set<string>();
-    for (const c of collapsed) for (const d of descendantsOf(c, edges)) h.add(d);
-    return h;
-  }, [collapsed, edges]);
+  // Managed top-to-bottom layout + per-node status + terminal add points (no free placement).
+  const layout = useMemo(() => computeVerticalLayout(nodes, edges), [nodes, edges]);
+  const terminals = useMemo(() => terminalIds(nodes, edges), [nodes, edges]);
+  const inDegreeById = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of nodes) m.set(n.id, 0);
+    for (const e of edges) m.set(e.target, (m.get(e.target) ?? 0) + 1);
+    return m;
+  }, [nodes, edges]);
+  const usedHandles = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const e of edges) {
+      if (e.sourceHandle == null) continue;
+      if (!m.has(e.source)) m.set(e.source, new Set());
+      m.get(e.source)!.add(e.sourceHandle);
+    }
+    return m;
+  }, [edges]);
 
   const displayNodes = useMemo(
     () =>
-      nodes.map((n) => ({
-        ...n,
-        hidden: hiddenIds.has(n.id),
-        data: { ...n.data, stepNo: stepNoById.get(n.id), onAddFrom: addFromNode },
-      })),
-    [nodes, hiddenIds, stepNoById, addFromNode],
+      nodes.map((n) => {
+        const inputCount = inDegreeById.get(n.id) ?? 0;
+        const updating = testingId === n.id || (recalcLoading && n.id === selectedId);
+        const status = computeNodeStatus({ type: String(n.type), cfg: n.data.config, inputCount, lastTest: n.data.lastTest, dirty: n.data.dirty, updating });
+        const issue = status === "setup" ? setupHint(String(n.type), n.data.config, inputCount) : undefined;
+        let freeHandles: Array<{ id: string; label: string }> | undefined;
+        if (n.type === "paths") {
+          const used = usedHandles.get(n.id) ?? new Set<string>();
+          freeHandles = pathHandles(n.data).filter((h) => !used.has(h.id));
+        }
+        return {
+          ...n,
+          position: layout.get(n.id) ?? n.position,
+          data: { ...n.data, stepNo: stepNoById.get(n.id), status, issue, isTerminal: terminals.has(n.id), freeHandles, onAddFrom: addFromNode },
+        };
+      }),
+    [nodes, layout, terminals, stepNoById, inDegreeById, usedHandles, addFromNode, testingId, recalcLoading, selectedId],
   );
   const displayEdges = useMemo(
-    () =>
-      edges.map((e) => ({
-        ...e,
-        type: "insert",
-        hidden: hiddenIds.has(e.source) || hiddenIds.has(e.target),
-        data: { ...(e.data ?? {}), onInsert: insertOnEdge },
-      })),
-    [edges, hiddenIds, insertOnEdge],
+    () => edges.map((e) => ({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: insertOnEdge } })),
+    [edges, insertOnEdge],
   );
 
   const empty = nodes.length === 0;
@@ -453,16 +450,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setLibrary({ open: true, ctx: null })} className="rounded-md bg-neutral-900 px-3 py-1 text-sm font-medium text-white hover:bg-neutral-800">
-            + Add step
-          </button>
-          <div className="mx-1 h-5 w-px bg-neutral-200" />
-          <ToolButton onClick={autoLayout}>Auto layout</ToolButton>
-          <ToolButton onClick={alignSelection}>Align</ToolButton>
-          <ToolButton onClick={toggleCollapse}>{selectedId && collapsed.has(selectedId) ? "Expand" : "Collapse"}</ToolButton>
-          <ToolButton onClick={() => fitView({ padding: 0.2, duration: 300 })}>Fit</ToolButton>
-          <ToolButton onClick={() => setShowMinimap((v) => !v)}>{showMinimap ? "Hide map" : "Map"}</ToolButton>
-          <div className="mx-1 h-5 w-px bg-neutral-200" />
           <ToolButton onClick={undo}>Undo</ToolButton>
           <ToolButton onClick={redo}>Redo</ToolButton>
           {publishState.status === "published" && (
@@ -492,21 +479,17 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             edges={displayEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
             onNodeClick={(_, n) => setSelectedId(n.id)}
             onPaneClick={() => setSelectedId(null)}
-            isValidConnection={isValidConnection}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             defaultEdgeOptions={{ type: "insert" }}
-            snapToGrid
-            snapGrid={[16, 16]}
+            nodesDraggable={false}
+            nodesConnectable={false}
             fitView
             deleteKeyCode={["Backspace", "Delete"]}
           >
             <Background gap={16} />
-            <Controls showInteractive={false} />
-            {showMinimap && <MiniMap pannable zoomable />}
           </ReactFlow>
 
           {empty && (
@@ -520,7 +503,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             </div>
           )}
 
-          {!empty && <FlowCheckRail checks={checks} onFix={(id) => id && setSelectedId(id)} />}
         </div>
 
         {/* Config panel */}
@@ -538,12 +520,22 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             resultSteps={chainSteps}
             resultTitles={resultTitles}
             resultLoading={recalcLoading}
+            numberCandidates={candidates.number}
+            datasetCandidates={candidates.dataset}
+            isTerminal={terminals.has(selected.id)}
             onChange={(patch) => updateConfig(selected.id, patch)}
             onRename={(v) => renameNode(selected.id, v)}
             onTest={() => testNode(selected.id)}
             onDelete={() => deleteNode(selected.id)}
             onDeleteReconnect={() => deleteAndReconnect(selected.id)}
             onDuplicate={() => duplicateNode(selected.id)}
+            onSetInput={(handle, sourceId) => setFormulaInput(selected.id, handle, sourceId)}
+            onSetSources={(ids) => setCombineSources(selected.id, ids)}
+            onContinue={() => {
+              const out = edges.find((e) => e.source === selected.id);
+              if (out) setSelectedId(out.target);
+              else publish();
+            }}
           />
         )}
       </div>

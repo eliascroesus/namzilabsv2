@@ -65,7 +65,7 @@ export function NodeLibraryModal({ onClose, onPick }: { onClose: () => void; onP
           ))}
           {advanced.length > 0 && (
             <details open={query.length > 0} className="mt-1">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-neutral-400">Advanced steps</summary>
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-neutral-400">More tools</summary>
               <div className="mt-2 grid grid-cols-2 gap-2">{advanced.map(card)}</div>
             </details>
           )}

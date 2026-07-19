@@ -15,8 +15,8 @@ import {
   type FlowFilterOp,
 } from "@/lib/flow/types";
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor, Rule } from "./graph-utils";
-import { collidingFields, fieldProvenance } from "./graph-utils";
-import { NODE_META, MORE_FILTER_OPS, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
+import { collidingFields, computeNodeStatus, fieldProvenance } from "./graph-utils";
+import { NODE_META, STATUS_META, MORE_FILTER_OPS, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { FieldPicker } from "./FieldPicker";
 import { ValueInput, type ValuePatch } from "./ValueInput";
 import { RecordSamplePicker } from "./RecordSamplePicker";
@@ -43,6 +43,9 @@ function syncStatusLabel(status: string): string {
 type TabKey = "setup" | "configure" | "test";
 
 export type GuidedStep = { id: string; label: string; tab: TabKey; done: boolean };
+
+/** A reference to an earlier step, offered as a labeled pill for multi-input wiring. */
+export type StepRef = { id: string; title: string; stepNo?: number };
 
 /**
  * Ordered guided steps for a node. Drives the single progressing CTA and the panel's
@@ -113,12 +116,18 @@ export function ConfigPanel({
   resultSteps,
   resultTitles,
   resultLoading,
+  numberCandidates,
+  datasetCandidates,
+  isTerminal,
   onChange,
   onRename,
   onTest,
   onDelete,
   onDeleteReconnect,
   onDuplicate,
+  onSetInput,
+  onSetSources,
+  onContinue,
 }: {
   node: FNode;
   stepNo?: number;
@@ -131,48 +140,39 @@ export function ConfigPanel({
   resultSteps: ChainStepDTO[];
   resultTitles: Record<string, string>;
   resultLoading: boolean;
+  numberCandidates: StepRef[];
+  datasetCandidates: StepRef[];
+  isTerminal: boolean;
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
   onTest: () => void;
   onDelete: () => void;
   onDeleteReconnect: () => void;
   onDuplicate: () => void;
+  onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
+  onSetSources: (ids: string[]) => void;
+  onContinue: () => void;
 }) {
   const type = String(node.type) as NodeType;
   const cfg = node.data.config;
   const steps = nodeSteps(node, type, cfg, inputCount);
   const firstOpen = steps.find((s) => !s.done);
-  const configureDone = steps.filter((s) => s.tab === "configure").every((s) => s.done);
-  const tested = !!node.data.lastTest && node.data.lastTest.status === "ok" && !node.data.dirty;
-
-  const [tab, setTab] = useState<TabKey>(() => firstOpen?.tab ?? "configure");
-
-  const tabs: Array<{ key: TabKey; label: string; done: boolean; enabled: boolean }> = [
-    { key: "setup", label: "Guide", done: !firstOpen, enabled: true },
-    { key: "configure", label: "Configure", done: configureDone, enabled: true },
-    { key: "test", label: "Test", done: tested, enabled: configureDone },
-  ];
-
-  const cta = firstOpen
-    ? {
-        label: testing && firstOpen.tab === "test" ? "Testing…" : firstOpen.label,
-        run: () => {
-          setTab(firstOpen.tab);
-          if (firstOpen.tab === "test" && configureDone && !testing) onTest();
-        },
-      }
-    : tab !== "test"
-      ? { label: "Continue", run: () => setTab("test") }
-      : { label: testing ? "Testing…" : "Re-test step", run: onTest };
+  const status = computeNodeStatus({ type, cfg, inputCount, lastTest: node.data.lastTest, dirty: node.data.dirty, updating: testing || resultLoading });
+  const sm = STATUS_META[status];
+  const err = node.data.lastTest?.status === "error" ? node.data.lastTest.error : null;
 
   return (
     <aside className="flex w-[480px] shrink-0 flex-col border-l border-neutral-200 bg-white">
+      {/* Header + single status */}
       <div className="border-b border-neutral-200 px-4 py-3">
-        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-          <span className="text-neutral-500">
-            {type === "app" ? <SourceBadge source={String((node.data.config as { source?: unknown }).source ?? "")} size={16} /> : <NodeGlyph type={type} className="h-4 w-4" />}
-          </span>
-          <span>{stepNo != null ? `Step ${stepNo} · ` : ""}{NODE_META[type].label}</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+            <span className="text-neutral-500">
+              {type === "app" ? <SourceBadge source={String((cfg as { source?: unknown }).source ?? "")} size={16} /> : <NodeGlyph type={type} className="h-4 w-4" />}
+            </span>
+            <span>{stepNo != null ? `Step ${stepNo} · ` : ""}{NODE_META[type].label}</span>
+          </div>
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>
         </div>
         <input
           value={node.data.label ?? ""}
@@ -182,68 +182,59 @@ export function ConfigPanel({
         />
       </div>
 
-      <div className="flex border-b border-neutral-200 text-sm">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            disabled={!t.enabled}
-            onClick={() => t.enabled && setTab(t.key)}
-            className={`flex flex-1 items-center justify-center gap-1 px-3 py-2.5 ${tab === t.key ? "border-b-2 border-neutral-900 font-medium" : "text-neutral-500"} ${!t.enabled ? "cursor-not-allowed opacity-40" : ""}`}
-          >
-            {t.done ? <span className="text-green-600">✓</span> : null}
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       <ResultSoFar steps={resultSteps} titles={resultTitles} loading={resultLoading} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        {tab === "setup" && (
-          <div className="space-y-5 text-sm">
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Steps</p>
-              {steps.map((s, i) => (
-                <button
-                  key={s.id}
-                  onClick={() => setTab(s.tab)}
-                  className="flex w-full items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-left hover:bg-neutral-50"
-                >
-                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-medium ${s.done ? "bg-green-100 text-green-700" : "bg-neutral-100 text-neutral-500"}`}>
-                    {s.done ? "✓" : i + 1}
-                  </span>
-                  <span className={s.done ? "text-neutral-500" : "font-medium text-neutral-800"}>{s.label}</span>
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={onDuplicate} className="rounded border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">
-                Duplicate
-              </button>
-              <button onClick={onDelete} className="rounded border border-red-300 px-3 py-1.5 text-red-700 hover:bg-red-50">
-                Delete
-              </button>
-              {canReconnect && (
-                <button onClick={onDeleteReconnect} className="rounded border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50" title="Remove this step and connect the previous step straight to the next">
-                  Delete &amp; reconnect
-                </button>
-              )}
-            </div>
+      {/* One panel, logical sections. */}
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+        {/* The one next action / problem, at the top. */}
+        {err ? (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>
+        ) : firstOpen ? (
+          <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+            <span className="font-medium">Next:</span> {firstOpen.label}
           </div>
-        )}
+        ) : null}
 
-        {tab === "configure" && <ConfigureTab type={type} cfg={cfg} connections={connections} fieldGroups={fieldGroups} inputs={inputs} onChange={onChange} />}
+        <ConfigureTab
+          type={type}
+          cfg={cfg}
+          connections={connections}
+          fieldGroups={fieldGroups}
+          inputs={inputs}
+          numberCandidates={numberCandidates}
+          datasetCandidates={datasetCandidates}
+          onChange={onChange}
+          onSetInput={onSetInput}
+          onSetSources={onSetSources}
+        />
 
-        {tab === "test" && <TestTab node={node} testing={testing} onTest={onTest} onChange={onChange} />}
+        <div className="border-t border-neutral-100 pt-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">Preview</p>
+          <TestTab node={node} testing={testing} onTest={onTest} onChange={onChange} />
+        </div>
+
+        <details className="border-t border-neutral-100 pt-3">
+          <summary className="cursor-pointer text-xs font-medium text-neutral-500">Step options</summary>
+          <div className="mt-2 flex flex-wrap gap-2 text-sm">
+            <button onClick={onDuplicate} className="rounded border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">
+              Duplicate
+            </button>
+            <button onClick={onDelete} className="rounded border border-red-300 px-3 py-1.5 text-red-700 hover:bg-red-50">
+              Delete
+            </button>
+            {canReconnect && (
+              <button onClick={onDeleteReconnect} className="rounded border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50" title="Remove this step and connect the previous step straight to the next">
+                Delete &amp; reconnect
+              </button>
+            )}
+          </div>
+        </details>
       </div>
 
+      {/* Sticky primary action. */}
       <div className="border-t border-neutral-200 p-3">
-        <button
-          onClick={cta.run}
-          disabled={testing}
-          className={`w-full rounded-md px-4 py-2.5 text-sm font-medium disabled:opacity-50 ${firstOpen ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-neutral-900 text-white hover:bg-neutral-800"}`}
-        >
-          {cta.label}
+        <button onClick={onContinue} className="w-full rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800">
+          {isTerminal ? "Review & publish" : "Continue →"}
         </button>
       </div>
     </aside>
@@ -256,14 +247,22 @@ function ConfigureTab({
   connections,
   fieldGroups,
   inputs,
+  numberCandidates,
+  datasetCandidates,
   onChange,
+  onSetInput,
+  onSetSources,
 }: {
   type: NodeType;
   cfg: Record<string, unknown>;
   connections: ConnMeta[];
   fieldGroups: FieldGroup[];
   inputs: InputDescriptor[];
+  numberCandidates: StepRef[];
+  datasetCandidates: StepRef[];
   onChange: (patch: Record<string, unknown>) => void;
+  onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
+  onSetSources: (ids: string[]) => void;
 }) {
   // Formatter shows controls by intent (Clean text / Change number / …), derived from the op.
   const [fmtIntent, setFmtIntent] = useState(() => formatterIntentOf(String((cfg as { op?: unknown }).op ?? "round")));
@@ -396,8 +395,21 @@ function ConfigureTab({
     const labels = formulaHandleLabels(op);
     const inA = inputs.find((i) => i.targetHandle === "a");
     const inB = inputs.find((i) => i.targetHandle === "b");
-    const nameA = inA?.title ?? labels.a;
-    const nameB = inB?.title ?? labels.b;
+    const nameA = inA?.title ?? "First number";
+    const nameB = inB?.title ?? "Second number";
+    const numberPicker = (handle: "a" | "b", label: string, desc?: InputDescriptor) => (
+      <Field label={label}>
+        <select value={desc?.nodeId ?? ""} onChange={(e) => onSetInput(handle, e.target.value || null)} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
+          <option value="">Choose a number…</option>
+          {numberCandidates.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.stepNo != null ? `${c.stepNo}. ` : ""}{c.title}
+            </option>
+          ))}
+        </select>
+        {desc?.value != null && <p className="mt-1 text-xs text-neutral-500">= {String(desc.value)}</p>}
+      </Field>
+    );
     return (
       <div className="space-y-3 text-sm">
         <Field label="Calculation">
@@ -410,9 +422,11 @@ function ConfigureTab({
         <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
           <p className="font-medium">{formulaExpression(op, nameA, nameB)}</p>
         </div>
-        <FormulaInput label={`${labels.a} (input A)`} desc={inA} />
-        <FormulaInput label={`${labels.b} (input B)`} desc={inB} />
-        <p className="text-xs text-neutral-400">Inputs A and B accept a single number from an Aggregate or Formula step.</p>
+        {numberPicker("a", labels.a, inA)}
+        {numberPicker("b", labels.b, inB)}
+        {numberCandidates.length === 0 && (
+          <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Add a “Calculate a number” step earlier in the flow to compare.</p>
+        )}
       </div>
     );
   }
@@ -420,30 +434,45 @@ function ConfigureTab({
   if (type === "combine") {
     const mode = (cfg.mode as string) ?? "stack";
     const collisions = collidingFields(inputs);
+    const connectedIds = inputs.map((i) => i.nodeId);
+    const toggle = (id: string, on: boolean) => onSetSources(on ? [...connectedIds, id] : connectedIds.filter((x) => x !== id));
     return (
       <div className="space-y-3 text-sm">
-        <Field label="Mode">
+        <div>
+          <p className="mb-1 text-xs font-medium text-neutral-600">Data to combine</p>
+          {datasetCandidates.length === 0 ? (
+            <p className="text-xs text-neutral-400">Add earlier data steps to combine them here.</p>
+          ) : (
+            <div className="space-y-1">
+              {datasetCandidates.map((c) => {
+                const on = connectedIds.includes(c.id);
+                const desc = inputs.find((i) => i.nodeId === c.id);
+                return (
+                  <label key={c.id} className="flex items-center justify-between gap-2 rounded border border-neutral-200 px-2 py-1.5 text-xs">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <input type="checkbox" checked={on} onChange={(e) => toggle(c.id, e.target.checked)} />
+                      <span className="truncate">{c.stepNo != null ? `${c.stepNo}. ` : ""}{c.title}</span>
+                    </span>
+                    {desc?.recordCount != null && <span className="shrink-0 text-neutral-400">{desc.recordCount} recs</span>}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <Field label="How should they be combined?">
           <select value={mode} onChange={(e) => onChange({ mode: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
-            <option value="stack">Stack (combine all records)</option>
-            <option value="dedupe">De-duplicate by identity</option>
-            <option value="match">Match records by identity</option>
+            <option value="stack">Put all records together</option>
+            <option value="dedupe">Remove duplicate people</option>
+            <option value="match">Match records across sources</option>
           </select>
         </Field>
 
-        <div>
-          <p className="mb-1 text-xs font-medium text-neutral-600">Connected sources ({inputs.length})</p>
-          {inputs.length === 0 && <p className="text-xs text-neutral-400">Connect two or more record steps (Apps, Filter, Time, …).</p>}
-          <div className="space-y-1.5">
-            {inputs.map((inp, i) => (
-              <SourceCard key={inp.nodeId} index={i + 1} desc={inp} isBase={mode === "match" && (cfg.baseSourceId as string) === inp.nodeId} />
-            ))}
-          </div>
-        </div>
-
         {mode === "match" && (
-          <Field label="Base source (records kept & enriched)">
+          <Field label="Main list (records kept &amp; enriched)">
             <select value={(cfg.baseSourceId as string) ?? ""} onChange={(e) => onChange({ baseSourceId: e.target.value || null })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
-              <option value="">First connected input</option>
+              <option value="">First selected source</option>
               {inputs.map((inp, i) => (
                 <option key={inp.nodeId} value={inp.nodeId}>
                   Source {i + 1}: {inp.title}
@@ -452,34 +481,31 @@ function ConfigureTab({
             </select>
           </Field>
         )}
-
         {(mode === "dedupe" || mode === "match") && (
-          <Field label="Match records using">
+          <Field label="Recognize the same person by">
             <FieldPicker value={(cfg.identityField as string) ?? "subject"} fieldGroups={fieldGroups} onChange={(v) => onChange({ identityField: v })} />
           </Field>
         )}
         {mode === "match" && (
           <Field label="Keep">
             <select value={(cfg.keep as string) ?? "all"} onChange={(e) => onChange({ keep: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
-              <option value="all">All base records</option>
+              <option value="all">All records from the main list</option>
               <option value="matched">Only matched</option>
               <option value="unmatched">Only unmatched</option>
             </select>
           </Field>
         )}
-
         {(mode === "dedupe" || mode === "match") && collisions.length > 0 && (
           <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-            Fields present in more than one source may overwrite each other: <b>{collisions.join(", ")}</b>. The winning source is set below.
+            These fields exist in more than one source and may overwrite each other: <b>{collisions.join(", ")}</b>.
           </p>
         )}
-
         {(mode === "dedupe" || mode === "match") && (
           <AdvancedSection>
             <Field label="When duplicated, which source wins">
               <select value={(cfg.sourceWins as string) ?? "first"} onChange={(e) => onChange({ sourceWins: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5">
-                <option value="first">First connected input</option>
-                <option value="last">Last connected input</option>
+                <option value="first">First selected source</option>
+                <option value="last">Last selected source</option>
               </select>
             </Field>
           </AdvancedSection>
@@ -858,66 +884,6 @@ function sampleLine(r: unknown): string {
   return `${rec.source ?? ""} · ${rec.eventType ?? ""}${rec.subject ? ` · ${rec.subject}` : ""}${rec.value != null ? ` · ${String(rec.value)}` : ""}`;
 }
 
-function StatusPill({ status, count }: { status: InputDescriptor["status"]; count?: number }) {
-  const cls: Record<string, string> = {
-    ok: "bg-green-100 text-green-700",
-    error: "bg-red-100 text-red-700",
-    dirty: "bg-amber-100 text-amber-700",
-    untested: "bg-neutral-100 text-neutral-500",
-  };
-  const label = status === "ok" ? (count != null ? `${count} recs` : "tested") : status === "error" ? "error" : status === "dirty" ? "retest" : "not tested";
-  return <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium ${cls[status]}`}>{label}</span>;
-}
-
-/** One connected Combine source, expandable to its origin + sample records. */
-function SourceCard({ index, desc, isBase }: { index: number; desc: InputDescriptor; isBase: boolean }) {
-  return (
-    <details className={`rounded border ${isBase ? "border-neutral-800" : "border-neutral-200"}`}>
-      <summary className="flex cursor-pointer items-center justify-between gap-2 px-2 py-1.5 text-xs">
-        <span className="min-w-0 truncate">
-          <span className="font-medium">Source {index}:</span> {desc.title}
-          {isBase && <span className="ml-1 rounded bg-neutral-800 px-1 text-[9px] text-white">BASE</span>}
-        </span>
-        <StatusPill status={desc.status} count={desc.recordCount} />
-      </summary>
-      <div className="space-y-1 border-t border-neutral-100 p-2 text-[11px] text-neutral-600">
-        {desc.appSource && (
-          <p>
-            App: {desc.appSource}
-            {desc.account ? ` · ${desc.account}` : ""}
-            {desc.eventType ? ` · ${desc.eventType}` : ""}
-          </p>
-        )}
-        {desc.chain.length > 0 && <p className="text-neutral-400">Chain: {desc.chain.join(" → ")}</p>}
-        {desc.sample.length > 0 && (
-          <div className="space-y-0.5">
-            {desc.sample.slice(0, 3).map((r, i) => (
-              <div key={i} className="truncate rounded bg-neutral-50 p-1">{sampleLine(r)}</div>
-            ))}
-          </div>
-        )}
-      </div>
-    </details>
-  );
-}
-
-/** One Formula input (A/B), showing the upstream step, its calculation, and value. */
-function FormulaInput({ label, desc }: { label: string; desc?: InputDescriptor }) {
-  return (
-    <div className="rounded border border-neutral-200 p-2 text-xs">
-      <p className="font-medium text-neutral-600">{label}</p>
-      {desc ? (
-        <p className="mt-0.5 text-neutral-700">
-          {desc.title}
-          {desc.calc ? ` — ${desc.calc}` : ""}
-          {desc.value != null ? ` = ${String(desc.value)}` : desc.status === "untested" ? " (test to see value)" : ""}
-        </p>
-      ) : (
-        <p className="mt-0.5 text-amber-700">Not connected — connect an Aggregate or Formula step.</p>
-      )}
-    </div>
-  );
-}
 
 type DateRange = { enabled?: boolean; dateField?: string; mode?: string; preset?: string; days?: number; from?: string; to?: string };
 

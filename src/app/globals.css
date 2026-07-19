@@ -35,25 +35,18 @@ body {
 }
 
 /*
- * Connectors are secondary: small, muted handles that only gain colour (blue =
- * active) on hover, so the node cards and the "Add next step" control lead.
+ * Managed flow: steps auto-connect, so connection handles are never shown or
+ * dragged. They stay in the DOM only as invisible anchor points for the edges.
  */
 .react-flow__handle {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   min-width: 0;
   min-height: 0;
-  background: #ffffff;
-  border: 1.5px solid #cbd5e1;
-}
-.react-flow__node:hover .react-flow__handle {
-  border-color: #94a3b8;
-}
-.react-flow__handle:hover,
-.react-flow__handle.connecting,
-.react-flow__handle.valid {
-  border-color: #2563eb;
-  background: #eff6ff;
+  opacity: 0;
+  border: none;
+  background: transparent;
+  pointer-events: none;
 }
 .react-flow__edge-path {
   stroke: #cbd5e1;

@@ -13,6 +13,10 @@ export type NodeData = {
   dirty?: boolean;
   // Transient (display-only) fields injected before render — never persisted:
   stepNo?: number;
+  status?: "ready" | "setup" | "updating" | "error";
+  isTerminal?: boolean;
+  issue?: string;
+  freeHandles?: Array<{ id: string; label: string }>;
   onAddFrom?: (sourceNodeId: string, sourceHandle?: string | null) => void;
   [k: string]: unknown;
 };
@@ -107,6 +111,84 @@ export function computeLayout(nodes: FNode[], edges: Edge[]): Map<string, { x: n
     ids.forEach((idv, i) => pos.set(idv, { x: 60 + l * 300, y: 60 + i * 150 }));
   }
   return pos;
+}
+
+/**
+ * Managed top-to-bottom layout. Positions are always computed (users never place
+ * nodes): depth flows downward via longest-path layering, and each layer is centred
+ * horizontally so branches (Paths) fan out symmetrically.
+ */
+export function computeVerticalLayout(nodes: FNode[], edges: Edge[]): Map<string, { x: number; y: number }> {
+  const indeg = new Map<string, number>();
+  const adj = new Map<string, string[]>();
+  for (const n of nodes) {
+    indeg.set(n.id, 0);
+    adj.set(n.id, []);
+  }
+  for (const e of edges) {
+    if (!indeg.has(e.target) || !adj.has(e.source)) continue;
+    indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
+    adj.get(e.source)!.push(e.target);
+  }
+  const depth = new Map<string, number>();
+  const indeg2 = new Map(indeg);
+  const queue = [...indeg.entries()].filter(([, d]) => d === 0).map(([id]) => id);
+  for (const id of queue) depth.set(id, 0);
+  while (queue.length) {
+    const id = queue.shift()!;
+    for (const nx of adj.get(id) ?? []) {
+      depth.set(nx, Math.max(depth.get(nx) ?? 0, (depth.get(id) ?? 0) + 1));
+      indeg2.set(nx, (indeg2.get(nx) ?? 0) - 1);
+      if (indeg2.get(nx) === 0) queue.push(nx);
+    }
+  }
+  for (const n of nodes) if (!depth.has(n.id)) depth.set(n.id, 0);
+
+  const byDepth = new Map<number, string[]>();
+  for (const n of nodes) {
+    const d = depth.get(n.id) ?? 0;
+    if (!byDepth.has(d)) byDepth.set(d, []);
+    byDepth.get(d)!.push(n.id);
+  }
+  const COL = 288;
+  const ROW = 168;
+  const pos = new Map<string, { x: number; y: number }>();
+  for (const [d, ids] of byDepth) {
+    const total = ids.length;
+    ids.forEach((id, i) => pos.set(id, { x: (i - (total - 1) / 2) * COL, y: d * ROW }));
+  }
+  return pos;
+}
+
+/** Nodes with no outgoing edge — the "ends" of the flow (per branch). */
+export function terminalIds(nodes: FNode[], edges: Edge[]): Set<string> {
+  const hasOut = new Set(edges.map((e) => e.source));
+  return new Set(nodes.filter((n) => !hasOut.has(n.id)).map((n) => n.id));
+}
+
+/** Whether a step still needs required setup before it can produce a result. */
+export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, inputCount: number): boolean {
+  if (type === "app") return !cfg.connectionId && !cfg.source;
+  if (type === "formula") return inputCount < 2;
+  if (type === "output") return inputCount === 0 || !String(cfg.name ?? "").trim();
+  return inputCount === 0;
+}
+
+/** The single user-facing status for a step: Ready / Needs setup / Updating / Error. */
+export function computeNodeStatus(opts: {
+  type: string;
+  cfg: Record<string, unknown>;
+  inputCount: number;
+  lastTest?: { status?: string } | null;
+  dirty?: boolean;
+  updating?: boolean;
+}): "ready" | "setup" | "updating" | "error" {
+  const { type, cfg, inputCount, lastTest, dirty, updating } = opts;
+  if (nodeNeedsSetup(type, cfg, inputCount)) return "setup";
+  if (updating) return "updating";
+  if (lastTest?.status === "error") return "error";
+  if (!lastTest || dirty) return "updating";
+  return "ready";
 }
 
 /** All nodes reachable downstream from `start` (excluding start). */
