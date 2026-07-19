@@ -1,7 +1,7 @@
 import { and, eq, notInArray } from "drizzle-orm";
 import { flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
-import { runFlow } from "./engine";
+import { runFlow, buildTile } from "./engine";
 import { getPublishedVersion } from "./store";
 import { parseGraph, type TileSpec } from "./types";
 
@@ -17,8 +17,18 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
 
   try {
     const { nodes, outputs } = await runFlow({ db, orgId }, graph);
-    if (outputs.length === 0) {
-      // No Output produced a result. Surface the earliest failing node's error
+
+    // Tiles come from Output nodes (legacy flows) and/or endpoint metrics chosen at
+    // Review & publish (new flows) — one tile per enabled metric.
+    const tiles: Array<{ nodeId: string; tile: TileSpec }> = outputs.map((o) => ({ nodeId: o.nodeId, tile: o.tile }));
+    for (const m of graph.metrics) {
+      if (!m.enabled) continue;
+      const ex = nodes.get(m.nodeId);
+      if (ex && ex.status === "ok") tiles.push({ nodeId: m.nodeId, tile: buildTile(m, ex.shape, ex.sample) });
+    }
+
+    if (tiles.length === 0) {
+      // Nothing produced a result. Surface the earliest failing node's error
       // (topological order) — that's the root cause, not the downstream fallout.
       let message = "The flow produced no dashboard result.";
       for (const [, n] of nodes) {
@@ -30,11 +40,11 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
       await db.update(flowResults).set({ status: "error", error: message }).where(eq(flowResults.flowId, flowId));
       return { ok: false, error: message };
     }
-    for (const o of outputs) {
-      await upsertResult(db, orgId, flowId, version, o.nodeId, o.tile, "fresh", null);
+    for (const t of tiles) {
+      await upsertResult(db, orgId, flowId, version, t.nodeId, t.tile, "fresh", null);
     }
-    // Drop results for Output nodes that no longer exist in the published flow.
-    const keep = outputs.map((o) => o.nodeId);
+    // Drop results for tiles that no longer exist in the published flow.
+    const keep = tiles.map((t) => t.nodeId);
     await db
       .delete(flowResults)
       .where(keep.length ? and(eq(flowResults.flowId, flowId), notInArray(flowResults.outputNodeId, keep)) : eq(flowResults.flowId, flowId));

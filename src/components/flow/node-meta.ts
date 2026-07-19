@@ -13,7 +13,9 @@ export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: 
   paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", advanced: true, keywords: "split branch route condition paths" },
   calculate: { label: "Calculate a number", blurb: "Count, compare, or break down", stage: "Calculation", advanced: false, keywords: "count sum average metric number compare rate ratio break down group calculate" },
   formatter: { label: "Clean up values", blurb: "Fix text, numbers, and dates", stage: "Calculation", advanced: true, keywords: "format clean text number round date formatter" },
-  output: { label: "Show on dashboard", blurb: "Save the metric as a dashboard tile", stage: "Dashboard", advanced: false, keywords: "dashboard tile metric result output show" },
+  // Output is replaced by "Review & publish" (metrics are chosen there). Kept so old
+  // flows with an Output node still render + run; hidden from the picker.
+  output: { label: "Show on dashboard", blurb: "Save the metric as a dashboard tile", stage: "Dashboard", advanced: false, keywords: "dashboard tile metric result output show", hidden: true },
   // Legacy steps — merged into Calculate / Filter. Kept so old flows still render + run,
   // but hidden from the picker (new flows use Calculate + Filter's date range).
   time: { label: "Date range", blurb: "Limit records to a time window", stage: "Conditions", advanced: true, keywords: "date range window period time", hidden: true },

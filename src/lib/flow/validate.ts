@@ -157,8 +157,10 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
     }
   }
 
-  if (graph.nodes.filter((n) => n.type === "output").length === 0) {
-    issues.push({ message: "Add an Output node to save a result to the dashboard." });
+  const hasOutput = graph.nodes.some((n) => n.type === "output");
+  const hasMetric = graph.metrics.some((m) => m.enabled);
+  if (!hasOutput && !hasMetric) {
+    issues.push({ message: "Choose at least one metric to publish (Review & publish)." });
   }
 
   return issues;

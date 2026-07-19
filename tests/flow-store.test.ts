@@ -108,6 +108,25 @@ describe("materializer", () => {
     expect(rows[0].computedAt).not.toBeNull();
   });
 
+  it("materializes an endpoint metric (Review & publish) without an Output node", async () => {
+    await seedEvents(4);
+    const flow = await createFlow(db, ORG);
+    await saveDraft(db, ORG, flow.id, {
+      nodes: [N("a", "app", { connectionId: CONN }), N("c", "calculate", { mode: "number", aggregation: "count" })],
+      edges: [E("a", "c")],
+      metrics: [{ nodeId: "c", enabled: true, name: "Total bookings", viz: "number", format: "number" }],
+    });
+    await publishFlow(db, ORG, flow.id);
+
+    const res = await materializeFlow(db, ORG, flow.id);
+    expect(res.ok).toBe(true);
+    const rows = await db.select().from(flowResults).where(eq(flowResults.flowId, flow.id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].outputNodeId).toBe("c");
+    expect((rows[0].tile as { value: number; name: string }).value).toBe(4);
+    expect((rows[0].tile as { name: string }).name).toBe("Total bookings");
+  });
+
   it("reports ok:false when a published flow cannot be computed (drives the publish warning)", async () => {
     await seedEvents(3);
     // Passes validation (both formula handles connected) but divides by zero at runtime.
@@ -150,8 +169,16 @@ describe("graph validation", () => {
     });
     expect(validateGraph(g).some((i) => /records as input/.test(i.message))).toBe(true);
   });
-  it("flags a graph with no Output", () => {
+  it("flags a graph with no metric to publish (no Output node, no metrics)", () => {
     const g = parseGraph({ nodes: [N("a", "app", { connectionId: CONN })], edges: [] });
-    expect(validateGraph(g).some((i) => /Output/.test(i.message))).toBe(true);
+    expect(validateGraph(g).some((i) => /metric to publish/.test(i.message))).toBe(true);
+  });
+  it("accepts an endpoint metric instead of an Output node", () => {
+    const g = parseGraph({
+      nodes: [N("a", "app", { connectionId: CONN }), N("c", "calculate", { mode: "number", aggregation: "count" })],
+      edges: [E("a", "c")],
+      metrics: [{ nodeId: "c", enabled: true, name: "Total" }],
+    });
+    expect(validateGraph(g).some((i) => /metric to publish/.test(i.message))).toBe(false);
   });
 });

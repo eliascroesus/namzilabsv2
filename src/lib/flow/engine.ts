@@ -383,26 +383,34 @@ function execCalculate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   return { status: "ok", nodeType: "calculate", shape, recordsIn: input.records.length, recordsOut, sample: input.records.slice(0, 3), outputSchema: [] };
 }
 
-// ---------- Output ----------
-function execOutput(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
-  const cfg = OutputConfigSchema.parse(node.data.config ?? {});
-  const input = inputs[0];
-  if (!input) {
-    return { status: "error", nodeType: "output", error: "Output needs one connected input.", recordsIn: 0, recordsOut: 0, sample: [], outputSchema: [] };
-  }
+// ---------- Output / tiles ----------
 
+/** Presentation config for a tile (Output node config, or a Review & publish MetricSpec). */
+export type TilePresentation = {
+  name: string;
+  description?: string;
+  viz: TileSpec["viz"];
+  format: TileSpec["format"];
+  unit?: string;
+  currency?: string;
+  precision: number;
+  target: number | null;
+};
+
+/** Build a dashboard tile from a computed shape + its presentation. Shared by the
+ * Output node and the materializer (endpoint metrics). */
+export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowRecord[]): TileSpec {
   const tile: TileSpec = {
-    name: cfg.name,
-    description: cfg.description,
-    viz: cfg.viz,
-    format: cfg.format,
-    unit: cfg.unit,
-    currency: cfg.currency,
-    precision: cfg.precision,
-    target: cfg.target,
-    sample: input.exec.sample,
+    name: spec.name,
+    description: spec.description,
+    viz: spec.viz,
+    format: spec.format,
+    unit: spec.unit,
+    currency: spec.currency,
+    precision: spec.precision,
+    target: spec.target,
+    sample,
   };
-  const shape = input.shape;
   if (shape.kind === "scalar") tile.value = shape.value;
   else if (shape.kind === "series") {
     tile.series = shape.series;
@@ -414,7 +422,16 @@ function execOutput(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     tile.value = shape.records.length;
     tile.sample = shape.records.slice(0, 5);
   }
+  return tile;
+}
 
+function execOutput(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = OutputConfigSchema.parse(node.data.config ?? {});
+  const input = inputs[0];
+  if (!input) {
+    return { status: "error", nodeType: "output", error: "Output needs one connected input.", recordsIn: 0, recordsOut: 0, sample: [], outputSchema: [] };
+  }
+  const tile = buildTile(cfg, input.shape, input.exec.sample);
   return {
     status: "ok",
     nodeType: "output",

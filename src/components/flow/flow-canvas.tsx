@@ -21,12 +21,14 @@ import {
   type Graph,
   type InputDescriptor,
   type LibraryCtx,
+  type MetricSpecT,
 } from "./graph-utils";
 import { ALL_TYPES, defaultConfig, nodeTitle, pathHandles } from "./node-meta";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
 import { ConfigPanel, type StepRef } from "./ConfigPanel";
 import { NodeLibraryModal } from "./NodeLibraryModal";
+import { ReviewPublishModal, type Endpoint } from "./ReviewPublishModal";
 
 export type { ConnMeta };
 
@@ -61,7 +63,7 @@ export function FlowCanvas(props: {
   name: string;
   status: string;
   publishedVersion: number | null;
-  initialGraph: { nodes: FNode[] | { id: string; type: string; position: { x: number; y: number }; data: { config?: unknown; label?: unknown; lastTest?: unknown } }[]; edges: Array<{ id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }> };
+  initialGraph: { nodes: FNode[] | { id: string; type: string; position: { x: number; y: number }; data: { config?: unknown; label?: unknown; lastTest?: unknown } }[]; edges: Array<{ id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>; metrics?: MetricSpecT[] };
   connections: ConnMeta[];
 }) {
   return (
@@ -106,6 +108,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [publishing, setPublishing] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [library, setLibrary] = useState<{ open: boolean; ctx: LibraryCtx }>({ open: false, ctx: null });
+  const [metrics, setMetrics] = useState<MetricSpecT[]>(initialGraph.metrics ?? []);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const past = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
   const future = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
@@ -120,8 +124,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     return {
       nodes: nodes.map((n) => ({ id: n.id, type: String(n.type), position: n.position, data: { config: n.data.config, label: n.data.label, lastTest: n.data.lastTest ?? undefined } })),
       edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null })),
+      metrics,
     };
-  }, [nodes, edges]);
+  }, [nodes, edges, metrics]);
 
   // Autosave the draft (debounced). Never affects the published version.
   const firstRun = useRef(true);
@@ -313,6 +318,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     if (r.ok) {
       setPublishState({ status: "published", version: r.version });
       if (r.warning) setPublishWarning(r.warning);
+      else setReviewOpen(false);
     } else {
       setPublishError(r.error);
     }
@@ -400,6 +406,22 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   // Managed top-to-bottom layout + per-node status + terminal add points (no free placement).
   const layout = useMemo(() => computeVerticalLayout(nodes, edges), [nodes, edges]);
   const terminals = useMemo(() => terminalIds(nodes, edges), [nodes, edges]);
+
+  // Endpoints (terminals, excluding legacy Output nodes) each become a dashboard
+  // metric at Review & publish — a flow with un-recombined Paths has several.
+  const endpoints = useMemo<Endpoint[]>(
+    () => nodes.filter((n) => terminals.has(n.id) && n.type !== "output").map((n) => ({ nodeId: n.id, title: nodeTitle(String(n.type) as NodeType, n.data) })),
+    [nodes, terminals],
+  );
+  const openReview = useCallback(() => {
+    setMetrics((prev) => {
+      const byId = new Map(prev.map((m) => [m.nodeId, m]));
+      return endpoints.map((ep) => byId.get(ep.nodeId) ?? { nodeId: ep.nodeId, enabled: true, name: ep.title, viz: "number", format: "number", currency: "USD", precision: 0, target: null });
+    });
+    setPublishError(null);
+    setPublishWarning(null);
+    setReviewOpen(true);
+  }, [endpoints]);
   const inDegreeById = useMemo(() => {
     const m = new Map<string, number>();
     for (const n of nodes) m.set(n.id, 0);
@@ -466,8 +488,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           {publishState.status === "published" && (
             <span className="rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800">Published v{publishState.version}</span>
           )}
-          <button onClick={publish} disabled={publishing} className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
-            {publishing ? "Publishing…" : "Publish"}
+          <button onClick={openReview} disabled={publishing} className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
+            {publishState.status === "published" ? "Edit output" : "Review & publish"}
           </button>
         </div>
       </header>
@@ -545,7 +567,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             onContinue={() => {
               const out = edges.find((e) => e.source === selected.id);
               if (out) setSelectedId(out.target);
-              else publish();
+              else openReview();
             }}
           />
         )}
@@ -558,6 +580,20 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             createNode(type, library.ctx);
             setLibrary({ open: false, ctx: null });
           }}
+        />
+      )}
+
+      {reviewOpen && (
+        <ReviewPublishModal
+          endpoints={endpoints}
+          metrics={metrics}
+          publishing={publishing}
+          error={publishError}
+          warning={publishWarning}
+          publishedVersion={publishState.version}
+          onChange={setMetrics}
+          onPublish={publish}
+          onClose={() => setReviewOpen(false)}
         />
       )}
     </div>

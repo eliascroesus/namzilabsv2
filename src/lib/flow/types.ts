@@ -314,9 +314,30 @@ export const FlowEdgeSchema = z.object({
 });
 export type FlowEdge = z.infer<typeof FlowEdgeSchema>;
 
+/**
+ * The presentation of one published metric, chosen at "Review & publish". Each entry
+ * targets a flow endpoint (a node with no next step) — so a flow with un-recombined
+ * Paths branches can publish several metrics. Replaces the Output node for new flows;
+ * old flows keep their Output nodes and simply have no metrics[] entries.
+ */
+export const MetricSpecSchema = z.object({
+  nodeId: z.string().min(1),
+  enabled: z.boolean().default(true),
+  name: z.string().default("Untitled metric"),
+  viz: z.enum(VIZ_TYPES).default("number"),
+  format: z.enum(["number", "percent", "currency"]).default("number"),
+  unit: z.string().optional(),
+  currency: z.string().default("USD"),
+  precision: z.number().int().min(0).max(6).default(0),
+  target: z.number().nullable().default(null),
+});
+export type MetricSpec = z.infer<typeof MetricSpecSchema>;
+
 export const FlowGraphSchema = z.object({
   nodes: z.array(FlowNodeSchema).default([]),
   edges: z.array(FlowEdgeSchema).default([]),
+  /** Per-endpoint published metrics (Review & publish). Empty for Output-node flows. */
+  metrics: z.array(MetricSpecSchema).default([]),
 });
 export type FlowGraph = z.infer<typeof FlowGraphSchema>;
 
