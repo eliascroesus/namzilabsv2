@@ -6,7 +6,7 @@ import type { NodeType } from "@/lib/flow/types";
 import type { FNode, NodeData } from "./graph-utils";
 import { NODE_META, STATUS_META, nodeTitle, pathHandles, resultLabel, summary, type NodeStatus } from "./node-meta";
 import { NodeGlyph } from "./icons";
-import { SourceBadge } from "./MappingChip";
+import { SourceBadge } from "./controls";
 
 // Edges are auto-managed (never dragged), so the connection handles are visually
 // hidden — they only anchor the edge geometry, they are not interactive affordances.
