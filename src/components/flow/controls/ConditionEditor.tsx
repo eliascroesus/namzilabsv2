@@ -31,18 +31,19 @@ const DATE_PRESETS: Array<{ value: string; label: string }> = [
 ];
 
 /** Convert a stored rule's value side into the ValueInput model (looking up display info). */
-function ruleToValue(rule: Rule, group: DataGroup): ValueModel {
+function ruleToValue(rule: Rule, groups: DataGroup[]): ValueModel {
   if (rule.valueKind === "field" && rule.valueField) {
-    const f = group.fields.find((x) => x.path === rule.valueField);
+    const owner = groups.find((g) => g.fields.some((x) => x.path === rule.valueField));
+    const f = owner?.fields.find((x) => x.path === rule.valueField);
     return {
       mode: "field",
       text: "",
       field: {
-        producerStepId: group.stepId,
+        producerStepId: owner?.stepId ?? "",
         fieldPath: rule.valueField,
         label: f?.label ?? humanizeKey(rule.valueField),
-        source: group.source,
-        stepNo: group.stepNo,
+        source: owner?.source,
+        stepNo: owner?.stepNo,
         sample: f?.sample,
       },
     };
@@ -61,31 +62,31 @@ function valueToRule(v: ValueModel): Partial<Rule> {
  * empty — the operator only sees comparisons appropriate to the chosen field's type, and
  * the value is a Fixed value or a mapped field. Rules combine with All (AND) or Any (OR).
  * An optional advanced Date-range section (kept collapsed) maps to the engine's dateRange.
- * `inputGroup` is the dataset flowing into this step — the only data conditions test against.
+ * `groups` is the data flowing into this step — the only data conditions test against.
  */
 export function ConditionEditor({
   value,
   onChange,
-  inputGroup,
+  groups,
   showDateRange = false,
   emptyHint = "No conditions yet — every record continues. Add one to narrow it down.",
 }: {
   value: FilterConfig;
   onChange: (v: FilterConfig) => void;
-  inputGroup: DataGroup;
+  groups: DataGroup[];
   showDateRange?: boolean;
   emptyHint?: string;
 }) {
   const [advOpen, setAdvOpen] = useState<boolean>(!!value.dateRange?.enabled);
   const rules = value.rules;
-  const groups = [inputGroup];
 
   const setRules = (next: Rule[]) => onChange({ ...value, rules: next });
   const updateRule = (i: number, patch: Partial<Rule>) => setRules(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const removeRule = (i: number) => setRules(rules.filter((_, idx) => idx !== i));
   const addRule = () => setRules([...rules, { field: "", op: "equals", value: "", value2: undefined, valueKind: "fixed", valueField: undefined }]);
 
-  const fieldMeta = (path: string) => inputGroup.fields.find((f) => f.path === path);
+  const allFields = groups.flatMap((g) => g.fields);
+  const fieldMeta = (path: string) => allFields.find((f) => f.path === path);
   const typeOfRuleField = (rule: Rule) => fieldMeta(rule.field)?.type;
 
   const pickField = (i: number, ref: FieldRef) => {
@@ -118,7 +119,7 @@ export function ConditionEditor({
       },
     });
 
-  const dateFieldOptions = inputGroup.fields
+  const dateFieldOptions = allFields
     .filter((f) => f.type === "date")
     .map((f) => ({ value: f.path, label: f.label }));
 
@@ -176,7 +177,7 @@ export function ConditionEditor({
                   <div>
                     <label className={LABEL}>{isBetween ? "From" : "Value"}</label>
                     <ValueInput
-                      value={ruleToValue(rule, inputGroup)}
+                      value={ruleToValue(rule, groups)}
                       onChange={(v) => updateRule(i, valueToRule(v))}
                       groups={groups}
                       fieldType={ftype}
