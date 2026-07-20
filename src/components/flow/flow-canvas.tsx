@@ -110,6 +110,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [library, setLibrary] = useState<{ open: boolean; ctx: LibraryCtx }>({ open: false, ctx: null });
   const [metrics, setMetrics] = useState<MetricSpecT[]>(initialGraph.metrics ?? []);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{ message: string; run: () => void } | null>(null);
 
   const past = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
   const future = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
@@ -328,14 +329,49 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [commit, edges, setNodes, setEdges],
   );
 
-  // Delete key: reconnect any in-between step's neighbours so the flow stays linear.
-  const onNodesDelete = useCallback(
-    (deleted: FNode[]) => {
-      const bridges = deleted.map((n) => bridgeEdgeFor(n.id, edges)).filter((b): b is Edge => b !== null);
-      if (bridges.length) setEdges((es) => [...es, ...bridges]);
-      setSelectedId((cur) => (cur && deleted.some((n) => n.id === cur) ? null : cur));
+  // Delete from a card's kebab. A plain step reconnects its neighbours (stays linear);
+  // a Paths hub or a branch takes the whole subtree with it, behind a confirmation, so
+  // the split can never leave orphaned steps that reflow to the top.
+  const requestDelete = useCallback(
+    (id: string) => {
+      const node = nodes.find((n) => n.id === id);
+      if (!node) return;
+
+      if (node.type === "paths") {
+        const sub = descendantsOf(id, edges);
+        const count = sub.size;
+        setPendingDelete({
+          message: `This deletes “Split into paths” and all ${count} step${count === 1 ? "" : "s"} in its branches.`,
+          run: () => {
+            commit();
+            const remove = new Set<string>([id, ...sub]);
+            setNodes((ns) => ns.filter((n) => !remove.has(n.id)));
+            setEdges((es) => es.filter((e) => !remove.has(e.source) && !remove.has(e.target)));
+            setSelectedId(null);
+          },
+        });
+        return;
+      }
+
+      const inEdge = edges.find((e) => e.target === id);
+      const parent = inEdge ? nodes.find((n) => n.id === inEdge.source) : undefined;
+      if (parent?.type === "paths" && inEdge?.sourceHandle) {
+        const sub = descendantsOf(id, edges);
+        const count = sub.size + 1;
+        const handle = inEdge.sourceHandle;
+        setPendingDelete({
+          message: `This deletes this branch and its ${count} step${count === 1 ? "" : "s"}.`,
+          run: () => {
+            removeBranch(parent.id, handle);
+            setSelectedId(null);
+          },
+        });
+        return;
+      }
+
+      deleteAndReconnect(id);
     },
-    [edges, setEdges],
+    [nodes, edges, commit, setNodes, setEdges, removeBranch, deleteAndReconnect],
   );
 
   const duplicateNode = useCallback(
@@ -484,10 +520,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         return {
           ...n,
           position: layout.get(n.id) ?? n.position,
-          data: { ...n.data, stepNo: stepNoById.get(n.id), status, issue, isTerminal: terminals.has(n.id), freeHandles, onAddFrom: addFromNode },
+          data: { ...n.data, stepNo: stepNoById.get(n.id), status, issue, isTerminal: terminals.has(n.id), freeHandles, onAddFrom: addFromNode, onDeleteNode: requestDelete, onDuplicateNode: duplicateNode },
         };
       }),
-    [nodes, layout, terminals, stepNoById, inDegreeById, usedHandles, addFromNode, testingId],
+    [nodes, layout, terminals, stepNoById, inDegreeById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode],
   );
   // Branch (Paths) edges are labeled with their path, so the fan-out reads as lanes.
   const pathLabels = useMemo(() => {
@@ -559,7 +595,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             edges={displayEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onNodesDelete={onNodesDelete}
             onNodeClick={(_, n) => setSelectedId(n.id)}
             onPaneClick={() => setSelectedId(null)}
             nodeTypes={nodeTypes}
@@ -568,7 +603,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             nodesDraggable={false}
             nodesConnectable={false}
             fitView
-            deleteKeyCode={["Backspace", "Delete"]}
+            deleteKeyCode={null}
           >
             <Background gap={16} />
           </ReactFlow>
@@ -597,15 +632,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             inputs={selectedInputs}
             inputCount={edges.filter((e) => e.target === selected.id).length}
             testing={testingId === selected.id}
-            canReconnect={bridgeEdgeFor(selected.id, edges) !== null}
             numberCandidates={candidates.number}
             datasetCandidates={candidates.dataset}
             onChange={(patch) => updateConfig(selected.id, patch)}
             onRename={(v) => renameNode(selected.id, v)}
             onTest={() => testNode(selected.id)}
-            onDelete={() => deleteNode(selected.id)}
-            onDeleteReconnect={() => deleteAndReconnect(selected.id)}
-            onDuplicate={() => duplicateNode(selected.id)}
             onAddNext={() => addFromNode(selected.id)}
             onSetInput={(handle, sourceId) => setFormulaInput(selected.id, handle, sourceId)}
             onSetSources={(ids) => setCombineSources(selected.id, ids)}
@@ -637,6 +668,29 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           onPublish={publish}
           onClose={() => setReviewOpen(false)}
         />
+      )}
+
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setPendingDelete(null)}>
+          <div className="w-full max-w-sm rounded-lg border border-neutral-200 bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-neutral-900">Delete this step?</p>
+            <p className="mt-1.5 text-sm text-neutral-600">{pendingDelete.message}</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setPendingDelete(null)} className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  pendingDelete.run();
+                  setPendingDelete(null);
+                }}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

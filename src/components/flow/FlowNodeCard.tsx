@@ -1,20 +1,76 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { NodeType } from "@/lib/flow/types";
 import type { FNode, NodeData } from "./graph-utils";
-import { NODE_META, STATUS_META, nodeTitle, pathHandles, resultLabel, summary, type NodeStatus } from "./node-meta";
+import { STATUS_META, nodeTitle, pathHandles, resultLabel, type NodeStatus } from "./node-meta";
 import { NodeGlyph } from "./icons";
 import { SourceBadge } from "./controls";
+import { Popover } from "./controls/Popover";
 
 // Edges are auto-managed (never dragged), so the connection handles are visually
 // hidden — they only anchor the edge geometry, they are not interactive affordances.
 const HIDDEN_HANDLE: CSSProperties = { opacity: 0, pointerEvents: "none", width: 6, height: 6, minWidth: 0, minHeight: 0, border: "none" };
 
+/** The kebab (⋮) menu on each card: Duplicate + Delete. Replaces the panel's Step options. */
+function NodeMenu({ id, data }: { id: string; data: NodeData }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover
+      open={open}
+      setOpen={setOpen}
+      width={150}
+      align="right"
+      anchor={
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(!open);
+          }}
+          className="nodrag rounded p-0.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+          title="Step actions"
+          aria-label="Step actions"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+            <circle cx="8" cy="3" r="1.4" />
+            <circle cx="8" cy="8" r="1.4" />
+            <circle cx="8" cy="13" r="1.4" />
+          </svg>
+        </button>
+      }
+    >
+      <div className="nodrag p-1 text-sm">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(false);
+            data.onDuplicateNode?.(id);
+          }}
+          className="block w-full rounded px-2 py-1.5 text-left hover:bg-neutral-100"
+        >
+          Duplicate
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(false);
+            data.onDeleteNode?.(id);
+          }}
+          className="block w-full rounded px-2 py-1.5 text-left text-red-600 hover:bg-red-50"
+        >
+          Delete
+        </button>
+      </div>
+    </Popover>
+  );
+}
+
 export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const t = (type as NodeType) ?? "app";
-  const meta = NODE_META[t];
   const status = (data.status ?? "setup") as NodeStatus;
   const sm = STATUS_META[status];
   const test = data.lastTest;
@@ -23,9 +79,18 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const border = selected ? "border-blue-400 ring-2 ring-blue-500" : sm.border;
   const freeHandles = (data.freeHandles as Array<{ id: string; label: string }> | undefined) ?? [];
 
+  // The single body line: the plain output when ready, a hint when setup, else nothing.
+  const bodyLine =
+    status === "error" && test?.status === "error"
+      ? { text: test.error, cls: "text-red-600" }
+      : status === "setup" && data.issue
+        ? { text: data.issue, cls: "text-neutral-400" }
+        : status === "ready" && test?.status === "ok"
+          ? { text: resultLabel(t, test), cls: "text-neutral-500" }
+          : null;
+
   return (
-    <div className={`w-64 rounded-lg border bg-white shadow-sm ${border}`}>
-      {/* input handle(s) on top — hidden; edges are auto-managed, never dragged */}
+    <div className={`w-64 rounded-xl border bg-white shadow-sm ${border}`}>
       {isCompare ? (
         <>
           <Handle type="target" id="a" position={Position.Top} style={{ ...HIDDEN_HANDLE, left: "35%" }} />
@@ -35,38 +100,21 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE} />
       ) : null}
 
-      <div className="flex items-center justify-between border-b border-neutral-100 px-3 py-2">
-        <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-neutral-700">
-          <span className="shrink-0 text-neutral-500">
-            {t === "app" ? <SourceBadge source={String(data.config.source ?? "")} size={16} /> : <NodeGlyph type={t} className="h-4 w-4" />}
-          </span>
-          <span className="truncate">{data.stepNo != null ? `${data.stepNo}. ` : ""}{nodeTitle(t, data)}</span>
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <span className="shrink-0">
+          {t === "app" ? <SourceBadge source={String(data.config.source ?? "")} size={22} /> : <NodeGlyph type={t} className="h-5 w-5 text-neutral-500" />}
         </span>
-        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-neutral-800">
+            {data.stepNo != null ? `${data.stepNo}. ` : ""}
+            {nodeTitle(t, data)}
+          </span>
+          {bodyLine && <span className={`block truncate text-xs ${bodyLine.cls}`}>{bodyLine.text}</span>}
+        </span>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>
+        <NodeMenu id={id} data={data} />
       </div>
 
-      <div className="px-3 py-2">
-        <p className="text-[11px] uppercase tracking-wide text-neutral-400">{meta.label}</p>
-        <p className="truncate text-sm text-neutral-700">{summary(t, data)}</p>
-
-        {isPaths && (
-          <div className="mt-1.5 space-y-1 rounded-md border border-pink-100 bg-pink-50/50 p-1.5">
-            {((data.config.paths as Array<{ id: string; label: string }>) ?? []).map((p) => (
-              <div key={p.id} className="truncate rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-neutral-700 shadow-sm">↳ {p.label}</div>
-            ))}
-            {data.config.fallbackId != null && (
-              <div className="truncate px-1.5 py-0.5 text-[10px] text-neutral-500">↳ {String(data.config.fallbackLabel ?? "Fallback")} · everything else</div>
-            )}
-          </div>
-        )}
-
-        {/* The problem lives inside the affected step (no separate rail). */}
-        {status === "error" && test?.status === "error" && <p className="mt-1 rounded bg-red-50 px-1.5 py-1 text-xs text-red-700">{test.error}</p>}
-        {status === "setup" && data.issue && <p className="mt-1 rounded bg-neutral-50 px-1.5 py-1 text-xs text-neutral-600">{data.issue}</p>}
-        {status === "ready" && test?.status === "ok" && <p className="mt-1 text-xs text-neutral-500">{resultLabel(t, test)}</p>}
-      </div>
-
-      {/* output handle(s) on bottom — hidden */}
       {isPaths ? (
         pathHandles(data).map((h, i, arr) => (
           <Handle key={h.id} type="source" id={h.id} position={Position.Bottom} title={h.label} style={{ ...HIDDEN_HANDLE, left: `${((i + 1) / (arr.length + 1)) * 100}%` }} />
@@ -89,7 +137,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         </button>
       )}
 
-      {/* For a branch step, one "Add next step" per path that has no next step yet. */}
+      {/* For a branch hub, one "Add next step" per path that has no next step yet. */}
       {isPaths && freeHandles.length > 0 && (
         <div className="nodrag absolute left-1/2 top-full z-10 mt-3 flex -translate-x-1/2 flex-col items-center gap-1">
           {freeHandles.map((h) => (

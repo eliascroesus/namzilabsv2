@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { DataBrowser } from "./DataBrowser";
 import { OperatorSelect } from "./OperatorSelect";
 import { Select } from "./Select";
@@ -15,20 +14,6 @@ type Rule = FilterConfig["rules"][number];
 const LABEL = "mb-0.5 block text-[11px] font-medium text-neutral-500";
 const SELECT_BTN =
   "flex w-full items-center justify-between gap-2 rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-left text-sm hover:border-neutral-400 focus:outline-none";
-
-/** Preset windows for the advanced Date-range section (match the engine's timeWindow). */
-const DATE_PRESETS: Array<{ value: string; label: string }> = [
-  { value: "today", label: "Today" },
-  { value: "yesterday", label: "Yesterday" },
-  { value: "this_week", label: "This week" },
-  { value: "last_week", label: "Last week" },
-  { value: "this_month", label: "This month" },
-  { value: "last_month", label: "Last month" },
-  { value: "last_7_days", label: "Last 7 days" },
-  { value: "last_30_days", label: "Last 30 days" },
-  { value: "last_90_days", label: "Last 90 days" },
-  { value: "last_365_days", label: "Last 365 days" },
-];
 
 /** Convert a stored rule's value side into the ValueInput model (looking up display info). */
 function ruleToValue(rule: Rule, groups: DataGroup[]): ValueModel {
@@ -61,23 +46,19 @@ function valueToRule(v: ValueModel): Partial<Rule> {
  * The condition builder used by Filter and by each Path's "Path conditions" step. Starts
  * empty — the operator only sees comparisons appropriate to the chosen field's type, and
  * the value is a Fixed value or a mapped field. Rules combine with All (AND) or Any (OR).
- * An optional advanced Date-range section (kept collapsed) maps to the engine's dateRange.
  * `groups` is the data flowing into this step — the only data conditions test against.
  */
 export function ConditionEditor({
   value,
   onChange,
   groups,
-  showDateRange = false,
   emptyHint = "No conditions yet — every record continues. Add one to narrow it down.",
 }: {
   value: FilterConfig;
   onChange: (v: FilterConfig) => void;
   groups: DataGroup[];
-  showDateRange?: boolean;
   emptyHint?: string;
 }) {
-  const [advOpen, setAdvOpen] = useState<boolean>(!!value.dateRange?.enabled);
   const rules = value.rules;
 
   const setRules = (next: Rule[]) => onChange({ ...value, rules: next });
@@ -102,26 +83,6 @@ export function ConditionEditor({
       valueField: undefined,
     });
   };
-
-  const dr = value.dateRange;
-  const setDr = (patch: Partial<NonNullable<FilterConfig["dateRange"]>>) =>
-    onChange({
-      ...value,
-      dateRange: {
-        enabled: dr?.enabled ?? false,
-        dateField: dr?.dateField ?? "occurredAt",
-        mode: dr?.mode ?? "preset",
-        preset: dr?.preset ?? "last_30_days",
-        days: dr?.days ?? 30,
-        from: dr?.from,
-        to: dr?.to,
-        ...patch,
-      },
-    });
-
-  const dateFieldOptions = allFields
-    .filter((f) => f.type === "date")
-    .map((f) => ({ value: f.path, label: f.label }));
 
   return (
     <div className="space-y-3">
@@ -213,91 +174,6 @@ export function ConditionEditor({
       >
         <span className="text-sm leading-none">+</span> Add condition
       </button>
-
-      {showDateRange && (
-        <div className="rounded-lg border border-neutral-200">
-          <button
-            type="button"
-            onClick={() => setAdvOpen((o) => !o)}
-            className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-neutral-600 hover:bg-neutral-50"
-          >
-            <span>Date range {dr?.enabled ? "· on" : "· off"}</span>
-            <span className="text-neutral-400">{advOpen ? "▴" : "▾"}</span>
-          </button>
-          {advOpen && (
-            <div className="space-y-2 border-t border-neutral-100 p-3">
-              <label className="flex items-center gap-2 text-xs text-neutral-700">
-                <input type="checkbox" checked={!!dr?.enabled} onChange={(e) => setDr({ enabled: e.target.checked })} />
-                Only include records inside a date window
-              </label>
-              {dr?.enabled && (
-                <div className="grid grid-cols-1 gap-2">
-                  <div>
-                    <label className={LABEL}>Date field</label>
-                    <Select
-                      value={dr.dateField}
-                      options={dateFieldOptions.length ? dateFieldOptions : [{ value: "occurredAt", label: "When it happened" }]}
-                      onChange={(v) => setDr({ dateField: v })}
-                    />
-                  </div>
-                  <div>
-                    <label className={LABEL}>Window</label>
-                    <Select
-                      value={dr.mode}
-                      options={[
-                        { value: "preset", label: "A preset range" },
-                        { value: "rolling", label: "Last N days" },
-                        { value: "between", label: "Between two dates" },
-                      ]}
-                      onChange={(v) => setDr({ mode: v as "preset" | "rolling" | "between" })}
-                    />
-                  </div>
-                  {dr.mode === "preset" && (
-                    <div>
-                      <label className={LABEL}>Range</label>
-                      <Select value={dr.preset} options={DATE_PRESETS} onChange={(v) => setDr({ preset: v })} searchable />
-                    </div>
-                  )}
-                  {dr.mode === "rolling" && (
-                    <div>
-                      <label className={LABEL}>Days</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={dr.days}
-                        onChange={(e) => setDr({ days: Math.max(1, Number(e.target.value) || 1) })}
-                        className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm focus:border-neutral-400 focus:outline-none"
-                      />
-                    </div>
-                  )}
-                  {dr.mode === "between" && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className={LABEL}>From</label>
-                        <input
-                          type="date"
-                          value={dr.from ?? ""}
-                          onChange={(e) => setDr({ from: e.target.value })}
-                          className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm focus:border-neutral-400 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className={LABEL}>To</label>
-                        <input
-                          type="date"
-                          value={dr.to ?? ""}
-                          onChange={(e) => setDr({ to: e.target.value })}
-                          className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm focus:border-neutral-400 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

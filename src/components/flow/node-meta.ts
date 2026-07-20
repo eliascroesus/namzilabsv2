@@ -168,37 +168,36 @@ export function summary(type: string, data: NodeData): string {
   if (type === "combine") return `${String(c.mode ?? "stack")} on ${String(c.identityField ?? "subject")}`;
   if (type === "group") return String(c.mode) === "field" ? `by ${String(c.field ?? "source")}` : `${((c.categories as unknown[]) ?? []).length} categories`;
   if (type === "formatter") return `${String(c.op ?? "round")} · ${String(c.field ?? "value")}`;
-  if (type === "paths") return `${((c.paths as unknown[]) ?? []).length} branches`;
+  if (type === "paths") return ""; // the hub reads simply as "Split into paths" (its label)
   return "";
 }
 
-/** Node-specific wording for a successful test result. */
+/** Minimal wording for a successful test result — just the number + a short verb. */
 export function resultLabel(type: string, test: { recordsIn: number; recordsOut: number; tile?: unknown }): string {
-  const { recordsIn, recordsOut, tile } = test;
+  const { recordsOut, tile } = test;
   const val = tile != null ? String((tile as { value?: unknown }).value ?? "—") : String(recordsOut);
   switch (type) {
     case "app":
-      return `${recordsOut} records loaded`;
+      return `${recordsOut} loaded`;
     case "filter":
-      return `${recordsOut} of ${recordsIn} records matched`;
+      return `${recordsOut} passed`;
     case "time":
-      return `${recordsOut} of ${recordsIn} within window`;
+      return `${recordsOut} kept`;
     case "formatter":
-      return `${recordsOut} records formatted`;
+      return `${recordsOut} cleaned`;
     case "combine":
-      return `${recordsOut} records combined`;
+      return `${recordsOut} combined`;
     case "paths":
-      return `${recordsOut} records routed`;
+      return `${recordsOut} routed`;
     case "group":
       return `${recordsOut} groups`;
     case "aggregate":
     case "formula":
     case "calculate":
-      return `Result: ${val}`;
     case "output":
-      return `Dashboard value: ${val}`;
+      return `${val}`;
     default:
-      return `${recordsOut} of ${recordsIn} records`;
+      return `${recordsOut}`;
   }
 }
 

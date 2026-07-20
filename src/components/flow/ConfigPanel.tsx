@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AGGREGATIONS,
   TIME_UNITS,
@@ -34,6 +34,41 @@ const AGG_LABELS: Record<string, string> = { count: "Count of records", count_di
 const FORMULA_LABELS: Record<string, string> = { add: "Add", subtract: "Subtract", multiply: "Multiply", divide: "Divide", percentage: "Percentage", percent_change: "Percent change", difference: "Difference", ratio: "Ratio", average: "Average" };
 const VIZ_LABELS: Record<string, string> = { number: "Single number", line: "Line chart", bar: "Bar chart", category: "Category breakdown", table: "Table", progress: "Progress bar", funnel: "Funnel" };
 const title = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+
+/**
+ * A numeric input backed by local text state, so the field can be cleared and retyped.
+ * Empty input never snaps back to a forced value (the old `Number(x) || 1` bug), and
+ * `min` is only applied to committed numbers — not while typing.
+ */
+function NumberField({ value, onChange, min, allowNull = false, placeholder }: { value: number | null | undefined; onChange: (n: number | null) => void; min?: number; allowNull?: boolean; placeholder?: string }) {
+  const [text, setText] = useState(value == null ? "" : String(value));
+  useEffect(() => {
+    setText(value == null ? "" : String(value));
+  }, [value]);
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={text}
+      placeholder={placeholder}
+      onChange={(e) => {
+        const t = e.target.value;
+        if (!/^-?\d*\.?\d*$/.test(t)) return;
+        setText(t);
+        if (t === "" || t === "-" || t === ".") {
+          if (allowNull) onChange(null);
+          return;
+        }
+        const n = Number(t);
+        if (Number.isFinite(n)) onChange(min != null ? Math.max(min, n) : n);
+      }}
+      onBlur={() => {
+        if (text.trim() === "" && !allowNull) setText(value == null ? "" : String(value));
+      }}
+      className={INPUT}
+    />
+  );
+}
 
 /** Formatter operations grouped by user intent, so we show only relevant controls. */
 const FORMATTER_INTENTS: Array<{ id: string; label: string; ops: string[] }> = [
@@ -76,15 +111,11 @@ export function ConfigPanel({
   inputs,
   inputCount,
   testing,
-  canReconnect,
   numberCandidates,
   datasetCandidates,
   onChange,
   onRename,
   onTest,
-  onDelete,
-  onDeleteReconnect,
-  onDuplicate,
   onAddNext,
   onSetInput,
   onSetSources,
@@ -98,15 +129,11 @@ export function ConfigPanel({
   inputs: InputDescriptor[];
   inputCount: number;
   testing: boolean;
-  canReconnect: boolean;
   numberCandidates: StepRef[];
   datasetCandidates: StepRef[];
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
   onTest: () => void;
-  onDelete: () => void;
-  onDeleteReconnect: () => void;
-  onDuplicate: () => void;
   onAddNext: () => void;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
@@ -149,41 +176,32 @@ export function ConfigPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-        {err && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-full flex-col p-4">
+          {err && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>}
 
-        <NodeConfig
-          type={type}
-          cfg={cfg}
-          connections={connections}
-          groups={groups}
-          inputs={inputs}
-          numberCandidates={numberCandidates}
-          datasetCandidates={datasetCandidates}
-          onChange={onChange}
-          onSetInput={onSetInput}
-          onSetSources={onSetSources}
-          onAddBranch={onAddBranch}
-          onRemoveBranch={onRemoveBranch}
-        />
+          {/* The main configuration — the focus of the step — sits at the top. */}
+          <NodeConfig
+            type={type}
+            cfg={cfg}
+            connections={connections}
+            groups={groups}
+            inputs={inputs}
+            numberCandidates={numberCandidates}
+            datasetCandidates={datasetCandidates}
+            onChange={onChange}
+            onSetInput={onSetInput}
+            onSetSources={onSetSources}
+            onAddBranch={onAddBranch}
+            onRemoveBranch={onRemoveBranch}
+          />
 
-        {node.data.lastTest?.status === "ok" && <TestResults node={node} onChange={onChange} />}
-
-        <details className="border-t border-neutral-100 pt-3">
-          <summary className="cursor-pointer text-xs font-medium text-neutral-500">Step options</summary>
-          <div className="mt-2 flex flex-wrap gap-2 text-sm">
-            <button onClick={onDuplicate} className="rounded border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">
-              Duplicate
-            </button>
-            <button
-              onClick={canReconnect ? onDeleteReconnect : onDelete}
-              className="rounded border border-red-300 px-3 py-1.5 text-red-700 hover:bg-red-50"
-              title={canReconnect ? "Remove this step and reconnect the steps around it" : "Delete this step"}
-            >
-              Delete step
-            </button>
+          {/* Extra options + the test result sink to the bottom, just above the button. */}
+          <div className="mt-auto space-y-4 pt-6">
+            <NodeExtras type={type} cfg={cfg} groups={groups} onChange={onChange} />
+            {node.data.lastTest?.status === "ok" && <TestResults node={node} onChange={onChange} />}
           </div>
-        </details>
+        </div>
       </div>
 
       <div className="border-t border-neutral-200 p-3">
@@ -285,7 +303,7 @@ function NodeConfig({
     return (
       <div className="space-y-4">
         <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Only continue if…</p>
-        <ConditionEditor value={fc} groups={groups} showDateRange onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules, dateRange: v.dateRange })} />
+        <ConditionEditor value={fc} groups={groups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />
       </div>
     );
   }
@@ -312,7 +330,7 @@ function NodeConfig({
         )}
         {mode === "rolling" && (
           <Field label="Last N days">
-            <input type="number" value={Number(cfg.days ?? 30)} onChange={(e) => onChange({ days: Number(e.target.value) })} className={INPUT} />
+            <NumberField value={Number(cfg.days ?? 30)} min={1} onChange={(n) => onChange({ days: n ?? 1 })} />
           </Field>
         )}
         {mode === "between" && (
@@ -486,7 +504,7 @@ function NodeConfig({
             <Select value={op} width={W} options={intent.ops.map((o) => ({ value: o, label: FORMATTER_OP_LABELS[o] ?? title(o) }))} onChange={(v) => onChange({ op: v })} />
           </Field>
         )}
-        {op === "round" && <Field label="Decimals"><input type="number" value={Number(cfg.decimals ?? 2)} onChange={(e) => onChange({ decimals: Number(e.target.value) })} className={INPUT} /></Field>}
+        {op === "round" && <Field label="Decimals"><NumberField value={Number(cfg.decimals ?? 2)} min={0} onChange={(n) => onChange({ decimals: n ?? 0 })} /></Field>}
         {op === "replace" && (
           <>
             <Field label="Find"><input value={(cfg.find as string) ?? ""} onChange={(e) => onChange({ find: e.target.value })} className={INPUT} /></Field>
@@ -494,7 +512,7 @@ function NodeConfig({
           </>
         )}
         {op === "default" && <Field label="Value for empty"><ValueInput value={storedToValue(cfg, "defaultValue", groups)} groups={groups} placeholder="fallback value" onChange={(v) => onChange(valueToStored(v, "defaultValue"))} /></Field>}
-        {(op === "multiply" || op === "divide") && <Field label="Factor"><input type="number" value={cfg.factor != null ? Number(cfg.factor) : ""} onChange={(e) => onChange({ factor: e.target.value === "" ? undefined : Number(e.target.value) })} className={INPUT} /></Field>}
+        {(op === "multiply" || op === "divide") && <Field label="Factor"><NumberField value={cfg.factor != null ? Number(cfg.factor) : null} allowNull onChange={(n) => onChange({ factor: n ?? undefined })} /></Field>}
         <Advanced>
           <Field label="Save to field (defaults to same field)">
             <input value={(cfg.outputField as string) ?? ""} onChange={(e) => onChange({ outputField: e.target.value || undefined })} className={INPUT} />
@@ -535,9 +553,9 @@ function NodeConfig({
       <Field label="Format"><Select value={(cfg.format as string) ?? "number"} width={W} options={[{ value: "number", label: "Number" }, { value: "percent", label: "Percentage" }, { value: "currency", label: "Currency" }]} onChange={(v) => onChange({ format: v })} /></Field>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Unit"><input value={(cfg.unit as string) ?? ""} onChange={(e) => onChange({ unit: e.target.value })} className={INPUT} /></Field>
-        <Field label="Decimals"><input type="number" value={Number(cfg.precision ?? 0)} onChange={(e) => onChange({ precision: Number(e.target.value) })} className={INPUT} /></Field>
+        <Field label="Decimals"><NumberField value={Number(cfg.precision ?? 0)} min={0} onChange={(n) => onChange({ precision: n ?? 0 })} /></Field>
       </div>
-      <Field label="Goal / target (optional)"><input type="number" value={cfg.target != null ? Number(cfg.target) : ""} onChange={(e) => onChange({ target: e.target.value === "" ? null : Number(e.target.value) })} className={INPUT} /></Field>
+      <Field label="Goal / target (optional)"><NumberField value={cfg.target != null ? Number(cfg.target) : null} allowNull onChange={(n) => onChange({ target: n })} /></Field>
     </div>
   );
 }
@@ -638,6 +656,66 @@ function CategoryEditor({ cfg, groups, onChange }: { cfg: Record<string, unknown
       ))}
       <button onClick={() => onChange({ categories: [...cats, { label: `Category ${cats.length + 1}`, filters: { combinator: "and", rules: [] } }] })} className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">+ Add category</button>
       <Field label="Fallback label"><input value={(cfg.fallbackLabel as string) ?? "Other"} onChange={(e) => onChange({ fallbackLabel: e.target.value })} className={INPUT} /></Field>
+    </div>
+  );
+}
+
+const DATE_PRESETS: Array<{ value: string; label: string }> = TIME_PRESETS.map((p) => ({ value: p, label: title(p) }));
+
+type DateRange = { enabled?: boolean; dateField?: string; mode?: "preset" | "rolling" | "between"; preset?: string; days?: number; from?: string; to?: string };
+
+/** Node-specific extras that belong at the bottom, out of the main focus. */
+function NodeExtras({ type, cfg, groups, onChange }: { type: NodeType; cfg: Record<string, unknown>; groups: DataGroup[]; onChange: (p: Record<string, unknown>) => void }) {
+  if (type === "filter") return <DateRangeSection cfg={cfg} groups={groups} onChange={onChange} />;
+  return null;
+}
+
+/** Optional "Date range" window for Filter (collapsed by default), maps to engine dateRange. */
+function DateRangeSection({ cfg, groups, onChange }: { cfg: Record<string, unknown>; groups: DataGroup[]; onChange: (p: Record<string, unknown>) => void }) {
+  const dr = (cfg.dateRange as DateRange) ?? {};
+  const [open, setOpen] = useState(!!dr.enabled);
+  const enabled = !!dr.enabled;
+  const mode = dr.mode ?? "preset";
+  const set = (patch: Partial<DateRange>) =>
+    onChange({ dateRange: { enabled, dateField: dr.dateField ?? "occurredAt", mode, preset: dr.preset ?? "last_30_days", days: dr.days ?? 30, from: dr.from, to: dr.to, ...patch } });
+  const dateFields = groups.flatMap((g) => g.fields).filter((f) => f.type === "date").map((f) => ({ value: f.path, label: f.label }));
+  return (
+    <div className="rounded-lg border border-neutral-200">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-neutral-600 hover:bg-neutral-50">
+        <span>Date range {enabled ? "· on" : "· off"}</span>
+        <span className="text-neutral-400">{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <div className="space-y-2 border-t border-neutral-100 p-3">
+          <button type="button" onClick={() => set({ enabled: !enabled })} className="flex items-center gap-2 text-xs text-neutral-700">
+            <span className={`flex h-4 w-4 items-center justify-center rounded border ${enabled ? "border-neutral-800 bg-neutral-800 text-white" : "border-neutral-300"}`}>{enabled ? "✓" : ""}</span>
+            Only include records inside a date window
+          </button>
+          {enabled && (
+            <div className="space-y-2">
+              <Field label="Date field">
+                <Select value={dr.dateField ?? "occurredAt"} width={W} options={dateFields.length ? dateFields : [{ value: "occurredAt", label: "When it happened" }]} onChange={(v) => set({ dateField: v })} />
+              </Field>
+              <Field label="Window">
+                <Select
+                  value={mode}
+                  width={W}
+                  options={[{ value: "preset", label: "A preset range" }, { value: "rolling", label: "Last N days" }, { value: "between", label: "Between two dates" }]}
+                  onChange={(v) => set({ mode: v as DateRange["mode"] })}
+                />
+              </Field>
+              {mode === "preset" && <Field label="Range"><Select value={dr.preset ?? "last_30_days"} width={W} searchable options={DATE_PRESETS} onChange={(v) => set({ preset: v })} /></Field>}
+              {mode === "rolling" && <Field label="Days"><NumberField value={dr.days ?? 30} min={1} onChange={(n) => set({ days: n ?? 1 })} /></Field>}
+              {mode === "between" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="From"><input type="date" value={dr.from ?? ""} onChange={(e) => set({ from: e.target.value })} className={INPUT} /></Field>
+                  <Field label="To"><input type="date" value={dr.to ?? ""} onChange={(e) => set({ to: e.target.value })} className={INPUT} /></Field>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

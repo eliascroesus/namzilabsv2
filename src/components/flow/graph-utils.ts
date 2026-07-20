@@ -18,6 +18,8 @@ export type NodeData = {
   issue?: string;
   freeHandles?: Array<{ id: string; label: string }>;
   onAddFrom?: (sourceNodeId: string, sourceHandle?: string | null) => void;
+  onDeleteNode?: (id: string) => void;
+  onDuplicateNode?: (id: string) => void;
   [k: string]: unknown;
 };
 export type FNode = Node<NodeData>;
