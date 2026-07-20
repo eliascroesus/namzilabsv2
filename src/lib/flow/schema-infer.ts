@@ -58,10 +58,11 @@ export function inferSchema(records: FlowRecord[]): FieldInfo[] {
 
   for (const f of STANDARD_FIELDS) push(f, f);
 
-  // Union of property keys across the sample (bounded).
+  // Union of property keys across the sample (bounded). Internal engine keys (a step's
+  // stamped record-count / pass flag, prefixed "__") are never surfaced as fields.
   const propKeys = new Set<string>();
   for (const r of records.slice(0, 50)) {
-    for (const k of Object.keys(r.properties ?? {})) propKeys.add(k);
+    for (const k of Object.keys(r.properties ?? {})) if (!k.startsWith("__")) propKeys.add(k);
   }
   for (const k of [...propKeys].sort()) push(`properties.${k}`, k);
 

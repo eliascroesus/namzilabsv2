@@ -163,7 +163,7 @@ async function execApp(ctx: EngineCtx, node: FlowNode): Promise<NodeExec> {
     .limit(APP_LOAD_CAP);
 
   const records = rows.map(eventToRecord);
-  return datasetExec("app", records, 0);
+  return datasetExec("app", node.id, records, 0);
 }
 
 // ---------- Filter ----------
@@ -181,7 +181,7 @@ function execFilter(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     });
   }
   const passed = recs.filter((r) => evalRules(r, cfg));
-  return datasetExec("filter", passed, input.records.length);
+  return datasetExec("filter", node.id, passed, input.records.length);
 }
 
 // ---------- Time ----------
@@ -193,7 +193,7 @@ function execTime(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     const t = dateMs(getField(r, cfg.dateField));
     return t != null && t >= start && t <= end;
   });
-  return datasetExec("time", passed, input.records.length);
+  return datasetExec("time", node.id, passed, input.records.length);
 }
 
 // ---------- Formatter ----------
@@ -213,7 +213,7 @@ function execFormatter(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     setField(copy, out, formatValue(getField(r, cfg.field), eff));
     return copy;
   });
-  return datasetExec("formatter", records, input.records.length);
+  return datasetExec("formatter", node.id, records, input.records.length);
 }
 
 // ---------- Combine ----------
@@ -241,7 +241,7 @@ function execCombine(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   } else {
     records = matchJoin(datasets, cfg.identityField, cfg.keep, cfg.sourceWins);
   }
-  return datasetExec("combine", records, totalIn);
+  return datasetExec("combine", node.id, records, totalIn);
 }
 
 // ---------- Paths ----------
@@ -455,15 +455,23 @@ function execOutput(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
 }
 
 // ---------- shared executors helpers ----------
-function datasetExec(nodeType: string, records: FlowRecord[], recordsIn: number): NodeExecOk {
+function datasetExec(nodeType: string, nodeId: string, records: FlowRecord[], recordsIn: number): NodeExecOk {
+  const count = records.length;
+  // Stamp this step's own record-count and pass flag under a per-node key. Records carry
+  // these downstream, so any later step can reference *this* step's "Output number" / bool
+  // "Output" and it resolves correctly no matter how many steps sit in between. Keys are
+  // "__"-prefixed and hidden from the field schema (see schema-infer).
+  const ckey = `__count_${nodeId}`;
+  const pkey = `__passed_${nodeId}`;
+  const stamped = records.map((r) => ({ ...r, properties: { ...r.properties, [ckey]: count, [pkey]: true } }));
   return {
     status: "ok",
     nodeType,
-    shape: { kind: "dataset", records },
+    shape: { kind: "dataset", records: stamped },
     recordsIn,
-    recordsOut: records.length,
-    sample: records.slice(0, 3),
-    outputSchema: inferSchema(records),
+    recordsOut: count,
+    sample: stamped.slice(0, 3),
+    outputSchema: inferSchema(stamped),
   };
 }
 

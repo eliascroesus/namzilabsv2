@@ -101,9 +101,11 @@ describe("buildFieldGroups (variable picker)", () => {
 
   it("shows source fields first and puts canonical fields in a trailing System group", () => {
     const groups = buildFieldGroups({ selectedId: "f1", nodes, edges, stepNoById, titleOf });
-    // First group = the upstream source's custom fields (subject is standard, so excluded here).
+    // First group = the upstream source's custom fields (subject is standard, so excluded
+    // here) plus the step's "Output number" (record count).
     expect(groups[0].from).toBe("app");
-    expect(groups[0].fields.map((f) => f.path)).toEqual(["plan", "properties.seats"]);
+    expect(groups[0].fields.map((f) => f.path)).toEqual(["plan", "properties.seats", "__count_app1"]);
+    expect(groups[0].fields.find((f) => f.path === "__count_app1")?.label).toBe("Output number");
     // Last group = collapsed System fields.
     const last = groups[groups.length - 1];
     expect(last.system).toBe(true);
@@ -155,6 +157,22 @@ describe("buildFieldGroups — nearest-app example resolution + provenance", () 
     // Every upstream step is now a group (in flow order), so the field is attributed to
     // the step that first introduced it — the app (step 1) — not the pass-through Filter.
     expect(prov.stepNo).toBe(1);
+  });
+
+  it("a filter step exposes only its Output + Output number, not columns", () => {
+    const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
+    const filterGroup = groups.find((g) => g.stepNo === 2);
+    expect(filterGroup?.fields.map((f) => f.label)).toEqual(["Output", "Output number"]);
+    expect(filterGroup?.fields.map((f) => f.path)).toEqual(["__passed_fN", "__count_fN"]);
+    expect(filterGroup?.fields.find((f) => f.label === "Output number")?.example).toBe(1); // recordsOut
+    expect(filterGroup?.fields.find((f) => f.label === "Output")?.type).toBe("boolean");
+  });
+
+  it("a data step exposes its columns plus an Output number", () => {
+    const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
+    const appGroup = groups.find((g) => g.stepNo === 1);
+    expect(appGroup?.fields.map((f) => f.label)).toContain("Output number");
+    expect(appGroup?.fields.some((f) => f.path === "plan")).toBe(true);
   });
 });
 

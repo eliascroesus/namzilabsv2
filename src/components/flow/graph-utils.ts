@@ -375,33 +375,51 @@ export function buildFieldGroups(opts: {
     for (const sid of ordered) {
       const sn = nodes.find((n) => n.id === sid);
       if (!sn) continue;
-      const schema = sn.data.lastTest?.outputSchema ?? [];
-      // W3b: examples come from the field's nearest App ancestor's *selected* preview
-      // record, so changing the record updates values everywhere. Transform-added fields
-      // (absent on the app record) fall back to the direct upstream's own sample.
+      // Untested steps expose nothing yet (explicit-test model).
+      if (sn.data.lastTest?.status !== "ok") continue;
+      const recordsOut = sn.data.lastTest.recordsOut;
       const app = nearestAppAncestor(sn, nodes, edges);
       const appChosen = app ? chosenSample(app, sampleIndexOf) : undefined;
       const upChosen = chosenSample(sn, sampleIndexOf);
-      const custom: PickField[] = [];
-      for (const f of schema) {
-        let ex = appChosen !== undefined ? resolveSampleField(appChosen, f.path) : undefined;
-        if (ex === undefined) ex = upChosen !== undefined ? resolveSampleField(upChosen, f.path) : f.example;
-        if (stdSet.has(f.path)) {
-          const sys = systemFields.find((s) => s.path === f.path);
-          if (sys && sys.example === undefined) sys.example = ex;
-        } else {
-          custom.push({ path: f.path, label: f.label, type: f.type, example: ex, container: f.container });
+
+      // Every tested step exposes an "Output number" (how many records it produced), and
+      // filters/windows also expose "Output" (whether records continued — always true for
+      // the ones that got through). These resolve at runtime via the engine's per-step
+      // stamp (__count_<id> / __passed_<id>), so they can feed conditions and calculations.
+      const outNum: PickField = { path: `__count_${sn.id}`, label: "Output number", type: "number", example: recordsOut };
+      const outBool: PickField = { path: `__passed_${sn.id}`, label: "Output", type: "boolean", example: true };
+      const isPassThrough = sn.type === "filter" || sn.type === "time";
+
+      let fields: PickField[];
+      if (isPassThrough) {
+        // A filter/window introduces no columns of its own (they come from the source
+        // step); it reads out purely as its result.
+        fields = [outBool, outNum];
+      } else {
+        // W3b: examples come from the field's nearest App ancestor's *selected* preview
+        // record, so changing the record updates values everywhere. Transform-added fields
+        // (absent on the app record) fall back to the direct upstream's own sample.
+        const custom: PickField[] = [];
+        for (const f of sn.data.lastTest.outputSchema ?? []) {
+          let ex = appChosen !== undefined ? resolveSampleField(appChosen, f.path) : undefined;
+          if (ex === undefined) ex = upChosen !== undefined ? resolveSampleField(upChosen, f.path) : f.example;
+          if (stdSet.has(f.path)) {
+            const sys = systemFields.find((s) => s.path === f.path);
+            if (sys && sys.example === undefined) sys.example = ex;
+          } else {
+            custom.push({ path: f.path, label: f.label, type: f.type, example: ex, container: f.container });
+          }
         }
+        fields = [...custom, outNum];
       }
-      if (custom.length) {
-        groups.push({
-          from: titleOf(sn),
-          stepNo: stepNoById.get(sid),
-          appSource: app ? String((app.data.config as { source?: unknown }).source ?? "") : undefined,
-          sampleRecord: appChosen ?? upChosen,
-          fields: custom,
-        });
-      }
+
+      groups.push({
+        from: titleOf(sn),
+        stepNo: stepNoById.get(sid),
+        appSource: app ? String((app.data.config as { source?: unknown }).source ?? "") : undefined,
+        sampleRecord: isPassThrough ? undefined : appChosen ?? upChosen,
+        fields,
+      });
     }
   }
 
