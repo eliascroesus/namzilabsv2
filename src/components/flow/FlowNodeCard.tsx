@@ -1,11 +1,16 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { NodeType } from "@/lib/flow/types";
 import type { FNode, NodeData } from "./graph-utils";
 import { NODE_META, STATUS_META, nodeTitle, pathHandles, resultLabel, summary, type NodeStatus } from "./node-meta";
 import { NodeGlyph } from "./icons";
 import { SourceBadge } from "./MappingChip";
+
+// Edges are auto-managed (never dragged), so the connection handles are visually
+// hidden — they only anchor the edge geometry, they are not interactive affordances.
+const HIDDEN_HANDLE: CSSProperties = { opacity: 0, pointerEvents: "none", width: 6, height: 6, minWidth: 0, minHeight: 0, border: "none" };
 
 export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const t = (type as NodeType) ?? "app";
@@ -23,11 +28,11 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       {/* input handle(s) on top — hidden; edges are auto-managed, never dragged */}
       {isCompare ? (
         <>
-          <Handle type="target" id="a" position={Position.Top} style={{ left: "35%" }} />
-          <Handle type="target" id="b" position={Position.Top} style={{ left: "65%" }} />
+          <Handle type="target" id="a" position={Position.Top} style={{ ...HIDDEN_HANDLE, left: "35%" }} />
+          <Handle type="target" id="b" position={Position.Top} style={{ ...HIDDEN_HANDLE, left: "65%" }} />
         </>
       ) : t !== "app" ? (
-        <Handle type="target" position={Position.Top} />
+        <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE} />
       ) : null}
 
       <div className="flex items-center justify-between border-b border-neutral-100 px-3 py-2">
@@ -64,10 +69,10 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       {/* output handle(s) on bottom — hidden */}
       {isPaths ? (
         pathHandles(data).map((h, i, arr) => (
-          <Handle key={h.id} type="source" id={h.id} position={Position.Bottom} title={h.label} style={{ left: `${((i + 1) / (arr.length + 1)) * 100}%` }} />
+          <Handle key={h.id} type="source" id={h.id} position={Position.Bottom} title={h.label} style={{ ...HIDDEN_HANDLE, left: `${((i + 1) / (arr.length + 1)) * 100}%` }} />
         ))
       ) : t !== "output" ? (
-        <Handle type="source" position={Position.Bottom} />
+        <Handle type="source" position={Position.Bottom} style={HIDDEN_HANDLE} />
       ) : null}
 
       {/* One "Add next step" at the end of a plain branch. */}
