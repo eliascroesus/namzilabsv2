@@ -1,8 +1,9 @@
-import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs, PollResult } from "./types";
+import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs, PollResult, ListOptionsArgs, SourceOption } from "./types";
 import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
 import { fetchJson } from "@/lib/http-client";
 
 const API = "https://sheets.googleapis.com/v4/spreadsheets";
+const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
 
 /**
  * Google Sheets. Poll-PRIMARY: Sheets has no native "new row" webhook, so we
@@ -43,6 +44,36 @@ export const googleSheetsConnector: Connector = {
     return readRows(args, args.cursor ? Number(args.cursor) : 0);
   },
 
+  async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
+    const token = str(args.credentials?.["accessToken"]);
+    if (!token) throw new Error("gsheets: missing access token");
+    if (key === "spreadsheetId") {
+      const params = new URLSearchParams({
+        q: "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
+        orderBy: "modifiedTime desc",
+        pageSize: "100",
+        fields: "files(id,name)",
+      });
+      const data = await fetchJson<{ files?: Array<{ id: string; name: string }> }>(`${DRIVE_API}?${params.toString()}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      return (data.files ?? []).map((f) => ({ value: f.id, label: f.name }));
+    }
+    if (key === "range") {
+      const spreadsheetId = str(args.config?.["spreadsheetId"]);
+      if (!spreadsheetId) return [];
+      const data = await fetchJson<{ sheets?: Array<{ properties?: { title?: string } }> }>(
+        `${API}/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties(title)`,
+        { headers: { authorization: `Bearer ${token}` } },
+      );
+      return (data.sheets ?? [])
+        .map((s) => s.properties?.title)
+        .filter((t): t is string => !!t)
+        .map((t) => ({ value: t, label: t }));
+    }
+    return [];
+  },
+
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
     const { records } = await readRows(args, 0);
     return records.slice(-n).reverse();
@@ -65,6 +96,9 @@ async function readRows(args: PollArgs, fromDataRow: number): Promise<PollResult
 
   const header = values[0];
   const dataRows = values.slice(1);
+  // Row numbers repeat across spreadsheets/tabs, so the stream identity is part of
+  // the dedup key — two streams' "row 5" must never collide.
+  const streamTag = args.streamHash ? `${args.streamHash}:` : "";
   const records: CanonicalEvent[] = [];
   for (let i = fromDataRow; i < dataRows.length; i++) {
     const cells = dataRows[i];
@@ -72,7 +106,7 @@ async function readRows(args: PollArgs, fromDataRow: number): Promise<PollResult
     header.forEach((h, c) => (obj[h || `col${c}`] = cells[c] ?? null));
     const sheetRowNumber = i + 2; // account for header + 1-based rows
     records.push({
-      eventId: `gsheets:${args.connectionId}:row:${sheetRowNumber}`,
+      eventId: `gsheets:${args.connectionId}:${streamTag}row:${sheetRowNumber}`,
       eventType: "row_added",
       subject: firstEmailLike(obj),
       occurredAt: new Date(),

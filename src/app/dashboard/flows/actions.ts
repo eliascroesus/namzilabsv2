@@ -2,13 +2,21 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { eq, and } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import { connections } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow } from "@/lib/flow/store";
 import { runFlow, type NodeExec } from "@/lib/flow/engine";
 import { materializeFlow } from "@/lib/flow/materialize";
-import { parseGraph } from "@/lib/flow/types";
+import { parseGraph, type FlowGraph } from "@/lib/flow/types";
 import { validateGraph } from "@/lib/flow/validate";
+import { ensureStreamsForGraph, primeStream } from "@/lib/sync/streams";
+import { getConnectionCredentials } from "@/lib/credentials";
+import { getConnector } from "@/connectors/registry";
+import { hasStreamConfig } from "@/lib/sync/stream-hash";
+import { isStreamScoped } from "@/connectors/catalog";
+import type { SourceOption } from "@/connectors/types";
 import { inngest } from "@/inngest/client";
 
 export async function createFlowAction(): Promise<void> {
@@ -23,7 +31,15 @@ export async function saveDraftAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { orgId } = await requireOrg();
   try {
-    await saveDraft(getDb(), orgId, id, graph);
+    const db = getDb();
+    await saveDraft(db, orgId, id, graph);
+    // Register any flow-configured resources (streams) so the sync sweep picks
+    // them up. Best-effort: a stream hiccup must never fail the save.
+    try {
+      await ensureStreamsForGraph(db, orgId, parseGraph(graph));
+    } catch {
+      // The Test path (primeStream) and the sweep self-heal missing streams.
+    }
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -71,11 +87,43 @@ function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTest
   };
 }
 
+/**
+ * First-use sync: if any app step feeding this test declares a resource whose
+ * stream has never been polled, pull its first pages now — the Zapier "test
+ * pulls samples" model. Errors surface on the Test result, never thrown.
+ */
+async function primeStreamsForTest(orgId: string, g: FlowGraph, nodeId: string): Promise<string | null> {
+  const db = getDb();
+  const incoming = new Map<string, string[]>();
+  for (const e of g.edges) {
+    if (!incoming.has(e.target)) incoming.set(e.target, []);
+    incoming.get(e.target)!.push(e.source);
+  }
+  const wanted = new Set<string>([nodeId]);
+  const stack = [nodeId];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    for (const s of incoming.get(cur) ?? []) if (!wanted.has(s)) { wanted.add(s); stack.push(s); }
+  }
+  for (const node of g.nodes) {
+    if (!wanted.has(node.id) || node.type !== "app") continue;
+    const cfg = node.data.config as { connectionId?: unknown; sourceConfig?: unknown };
+    const connectionId = typeof cfg.connectionId === "string" ? cfg.connectionId : null;
+    const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
+    if (!connectionId || !hasStreamConfig(sourceConfig)) continue;
+    const r = await primeStream(db, orgId, connectionId, sourceConfig);
+    if (!r.ok) return r.error;
+  }
+  return null;
+}
+
 /** Run the engine up to a single node on real synced data and return a compact result. */
 export async function testNodeAction(graph: unknown, nodeId: string): Promise<NodeTestDTO> {
   const { orgId } = await requireOrg();
   try {
     const g = parseGraph(graph);
+    const primeError = await primeStreamsForTest(orgId, g, nodeId);
+    if (primeError) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: primeError };
     const res = await runFlow({ db: getDb(), orgId }, g, { untilNodeId: nodeId });
     // The "before" side of the preview: the primary input node's output sample.
     const inNodeId = g.edges.find((e) => e.target === nodeId)?.source;
@@ -84,6 +132,36 @@ export async function testNodeAction(graph: unknown, nodeId: string): Promise<No
     return execToDTO(res.nodes.get(nodeId), inputSample);
   } catch (e) {
     return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Live choices for a Get data step's Configure dropdowns (spreadsheets, tabs,
+ * calendars…), listed straight from the provider with the connection's
+ * credentials. `config` carries the values chosen so far for dependent fields.
+ */
+export async function listSourceOptionsAction(
+  connectionId: string,
+  key: string,
+  config: Record<string, unknown>,
+): Promise<{ ok: true; options: SourceOption[] } | { ok: false; error: string }> {
+  const { orgId } = await requireOrg();
+  try {
+    const db = getDb();
+    const [conn] = await db
+      .select()
+      .from(connections)
+      .where(and(eq(connections.id, connectionId), eq(connections.orgId, orgId)))
+      .limit(1);
+    if (!conn) return { ok: false, error: "Connection not found." };
+    if (!isStreamScoped(conn.source)) return { ok: true, options: [] };
+    const connector = getConnector(conn.source);
+    if (!connector?.listOptions) return { ok: true, options: [] };
+    const credentials = await getConnectionCredentials(db, conn);
+    const options = await connector.listOptions(key, { connectionId, credentials, config });
+    return { ok: true, options };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 

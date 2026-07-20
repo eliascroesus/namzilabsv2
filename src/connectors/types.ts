@@ -34,6 +34,22 @@ export type PollArgs = {
   /** Decrypted credentials for the connection, if any. */
   credentials?: Record<string, unknown> | null;
   config?: Record<string, unknown>;
+  /**
+   * Identity of the stream being polled (hash of the resource config). Connectors
+   * whose natural ids can collide across resources (e.g. sheet row numbers) must
+   * embed it in eventId so two spreadsheets' row 5 stay distinct.
+   */
+  streamHash?: string | null;
+};
+
+/** One choice for a dynamic flow-level field (e.g. a spreadsheet, a tab). */
+export type SourceOption = { value: string; label: string };
+
+export type ListOptionsArgs = {
+  connectionId: string;
+  credentials?: Record<string, unknown> | null;
+  /** The flow-level config chosen so far (for dependent fields, e.g. tabs need the spreadsheet). */
+  config?: Record<string, unknown>;
 };
 
 export type PollResult = {
@@ -70,6 +86,8 @@ export interface Connector {
   normalize(rawPayload: unknown, ctx: NormalizeContext): CanonicalEvent[];
   /** Optional polling for reconciliation/backfill. */
   poll?(args: PollArgs): Promise<PollResult>;
+  /** Optional: list live choices for a dynamic flow-level field (spreadsheets, tabs, calendars…). */
+  listOptions?(key: string, args: ListOptionsArgs): Promise<SourceOption[]>;
   /** Optional: latest N records for the connect-time preview. */
   testFetchLatest?(n: number, args: PollArgs): Promise<CanonicalEvent[]>;
   /** Optional: auto-create the provider's webhook subscription at connect time. */

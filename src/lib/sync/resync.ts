@@ -1,9 +1,11 @@
 import { and, eq, gte, isNull, lt } from "drizzle-orm";
-import { connections, events, syncState, rawEvents } from "@/db/schema";
+import { connections, events, sourceStreams, syncState, rawEvents } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
+import { isStreamScoped } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { processRawEvent } from "@/ingestion/pipeline";
+import { activeStreams, syncStream } from "@/lib/sync/streams";
 import type { CanonicalEvent, Connector, PollArgs } from "@/connectors/types";
 
 const PAGE_CAP = 200;
@@ -43,6 +45,10 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
   await db.update(connections).set({ syncStatus: "importing", updatedAt: new Date() }).where(eq(connections.id, connectionId));
 
   try {
+    // Stream-scoped sources (Sheets, Calendar): the connection is auth-only; each
+    // flow-configured resource is its own stream with its own cursor.
+    if (isStreamScoped(conn.source)) return await runStreamSync(db, conn, mode);
+
     const credentials = await getConnectionCredentials(db, conn);
     const meta = { orgId: conn.orgId, connectionId: conn.id, source: conn.source };
     const base: PollArgs = { connectionId: conn.id, cursor: null, credentials, config: conn.config ?? undefined };
@@ -88,6 +94,64 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
   }
 }
 
+type ConnRow = typeof connections.$inferSelect;
+
+/**
+ * Full / incremental sync for a stream-scoped connection: every flow-configured
+ * resource (stream) is polled with its own cursor. A full re-sync repolls each
+ * stream from the start at a new generation, then soft-deletes poll-managed rows
+ * the run no longer saw — including rows of streams no flow references anymore.
+ */
+async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<SyncResult> {
+  const connector = getConnector(conn.source)!;
+  const streams = (await activeStreams(db, conn.id)).filter((s) => s.status !== "disabled");
+
+  if (mode === "incremental") {
+    let upserted = 0;
+    for (const stream of streams) {
+      try {
+        const r = await syncStream(db, conn, stream, 5);
+        upserted += r.inserted;
+      } catch {
+        // Recorded on the stream row; other streams keep syncing.
+      }
+    }
+    await db
+      .update(connections)
+      .set({ syncStatus: "live", lastEventAt: upserted > 0 ? new Date() : conn.lastEventAt, lastError: null, updatedAt: new Date() })
+      .where(eq(connections.id, conn.id));
+    return { mode, polled: streams.length > 0, upserted, softDeleted: 0, generation: Math.max(1, conn.syncGeneration ?? 0), orgId: conn.orgId, source: conn.source };
+  }
+
+  // Full: re-poll every stream from the beginning at the next generation, then
+  // remove poll-managed rows not seen this run (upstream-deleted or de-referenced).
+  const credentials = await getConnectionCredentials(db, conn);
+  const gen = Math.max(1, (conn.syncGeneration ?? 0) + 1);
+  let upserted = 0;
+  for (const stream of streams) {
+    const base: PollArgs = { connectionId: conn.id, cursor: null, credentials, config: stream.config ?? undefined, streamHash: stream.configHash };
+    const { records, cursor } = await pollAll(connector, base);
+    upserted += await upsertEventsGen(db, { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash }, records, gen);
+    await db
+      .update(sourceStreams)
+      .set({ cursor, status: "active", lastError: null, lastPolledAt: new Date(), updatedAt: new Date() })
+      .where(eq(sourceStreams.id, stream.id));
+  }
+
+  const del = await db
+    .update(events)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(events.connectionId, conn.id), gte(events.syncGeneration, 1), lt(events.syncGeneration, gen), isNull(events.deletedAt)))
+    .returning({ id: events.id });
+
+  await db
+    .update(connections)
+    .set({ syncGeneration: gen, syncStatus: "live", historicalSyncedAt: new Date(), lastEventAt: new Date(), lastError: null, updatedAt: new Date() })
+    .where(eq(connections.id, conn.id));
+
+  return { mode: "full", polled: streams.length > 0, upserted, softDeleted: del.length, generation: gen, orgId: conn.orgId, source: conn.source };
+}
+
 /** Re-run normalization from the immutable raw_events (no provider calls). */
 export async function reprocessConnection(db: DB, orgId: string, connectionId: string): Promise<{ processed: number }> {
   const raws = await db
@@ -127,7 +191,7 @@ async function pollAll(connector: Connector, base: PollArgs): Promise<{ records:
 
 async function upsertEventsGen(
   db: DB,
-  meta: { orgId: string; connectionId: string; source: string },
+  meta: { orgId: string; connectionId: string; source: string; streamHash?: string | null },
   records: CanonicalEvent[],
   generation: number,
 ): Promise<number> {
@@ -142,6 +206,7 @@ async function upsertEventsGen(
       properties: ev.properties ?? {},
       syncGeneration: generation,
       deletedAt: null,
+      streamHash: meta.streamHash ?? null,
     };
     await db
       .insert(events)

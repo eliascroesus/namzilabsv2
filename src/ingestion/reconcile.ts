@@ -2,18 +2,22 @@ import { eq } from "drizzle-orm";
 import { connections, syncState } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
+import { isStreamScoped } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "./pipeline";
+import { activeStreams, syncStream } from "@/lib/sync/streams";
 
 export type ReconcileResult = { inserted: number; deduped: number; polled: boolean };
 
 /**
  * The safety net that makes "never breaks" true: re-pull recent records from the
  * source and dedup them against what we already have, so any event a webhook
- * missed is still captured on the next sweep. Advances the connection's cursor.
+ * missed is still captured on the next sweep.
  *
- * Credentials are decrypted from the connection and passed to poll(); expired
- * Google OAuth tokens are refreshed and persisted in the process.
+ * Stream-scoped sources (Sheets, Calendar — the resource is chosen per flow)
+ * poll each of their streams with its own cursor; a failing stream records its
+ * error on the stream row and never blocks the others. Connection-scoped
+ * sources keep the single connection-level cursor.
  */
 export async function reconcileConnection(db: DB, connectionId: string): Promise<ReconcileResult> {
   const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId)).limit(1);
@@ -22,6 +26,23 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   const connector = getConnector(conn.source);
   // Sources that only push (no list endpoint) have nothing to reconcile.
   if (!connector?.poll) return { inserted: 0, deduped: 0, polled: false };
+
+  if (isStreamScoped(conn.source)) {
+    const streams = await activeStreams(db, connectionId);
+    let inserted = 0;
+    let deduped = 0;
+    for (const stream of streams) {
+      if (stream.status === "disabled") continue;
+      try {
+        const r = await syncStream(db, conn, stream, 5);
+        inserted += r.inserted;
+        deduped += r.deduped;
+      } catch {
+        // Recorded on the stream row; other streams keep syncing.
+      }
+    }
+    return { inserted, deduped, polled: streams.length > 0 };
+  }
 
   const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, connectionId)).limit(1);
   const cursor = state?.cursor ?? null;

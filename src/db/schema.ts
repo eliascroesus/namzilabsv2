@@ -135,12 +135,46 @@ export const events = pgTable(
     syncGeneration: integer("sync_generation").notNull().default(0),
     // Soft-delete: set when a full re-sync no longer sees a previously-synced record.
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    // Which source stream (connection + resource config) produced this row. Null for
+    // webhook/instant events and for connectors whose connection is the whole resource.
+    streamHash: text("stream_hash"),
   },
   (t) => [
     uniqueIndex("events_event_id_uq").on(t.eventId),
     index("events_org_type_idx").on(t.orgId, t.eventType),
     index("events_occurred_idx").on(t.occurredAt),
     index("events_conn_idx").on(t.connectionId),
+    index("events_conn_stream_idx").on(t.connectionId, t.streamHash),
+  ],
+);
+
+/**
+ * One synced resource of a connection — e.g. one spreadsheet+tab, one calendar.
+ * The connection holds only authentication; each flow's "Get data" step declares
+ * WHAT to pull (its sourceConfig), and saving the flow upserts the matching
+ * stream here. The reconcile sweep polls every active stream with its own
+ * cursor, and events are tagged with the stream's configHash so flows read
+ * exactly the resource they configured. Streams are the long-term unit of sync.
+ */
+export const sourceStreams = pgTable(
+  "source_streams",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    connectionId: uuid("connection_id").notNull(),
+    /** Stable hash of the normalized resource config (also stamped on events). */
+    configHash: text("config_hash").notNull(),
+    config: jsonb("config").$type<Record<string, unknown>>().default({}).notNull(),
+    cursor: text("cursor"),
+    status: text("status").notNull().default("active"), // active | error | disabled
+    lastPolledAt: timestamp("last_polled_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("source_streams_conn_cfg_uq").on(t.connectionId, t.configHash),
+    index("source_streams_org_idx").on(t.orgId),
   ],
 );
 

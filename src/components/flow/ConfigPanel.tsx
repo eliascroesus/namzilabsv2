@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { catalogEntry, type FlowConfigField } from "@/connectors/catalog";
+import { listSourceOptionsAction } from "@/app/dashboard/flows/actions";
 import {
   AGGREGATIONS,
   TIME_UNITS,
@@ -282,10 +284,14 @@ function NodeConfig({
           )}
         </div>
 
-        {/* Configure: what to pull — set per flow, not on the integration. */}
+        {/* Configure: what to pull — set per flow, not on the integration. Stream-scoped
+            sources (Sheets, Calendar) pick their resource here via live dropdowns. */}
         {conn && (
           <div className="space-y-2">
             <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Configure</p>
+            {(catalogEntry(conn.source)?.flowFields ?? []).map((f) => (
+              <SourceConfigField key={f.key} field={f} conn={conn} cfg={cfg} onChange={onChange} />
+            ))}
             <Field label="Which event">
               <Select
                 value={typeof cfg.eventType === "string" ? (cfg.eventType as string) : "__none"}
@@ -682,6 +688,85 @@ function CategoryEditor({ cfg, groups, onChange }: { cfg: Record<string, unknown
       <button onClick={() => onChange({ categories: [...cats, { label: `Category ${cats.length + 1}`, filters: { combinator: "and", rules: [] } }] })} className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">+ Add category</button>
       <Field label="Fallback label"><input value={(cfg.fallbackLabel as string) ?? "Other"} onChange={(e) => onChange({ fallbackLabel: e.target.value })} className={INPUT} /></Field>
     </div>
+  );
+}
+
+/**
+ * One flow-level resource field of a Get data step (which spreadsheet, which tab…).
+ * Dynamic fields list live choices from the provider via the connection's credentials;
+ * dependent fields stay disabled until their prerequisites are chosen, and changing a
+ * prerequisite resets them. If listing fails, a manual text input takes over so the
+ * step is never dead-ended.
+ */
+function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigField; conn: ConnMeta; cfg: Record<string, unknown>; onChange: (p: Record<string, unknown>) => void }) {
+  const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
+  const value = String(sourceConfig[field.key] ?? "");
+  const deps = field.dependsOn ?? [];
+  const depsReady = deps.every((d) => String(sourceConfig[d] ?? "").trim() !== "");
+  const depsSignature = deps.map((d) => String(sourceConfig[d] ?? "")).join(" ");
+
+  const [state, setState] = useState<{ sig: string | null; status: "idle" | "loading" | "ok" | "error"; options: Array<{ value: string; label: string }>; error?: string }>({ sig: null, status: "idle", options: [] });
+
+  useEffect(() => {
+    if (!field.dynamic || !depsReady) return;
+    if (state.sig === depsSignature && state.status !== "idle") return;
+    let cancelled = false;
+    setState({ sig: depsSignature, status: "loading", options: [] });
+    void listSourceOptionsAction(conn.id, field.key, sourceConfig).then((r) => {
+      if (cancelled) return;
+      if (r.ok) setState({ sig: depsSignature, status: "ok", options: r.options });
+      else setState({ sig: depsSignature, status: "error", options: [], error: r.error });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [field.dynamic, field.key, conn.id, depsReady, depsSignature]);
+
+  const entry = catalogEntry(conn.source);
+  const set = (v: string) => {
+    const next: Record<string, unknown> = { ...sourceConfig, [field.key]: v };
+    // Changing a prerequisite invalidates everything that depends on it.
+    for (const other of entry?.flowFields ?? []) {
+      if ((other.dependsOn ?? []).includes(field.key)) delete next[other.key];
+    }
+    onChange({ sourceConfig: next });
+  };
+
+  if (!depsReady) {
+    return (
+      <Field label={field.label}>
+        <Select value="" options={[]} onChange={() => {}} width={W} disabled placeholder={`Choose ${deps.map((d) => entry?.flowFields?.find((f) => f.key === d)?.label ?? d).join(", ")} first…`} />
+      </Field>
+    );
+  }
+
+  // Listing failed (permissions, revoked scope…): manual entry keeps the step usable.
+  if (field.dynamic && state.status === "error") {
+    return (
+      <Field label={field.label}>
+        <input value={value} placeholder={field.placeholder} onChange={(e) => set(e.target.value)} className={INPUT} />
+        <p className="mt-1 text-xs text-amber-700">Couldn’t list options ({state.error}). Paste the {field.label.toLowerCase()} manually.</p>
+      </Field>
+    );
+  }
+
+  const options = field.dynamic ? state.options : field.options ?? [];
+  // Keep a previously saved value selectable even if it's not in the freshly-listed set.
+  const withCurrent = value && !options.some((o) => o.value === value) ? [{ value, label: value }, ...options] : options;
+
+  return (
+    <Field label={field.label}>
+      <Select
+        value={value}
+        options={withCurrent}
+        onChange={set}
+        width={W}
+        searchable
+        placeholder={field.dynamic && state.status === "loading" ? "Loading…" : `Choose a ${field.label.toLowerCase()}…`}
+      />
+      {field.hint && <p className="mt-1 text-xs text-neutral-400">{field.hint}</p>}
+    </Field>
   );
 }
 

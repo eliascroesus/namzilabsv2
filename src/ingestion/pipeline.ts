@@ -11,6 +11,8 @@ type EventMeta = {
   connectionId: string;
   source: string;
   rawEventId?: string | null;
+  /** Stream (resource) identity for polled events; null for webhook/instant events. */
+  streamHash?: string | null;
 };
 
 /**
@@ -35,6 +37,7 @@ export async function upsertEvents(db: DB, meta: EventMeta, canonical: Canonical
         currency: ev.currency ?? null,
         properties: ev.properties ?? {},
         rawEventId: meta.rawEventId ?? null,
+        streamHash: meta.streamHash ?? null,
       })
       .onConflictDoNothing({ target: events.eventId })
       .returning({ id: events.id });

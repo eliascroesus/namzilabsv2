@@ -52,7 +52,7 @@ function isNumberProducer(n: FNode): boolean {
 
 /** Short "what to do next" hint shown inside a step that needs setup. */
 function setupHint(type: string, cfg: Record<string, unknown>, inputCount: number): string {
-  if (type === "app") return "Choose an account to load data.";
+  if (type === "app") return cfg.connectionId ? "Choose what data to pull." : "Choose an account to load data.";
   if (type === "formula") return "Pick a First and Second number.";
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? "Pick a First and Second number." : "Connect an input.";
   if (type === "output") return inputCount === 0 ? "Connect an input." : "Name this metric.";

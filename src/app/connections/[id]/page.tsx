@@ -84,7 +84,7 @@ export default async function ConnectionPage({
           <Field label="Polling / backfill" value={entry?.poll ? "Yes" : "No"} />
         </dl>
 
-        {/* Config (e.g. Google Sheets spreadsheet id / range) */}
+        {/* Connection-level settings (auth-domain only, e.g. Calendly webhook scope). */}
         {entry?.configFields && entry.configFields.length > 0 && (
           <section className="mt-8">
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Configuration</h2>
@@ -104,6 +104,17 @@ export default async function ConnectionPage({
           </section>
         )}
 
+        {/* Stream-scoped sources choose WHAT to pull inside each flow, not here. */}
+        {entry?.flowFields && entry.flowFields.length > 0 && (
+          <section className="mt-8">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Configuration</h2>
+            <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">
+              This account is connected. Choose {entry.flowFields.map((f) => f.label.toLowerCase()).join(" and ")} inside each
+              flow&rsquo;s <b>Get data</b> step — every flow can pull from a different one.
+            </p>
+          </section>
+        )}
+
         {/* Inbound webhook URL + secret (manual providers / custom webhook) */}
         {entry?.instant && (
           <section className="mt-8">
@@ -114,24 +125,27 @@ export default async function ConnectionPage({
           </section>
         )}
 
-        {/* Preview latest records */}
-        <section className="mt-8">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Latest records</h2>
-            <Link href={`/connections/${conn.id}?preview=1`} className="text-sm text-blue-600 hover:underline">
-              Preview latest
-            </Link>
-          </div>
-          {preview !== "1" && (
-            <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-500">
-              Click &ldquo;Preview latest&rdquo; to pull the most recent records from this source.
-            </p>
-          )}
-          {previewError && (
-            <p className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{previewError}</p>
-          )}
-          {previewRows && <PreviewTable rows={previewRows} />}
-        </section>
+        {/* Preview latest records (connection-scoped sources only — stream-scoped
+            sources preview inside the flow's Get data step, where the resource is). */}
+        {!entry?.flowFields?.length && (
+          <section className="mt-8">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Latest records</h2>
+              <Link href={`/connections/${conn.id}?preview=1`} className="text-sm text-blue-600 hover:underline">
+                Preview latest
+              </Link>
+            </div>
+            {preview !== "1" && (
+              <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-500">
+                Click &ldquo;Preview latest&rdquo; to pull the most recent records from this source.
+              </p>
+            )}
+            {previewError && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{previewError}</p>
+            )}
+            {previewRows && <PreviewTable rows={previewRows} />}
+          </section>
+        )}
 
         {/* Data & sync controls */}
         <section className="mt-10">

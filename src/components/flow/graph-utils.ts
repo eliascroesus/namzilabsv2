@@ -1,5 +1,6 @@
 import type { Node, Edge } from "@xyflow/react";
 import { STANDARD_FIELDS, walkPath } from "@/lib/flow/records";
+import { catalogEntry } from "@/connectors/catalog";
 import type { NodeTestDTO } from "@/app/dashboard/flows/actions";
 
 // ---------- Shared editor types ----------
@@ -254,7 +255,13 @@ export function terminalIds(nodes: FNode[], allEdges: Edge[]): Set<string> {
 export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, inputCount: number, handles?: Array<string | null>): boolean {
   // A compare step needs both of its named numbers picked (a chain edge alone isn't enough).
   const missingAB = handles ? !handles.includes("a") || !handles.includes("b") : inputCount < 2;
-  if (type === "app") return !cfg.connectionId && !cfg.source;
+  if (type === "app") {
+    if (!cfg.connectionId && !cfg.source) return true;
+    // Stream-scoped sources also need their flow-level resource chosen (which sheet…).
+    const flowFields = catalogEntry(String(cfg.source ?? ""))?.flowFields ?? [];
+    const sc = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
+    return flowFields.some((f) => f.required && String(sc[f.key] ?? "").trim() === "");
+  }
   if (type === "formula") return missingAB;
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? missingAB : inputCount === 0;
   if (type === "output") return inputCount === 0 || !String(cfg.name ?? "").trim();

@@ -2,7 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { connections } from "@/db/schema";
+import { connections, sourceStreams } from "@/db/schema";
 import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
 import { getConnector } from "@/connectors/registry";
 import { catalogEntry } from "@/connectors/catalog";
@@ -130,7 +130,10 @@ export async function updateConnectionConfig(
 }
 
 export async function deleteConnection(orgId: string, id: string): Promise<void> {
-  await getDb().delete(connections).where(and(eq(connections.id, id), eq(connections.orgId, orgId)));
+  const db = getDb();
+  await db.delete(connections).where(and(eq(connections.id, id), eq(connections.orgId, orgId)));
+  // A connection's synced streams die with it (their cursors are meaningless without auth).
+  await db.delete(sourceStreams).where(and(eq(sourceStreams.connectionId, id), eq(sourceStreams.orgId, orgId)));
 }
 
 /** Decrypt the connection's signing secret for display (manual webhook setup). */

@@ -127,6 +127,12 @@ export const AppConfigSchema = z.object({
   source: z.string().nullable().default(null),
   eventType: z.string().nullable().default(null),
   identityField: z.string().nullable().default("subject"),
+  /**
+   * Flow-level resource selection (which spreadsheet + tab, which calendar…).
+   * The connection holds only auth; this config identifies the synced stream the
+   * step reads (events tagged with its hash). Empty for connection-scoped sources.
+   */
+  sourceConfig: z.record(z.string(), z.unknown()).default({}),
 });
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 

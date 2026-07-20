@@ -1,4 +1,4 @@
-import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs, PollResult } from "./types";
+import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs, PollResult, ListOptionsArgs, SourceOption } from "./types";
 import { fetchJson } from "@/lib/http-client";
 
 const API = "https://www.googleapis.com/calendar/v3/calendars";
@@ -47,14 +47,26 @@ export const googleCalendarConnector: Connector = {
       throw err;
     }
 
+    const streamTag = args.streamHash ? `${args.streamHash}:` : "";
     const records: CanonicalEvent[] = (data.items ?? []).map((ev) => ({
-      eventId: `gcal:${args.connectionId}:${str(ev["id"])}`,
+      eventId: `gcal:${args.connectionId}:${streamTag}${str(ev["id"])}`,
       eventType: "calendar_event",
       subject: str(ev["summary"]) ?? firstAttendeeEmail(ev) ?? null,
       occurredAt: eventStart(ev) ?? new Date(),
       properties: ev,
     }));
     return { records, nextCursor: data.nextSyncToken ?? args.cursor };
+  },
+
+  async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
+    if (key !== "calendarId") return [];
+    const token = str(args.credentials?.["accessToken"]);
+    if (!token) throw new Error("gcal: missing access token");
+    const data = await fetchJson<{ items?: Array<{ id: string; summary?: string; primary?: boolean }> }>(
+      "https://www.googleapis.com/calendar/v3/users/me/calendarList?fields=items(id,summary,primary)",
+      { headers: { authorization: `Bearer ${token}` } },
+    );
+    return (data.items ?? []).map((c) => ({ value: c.id, label: c.primary ? `${c.summary ?? c.id} (primary)` : c.summary ?? c.id }));
   },
 
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {

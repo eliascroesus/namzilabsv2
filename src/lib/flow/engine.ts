@@ -3,6 +3,7 @@ import { events } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { eventToRecord, getField, toNumber, type FlowRecord } from "./records";
 import { inferSchema, type FieldInfo } from "./schema-infer";
+import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import {
   AppConfigSchema,
   FilterConfigSchema,
@@ -154,6 +155,8 @@ async function execApp(ctx: EngineCtx, node: FlowNode): Promise<NodeExec> {
   if (cfg.connectionId) conds.push(eq(events.connectionId, cfg.connectionId));
   if (cfg.source) conds.push(eq(events.source, cfg.source));
   if (cfg.eventType) conds.push(eq(events.eventType, cfg.eventType));
+  // A flow-level resource selection reads exactly its own stream's events.
+  if (hasStreamConfig(cfg.sourceConfig)) conds.push(eq(events.streamHash, streamConfigHash(cfg.sourceConfig)));
 
   const rows = await ctx.db
     .select()

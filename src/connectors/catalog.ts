@@ -15,6 +15,24 @@ export type ConfigField = {
   options?: { value: string; label: string }[];
 };
 
+/**
+ * A per-flow resource field set inside the Get data step (never at connect time):
+ * which spreadsheet + tab, which calendar, … `dynamic` fields load their options
+ * live from the provider via the connector's listOptions; `dependsOn` gates a
+ * field until its prerequisites are chosen (and changing those resets it).
+ */
+export type FlowConfigField = {
+  key: string;
+  label: string;
+  required?: boolean;
+  hint?: string;
+  placeholder?: string;
+  /** Load options from the provider (connector.listOptions) instead of static ones. */
+  dynamic?: boolean;
+  dependsOn?: string[];
+  options?: { value: string; label: string }[];
+};
+
 export type ConnectorCatalogEntry = {
   source: string;
   name: string;
@@ -26,7 +44,14 @@ export type ConnectorCatalogEntry = {
   /** Whether we auto-create the provider webhook subscription on connect. */
   autoWebhook: boolean;
   credentialFields: CredentialField[];
+  /** Connection-level settings (auth-domain only, e.g. Calendly webhook scope). */
   configFields?: ConfigField[];
+  /**
+   * Flow-level resource settings (the Get data step's Configure section). A
+   * connector with flowFields is stream-scoped: each distinct config becomes its
+   * own synced stream with its own cursor, and events are tagged per stream.
+   */
+  flowFields?: FlowConfigField[];
   /** Manual webhook setup note shown on the connection page when not auto. */
   webhookSetup?: string;
 };
@@ -107,9 +132,10 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     poll: true,
     autoWebhook: false,
     credentialFields: [],
-    configFields: [
-      { key: "spreadsheetId", label: "Spreadsheet ID", placeholder: "1AbC...", required: true },
-      { key: "range", label: "Sheet / range", placeholder: "Sheet1" },
+    // Which spreadsheet + tab is chosen inside each flow's Get data step.
+    flowFields: [
+      { key: "spreadsheetId", label: "Spreadsheet", required: true, dynamic: true, placeholder: "1AbC…", hint: "Pick a spreadsheet from your Google Drive." },
+      { key: "range", label: "Sheet / tab", dynamic: true, dependsOn: ["spreadsheetId"], placeholder: "Sheet1" },
     ],
   },
   {
@@ -121,7 +147,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     poll: true,
     autoWebhook: false,
     credentialFields: [],
-    configFields: [{ key: "calendarId", label: "Calendar ID", placeholder: "primary" }],
+    flowFields: [{ key: "calendarId", label: "Calendar", dynamic: true, placeholder: "primary" }],
   },
   {
     source: "webhook",
@@ -139,4 +165,9 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
 
 export function catalogEntry(source: string): ConnectorCatalogEntry | undefined {
   return CONNECTOR_CATALOG.find((c) => c.source === source);
+}
+
+/** Sources whose resource lives on the flow (streams), not on the connection. */
+export function isStreamScoped(source: string | null | undefined): boolean {
+  return (catalogEntry(source ?? "")?.flowFields?.length ?? 0) > 0;
 }
