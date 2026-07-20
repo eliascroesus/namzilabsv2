@@ -1,0 +1,194 @@
+"use client";
+
+import { useMemo, useState, type ReactNode } from "react";
+import { Popover } from "./Popover";
+import { SourceBadge } from "./Pill";
+import type { DataField, DataGroup, FieldRef } from "./types";
+import { childFields, filterFields, formatSample, makeFieldRef } from "./field-utils";
+
+/** One selectable field row: human label + type + real sample, drill affordance for containers. */
+function FieldRow({ field, onDrill, onPick }: { field: DataField; onDrill: () => void; onPick: () => void }) {
+  const sample = formatSample(field.sample);
+  return (
+    <button
+      type="button"
+      onClick={field.container ? onDrill : onPick}
+      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-neutral-100"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-sm text-neutral-800">{field.label}</span>
+          {field.type && field.type !== "unknown" && (
+            <span className="shrink-0 rounded border border-neutral-200 px-1 text-[9px] uppercase tracking-wide text-neutral-400">{field.type}</span>
+          )}
+        </span>
+        {sample != null && <span className="block truncate text-[11px] text-neutral-400">{sample}</span>}
+      </span>
+      {field.container && <span className="shrink-0 text-neutral-400" aria-hidden>›</span>}
+    </button>
+  );
+}
+
+/**
+ * The "Insert data" popover — Zapier's Previous Steps browser. Shows fields produced by
+ * earlier steps, grouped by step, with the app badge, step number, human field names,
+ * real sample values, and data types. Objects/arrays drill in (nested values); a search
+ * filters the current level. Picking a field emits a {@link FieldRef} (identity by
+ * producing step + path). It only ever shows logically-valid upstream data (the caller
+ * supplies the scoped groups), never every node on the canvas.
+ */
+export function DataBrowser({
+  groups,
+  onPick,
+  align = "left",
+  width = 340,
+  trigger,
+  buttonLabel = "Insert data",
+  disabled = false,
+}: {
+  groups: DataGroup[];
+  onPick: (ref: FieldRef) => void;
+  align?: "left" | "right";
+  width?: number;
+  trigger?: (o: { open: boolean; toggle: () => void }) => ReactNode;
+  buttonLabel?: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpenRaw] = useState(false);
+  const [q, setQ] = useState("");
+  // Drill state: which step, and the trail of container fields we've descended into.
+  const [drill, setDrill] = useState<{ groupId: string; trail: DataField[] } | null>(null);
+
+  const setOpen = (o: boolean) => {
+    setOpenRaw(o);
+    if (!o) {
+      setQ("");
+      setDrill(null);
+    }
+  };
+  const toggle = () => (disabled ? undefined : setOpen(!open));
+
+  const drillGroup = drill ? groups.find((g) => g.stepId === drill.groupId) : undefined;
+  const drillField = drill && drill.trail.length ? drill.trail[drill.trail.length - 1] : undefined;
+
+  const pick = (group: DataGroup, field: DataField) => {
+    onPick(makeFieldRef(group, field));
+    setOpen(false);
+  };
+
+  const anyFields = useMemo(() => groups.some((g) => g.fields.length > 0), [groups]);
+
+  return (
+    <Popover
+      open={open}
+      setOpen={setOpen}
+      width={width}
+      align={align}
+      anchor={
+        trigger ? (
+          trigger({ open, toggle })
+        ) : (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={toggle}
+            className={`inline-flex items-center gap-1 rounded-md border border-dashed px-2 py-1 text-xs ${
+              disabled ? "cursor-not-allowed border-neutral-200 text-neutral-300" : "border-neutral-300 text-neutral-500 hover:border-neutral-400 hover:text-neutral-700"
+            }`}
+          >
+            <span className="text-sm leading-none">+</span> {buttonLabel}
+          </button>
+        )
+      }
+    >
+      <div className="flex max-h-80 w-full flex-col">
+        <div className="border-b border-neutral-100 p-1.5">
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search fields…"
+            className="w-full rounded border border-neutral-300 px-2 py-1 text-xs focus:border-neutral-400 focus:outline-none"
+          />
+        </div>
+
+        {/* Drill breadcrumb */}
+        {drill && drillGroup && (
+          <div className="flex items-center gap-1 border-b border-neutral-100 px-2 py-1 text-[11px] text-neutral-500">
+            <button
+              type="button"
+              onClick={() => setDrill(drill.trail.length > 1 ? { groupId: drill.groupId, trail: drill.trail.slice(0, -1) } : null)}
+              className="rounded px-1 hover:bg-neutral-100"
+            >
+              ‹ Back
+            </button>
+            <span className="truncate">
+              {drillGroup.title}
+              {drill.trail.map((f) => ` › ${f.label}`).join("")}
+            </span>
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-1">
+          {!anyFields && (
+            <p className="px-2 py-6 text-center text-xs text-neutral-400">No data yet. Test an earlier step to bring its fields here.</p>
+          )}
+
+          {/* Drilled-in view: children of the current container field. */}
+          {drill && drillGroup && drillField && (
+            <>
+              {(() => {
+                const kids = filterFields(childFields(drillField), q);
+                if (kids.length === 0) return <p className="px-2 py-4 text-center text-xs text-neutral-400">Nothing inside this field.</p>;
+                return kids.map((f) => (
+                  <FieldRow
+                    key={f.path}
+                    field={f}
+                    onPick={() => pick(drillGroup, f)}
+                    onDrill={() => setDrill({ groupId: drill.groupId, trail: [...drill.trail, f] })}
+                  />
+                ));
+              })()}
+            </>
+          )}
+
+          {/* Top level: every valid earlier step, grouped. */}
+          {!drill &&
+            anyFields &&
+            groups.map((g) => {
+              const fields = filterFields(g.fields, q);
+              if (fields.length === 0) return null;
+              return (
+                <div key={g.stepId} className="mb-1">
+                  <div className="flex items-center gap-1.5 px-2 pb-0.5 pt-1.5">
+                    {g.system ? (
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-neutral-200 text-[8px] font-semibold text-neutral-500" aria-hidden>
+                        ⚙
+                      </span>
+                    ) : (
+                      <SourceBadge source={g.source} size={16} />
+                    )}
+                    {g.stepNo != null && <span className="text-[11px] font-semibold text-neutral-400">{g.stepNo}.</span>}
+                    <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{g.title}</span>
+                  </div>
+                  {fields.map((f) => (
+                    <FieldRow
+                      key={f.path}
+                      field={f}
+                      onPick={() => pick(g, f)}
+                      onDrill={() => setDrill({ groupId: g.stepId, trail: [f] })}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+
+          {/* Search with no matches anywhere. */}
+          {!drill && anyFields && q.trim() && groups.every((g) => filterFields(g.fields, q).length === 0) && (
+            <p className="px-2 py-4 text-center text-xs text-neutral-400">No fields match “{q.trim()}”.</p>
+          )}
+        </div>
+      </div>
+    </Popover>
+  );
+}
