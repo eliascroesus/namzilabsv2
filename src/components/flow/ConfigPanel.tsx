@@ -91,6 +91,8 @@ export function ConfigPanel({
   onAddNext,
   onSetInput,
   onSetSources,
+  onAddBranch,
+  onRemoveBranch,
 }: {
   node: FNode;
   stepNo?: number;
@@ -111,6 +113,8 @@ export function ConfigPanel({
   onAddNext: () => void;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
+  onAddBranch: () => void;
+  onRemoveBranch: (pathId: string) => void;
 }) {
   const type = String(node.type) as NodeType;
   const cfg = node.data.config;
@@ -162,6 +166,8 @@ export function ConfigPanel({
           onChange={onChange}
           onSetInput={onSetInput}
           onSetSources={onSetSources}
+          onAddBranch={onAddBranch}
+          onRemoveBranch={onRemoveBranch}
         />
 
         {/* Test results appear only after a manual test — never auto-computed. */}
@@ -204,6 +210,8 @@ function ConfigureTab({
   onChange,
   onSetInput,
   onSetSources,
+  onAddBranch,
+  onRemoveBranch,
 }: {
   type: NodeType;
   cfg: Record<string, unknown>;
@@ -215,6 +223,8 @@ function ConfigureTab({
   onChange: (patch: Record<string, unknown>) => void;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
+  onAddBranch: () => void;
+  onRemoveBranch: (pathId: string) => void;
 }) {
   // Formatter shows controls by intent (Clean text / Change number / …), derived from the op.
   const [fmtIntent, setFmtIntent] = useState(() => formatterIntentOf(String((cfg as { op?: unknown }).op ?? "round")));
@@ -469,36 +479,25 @@ function ConfigureTab({
   }
 
   if (type === "paths") {
-    const paths = (cfg.paths as Array<{ id: string; label: string; filters: Filters }>) ?? [];
-    const setPath = (i: number, patch: Record<string, unknown>) => onChange({ paths: paths.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
+    const paths = (cfg.paths as Array<{ id: string; label: string }>) ?? [];
+    const setLabel = (i: number, label: string) => onChange({ paths: paths.map((p, j) => (j === i ? { ...p, label } : p)) });
     return (
       <div className="space-y-3 text-sm">
-        <p className="text-xs text-neutral-500">Records are sent down the first branch whose conditions they match. Add as many branches as you need — each becomes its own path (and can be its own dashboard metric).</p>
+        <p className="text-xs text-neutral-500">This step just splits your records into branches. Set each branch’s “only continue if” conditions in its own <b>Path conditions</b> step on the canvas.</p>
         {paths.map((p, i) => (
-          <div key={p.id} className="space-y-2 rounded-md border border-pink-200 bg-pink-50/40 p-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-pink-700">Branch {i + 1}</span>
-              {paths.length > 1 && (
-                <button onClick={() => onChange({ paths: paths.filter((_, j) => j !== i) })} className="text-[11px] text-red-600 hover:underline">
-                  Remove
-                </button>
-              )}
-            </div>
-            <input value={p.label} placeholder={`Branch ${i + 1} name`} onChange={(e) => setPath(i, { label: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
-            <RulesEditor value={p.filters ?? { combinator: "and", rules: [] }} fieldGroups={fieldGroups} onChange={(v) => setPath(i, { filters: v })} />
+          <div key={p.id} className="flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50/40 px-2 py-1.5">
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-pink-700">Branch {i + 1}</span>
+            <input value={p.label} onChange={(e) => setLabel(i, e.target.value)} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
+            {paths.length > 1 && (
+              <button onClick={() => onRemoveBranch(p.id)} className="shrink-0 text-[11px] text-red-600 hover:underline" title="Remove this branch and its steps">
+                Remove
+              </button>
+            )}
           </div>
         ))}
-        <button
-          onClick={() => onChange({ paths: [...paths, { id: `p${Math.random().toString(36).slice(2, 7)}`, label: `Branch ${paths.length + 1}`, filters: { combinator: "and", rules: [] } }] })}
-          className="w-full rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-        >
+        <button onClick={onAddBranch} className="w-full rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">
           + Add branch
         </button>
-        <div className="rounded-md border border-neutral-200 p-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">Fallback branch</span>
-          <p className="mb-1 text-[11px] text-neutral-500">Everything that matches no branch above.</p>
-          <input value={(cfg.fallbackLabel as string) ?? "Fallback"} onChange={(e) => onChange({ fallbackLabel: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5" />
-        </div>
       </div>
     );
   }

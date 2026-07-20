@@ -137,7 +137,7 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
     if (node.type === "paths") {
       const cfg = PathsConfigSchema.safeParse(node.data.config ?? {});
       if (!cfg.success || cfg.data.paths.length === 0) {
-        issues.push({ nodeId: node.id, message: "Paths node needs at least one path with conditions." });
+        issues.push({ nodeId: node.id, message: "Split into paths needs at least one branch." });
       } else if (cfg.data.paths.reduce((a, p) => a + mappedRuleGaps(p.filters), 0) > 0) {
         issues.push({ nodeId: node.id, message: "A path condition compares against a field, but no field is chosen." });
       }

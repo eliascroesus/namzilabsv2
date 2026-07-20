@@ -249,16 +249,26 @@ function execPaths(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = PathsConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Paths");
   const outputs: Record<string, Shape> = {};
-  const assigned = new Set<FlowRecord>();
-  for (const p of cfg.paths) {
-    const matched = input.records.filter((r) => {
-      const ok = evalRules(r, p.filters);
-      if (ok) assigned.add(r);
-      return ok;
-    });
-    outputs[p.id] = { kind: "dataset", records: matched };
+
+  // Legacy nodes routed by per-path filters + a fallback. New nodes just split:
+  // the hub does nothing and each branch's own "Path conditions" (Filter) narrows it.
+  const legacy = cfg.fallbackId != null || cfg.paths.some((p) => (p.filters?.rules?.length ?? 0) > 0);
+  if (legacy) {
+    const assigned = new Set<FlowRecord>();
+    for (const p of cfg.paths) {
+      const matched = p.filters
+        ? input.records.filter((r) => {
+            const ok = evalRules(r, p.filters!);
+            if (ok) assigned.add(r);
+            return ok;
+          })
+        : input.records;
+      outputs[p.id] = { kind: "dataset", records: matched };
+    }
+    if (cfg.fallbackId) outputs[cfg.fallbackId] = { kind: "dataset", records: input.records.filter((r) => !assigned.has(r)) };
+  } else {
+    for (const p of cfg.paths) outputs[p.id] = { kind: "dataset", records: input.records };
   }
-  outputs[cfg.fallbackId] = { kind: "dataset", records: input.records.filter((r) => !assigned.has(r)) };
 
   return {
     status: "ok",

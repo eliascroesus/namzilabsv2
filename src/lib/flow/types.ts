@@ -282,11 +282,14 @@ export const FormatterConfigSchema = z.object({
 });
 export type FormatterConfig = z.infer<typeof FormatterConfigSchema>;
 
-// ---------- Paths (advanced) ----------
+// ---------- Paths ----------
+// New model: the hub just splits (fan-out); each branch is its own "Path conditions"
+// step (a Filter). Legacy nodes carried per-path filters + a fallback — both optional
+// here so old published flows keep routing exactly as before.
 export const PathsConfigSchema = z.object({
-  paths: z.array(z.object({ id: z.string().min(1), label: z.string().min(1), filters: FilterConfigSchema })).default([]),
-  fallbackId: z.string().default("fallback"),
-  fallbackLabel: z.string().default("Fallback"),
+  paths: z.array(z.object({ id: z.string().min(1), label: z.string().min(1), filters: FilterConfigSchema.optional() })).default([]),
+  fallbackId: z.string().optional(),
+  fallbackLabel: z.string().optional(),
 });
 export type PathsConfig = z.infer<typeof PathsConfigSchema>;
 

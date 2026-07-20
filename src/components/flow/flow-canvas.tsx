@@ -172,23 +172,43 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         if (src && tgt) position = { x: (src.position.x + tgt.position.x) / 2, y: (src.position.y + tgt.position.y) / 2 };
       }
 
-      const newNode: FNode = { id, type, position, data: { config: defaultConfig(type), lastTest: null, dirty: false } };
-      setNodes((ns) => [...ns, newNode]);
+      const config = defaultConfig(type);
+      const newNode: FNode = { id, type, position, data: { config, lastTest: null, dirty: false } };
+
+      // A Paths hub auto-creates one "Path conditions" (Filter) step per branch, so the
+      // canvas splits into labeled lanes the moment you add it (Zapier-style).
+      const extraNodes: FNode[] = [];
+      const extraEdges: Edge[] = [];
+      if (type === "paths") {
+        const paths = (config.paths as Array<{ id: string; label: string }>) ?? [];
+        paths.forEach((p, i) => {
+          const bid = `filter_${Math.random().toString(36).slice(2, 8)}`;
+          extraNodes.push({
+            id: bid,
+            type: "filter",
+            position: { x: position.x + (i - (paths.length - 1) / 2) * 300, y: position.y + 170 },
+            data: { config: defaultConfig("filter"), label: p.label, lastTest: null, dirty: false },
+          });
+          extraEdges.push({ id: rid(), type: "insert", source: id, sourceHandle: p.id, target: bid });
+        });
+      }
+      setNodes((ns) => [...ns, newNode, ...extraNodes]);
 
       const targetHandleFor = (t: NodeType) => (t === "formula" ? "a" : undefined);
-      if (ctx?.fromNodeId) {
-        setEdges((es) => [
-          ...es,
-          { id: `e_${Math.random().toString(36).slice(2, 9)}`, type: "insert", source: ctx.fromNodeId!, sourceHandle: ctx.sourceHandle ?? undefined, target: id, targetHandle: targetHandleFor(type) },
-        ]);
-      } else if (ctx?.onEdge) {
-        const old = ctx.onEdge;
-        setEdges((es) => [
-          ...es.filter((e) => e.id !== old.id),
-          { id: `e_${Math.random().toString(36).slice(2, 9)}`, type: "insert", source: old.source, sourceHandle: old.sourceHandle, target: id, targetHandle: targetHandleFor(type) },
-          { id: `e_${Math.random().toString(36).slice(2, 9)}`, type: "insert", source: id, target: old.target, targetHandle: old.targetHandle },
-        ]);
-      }
+      setEdges((es) => {
+        let base = es;
+        if (ctx?.fromNodeId) {
+          base = [...es, { id: rid(), type: "insert", source: ctx.fromNodeId, sourceHandle: ctx.sourceHandle ?? undefined, target: id, targetHandle: targetHandleFor(type) }];
+        } else if (ctx?.onEdge) {
+          const old = ctx.onEdge;
+          base = [
+            ...es.filter((e) => e.id !== old.id),
+            { id: rid(), type: "insert", source: old.source, sourceHandle: old.sourceHandle, target: id, targetHandle: targetHandleFor(type) },
+            { id: rid(), type: "insert", source: id, target: old.target, targetHandle: old.targetHandle },
+          ];
+        }
+        return [...base, ...extraEdges];
+      });
       setSelectedId(id);
     },
     [commit, nodes, setNodes, setEdges],
@@ -272,6 +292,40 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       markDirtyFrom(nodeId);
     },
     [commit, setEdges, markDirtyFrom],
+  );
+
+  // Paths: add a branch = a new labeled handle + its own "Path conditions" (Filter) step.
+  const addBranch = useCallback(
+    (hubId: string) => {
+      const hub = nodes.find((n) => n.id === hubId);
+      if (!hub) return;
+      commit();
+      const paths = ((hub.data.config as { paths?: Array<{ id: string; label: string }> }).paths) ?? [];
+      const pid = `p${Math.random().toString(36).slice(2, 7)}`;
+      const label = `Path ${String.fromCharCode(65 + paths.length)}`;
+      const bid = `filter_${Math.random().toString(36).slice(2, 8)}`;
+      setNodes((ns) => [
+        ...ns.map((n) => (n.id === hubId ? { ...n, data: { ...n.data, config: { ...n.data.config, paths: [...paths, { id: pid, label }] } } } : n)),
+        { id: bid, type: "filter", position: { x: hub.position.x, y: hub.position.y + 170 }, data: { config: defaultConfig("filter"), label, lastTest: null, dirty: false } } as FNode,
+      ]);
+      setEdges((es) => [...es, { id: rid(), type: "insert", source: hubId, sourceHandle: pid, target: bid }]);
+    },
+    [commit, nodes, setNodes, setEdges],
+  );
+  const removeBranch = useCallback(
+    (hubId: string, pathId: string) => {
+      commit();
+      const branchTargets = edges.filter((e) => e.source === hubId && e.sourceHandle === pathId).map((e) => e.target);
+      const toRemove = new Set<string>(branchTargets);
+      for (const t of branchTargets) for (const d of descendantsOf(t, edges)) toRemove.add(d);
+      setNodes((ns) =>
+        ns
+          .map((n) => (n.id === hubId ? { ...n, data: { ...n.data, config: { ...n.data.config, paths: (((n.data.config as { paths?: Array<{ id: string }> }).paths) ?? []).filter((p) => p.id !== pathId) } } } : n))
+          .filter((n) => !toRemove.has(n.id)),
+      );
+      setEdges((es) => es.filter((e) => !(e.source === hubId && e.sourceHandle === pathId) && !toRemove.has(e.source) && !toRemove.has(e.target)));
+    },
+    [commit, edges, setNodes, setEdges],
   );
 
   // Delete key: reconnect any in-between step's neighbours so the flow stays linear.
@@ -555,6 +609,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             onAddNext={() => addFromNode(selected.id)}
             onSetInput={(handle, sourceId) => setFormulaInput(selected.id, handle, sourceId)}
             onSetSources={(ids) => setCombineSources(selected.id, ids)}
+            onAddBranch={() => addBranch(selected.id)}
+            onRemoveBranch={(pid) => removeBranch(selected.id, pid)}
           />
         )}
       </div>

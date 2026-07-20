@@ -242,6 +242,25 @@ describe("engine — Calculate node (merged number / breakdown / compare)", () =
   });
 });
 
+describe("engine — Paths hub fans out to each branch (new model)", () => {
+  it("gives every branch the full input; the branch's own Filter narrows it", async () => {
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "canceled" });
+    const g = parseGraph({
+      nodes: [
+        N("a", "app", { connectionId: CONN }),
+        N("p", "paths", { paths: [{ id: "pa", label: "Path A" }, { id: "pb", label: "Path B" }] }),
+        N("fa", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "booked" }] }),
+      ],
+      edges: [E("a", "p"), { id: "p->fa", source: "p", target: "fa", sourceHandle: "pa" }],
+    });
+    const res = await runFlow({ db, orgId: ORG }, g, { untilNodeId: "fa" });
+    expect(res.nodes.get("p")!.recordsOut).toBe(3); // hub passes everything through
+    expect(res.nodes.get("fa")!.recordsOut).toBe(2); // Path A's Filter keeps booked
+  });
+});
+
 describe("validateGraph — mapped rule without a chosen field", () => {
   it("flags a condition set to compare against a field with no field chosen", () => {
     const g = parseGraph({

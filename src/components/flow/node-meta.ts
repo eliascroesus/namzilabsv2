@@ -83,7 +83,7 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
     case "formatter":
       return { field: "value", op: "round", decimals: 2 };
     case "paths":
-      return { paths: [{ id: "p1", label: "Path 1", filters: { combinator: "and", rules: [] } }], fallbackId: "fallback", fallbackLabel: "Fallback" };
+      return { paths: [{ id: "p1", label: "Path A" }, { id: "p2", label: "Path B" }] };
     default:
       return {};
   }
@@ -168,7 +168,7 @@ export function summary(type: string, data: NodeData): string {
   if (type === "combine") return `${String(c.mode ?? "stack")} on ${String(c.identityField ?? "subject")}`;
   if (type === "group") return String(c.mode) === "field" ? `by ${String(c.field ?? "source")}` : `${((c.categories as unknown[]) ?? []).length} categories`;
   if (type === "formatter") return `${String(c.op ?? "round")} · ${String(c.field ?? "value")}`;
-  if (type === "paths") return `${((c.paths as unknown[]) ?? []).length} path(s) + fallback`;
+  if (type === "paths") return `${((c.paths as unknown[]) ?? []).length} branches`;
   return "";
 }
 
@@ -221,5 +221,8 @@ export function statusOf(data: NodeData): { label: string; cls: string } {
 
 export function pathHandles(data: NodeData): Array<{ id: string; label: string }> {
   const paths = (data.config.paths as Array<{ id: string; label: string }>) ?? [];
-  return [...paths, { id: String(data.config.fallbackId ?? "fallback"), label: String(data.config.fallbackLabel ?? "Fallback") }];
+  const handles = paths.map((p) => ({ id: p.id, label: p.label }));
+  const fbId = data.config.fallbackId as string | undefined; // legacy nodes only
+  if (fbId) handles.push({ id: fbId, label: String(data.config.fallbackLabel ?? "Fallback") });
+  return handles;
 }
