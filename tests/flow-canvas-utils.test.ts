@@ -147,12 +147,14 @@ describe("buildFieldGroups — nearest-app example resolution + provenance", () 
     expect(groups[0].fields.find((f) => f.path === "properties.utm")?.container).toBe(true);
   });
 
-  it("fieldProvenance resolves a drilled-in nested path to its step + sample", () => {
+  it("fieldProvenance resolves a drilled-in nested path to its originating step + sample", () => {
     const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
     const prov = fieldProvenance(groups, "properties.utm.source");
     expect(prov.sample).toBe("google");
     expect(prov.label).toBe("source");
-    expect(prov.stepNo).toBe(2);
+    // Every upstream step is now a group (in flow order), so the field is attributed to
+    // the step that first introduced it — the app (step 1) — not the pass-through Filter.
+    expect(prov.stepNo).toBe(1);
   });
 });
 

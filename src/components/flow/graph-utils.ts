@@ -148,18 +148,66 @@ export function computeVerticalLayout(nodes: FNode[], edges: Edge[]): Map<string
   }
   for (const n of nodes) if (!depth.has(n.id)) depth.set(n.id, 0);
 
+  // Horizontal position: propagate a lane offset down each branch so a Paths split sends
+  // its branches cleanly to the sides and every step in a branch stays in that branch's
+  // column (instead of drifting back to centre). Non-branching chains stay at x = 0.
+  const incoming = new Map<string, Array<{ source: string; handle: string | null }>>();
+  for (const e of edges) {
+    if (!incoming.has(e.target)) incoming.set(e.target, []);
+    incoming.get(e.target)!.push({ source: e.source, handle: e.sourceHandle ?? null });
+  }
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const pathIds = (n: FNode | undefined): string[] => {
+    if (!n) return [];
+    const paths = (n.data.config?.paths as Array<{ id: string }> | undefined) ?? [];
+    const ids = paths.map((p) => p.id);
+    const fb = n.data.config?.fallbackId as string | undefined;
+    if (fb) ids.push(fb);
+    return ids;
+  };
+  const SPREAD = 320;
+  const xById = new Map<string, number>();
+  const ordered = [...nodes].sort((a, b) => (depth.get(a.id) ?? 0) - (depth.get(b.id) ?? 0));
+  for (const n of ordered) {
+    const ins = incoming.get(n.id) ?? [];
+    if (ins.length === 0) {
+      xById.set(n.id, 0);
+    } else if (ins.length === 1) {
+      const { source, handle } = ins[0];
+      const px = xById.get(source) ?? 0;
+      const parent = nodeById.get(source);
+      if (parent && parent.type === "paths" && handle) {
+        const ids = pathIds(parent);
+        const idx = Math.max(0, ids.indexOf(handle));
+        xById.set(n.id, px + (idx - (ids.length - 1) / 2) * SPREAD);
+      } else {
+        xById.set(n.id, px);
+      }
+    } else {
+      // Recombined (e.g. Combine): sit under the average of the inputs.
+      xById.set(n.id, ins.reduce((s, i) => s + (xById.get(i.source) ?? 0), 0) / ins.length);
+    }
+  }
+
+  const ROW = 168;
+  const MIN_GAP = 288;
   const byDepth = new Map<number, string[]>();
   for (const n of nodes) {
     const d = depth.get(n.id) ?? 0;
     if (!byDepth.has(d)) byDepth.set(d, []);
     byDepth.get(d)!.push(n.id);
   }
-  const COL = 288;
-  const ROW = 168;
   const pos = new Map<string, { x: number; y: number }>();
   for (const [d, ids] of byDepth) {
-    const total = ids.length;
-    ids.forEach((id, i) => pos.set(id, { x: (i - (total - 1) / 2) * COL, y: d * ROW }));
+    // Keep lane offsets, but nudge apart any nodes that would overlap in this row.
+    ids.sort((a, b) => (xById.get(a) ?? 0) - (xById.get(b) ?? 0));
+    let prevX = -Infinity;
+    for (const id of ids) {
+      let x = xById.get(id) ?? 0;
+      if (x - prevX < MIN_GAP) x = prevX + MIN_GAP;
+      pos.set(id, { x, y: d * ROW });
+      prevX = x;
+    }
   }
   return pos;
 }

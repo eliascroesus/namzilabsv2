@@ -525,25 +525,16 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       }),
     [nodes, layout, terminals, stepNoById, inDegreeById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode],
   );
-  // Branch (Paths) edges are labeled with their path, so the fan-out reads as lanes.
-  const pathLabels = useMemo(() => {
-    const m = new Map<string, Map<string, string>>();
-    for (const n of nodes) {
-      if (n.type !== "paths") continue;
-      const inner = new Map<string, string>();
-      for (const h of pathHandles(n.data)) inner.set(h.id, h.label);
-      m.set(n.id, inner);
-    }
-    return m;
-  }, [nodes]);
+  // Branch edges (from a Paths hub) get no "+" insert — a branch always starts with its
+  // own mandatory conditions step, and the plain line reads cleaner without labels.
   const displayEdges = useMemo(
     () =>
       edges.map((e) => ({
         ...e,
         type: "insert",
-        data: { ...(e.data ?? {}), onInsert: insertOnEdge, label: e.sourceHandle ? pathLabels.get(e.source)?.get(e.sourceHandle) : undefined },
+        data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge },
       })),
-    [edges, insertOnEdge, pathLabels],
+    [edges, insertOnEdge],
   );
 
   const empty = nodes.length === 0;
