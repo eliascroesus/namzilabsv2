@@ -58,14 +58,25 @@ export function DataBrowser({
   const [q, setQ] = useState("");
   // Drill state: which step, and the trail of container fields we've descended into.
   const [drill, setDrill] = useState<{ groupId: string; trail: DataField[] } | null>(null);
+  // Which step groups are expanded. Collapsed by default so the user first sees every
+  // available step, then opens the one they want (Zapier's Previous Steps).
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const setOpen = (o: boolean) => {
     setOpenRaw(o);
     if (!o) {
       setQ("");
       setDrill(null);
+      setExpanded(new Set());
     }
   };
+  const toggleGroup = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const toggle = () => (disabled ? undefined : setOpen(!open));
 
   const drillGroup = drill ? groups.find((g) => g.stepId === drill.groupId) : undefined;
@@ -152,33 +163,38 @@ export function DataBrowser({
             </>
           )}
 
-          {/* Top level: every valid earlier step, grouped. */}
+          {/* Top level: every valid earlier step as a collapsible group. Collapsed by
+              default; a search auto-reveals matching fields inside every step. */}
           {!drill &&
             anyFields &&
             groups.map((g) => {
               const fields = filterFields(g.fields, q);
-              if (fields.length === 0) return null;
+              const searching = q.trim().length > 0;
+              if (searching && fields.length === 0) return null;
+              const isOpen = searching || expanded.has(g.stepId);
               return (
-                <div key={g.stepId} className="mb-1">
-                  <div className="flex items-center gap-1.5 px-2 pb-0.5 pt-1.5">
+                <div key={g.stepId} className="mb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(g.stepId)}
+                    className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left hover:bg-neutral-50"
+                  >
+                    <span className={`shrink-0 text-neutral-400 transition-transform ${isOpen ? "rotate-90" : ""}`} aria-hidden>›</span>
                     {g.system ? (
-                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-neutral-200 text-[8px] font-semibold text-neutral-500" aria-hidden>
-                        ⚙
-                      </span>
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-neutral-200 text-[8px] font-semibold text-neutral-500" aria-hidden>⚙</span>
                     ) : (
                       <SourceBadge source={g.source} size={16} />
                     )}
                     {g.stepNo != null && <span className="text-[11px] font-semibold text-neutral-400">{g.stepNo}.</span>}
-                    <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{g.title}</span>
-                  </div>
-                  {fields.map((f) => (
-                    <FieldRow
-                      key={f.path}
-                      field={f}
-                      onPick={() => pick(g, f)}
-                      onDrill={() => setDrill({ groupId: g.stepId, trail: [f] })}
-                    />
-                  ))}
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-neutral-700">{g.title}</span>
+                    <span className="shrink-0 text-[10px] text-neutral-400">{g.fields.length}</span>
+                  </button>
+                  {isOpen &&
+                    fields.map((f) => (
+                      <div key={f.path} className="pl-4">
+                        <FieldRow field={f} onPick={() => pick(g, f)} onDrill={() => setDrill({ groupId: g.stepId, trail: [f] })} />
+                      </div>
+                    ))}
                 </div>
               );
             })}
