@@ -8,7 +8,6 @@ import {
   TIME_PRESETS,
   FORMULA_OPS,
   type NodeType,
-  type FilterConfig,
 } from "@/lib/flow/types";
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
 import { collidingFields, computeNodeStatus } from "./graph-utils";
@@ -16,8 +15,9 @@ import { STATUS_META, defaultTitle, formulaExpression, formulaHandleLabels, resu
 import { RecordSamplePicker } from "./RecordSamplePicker";
 import { NodeGlyph } from "./icons";
 import { Select, DataBrowser, ValueInput, ConditionEditor, SourceBadge, humanizeKey } from "./controls";
-import type { DataGroup, ValueModel } from "./controls/types";
+import type { DataGroup } from "./controls/types";
 import { toDataGroups } from "./field-groups";
+import { storedToValue, valueToStored, asFilterConfig } from "./panel-mappers";
 
 /** A reference to an earlier step, offered as a labeled pill for multi-input wiring. */
 export type StepRef = { id: string; title: string; stepNo?: number };
@@ -66,20 +66,6 @@ function FieldSelect({ value, groups, onChange, placeholder = "Choose a field…
       )}
     />
   );
-}
-
-function storedToValue(cfg: Record<string, unknown>, prefix: string, groups: DataGroup[]): ValueModel {
-  if (cfg[`${prefix}Kind`] === "field" && cfg[`${prefix}Field`]) {
-    const path = String(cfg[`${prefix}Field`]);
-    const owner = groups.find((g) => g.fields.some((f) => f.path === path));
-    const f = owner?.fields.find((x) => x.path === path);
-    return { mode: "field", text: "", field: { producerStepId: owner?.stepId ?? "", fieldPath: path, label: f?.label ?? humanizeKey(path), source: owner?.source, stepNo: owner?.stepNo, sample: f?.sample } };
-  }
-  return { mode: "fixed", text: String(cfg[prefix] ?? ""), field: null };
-}
-function valueToStored(v: ValueModel, prefix: string): Record<string, unknown> {
-  if (v.mode === "field" && v.field) return { [`${prefix}Kind`]: "field", [`${prefix}Field`]: v.field.fieldPath, [prefix]: "" };
-  return { [`${prefix}Kind`]: "fixed", [prefix]: v.text, [`${prefix}Field`]: undefined };
 }
 
 export function ConfigPanel({
@@ -654,15 +640,6 @@ function CategoryEditor({ cfg, groups, onChange }: { cfg: Record<string, unknown
       <Field label="Fallback label"><input value={(cfg.fallbackLabel as string) ?? "Other"} onChange={(e) => onChange({ fallbackLabel: e.target.value })} className={INPUT} /></Field>
     </div>
   );
-}
-
-/** Coerce a loosely-typed config blob into a FilterConfig for the ConditionEditor. */
-function asFilterConfig(cfg: Record<string, unknown>): FilterConfig {
-  return {
-    combinator: (cfg.combinator as "and" | "or") ?? "and",
-    rules: (cfg.rules as FilterConfig["rules"]) ?? [],
-    dateRange: cfg.dateRange as FilterConfig["dateRange"],
-  };
 }
 
 /** Shown only after a successful manual test (never auto-computed). */

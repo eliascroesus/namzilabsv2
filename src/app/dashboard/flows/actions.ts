@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "@/db/client";
 import { requireOrg } from "@/lib/auth";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow } from "@/lib/flow/store";
-import { runFlow, topoSort, type NodeExec } from "@/lib/flow/engine";
+import { runFlow, type NodeExec } from "@/lib/flow/engine";
 import { materializeFlow } from "@/lib/flow/materialize";
 import { parseGraph } from "@/lib/flow/types";
 import { validateGraph } from "@/lib/flow/validate";
@@ -53,17 +53,6 @@ export type NodeTestDTO = {
   tile?: unknown;
 };
 
-/** One step's compact result, for the persistent "Result so far" panel (W5). */
-export type ChainStepDTO = {
-  nodeId: string;
-  type: string;
-  recordsIn: number;
-  recordsOut: number;
-  value: number | null;
-  status: "ok" | "error";
-  error?: string;
-};
-
 /** Shape one engine result into the compact DTO the editor renders. */
 function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTestDTO {
   if (!exec) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample, outputSchema: [], error: "This step didn't run — check its inputs are connected." };
@@ -84,69 +73,6 @@ export async function testNodeAction(graph: unknown, nodeId: string): Promise<No
     return execToDTO(res.nodes.get(nodeId), inputSample);
   } catch (e) {
     return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
-/** Value a step contributes to the running "Result so far" (scalar/tile value, else null). */
-function chainValue(ex: NodeExec): number | null {
-  if (ex.status !== "ok") return null;
-  const tileVal = (ex.tile as { value?: unknown } | undefined)?.value;
-  if (typeof tileVal === "number") return tileVal;
-  if (ex.shape.kind === "scalar") return ex.shape.value;
-  return null;
-}
-
-/**
- * Run the flow up to a node and return (1) the ordered ancestor chain (incl. the node)
- * as compact per-step results for the persistent "Result so far" panel, and (2) full
- * per-node DTOs so the editor can refresh each node card + the data browser at once.
- * Read-only over synced data, so the client calls this on a debounce after edits.
- */
-export async function runChainAction(
-  graph: unknown,
-  nodeId: string,
-): Promise<{ steps: ChainStepDTO[]; results: Record<string, NodeTestDTO> }> {
-  const { orgId } = await requireOrg();
-  try {
-    const g = parseGraph(graph);
-    const res = await runFlow({ db: getDb(), orgId }, g, { untilNodeId: nodeId });
-
-    // Ancestors of nodeId (incl. itself).
-    const incoming = new Map<string, string[]>();
-    for (const e of g.edges) {
-      if (!incoming.has(e.target)) incoming.set(e.target, []);
-      incoming.get(e.target)!.push(e.source);
-    }
-    const anc = new Set<string>([nodeId]);
-    const stack = [nodeId];
-    while (stack.length) {
-      const id = stack.pop()!;
-      for (const s of incoming.get(id) ?? []) if (!anc.has(s)) { anc.add(s); stack.push(s); }
-    }
-
-    const ordered = topoSort(g).filter((id) => anc.has(id));
-    const steps: ChainStepDTO[] = [];
-    const results: Record<string, NodeTestDTO> = {};
-    for (const id of ordered) {
-      const node = g.nodes.find((n) => n.id === id)!;
-      const ex = res.nodes.get(id);
-      const inNodeId = g.edges.find((e) => e.target === id)?.source;
-      const inExec = inNodeId ? res.nodes.get(inNodeId) : undefined;
-      const inputSample = inExec && inExec.status === "ok" ? inExec.sample : [];
-      results[id] = execToDTO(ex, inputSample);
-      steps.push({
-        nodeId: id,
-        type: node.type,
-        recordsIn: ex?.recordsIn ?? 0,
-        recordsOut: ex?.recordsOut ?? 0,
-        value: ex ? chainValue(ex) : null,
-        status: ex?.status ?? "error",
-        error: ex && ex.status === "error" ? ex.error : ex ? undefined : "This step didn't run.",
-      });
-    }
-    return { steps, results };
-  } catch {
-    return { steps: [], results: {} };
   }
 }
 
