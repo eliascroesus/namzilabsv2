@@ -315,18 +315,42 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   );
   const removeBranch = useCallback(
     (hubId: string, pathId: string) => {
+      const hub = nodes.find((n) => n.id === hubId);
+      if (!hub) return;
       commit();
+      const paths = ((hub.data.config as { paths?: Array<{ id: string; label: string }> }).paths) ?? [];
+      const remaining = paths.filter((p) => p.id !== pathId);
+
+      // Remove the deleted branch's whole subtree.
       const branchTargets = edges.filter((e) => e.source === hubId && e.sourceHandle === pathId).map((e) => e.target);
       const toRemove = new Set<string>(branchTargets);
       for (const t of branchTargets) for (const d of descendantsOf(t, edges)) toRemove.add(d);
+
+      if (remaining.length <= 1) {
+        // A split with one (or zero) branch left is pointless — dissolve the hub and wire
+        // the surviving branch straight onto whatever fed the split, so the flow stays a
+        // single line (no orphaned steps).
+        const survivor = remaining[0];
+        const survivorFirst = survivor ? edges.find((e) => e.source === hubId && e.sourceHandle === survivor.id)?.target : undefined;
+        const hubParents = edges.filter((e) => e.target === hubId).map((e) => ({ source: e.source, sourceHandle: e.sourceHandle ?? undefined }));
+        toRemove.add(hubId);
+        setNodes((ns) => ns.filter((n) => !toRemove.has(n.id)));
+        setEdges((es) => {
+          let next = es.filter((e) => !toRemove.has(e.source) && !toRemove.has(e.target) && e.source !== hubId && e.target !== hubId);
+          if (survivorFirst) for (const p of hubParents) next = [...next, { id: rid(), type: "insert", source: p.source, sourceHandle: p.sourceHandle, target: survivorFirst }];
+          return next;
+        });
+        setSelectedId(null);
+        return;
+      }
+
+      // Two or more branches remain: just drop this branch and its path entry.
       setNodes((ns) =>
-        ns
-          .map((n) => (n.id === hubId ? { ...n, data: { ...n.data, config: { ...n.data.config, paths: (((n.data.config as { paths?: Array<{ id: string }> }).paths) ?? []).filter((p) => p.id !== pathId) } } } : n))
-          .filter((n) => !toRemove.has(n.id)),
+        ns.map((n) => (n.id === hubId ? { ...n, data: { ...n.data, config: { ...n.data.config, paths: remaining } } } : n)).filter((n) => !toRemove.has(n.id)),
       );
       setEdges((es) => es.filter((e) => !(e.source === hubId && e.sourceHandle === pathId) && !toRemove.has(e.source) && !toRemove.has(e.target)));
     },
-    [commit, edges, setNodes, setEdges],
+    [commit, nodes, edges, setNodes, setEdges],
   );
 
   // Delete from a card's kebab. A plain step reconnects its neighbours (stays linear);
@@ -359,8 +383,13 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         const sub = descendantsOf(id, edges);
         const count = sub.size + 1;
         const handle = inEdge.sourceHandle;
+        const hubPaths = (((parent.data.config as { paths?: unknown[] }).paths) ?? []).length;
+        const message =
+          hubPaths <= 2
+            ? `This deletes this branch and its ${count} step${count === 1 ? "" : "s"}. The other branch will connect straight to the step before the split.`
+            : `This deletes this branch and its ${count} step${count === 1 ? "" : "s"}.`;
         setPendingDelete({
-          message: `This deletes this branch and its ${count} step${count === 1 ? "" : "s"}.`,
+          message,
           run: () => {
             removeBranch(parent.id, handle);
             setSelectedId(null);
@@ -373,6 +402,22 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     },
     [nodes, edges, commit, setNodes, setEdges, removeBranch, deleteAndReconnect],
   );
+
+  // Backspace / Delete removes the selected step (routed through the same smart delete,
+  // so a Paths hub or branch still asks for confirmation). Ignored while typing in a field.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Backspace" && e.key !== "Delete") return;
+      if (!selectedId) return;
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
+      e.preventDefault();
+      requestDelete(selectedId);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectedId, requestDelete]);
 
   const duplicateNode = useCallback(
     (id: string) => {
