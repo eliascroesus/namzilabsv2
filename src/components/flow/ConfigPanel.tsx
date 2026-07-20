@@ -111,7 +111,7 @@ export function ConfigPanel({
   inputs,
   inputCount,
   testing,
-  numberCandidates,
+  numberGroups,
   datasetCandidates,
   onChange,
   onRename,
@@ -129,7 +129,7 @@ export function ConfigPanel({
   inputs: InputDescriptor[];
   inputCount: number;
   testing: boolean;
-  numberCandidates: StepRef[];
+  numberGroups: DataGroup[];
   datasetCandidates: StepRef[];
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
@@ -142,7 +142,7 @@ export function ConfigPanel({
 }) {
   const type = String(node.type) as NodeType;
   const cfg = node.data.config;
-  const status = computeNodeStatus({ type, cfg, inputCount, lastTest: node.data.lastTest, dirty: node.data.dirty, updating: testing });
+  const status = computeNodeStatus({ type, cfg, inputCount, inputHandles: inputs.map((i) => i.targetHandle), lastTest: node.data.lastTest, dirty: node.data.dirty, updating: testing });
   const sm = STATUS_META[status];
   const err = node.data.lastTest?.status === "error" ? node.data.lastTest.error : null;
   const tested = status === "ready";
@@ -187,7 +187,7 @@ export function ConfigPanel({
             connections={connections}
             groups={groups}
             inputs={inputs}
-            numberCandidates={numberCandidates}
+            numberGroups={numberGroups}
             datasetCandidates={datasetCandidates}
             onChange={onChange}
             onSetInput={onSetInput}
@@ -223,7 +223,7 @@ function NodeConfig({
   connections,
   groups,
   inputs,
-  numberCandidates,
+  numberGroups,
   datasetCandidates,
   onChange,
   onSetInput,
@@ -236,7 +236,7 @@ function NodeConfig({
   connections: ConnMeta[];
   groups: DataGroup[];
   inputs: InputDescriptor[];
-  numberCandidates: StepRef[];
+  numberGroups: DataGroup[];
   datasetCandidates: StepRef[];
   onChange: (patch: Record<string, unknown>) => void;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
@@ -250,8 +250,10 @@ function NodeConfig({
     const connId = (cfg.connectionId as string) ?? "";
     const conn = connections.find((c) => c.id === connId);
     return (
-      <div className="space-y-3">
-        <Field label="Connected account">
+      <div className="space-y-4">
+        {/* Setup: which connected account this flow pulls from. */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Account</p>
           <Select
             value={connId}
             width={W}
@@ -262,38 +264,39 @@ function NodeConfig({
               onChange({ connectionId: c?.id ?? null, connectionName: c?.name ?? null, source: c?.source ?? null, eventType: null });
             }}
           />
-        </Field>
-        {conn?.syncStatus && (
-          <p className="text-xs text-neutral-500">
-            Data status: <span className={`inline-block h-2 w-2 rounded-full align-middle ${SYNC_DOT[conn.syncStatus] ?? "bg-neutral-400"}`} /> {syncStatusLabel(conn.syncStatus)}
-            {conn.syncStatus === "outdated" || conn.syncStatus === "error" ? (
-              <>
-                {" "}&middot;{" "}
-                <a className="underline" href={`/connections/${conn.id}`}>Manage</a>
-              </>
-            ) : null}
-          </p>
+          {conn?.syncStatus && (
+            <p className="text-xs text-neutral-500">
+              Data status: <span className={`inline-block h-2 w-2 rounded-full align-middle ${SYNC_DOT[conn.syncStatus] ?? "bg-neutral-400"}`} /> {syncStatusLabel(conn.syncStatus)}
+              {conn.syncStatus === "outdated" || conn.syncStatus === "error" ? (
+                <>
+                  {" "}&middot;{" "}
+                  <a className="underline" href={`/connections/${conn.id}`}>Manage</a>
+                </>
+              ) : null}
+            </p>
+          )}
+          {connections.length === 0 && (
+            <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+              No connected accounts yet. Connect one in <a className="underline" href="/integrations">Integrations</a>.
+            </p>
+          )}
+        </div>
+
+        {/* Configure: what to pull — set per flow, not on the integration. */}
+        {conn && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Configure</p>
+            <Field label="Which event">
+              <Select
+                value={typeof cfg.eventType === "string" ? (cfg.eventType as string) : "__none"}
+                width={W}
+                placeholder="Choose an event…"
+                options={[{ value: "", label: "All events" }, ...(conn?.eventTypes ?? []).map((t) => ({ value: t, label: t }))]}
+                onChange={(v) => onChange({ eventType: v })}
+              />
+            </Field>
+          </div>
         )}
-        {connections.length === 0 && (
-          <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-            No connected accounts yet. Connect one in <a className="underline" href="/integrations">Integrations</a>.
-          </p>
-        )}
-        <Field label="Which event">
-          <Select
-            value={typeof cfg.eventType === "string" ? (cfg.eventType as string) : "__none"}
-            width={W}
-            placeholder="Choose an event…"
-            options={[{ value: "", label: "All events" }, ...(conn?.eventTypes ?? []).map((t) => ({ value: t, label: t }))]}
-            onChange={(v) => onChange({ eventType: v })}
-          />
-        </Field>
-        <Advanced>
-          <Field label="Match records using">
-            <FieldSelect value={(cfg.identityField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ identityField: v })} />
-          </Field>
-          <p className="text-xs text-neutral-400">Used by downstream Combine / de-duplicate steps to recognise the same person.</p>
-        </Advanced>
       </div>
     );
   }
@@ -356,9 +359,9 @@ function NodeConfig({
         <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
           <p className="font-medium">{formulaExpression(op, inA?.title ?? "First number", inB?.title ?? "Second number")}</p>
         </div>
-        <NumberPicker handle="a" label={labels.a} desc={inA} candidates={numberCandidates} onSetInput={onSetInput} />
-        <NumberPicker handle="b" label={labels.b} desc={inB} candidates={numberCandidates} onSetInput={onSetInput} />
-        {numberCandidates.length === 0 && <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Add a “Calculate a number” step earlier in the flow to compare.</p>}
+        <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} onSetInput={onSetInput} />
+        <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} onSetInput={onSetInput} />
+        {numberGroups.length === 0 && <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Add an earlier step first — its result becomes a number you can compare.</p>}
       </div>
     );
   }
@@ -548,7 +551,7 @@ function NodeConfig({
         </Field>
         {mode === "number" && <CalcNumber cfg={cfg} groups={groups} onChange={onChange} />}
         {mode === "breakdown" && <CalcBreakdown cfg={cfg} groups={groups} onChange={onChange} />}
-        {mode === "compare" && <CalcCompare cfg={cfg} inputs={inputs} numberCandidates={numberCandidates} onChange={onChange} onSetInput={onSetInput} />}
+        {mode === "compare" && <CalcCompare cfg={cfg} inputs={inputs} numberGroups={numberGroups} onChange={onChange} onSetInput={onSetInput} />}
       </div>
     );
   }
@@ -616,7 +619,7 @@ function CalcBreakdown({ cfg, groups, onChange }: { cfg: Record<string, unknown>
 }
 
 /** Calculate → compare two numbers picked from earlier steps as labeled pills. */
-function CalcCompare({ cfg, inputs, numberCandidates, onChange, onSetInput }: { cfg: Record<string, unknown>; inputs: InputDescriptor[]; numberCandidates: StepRef[]; onChange: (p: Record<string, unknown>) => void; onSetInput: (h: "a" | "b", id: string | null) => void }) {
+function CalcCompare({ cfg, inputs, numberGroups, onChange, onSetInput }: { cfg: Record<string, unknown>; inputs: InputDescriptor[]; numberGroups: DataGroup[]; onChange: (p: Record<string, unknown>) => void; onSetInput: (h: "a" | "b", id: string | null) => void }) {
   const op = String(cfg.op ?? "percentage");
   const labels = formulaHandleLabels(op);
   const inA = inputs.find((i) => i.targetHandle === "a");
@@ -629,24 +632,34 @@ function CalcCompare({ cfg, inputs, numberCandidates, onChange, onSetInput }: { 
       <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
         <p className="font-medium">{formulaExpression(op, inA?.title ?? "First number", inB?.title ?? "Second number")}</p>
       </div>
-      <NumberPicker handle="a" label={labels.a} desc={inA} candidates={numberCandidates} onSetInput={onSetInput} />
-      <NumberPicker handle="b" label={labels.b} desc={inB} candidates={numberCandidates} onSetInput={onSetInput} />
-      {numberCandidates.length === 0 && <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Add a “Calculate a number” step earlier in the flow to compare.</p>}
+      <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} onSetInput={onSetInput} />
+      <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} onSetInput={onSetInput} />
+      {numberGroups.length === 0 && <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Add an earlier step first — its result becomes a number you can compare.</p>}
     </>
   );
 }
 
-function NumberPicker({ handle, label, desc, candidates, onSetInput }: { handle: "a" | "b"; label: string; desc?: InputDescriptor; candidates: StepRef[]; onSetInput: (h: "a" | "b", id: string | null) => void }) {
-  // A scalar step shows its computed value; a data step shows its record count (Output number).
-  const preview = desc?.value ?? desc?.recordCount;
+/**
+ * A compare step's number input: the same Insert-data browser as every other input,
+ * but each earlier step exposes exactly its one number — a scalar step's Result, or a
+ * dataset step's Output number (its record count, e.g. "56 passed").
+ */
+function NumberPicker({ handle, label, desc, groups, onSetInput }: { handle: "a" | "b"; label: string; desc?: InputDescriptor; groups: DataGroup[]; onSetInput: (h: "a" | "b", id: string | null) => void }) {
+  const chosen = groups.find((g) => g.stepId === desc?.nodeId);
+  const chosenLabel = chosen ? `${chosen.stepNo != null ? `${chosen.stepNo}. ` : ""}${chosen.title}` : desc ? desc.title : null;
+  const preview = chosen?.fields[0]?.sample ?? desc?.value ?? desc?.recordCount;
   return (
     <Field label={label}>
-      <Select
-        value={desc?.nodeId ?? ""}
+      <DataBrowser
+        groups={groups}
         width={W}
-        placeholder="Choose a number…"
-        options={candidates.map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
-        onChange={(v) => onSetInput(handle, v || null)}
+        onPick={(ref) => onSetInput(handle, ref.producerStepId)}
+        trigger={({ toggle }) => (
+          <button type="button" onClick={toggle} className={SELECT_BTN}>
+            <span className={`min-w-0 truncate ${chosenLabel ? "text-neutral-800" : "text-neutral-400"}`}>{chosenLabel ?? "Choose a number…"}</span>
+            <span className="shrink-0 text-neutral-400">▾</span>
+          </button>
+        )}
       />
       {preview != null && <p className="mt-1 text-xs text-neutral-500">= {String(preview)}</p>}
     </Field>

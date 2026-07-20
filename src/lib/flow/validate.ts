@@ -83,25 +83,20 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
 
     if (VALUE_CONSUMERS.has(node.type)) {
       if (ins.length === 0) issues.push({ nodeId: node.id, message: `${cap(node.type)} node needs a connected number.` });
-      for (const srcId of ins) {
-        const src = byId.get(srcId);
-        if (src && outputKind(src) !== "value") {
-          issues.push({ nodeId: node.id, message: `${cap(node.type)} needs numbers as input (connect Aggregate nodes).` });
-        }
-      }
       if (node.type === "formula") {
-        // Formula is binary: exactly one number into handle "a" and one into "b".
+        // Calculate is binary: exactly one number in each named input (a/b). A number is
+        // a scalar step's value OR a dataset step's record count ("Output number"). A
+        // plain (no-handle) edge is the step's position in the line — always allowed.
         const fEdges = incomingEdges.get(node.id) ?? [];
         const aCount = fEdges.filter((e) => e.targetHandle === "a").length;
         const bCount = fEdges.filter((e) => e.targetHandle === "b").length;
         if (aCount !== 1 || bCount !== 1) {
-          issues.push({ nodeId: node.id, message: "Formula needs one number in input A and one in input B." });
+          issues.push({ nodeId: node.id, message: "Calculate needs both of its numbers picked." });
         }
-        // A/B must be scalars — only Aggregate or Formula produce a single number.
         for (const e of fEdges) {
           const src = byId.get(e.source);
-          if (src && src.type !== "aggregate" && src.type !== "formula") {
-            issues.push({ nodeId: node.id, message: "Formula inputs must come from Aggregate or Formula steps (a single number)." });
+          if (src && (e.targetHandle === "a" || e.targetHandle === "b") && outputKind(src) === "none") {
+            issues.push({ nodeId: node.id, message: "A Calculate input must be an earlier step's number." });
           }
         }
       }
@@ -121,11 +116,11 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
         const cEdges = incomingEdges.get(node.id) ?? [];
         const aCount = cEdges.filter((e) => e.targetHandle === "a").length;
         const bCount = cEdges.filter((e) => e.targetHandle === "b").length;
-        if (aCount !== 1 || bCount !== 1) issues.push({ nodeId: node.id, message: "Compare needs one number in First and one in Second." });
+        if (aCount !== 1 || bCount !== 1) issues.push({ nodeId: node.id, message: "Compare needs both of its numbers picked." });
         for (const e of cEdges) {
           const src = byId.get(e.source);
-          if (src && (e.targetHandle === "a" || e.targetHandle === "b") && outputKind(src) !== "value") {
-            issues.push({ nodeId: node.id, message: "Compare inputs must be numbers (connect Calculate steps)." });
+          if (src && (e.targetHandle === "a" || e.targetHandle === "b") && outputKind(src) === "none") {
+            issues.push({ nodeId: node.id, message: "A Compare input must be an earlier step's number." });
           }
         }
       } else {

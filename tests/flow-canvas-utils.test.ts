@@ -4,11 +4,15 @@ import {
   bridgeEdgeFor,
   isValidFlowConnection,
   buildFieldGroups,
+  computeVerticalLayout,
+  computeStepNumbers,
   resolveSampleField,
   fieldProvenance,
   flowChecks,
   describeInputs,
   collidingFields,
+  structuralEdges,
+  terminalIds,
   type FNode,
 } from "@/components/flow/graph-utils";
 
@@ -99,19 +103,15 @@ describe("buildFieldGroups (variable picker)", () => {
   const edges = [E("app1", "f1")];
   const stepNoById = new Map([["app1", 1], ["f1", 2]]);
 
-  it("shows source fields first and puts canonical fields in a trailing System group", () => {
+  it("shows the step's own fields (no separate System group), canonical ones humanised", () => {
     const groups = buildFieldGroups({ selectedId: "f1", nodes, edges, stepNoById, titleOf });
-    // First group = the upstream source's custom fields (subject is standard, so excluded
-    // here) plus the step's "Output number" (record count).
     expect(groups[0].from).toBe("app");
-    expect(groups[0].fields.map((f) => f.path)).toEqual(["plan", "properties.seats", "__count_app1"]);
+    // Custom fields first, then canonical fields that carry data, then Output number.
+    expect(groups[0].fields.map((f) => f.path)).toEqual(["plan", "properties.seats", "subject", "__count_app1"]);
+    expect(groups[0].fields.find((f) => f.path === "subject")?.label).toBe("Subject / person");
     expect(groups[0].fields.find((f) => f.path === "__count_app1")?.label).toBe("Output number");
-    // Last group = collapsed System fields.
-    const last = groups[groups.length - 1];
-    expect(last.system).toBe(true);
-    expect(last.from).toBe("System fields");
-    expect(last.fields.map((f) => f.path)).toContain("source");
-    expect(last.fields.map((f) => f.path)).toContain("occurredAt");
+    // No trailing System group anymore.
+    expect(groups.some((g) => g.system)).toBe(false);
   });
 
   it("uses the chosen sample record for example values", () => {
@@ -173,6 +173,40 @@ describe("buildFieldGroups — nearest-app example resolution + provenance", () 
     const appGroup = groups.find((g) => g.stepNo === 1);
     expect(appGroup?.fields.map((f) => f.label)).toContain("Output number");
     expect(appGroup?.fields.some((f) => f.path === "plan")).toBe(true);
+  });
+});
+
+describe("structural layout — number references never move nodes", () => {
+  const app = N("s", "app");
+  const filter = N("f", "filter");
+  const calc = N("c", "formula");
+  const nodes = [app, filter, calc];
+  // The line: sheets → filter → calc (plain chain edges).
+  const chain = [E("s", "f"), E("f", "c")];
+  // The calc's numbers: references to earlier steps (named handles).
+  const withRefs = [...chain, E("s", "c", { id: "ra", targetHandle: "a" }), E("s", "c", { id: "rb", targetHandle: "b" })];
+  const otherRefs = [...chain, E("f", "c", { id: "ra2", targetHandle: "a" }), E("s", "c", { id: "rb2", targetHandle: "b" })];
+
+  it("keeps a compare step in its chain position no matter which numbers it references", () => {
+    const base = computeVerticalLayout(nodes, chain);
+    expect(computeVerticalLayout(nodes, withRefs)).toEqual(base);
+    expect(computeVerticalLayout(nodes, otherRefs)).toEqual(base);
+    // Step numbers are equally unaffected.
+    expect(computeStepNumbers(nodes, withRefs)).toEqual(computeStepNumbers(nodes, chain));
+  });
+
+  it("structuralEdges drops reference edges once a chain edge exists, keeps legacy anchors", () => {
+    expect(structuralEdges(nodes, withRefs).map((e) => e.id)).toEqual(chain.map((e) => e.id));
+    // Legacy compare (no plain chain): its "a" edge is its anchor and is kept.
+    const legacy = [E("s", "f"), E("f", "c", { id: "la", targetHandle: "a" }), E("s", "c", { id: "lb", targetHandle: "b" })];
+    expect(structuralEdges(nodes, legacy).map((e) => e.id)).toEqual(["s->f", "la"]);
+  });
+
+  it("a step that only feeds a reference still counts as a line end", () => {
+    // sheets → filter (chain); calc chained after filter; sheets also referenced by calc.
+    const terms = terminalIds(nodes, withRefs);
+    expect(terms.has("c")).toBe(true);
+    expect(terms.has("s")).toBe(false);
   });
 });
 

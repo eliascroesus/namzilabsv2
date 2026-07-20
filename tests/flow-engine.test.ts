@@ -222,6 +222,6 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
     const res = await runFlow({ db, orgId: ORG }, g);
     const calc = res.nodes.get("calc")!;
     expect(calc.status).toBe("ok");
-    expect((calc.shape as { value: number }).value).toBe(75); // 3 passed ÷ 4 loaded × 100
+    expect((calc as { shape: { value: number } }).shape.value).toBe(75); // 3 passed ÷ 4 loaded × 100
   });
 });

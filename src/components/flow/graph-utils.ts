@@ -50,8 +50,33 @@ export type LibraryCtx = { fromNodeId?: string; sourceHandle?: string | null; on
 
 // ---------- Pure graph algorithms ----------
 
+/** A step that compares two numbers (its a/b inputs are data references, not chain links). */
+export function isCompareNode(n: FNode): boolean {
+  return n.type === "formula" || (n.type === "calculate" && String((n.data.config as { mode?: unknown }).mode ?? "") === "compare");
+}
+
+/**
+ * The edges that define the flow's SHAPE — the line the user reads. A compare step's
+ * a/b number edges are data references chosen in the panel; once the step has a plain
+ * chain edge holding its place in the line, its references are excluded here so that
+ * changing which numbers it compares can never move any node. (A legacy compare step
+ * without a plain chain edge keeps its "a" edge as its anchor so it doesn't float.)
+ */
+export function structuralEdges(nodes: FNode[], edges: Edge[]): Edge[] {
+  const compareIds = new Set(nodes.filter(isCompareNode).map((n) => n.id));
+  const hasPlainIn = new Set<string>();
+  for (const e of edges) if (compareIds.has(e.target) && e.targetHandle == null) hasPlainIn.add(e.target);
+  return edges.filter((e) => {
+    if (!compareIds.has(e.target)) return true;
+    if (e.targetHandle === "b") return false;
+    if (e.targetHandle === "a") return !hasPlainIn.has(e.target);
+    return true;
+  });
+}
+
 /** Assign 1-based step numbers in topological (top-to-bottom, left-to-right) order. */
-export function computeStepNumbers(nodes: FNode[], edges: Edge[]): Map<string, number> {
+export function computeStepNumbers(nodes: FNode[], allEdges: Edge[]): Map<string, number> {
+  const edges = structuralEdges(nodes, allEdges);
   const indeg = new Map<string, number>();
   const adj = new Map<string, string[]>();
   for (const n of nodes) {
@@ -120,9 +145,11 @@ export function computeLayout(nodes: FNode[], edges: Edge[]): Map<string, { x: n
 /**
  * Managed top-to-bottom layout. Positions are always computed (users never place
  * nodes): depth flows downward via longest-path layering, and each layer is centred
- * horizontally so branches (Paths) fan out symmetrically.
+ * horizontally so branches (Paths) fan out symmetrically. Only structural (chain)
+ * edges shape the layout — a compare step's number references never move anything.
  */
-export function computeVerticalLayout(nodes: FNode[], edges: Edge[]): Map<string, { x: number; y: number }> {
+export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<string, { x: number; y: number }> {
+  const edges = structuralEdges(nodes, allEdges);
   const indeg = new Map<string, number>();
   const adj = new Map<string, string[]>();
   for (const n of nodes) {
@@ -216,17 +243,20 @@ export function computeVerticalLayout(nodes: FNode[], edges: Edge[]): Map<string
   return pos;
 }
 
-/** Nodes with no outgoing edge — the "ends" of the flow (per branch). */
-export function terminalIds(nodes: FNode[], edges: Edge[]): Set<string> {
-  const hasOut = new Set(edges.map((e) => e.source));
+/** Nodes with no outgoing chain edge — the "ends" of the flow (per branch). A step
+ * that only feeds a compare reference is still a line end (it gets an Add-next). */
+export function terminalIds(nodes: FNode[], allEdges: Edge[]): Set<string> {
+  const hasOut = new Set(structuralEdges(nodes, allEdges).map((e) => e.source));
   return new Set(nodes.filter((n) => !hasOut.has(n.id)).map((n) => n.id));
 }
 
 /** Whether a step still needs required setup before it can produce a result. */
-export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, inputCount: number): boolean {
+export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, inputCount: number, handles?: Array<string | null>): boolean {
+  // A compare step needs both of its named numbers picked (a chain edge alone isn't enough).
+  const missingAB = handles ? !handles.includes("a") || !handles.includes("b") : inputCount < 2;
   if (type === "app") return !cfg.connectionId && !cfg.source;
-  if (type === "formula") return inputCount < 2;
-  if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? inputCount < 2 : inputCount === 0;
+  if (type === "formula") return missingAB;
+  if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? missingAB : inputCount === 0;
   if (type === "output") return inputCount === 0 || !String(cfg.name ?? "").trim();
   return inputCount === 0;
 }
@@ -236,12 +266,13 @@ export function computeNodeStatus(opts: {
   type: string;
   cfg: Record<string, unknown>;
   inputCount: number;
+  inputHandles?: Array<string | null>;
   lastTest?: { status?: string } | null;
   dirty?: boolean;
   updating?: boolean;
 }): "ready" | "setup" | "untested" | "updating" | "error" {
-  const { type, cfg, inputCount, lastTest, dirty, updating } = opts;
-  if (nodeNeedsSetup(type, cfg, inputCount)) return "setup";
+  const { type, cfg, inputCount, inputHandles, lastTest, dirty, updating } = opts;
+  if (nodeNeedsSetup(type, cfg, inputCount, inputHandles)) return "setup";
   if (updating) return "updating";
   if (lastTest?.status === "error") return "error";
   if (!lastTest || dirty) return "untested"; // configured but needs a manual test
@@ -351,7 +382,6 @@ export function buildFieldGroups(opts: {
 }): FieldGroup[] {
   const { selectedId, nodes, edges, stepNoById, titleOf, sampleIndexOf } = opts;
   const stdSet = new Set<string>(STANDARD_FIELDS);
-  const systemFields: PickField[] = STANDARD_FIELDS.map((p) => ({ path: p, label: STD_META[p]?.label ?? p, type: STD_META[p]?.type }));
   const groups: FieldGroup[] = [];
 
   if (selectedId) {
@@ -399,18 +429,20 @@ export function buildFieldGroups(opts: {
         // W3b: examples come from the field's nearest App ancestor's *selected* preview
         // record, so changing the record updates values everywhere. Transform-added fields
         // (absent on the app record) fall back to the direct upstream's own sample.
+        // Canonical fields (subject, occurredAt, …) live inside the step's own group —
+        // with human labels — and only when they actually carry data (no "System" group).
         const custom: PickField[] = [];
+        const std: PickField[] = [];
         for (const f of sn.data.lastTest.outputSchema ?? []) {
           let ex = appChosen !== undefined ? resolveSampleField(appChosen, f.path) : undefined;
           if (ex === undefined) ex = upChosen !== undefined ? resolveSampleField(upChosen, f.path) : f.example;
           if (stdSet.has(f.path)) {
-            const sys = systemFields.find((s) => s.path === f.path);
-            if (sys && sys.example === undefined) sys.example = ex;
+            if (ex != null && ex !== "") std.push({ path: f.path, label: STD_META[f.path]?.label ?? f.label, type: STD_META[f.path]?.type ?? f.type, example: ex });
           } else {
             custom.push({ path: f.path, label: f.label, type: f.type, example: ex, container: f.container });
           }
         }
-        fields = [...custom, outNum];
+        fields = [...custom, ...std, outNum];
       }
 
       groups.push({
@@ -423,8 +455,7 @@ export function buildFieldGroups(opts: {
     }
   }
 
-  // Source fields first; canonical/system fields last (rendered collapsed).
-  return [...groups, { from: "System fields", system: true, fields: systemFields }];
+  return groups;
 }
 
 /** The selected preview record for a node (its `sampleIndex`, else the first sample). */
@@ -435,7 +466,7 @@ function chosenSample(node: FNode, sampleIndexOf?: (n: FNode) => number): unknow
 }
 
 /** Walk upstream from a node to the nearest App source (itself if it is one). */
-function nearestAppAncestor(start: FNode, nodes: FNode[], edges: Edge[]): FNode | undefined {
+export function nearestAppAncestor(start: FNode, nodes: FNode[], edges: Edge[]): FNode | undefined {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const guard = new Set<string>();
   let cur: FNode | undefined = start;

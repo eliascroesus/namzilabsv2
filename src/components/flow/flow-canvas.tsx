@@ -14,6 +14,9 @@ import {
   computeVerticalLayout,
   describeInputs,
   descendantsOf,
+  isCompareNode,
+  nearestAppAncestor,
+  structuralEdges,
   terminalIds,
   type ConnMeta,
   type FieldGroup,
@@ -23,6 +26,7 @@ import {
   type LibraryCtx,
   type MetricSpecT,
 } from "./graph-utils";
+import type { DataGroup } from "./controls/types";
 import { ALL_TYPES, defaultConfig, nodeTitle, pathHandles } from "./node-meta";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
@@ -92,10 +96,22 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       }),
     [initialGraph],
   );
-  const initialEdges: Edge[] = useMemo(
-    () => initialGraph.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? undefined, targetHandle: e.targetHandle ?? undefined })),
-    [initialGraph],
-  );
+  const initialEdges: Edge[] = useMemo(() => {
+    const es: Edge[] = initialGraph.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? undefined, targetHandle: e.targetHandle ?? undefined }));
+    // Older flows used a compare step's "a" number edge as its place in the line. Give
+    // those steps a plain chain edge anchored to the same source, so changing which
+    // numbers they compare can never move them (references are data, not position).
+    for (const n of initialGraph.nodes) {
+      const raw = n as { id: string; type: string; data?: { config?: unknown } };
+      const isCompare = raw.type === "formula" || (raw.type === "calculate" && String((raw.data?.config as { mode?: unknown } | undefined)?.mode ?? "") === "compare");
+      if (!isCompare) continue;
+      const ins = es.filter((e) => e.target === raw.id);
+      if (ins.length === 0 || ins.some((e) => e.targetHandle == null)) continue;
+      const anchor = ins.find((e) => e.targetHandle === "a") ?? ins[0];
+      es.push({ id: `e_chain_${raw.id}`, source: anchor.source, target: raw.id });
+    }
+    return es;
+  }, [initialGraph]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
@@ -195,18 +211,24 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       }
       setNodes((ns) => [...ns, newNode, ...extraNodes]);
 
-      const targetHandleFor = (t: NodeType) => (t === "formula" ? "a" : undefined);
       setEdges((es) => {
         let base = es;
+        const predecessor = ctx?.fromNodeId ?? ctx?.onEdge?.source ?? null;
         if (ctx?.fromNodeId) {
-          base = [...es, { id: rid(), type: "insert", source: ctx.fromNodeId, sourceHandle: ctx.sourceHandle ?? undefined, target: id, targetHandle: targetHandleFor(type) }];
+          // The chain edge is always plain — it fixes the step's place in the line.
+          base = [...es, { id: rid(), type: "insert", source: ctx.fromNodeId, sourceHandle: ctx.sourceHandle ?? undefined, target: id }];
         } else if (ctx?.onEdge) {
           const old = ctx.onEdge;
           base = [
             ...es.filter((e) => e.id !== old.id),
-            { id: rid(), type: "insert", source: old.source, sourceHandle: old.sourceHandle, target: id, targetHandle: targetHandleFor(type) },
+            { id: rid(), type: "insert", source: old.source, sourceHandle: old.sourceHandle, target: id },
             { id: rid(), type: "insert", source: id, target: old.target, targetHandle: old.targetHandle },
           ];
+        }
+        // A compare step defaults its first number to the step it was added after —
+        // a data reference (named handle), separate from the chain edge above.
+        if (type === "formula" && predecessor) {
+          base = [...base, { id: rid(), type: "insert", source: predecessor, target: id, targetHandle: "a" }];
         }
         return [...base, ...extraEdges];
       });
@@ -260,17 +282,21 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [commit, setNodes, setEdges],
   );
 
-  /** Remove a node with exactly one in + one out edge, bridging prev→next. */
+  // The flow's SHAPE: chain edges only (a compare step's number references are data,
+  // not position). Layout, step numbers, terminals, and delete-reconnect follow these.
+  const sEdges = useMemo(() => structuralEdges(nodes, edges), [nodes, edges]);
+
+  /** Remove a node with exactly one chain in + one chain out, bridging prev→next. */
   const deleteAndReconnect = useCallback(
     (id: string) => {
-      const bridge = bridgeEdgeFor(id, edges);
+      const bridge = bridgeEdgeFor(id, sEdges);
       if (!bridge) return deleteNode(id);
       commit();
       setEdges((es) => [...es.filter((e) => e.source !== id && e.target !== id), bridge]);
       setNodes((ns) => ns.map((n) => (n.id === bridge.target ? { ...n, data: { ...n.data, dirty: true } } : n)).filter((n) => n.id !== id));
       setSelectedId(null);
     },
-    [edges, commit, setEdges, setNodes, deleteNode],
+    [sEdges, commit, setEdges, setNodes, deleteNode],
   );
 
   // Multi-input steps are wired from the config panel (labeled pills), never by
@@ -321,10 +347,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       const paths = ((hub.data.config as { paths?: Array<{ id: string; label: string }> }).paths) ?? [];
       const remaining = paths.filter((p) => p.id !== pathId);
 
-      // Remove the deleted branch's whole subtree.
+      // Remove the deleted branch's whole subtree (chain descendants only — a step
+      // elsewhere that merely references a branch step is never deleted with it).
       const branchTargets = edges.filter((e) => e.source === hubId && e.sourceHandle === pathId).map((e) => e.target);
       const toRemove = new Set<string>(branchTargets);
-      for (const t of branchTargets) for (const d of descendantsOf(t, edges)) toRemove.add(d);
+      for (const t of branchTargets) for (const d of descendantsOf(t, sEdges)) toRemove.add(d);
 
       if (remaining.length <= 1) {
         // A split with one (or zero) branch left is pointless — dissolve the hub and wire
@@ -350,7 +377,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       );
       setEdges((es) => es.filter((e) => !(e.source === hubId && e.sourceHandle === pathId) && !toRemove.has(e.source) && !toRemove.has(e.target)));
     },
-    [commit, nodes, edges, setNodes, setEdges],
+    [commit, nodes, edges, sEdges, setNodes, setEdges],
   );
 
   // Delete from a card's kebab. A plain step reconnects its neighbours (stays linear);
@@ -362,7 +389,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       if (!node) return;
 
       if (node.type === "paths") {
-        const sub = descendantsOf(id, edges);
+        const sub = descendantsOf(id, sEdges);
         const count = sub.size;
         setPendingDelete({
           message: `This deletes “Split into paths” and all ${count} step${count === 1 ? "" : "s"} in its branches.`,
@@ -377,10 +404,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         return;
       }
 
-      const inEdge = edges.find((e) => e.target === id);
+      const inEdge = sEdges.find((e) => e.target === id);
       const parent = inEdge ? nodes.find((n) => n.id === inEdge.source) : undefined;
       if (parent?.type === "paths" && inEdge?.sourceHandle) {
-        const sub = descendantsOf(id, edges);
+        const sub = descendantsOf(id, sEdges);
         const count = sub.size + 1;
         const handle = inEdge.sourceHandle;
         const hubPaths = (((parent.data.config as { paths?: unknown[] }).paths) ?? []).length;
@@ -400,7 +427,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
       deleteAndReconnect(id);
     },
-    [nodes, edges, commit, setNodes, setEdges, removeBranch, deleteAndReconnect],
+    [nodes, sEdges, commit, setNodes, setEdges, removeBranch, deleteAndReconnect],
   );
 
   // Backspace / Delete removes the selected step (routed through the same smart delete,
@@ -504,18 +531,38 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [selected, nodes, edges],
   );
 
-  // Candidate steps for wiring multi-input steps via labeled pills (exclude self + descendants).
+  // Candidate steps for wiring multi-input steps (exclude self + descendants).
   const candidates = useMemo(() => {
-    if (!selected) return { number: [] as StepRef[], dataset: [] as StepRef[] };
+    if (!selected) return { dataset: [] as StepRef[] };
     const desc = descendantsOf(selected.id, edges);
     const avail = nodes.filter((n) => n.id !== selected.id && !desc.has(n.id));
     const toItem = (n: FNode): StepRef => ({ id: n.id, title: nodeTitle(String(n.type) as NodeType, n.data), stepNo: stepNoById.get(n.id) });
-    return {
-      // A "number" input can be a scalar step (Count/Calculate) OR any dataset step —
-      // whose record count ("Output number", e.g. 56 passed / 76 loaded) is the number.
-      number: avail.filter((n) => isNumberProducer(n) || DATASET_PRODUCERS.has(String(n.type))).map(toItem),
-      dataset: avail.filter((n) => DATASET_PRODUCERS.has(String(n.type))).map(toItem),
-    };
+    return { dataset: avail.filter((n) => DATASET_PRODUCERS.has(String(n.type))).map(toItem) };
+  }, [selected, nodes, edges, stepNoById]);
+
+  // Number choices for a compare step, in the same data-browser shape as every other
+  // input: one group per earlier step, each exposing exactly its number — a scalar
+  // step's Result, or a dataset step's Output number (its record count).
+  const numberGroups = useMemo<DataGroup[]>(() => {
+    if (!selected) return [];
+    const desc = descendantsOf(selected.id, edges);
+    const avail = nodes
+      .filter((n) => n.id !== selected.id && !desc.has(n.id) && (isNumberProducer(n) || DATASET_PRODUCERS.has(String(n.type))))
+      .sort((a, b) => (stepNoById.get(a.id) ?? 0) - (stepNoById.get(b.id) ?? 0));
+    return avail.map((n) => {
+      const app = nearestAppAncestor(n, nodes, edges);
+      const scalar = isNumberProducer(n);
+      const t = n.data.lastTest;
+      const tile = t?.status === "ok" ? (t.tile as { value?: unknown } | undefined) : undefined;
+      const sample = scalar ? tile?.value : t?.status === "ok" ? t.recordsOut : undefined;
+      return {
+        stepId: n.id,
+        stepNo: stepNoById.get(n.id),
+        source: app ? String((app.data.config as { source?: unknown }).source ?? "") : undefined,
+        title: nodeTitle(String(n.type) as NodeType, n.data),
+        fields: [{ path: scalar ? `__result_${n.id}` : `__count_${n.id}`, label: scalar ? "Result" : "Output number", type: "number", sample }],
+      };
+    });
   }, [selected, nodes, edges, stepNoById]);
 
   // Managed top-to-bottom layout + per-node status + terminal add points (no free placement).
@@ -543,6 +590,14 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     for (const e of edges) m.set(e.target, (m.get(e.target) ?? 0) + 1);
     return m;
   }, [nodes, edges]);
+  const inHandlesById = useMemo(() => {
+    const m = new Map<string, Array<string | null>>();
+    for (const e of edges) {
+      if (!m.has(e.target)) m.set(e.target, []);
+      m.get(e.target)!.push(e.targetHandle ?? null);
+    }
+    return m;
+  }, [edges]);
   const usedHandles = useMemo(() => {
     const m = new Map<string, Set<string>>();
     for (const e of edges) {
@@ -557,7 +612,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     () =>
       nodes.map((n) => {
         const inputCount = inDegreeById.get(n.id) ?? 0;
-        const status = computeNodeStatus({ type: String(n.type), cfg: n.data.config, inputCount, lastTest: n.data.lastTest, dirty: n.data.dirty, updating: testingId === n.id });
+        const status = computeNodeStatus({ type: String(n.type), cfg: n.data.config, inputCount, inputHandles: inHandlesById.get(n.id) ?? [], lastTest: n.data.lastTest, dirty: n.data.dirty, updating: testingId === n.id });
         const issue = status === "setup" ? setupHint(String(n.type), n.data.config, inputCount) : undefined;
         let freeHandles: Array<{ id: string; label: string }> | undefined;
         if (n.type === "paths") {
@@ -570,28 +625,22 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           data: { ...n.data, stepNo: stepNoById.get(n.id), status, issue, isTerminal: terminals.has(n.id), freeHandles, onAddFrom: addFromNode, onDeleteNode: requestDelete, onDuplicateNode: duplicateNode },
         };
       }),
-    [nodes, layout, terminals, stepNoById, inDegreeById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode],
+    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode],
   );
-  // Compare steps (two numbers) keep the first number as the visible chain line; the
-  // second is a data reference chosen in the panel, so its edge isn't drawn (it would
-  // otherwise cut across unrelated steps).
-  const compareIds = useMemo(
-    () => new Set(nodes.filter((n) => n.type === "formula" || (n.type === "calculate" && String((n.data.config as { mode?: unknown }).mode ?? "") === "compare")).map((n) => n.id)),
-    [nodes],
-  );
-  // Branch edges (from a Paths hub) get no "+" insert — a branch always starts with its
-  // own mandatory conditions step, and the plain line reads cleaner without labels.
-  const displayEdges = useMemo(
-    () =>
-      edges
-        .filter((e) => !(e.targetHandle === "b" && compareIds.has(e.target)))
-        .map((e) => ({
-          ...e,
-          type: "insert",
-          data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge },
-        })),
-    [edges, insertOnEdge, compareIds],
-  );
+  // Only the flow's chain edges are drawn — a compare step's number references are
+  // picked in the panel and never rendered as lines (they'd cut across the canvas).
+  // Branch edges (from a Paths hub) get no "+" insert: a branch always starts with
+  // its own mandatory conditions step.
+  const displayEdges = useMemo(() => {
+    const compareIds = new Set(nodes.filter(isCompareNode).map((n) => n.id));
+    return edges
+      .filter((e) => !(compareIds.has(e.target) && (e.targetHandle === "a" || e.targetHandle === "b")))
+      .map((e) => ({
+        ...e,
+        type: "insert",
+        data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge },
+      }));
+  }, [nodes, edges, insertOnEdge]);
 
   const empty = nodes.length === 0;
 
@@ -679,7 +728,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             inputs={selectedInputs}
             inputCount={edges.filter((e) => e.target === selected.id).length}
             testing={testingId === selected.id}
-            numberCandidates={candidates.number}
+            numberGroups={numberGroups}
             datasetCandidates={candidates.dataset}
             onChange={(patch) => updateConfig(selected.id, patch)}
             onRename={(v) => renameNode(selected.id, v)}
