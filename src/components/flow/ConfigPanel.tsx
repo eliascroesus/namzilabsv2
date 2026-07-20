@@ -560,11 +560,10 @@ function NodeConfig({
   );
 }
 
-/** Calculate → single number (also the legacy Aggregate editor). */
+/** The Count step (aggregate executor): turn records into one number, optionally a trend. */
 function CalcNumber({ cfg, groups, onChange }: { cfg: Record<string, unknown>; groups: DataGroup[]; onChange: (p: Record<string, unknown>) => void }) {
   const agg = String(cfg.aggregation ?? "count");
   const gb = (cfg.groupBy as { type?: string; unit?: string; field?: string } | null) ?? null;
-  const gbMode = gb ? gb.type : "none";
   return (
     <>
       <Field label="Calculation">
@@ -572,16 +571,15 @@ function CalcNumber({ cfg, groups, onChange }: { cfg: Record<string, unknown>; g
       </Field>
       {(agg === "sum" || agg === "avg" || agg === "min" || agg === "max") && <Field label="Number field"><FieldSelect value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
       {agg === "count_distinct" && <Field label="Distinct by"><FieldSelect value={(cfg.distinctField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ distinctField: v })} /></Field>}
-      <Field label="Split it up?">
+      <Field label="Split over time?">
         <Select
-          value={gbMode ?? "none"}
+          value={gb?.type === "time" ? "time" : "none"}
           width={W}
-          options={[{ value: "none", label: "No — one total number" }, { value: "time", label: "Yes — a trend over time" }, { value: "field", label: "By a field (breakdown)" }]}
-          onChange={(m) => onChange({ groupBy: m === "none" ? null : m === "time" ? { type: "time", unit: "day" } : { type: "field", field: "source" } })}
+          options={[{ value: "none", label: "No — one total number" }, { value: "time", label: "Yes — a trend over time" }]}
+          onChange={(m) => onChange({ groupBy: m === "time" ? { type: "time", unit: "day" } : null })}
         />
       </Field>
       {gb?.type === "time" && <Field label="Period"><Select value={gb.unit ?? "day"} width={W} options={TIME_UNITS.map((u) => ({ value: u, label: title(u) }))} onChange={(v) => onChange({ groupBy: { type: "time", unit: v } })} /></Field>}
-      {gb?.type === "field" && <Field label="Field"><FieldSelect value={gb.field ?? "source"} groups={groups} onChange={(v) => onChange({ groupBy: { type: "field", field: v } })} /></Field>}
     </>
   );
 }

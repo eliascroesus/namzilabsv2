@@ -11,16 +11,18 @@ export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: 
   combine: { label: "Combine data", blurb: "Merge records from multiple steps", stage: "Data", advanced: true, keywords: "merge join dedupe union combine sources" },
   filter: { label: "Filter records", blurb: "Keep only the records you want", stage: "Conditions", advanced: false, keywords: "condition where keep only match date range filter" },
   paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", advanced: true, keywords: "split branch route condition paths" },
-  calculate: { label: "Calculate a number", blurb: "Count, compare, or break down", stage: "Calculation", advanced: false, keywords: "count sum average metric number compare rate ratio break down group calculate" },
+  // "Count" and "Calculate" are two focused steps: Count turns records into a number
+  // (count/sum/avg/…), Calculate compares two numbers. They map to the aggregate + formula
+  // executors below. The old merged "calculate" node is retired from the picker.
+  aggregate: { label: "Count", blurb: "Count, sum, or average records into a number", stage: "Calculation", advanced: false, keywords: "count sum average total aggregate number records maximum minimum distinct" },
+  formula: { label: "Calculate", blurb: "Compare two numbers — rate, ratio, % change", stage: "Calculation", advanced: false, keywords: "calculate compare rate ratio percentage change difference formula divide" },
   formatter: { label: "Clean up values", blurb: "Fix text, numbers, and dates", stage: "Calculation", advanced: true, keywords: "format clean text number round date formatter" },
   // Output is replaced by "Review & publish" (metrics are chosen there). Kept so old
   // flows with an Output node still render + run; hidden from the picker.
   output: { label: "Show on dashboard", blurb: "Save the metric as a dashboard tile", stage: "Dashboard", advanced: false, keywords: "dashboard tile metric result output show", hidden: true },
-  // Legacy steps — merged into Calculate / Filter. Kept so old flows still render + run,
-  // but hidden from the picker (new flows use Calculate + Filter's date range).
+  // Retired from the picker but kept so old flows still render + run.
+  calculate: { label: "Calculate a number", blurb: "Count, compare, or break down", stage: "Calculation", advanced: false, keywords: "count sum average metric number compare rate ratio break down group calculate", hidden: true },
   time: { label: "Date range", blurb: "Limit records to a time window", stage: "Conditions", advanced: true, keywords: "date range window period time", hidden: true },
-  aggregate: { label: "Calculate a number", blurb: "Count, sum, or average records", stage: "Calculation", advanced: false, keywords: "count sum average aggregate", hidden: true },
-  formula: { label: "Compare two numbers", blurb: "Rates, ratios, and % change", stage: "Calculation", advanced: false, keywords: "percentage ratio formula compare", hidden: true },
   group: { label: "Group into categories", blurb: "Break records into groups", stage: "Calculation", advanced: true, keywords: "category breakdown segment group", hidden: true },
 };
 export const ALL_TYPES = Object.keys(NODE_META) as NodeType[];
