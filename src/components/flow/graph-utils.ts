@@ -303,8 +303,24 @@ export function buildFieldGroups(opts: {
   const groups: FieldGroup[] = [];
 
   if (selectedId) {
-    const sourceIds = edges.filter((e) => e.target === selectedId).map((e) => e.source);
-    for (const sid of sourceIds) {
+    // Every logically-upstream step is offered as its own group (Zapier's "Previous
+    // Steps"), so the user can expand any earlier step — not just the immediate parent —
+    // and pick a value from it. Branch scoping still holds: only ancestors of the
+    // selected step appear, never sibling branches or future steps.
+    const incoming = new Map<string, string[]>();
+    for (const e of edges) {
+      if (!incoming.has(e.target)) incoming.set(e.target, []);
+      incoming.get(e.target)!.push(e.source);
+    }
+    const ancestorIds = new Set<string>();
+    const stack = [selectedId];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      for (const s of incoming.get(cur) ?? []) if (!ancestorIds.has(s)) { ancestorIds.add(s); stack.push(s); }
+    }
+    // In flow order (step 1, 2, 3…), matching how the steps read on the canvas.
+    const ordered = [...ancestorIds].sort((a, b) => (stepNoById.get(a) ?? 0) - (stepNoById.get(b) ?? 0));
+    for (const sid of ordered) {
       const sn = nodes.find((n) => n.id === sid);
       if (!sn) continue;
       const schema = sn.data.lastTest?.outputSchema ?? [];
