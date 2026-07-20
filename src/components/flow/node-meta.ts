@@ -175,9 +175,10 @@ export function summary(type: string, data: NodeData): string {
 }
 
 /** Minimal wording for a successful test result — just the number + a short verb. */
-export function resultLabel(type: string, test: { recordsIn: number; recordsOut: number; tile?: unknown }): string {
-  const { recordsOut, tile } = test;
-  const val = tile != null ? String((tile as { value?: unknown }).value ?? "—") : String(recordsOut);
+export function resultLabel(type: string, test: { recordsIn: number; recordsOut: number; tile?: unknown; value?: number }): string {
+  const { recordsOut, tile, value } = test;
+  const tileVal = (tile as { value?: unknown } | undefined)?.value;
+  const val = value != null ? String(value) : tileVal != null ? String(tileVal) : String(recordsOut);
   switch (type) {
     case "app":
       return `${recordsOut} loaded`;

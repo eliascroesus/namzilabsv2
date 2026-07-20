@@ -554,7 +554,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       const scalar = isNumberProducer(n);
       const t = n.data.lastTest;
       const tile = t?.status === "ok" ? (t.tile as { value?: unknown } | undefined) : undefined;
-      const sample = scalar ? tile?.value : t?.status === "ok" ? t.recordsOut : undefined;
+      const sample = scalar ? t?.value ?? tile?.value : t?.status === "ok" ? t.recordsOut : undefined;
       return {
         stepId: n.id,
         stepNo: stepNoById.get(n.id),

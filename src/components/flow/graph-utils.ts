@@ -648,7 +648,7 @@ export function describeInputs(opts: { selectedId: string; nodes: FNode[]; edges
       type: sn ? String(sn.type) : "?",
       status: sn ? statusFor(sn) : "untested",
       recordCount: sn?.data.lastTest?.recordsOut,
-      value: sn?.data.lastTest?.tile != null ? (sn.data.lastTest!.tile as { value?: unknown }).value : undefined,
+      value: sn?.data.lastTest?.value ?? (sn?.data.lastTest?.tile != null ? (sn.data.lastTest!.tile as { value?: unknown }).value : undefined),
       calc: sn ? calcOf(sn) : undefined,
       chain: [],
       sample: (sn?.data.lastTest?.sample ?? []) as unknown[],

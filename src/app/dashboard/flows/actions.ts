@@ -51,13 +51,24 @@ export type NodeTestDTO = {
   outputSchema: Array<{ path: string; label: string; type: string; example?: unknown; container?: boolean }>;
   error?: string;
   tile?: unknown;
+  /** The computed number, when the step produces a single number (Count/Calculate). */
+  value?: number;
 };
 
 /** Shape one engine result into the compact DTO the editor renders. */
 function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTestDTO {
   if (!exec) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample, outputSchema: [], error: "This step didn't run — check its inputs are connected." };
   if (exec.status === "error") return { status: "error", recordsIn: exec.recordsIn, recordsOut: exec.recordsOut, sample: [], inputSample, outputSchema: [], error: exec.error };
-  return { status: "ok", recordsIn: exec.recordsIn, recordsOut: exec.recordsOut, sample: exec.sample, inputSample, outputSchema: exec.outputSchema, tile: exec.tile };
+  return {
+    status: "ok",
+    recordsIn: exec.recordsIn,
+    recordsOut: exec.recordsOut,
+    sample: exec.sample,
+    inputSample,
+    outputSchema: exec.outputSchema,
+    tile: exec.tile,
+    value: exec.shape.kind === "scalar" ? exec.shape.value : undefined,
+  };
 }
 
 /** Run the engine up to a single node on real synced data and return a compact result. */
