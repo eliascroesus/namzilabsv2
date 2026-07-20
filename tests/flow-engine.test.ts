@@ -204,4 +204,24 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
     expect(res.nodes.has("agg")).toBe(false); // downstream not executed
     expect(res.nodes.get("f")!.recordsOut).toBe(2);
   });
+
+  it("Calculate (formula) compares data-step record counts (Output numbers)", async () => {
+    await ev({ eventType: "booked", subject: "a" });
+    await ev({ eventType: "booked", subject: "b" });
+    await ev({ eventType: "booked", subject: "c" });
+    await ev({ eventType: "canceled", subject: "d" });
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("f", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "booked" }] }),
+        N("calc", "formula", { op: "percentage" }),
+      ],
+      // Numerator (a) = the filter's passed count; denominator (b) = the app's loaded count.
+      [E("a", "f"), { id: "f->calc", source: "f", target: "calc", targetHandle: "a" }, { id: "a->calc", source: "a", target: "calc", targetHandle: "b" }],
+    );
+    const res = await runFlow({ db, orgId: ORG }, g);
+    const calc = res.nodes.get("calc")!;
+    expect(calc.status).toBe("ok");
+    expect((calc.shape as { value: number }).value).toBe(75); // 3 passed ÷ 4 loaded × 100
+  });
 });

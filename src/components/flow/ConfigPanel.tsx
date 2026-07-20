@@ -637,6 +637,8 @@ function CalcCompare({ cfg, inputs, numberCandidates, onChange, onSetInput }: { 
 }
 
 function NumberPicker({ handle, label, desc, candidates, onSetInput }: { handle: "a" | "b"; label: string; desc?: InputDescriptor; candidates: StepRef[]; onSetInput: (h: "a" | "b", id: string | null) => void }) {
+  // A scalar step shows its computed value; a data step shows its record count (Output number).
+  const preview = desc?.value ?? desc?.recordCount;
   return (
     <Field label={label}>
       <Select
@@ -646,7 +648,7 @@ function NumberPicker({ handle, label, desc, candidates, onSetInput }: { handle:
         options={candidates.map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
         onChange={(v) => onSetInput(handle, v || null)}
       />
-      {desc?.value != null && <p className="mt-1 text-xs text-neutral-500">= {String(desc.value)}</p>}
+      {preview != null && <p className="mt-1 text-xs text-neutral-500">= {String(preview)}</p>}
     </Field>
   );
 }

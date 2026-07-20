@@ -511,7 +511,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     const avail = nodes.filter((n) => n.id !== selected.id && !desc.has(n.id));
     const toItem = (n: FNode): StepRef => ({ id: n.id, title: nodeTitle(String(n.type) as NodeType, n.data), stepNo: stepNoById.get(n.id) });
     return {
-      number: avail.filter(isNumberProducer).map(toItem),
+      // A "number" input can be a scalar step (Count/Calculate) OR any dataset step —
+      // whose record count ("Output number", e.g. 56 passed / 76 loaded) is the number.
+      number: avail.filter((n) => isNumberProducer(n) || DATASET_PRODUCERS.has(String(n.type))).map(toItem),
       dataset: avail.filter((n) => DATASET_PRODUCERS.has(String(n.type))).map(toItem),
     };
   }, [selected, nodes, edges, stepNoById]);
@@ -570,16 +572,25 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       }),
     [nodes, layout, terminals, stepNoById, inDegreeById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode],
   );
+  // Compare steps (two numbers) keep the first number as the visible chain line; the
+  // second is a data reference chosen in the panel, so its edge isn't drawn (it would
+  // otherwise cut across unrelated steps).
+  const compareIds = useMemo(
+    () => new Set(nodes.filter((n) => n.type === "formula" || (n.type === "calculate" && String((n.data.config as { mode?: unknown }).mode ?? "") === "compare")).map((n) => n.id)),
+    [nodes],
+  );
   // Branch edges (from a Paths hub) get no "+" insert — a branch always starts with its
   // own mandatory conditions step, and the plain line reads cleaner without labels.
   const displayEdges = useMemo(
     () =>
-      edges.map((e) => ({
-        ...e,
-        type: "insert",
-        data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge },
-      })),
-    [edges, insertOnEdge],
+      edges
+        .filter((e) => !(e.targetHandle === "b" && compareIds.has(e.target)))
+        .map((e) => ({
+          ...e,
+          type: "insert",
+          data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge },
+        })),
+    [edges, insertOnEdge, compareIds],
   );
 
   const empty = nodes.length === 0;

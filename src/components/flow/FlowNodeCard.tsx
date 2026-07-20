@@ -93,8 +93,10 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
     <div className={`w-64 rounded-xl border bg-white shadow-sm ${border}`}>
       {isCompare ? (
         <>
-          <Handle type="target" id="a" position={Position.Top} style={{ ...HIDDEN_HANDLE, left: "35%" }} />
-          <Handle type="target" id="b" position={Position.Top} style={{ ...HIDDEN_HANDLE, left: "65%" }} />
+          {/* Both number inputs anchor at top-centre; the edges enter straight down (no
+              off-centre jog). The two numbers are chosen in the panel, not by port. */}
+          <Handle type="target" id="a" position={Position.Top} style={HIDDEN_HANDLE} />
+          <Handle type="target" id="b" position={Position.Top} style={HIDDEN_HANDLE} />
         </>
       ) : t !== "app" ? (
         <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE} />

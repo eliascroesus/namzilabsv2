@@ -318,12 +318,18 @@ function execAggregate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
 // ---------- Formula ----------
 // A Formula is a binary operation over two named inputs: handle "a" and handle "b".
 // (No edge-order fallback — all pre-v2 flows are wiped in migration 0003.)
-/** Read a single number from a named input handle (a/b). Shared by Formula + Calculate. */
+/**
+ * Read a single number from a named input handle (a/b). Shared by Formula + Calculate.
+ * A scalar step (Count/Calculate) contributes its value; a dataset step (Get data,
+ * Filter, …) contributes its record count — its "Output number" — so counts like
+ * "56 passed" or "76 loaded" can be compared directly.
+ */
 function scalarAt(inputs: ResolvedInput[], handle: "a" | "b"): number {
   const found = inputs.find((i) => i.targetHandle === handle);
   if (!found) throw new Error(`Needs a number connected to input ${handle.toUpperCase()}.`);
-  if (found.shape.kind !== "scalar") throw new Error("Inputs must be single numbers (connect Calculate steps).");
-  return found.shape.value;
+  if (found.shape.kind === "scalar") return found.shape.value;
+  if (found.shape.kind === "dataset") return found.shape.records.length;
+  throw new Error("This input isn't a single number — pick a Count step or a step's record count.");
 }
 
 /** The binary calculation over two numbers. Shared by Formula + Calculate(compare). */
