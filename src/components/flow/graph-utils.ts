@@ -184,8 +184,12 @@ export function computeVerticalLayout(nodes: FNode[], edges: Edge[]): Map<string
         xById.set(n.id, px);
       }
     } else {
-      // Recombined (e.g. Combine): sit under the average of the inputs.
-      xById.set(n.id, ins.reduce((s, i) => s + (xById.get(i.source) ?? 0), 0) / ins.length);
+      // Multiple inputs (e.g. Combine, or Calculate's two numbers): stay in the lane of
+      // the closest (deepest) input — the chain continuation — so extra data sources are
+      // treated as references that don't move the node. Positions follow the flow, never
+      // "what data comes in".
+      const primary = ins.reduce((best, i) => ((depth.get(i.source) ?? 0) > (depth.get(best.source) ?? 0) ? i : best), ins[0]);
+      xById.set(n.id, xById.get(primary.source) ?? 0);
     }
   }
 

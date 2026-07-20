@@ -367,7 +367,6 @@ function NodeConfig({
     const mode = (cfg.mode as string) ?? "stack";
     const collisions = collidingFields(inputs);
     const connectedIds = inputs.map((i) => i.nodeId);
-    const toggle = (id: string, on: boolean) => onSetSources(on ? [...connectedIds, id] : connectedIds.filter((x) => x !== id));
     return (
       <div className="space-y-3">
         <div>
@@ -375,20 +374,33 @@ function NodeConfig({
           {datasetCandidates.length === 0 ? (
             <p className="text-xs text-neutral-400">Add earlier data steps to combine them here.</p>
           ) : (
-            <div className="space-y-1">
-              {datasetCandidates.map((c) => {
-                const on = connectedIds.includes(c.id);
-                const desc = inputs.find((i) => i.nodeId === c.id);
-                return (
-                  <button key={c.id} type="button" onClick={() => toggle(c.id, !on)} className={`flex w-full items-center justify-between gap-2 rounded border px-2 py-1.5 text-left text-xs ${on ? "border-neutral-800 bg-neutral-50" : "border-neutral-200 hover:border-neutral-300"}`}>
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${on ? "border-neutral-800 bg-neutral-800 text-white" : "border-neutral-300"}`}>{on ? "✓" : ""}</span>
-                      <span className="truncate">{c.stepNo != null ? `${c.stepNo}. ` : ""}{c.title}</span>
-                    </span>
-                    {desc?.recordCount != null && <span className="shrink-0 text-neutral-400">{desc.recordCount} recs</span>}
+            <div className="space-y-1.5">
+              {connectedIds.map((id, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Select
+                    value={id}
+                    width={320}
+                    placeholder="Choose a step…"
+                    options={datasetCandidates.filter((c) => c.id === id || !connectedIds.includes(c.id)).map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
+                    onChange={(v) => onSetSources(connectedIds.map((x, i) => (i === idx ? v : x)))}
+                  />
+                  <button type="button" onClick={() => onSetSources(connectedIds.filter((_, i) => i !== idx))} className="shrink-0 text-xs text-neutral-400 hover:text-red-600">
+                    Remove
                   </button>
-                );
-              })}
+                </div>
+              ))}
+              {connectedIds.length < datasetCandidates.length && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const avail = datasetCandidates.find((c) => !connectedIds.includes(c.id));
+                    if (avail) onSetSources([...connectedIds, avail.id]);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-xs text-neutral-600 hover:border-neutral-400 hover:text-neutral-800"
+                >
+                  <span className="text-sm leading-none">+</span> Add data source
+                </button>
+              )}
             </div>
           )}
         </div>
