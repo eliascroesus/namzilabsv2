@@ -1,8 +1,28 @@
 "use client";
 
 import type { MetricSpecT } from "./graph-utils";
+import { Select } from "./controls";
 
-const VIZ = ["number", "line", "bar", "category", "table", "progress"] as const;
+const VIZ_OPTIONS = [
+  { value: "number", label: "Single number" },
+  { value: "line", label: "Line chart" },
+  { value: "bar", label: "Bar chart" },
+  { value: "category", label: "Category breakdown" },
+  { value: "table", label: "Table" },
+  { value: "progress", label: "Progress bar" },
+];
+const FORMAT_OPTIONS = [
+  { value: "number", label: "Number" },
+  { value: "percent", label: "Percentage" },
+  { value: "currency", label: "Currency" },
+];
+const TIME_UNIT_OPTIONS = [
+  { value: "day", label: "By day" },
+  { value: "week", label: "By week" },
+  { value: "month", label: "By month" },
+  { value: "quarter", label: "By quarter" },
+  { value: "year", label: "By year" },
+];
 
 /** An endpoint of the flow (a step with no next step) that can become a metric. */
 export type Endpoint = { nodeId: string; title: string };
@@ -15,6 +35,7 @@ export type Endpoint = { nodeId: string; title: string };
 export function ReviewPublishModal({
   endpoints,
   metrics,
+  timeFieldOptions,
   publishing,
   error,
   warning,
@@ -25,6 +46,7 @@ export function ReviewPublishModal({
 }: {
   endpoints: Endpoint[];
   metrics: MetricSpecT[];
+  timeFieldOptions: Array<{ value: string; label: string }>;
   publishing: boolean;
   error: string | null;
   warning: string | null;
@@ -71,23 +93,36 @@ export function ReviewPublishModal({
                       <input value={m.name} onChange={(e) => set(ep.nodeId, { name: e.target.value })} placeholder="e.g. Show-up rate" className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm" />
                     </label>
                     <div className="grid grid-cols-2 gap-2">
-                      <label className="block">
+                      <div>
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Show as</span>
-                        <select value={m.viz} onChange={(e) => set(ep.nodeId, { viz: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm">
-                          {VIZ.map((v) => (
-                            <option key={v} value={v}>{v}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block">
+                        <Select value={m.viz} width={210} options={VIZ_OPTIONS} onChange={(v) => set(ep.nodeId, { viz: v })} />
+                      </div>
+                      <div>
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Format</span>
-                        <select value={m.format} onChange={(e) => set(ep.nodeId, { format: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm">
-                          <option value="number">Number</option>
-                          <option value="percent">Percentage</option>
-                          <option value="currency">Currency</option>
-                        </select>
-                      </label>
+                        <Select value={m.format} width={210} options={FORMAT_OPTIONS} onChange={(v) => set(ep.nodeId, { format: v })} />
+                      </div>
                     </div>
+                    {(m.viz === "line" || m.viz === "bar") && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="mb-1 block text-xs font-medium text-neutral-600">Time reference</span>
+                          <Select
+                            value={m.timeField ?? ""}
+                            width={210}
+                            searchable
+                            placeholder="A date field…"
+                            options={[{ value: "", label: "None (single bar/point)" }, ...timeFieldOptions]}
+                            onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
+                          />
+                        </div>
+                        {m.timeField && (
+                          <div>
+                            <span className="mb-1 block text-xs font-medium text-neutral-600">Group by</span>
+                            <Select value={m.timeUnit ?? "month"} width={210} options={TIME_UNIT_OPTIONS} onChange={(v) => set(ep.nodeId, { timeUnit: v })} />
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Decimals</span>

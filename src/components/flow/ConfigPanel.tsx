@@ -72,20 +72,26 @@ function NumberField({ value, onChange, min, allowNull = false, placeholder }: {
   );
 }
 
-/** Formatter operations grouped by user intent, so we show only relevant controls. */
-const FORMATTER_INTENTS: Array<{ id: string; label: string; ops: string[] }> = [
-  { id: "text", label: "Clean up text", ops: ["trim", "uppercase", "lowercase", "normalize_email", "normalize_phone"] },
-  { id: "number", label: "Change a number", ops: ["round", "multiply", "divide", "to_number"] },
-  { id: "date", label: "Change a date", ops: ["date_only", "year_month"] },
-  { id: "replace", label: "Find & replace", ops: ["replace"] },
-  { id: "fallback", label: "Fill in when empty", ops: ["default"] },
+/**
+ * "Clean up values" actions as one flat, plain-language list (no nested intent →
+ * operation dropdowns). Each is a concrete thing a non-technical user recognises, with
+ * a one-line description and an example, so the step is self-explanatory.
+ */
+const FORMATTER_ACTIONS: Array<{ value: string; label: string; hint: string }> = [
+  { value: "trim", label: "Trim extra spaces", hint: "Removes spaces at the start and end." },
+  { value: "uppercase", label: "Make UPPERCASE", hint: '"hello" → "HELLO".' },
+  { value: "lowercase", label: "Make lowercase", hint: '"HELLO" → "hello".' },
+  { value: "normalize_email", label: "Tidy up an email", hint: "Lowercases and trims the address." },
+  { value: "normalize_phone", label: "Keep phone digits only", hint: '"(555) 12-34" → "5551234".' },
+  { value: "round", label: "Round a number", hint: "Rounds to the decimals you choose." },
+  { value: "multiply", label: "Multiply by a number", hint: "e.g. convert to a percentage or a rate." },
+  { value: "divide", label: "Divide by a number", hint: "e.g. cents → dollars (÷ 100)." },
+  { value: "to_number", label: "Turn text into a number", hint: '"42" → 42, so it can be calculated.' },
+  { value: "date_only", label: "Keep the date only", hint: "Drops the time: 2026-01-05." },
+  { value: "year_month", label: "Keep year & month", hint: "Drops the day: 2026-01." },
+  { value: "replace", label: "Find and replace text", hint: "Swap one piece of text for another." },
+  { value: "default", label: "Fill in a value when empty", hint: "Use a fallback when the field is blank." },
 ];
-const FORMATTER_OP_LABELS: Record<string, string> = {
-  trim: "Trim spaces", uppercase: "UPPERCASE", lowercase: "lowercase", normalize_email: "Normalize email", normalize_phone: "Digits only (phone)",
-  round: "Round", multiply: "Multiply", divide: "Divide", to_number: "Convert to number", to_text: "Convert to text",
-  date_only: "Date only (YYYY-MM-DD)", year_month: "Year & month (YYYY-MM)", replace: "Find & replace", default: "Fallback when empty",
-};
-const formatterIntentOf = (op: string): string => FORMATTER_INTENTS.find((i) => i.ops.includes(op))?.id ?? "text";
 
 /** A Zapier-style field chooser (label + data browser with samples, search, drill-in). */
 function FieldSelect({ value, groups, onChange, placeholder = "Choose a field…" }: { value: string; groups: DataGroup[]; onChange: (path: string) => void; placeholder?: string }) {
@@ -259,7 +265,6 @@ function NodeConfig({
   onAddBranch: () => void;
   onRemoveBranch: (pathId: string) => void;
 }) {
-  const [fmtIntent, setFmtIntent] = useState(() => formatterIntentOf(String((cfg as { op?: unknown }).op ?? "round")));
 
   if (type === "app") {
     const connId = (cfg.connectionId as string) ?? "";
@@ -515,41 +520,31 @@ function NodeConfig({
 
   if (type === "formatter") {
     const op = String(cfg.op ?? "round");
-    const intent = FORMATTER_INTENTS.find((i) => i.id === fmtIntent) ?? FORMATTER_INTENTS[0];
+    const action = FORMATTER_ACTIONS.find((a) => a.value === op);
     return (
       <div className="space-y-3">
+        <p className="text-xs text-neutral-500">Fix one field&rsquo;s values — pick the field, then what to do with it.</p>
         <Field label="Field to clean up">
           <FieldSelect value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} />
         </Field>
-        <Field label="What do you want to do?">
-          <Select
-            value={fmtIntent}
-            width={W}
-            options={FORMATTER_INTENTS.map((i) => ({ value: i.id, label: i.label }))}
-            onChange={(ni) => {
-              setFmtIntent(ni);
-              const nextOps = FORMATTER_INTENTS.find((i) => i.id === ni)?.ops ?? [];
-              if (nextOps.length && !nextOps.includes(op)) onChange({ op: nextOps[0] });
-            }}
-          />
+        <Field label="What should we do to it?">
+          <Select value={op} width={W} searchable options={FORMATTER_ACTIONS.map((a) => ({ value: a.value, label: a.label }))} onChange={(v) => onChange({ op: v })} />
         </Field>
-        {intent.ops.length > 1 && (
-          <Field label="Operation">
-            <Select value={op} width={W} options={intent.ops.map((o) => ({ value: o, label: FORMATTER_OP_LABELS[o] ?? title(o) }))} onChange={(v) => onChange({ op: v })} />
-          </Field>
-        )}
-        {op === "round" && <Field label="Decimals"><NumberField value={Number(cfg.decimals ?? 2)} min={0} onChange={(n) => onChange({ decimals: n ?? 0 })} /></Field>}
+        {action && <p className="-mt-1 text-xs text-neutral-400">{action.hint}</p>}
+
+        {op === "round" && <Field label="Decimal places"><NumberField value={Number(cfg.decimals ?? 2)} min={0} onChange={(n) => onChange({ decimals: n ?? 0 })} /></Field>}
+        {(op === "multiply" || op === "divide") && <Field label={op === "multiply" ? "Multiply by" : "Divide by"}><NumberField value={cfg.factor != null ? Number(cfg.factor) : null} allowNull placeholder="e.g. 100" onChange={(n) => onChange({ factor: n ?? undefined })} /></Field>}
         {op === "replace" && (
           <>
-            <Field label="Find"><input value={(cfg.find as string) ?? ""} onChange={(e) => onChange({ find: e.target.value })} className={INPUT} /></Field>
-            <Field label="Replace with"><ValueInput value={storedToValue(cfg, "replaceWith", groups)} groups={groups} placeholder="new value" onChange={(v) => onChange(valueToStored(v, "replaceWith"))} /></Field>
+            <Field label="Find this text"><input value={(cfg.find as string) ?? ""} onChange={(e) => onChange({ find: e.target.value })} className={INPUT} /></Field>
+            <Field label="Replace it with"><ValueInput value={storedToValue(cfg, "replaceWith", groups)} groups={groups} placeholder="new value" onChange={(v) => onChange(valueToStored(v, "replaceWith"))} /></Field>
           </>
         )}
-        {op === "default" && <Field label="Value for empty"><ValueInput value={storedToValue(cfg, "defaultValue", groups)} groups={groups} placeholder="fallback value" onChange={(v) => onChange(valueToStored(v, "defaultValue"))} /></Field>}
-        {(op === "multiply" || op === "divide") && <Field label="Factor"><NumberField value={cfg.factor != null ? Number(cfg.factor) : null} allowNull onChange={(n) => onChange({ factor: n ?? undefined })} /></Field>}
+        {op === "default" && <Field label="Value to use when empty"><ValueInput value={storedToValue(cfg, "defaultValue", groups)} groups={groups} placeholder="fallback value" onChange={(v) => onChange(valueToStored(v, "defaultValue"))} /></Field>}
+
         <Advanced>
-          <Field label="Save to field (defaults to same field)">
-            <input value={(cfg.outputField as string) ?? ""} onChange={(e) => onChange({ outputField: e.target.value || undefined })} className={INPUT} />
+          <Field label="Save the result to a different field">
+            <input value={(cfg.outputField as string) ?? ""} placeholder="Leave blank to update the same field" onChange={(e) => onChange({ outputField: e.target.value || undefined })} className={INPUT} />
           </Field>
         </Advanced>
       </div>

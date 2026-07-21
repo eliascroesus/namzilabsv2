@@ -414,6 +414,9 @@ export type TilePresentation = {
   currency?: string;
   precision: number;
   target: number | null;
+  /** Optional dashboard time axis: a date field to bucket a dataset endpoint by. */
+  timeField?: string;
+  timeUnit?: "day" | "week" | "month" | "quarter" | "year";
 };
 
 /** Build a dashboard tile from a computed shape + its presentation. Shared by the
@@ -430,6 +433,21 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
     target: spec.target,
     sample,
   };
+  // A metric-level time reference turns a raw dataset endpoint into a time series for
+  // line/bar charts — records are counted into buckets of the chosen date field.
+  if (spec.timeField && (spec.viz === "line" || spec.viz === "bar") && shape.kind === "dataset") {
+    const unit = spec.timeUnit ?? "month";
+    const buckets = new Map<string, number>();
+    for (const r of shape.records) {
+      const t = dateMs(getField(r, spec.timeField));
+      if (t == null) continue;
+      const key = bucketKey(new Date(t).toISOString(), unit);
+      buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+    tile.series = [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([bucket, value]) => ({ bucket, value }));
+    tile.value = round(tile.series.reduce((a, b) => a + b.value, 0));
+    return tile;
+  }
   if (shape.kind === "scalar") tile.value = shape.value;
   else if (shape.kind === "series") {
     tile.series = shape.series;

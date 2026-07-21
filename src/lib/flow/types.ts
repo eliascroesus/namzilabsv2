@@ -339,6 +339,9 @@ export const MetricSpecSchema = z.object({
   currency: z.string().default("USD"),
   precision: z.number().int().min(0).max(6).default(0),
   target: z.number().nullable().default(null),
+  /** Optional dashboard time axis for line/bar charts: which date field to bucket by. */
+  timeField: z.string().optional(),
+  timeUnit: z.enum(TIME_UNITS).default("month"),
 });
 export type MetricSpec = z.infer<typeof MetricSpecSchema>;
 

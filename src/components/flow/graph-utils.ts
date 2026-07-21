@@ -40,7 +40,7 @@ export type FieldGroup = {
   fields: PickField[];
 };
 
-export type MetricSpecT = { nodeId: string; enabled: boolean; name: string; viz: string; format: string; unit?: string; currency?: string; precision: number; target: number | null };
+export type MetricSpecT = { nodeId: string; enabled: boolean; name: string; viz: string; format: string; unit?: string; currency?: string; precision: number; target: number | null; timeField?: string; timeUnit?: string };
 export type Graph = {
   nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>;
   edges: Array<{ id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>;

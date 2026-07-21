@@ -578,12 +578,23 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const openReview = useCallback(() => {
     setMetrics((prev) => {
       const byId = new Map(prev.map((m) => [m.nodeId, m]));
-      return endpoints.map((ep) => byId.get(ep.nodeId) ?? { nodeId: ep.nodeId, enabled: true, name: ep.title, viz: "number", format: "number", currency: "USD", precision: 0, target: null });
+      return endpoints.map((ep) => byId.get(ep.nodeId) ?? { nodeId: ep.nodeId, enabled: true, name: ep.title, viz: "number", format: "number", currency: "USD", precision: 0, target: null, timeUnit: "month" });
     });
     setPublishError(null);
     setPublishWarning(null);
     setReviewOpen(true);
   }, [endpoints]);
+  // Date fields across the flow — offered as a metric's "Time reference" (dashboard axis).
+  const timeFieldOptions = useMemo<Array<{ value: string; label: string }>>(() => {
+    const seen = new Map<string, string>();
+    seen.set("occurredAt", "When it happened");
+    for (const n of nodes) {
+      for (const f of n.data.lastTest?.outputSchema ?? []) {
+        if (f.type === "date" && !seen.has(f.path)) seen.set(f.path, f.label);
+      }
+    }
+    return [...seen.entries()].map(([value, label]) => ({ value, label }));
+  }, [nodes]);
   const inDegreeById = useMemo(() => {
     const m = new Map<string, number>();
     for (const n of nodes) m.set(n.id, 0);
@@ -756,6 +767,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         <ReviewPublishModal
           endpoints={endpoints}
           metrics={metrics}
+          timeFieldOptions={timeFieldOptions}
           publishing={publishing}
           error={publishError}
           warning={publishWarning}
