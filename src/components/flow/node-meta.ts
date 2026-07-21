@@ -1,4 +1,4 @@
-import { FILTER_OP_LABELS, PRIMARY_FILTER_OPS, type NodeType, type FlowFilterOp } from "@/lib/flow/types";
+import { type NodeType } from "@/lib/flow/types";
 import type { NodeData } from "./graph-utils";
 
 /** The four visible stages a metric flows through, in order. */
@@ -58,9 +58,6 @@ export function sourceStyle(source?: string | null): SourceStyle {
   const key = (source ?? "").trim();
   return { label: key || "App", color: "#64748B", short: (key || "ap").slice(0, 2).replace(/^\w/, (c) => c.toUpperCase()) };
 }
-
-/** Filter operators shown under the "More" divider (everything not in the common set). */
-export const MORE_FILTER_OPS = (Object.keys(FILTER_OP_LABELS) as FlowFilterOp[]).filter((o) => !PRIMARY_FILTER_OPS.includes(o));
 
 export function defaultConfig(type: NodeType): Record<string, unknown> {
   switch (type) {
@@ -213,13 +210,6 @@ export const STATUS_META: Record<NodeStatus, { label: string; cls: string; borde
   updating: { label: "Testing…", cls: "bg-blue-100 text-blue-700", border: "border-blue-300" },
   error: { label: "Error", cls: "bg-red-100 text-red-700", border: "border-red-300" },
 };
-
-export function statusOf(data: NodeData): { label: string; cls: string } {
-  if (data.dirty) return { label: "Retest", cls: "bg-amber-100 text-amber-700" };
-  if (!data.lastTest) return { label: "Not tested", cls: "bg-neutral-100 text-neutral-500" };
-  if (data.lastTest.status === "error") return { label: "Error", cls: "bg-red-100 text-red-700" };
-  return { label: "Tested", cls: "bg-green-100 text-green-700" };
-}
 
 export function pathHandles(data: NodeData): Array<{ id: string; label: string }> {
   const paths = (data.config.paths as Array<{ id: string; label: string }>) ?? [];

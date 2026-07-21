@@ -703,7 +703,7 @@ function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigFi
   const value = String(sourceConfig[field.key] ?? "");
   const deps = field.dependsOn ?? [];
   const depsReady = deps.every((d) => String(sourceConfig[d] ?? "").trim() !== "");
-  const depsSignature = deps.map((d) => String(sourceConfig[d] ?? "")).join(" ");
+  const depsSignature = deps.map((d) => String(sourceConfig[d] ?? "")).join(" ");
 
   const [state, setState] = useState<{ sig: string | null; status: "idle" | "loading" | "ok" | "error"; options: Array<{ value: string; label: string }>; error?: string }>({ sig: null, status: "idle", options: [] });
 

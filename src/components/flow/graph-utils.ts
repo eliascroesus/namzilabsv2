@@ -106,43 +106,6 @@ export function computeStepNumbers(nodes: FNode[], allEdges: Edge[]): Map<string
   return order;
 }
 
-/** Simple layered left-to-right layout for the "Auto layout" button. */
-export function computeLayout(nodes: FNode[], edges: Edge[]): Map<string, { x: number; y: number }> {
-  const layer = new Map<string, number>();
-  const indeg = new Map<string, number>();
-  const adj = new Map<string, string[]>();
-  for (const n of nodes) {
-    layer.set(n.id, 0);
-    indeg.set(n.id, 0);
-    adj.set(n.id, []);
-  }
-  for (const e of edges) {
-    if (!indeg.has(e.target) || !adj.has(e.source)) continue;
-    indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
-    adj.get(e.source)!.push(e.target);
-  }
-  const queue = [...indeg.entries()].filter(([, d]) => d === 0).map(([id]) => id);
-  while (queue.length) {
-    const id = queue.shift()!;
-    for (const next of adj.get(id) ?? []) {
-      layer.set(next, Math.max(layer.get(next) ?? 0, (layer.get(id) ?? 0) + 1));
-      indeg.set(next, (indeg.get(next) ?? 0) - 1);
-      if ((indeg.get(next) ?? 0) === 0) queue.push(next);
-    }
-  }
-  const byLayer = new Map<number, string[]>();
-  for (const n of nodes) {
-    const l = layer.get(n.id) ?? 0;
-    if (!byLayer.has(l)) byLayer.set(l, []);
-    byLayer.get(l)!.push(n.id);
-  }
-  const pos = new Map<string, { x: number; y: number }>();
-  for (const [l, ids] of byLayer) {
-    ids.forEach((idv, i) => pos.set(idv, { x: 60 + l * 300, y: 60 + i * 150 }));
-  }
-  return pos;
-}
-
 /**
  * Managed top-to-bottom layout. Positions are always computed (users never place
  * nodes): depth flows downward via longest-path layering, and each layer is centred
