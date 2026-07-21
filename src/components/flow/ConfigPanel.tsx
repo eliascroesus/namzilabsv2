@@ -76,25 +76,37 @@ function NumberField({ value, onChange, min, allowNull = false, placeholder }: {
 }
 
 /**
- * "Clean up values" actions as one flat, plain-language list (no nested intent →
- * operation dropdowns). Each is a concrete thing a non-technical user recognises, with
- * a one-line description and an example, so the step is self-explanatory.
+ * "Clean up values" is Zapier-style two-step: first WHAT KIND of values (text /
+ * numbers / dates), then what to do with them — so the action list is short and
+ * every option is relevant. Each action has a one-line example so it explains itself.
  */
-const FORMATTER_ACTIONS: Array<{ value: string; label: string; hint: string }> = [
-  { value: "trim", label: "Trim extra spaces", hint: "Removes spaces at the start and end." },
-  { value: "uppercase", label: "Make UPPERCASE", hint: '"hello" → "HELLO".' },
-  { value: "lowercase", label: "Make lowercase", hint: '"HELLO" → "hello".' },
-  { value: "normalize_email", label: "Tidy up an email", hint: "Lowercases and trims the address." },
-  { value: "normalize_phone", label: "Keep phone digits only", hint: '"(555) 12-34" → "5551234".' },
-  { value: "round", label: "Round a number", hint: "Rounds to the decimals you choose." },
-  { value: "multiply", label: "Multiply by a number", hint: "e.g. convert to a percentage or a rate." },
-  { value: "divide", label: "Divide by a number", hint: "e.g. cents → dollars (÷ 100)." },
-  { value: "to_number", label: "Turn text into a number", hint: '"42" → 42, so it can be calculated.' },
-  { value: "date_only", label: "Keep the date only", hint: "Drops the time: 2026-01-05." },
-  { value: "year_month", label: "Keep year & month", hint: "Drops the day: 2026-01." },
-  { value: "replace", label: "Find and replace text", hint: "Swap one piece of text for another." },
-  { value: "default", label: "Fill in a value when empty", hint: "Use a fallback when the field is blank." },
+type FormatterCat = "text" | "number" | "date";
+const FORMATTER_CATEGORIES: Array<{ value: FormatterCat; label: string; hint: string }> = [
+  { value: "text", label: "Text", hint: "Trim, capitalize, find & replace, tidy emails…" },
+  { value: "number", label: "Numbers", hint: "Turn text into numbers, round, multiply, divide." },
+  { value: "date", label: "Dates & times", hint: "Fix text timestamps into real dates, keep day / month / hour." },
 ];
+const FORMATTER_ACTIONS: Array<{ value: string; label: string; hint: string; cat: FormatterCat }> = [
+  // Text
+  { value: "trim", label: "Trim extra spaces", hint: "Removes spaces at the start and end.", cat: "text" },
+  { value: "uppercase", label: "Make UPPERCASE", hint: '"hello" → "HELLO".', cat: "text" },
+  { value: "lowercase", label: "Make lowercase", hint: '"HELLO" → "hello".', cat: "text" },
+  { value: "normalize_email", label: "Tidy up an email", hint: "Lowercases and trims the address.", cat: "text" },
+  { value: "normalize_phone", label: "Keep phone digits only", hint: '"(555) 12-34" → "5551234".', cat: "text" },
+  { value: "replace", label: "Find and replace text", hint: "Swap one piece of text for another.", cat: "text" },
+  { value: "default", label: "Fill in a value when empty", hint: "Use a fallback when the field is blank.", cat: "text" },
+  // Numbers
+  { value: "to_number", label: "Turn text into a number", hint: '"42" → 42, so it can be summed and compared.', cat: "number" },
+  { value: "round", label: "Round a number", hint: "Rounds to the decimals you choose.", cat: "number" },
+  { value: "multiply", label: "Multiply by a number", hint: "e.g. convert to a percentage or a rate.", cat: "number" },
+  { value: "divide", label: "Divide by a number", hint: "e.g. cents → dollars (÷ 100).", cat: "number" },
+  // Dates & times
+  { value: "to_date", label: "Fix into a real date", hint: 'Reads text like "7/21/2026 14:23" and outputs a proper date-time.', cat: "date" },
+  { value: "date_only", label: "Keep the date only", hint: "Drops the time: 2026-01-05.", cat: "date" },
+  { value: "year_month", label: "Keep year & month", hint: "Drops the day: 2026-01.", cat: "date" },
+  { value: "hour", label: "Bucket into hours", hint: '"2026-01-05 14:00" — compare or total records per hour.', cat: "date" },
+];
+const formatterCatOf = (op: string): FormatterCat => FORMATTER_ACTIONS.find((a) => a.value === op)?.cat ?? "text";
 
 /** A Zapier-style field chooser (label + data browser with samples, search, drill-in). */
 function FieldSelect({ value, groups, onChange, placeholder = "Choose a field…" }: { value: string; groups: DataGroup[]; onChange: (path: string) => void; placeholder?: string }) {
@@ -289,7 +301,9 @@ function NodeConfig({
             options={connections.map((c) => ({ value: c.id, label: c.name, hint: c.source }))}
             onChange={(v) => {
               const c = connections.find((x) => x.id === v);
-              onChange({ connectionId: c?.id ?? null, connectionName: c?.name ?? null, source: c?.source ?? null, eventType: null });
+              // A different account invalidates the resource selection (its spreadsheet
+              // ids, calendars… belong to the old account), so sourceConfig resets.
+              onChange({ connectionId: c?.id ?? null, connectionName: c?.name ?? null, source: c?.source ?? null, eventType: null, sourceConfig: {} });
             }}
           />
           {conn?.syncStatus && (
@@ -586,15 +600,28 @@ function NodeConfig({
 
   if (type === "formatter") {
     const op = String(cfg.op ?? "round");
+    const cat = formatterCatOf(op);
+    const actions = FORMATTER_ACTIONS.filter((a) => a.cat === cat);
     const action = FORMATTER_ACTIONS.find((a) => a.value === op);
     return (
       <div className="space-y-3">
-        <p className="text-xs text-neutral-500">Fix one field&rsquo;s values — pick the field, then what to do with it.</p>
+        <p className="text-xs text-neutral-500">Fix one field&rsquo;s values — pick the field, what kind of data it is, then what to do.</p>
         <Field label="Field to clean up">
           <FieldSelect value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} />
         </Field>
-        <Field label="What should we do to it?">
-          <Select value={op} width={W} searchable options={FORMATTER_ACTIONS.map((a) => ({ value: a.value, label: a.label }))} onChange={(v) => onChange({ op: v })} />
+        <Field label="What kind of values are they?">
+          <Select
+            value={cat}
+            width={W}
+            options={FORMATTER_CATEGORIES.map((c) => ({ value: c.value, label: c.label, hint: c.hint }))}
+            onChange={(c) => {
+              const first = FORMATTER_ACTIONS.find((a) => a.cat === c);
+              if (first && first.cat !== cat) onChange({ op: first.value });
+            }}
+          />
+        </Field>
+        <Field label="What should we do?">
+          <Select value={op} width={W} options={actions.map((a) => ({ value: a.value, label: a.label, hint: a.hint }))} onChange={(v) => onChange({ op: v })} />
         </Field>
         {action && <p className="-mt-1 text-xs text-neutral-400">{action.hint}</p>}
 
@@ -780,7 +807,10 @@ function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigFi
   const value = String(sourceConfig[field.key] ?? "");
   const deps = field.dependsOn ?? [];
   const depsReady = deps.every((d) => String(sourceConfig[d] ?? "").trim() !== "");
-  const depsSignature = deps.map((d) => String(sourceConfig[d] ?? "")).join(" ");
+  // The connection id is part of the fetch signature: switching the Account MUST
+  // refetch, so the list always shows the selected account's own resources — never
+  // a stale list from the previously selected one.
+  const depsSignature = [conn.id, ...deps.map((d) => String(sourceConfig[d] ?? ""))].join(" ");
 
   const [state, setState] = useState<{ sig: string | null; status: "idle" | "loading" | "ok" | "error"; options: Array<{ value: string; label: string }>; error?: string }>({ sig: null, status: "idle", options: [] });
 

@@ -70,7 +70,7 @@ export function FlowTile({ row }: { row: FlowResultRow }) {
       ) : (
         <>
           <p className="mt-2 text-4xl font-semibold">{fmt(t.value, t)}</p>
-          {t.target != null && <TargetBar value={t.value ?? 0} target={t.target} />}
+          {t.target != null && <TargetBar value={t.value ?? 0} target={t.target} tile={t} />}
         </>
       )}
 
@@ -91,12 +91,13 @@ function Freshness({ status }: { status: string }) {
   return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${map[status] ?? "bg-neutral-100 text-neutral-600"}`}>{status}</span>;
 }
 
-function TargetBar({ value, target }: { value: number; target: number }) {
+function TargetBar({ value, target, tile }: { value: number; target: number; tile: Tile }) {
   const pct = target > 0 ? Math.min(Math.round((value / target) * 100), 100) : 0;
   return (
     <div className="mt-3">
       <div className="mb-1 flex justify-between text-xs text-neutral-500">
-        <span>Goal: {target}</span>
+        {/* The goal is shown in the metric's own format ("Goal: 90%", "Goal: $1,500"). */}
+        <span>Goal: {fmt(target, tile)}</span>
         <span>{pct}%</span>
       </div>
       <div className="h-2 w-full overflow-hidden rounded bg-neutral-100">

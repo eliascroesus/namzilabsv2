@@ -1,8 +1,9 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { requireOrg } from "@/lib/auth";
-import { createConnection, deleteConnection, updateConnectionConfig, getConnection } from "@/lib/connections";
+import { createConnection, deleteConnection, updateConnectionConfig, updateConnectionName, getConnection } from "@/lib/connections";
 import { catalogEntry } from "@/connectors/catalog";
 import { inngest } from "@/inngest/client";
 
@@ -34,6 +35,14 @@ export async function connectApiKeyAction(formData: FormData): Promise<void> {
     config,
   });
   redirect(`/connections/${conn.id}`);
+}
+
+/** Rename a connection from the Integrations list (inline edit). */
+export async function renameConnectionAction(id: string, name: string): Promise<{ ok: boolean }> {
+  const { orgId } = await requireOrg();
+  await updateConnectionName(orgId, id, name);
+  revalidatePath("/integrations");
+  return { ok: true };
 }
 
 export async function updateConfigAction(formData: FormData): Promise<void> {

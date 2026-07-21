@@ -37,10 +37,13 @@ export async function GET(req: Request) {
 
   try {
     const tokens = await exchangeGoogleCode(code);
+    // Label the connection with the Google account's email, so two connected
+    // accounts are distinguishable at a glance ("Google Sheets · me@work.com").
+    const product = source === "gcal" ? "Google Calendar" : "Google Sheets";
     const conn = await createConnection({
       orgId: ctx.orgId,
       source,
-      name: source === "gcal" ? "Google Calendar" : "Google Sheets",
+      name: tokens.email ? `${product} · ${tokens.email}` : product,
       authType: "oauth2",
       credentials: tokens as unknown as Record<string, unknown>,
       config: {},

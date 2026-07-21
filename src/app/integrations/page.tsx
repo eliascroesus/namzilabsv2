@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { listConnections } from "@/lib/connections";
 import { CONNECTOR_CATALOG, type ConnectorCatalogEntry } from "@/connectors/catalog";
 import { ConfigFieldInput } from "@/components/config-field-input";
+import { ConnectionRow } from "./ConnectionRow";
 import { connectApiKeyAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -33,17 +33,7 @@ export default async function IntegrationsPage() {
             </h2>
             <div className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
               {connected.map((c) => (
-                <Link
-                  key={c.id}
-                  href={`/connections/${c.id}`}
-                  className="flex items-center justify-between px-4 py-3 hover:bg-neutral-50"
-                >
-                  <span className="font-medium">{c.name}</span>
-                  <span className="flex items-center gap-3 text-sm text-neutral-500">
-                    <span>{c.source}</span>
-                    <StatusDot status={c.status} />
-                  </span>
-                </Link>
+                <ConnectionRow key={c.id} id={c.id} name={c.name} source={c.source} status={c.status} />
               ))}
             </div>
           </section>
@@ -133,7 +123,3 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
   );
 }
 
-function StatusDot({ status }: { status: string }) {
-  const color = status === "active" ? "bg-green-500" : status === "error" ? "bg-red-500" : "bg-neutral-300";
-  return <span className={`inline-block h-2 w-2 rounded-full ${color}`} aria-label={status} />;
-}

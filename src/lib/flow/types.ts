@@ -264,8 +264,10 @@ export const FORMATTER_OPS = [
   "trim",
   "normalize_email",
   "normalize_phone",
+  "to_date",
   "date_only",
   "year_month",
+  "hour",
   "replace",
   "default",
   "multiply",
@@ -396,6 +398,10 @@ export type TileSpec = {
   currency?: string;
   precision: number;
   target: number | null;
+  /** The metric's time reference (which field says WHEN each record happened) —
+   * carried onto the tile so dashboard time-range controls can use it. */
+  timeField?: string;
+  timeUnit?: string;
   value?: number;
   series?: Array<{ bucket: string; value: number }>;
   groups?: Array<{ label: string; value: number }>;

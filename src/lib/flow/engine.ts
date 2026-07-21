@@ -451,6 +451,8 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
     currency: spec.currency,
     precision: spec.precision,
     target: spec.target,
+    timeField: spec.timeField,
+    timeUnit: spec.timeUnit,
     sample,
   };
   // A metric-level time reference turns a raw dataset endpoint into a time series for
@@ -733,6 +735,13 @@ function formatValue(raw: unknown, cfg: { op: string; decimals: number; find?: s
       return str.trim().toLowerCase();
     case "normalize_phone":
       return str.replace(/[^\d]/g, "");
+    case "to_date": {
+      // Parse any recognizable date text (a Sheets "7/21/2026 14:23:45" timestamp, an
+      // ISO string, "Jan 5 2026"…) into a proper ISO date-time. Unparseable values
+      // pass through unchanged — cleanup never destroys data.
+      const t = dateMs(raw);
+      return t == null ? raw : new Date(t).toISOString();
+    }
     case "date_only": {
       const t = dateMs(raw);
       return t == null ? raw : new Date(t).toISOString().slice(0, 10);
@@ -740,6 +749,11 @@ function formatValue(raw: unknown, cfg: { op: string; decimals: number; find?: s
     case "year_month": {
       const t = dateMs(raw);
       return t == null ? raw : new Date(t).toISOString().slice(0, 7);
+    }
+    case "hour": {
+      // "2026-01-05 14:00" — a per-hour bucket, usable for hour-by-hour breakdowns.
+      const t = dateMs(raw);
+      return t == null ? raw : `${new Date(t).toISOString().slice(0, 13).replace("T", " ")}:00`;
     }
     case "replace":
       return cfg.find != null ? str.split(cfg.find).join(cfg.replaceWith ?? "") : str;

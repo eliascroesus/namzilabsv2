@@ -116,6 +116,16 @@ export async function getConnection(orgId: string, id: string): Promise<Connecti
   return row ?? null;
 }
 
+/** Rename a connection (user-editable label, e.g. "Sheets — sales team"). */
+export async function updateConnectionName(orgId: string, id: string, name: string): Promise<void> {
+  const trimmed = name.trim().slice(0, 120);
+  if (!trimmed) return;
+  await getDb()
+    .update(connections)
+    .set({ name: trimmed, updatedAt: new Date() })
+    .where(and(eq(connections.id, id), eq(connections.orgId, orgId)));
+}
+
 export async function updateConnectionConfig(
   orgId: string,
   id: string,

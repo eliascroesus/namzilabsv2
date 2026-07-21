@@ -102,30 +102,30 @@ export function ReviewPublishModal({
                         <Select value={m.format} width={210} options={FORMAT_OPTIONS} onChange={(v) => set(ep.nodeId, { format: v })} />
                       </div>
                     </div>
-                    {(m.viz === "line" || m.viz === "bar") && (
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <span className="mb-1 block text-xs font-medium text-neutral-600">Time reference</span>
-                            <Select
-                              value={m.timeField ?? ""}
-                              width={260}
-                              searchable
-                              placeholder="Pick a field…"
-                              options={[{ value: "", label: "None (single bar/point)" }, ...timeFieldOptions]}
-                              onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
-                            />
-                          </div>
-                          {m.timeField && (
-                            <div>
-                              <span className="mb-1 block text-xs font-medium text-neutral-600">Group by</span>
-                              <Select value={m.timeUnit ?? "month"} width={210} options={TIME_UNIT_OPTIONS} onChange={(v) => set(ep.nodeId, { timeUnit: v })} />
-                            </div>
-                          )}
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="mb-1 block text-xs font-medium text-neutral-600">Time reference</span>
+                          <Select
+                            value={m.timeField ?? ""}
+                            width={260}
+                            searchable
+                            placeholder="Pick a field…"
+                            options={[{ value: "", label: "None" }, ...timeFieldOptions]}
+                            onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
+                          />
                         </div>
-                        <p className="text-[11px] text-neutral-400">Which value says when each record happened — any field from any step (e.g. a Timestamp column from your sheet).</p>
+                        {(m.viz === "line" || m.viz === "bar") && m.timeField && (
+                          <div>
+                            <span className="mb-1 block text-xs font-medium text-neutral-600">Group by</span>
+                            <Select value={m.timeUnit ?? "month"} width={210} options={TIME_UNIT_OPTIONS} onChange={(v) => set(ep.nodeId, { timeUnit: v })} />
+                          </div>
+                        )}
                       </div>
-                    )}
+                      <p className="text-[11px] text-neutral-400">
+                        Which value says when each record happened (e.g. a Timestamp column from your sheet) — drives chart axes and the dashboard&rsquo;s 7 / 30 / 90-day views.
+                      </p>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Decimals</span>
@@ -133,7 +133,17 @@ export function ReviewPublishModal({
                       </label>
                       <label className="block">
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Goal / target</span>
-                        <input type="number" value={m.target ?? ""} onChange={(e) => set(ep.nodeId, { target: e.target.value === "" ? null : Number(e.target.value) })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm" />
+                        {/* The goal is in the metric's own format: % for percentages, $ for currency. */}
+                        <div className="relative">
+                          {m.format === "currency" && <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm text-neutral-400">$</span>}
+                          <input
+                            type="number"
+                            value={m.target ?? ""}
+                            onChange={(e) => set(ep.nodeId, { target: e.target.value === "" ? null : Number(e.target.value) })}
+                            className={`w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm ${m.format === "currency" ? "pl-6" : ""} ${m.format === "percent" ? "pr-7" : ""}`}
+                          />
+                          {m.format === "percent" && <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-neutral-400">%</span>}
+                        </div>
                       </label>
                     </div>
                   </div>

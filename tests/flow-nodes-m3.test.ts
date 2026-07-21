@@ -311,6 +311,34 @@ describe("Formatter node", () => {
     );
     expect((await run(g)).outputs[0].tile.value).toBe(3); // 1 + 2
   });
+
+  it("fixes a text timestamp into a real date, and buckets into hours", async () => {
+    // A Sheets-style row whose Timestamp column is plain text.
+    await db.insert(events).values({
+      eventId: `gsheets:${randomUUID()}`,
+      orgId: ORG,
+      connectionId: CONN,
+      source: "gsheets",
+      eventType: "row_added",
+      subject: null,
+      occurredAt: new Date(),
+      value: null,
+      properties: { ts: "7/21/2026 14:23:45" },
+    });
+    const g = (op: string, outputField?: string) =>
+      G(
+        [N("a", "app", { connectionId: CONN }), N("fmt", "formatter", { field: "ts", op, outputField })],
+        [E("a", "fmt")],
+      );
+    const fixed = await run(g("to_date"));
+    const fixedSample = (fixed.nodes.get("fmt") as { sample: Array<{ properties: Record<string, unknown> }> }).sample[0];
+    expect(String(fixedSample.properties.ts)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/); // proper ISO date-time
+
+    const hourly = await run(g("hour", "ts_hour"));
+    const hourlySample = (hourly.nodes.get("fmt") as { sample: Array<{ properties: Record<string, unknown> }> }).sample[0];
+    expect(String(hourlySample.properties.ts_hour)).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:00$/); // "2026-07-21 14:00"
+    expect(hourlySample.properties.ts).toBe("7/21/2026 14:23:45"); // original kept (saved to a new field)
+  });
 });
 
 describe("Paths node", () => {
