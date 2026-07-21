@@ -220,26 +220,6 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
     }
     return px;
   };
-  const ordered = [...nodes].sort((a, b) => (depth.get(a.id) ?? 0) - (depth.get(b.id) ?? 0));
-  for (const n of ordered) {
-    const ins = structuralIncoming.get(n.id) ?? [];
-    const info = mergeInfo.get(n.id);
-    if (info) {
-      if (info.centering) {
-        const uniqueXs = [...new Set(info.allSources.map((s) => xById.get(s) ?? 0))];
-        xById.set(n.id, uniqueXs.reduce((a, b) => a + b, 0) / Math.max(1, uniqueXs.length));
-      } else {
-        // Anchored: exactly where its chain predecessor puts it. Reference sources
-        // (whatever data it pulls in) never move it.
-        xById.set(n.id, info.anchor ? laneX(info.anchor) : 0);
-      }
-    } else if (ins.length === 0) {
-      xById.set(n.id, 0);
-    } else {
-      xById.set(n.id, laneX(ins[0]));
-    }
-  }
-
   const ROW = 168;
   const MIN_GAP = 288;
   const byDepth = new Map<number, string[]>();
@@ -249,14 +229,36 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
     byDepth.get(d)!.push(n.id);
   }
   const pos = new Map<string, { x: number; y: number }>();
-  for (const [d, ids] of byDepth) {
-    // Keep lane offsets, but nudge apart any nodes that would overlap in this row.
+  // Level by level, top down: place each node from its already-PACKED parents, then
+  // nudge same-row overlaps apart and write the packed lane back — so a whole subtree
+  // follows its root's final column. Several Get data roots therefore sit side by
+  // side, each with its own chain running straight down its own lane.
+  for (const [d, ids] of [...byDepth.entries()].sort((a, b) => a[0] - b[0])) {
+    for (const nid of ids) {
+      const ins = structuralIncoming.get(nid) ?? [];
+      const info = mergeInfo.get(nid);
+      if (info) {
+        if (info.centering) {
+          const uniqueXs = [...new Set(info.allSources.map((s) => xById.get(s) ?? 0))];
+          xById.set(nid, uniqueXs.reduce((a, b) => a + b, 0) / Math.max(1, uniqueXs.length));
+        } else {
+          // Anchored: exactly where its chain predecessor puts it. Reference sources
+          // (whatever data it pulls in) never move it.
+          xById.set(nid, info.anchor ? laneX(info.anchor) : 0);
+        }
+      } else if (ins.length === 0) {
+        xById.set(nid, 0);
+      } else {
+        xById.set(nid, laneX(ins[0]));
+      }
+    }
     ids.sort((a, b) => (xById.get(a) ?? 0) - (xById.get(b) ?? 0));
     let prevX = -Infinity;
     for (const id of ids) {
       let x = xById.get(id) ?? 0;
       if (x - prevX < MIN_GAP) x = prevX + MIN_GAP;
       pos.set(id, { x, y: d * ROW });
+      xById.set(id, x);
       prevX = x;
     }
   }

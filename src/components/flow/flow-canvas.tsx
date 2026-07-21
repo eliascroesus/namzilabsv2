@@ -97,7 +97,13 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [initialGraph],
   );
   const initialEdges: Edge[] = useMemo(() => {
-    const es: Edge[] = initialGraph.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? undefined, targetHandle: e.targetHandle ?? undefined }));
+    // An App (Get data) step has no inputs — it's a data source, a root of its own
+    // lane. Any stored edge INTO one is an artifact of older builds (where "Add next
+    // step → Get data" wrongly chained it); dropping them here heals those flows.
+    const appIds = new Set(initialGraph.nodes.filter((n) => (n as { type: string }).type === "app").map((n) => (n as { id: string }).id));
+    const es: Edge[] = initialGraph.edges
+      .filter((e) => !appIds.has(e.target))
+      .map((e) => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? undefined, targetHandle: e.targetHandle ?? undefined }));
     // Older flows used a compare step's "a" number edge as its place in the line. Give
     // those steps a plain chain edge anchored to the same source, so changing which
     // numbers they compare can never move them (references are data, not position).
@@ -217,6 +223,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       setNodes((ns) => [...ns, newNode, ...extraNodes]);
 
       setEdges((es) => {
+        // A Get data step is a data SOURCE — a new root lane beside the others, never a
+        // next step. No matter where it was added from (an Add-next button, a "+" on an
+        // edge), it connects to nothing; later steps pull it in via Combine or numbers.
+        if (type === "app") return es;
         let base = es;
         const predecessor = ctx?.fromNodeId ?? ctx?.onEdge?.source ?? null;
         if (ctx?.fromNodeId) {

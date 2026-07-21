@@ -210,6 +210,25 @@ describe("structural layout — number references never move nodes", () => {
   });
 });
 
+describe("multiple Get data roots — parallel lanes", () => {
+  it("puts each data source on its own lane, side by side, with its chain below it", () => {
+    const nodes = [N("s1", "app"), N("f1", "filter"), N("s2", "app"), N("f2", "filter")];
+    const edges = [E("s1", "f1"), E("s2", "f2")];
+    const pos = computeVerticalLayout(nodes, edges);
+    // Both sources on the top row, spaced apart — neither reads as the other's next step.
+    expect(pos.get("s1")!.y).toBe(pos.get("s2")!.y);
+    expect(pos.get("s2")!.x - pos.get("s1")!.x).toBeGreaterThanOrEqual(288);
+    // Each source's chain runs straight down its own lane.
+    expect(pos.get("f1")!.x).toBe(pos.get("s1")!.x);
+    expect(pos.get("f2")!.x).toBe(pos.get("s2")!.x);
+    expect(pos.get("f1")!.y).toBeGreaterThan(pos.get("s1")!.y);
+    // Both chains end in their own terminal (each lane gets its own "+ Add next step").
+    const terms = terminalIds(nodes, edges);
+    expect(terms.has("f1")).toBe(true);
+    expect(terms.has("f2")).toBe(true);
+  });
+});
+
 describe("Combine layout — picked sources never move the node", () => {
   it("keeps a combine glued to its chain anchor when it references another app", () => {
     const nodes = [N("a", "app"), N("f", "filter"), N("c", "combine"), N("b", "app")];
