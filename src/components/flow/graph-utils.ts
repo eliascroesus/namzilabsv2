@@ -175,12 +175,33 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
         xById.set(n.id, px);
       }
     } else {
-      // Multiple inputs (e.g. Combine, or Calculate's two numbers): stay in the lane of
-      // the closest (deepest) input — the chain continuation — so extra data sources are
-      // treated as references that don't move the node. Positions follow the flow, never
-      // "what data comes in".
-      const primary = ins.reduce((best, i) => ((depth.get(i.source) ?? 0) > (depth.get(best.source) ?? 0) ? i : best), ins[0]);
-      xById.set(n.id, xById.get(primary.source) ?? 0);
+      // Multiple structural inputs — in practice only Combine. Keep its position stable:
+      //  - if it merges sibling branches of a single Paths split, centre it between them;
+      //  - otherwise it stays in its chain anchor's lane (the first input — the step it was
+      //    added after), so pulling in an off-to-the-side source (a Sheet, another app)
+      //    never drags the node out of its line. Position follows the flow, not the data.
+      const branchKeyOf = (startId: string): string | null => {
+        let cur: string | undefined = startId;
+        const guard = new Set<string>();
+        while (cur && !guard.has(cur)) {
+          guard.add(cur);
+          const up: { source: string; handle: string | null } | undefined = incoming.get(cur)?.[0];
+          if (!up) return null;
+          const parent = nodeById.get(up.source);
+          if (parent && parent.type === "paths" && up.handle) return `${up.source}::${up.handle}`;
+          cur = up.source;
+        }
+        return null;
+      };
+      const keys = ins.map((i) => branchKeyOf(i.source)).filter((k): k is string => k != null);
+      const hubs = new Set(keys.map((k) => k.split("::")[0]));
+      const siblingSplit = new Set(keys).size >= 2 && hubs.size === 1;
+      if (siblingSplit) {
+        const uniqueXs = [...new Set(ins.map((i) => xById.get(i.source) ?? 0))];
+        xById.set(n.id, uniqueXs.reduce((a, b) => a + b, 0) / uniqueXs.length);
+      } else {
+        xById.set(n.id, xById.get(ins[0].source) ?? 0);
+      }
     }
   }
 

@@ -296,6 +296,14 @@ export const PathsConfigSchema = z.object({
   paths: z.array(z.object({ id: z.string().min(1), label: z.string().min(1), filters: FilterConfigSchema.optional() })).default([]),
   fallbackId: z.string().optional(),
   fallbackLabel: z.string().optional(),
+  /**
+   * How a record flows through the branches:
+   *  - "overlap" (default): a record continues down every path whose conditions it
+   *    meets ("always continue") — the standard Zapier Paths behaviour.
+   *  - "exclusive": a record takes only the first path it matches.
+   * A record matching no path's conditions goes to the fallback branch, if one exists.
+   */
+  routing: z.enum(["overlap", "exclusive"]).default("overlap"),
 });
 export type PathsConfig = z.infer<typeof PathsConfigSchema>;
 

@@ -12,7 +12,7 @@ import {
   type NodeType,
 } from "@/lib/flow/types";
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
-import { collidingFields, computeNodeStatus } from "./graph-utils";
+import { computeNodeStatus } from "./graph-utils";
 import { STATUS_META, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { RecordSamplePicker } from "./RecordSamplePicker";
 import { NodeGlyph } from "./icons";
@@ -129,6 +129,7 @@ export function ConfigPanel({
   onSetSources,
   onAddBranch,
   onRemoveBranch,
+  onSetFallback,
 }: {
   node: FNode;
   stepNo?: number;
@@ -147,6 +148,7 @@ export function ConfigPanel({
   onSetSources: (ids: string[]) => void;
   onAddBranch: () => void;
   onRemoveBranch: (pathId: string) => void;
+  onSetFallback: (enabled: boolean) => void;
 }) {
   const type = String(node.type) as NodeType;
   const cfg = node.data.config;
@@ -202,6 +204,7 @@ export function ConfigPanel({
             onSetSources={onSetSources}
             onAddBranch={onAddBranch}
             onRemoveBranch={onRemoveBranch}
+            onSetFallback={onSetFallback}
           />
 
           {/* Extra options + the test result sink to the bottom, just above the button. */}
@@ -251,6 +254,7 @@ function NodeConfig({
   onSetSources,
   onAddBranch,
   onRemoveBranch,
+  onSetFallback,
 }: {
   type: NodeType;
   cfg: Record<string, unknown>;
@@ -264,6 +268,7 @@ function NodeConfig({
   onSetSources: (ids: string[]) => void;
   onAddBranch: () => void;
   onRemoveBranch: (pathId: string) => void;
+  onSetFallback: (enabled: boolean) => void;
 }) {
 
   if (type === "app") {
@@ -392,7 +397,6 @@ function NodeConfig({
 
   if (type === "combine") {
     const mode = (cfg.mode as string) ?? "stack";
-    const collisions = collidingFields(inputs);
     const connectedIds = inputs.map((i) => i.nodeId);
     return (
       <div className="space-y-3">
@@ -466,14 +470,12 @@ function NodeConfig({
             />
           </Field>
         )}
-        {(mode === "dedupe" || mode === "match") && collisions.length > 0 && (
-          <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">These fields exist in more than one source and may overwrite each other: <b>{collisions.join(", ")}</b>.</p>
-        )}
         {(mode === "dedupe" || mode === "match") && (
           <Advanced>
-            <Field label="When duplicated, which source wins">
+            <Field label="When the same field is on both, which source wins">
               <Select value={(cfg.sourceWins as string) ?? "first"} width={W} options={[{ value: "first", label: "First selected source" }, { value: "last", label: "Last selected source" }]} onChange={(v) => onChange({ sourceWins: v })} />
             </Field>
+            <p className="text-xs text-neutral-400">Blank values never overwrite real ones — the winning source only fills gaps, so no data is lost.</p>
           </Advanced>
         )}
       </div>
@@ -482,10 +484,12 @@ function NodeConfig({
 
   if (type === "paths") {
     const paths = (cfg.paths as Array<{ id: string; label: string }>) ?? [];
+    const routing = String(cfg.routing ?? "overlap");
+    const fallbackOn = !!cfg.fallbackId;
     const setLabel = (i: number, label: string) => onChange({ paths: paths.map((p, j) => (j === i ? { ...p, label } : p)) });
     return (
       <div className="space-y-3">
-        <p className="text-xs text-neutral-500">This step just splits your records into branches. Set each branch’s “only continue if” conditions in its own <b>Path conditions</b> step on the canvas.</p>
+        <p className="text-xs text-neutral-500">This step splits your records into branches. Set each branch’s “only continue if” conditions in its own <b>Path conditions</b> step on the canvas.</p>
         {paths.map((p, i) => (
           <div key={p.id} className="flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50/40 px-2 py-1.5">
             <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-pink-700">Branch {i + 1}</span>
@@ -496,6 +500,34 @@ function NodeConfig({
           </div>
         ))}
         <button onClick={onAddBranch} className="w-full rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">+ Add branch</button>
+
+        <Field label="How should records flow?">
+          <Select
+            value={routing}
+            width={W}
+            options={[
+              { value: "overlap", label: "Down every path it matches" },
+              { value: "exclusive", label: "Down only the first path it matches" },
+            ]}
+            onChange={(v) => onChange({ routing: v })}
+          />
+        </Field>
+        <p className="-mt-1 text-xs text-neutral-400">
+          {routing === "overlap"
+            ? "A record can continue down more than one branch (always continue)."
+            : "A record stops at the first branch whose conditions it meets."}
+        </p>
+
+        <label className="flex items-start gap-2 rounded-md border border-neutral-200 px-2 py-2 text-xs text-neutral-700">
+          <input type="checkbox" checked={fallbackOn} onChange={(e) => onSetFallback(e.target.checked)} className="mt-0.5 h-3.5 w-3.5" />
+          <span>Add a “fallback” branch for records that match no other path (everything else).</span>
+        </label>
+        {fallbackOn && (
+          <div className="flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50/40 px-2 py-1.5">
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-pink-700">Fallback</span>
+            <input value={(cfg.fallbackLabel as string) ?? "Everything else"} onChange={(e) => onChange({ fallbackLabel: e.target.value })} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
+          </div>
+        )}
       </div>
     );
   }

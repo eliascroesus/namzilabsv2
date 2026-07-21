@@ -214,7 +214,7 @@ export const STATUS_META: Record<NodeStatus, { label: string; cls: string; borde
 export function pathHandles(data: NodeData): Array<{ id: string; label: string }> {
   const paths = (data.config.paths as Array<{ id: string; label: string }>) ?? [];
   const handles = paths.map((p) => ({ id: p.id, label: p.label }));
-  const fbId = data.config.fallbackId as string | undefined; // legacy nodes only
-  if (fbId) handles.push({ id: fbId, label: String(data.config.fallbackLabel ?? "Fallback") });
+  const fbId = data.config.fallbackId as string | undefined; // the "everything else" lane
+  if (fbId) handles.push({ id: fbId, label: String(data.config.fallbackLabel ?? "Everything else") });
   return handles;
 }

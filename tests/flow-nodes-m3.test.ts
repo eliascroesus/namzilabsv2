@@ -290,4 +290,45 @@ describe("Paths node", () => {
     expect(booked.tile.value).toBe(2);
     expect(other.tile.value).toBe(1);
   });
+
+  it("new model: branches self-filter and the fallback catches the rest (overlap)", async () => {
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "canceled" });
+    await ev({ eventType: "noshow" });
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("p", "paths", { paths: [{ id: "p1", label: "Booked" }, { id: "p2", label: "Canceled" }], fallbackId: "fb", fallbackLabel: "Other", routing: "overlap" }),
+        N("f1", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "booked" }] }),
+        N("f2", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "canceled" }] }),
+        N("aggF", "aggregate", { aggregation: "count" }),
+      ],
+      [E("a", "p"), EH("p", "f1", "p1"), EH("p", "f2", "p2"), EH("p", "aggF", "fb")],
+    );
+    const r = await run(g);
+    // Each branch receives all 3 records, then narrows them in its own conditions step.
+    expect(r.nodes.get("f1")!.recordsIn).toBe(3);
+    expect(r.nodes.get("f1")!.recordsOut).toBe(1);
+    expect(r.nodes.get("f2")!.recordsOut).toBe(1);
+    // Fallback = records matching neither branch's conditions (the noshow).
+    expect(r.nodes.get("aggF")!.recordsIn).toBe(1);
+  });
+
+  it("exclusive routing sends each record down only the first matching path", async () => {
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "booked" });
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("p", "paths", { paths: [{ id: "p1", label: "A" }, { id: "p2", label: "B" }], routing: "exclusive" }),
+        // Both branches would match "booked"; exclusive means only the first one gets them.
+        N("f1", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "booked" }] }),
+        N("f2", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "booked" }] }),
+      ],
+      [E("a", "p"), EH("p", "f1", "p1"), EH("p", "f2", "p2")],
+    );
+    const r = await run(g);
+    expect(r.nodes.get("f1")!.recordsIn).toBe(2);
+    expect(r.nodes.get("f2")!.recordsIn).toBe(0);
+  });
 });

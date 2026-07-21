@@ -193,11 +193,15 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       const newNode: FNode = { id, type, position, data: { config, lastTest: null, dirty: false } };
 
       // A Paths hub auto-creates one "Path conditions" (Filter) step per branch, so the
-      // canvas splits into labeled lanes the moment you add it (Zapier-style).
+      // canvas splits into labeled lanes the moment you add it (Zapier-style). When the
+      // hub is dropped between two steps, the existing downstream chain is routed into the
+      // FIRST branch — so a split always begins with exactly its branches, never a stray
+      // third line to the old next step.
       const extraNodes: FNode[] = [];
       const extraEdges: Edge[] = [];
       if (type === "paths") {
         const paths = (config.paths as Array<{ id: string; label: string }>) ?? [];
+        const onEdge = ctx?.onEdge ?? null;
         paths.forEach((p, i) => {
           const bid = `filter_${Math.random().toString(36).slice(2, 8)}`;
           extraNodes.push({
@@ -207,6 +211,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             data: { config: defaultConfig("filter"), label: p.label, lastTest: null, dirty: false },
           });
           extraEdges.push({ id: rid(), type: "insert", source: id, sourceHandle: p.id, target: bid });
+          if (i === 0 && onEdge) extraEdges.push({ id: rid(), type: "insert", source: bid, target: onEdge.target, targetHandle: onEdge.targetHandle ?? undefined });
         });
       }
       setNodes((ns) => [...ns, newNode, ...extraNodes]);
@@ -219,11 +224,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           base = [...es, { id: rid(), type: "insert", source: ctx.fromNodeId, sourceHandle: ctx.sourceHandle ?? undefined, target: id }];
         } else if (ctx?.onEdge) {
           const old = ctx.onEdge;
-          base = [
-            ...es.filter((e) => e.id !== old.id),
-            { id: rid(), type: "insert", source: old.source, sourceHandle: old.sourceHandle, target: id },
-            { id: rid(), type: "insert", source: id, target: old.target, targetHandle: old.targetHandle },
-          ];
+          base = [...es.filter((e) => e.id !== old.id), { id: rid(), type: "insert", source: old.source, sourceHandle: old.sourceHandle, target: id }];
+          // A Paths hub re-wires the downstream through its first branch (above); every
+          // other node keeps the plain hub→next-step chain edge.
+          if (type !== "paths") base = [...base, { id: rid(), type: "insert", source: id, target: old.target, targetHandle: old.targetHandle }];
         }
         // A compare step defaults its first number to the step it was added after —
         // a data reference (named handle), separate from the chain edge above.
@@ -344,8 +348,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       const hub = nodes.find((n) => n.id === hubId);
       if (!hub) return;
       commit();
-      const paths = ((hub.data.config as { paths?: Array<{ id: string; label: string }> }).paths) ?? [];
+      const hubCfg = hub.data.config as { paths?: Array<{ id: string; label: string }>; fallbackId?: string };
+      const paths = hubCfg.paths ?? [];
       const remaining = paths.filter((p) => p.id !== pathId);
+      // Lanes still leaving the hub after this branch is gone (paths + the fallback lane).
+      const laneIds = [...remaining.map((p) => p.id), ...(hubCfg.fallbackId ? [hubCfg.fallbackId] : [])];
 
       // Remove the deleted branch's whole subtree (chain descendants only — a step
       // elsewhere that merely references a branch step is never deleted with it).
@@ -353,12 +360,12 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       const toRemove = new Set<string>(branchTargets);
       for (const t of branchTargets) for (const d of descendantsOf(t, sEdges)) toRemove.add(d);
 
-      if (remaining.length <= 1) {
-        // A split with one (or zero) branch left is pointless — dissolve the hub and wire
-        // the surviving branch straight onto whatever fed the split, so the flow stays a
-        // single line (no orphaned steps).
-        const survivor = remaining[0];
-        const survivorFirst = survivor ? edges.find((e) => e.source === hubId && e.sourceHandle === survivor.id)?.target : undefined;
+      if (laneIds.length <= 1) {
+        // One (or zero) lane left is a pointless split — dissolve the hub and wire the
+        // surviving lane straight onto whatever fed the split, so the flow stays a single
+        // line (no orphaned steps).
+        const survivorHandle = laneIds[0];
+        const survivorFirst = survivorHandle ? edges.find((e) => e.source === hubId && e.sourceHandle === survivorHandle)?.target : undefined;
         const hubParents = edges.filter((e) => e.target === hubId).map((e) => ({ source: e.source, sourceHandle: e.sourceHandle ?? undefined }));
         toRemove.add(hubId);
         setNodes((ns) => ns.filter((n) => !toRemove.has(n.id)));
@@ -371,11 +378,40 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         return;
       }
 
-      // Two or more branches remain: just drop this branch and its path entry.
+      // Two or more lanes remain: just drop this branch and its path entry.
       setNodes((ns) =>
         ns.map((n) => (n.id === hubId ? { ...n, data: { ...n.data, config: { ...n.data.config, paths: remaining } } } : n)).filter((n) => !toRemove.has(n.id)),
       );
       setEdges((es) => es.filter((e) => !(e.source === hubId && e.sourceHandle === pathId) && !toRemove.has(e.source) && !toRemove.has(e.target)));
+    },
+    [commit, nodes, edges, sEdges, setNodes, setEdges],
+  );
+
+  // Paths: toggle a fallback branch ("everything else"). Enabling adds its handle (the hub
+  // then shows a "+ Add to …" for it); disabling removes the fallback lane + its subtree.
+  const setFallback = useCallback(
+    (hubId: string, enabled: boolean) => {
+      const hub = nodes.find((n) => n.id === hubId);
+      if (!hub) return;
+      const cfg = hub.data.config as { fallbackId?: string };
+      commit();
+      if (enabled) {
+        if (cfg.fallbackId) return;
+        const fid = `fb${Math.random().toString(36).slice(2, 7)}`;
+        setNodes((ns) => ns.map((n) => (n.id === hubId ? { ...n, data: { ...n.data, config: { ...n.data.config, fallbackId: fid, fallbackLabel: "Everything else" } } } : n)));
+      } else {
+        const fid = cfg.fallbackId;
+        if (!fid) return;
+        const branchTargets = edges.filter((e) => e.source === hubId && e.sourceHandle === fid).map((e) => e.target);
+        const toRemove = new Set<string>(branchTargets);
+        for (const t of branchTargets) for (const d of descendantsOf(t, sEdges)) toRemove.add(d);
+        setNodes((ns) =>
+          ns
+            .map((n) => (n.id === hubId ? { ...n, data: { ...n.data, config: { ...n.data.config, fallbackId: undefined, fallbackLabel: undefined } } } : n))
+            .filter((n) => !toRemove.has(n.id)),
+        );
+        setEdges((es) => es.filter((e) => !(e.source === hubId && e.sourceHandle === fid) && !toRemove.has(e.source) && !toRemove.has(e.target)));
+      }
     },
     [commit, nodes, edges, sEdges, setNodes, setEdges],
   );
@@ -410,15 +446,20 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         const sub = descendantsOf(id, sEdges);
         const count = sub.size + 1;
         const handle = inEdge.sourceHandle;
-        const hubPaths = (((parent.data.config as { paths?: unknown[] }).paths) ?? []).length;
-        const message =
-          hubPaths <= 2
-            ? `This deletes this branch and its ${count} step${count === 1 ? "" : "s"}. The other branch will connect straight to the step before the split.`
-            : `This deletes this branch and its ${count} step${count === 1 ? "" : "s"}.`;
+        const cfg = parent.data.config as { paths?: unknown[]; fallbackId?: string };
+        const isFallback = handle === cfg.fallbackId;
+        const laneCount = ((cfg.paths ?? []).length) + (cfg.fallbackId ? 1 : 0);
+        // Deleting a path branch that leaves one lane dissolves the split; deleting the
+        // fallback lane just removes it (the split stays).
+        const willDissolve = !isFallback && laneCount <= 2;
+        const message = willDissolve
+          ? `This deletes this branch and its ${count} step${count === 1 ? "" : "s"}. The other branch will connect straight to the step before the split.`
+          : `This deletes this branch and its ${count} step${count === 1 ? "" : "s"}.`;
         setPendingDelete({
           message,
           run: () => {
-            removeBranch(parent.id, handle);
+            if (isFallback) setFallback(parent.id, false);
+            else removeBranch(parent.id, handle);
             setSelectedId(null);
           },
         });
@@ -427,7 +468,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
       deleteAndReconnect(id);
     },
-    [nodes, sEdges, commit, setNodes, setEdges, removeBranch, deleteAndReconnect],
+    [nodes, sEdges, commit, setNodes, setEdges, removeBranch, setFallback, deleteAndReconnect],
   );
 
   // Backspace / Delete removes the selected step (routed through the same smart delete,
@@ -537,7 +578,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     const desc = descendantsOf(selected.id, edges);
     const avail = nodes.filter((n) => n.id !== selected.id && !desc.has(n.id));
     const toItem = (n: FNode): StepRef => ({ id: n.id, title: nodeTitle(String(n.type) as NodeType, n.data), stepNo: stepNoById.get(n.id) });
-    return { dataset: avail.filter((n) => DATASET_PRODUCERS.has(String(n.type))).map(toItem) };
+    // The Paths hub is never a data source — it only feeds its branches, so it must not
+    // appear as something Combine (or anything else) can pull from. Pick a branch instead.
+    return { dataset: avail.filter((n) => DATASET_PRODUCERS.has(String(n.type)) && n.type !== "paths").map(toItem) };
   }, [selected, nodes, edges, stepNoById]);
 
   // Number choices for a compare step, in the same data-browser shape as every other
@@ -547,7 +590,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     if (!selected) return [];
     const desc = descendantsOf(selected.id, edges);
     const avail = nodes
-      .filter((n) => n.id !== selected.id && !desc.has(n.id) && (isNumberProducer(n) || DATASET_PRODUCERS.has(String(n.type))))
+      .filter((n) => n.id !== selected.id && !desc.has(n.id) && n.type !== "paths" && (isNumberProducer(n) || DATASET_PRODUCERS.has(String(n.type))))
       .sort((a, b) => (stepNoById.get(a.id) ?? 0) - (stepNoById.get(b.id) ?? 0));
     return avail.map((n) => {
       const app = nearestAppAncestor(n, nodes, edges);
@@ -644,13 +687,19 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   // its own mandatory conditions step.
   const displayEdges = useMemo(() => {
     const compareIds = new Set(nodes.filter(isCompareNode).map((n) => n.id));
-    return edges
-      .filter((e) => !(compareIds.has(e.target) && (e.targetHandle === "a" || e.targetHandle === "b")))
-      .map((e) => ({
-        ...e,
-        type: "insert",
-        data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge },
-      }));
+    const seen = new Set<string>();
+    const out: Edge[] = [];
+    for (const e of edges) {
+      // A compare step's number references are picked in the panel, never drawn as lines.
+      if (compareIds.has(e.target) && (e.targetHandle === "a" || e.targetHandle === "b")) continue;
+      // Collapse any duplicate line between the same two points (e.g. a source picked
+      // that already sits on this flow line) so the canvas never shows doubled connectors.
+      const key = `${e.source}::${e.sourceHandle ?? ""}->${e.target}::${e.targetHandle ?? ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge } });
+    }
+    return out;
   }, [nodes, edges, insertOnEdge]);
 
   const empty = nodes.length === 0;
@@ -749,6 +798,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             onSetSources={(ids) => setCombineSources(selected.id, ids)}
             onAddBranch={() => addBranch(selected.id)}
             onRemoveBranch={(pid) => removeBranch(selected.id, pid)}
+            onSetFallback={(on) => setFallback(selected.id, on)}
           />
         )}
       </div>

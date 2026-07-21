@@ -93,7 +93,7 @@ export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNod
       inputs.push({ shape, exec: se, targetHandle: e.targetHandle ?? null, sourceNodeId: e.source });
     }
 
-    const exec = await execNode(ctx, node, inputs, inputError);
+    const exec = await execNode(ctx, node, inputs, inputError, graph);
     nodes.set(id, exec);
     if (node.type === "output" && exec.status === "ok" && exec.tile) {
       outputs.push({ nodeId: id, tile: exec.tile });
@@ -103,7 +103,7 @@ export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNod
   return { nodes, outputs };
 }
 
-async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[], inputError: boolean): Promise<NodeExec> {
+async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[], inputError: boolean, graph: FlowGraph): Promise<NodeExec> {
   const err = (message: string): NodeExecErr => ({
     status: "error",
     nodeType: node.type,
@@ -129,7 +129,7 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
       case "combine":
         return execCombine(node, inputs);
       case "paths":
-        return execPaths(node, inputs);
+        return execPaths(node, inputs, graph);
       case "group":
         return execGroup(node, inputs);
       case "aggregate":
@@ -248,40 +248,64 @@ function execCombine(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
 }
 
 // ---------- Paths ----------
-function execPaths(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+function execPaths(node: FlowNode, inputs: ResolvedInput[], graph: FlowGraph): NodeExec {
   const cfg = PathsConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Paths");
+  const records = input.records;
   const outputs: Record<string, Shape> = {};
 
-  // Legacy nodes routed by per-path filters + a fallback. New nodes just split:
-  // the hub does nothing and each branch's own "Path conditions" (Filter) narrows it.
-  const legacy = cfg.fallbackId != null || cfg.paths.some((p) => (p.filters?.rules?.length ?? 0) > 0);
-  if (legacy) {
-    const assigned = new Set<FlowRecord>();
+  // A branch's conditions come from one of two places, transparently:
+  //  - Legacy nodes stored per-path filters directly on the hub.
+  //  - New nodes keep each branch's conditions in that branch's own first
+  //    "Path conditions" (Filter) step, read from the graph here.
+  const legacy = cfg.paths.some((p) => (p.filters?.rules?.length ?? 0) > 0);
+  const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
+  const condsOf = (p: { id: string; filters?: FilterConfig }): FilterConfig | null => {
+    if (legacy) return p.filters ?? null;
+    const edge = graph.edges.find((e) => e.source === node.id && e.sourceHandle === p.id);
+    const first = edge ? nodeById.get(edge.target) : undefined;
+    return first?.type === "filter" ? FilterConfigSchema.parse(first.data.config ?? {}) : null;
+  };
+  const hasConds = (c: FilterConfig | null): c is FilterConfig => !!c && c.rules.length > 0;
+
+  if (cfg.routing === "exclusive") {
+    // First matching path wins — a record never appears in two branches. A branch with
+    // no conditions (e.g. a step routed in mid-flow) catches everything left.
+    const taken = new Set<FlowRecord>();
     for (const p of cfg.paths) {
-      const matched = p.filters
-        ? input.records.filter((r) => {
-            const ok = evalRules(r, p.filters!);
-            if (ok) assigned.add(r);
-            return ok;
-          })
-        : input.records;
+      const c = condsOf(p);
+      const matched = records.filter((r) => {
+        if (taken.has(r)) return false;
+        const ok = hasConds(c) ? evalRules(r, c) : true;
+        if (ok) taken.add(r);
+        return ok;
+      });
       outputs[p.id] = { kind: "dataset", records: matched };
     }
-    if (cfg.fallbackId) outputs[cfg.fallbackId] = { kind: "dataset", records: input.records.filter((r) => !assigned.has(r)) };
+    if (cfg.fallbackId) outputs[cfg.fallbackId] = { kind: "dataset", records: records.filter((r) => !taken.has(r)) };
   } else {
-    for (const p of cfg.paths) outputs[p.id] = { kind: "dataset", records: input.records };
+    // "Always continue": every branch receives all records and narrows them in its own
+    // conditions step, so a record can continue down every path it matches. (Legacy hubs
+    // pre-filter here because their conditions live on the hub, not in a branch step.)
+    for (const p of cfg.paths) {
+      const c = condsOf(p);
+      outputs[p.id] = { kind: "dataset", records: legacy && hasConds(c) ? records.filter((r) => evalRules(r, c)) : records };
+    }
+    if (cfg.fallbackId) {
+      const matchedAny = (r: FlowRecord) => cfg.paths.some((p) => { const c = condsOf(p); return hasConds(c) && evalRules(r, c); });
+      outputs[cfg.fallbackId] = { kind: "dataset", records: records.filter((r) => !matchedAny(r)) };
+    }
   }
 
   return {
     status: "ok",
     nodeType: "paths",
-    shape: { kind: "dataset", records: input.records },
+    shape: { kind: "dataset", records },
     outputs,
-    recordsIn: input.records.length,
-    recordsOut: input.records.length,
-    sample: input.records.slice(0, 3),
-    outputSchema: inferSchema(input.records),
+    recordsIn: records.length,
+    recordsOut: records.length,
+    sample: records.slice(0, 3),
+    outputSchema: inferSchema(records),
   };
 }
 
@@ -671,14 +695,24 @@ function matchJoin(datasets: FlowRecord[][], idField: string, keep: "all" | "mat
   return out;
 }
 
-/** winner's non-null fields/properties take precedence. */
+/**
+ * Merge two records that share an identity. The winner's values take precedence, but a
+ * blank/missing winner value falls back to the loser's — so combining sources enriches
+ * (fills gaps) instead of overwriting good data with blanks. This is why the builder
+ * needs no "these fields collide" warning: collisions resolve deterministically here.
+ */
 function mergeRecords(winner: FlowRecord, loser: FlowRecord): FlowRecord {
+  const isBlank = (v: unknown) => v == null || v === "";
+  const properties = { ...loser.properties };
+  for (const [k, v] of Object.entries(winner.properties)) {
+    properties[k] = isBlank(v) && !isBlank(properties[k]) ? properties[k] : v;
+  }
   return {
     ...loser,
     ...winner,
-    subject: winner.subject ?? loser.subject,
+    subject: isBlank(winner.subject) ? loser.subject : winner.subject,
     value: winner.value ?? loser.value,
-    properties: { ...loser.properties, ...winner.properties },
+    properties,
   };
 }
 
