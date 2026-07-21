@@ -98,8 +98,6 @@ const FORMATTER_ACTIONS: Array<{ value: string; label: string; hint: string; cat
   // Numbers
   { value: "to_number", label: "Turn text into a number", hint: '"42" → 42, so it can be summed and compared.', cat: "number" },
   { value: "round", label: "Round a number", hint: "Rounds to the decimals you choose.", cat: "number" },
-  { value: "multiply", label: "Multiply by a number", hint: "e.g. convert to a percentage or a rate.", cat: "number" },
-  { value: "divide", label: "Divide by a number", hint: "e.g. cents → dollars (÷ 100).", cat: "number" },
   // Dates & times
   { value: "to_date", label: "Fix into a real date", hint: 'Reads text like "7/21/2026 14:23" and outputs a proper date-time.', cat: "date" },
   { value: "date_only", label: "Keep the date only", hint: "Drops the time: 2026-01-05.", cat: "date" },
@@ -441,113 +439,99 @@ function NodeConfig({
     const labels = formulaHandleLabels(op);
     const inA = inputs.find((i) => i.targetHandle === "a");
     const inB = inputs.find((i) => i.targetHandle === "b");
+    const aFixed = typeof cfg.aFixed === "number" ? cfg.aFixed : null;
+    const bFixed = typeof cfg.bFixed === "number" ? cfg.bFixed : null;
     return (
       <div className="space-y-3">
         <Field label="Calculation">
           <Select value={op} width={W} options={FORMULA_OPS.map((o) => ({ value: o, label: FORMULA_LABELS[o] ?? title(o) }))} onChange={(v) => onChange({ op: v })} />
         </Field>
         <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
-          <p className="font-medium">{formulaExpression(op, inA?.title ?? "First number", inB?.title ?? "Second number")}</p>
+          <p className="font-medium">{formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}</p>
         </div>
-        <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} onSetInput={onSetInput} />
-        <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} onSetInput={onSetInput} />
-        {numberGroups.length === 0 && <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Add an earlier step first — its result becomes a number you can compare.</p>}
+        <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} fixed={aFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ aFixed: n })} />
+        <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} fixed={bFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ bFixed: n })} />
       </div>
     );
   }
 
-  if (type === "combine") {
-    const mode = (cfg.mode as string) ?? "stack";
-    // The step above (the chain input) is always part of the combine and can't be
-    // removed — the picker manages only the ADDITIONAL sources, so choosing data can
-    // never re-route the step or move it on the canvas.
-    const chain = inputs.find((i) => i.targetHandle == null) ?? null;
-    const picked = inputs.filter((i) => i !== chain);
-    const pickedIds = picked.map((i) => i.nodeId);
-    const candidates = datasetCandidates.filter((c) => c.id !== chain?.nodeId);
+  if (type === "unite") {
+    // Unite is pure flow shape: pick which lanes flow into it. Its edges ARE the lanes.
+    const laneIds = inputs.map((i) => i.nodeId);
     return (
       <div className="space-y-3">
+        <p className="text-xs text-neutral-500">
+          Brings branches and data sources back into <b>one line</b> — every step after this one can use the records and fields from all of them.
+        </p>
         <div>
-          <p className="mb-1 text-xs font-medium text-neutral-600">Data to combine</p>
+          <p className="mb-1 text-xs font-medium text-neutral-600">Lanes to bring together</p>
           <div className="space-y-1.5">
-            {chain && (
-              <div className="flex items-center justify-between gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5">
-                <span className="min-w-0 truncate text-sm text-neutral-700">{chain.stepNo != null ? `${chain.stepNo}. ` : ""}{chain.title}</span>
-                <span className="shrink-0 text-[10px] uppercase tracking-wide text-neutral-400">the step above</span>
-              </div>
-            )}
-            {picked.map((inp, idx) => (
+            {inputs.map((inp, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <Select
                   value={inp.nodeId}
                   width={320}
                   placeholder="Choose a step…"
-                  options={candidates.filter((c) => c.id === inp.nodeId || !pickedIds.includes(c.id)).map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
-                  onChange={(v) => onSetSources(pickedIds.map((x, i) => (i === idx ? v : x)))}
+                  options={datasetCandidates.filter((c) => c.id === inp.nodeId || !laneIds.includes(c.id)).map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
+                  onChange={(v) => onSetSources(laneIds.map((x, i) => (i === idx ? v : x)))}
                 />
-                <button type="button" onClick={() => onSetSources(pickedIds.filter((_, i) => i !== idx))} className="shrink-0 text-xs text-neutral-400 hover:text-red-600">
+                <button type="button" onClick={() => onSetSources(laneIds.filter((_, i) => i !== idx))} className="shrink-0 text-xs text-neutral-400 hover:text-red-600">
                   Remove
                 </button>
               </div>
             ))}
-            {pickedIds.length < candidates.length && (
+            {laneIds.length < datasetCandidates.length && (
               <button
                 type="button"
                 onClick={() => {
-                  const avail = candidates.find((c) => !pickedIds.includes(c.id));
-                  if (avail) onSetSources([...pickedIds, avail.id]);
+                  const avail = datasetCandidates.find((c) => !laneIds.includes(c.id));
+                  if (avail) onSetSources([...laneIds, avail.id]);
                 }}
                 className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-xs text-neutral-600 hover:border-neutral-400 hover:text-neutral-800"
               >
-                <span className="text-sm leading-none">+</span> Add data source
+                <span className="text-sm leading-none">+</span> Add a lane
               </button>
             )}
-            {candidates.length === 0 && picked.length === 0 && <p className="text-xs text-neutral-400">Add earlier data steps to combine them here.</p>}
+            {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-xs text-neutral-400">Add data steps first, then unite them here.</p>}
           </div>
         </div>
+      </div>
+    );
+  }
 
-        <Field label="How should they be combined?">
+  if (type === "combine") {
+    // A normal single-input step: it works on whatever records flow into it (after a
+    // Unite, that's every lane's records together). Same-record matching happens by
+    // the identity field — no source wiring here at all.
+    const mode = (cfg.mode as string) ?? "dedupe";
+    const keep = (cfg.keep as string) ?? "all";
+    const choice = mode === "match" ? (keep === "unmatched" ? "only_once" : "only_dupes") : "merge";
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-neutral-500">
+          Works on the records flowing into this step — put a <b>Unite data</b> step before it to combine several lanes first.
+        </p>
+        <Field label="What should we do?">
           <Select
-            value={mode}
+            value={choice}
             width={W}
-            options={[{ value: "stack", label: "Put all records together" }, { value: "dedupe", label: "Remove duplicate people" }, { value: "match", label: "Match records across sources" }]}
-            onChange={(v) => onChange({ mode: v })}
+            options={[
+              { value: "merge", label: "Merge duplicates into one record", hint: "One record per person/id — fields from all copies are kept." },
+              { value: "only_dupes", label: "Keep only records found more than once", hint: "e.g. people appearing in both united sheets." },
+              { value: "only_once", label: "Keep only records found once", hint: "e.g. people in one sheet but not the other." },
+            ]}
+            onChange={(v) => onChange(v === "merge" ? { mode: "dedupe" } : { mode: "match", keep: v === "only_once" ? "unmatched" : "matched" })}
           />
         </Field>
-
-        {mode === "match" && (
-          <Field label="Main list (records kept & enriched)">
-            <Select
-              value={(cfg.baseSourceId as string) ?? ""}
-              width={W}
-              options={[{ value: "", label: "First selected source" }, ...inputs.map((inp, i) => ({ value: inp.nodeId, label: `Source ${i + 1}: ${inp.title}` }))]}
-              onChange={(v) => onChange({ baseSourceId: v || null })}
-            />
+        <Field label="Recognize the same record by">
+          <FieldSelect value={(cfg.identityField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ identityField: v })} />
+        </Field>
+        <Advanced>
+          <Field label="When copies disagree, which value wins">
+            <Select value={(cfg.sourceWins as string) ?? "first"} width={W} options={[{ value: "first", label: "The first copy seen" }, { value: "last", label: "The last copy seen" }]} onChange={(v) => onChange({ sourceWins: v })} />
           </Field>
-        )}
-        {(mode === "dedupe" || mode === "match") && (
-          <Field label="Recognize the same person by">
-            <FieldSelect value={(cfg.identityField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ identityField: v })} />
-          </Field>
-        )}
-        {mode === "match" && (
-          <Field label="Keep">
-            <Select
-              value={(cfg.keep as string) ?? "all"}
-              width={W}
-              options={[{ value: "all", label: "All records from the main list" }, { value: "matched", label: "Only matched" }, { value: "unmatched", label: "Only unmatched" }]}
-              onChange={(v) => onChange({ keep: v })}
-            />
-          </Field>
-        )}
-        {(mode === "dedupe" || mode === "match") && (
-          <Advanced>
-            <Field label="When the same field is on both, which source wins">
-              <Select value={(cfg.sourceWins as string) ?? "first"} width={W} options={[{ value: "first", label: "First selected source" }, { value: "last", label: "Last selected source" }]} onChange={(v) => onChange({ sourceWins: v })} />
-            </Field>
-            <p className="text-xs text-neutral-400">Blank values never overwrite real ones — the winning source only fills gaps, so no data is lost.</p>
-          </Advanced>
-        )}
+          <p className="text-xs text-neutral-400">Blank values never overwrite real ones — merging only fills gaps, so no data is lost.</p>
+        </Advanced>
       </div>
     );
   }
@@ -626,7 +610,6 @@ function NodeConfig({
         {action && <p className="-mt-1 text-xs text-neutral-400">{action.hint}</p>}
 
         {op === "round" && <Field label="Decimal places"><NumberField value={Number(cfg.decimals ?? 2)} min={0} onChange={(n) => onChange({ decimals: n ?? 0 })} /></Field>}
-        {(op === "multiply" || op === "divide") && <Field label={op === "multiply" ? "Multiply by" : "Divide by"}><NumberField value={cfg.factor != null ? Number(cfg.factor) : null} allowNull placeholder="e.g. 100" onChange={(n) => onChange({ factor: n ?? undefined })} /></Field>}
         {op === "replace" && (
           <>
             <Field label="Find this text"><input value={(cfg.find as string) ?? ""} onChange={(e) => onChange({ find: e.target.value })} className={INPUT} /></Field>
@@ -725,33 +708,50 @@ function CalcBreakdown({ cfg, groups, onChange }: { cfg: Record<string, unknown>
   );
 }
 
-/** Calculate → compare two numbers picked from earlier steps as labeled pills. */
+/** Calculate → compare two numbers: pick from earlier steps or type literals. */
 function CalcCompare({ cfg, inputs, numberGroups, onChange, onSetInput }: { cfg: Record<string, unknown>; inputs: InputDescriptor[]; numberGroups: DataGroup[]; onChange: (p: Record<string, unknown>) => void; onSetInput: (h: "a" | "b", id: string | null) => void }) {
   const op = String(cfg.op ?? "percentage");
   const labels = formulaHandleLabels(op);
   const inA = inputs.find((i) => i.targetHandle === "a");
   const inB = inputs.find((i) => i.targetHandle === "b");
+  const aFixed = typeof cfg.aFixed === "number" ? cfg.aFixed : null;
+  const bFixed = typeof cfg.bFixed === "number" ? cfg.bFixed : null;
   return (
     <>
       <Field label="Calculation">
         <Select value={op} width={W} options={FORMULA_OPS.map((o) => ({ value: o, label: FORMULA_LABELS[o] ?? title(o) }))} onChange={(v) => onChange({ op: v })} />
       </Field>
       <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
-        <p className="font-medium">{formulaExpression(op, inA?.title ?? "First number", inB?.title ?? "Second number")}</p>
+        <p className="font-medium">{formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}</p>
       </div>
-      <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} onSetInput={onSetInput} />
-      <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} onSetInput={onSetInput} />
-      {numberGroups.length === 0 && <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">Add an earlier step first — its result becomes a number you can compare.</p>}
+      <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} fixed={aFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ aFixed: n })} />
+      <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} fixed={bFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ bFixed: n })} />
     </>
   );
 }
 
 /**
- * A compare step's number input: the same Insert-data browser as every other input,
- * but each earlier step exposes exactly its one number — a scalar step's Result, or a
- * dataset step's Output number (its record count, e.g. "56 passed").
+ * A compare step's number input: type a literal number directly, or use the data
+ * button at the end to pick an earlier step's number instead (a scalar step's Result,
+ * or a dataset step's Output number — its record count, e.g. "56 passed").
  */
-function NumberPicker({ handle, label, desc, groups, onSetInput }: { handle: "a" | "b"; label: string; desc?: InputDescriptor; groups: DataGroup[]; onSetInput: (h: "a" | "b", id: string | null) => void }) {
+function NumberPicker({
+  handle,
+  label,
+  desc,
+  groups,
+  fixed,
+  onSetInput,
+  onSetFixed,
+}: {
+  handle: "a" | "b";
+  label: string;
+  desc?: InputDescriptor;
+  groups: DataGroup[];
+  fixed: number | null;
+  onSetInput: (h: "a" | "b", id: string | null) => void;
+  onSetFixed: (n: number | null) => void;
+}) {
   const chosen = groups.find((g) => g.stepId === desc?.nodeId);
   const chosenLabel = chosen ? `${chosen.stepNo != null ? `${chosen.stepNo}. ` : ""}${chosen.title}` : desc ? desc.title : null;
   // The group sample is already the right number per step type (a scalar step's Result,
@@ -760,18 +760,44 @@ function NumberPicker({ handle, label, desc, groups, onSetInput }: { handle: "a"
   const preview = chosen?.fields[0]?.sample ?? desc?.value;
   return (
     <Field label={label}>
-      <DataBrowser
-        groups={groups}
-        width={W}
-        onPick={(ref) => onSetInput(handle, ref.producerStepId)}
-        trigger={({ toggle }) => (
-          <button type="button" onClick={toggle} className={SELECT_BTN}>
-            <span className={`min-w-0 truncate ${chosenLabel ? "text-neutral-800" : "text-neutral-400"}`}>{chosenLabel ?? "Choose a number…"}</span>
-            <span className="shrink-0 text-neutral-400">▾</span>
-          </button>
+      <div className="flex items-stretch gap-1.5">
+        {desc ? (
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1.5">
+            <span className="min-w-0 truncate text-sm text-neutral-800">{chosenLabel}</span>
+            <button type="button" onClick={() => onSetInput(handle, null)} className="shrink-0 text-neutral-400 hover:text-neutral-700" title="Clear — type a number instead" aria-label="Clear the picked step">
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <NumberField value={fixed} allowNull placeholder="Type a number…" onChange={onSetFixed} />
+          </div>
         )}
-      />
-      {preview != null && <p className="mt-1 text-xs text-neutral-500">= {String(preview)}</p>}
+        <DataBrowser
+          groups={groups}
+          width={W}
+          onPick={(ref) => {
+            onSetInput(handle, ref.producerStepId);
+            onSetFixed(null);
+          }}
+          trigger={({ toggle }) => (
+            <button
+              type="button"
+              onClick={toggle}
+              title="Use a number from an earlier step"
+              aria-label="Pick a number from an earlier step"
+              className="flex shrink-0 items-center justify-center rounded-md border border-neutral-300 px-2 text-neutral-500 hover:border-neutral-400 hover:bg-neutral-50 hover:text-neutral-800"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <ellipse cx="12" cy="6" rx="7" ry="3" />
+                <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+                <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+              </svg>
+            </button>
+          )}
+        />
+      </div>
+      {desc && preview != null && <p className="mt-1 text-xs text-neutral-500">= {String(preview)}</p>}
     </Field>
   );
 }

@@ -46,6 +46,16 @@ const PATHS: Record<string, React.ReactNode> = {
       <circle cx="18" cy="17" r="1.6" />
     </>
   ),
+  // Unite: the mirror of paths — two lanes flowing back into one line.
+  unite: (
+    <>
+      <circle cx="6" cy="7" r="1.6" />
+      <circle cx="6" cy="17" r="1.6" />
+      <path d="M8 7l5 4h3" />
+      <path d="M8 17l5-4" />
+      <circle cx="18" cy="12" r="2" />
+    </>
+  ),
   group: (
     <>
       <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />

@@ -162,7 +162,10 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
     const allSources = [...new Set([...chainIns.map((i) => i.source), ...refs])];
     const keys = allSources.map(branchKeyOf).filter((k): k is string => k != null);
     const hubs = new Set(keys.map((k) => k.split("::")[0]));
-    const centering = (new Set(keys).size >= 2 && hubs.size === 1) || (!anchor && refs.length > 0);
+    // Centre a junction whose SHAPE joins several lanes: a Unite (2+ chain inputs), or
+    // a merge of sibling branches. A step that merely references extra data (Combine's
+    // src edges) keeps its anchor.
+    const centering = chainIns.length >= 2 || (new Set(keys).size >= 2 && hubs.size === 1) || (!anchor && refs.length > 0);
     mergeInfo.set(n.id, { centering, allSources, anchor });
   }
 
@@ -274,8 +277,11 @@ export function terminalIds(nodes: FNode[], allEdges: Edge[]): Set<string> {
 
 /** Whether a step still needs required setup before it can produce a result. */
 export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, inputCount: number, handles?: Array<string | null>): boolean {
-  // A compare step needs both of its named numbers picked (a chain edge alone isn't enough).
-  const missingAB = handles ? !handles.includes("a") || !handles.includes("b") : inputCount < 2;
+  // A compare step needs both of its named numbers — a wired step OR a typed-in
+  // literal per slot (a chain edge alone isn't enough).
+  const aOk = (handles?.includes("a") ?? inputCount >= 1) || cfg.aFixed != null;
+  const bOk = (handles?.includes("b") ?? inputCount >= 2) || cfg.bFixed != null;
+  const missingAB = !aOk || !bOk;
   if (type === "app") {
     if (!cfg.connectionId && !cfg.source) return true;
     // Stream-scoped sources also need their flow-level resource chosen (which sheet…).
@@ -321,14 +327,14 @@ export function descendantsOf(start: string, edges: Edge[]): Set<string> {
 // ---------- Delete & reconnect ----------
 
 /**
- * The bridge edge that reconnects a node's single predecessor to its single
- * successor when the node is removed. Returns null unless the node has exactly
- * one incoming and one outgoing edge (multi-in/out nodes are deleted normally).
+ * The bridge edge that reconnects a node's predecessor to its single successor when
+ * the node is removed. A multi-input junction (Unite) bridges from its FIRST lane so
+ * the line downstream survives; multi-output nodes are deleted normally (null).
  */
 export function bridgeEdgeFor(nodeId: string, edges: Edge[]): Edge | null {
   const incoming = edges.filter((e) => e.target === nodeId);
   const outgoing = edges.filter((e) => e.source === nodeId);
-  if (incoming.length !== 1 || outgoing.length !== 1) return null;
+  if (incoming.length === 0 || outgoing.length !== 1) return null;
   const i = incoming[0];
   const o = outgoing[0];
   return {
@@ -343,7 +349,7 @@ export function bridgeEdgeFor(nodeId: string, edges: Edge[]): Edge | null {
 
 // ---------- Connection validity (shape compatibility) ----------
 
-const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths"]);
+const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths", "unite"]);
 const SCALAR_PRODUCERS = new Set(["aggregate", "formula"]);
 const VALUE_PRODUCERS = new Set(["aggregate", "formula", "group"]);
 

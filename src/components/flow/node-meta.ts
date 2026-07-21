@@ -11,6 +11,7 @@ export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: 
   combine: { label: "Combine data", blurb: "Merge records from multiple steps", stage: "Data", advanced: true, keywords: "merge join dedupe union combine sources" },
   filter: { label: "Filter records", blurb: "Keep only the records you want", stage: "Conditions", advanced: false, keywords: "condition where keep only match date range filter" },
   paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", advanced: true, keywords: "split branch route condition paths" },
+  unite: { label: "Unite data", blurb: "Bring lanes and branches back into one line", stage: "Data", advanced: false, keywords: "unite merge join together branches lanes sources union bring back" },
   // "Count" and "Calculate" are two focused steps: Count turns records into a number
   // (count/sum/avg/…), Calculate compares two numbers. They map to the aggregate + formula
   // executors below. The old merged "calculate" node is retired from the picker.
@@ -76,7 +77,9 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
     case "formula":
       return { op: "percentage" };
     case "combine":
-      return { mode: "stack", identityField: "subject", keep: "all", sourceWins: "first" };
+      return { mode: "dedupe", identityField: "subject", keep: "all", sourceWins: "first" };
+    case "unite":
+      return {};
     case "group":
       return { mode: "field", field: "source", aggregation: "count", valueField: "value", distinctField: "subject", categories: [], fallbackLabel: "Other" };
     case "formatter":
@@ -187,6 +190,8 @@ export function resultLabel(type: string, test: { recordsIn: number; recordsOut:
       return `${recordsOut} cleaned`;
     case "combine":
       return `${recordsOut} combined`;
+    case "unite":
+      return `${recordsOut} united`;
     case "paths":
       return `${recordsOut} routed`;
     case "group":

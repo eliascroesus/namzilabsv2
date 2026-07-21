@@ -1,4 +1,4 @@
-import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, CalculateConfigSchema, NODE_TYPES, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
+import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, CalculateConfigSchema, FormulaConfigSchema, NODE_TYPES, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
 
 export type ValidationIssue = { nodeId?: string; message: string };
 
@@ -11,11 +11,11 @@ function mappedRuleGaps(filters: FilterConfig | undefined): number {
 type ShapeKind = "dataset" | "value" | "none";
 
 /** Nodes that emit a record set. */
-const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths"]);
+const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths", "unite"]);
 /** Nodes that emit a computed value/series/grouped. */
 const VALUE_PRODUCERS = new Set(["aggregate", "formula", "group", "calculate"]);
 /** Nodes that consume record sets. */
-const DATASET_CONSUMERS = new Set(["filter", "aggregate", "time", "formatter", "group", "paths", "combine"]);
+const DATASET_CONSUMERS = new Set(["filter", "aggregate", "time", "formatter", "group", "paths", "combine", "unite"]);
 /** Nodes that consume computed values. */
 const VALUE_CONSUMERS = new Set(["formula"]);
 
@@ -84,14 +84,17 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
     if (VALUE_CONSUMERS.has(node.type)) {
       if (ins.length === 0) issues.push({ nodeId: node.id, message: `${cap(node.type)} node needs a connected number.` });
       if (node.type === "formula") {
-        // Calculate is binary: exactly one number in each named input (a/b). A number is
-        // a scalar step's value OR a dataset step's record count ("Output number"). A
-        // plain (no-handle) edge is the step's position in the line — always allowed.
+        // Calculate is binary: each named input (a/b) is either one wired step's number
+        // OR a typed-in literal. A plain (no-handle) edge is the step's position in the
+        // line — always allowed.
         const fEdges = incomingEdges.get(node.id) ?? [];
+        const fCfg = FormulaConfigSchema.safeParse(node.data.config ?? {});
+        const aFixed = fCfg.success ? fCfg.data.aFixed : null;
+        const bFixed = fCfg.success ? fCfg.data.bFixed : null;
         const aCount = fEdges.filter((e) => e.targetHandle === "a").length;
         const bCount = fEdges.filter((e) => e.targetHandle === "b").length;
-        if (aCount !== 1 || bCount !== 1) {
-          issues.push({ nodeId: node.id, message: "Calculate needs both of its numbers picked." });
+        if (aCount > 1 || bCount > 1 || (aCount === 0 && aFixed == null) || (bCount === 0 && bFixed == null)) {
+          issues.push({ nodeId: node.id, message: "Calculate needs both of its numbers picked (or typed in)." });
         }
         for (const e of fEdges) {
           const src = byId.get(e.source);
@@ -114,9 +117,13 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
       const mode = parsed.success ? parsed.data.mode : "number";
       if (mode === "compare") {
         const cEdges = incomingEdges.get(node.id) ?? [];
+        const aFixed = parsed.success ? parsed.data.aFixed : null;
+        const bFixed = parsed.success ? parsed.data.bFixed : null;
         const aCount = cEdges.filter((e) => e.targetHandle === "a").length;
         const bCount = cEdges.filter((e) => e.targetHandle === "b").length;
-        if (aCount !== 1 || bCount !== 1) issues.push({ nodeId: node.id, message: "Compare needs both of its numbers picked." });
+        if (aCount > 1 || bCount > 1 || (aCount === 0 && aFixed == null) || (bCount === 0 && bFixed == null)) {
+          issues.push({ nodeId: node.id, message: "Compare needs both of its numbers picked (or typed in)." });
+        }
         for (const e of cEdges) {
           const src = byId.get(e.source);
           if (src && (e.targetHandle === "a" || e.targetHandle === "b") && outputKind(src) === "none") {

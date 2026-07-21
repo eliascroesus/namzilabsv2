@@ -81,6 +81,22 @@ describe("Formula node", () => {
     expect(r.outputs[0].tile.value).toBe(75); // 3 / 4 * 100
   });
 
+  it("a typed-in literal fills a number slot with no wired step", async () => {
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "booked" });
+    await ev({ eventType: "booked" });
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("cnt", "aggregate", { aggregation: "count" }), // 3
+        N("pct", "formula", { op: "percentage", bFixed: 10 }),
+        N("o", "output", {}),
+      ],
+      [E("a", "cnt"), ET("cnt", "pct", "a"), E("pct", "o")],
+    );
+    expect((await run(g)).outputs[0].tile.value).toBe(30); // 3 / 10 × 100
+  });
+
   it("resolves operands strictly by named handle (A/B), not edge order", async () => {
     await ev({ eventType: "booked", value: 10 });
     await ev({ eventType: "booked", value: 40 });
@@ -233,6 +249,32 @@ describe("Combine node", () => {
       const c = r.nodes.get("c") as { sample: Array<{ properties: Record<string, unknown> }> };
       expect(c.sample[0].properties.plan).toBe("pro");
     }
+  });
+
+  it("Unite joins lanes; a single-input Combine then merges/matches within the stream", async () => {
+    // Two sheets: x only in a, y in both, z only in b.
+    await seedTwoSources();
+    const g = (mode: string, keep = "all") =>
+      G(
+        [
+          N("a", "app", { connectionId: CONN, source: "a" }),
+          N("b", "app", { connectionId: CONN, source: "b" }),
+          N("u", "unite", {}),
+          N("c", "combine", { mode, identityField: "subject", keep }),
+        ],
+        [E("a", "u"), E("b", "u"), E("u", "c")],
+      );
+    // Unite = every record from every lane.
+    const united = await run(g("stack"));
+    expect(united.nodes.get("u")!.recordsOut).toBe(4);
+    // Merge duplicates → one record per subject (x, y, z).
+    expect((await run(g("dedupe"))).nodes.get("c")!.recordsOut).toBe(3);
+    // Only records found more than once → y.
+    const dupes = await run(g("match", "matched"));
+    expect(dupes.nodes.get("c")!.recordsOut).toBe(1);
+    expect((dupes.nodes.get("c") as { sample: Array<{ subject: string }> }).sample[0].subject).toBe("y");
+    // Only records found once → x and z.
+    expect((await run(g("match", "unmatched"))).nodes.get("c")!.recordsOut).toBe(2);
   });
 
   it("Match mode: the chosen base source controls which records survive", async () => {

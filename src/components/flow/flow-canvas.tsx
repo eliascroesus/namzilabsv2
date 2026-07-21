@@ -36,7 +36,7 @@ import { ReviewPublishModal, type Endpoint } from "./ReviewPublishModal";
 
 export type { ConnMeta };
 
-const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths"]);
+const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths", "unite"]);
 const rid = () => `e_${Math.random().toString(36).slice(2, 9)}`;
 
 /** A step that yields a single number, usable as a First/Second number in Compare. */
@@ -53,7 +53,8 @@ function isNumberProducer(n: FNode): boolean {
 /** Short "what to do next" hint shown inside a step that needs setup. */
 function setupHint(type: string, cfg: Record<string, unknown>, inputCount: number): string {
   if (type === "app") return cfg.connectionId ? "Choose what data to pull." : "Choose an account to load data.";
-  if (type === "formula") return "Pick a First and Second number.";
+  if (type === "unite") return "Pick the lanes to bring together.";
+  if (type === "formula") return "Pick or type a First and Second number.";
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? "Pick a First and Second number." : "Connect an input.";
   if (type === "output") return inputCount === 0 ? "Connect an input." : "Name this metric.";
   return "Connect an input.";
@@ -326,17 +327,12 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     },
     [commit, setEdges, markDirtyFrom],
   );
-  const setCombineSources = useCallback(
+  // Unite's lanes ARE the flow's shape: the picker manages plain chain edges, so the
+  // junction genuinely joins those lines (and downstream steps see all their data).
+  const setUniteSources = useCallback(
     (nodeId: string, sourceIds: string[]) => {
       commit();
-      setEdges((es) => {
-        // The step's place in the line is its first plain (chain) edge — created when it
-        // was added after a step. The picker NEVER touches it: picked sources live on
-        // separate "src" reference edges, so choosing data can't move or re-route the node.
-        const anchor = es.find((e) => e.target === nodeId && e.targetHandle == null);
-        const kept = es.filter((e) => e.target !== nodeId || e === anchor);
-        return [...kept, ...sourceIds.map((sid) => ({ id: rid(), type: "insert", source: sid, target: nodeId, targetHandle: "src" }))];
-      });
+      setEdges((es) => [...es.filter((e) => e.target !== nodeId), ...sourceIds.map((sid) => ({ id: rid(), type: "insert", source: sid, target: nodeId }))]);
       markDirtyFrom(nodeId);
     },
     [commit, setEdges, markDirtyFrom],
@@ -897,7 +893,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             onTest={() => testNode(selected.id)}
             onAddNext={() => addFromNode(selected.id)}
             onSetInput={(handle, sourceId) => setFormulaInput(selected.id, handle, sourceId)}
-            onSetSources={(ids) => setCombineSources(selected.id, ids)}
+            onSetSources={(ids) => setUniteSources(selected.id, ids)}
             onAddBranch={() => addBranch(selected.id)}
             onRemoveBranch={(pid) => removeBranch(selected.id, pid)}
           />

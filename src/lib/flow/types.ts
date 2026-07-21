@@ -8,6 +8,10 @@ export const NODE_TYPES = [
   "output",
   "combine",
   "paths",
+  // Unite is the opposite of Split into paths: it joins several lanes (branches,
+  // extra data sources) back into ONE line, so every later step can use all of
+  // their records and fields.
+  "unite",
   "group",
   "formula",
   "formatter",
@@ -207,6 +211,9 @@ export const FORMULA_OPS = [
 ] as const;
 export const FormulaConfigSchema = z.object({
   op: z.enum(FORMULA_OPS).default("percentage"),
+  /** Typed-in literal numbers for the A/B inputs — used when no step is wired in. */
+  aFixed: z.number().nullable().optional(),
+  bFixed: z.number().nullable().optional(),
 });
 export type FormulaConfig = z.infer<typeof FormulaConfigSchema>;
 
@@ -251,6 +258,9 @@ export const CalculateConfigSchema = z.object({
   fallbackLabel: z.string().default("Other"),
   // compare (formula): a rate/ratio/… over two numbers chosen as pills (handles a/b)
   op: z.enum(FORMULA_OPS).default("percentage"),
+  /** Typed-in literal numbers for the A/B inputs — used when no step is wired in. */
+  aFixed: z.number().nullable().optional(),
+  bFixed: z.number().nullable().optional(),
 });
 export type CalculateConfig = z.infer<typeof CalculateConfigSchema>;
 

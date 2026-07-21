@@ -56,8 +56,12 @@ describe("bridgeEdgeFor (delete & reconnect)", () => {
     expect(bridge.sourceHandle).toBe("x");
     expect(bridge.targetHandle).toBe("a");
   });
-  it("returns null for multiple inputs or outputs", () => {
-    expect(bridgeEdgeFor("b", [E("a", "b"), E("a2", "b"), E("b", "c")])).toBeNull();
+  it("bridges a multi-input junction (Unite) from its first lane", () => {
+    const bridge = bridgeEdgeFor("b", [E("a", "b"), E("a2", "b"), E("b", "c")])!;
+    expect(bridge.source).toBe("a");
+    expect(bridge.target).toBe("c");
+  });
+  it("returns null for multiple outputs or no input", () => {
     expect(bridgeEdgeFor("b", [E("a", "b"), E("b", "c"), E("b", "c2")])).toBeNull();
     expect(bridgeEdgeFor("b", [E("b", "c")])).toBeNull(); // no input
   });
@@ -226,6 +230,20 @@ describe("multiple Get data roots — parallel lanes", () => {
     const terms = terminalIds(nodes, edges);
     expect(terms.has("f1")).toBe(true);
     expect(terms.has("f2")).toBe(true);
+  });
+});
+
+describe("Unite layout — a junction joining lanes", () => {
+  it("centres a unite between the lanes it joins, below all of them", () => {
+    const nodes = [N("s1", "app"), N("s2", "app"), N("u", "unite"), N("agg", "aggregate")];
+    const edges = [E("s1", "u"), E("s2", "u"), E("u", "agg")];
+    const pos = computeVerticalLayout(nodes, edges);
+    const mid = (pos.get("s1")!.x + pos.get("s2")!.x) / 2;
+    expect(pos.get("u")!.x).toBe(mid);
+    expect(pos.get("u")!.y).toBeGreaterThan(pos.get("s1")!.y);
+    // The chain continues below the junction, in its lane.
+    expect(pos.get("agg")!.x).toBe(pos.get("u")!.x);
+    expect(pos.get("agg")!.y).toBeGreaterThan(pos.get("u")!.y);
   });
 });
 

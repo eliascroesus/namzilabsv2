@@ -128,6 +128,8 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
         return execFormatter(node, inputs);
       case "combine":
         return execCombine(node, inputs);
+      case "unite":
+        return execUnite(node, inputs);
       case "paths":
         return execPaths(node, inputs, graph);
       case "group":
@@ -219,6 +221,22 @@ function execFormatter(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   return datasetExec("formatter", node.id, records, input.records.length);
 }
 
+// ---------- Unite ----------
+/**
+ * The opposite of Split into paths: joins every connected lane (branches, extra data
+ * sources) back into one stream, so every later step can read all of their records
+ * and fields. No options — it's pure flow shape.
+ */
+function execUnite(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  if (inputs.length === 0) throw new Error("Unite needs at least one connected input.");
+  const datasets = inputs.map((i) => {
+    if (i.shape.kind !== "dataset") throw new Error("Unite only accepts record inputs.");
+    return i.shape.records;
+  });
+  const records = datasets.flat();
+  return datasetExec("unite", node.id, records, records.length);
+}
+
 // ---------- Combine ----------
 function execCombine(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = CombineConfigSchema.parse(node.data.config ?? {});
@@ -241,6 +259,11 @@ function execCombine(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     records = datasets.flat();
   } else if (cfg.mode === "dedupe") {
     records = dedupeBy(datasets.flat(), cfg.identityField, cfg.sourceWins);
+  } else if (datasets.length === 1) {
+    // The normal (new) shape: ONE stream flows in (often straight from a Unite), and
+    // "match" means matching records WITHIN it — the same person appearing more than
+    // once (e.g. from two united sources) counts as matched.
+    records = matchWithin(datasets[0], cfg.identityField, cfg.keep, cfg.sourceWins);
   } else {
     records = matchJoin(datasets, cfg.identityField, cfg.keep, cfg.sourceWins);
   }
@@ -347,9 +370,13 @@ function execAggregate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
  * Filter, …) contributes its record count — its "Output number" — so counts like
  * "56 passed" or "76 loaded" can be compared directly.
  */
-function scalarAt(inputs: ResolvedInput[], handle: "a" | "b"): number {
+function scalarAt(inputs: ResolvedInput[], handle: "a" | "b", fixed?: number | null): number {
   const found = inputs.find((i) => i.targetHandle === handle);
-  if (!found) throw new Error(`Needs a number connected to input ${handle.toUpperCase()}.`);
+  if (!found) {
+    // No step wired in: a typed-in literal number fills the slot.
+    if (fixed != null) return fixed;
+    throw new Error(`Needs a number connected to input ${handle.toUpperCase()}.`);
+  }
   if (found.shape.kind === "scalar") return found.shape.value;
   if (found.shape.kind === "dataset") return found.shape.records.length;
   throw new Error("This input isn't a single number — pick a Count step or a step's record count.");
@@ -385,7 +412,7 @@ function formulaValue(op: string, a: number, b: number): number {
 
 function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = FormulaConfigSchema.parse(node.data.config ?? {});
-  const value = formulaValue(cfg.op, scalarAt(inputs, "a"), scalarAt(inputs, "b"));
+  const value = formulaValue(cfg.op, scalarAt(inputs, "a", cfg.aFixed), scalarAt(inputs, "b", cfg.bFixed));
   return { status: "ok", nodeType: "formula", shape: { kind: "scalar", value: round(value) }, recordsIn: 2, recordsOut: 1, sample: [], outputSchema: [] };
 }
 
@@ -394,7 +421,7 @@ function execCalculate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = CalculateConfigSchema.parse(node.data.config ?? {});
 
   if (cfg.mode === "compare") {
-    const value = formulaValue(cfg.op, scalarAt(inputs, "a"), scalarAt(inputs, "b"));
+    const value = formulaValue(cfg.op, scalarAt(inputs, "a", cfg.aFixed), scalarAt(inputs, "b", cfg.bFixed));
     return { status: "ok", nodeType: "calculate", shape: { kind: "scalar", value: round(value) }, recordsIn: 2, recordsOut: 1, sample: [], outputSchema: [] };
   }
 
@@ -665,6 +692,41 @@ function dedupeBy(records: FlowRecord[], idField: string, sourceWins: "first" | 
     else map.set(key, mergeRecords(r, map.get(key)!));
   }
   return [...map.values()];
+}
+
+/**
+ * Match records WITHIN one stream by an identity field (the single-input Combine).
+ * "Matched" = the identity appears more than once (e.g. the same email arriving from
+ * two united sources); matched groups merge into one enriched record. Records with an
+ * empty identity can never match — they count as unmatched.
+ */
+function matchWithin(records: FlowRecord[], idField: string, keep: "all" | "matched" | "unmatched", sourceWins: "first" | "last"): FlowRecord[] {
+  const groups = new Map<string, FlowRecord[]>();
+  const noId: FlowRecord[] = [];
+  for (const r of records) {
+    const key = String(getField(r, idField) ?? "");
+    if (!key) {
+      noId.push(r);
+      continue;
+    }
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  }
+  const out: FlowRecord[] = [];
+  for (const grp of groups.values()) {
+    const matched = grp.length > 1;
+    if (matched && keep === "unmatched") continue;
+    if (!matched && keep === "matched") continue;
+    if (!matched) {
+      out.push(grp[0]);
+      continue;
+    }
+    let merged = grp[0];
+    for (const r of grp.slice(1)) merged = sourceWins === "last" ? mergeRecords(r, merged) : mergeRecords(merged, r);
+    out.push(merged);
+  }
+  if (keep !== "matched") out.push(...noId);
+  return out;
 }
 
 function matchJoin(datasets: FlowRecord[][], idField: string, keep: "all" | "matched" | "unmatched", sourceWins: "first" | "last"): FlowRecord[] {
