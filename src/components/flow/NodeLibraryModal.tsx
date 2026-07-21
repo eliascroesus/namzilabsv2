@@ -5,13 +5,6 @@ import type { NodeType } from "@/lib/flow/types";
 import { ALL_TYPES, NODE_META, STAGES } from "./node-meta";
 import { NodeGlyph } from "./icons";
 
-const STAGE_BLURB: Record<string, string> = {
-  Data: "Bring records in",
-  Conditions: "Narrow down which records count",
-  Calculation: "Turn records into a number",
-  Dashboard: "Show the result",
-};
-
 export function NodeLibraryModal({ onClose, onPick }: { onClose: () => void; onPick: (type: NodeType) => void }) {
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
@@ -21,8 +14,8 @@ export function NodeLibraryModal({ onClose, onPick }: { onClose: () => void; onP
     return `${m.label} ${m.blurb} ${m.keywords} ${m.stage}`.toLowerCase().includes(query);
   };
 
-  const byStage = STAGES.map((stage) => ({ stage, types: ALL_TYPES.filter((t) => NODE_META[t].stage === stage && !NODE_META[t].advanced && !NODE_META[t].hidden && matches(t)) })).filter((g) => g.types.length > 0);
-  const advanced = ALL_TYPES.filter((t) => NODE_META[t].advanced && !NODE_META[t].hidden && matches(t));
+  // Every step lives in its real category — no "advanced" ghetto, no subtitles.
+  const byStage = STAGES.map((stage) => ({ stage, types: ALL_TYPES.filter((t) => NODE_META[t].stage === stage && !NODE_META[t].hidden && matches(t)) })).filter((g) => g.types.length > 0);
 
   const card = (t: NodeType) => (
     <button key={t} onClick={() => onPick(t)} className="flex items-start gap-2.5 rounded-md border border-neutral-200 p-2.5 text-left hover:border-neutral-400 hover:bg-neutral-50">
@@ -55,20 +48,13 @@ export function NodeLibraryModal({ onClose, onPick }: { onClose: () => void; onP
           />
         </div>
         <div className="max-h-[60vh] overflow-y-auto p-3">
-          {byStage.length === 0 && advanced.length === 0 && <p className="p-4 text-center text-sm text-neutral-500">No matches.</p>}
+          {byStage.length === 0 && <p className="p-4 text-center text-sm text-neutral-500">No matches.</p>}
           {byStage.map(({ stage, types }) => (
             <div key={stage} className="mb-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{stage}</p>
-              <p className="mb-1.5 text-[11px] text-neutral-400">{STAGE_BLURB[stage]}</p>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-500">{stage}</p>
               <div className="grid grid-cols-2 gap-2">{types.map(card)}</div>
             </div>
           ))}
-          {advanced.length > 0 && (
-            <details open={query.length > 0} className="mt-1">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-neutral-400">More tools</summary>
-              <div className="mt-2 grid grid-cols-2 gap-2">{advanced.map(card)}</div>
-            </details>
-          )}
         </div>
       </div>
     </div>

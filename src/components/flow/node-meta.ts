@@ -8,10 +8,10 @@ export type Stage = (typeof STAGES)[number];
 /** Plain-English node metadata. Labels read like instructions, not jargon. */
 export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: Stage; advanced: boolean; keywords: string; hidden?: boolean }> = {
   app: { label: "Get data", blurb: "Pull records from a connected app", stage: "Data", advanced: false, keywords: "integration source connect data app get" },
-  combine: { label: "Combine data", blurb: "Merge records from multiple steps", stage: "Data", advanced: true, keywords: "merge join dedupe union combine sources" },
+  unite: { label: "Unite data", blurb: "Join lanes back into one line", stage: "Data", advanced: false, keywords: "unite merge join together branches lanes sources union bring back" },
+  combine: { label: "Combine data", blurb: "De-duplicate or match records", stage: "Data", advanced: true, keywords: "merge join dedupe union combine sources duplicates" },
   filter: { label: "Filter records", blurb: "Keep only the records you want", stage: "Conditions", advanced: false, keywords: "condition where keep only match date range filter" },
   paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", advanced: true, keywords: "split branch route condition paths" },
-  unite: { label: "Unite data", blurb: "Bring lanes and branches back into one line", stage: "Data", advanced: false, keywords: "unite merge join together branches lanes sources union bring back" },
   // "Count" and "Calculate" are two focused steps: Count turns records into a number
   // (count/sum/avg/…), Calculate compares two numbers. They map to the aggregate + formula
   // executors below. The old merged "calculate" node is retired from the picker.

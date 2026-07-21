@@ -374,17 +374,32 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       for (const t of branchTargets) for (const d of descendantsOf(t, sEdges)) toRemove.add(d);
 
       if (laneIds.length <= 1) {
-        // One (or zero) lane left is a pointless split — dissolve the hub and wire the
-        // surviving lane straight onto whatever fed the split, so the flow stays a single
-        // line (no orphaned steps).
+        // One (or zero) lane left is a pointless split — dissolve the hub entirely. The
+        // surviving branch's auto-created "Path conditions" head dissolves with it when
+        // it's pristine (no rules), so its REAL content reconnects straight to the step
+        // before the split; an empty surviving branch vanishes completely and the
+        // pre-split step becomes the line end again. A head with real rules is kept
+        // (it's genuine logic, now a plain Filter in the line).
         const survivorHandle = laneIds[0];
         const survivorFirst = survivorHandle ? edges.find((e) => e.source === hubId && e.sourceHandle === survivorHandle)?.target : undefined;
+        const survivorNode = survivorFirst ? nodes.find((n) => n.id === survivorFirst) : undefined;
+        const scfg = (survivorNode?.data.config ?? {}) as { rules?: unknown[]; dateRange?: { enabled?: boolean } };
+        const pristineHead = survivorNode?.type === "filter" && ((scfg.rules ?? []).length === 0) && !scfg.dateRange?.enabled;
+        let survivorTargets: string[] = survivorFirst ? [survivorFirst] : [];
+        if (pristineHead && survivorFirst) {
+          toRemove.add(survivorFirst);
+          survivorTargets = edges.filter((e) => e.source === survivorFirst && e.targetHandle == null).map((e) => e.target);
+        }
         const hubParents = edges.filter((e) => e.target === hubId).map((e) => ({ source: e.source, sourceHandle: e.sourceHandle ?? undefined }));
         toRemove.add(hubId);
-        setNodes((ns) => ns.filter((n) => !toRemove.has(n.id)));
+        setNodes((ns) =>
+          ns
+            .map((n) => (survivorTargets.includes(n.id) ? { ...n, data: { ...n.data, dirty: true } } : n))
+            .filter((n) => !toRemove.has(n.id)),
+        );
         setEdges((es) => {
           let next = es.filter((e) => !toRemove.has(e.source) && !toRemove.has(e.target) && e.source !== hubId && e.target !== hubId);
-          if (survivorFirst) for (const p of hubParents) next = [...next, { id: rid(), type: "insert", source: p.source, sourceHandle: p.sourceHandle, target: survivorFirst }];
+          for (const t of survivorTargets) for (const p of hubParents) next = [...next, { id: rid(), type: "insert", source: p.source, sourceHandle: p.sourceHandle, target: t }];
           return next;
         });
         setSelectedId(null);
@@ -633,15 +648,20 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     };
   }, [selected, sEdges, nodes, setBranchMode]);
 
-  // Candidate steps for wiring multi-input steps (exclude self + descendants).
+  // A Unite's lane candidates: only each line's FURTHEST step (computed as if this
+  // unite weren't connected), so lanes always join at their ends — never mid-line.
+  // Paths hubs are never pickable (they only feed their branches).
   const candidates = useMemo(() => {
-    if (!selected) return { dataset: [] as StepRef[] };
+    if (!selected || selected.type !== "unite") return { dataset: [] as StepRef[] };
     const desc = descendantsOf(selected.id, edges);
-    const avail = nodes.filter((n) => n.id !== selected.id && !desc.has(n.id));
+    const edgesSansSelf = edges.filter((e) => e.target !== selected.id);
+    const ends = terminalIds(nodes, edgesSansSelf);
     const toItem = (n: FNode): StepRef => ({ id: n.id, title: nodeTitle(String(n.type) as NodeType, n.data), stepNo: stepNoById.get(n.id) });
-    // The Paths hub is never a data source — it only feeds its branches, so it must not
-    // appear as something Combine (or anything else) can pull from. Pick a branch instead.
-    return { dataset: avail.filter((n) => DATASET_PRODUCERS.has(String(n.type)) && n.type !== "paths").map(toItem) };
+    return {
+      dataset: nodes
+        .filter((n) => n.id !== selected.id && !desc.has(n.id) && ends.has(n.id) && DATASET_PRODUCERS.has(String(n.type)) && n.type !== "paths")
+        .map(toItem),
+    };
   }, [selected, nodes, edges, stepNoById]);
 
   // Number choices for a compare step, in the same data-browser shape as every other
@@ -651,7 +671,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     if (!selected) return [];
     const desc = descendantsOf(selected.id, edges);
     const avail = nodes
-      .filter((n) => n.id !== selected.id && !desc.has(n.id) && n.type !== "paths" && (isNumberProducer(n) || DATASET_PRODUCERS.has(String(n.type))))
+      .filter((n) => n.id !== selected.id && !desc.has(n.id) && n.type !== "paths" && n.type !== "unite" && (isNumberProducer(n) || DATASET_PRODUCERS.has(String(n.type))))
       .sort((a, b) => (stepNoById.get(a.id) ?? 0) - (stepNoById.get(b.id) ?? 0));
     return avail.map((n) => {
       const app = nearestAppAncestor(n, nodes, edges);

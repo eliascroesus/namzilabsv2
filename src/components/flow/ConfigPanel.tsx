@@ -82,9 +82,9 @@ function NumberField({ value, onChange, min, allowNull = false, placeholder }: {
  */
 type FormatterCat = "text" | "number" | "date";
 const FORMATTER_CATEGORIES: Array<{ value: FormatterCat; label: string; hint: string }> = [
-  { value: "text", label: "Text", hint: "Trim, capitalize, find & replace, tidy emails…" },
-  { value: "number", label: "Numbers", hint: "Turn text into numbers, round, multiply, divide." },
-  { value: "date", label: "Dates & times", hint: "Fix text timestamps into real dates, keep day / month / hour." },
+  { value: "text", label: "Text", hint: "Trim, replace, tidy emails…" },
+  { value: "number", label: "Numbers", hint: "Convert, round." },
+  { value: "date", label: "Dates & times", hint: "Fix timestamps, keep day / month / hour." },
 ];
 const FORMATTER_ACTIONS: Array<{ value: string; label: string; hint: string; cat: FormatterCat }> = [
   // Text
@@ -359,24 +359,22 @@ function NodeConfig({
               value={bmode}
               width={W}
               options={[
-                { value: "custom", label: "Custom rules", hint: "Only records matching the conditions below continue." },
+                { value: "custom", label: "Custom rules", hint: "Only records matching the conditions below." },
                 {
                   value: "always",
                   label: "Always run",
                   disabled: branch.siblingHasFallback,
-                  hint: branch.siblingHasFallback
-                    ? "Can’t combine with a fallback branch — the fallback would never run."
-                    : "Every record continues down this path.",
+                  hint: branch.siblingHasFallback ? "Not with a fallback branch." : "Every record continues.",
                 },
                 {
                   value: "fallback",
-                  label: "Fallback — everything else",
+                  label: "Fallback",
                   disabled: branch.siblingHasFallback || branch.siblingHasAlways,
                   hint: branch.siblingHasFallback
-                    ? "Another branch is already the fallback."
+                    ? "Another branch is the fallback."
                     : branch.siblingHasAlways
-                      ? "Can’t combine with an always-run branch — the fallback would never run."
-                      : "Records that match no other path’s conditions continue here.",
+                      ? "Not with an always-run branch."
+                      : "Records no other path matched.",
                 },
               ]}
               onChange={(v) => branch.set(v)}
@@ -390,9 +388,7 @@ function NodeConfig({
           </>
         ) : (
           <p className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
-            {bmode === "always"
-              ? "Every record continues down this path — no conditions needed."
-              : "Records that didn’t match any other path’s conditions continue here — no conditions needed."}
+            {bmode === "always" ? "Every record continues — no conditions needed." : "Gets the records no other path matched."}
           </p>
         )}
       </div>
@@ -460,11 +456,9 @@ function NodeConfig({
     const laneIds = inputs.map((i) => i.nodeId);
     return (
       <div className="space-y-3">
-        <p className="text-xs text-neutral-500">
-          Brings branches and data sources back into <b>one line</b> — every step after this one can use the records and fields from all of them.
-        </p>
+        <p className="text-xs text-neutral-500">Joins lanes into one line — later steps see data from all of them.</p>
         <div>
-          <p className="mb-1 text-xs font-medium text-neutral-600">Lanes to bring together</p>
+          <p className="mb-1 text-xs font-medium text-neutral-600">Lanes</p>
           <div className="space-y-1.5">
             {inputs.map((inp, idx) => (
               <div key={idx} className="flex items-center gap-2">
@@ -492,7 +486,7 @@ function NodeConfig({
                 <span className="text-sm leading-none">+</span> Add a lane
               </button>
             )}
-            {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-xs text-neutral-400">Add data steps first, then unite them here.</p>}
+            {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-xs text-neutral-400">Add data steps first.</p>}
           </div>
         </div>
       </div>
@@ -508,29 +502,26 @@ function NodeConfig({
     const choice = mode === "match" ? (keep === "unmatched" ? "only_once" : "only_dupes") : "merge";
     return (
       <div className="space-y-3">
-        <p className="text-xs text-neutral-500">
-          Works on the records flowing into this step — put a <b>Unite data</b> step before it to combine several lanes first.
-        </p>
-        <Field label="What should we do?">
+        <Field label="Action">
           <Select
             value={choice}
             width={W}
             options={[
-              { value: "merge", label: "Merge duplicates into one record", hint: "One record per person/id — fields from all copies are kept." },
-              { value: "only_dupes", label: "Keep only records found more than once", hint: "e.g. people appearing in both united sheets." },
-              { value: "only_once", label: "Keep only records found once", hint: "e.g. people in one sheet but not the other." },
+              { value: "merge", label: "De-duplicate", hint: "Merge copies into one record." },
+              { value: "only_dupes", label: "Keep duplicates", hint: "Found more than once." },
+              { value: "only_once", label: "Keep uniques", hint: "Found only once." },
             ]}
             onChange={(v) => onChange(v === "merge" ? { mode: "dedupe" } : { mode: "match", keep: v === "only_once" ? "unmatched" : "matched" })}
           />
         </Field>
-        <Field label="Recognize the same record by">
+        <Field label="Match records by">
           <FieldSelect value={(cfg.identityField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ identityField: v })} />
         </Field>
         <Advanced>
-          <Field label="When copies disagree, which value wins">
-            <Select value={(cfg.sourceWins as string) ?? "first"} width={W} options={[{ value: "first", label: "The first copy seen" }, { value: "last", label: "The last copy seen" }]} onChange={(v) => onChange({ sourceWins: v })} />
+          <Field label="Which copy wins">
+            <Select value={(cfg.sourceWins as string) ?? "first"} width={W} options={[{ value: "first", label: "First seen" }, { value: "last", label: "Last seen" }]} onChange={(v) => onChange({ sourceWins: v })} />
           </Field>
-          <p className="text-xs text-neutral-400">Blank values never overwrite real ones — merging only fills gaps, so no data is lost.</p>
+          <p className="text-xs text-neutral-400">Blanks never overwrite real values.</p>
         </Advanced>
       </div>
     );
@@ -544,9 +535,7 @@ function NodeConfig({
     const setLabel = (i: number, label: string) => onChange({ paths: paths.map((p, j) => (j === i ? { ...p, label } : p)) });
     return (
       <div className="space-y-3">
-        <p className="text-xs text-neutral-500">
-          This step only splits your flow into branches. Open a branch’s own <b>Path conditions</b> step to choose how records enter it — custom rules, always run, or fallback.
-        </p>
+        <p className="text-xs text-neutral-500">Splits the flow into branches. Each branch’s rules live in its own <b>Path conditions</b> step.</p>
         {paths.map((p, i) => (
           <div key={p.id} className="flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50/40 px-2 py-1.5">
             <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-pink-700">Branch {i + 1}</span>

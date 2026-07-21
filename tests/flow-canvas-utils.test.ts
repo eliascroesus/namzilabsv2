@@ -126,6 +126,22 @@ describe("buildFieldGroups (variable picker)", () => {
     expect(planFirst?.example).toBe("pro");
     expect(planSecond?.example).toBe("free");
   });
+
+  it("never lists a Unite step as a data group — its lanes' steps appear instead", () => {
+    const unite = N("u", "unite", {
+      lastTest: { status: "ok", recordsIn: 3, recordsOut: 3, sample: [], inputSample: [], outputSchema: schema },
+    });
+    const after = N("f2", "filter");
+    const groups = buildFieldGroups({
+      selectedId: "f2",
+      nodes: [app, unite, after],
+      edges: [E("app1", "u"), E("u", "f2")],
+      stepNoById: new Map([["app1", 1], ["u", 2], ["f2", 3]]),
+      titleOf,
+    });
+    expect(groups.some((g) => g.from === "unite")).toBe(false);
+    expect(groups.some((g) => g.from === "app")).toBe(true);
+  });
 });
 
 describe("buildFieldGroups — nearest-app example resolution + provenance", () => {

@@ -439,6 +439,10 @@ export function buildFieldGroups(opts: {
     for (const sid of ordered) {
       const sn = nodes.find((n) => n.id === sid);
       if (!sn) continue;
+      // A Unite is pure plumbing — it exposes no data of its own. Its lanes' steps
+      // are ancestors too and appear as their own groups, which is what the user
+      // recognises ("1. Google Sheets", not "3. Unite data").
+      if (sn.type === "unite") continue;
       // Untested steps expose nothing yet (explicit-test model).
       if (sn.data.lastTest?.status !== "ok") continue;
       const recordsOut = sn.data.lastTest.recordsOut;
