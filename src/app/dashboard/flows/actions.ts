@@ -51,10 +51,15 @@ export async function renameFlowAction(id: string, name: string): Promise<void> 
   await renameFlow(getDb(), orgId, id, name.trim() || "Untitled flow");
 }
 
-export async function deleteFlowAction(id: string): Promise<void> {
+export async function deleteFlowAction(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const { orgId } = await requireOrg();
-  await deleteFlow(getDb(), orgId, id);
-  redirect("/dashboard/flows");
+  try {
+    await deleteFlow(getDb(), orgId, id);
+    revalidatePath("/dashboard/flows");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export type NodeTestDTO = {

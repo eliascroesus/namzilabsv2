@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { getDb } from "@/db/client";
 import { listFlows } from "@/lib/flow/store";
 import { createFlowAction } from "./actions";
+import { FlowRow } from "./FlowRow";
 
 export const dynamic = "force-dynamic";
 
@@ -39,15 +39,7 @@ export default async function FlowsPage() {
         ) : (
           <div className="mt-8 divide-y divide-neutral-100 rounded-md border border-neutral-200">
             {flows.map((f) => (
-              <Link key={f.id} href={`/dashboard/flows/${f.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-neutral-50">
-                <span className="font-medium">{f.name}</span>
-                <span className="flex items-center gap-3 text-sm text-neutral-500">
-                  <span className={`rounded px-2 py-0.5 text-xs font-medium ${f.status === "published" ? "bg-green-100 text-green-800" : "bg-neutral-100 text-neutral-600"}`}>
-                    {f.status}
-                  </span>
-                  <span>{new Date(f.updatedAt).toLocaleDateString()}</span>
-                </span>
-              </Link>
+              <FlowRow key={f.id} id={f.id} name={f.name} status={f.status} updatedAt={new Date(f.updatedAt).toISOString()} />
             ))}
           </div>
         )}

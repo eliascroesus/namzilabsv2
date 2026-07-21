@@ -33,7 +33,7 @@ const SYNC_DOT: Record<string, string> = { live: "bg-green-500", synced: "bg-gre
 const syncStatusLabel = (s: string): string => ({ importing: "importing…", outdated: "outdated", error: "sync error" } as Record<string, string>)[s] ?? s;
 
 const AGG_LABELS: Record<string, string> = { count: "Count of records", count_distinct: "Count of distinct values", sum: "Sum of a field", avg: "Average of a field", min: "Minimum of a field", max: "Maximum of a field" };
-const FORMULA_LABELS: Record<string, string> = { add: "Add", subtract: "Subtract", multiply: "Multiply", divide: "Divide", percentage: "Percentage", percent_change: "Percent change", difference: "Difference", ratio: "Ratio", average: "Average" };
+const FORMULA_LABELS: Record<string, string> = { add: "+  Add", subtract: "−  Subtract", multiply: "×  Multiply", divide: "÷  Divide", percentage: "%  Percentage", percent_change: "Δ%  Percent change", difference: "−  Difference", ratio: "∶  Ratio", average: "x̄  Average" };
 const VIZ_LABELS: Record<string, string> = { number: "Single number", line: "Line chart", bar: "Bar chart", category: "Category breakdown", table: "Table", progress: "Progress bar", funnel: "Funnel" };
 const title = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
@@ -207,13 +207,26 @@ export function ConfigPanel({
       </div>
 
       <div className="border-t border-neutral-200 p-3">
-        <button
-          onClick={cta.run}
-          disabled={cta.disabled}
-          className="w-full rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-default disabled:opacity-50"
-        >
-          {cta.label}
-        </button>
+        {tested && !testing ? (
+          // A ready step can be re-tested any time (e.g. to refresh a Get data count
+          // after new records arrived) and add the next step — two explicit actions.
+          <div className="flex gap-2">
+            <button onClick={onTest} className="flex-1 rounded-md border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
+              Test again
+            </button>
+            <button onClick={onAddNext} className="flex-1 rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800">
+              + Add next step
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={cta.run}
+            disabled={cta.disabled}
+            className="w-full rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-default disabled:opacity-50"
+          >
+            {cta.label}
+          </button>
+        )}
       </div>
     </aside>
   );
@@ -653,7 +666,10 @@ function CalcCompare({ cfg, inputs, numberGroups, onChange, onSetInput }: { cfg:
 function NumberPicker({ handle, label, desc, groups, onSetInput }: { handle: "a" | "b"; label: string; desc?: InputDescriptor; groups: DataGroup[]; onSetInput: (h: "a" | "b", id: string | null) => void }) {
   const chosen = groups.find((g) => g.stepId === desc?.nodeId);
   const chosenLabel = chosen ? `${chosen.stepNo != null ? `${chosen.stepNo}. ` : ""}${chosen.title}` : desc ? desc.title : null;
-  const preview = chosen?.fields[0]?.sample ?? desc?.value ?? desc?.recordCount;
+  // The group sample is already the right number per step type (a scalar step's Result,
+  // a dataset step's record count). Never fall back to recordCount — that shows a scalar
+  // step's meaningless "1 record" instead of its actual value.
+  const preview = chosen?.fields[0]?.sample ?? desc?.value;
   return (
     <Field label={label}>
       <DataBrowser
