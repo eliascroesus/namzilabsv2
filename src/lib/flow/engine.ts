@@ -255,9 +255,10 @@ function execPaths(node: FlowNode, inputs: ResolvedInput[], graph: FlowGraph): N
   const outputs: Record<string, Shape> = {};
 
   // A branch's conditions come from one of two places, transparently:
-  //  - Legacy nodes stored per-path filters directly on the hub.
-  //  - New nodes keep each branch's conditions in that branch's own first
-  //    "Path conditions" (Filter) step, read from the graph here.
+  //  - Legacy hubs stored per-path filters directly on the hub (+ a fallbackId lane).
+  //  - New hubs keep each branch's conditions in that branch's own first
+  //    "Path conditions" (Filter) step, read from the graph here. The hub itself
+  //    holds no rules — only each branch's mode (custom / always / fallback).
   const legacy = cfg.paths.some((p) => (p.filters?.rules?.length ?? 0) > 0);
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
   const condsOf = (p: { id: string; filters?: FilterConfig }): FilterConfig | null => {
@@ -268,34 +269,29 @@ function execPaths(node: FlowNode, inputs: ResolvedInput[], graph: FlowGraph): N
   };
   const hasConds = (c: FilterConfig | null): c is FilterConfig => !!c && c.rules.length > 0;
 
-  if (cfg.routing === "exclusive") {
-    // First matching path wins — a record never appears in two branches. A branch with
-    // no conditions (e.g. a step routed in mid-flow) catches everything left.
-    const taken = new Set<FlowRecord>();
-    for (const p of cfg.paths) {
+  // Does a record continue down at least one custom branch? (Fallback = the rest.)
+  // A legacy path without hub filters never claimed records for fallback purposes; a new
+  // custom branch with no conditions yet passes everything, so it claims everything.
+  const customPaths = cfg.paths.filter((p) => p.mode === "custom");
+  const matchedAny = (r: FlowRecord) =>
+    customPaths.some((p) => {
       const c = condsOf(p);
-      const matched = records.filter((r) => {
-        if (taken.has(r)) return false;
-        const ok = hasConds(c) ? evalRules(r, c) : true;
-        if (ok) taken.add(r);
-        return ok;
-      });
-      outputs[p.id] = { kind: "dataset", records: matched };
-    }
-    if (cfg.fallbackId) outputs[cfg.fallbackId] = { kind: "dataset", records: records.filter((r) => !taken.has(r)) };
-  } else {
-    // "Always continue": every branch receives all records and narrows them in its own
-    // conditions step, so a record can continue down every path it matches. (Legacy hubs
-    // pre-filter here because their conditions live on the hub, not in a branch step.)
-    for (const p of cfg.paths) {
+      return legacy ? hasConds(c) && evalRules(r, c) : hasConds(c) ? evalRules(r, c) : true;
+    });
+
+  for (const p of cfg.paths) {
+    if (p.mode === "always") {
+      outputs[p.id] = { kind: "dataset", records };
+    } else if (p.mode === "fallback") {
+      outputs[p.id] = { kind: "dataset", records: records.filter((r) => !matchedAny(r)) };
+    } else {
+      // Custom: a legacy hub filters here (its rules live on the hub); a new hub passes
+      // everything through and the branch's own Path-conditions step narrows it.
       const c = condsOf(p);
       outputs[p.id] = { kind: "dataset", records: legacy && hasConds(c) ? records.filter((r) => evalRules(r, c)) : records };
     }
-    if (cfg.fallbackId) {
-      const matchedAny = (r: FlowRecord) => cfg.paths.some((p) => { const c = condsOf(p); return hasConds(c) && evalRules(r, c); });
-      outputs[cfg.fallbackId] = { kind: "dataset", records: records.filter((r) => !matchedAny(r)) };
-    }
   }
+  if (cfg.fallbackId) outputs[cfg.fallbackId] = { kind: "dataset", records: records.filter((r) => !matchedAny(r)) };
 
   return {
     status: "ok",

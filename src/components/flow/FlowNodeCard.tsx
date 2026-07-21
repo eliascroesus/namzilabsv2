@@ -98,6 +98,13 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           <Handle type="target" id="a" position={Position.Top} style={HIDDEN_HANDLE} />
           <Handle type="target" id="b" position={Position.Top} style={HIDDEN_HANDLE} />
         </>
+      ) : t === "combine" ? (
+        <>
+          {/* The plain handle anchors the chain edge; "src" anchors picked-source
+              reference edges (chosen in the panel — they never move the node). */}
+          <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE} />
+          <Handle type="target" id="src" position={Position.Top} style={HIDDEN_HANDLE} />
+        </>
       ) : t !== "app" ? (
         <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE} />
       ) : null}

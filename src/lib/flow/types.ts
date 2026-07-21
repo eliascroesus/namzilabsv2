@@ -292,18 +292,30 @@ export type FormatterConfig = z.infer<typeof FormatterConfigSchema>;
 // New model: the hub just splits (fan-out); each branch is its own "Path conditions"
 // step (a Filter). Legacy nodes carried per-path filters + a fallback — both optional
 // here so old published flows keep routing exactly as before.
+/**
+ * How records enter one branch — set per branch (in its Path-conditions step), never
+ * on the hub:
+ *  - "custom": only records matching the branch's own conditions continue.
+ *  - "always": every record continues down this branch.
+ *  - "fallback": records that matched no custom branch's conditions continue here.
+ */
+export const PATH_MODES = ["custom", "always", "fallback"] as const;
+export type PathMode = (typeof PATH_MODES)[number];
+
 export const PathsConfigSchema = z.object({
-  paths: z.array(z.object({ id: z.string().min(1), label: z.string().min(1), filters: FilterConfigSchema.optional() })).default([]),
+  paths: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().min(1),
+        mode: z.enum(PATH_MODES).default("custom"),
+        filters: FilterConfigSchema.optional(), // legacy hubs stored conditions here
+      }),
+    )
+    .default([]),
+  // Legacy fallback lane (old hubs). New flows mark a branch with mode "fallback" instead.
   fallbackId: z.string().optional(),
   fallbackLabel: z.string().optional(),
-  /**
-   * How a record flows through the branches:
-   *  - "overlap" (default): a record continues down every path whose conditions it
-   *    meets ("always continue") — the standard Zapier Paths behaviour.
-   *  - "exclusive": a record takes only the first path it matches.
-   * A record matching no path's conditions goes to the fallback branch, if one exists.
-   */
-  routing: z.enum(["overlap", "exclusive"]).default("overlap"),
 });
 export type PathsConfig = z.infer<typeof PathsConfigSchema>;
 

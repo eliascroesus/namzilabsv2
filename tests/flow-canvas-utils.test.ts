@@ -210,6 +210,39 @@ describe("structural layout — number references never move nodes", () => {
   });
 });
 
+describe("Combine layout — picked sources never move the node", () => {
+  it("keeps a combine glued to its chain anchor when it references another app", () => {
+    const nodes = [N("a", "app"), N("f", "filter"), N("c", "combine"), N("b", "app")];
+    const chain = [E("a", "f"), E("f", "c")];
+    const withRef = [...chain, E("b", "c", { targetHandle: "src" })];
+    // Picking the second app as a source changes NOTHING about the layout or numbering.
+    expect(computeVerticalLayout(nodes, withRef)).toEqual(computeVerticalLayout(nodes, chain));
+    expect(computeStepNumbers(nodes, withRef)).toEqual(computeStepNumbers(nodes, chain));
+    // The reference edge is not structural, and the referenced app is still a line end.
+    expect(structuralEdges(nodes, withRef).map((e) => e.id)).toEqual(chain.map((e) => e.id));
+    expect(terminalIds(nodes, withRef).has("b")).toBe(true);
+  });
+
+  it("centres a combine that merges two sibling branches of one split", () => {
+    const hub = N("p", "paths", { config: { paths: [{ id: "p1", label: "A" }, { id: "p2", label: "B" }] } });
+    const nodes = [N("a", "app"), hub, N("f1", "filter"), N("f2", "filter"), N("c", "combine")];
+    const edges = [
+      E("a", "p"),
+      E("p", "f1", { sourceHandle: "p1" }),
+      E("p", "f2", { sourceHandle: "p2" }),
+      E("f1", "c"), // chain anchor (added after Path A's step)
+      E("f2", "c", { targetHandle: "src" }), // merges in Path B
+    ];
+    const pos = computeVerticalLayout(nodes, edges);
+    // Branch lanes fan out symmetrically; the merge sits centred between + below them.
+    expect(pos.get("f1")!.x).toBeLessThan(0);
+    expect(pos.get("f2")!.x).toBeGreaterThan(0);
+    expect(pos.get("c")!.x).toBe(0);
+    expect(pos.get("c")!.y).toBeGreaterThan(pos.get("f1")!.y);
+    expect(pos.get("c")!.y).toBeGreaterThan(pos.get("f2")!.y);
+  });
+});
+
 describe("flowChecks (Flow check rail)", () => {
   it("explains that a grouped aggregate can't feed a formula", () => {
     const app = N("a", "app", { config: { connectionId: "c", source: "gsheets" } });

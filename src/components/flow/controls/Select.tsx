@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Popover } from "./Popover";
 
-export type Option = { value: string; label: string; hint?: string; group?: string };
+export type Option = { value: string; label: string; hint?: string; group?: string; disabled?: boolean };
 
 const BTN = "flex w-full items-center justify-between gap-2 rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-left text-sm hover:border-neutral-400 focus:border-neutral-400 focus:outline-none";
 
@@ -72,7 +72,7 @@ export function Select({
     } else if (e.key === "Enter") {
       e.preventDefault();
       const o = filtered[active];
-      if (o) pick(o.value);
+      if (o && !o.disabled) pick(o.value);
     }
   };
 
@@ -144,13 +144,16 @@ export function Select({
                   type="button"
                   role="option"
                   aria-selected={o.value === value}
-                  onClick={() => pick(o.value)}
+                  aria-disabled={o.disabled || undefined}
+                  onClick={() => {
+                    if (!o.disabled) pick(o.value);
+                  }}
                   onMouseEnter={() => setActive(i)}
-                  className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm ${i === active ? "bg-neutral-100" : ""}`}
+                  className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-neutral-100" : ""}`}
                 >
                   <span className="min-w-0">
-                    <span className={`block truncate ${o.value === value ? "font-medium text-neutral-900" : "text-neutral-700"}`}>{o.label}</span>
-                    {o.hint && <span className="block truncate text-[10px] text-neutral-400">{o.hint}</span>}
+                    <span className={`block ${o.disabled ? "" : "truncate"} ${o.value === value ? "font-medium text-neutral-900" : "text-neutral-700"}`}>{o.label}</span>
+                    {o.hint && <span className={`block text-[10px] text-neutral-400 ${o.disabled ? "whitespace-normal" : "truncate"}`}>{o.hint}</span>}
                   </span>
                   {o.value === value && <span className="shrink-0 text-neutral-500">✓</span>}
                 </button>

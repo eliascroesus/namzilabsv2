@@ -319,7 +319,14 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const setCombineSources = useCallback(
     (nodeId: string, sourceIds: string[]) => {
       commit();
-      setEdges((es) => [...es.filter((e) => e.target !== nodeId), ...sourceIds.map((sid) => ({ id: rid(), type: "insert", source: sid, target: nodeId }))]);
+      setEdges((es) => {
+        // The step's place in the line is its first plain (chain) edge — created when it
+        // was added after a step. The picker NEVER touches it: picked sources live on
+        // separate "src" reference edges, so choosing data can't move or re-route the node.
+        const anchor = es.find((e) => e.target === nodeId && e.targetHandle == null);
+        const kept = es.filter((e) => e.target !== nodeId || e === anchor);
+        return [...kept, ...sourceIds.map((sid) => ({ id: rid(), type: "insert", source: sid, target: nodeId, targetHandle: "src" }))];
+      });
       markDirtyFrom(nodeId);
     },
     [commit, setEdges, markDirtyFrom],
@@ -414,6 +421,30 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       }
     },
     [commit, nodes, edges, sEdges, setNodes, setEdges],
+  );
+
+  // A branch's entry mode (Custom rules / Always run / Fallback) is edited from the
+  // branch head's own panel (Zapier-style) but stored on the hub's path entry, where
+  // the engine reads it. Switching away from custom clears the head's now-unused rules.
+  const setBranchMode = useCallback(
+    (hubId: string, pathId: string, headId: string, mode: string) => {
+      commit();
+      setNodes((ns) =>
+        ns.map((n) => {
+          if (n.id === hubId) {
+            const paths = ((n.data.config as { paths?: Array<{ id: string; label: string; mode?: string }> }).paths) ?? [];
+            return { ...n, data: { ...n.data, config: { ...n.data.config, paths: paths.map((p) => (p.id === pathId ? { ...p, mode } : p)) } } };
+          }
+          if (n.id === headId && mode !== "custom") {
+            return { ...n, data: { ...n.data, config: { ...n.data.config, combinator: "and", rules: [], dateRange: undefined } } };
+          }
+          return n;
+        }),
+      );
+      // A mode change re-routes records for every lane (fallback depends on siblings).
+      markDirtyFrom(hubId);
+    },
+    [commit, setNodes, markDirtyFrom],
   );
 
   // Delete from a card's kebab. A plain step reconnects its neighbours (stays linear);
@@ -568,9 +599,33 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   );
 
   const selectedInputs = useMemo<InputDescriptor[]>(
-    () => (selected ? describeInputs({ selectedId: selected.id, nodes, edges, titleOf: (n) => nodeTitle(String(n.type) as NodeType, n.data) }) : []),
-    [selected, nodes, edges],
+    () => (selected ? describeInputs({ selectedId: selected.id, nodes, edges, stepNoById, titleOf: (n) => nodeTitle(String(n.type) as NodeType, n.data) }) : []),
+    [selected, nodes, edges, stepNoById],
   );
+
+  // If the selected step is a branch head (the first step of a Paths branch), its panel
+  // shows the entry-mode dropdown (Custom rules / Always run / Fallback) — the mode
+  // itself lives on the hub's path entry.
+  const branch = useMemo(() => {
+    if (!selected || selected.type !== "filter") return null;
+    const inEdge = sEdges.find((e) => e.target === selected.id);
+    if (!inEdge?.sourceHandle) return null;
+    const hub = nodes.find((n) => n.id === inEdge.source);
+    if (!hub || hub.type !== "paths") return null;
+    const cfg = hub.data.config as { paths?: Array<{ id: string; label: string; mode?: string }>; fallbackId?: string };
+    const entry = (cfg.paths ?? []).find((p) => p.id === inEdge.sourceHandle);
+    if (!entry) return null; // a legacy fallback lane has no path entry — no dropdown
+    const siblings = (cfg.paths ?? []).filter((p) => p.id !== entry.id);
+    const hubId = hub.id;
+    const pathId = entry.id;
+    const headId = selected.id;
+    return {
+      mode: entry.mode ?? "custom",
+      siblingHasFallback: siblings.some((p) => (p.mode ?? "custom") === "fallback") || !!cfg.fallbackId,
+      siblingHasAlways: siblings.some((p) => (p.mode ?? "custom") === "always"),
+      set: (m: string) => setBranchMode(hubId, pathId, headId, m),
+    };
+  }, [selected, sEdges, nodes, setBranchMode]);
 
   // Candidate steps for wiring multi-input steps (exclude self + descendants).
   const candidates = useMemo(() => {
@@ -627,17 +682,30 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     setPublishWarning(null);
     setReviewOpen(true);
   }, [endpoints]);
-  // Date fields across the flow — offered as a metric's "Time reference" (dashboard axis).
-  const timeFieldOptions = useMemo<Array<{ value: string; label: string }>>(() => {
-    const seen = new Map<string, string>();
-    seen.set("occurredAt", "When it happened");
+  // Every field from every tested step — offered as a metric's "Time reference" (which
+  // value says WHEN each record happened). Date-typed fields float to the top, but ANY
+  // field is pickable: a Sheets "Timestamp" column often reads as text, and it still
+  // works as long as its values parse as dates.
+  const timeFieldOptions = useMemo<Array<{ value: string; label: string; hint?: string }>>(() => {
+    type Opt = { value: string; label: string; hint?: string; date: boolean; step: number };
+    const seen = new Map<string, Opt>();
+    seen.set("occurredAt", { value: "occurredAt", label: "When it happened", hint: "built-in", date: true, step: -1 });
     for (const n of nodes) {
-      for (const f of n.data.lastTest?.outputSchema ?? []) {
-        if (f.type === "date" && !seen.has(f.path)) seen.set(f.path, f.label);
+      const t = n.data.lastTest;
+      if (t?.status !== "ok") continue;
+      const step = stepNoById.get(n.id) ?? 999;
+      const title = nodeTitle(String(n.type) as NodeType, n.data);
+      for (const f of t.outputSchema ?? []) {
+        if (f.path.startsWith("__")) continue;
+        const prev = seen.get(f.path);
+        if (prev && prev.step <= step) continue; // keep the earliest step's provenance
+        seen.set(f.path, { value: f.path, label: f.label, hint: `${step}. ${title}`, date: f.type === "date", step });
       }
     }
-    return [...seen.entries()].map(([value, label]) => ({ value, label }));
-  }, [nodes]);
+    return [...seen.values()]
+      .sort((a, b) => (a.date === b.date ? a.step - b.step : a.date ? -1 : 1))
+      .map(({ value, label, hint }) => ({ value, label, hint }));
+  }, [nodes, stepNoById]);
   const inDegreeById = useMemo(() => {
     const m = new Map<string, number>();
     for (const n of nodes) m.set(n.id, 0);
@@ -687,20 +755,43 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   // its own mandatory conditions step.
   const displayEdges = useMemo(() => {
     const compareIds = new Set(nodes.filter(isCompareNode).map((n) => n.id));
+    // Chain ancestors per node, used to hide a Combine reference that points at a step
+    // already on its own line (that data flows in through the chain — a second line
+    // would just double the connector).
+    const ancestorCache = new Map<string, Set<string>>();
+    const chainAncestors = (id: string): Set<string> => {
+      const hit = ancestorCache.get(id);
+      if (hit) return hit;
+      const out = new Set<string>();
+      const stack = [id];
+      while (stack.length) {
+        const cur = stack.pop()!;
+        for (const e of sEdges) {
+          if (e.target === cur && !out.has(e.source)) {
+            out.add(e.source);
+            stack.push(e.source);
+          }
+        }
+      }
+      ancestorCache.set(id, out);
+      return out;
+    };
     const seen = new Set<string>();
     const out: Edge[] = [];
     for (const e of edges) {
       // A compare step's number references are picked in the panel, never drawn as lines.
       if (compareIds.has(e.target) && (e.targetHandle === "a" || e.targetHandle === "b")) continue;
-      // Collapse any duplicate line between the same two points (e.g. a source picked
-      // that already sits on this flow line) so the canvas never shows doubled connectors.
-      const key = `${e.source}::${e.sourceHandle ?? ""}->${e.target}::${e.targetHandle ?? ""}`;
+      // A Combine reference along its own line is invisible; a cross-lane one is drawn
+      // (without a "+" — you can't insert on a reference).
+      if (e.targetHandle === "src" && chainAncestors(e.target).has(e.source)) continue;
+      // Collapse duplicate lines between the same two nodes (chain + reference pair).
+      const key = `${e.source}::${e.sourceHandle ?? ""}->${e.target}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge } });
+      out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle || e.targetHandle === "src" ? undefined : insertOnEdge } });
     }
     return out;
-  }, [nodes, edges, insertOnEdge]);
+  }, [nodes, edges, sEdges, insertOnEdge]);
 
   const empty = nodes.length === 0;
 
@@ -790,6 +881,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             testing={testingId === selected.id}
             numberGroups={numberGroups}
             datasetCandidates={candidates.dataset}
+            branch={branch}
             onChange={(patch) => updateConfig(selected.id, patch)}
             onRename={(v) => renameNode(selected.id, v)}
             onTest={() => testNode(selected.id)}
@@ -798,7 +890,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             onSetSources={(ids) => setCombineSources(selected.id, ids)}
             onAddBranch={() => addBranch(selected.id)}
             onRemoveBranch={(pid) => removeBranch(selected.id, pid)}
-            onSetFallback={(on) => setFallback(selected.id, on)}
           />
         )}
       </div>

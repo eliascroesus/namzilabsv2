@@ -46,7 +46,7 @@ export function ReviewPublishModal({
 }: {
   endpoints: Endpoint[];
   metrics: MetricSpecT[];
-  timeFieldOptions: Array<{ value: string; label: string }>;
+  timeFieldOptions: Array<{ value: string; label: string; hint?: string }>;
   publishing: boolean;
   error: string | null;
   warning: string | null;
@@ -103,24 +103,27 @@ export function ReviewPublishModal({
                       </div>
                     </div>
                     {(m.viz === "line" || m.viz === "bar") && (
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="mb-1 block text-xs font-medium text-neutral-600">Time reference</span>
-                          <Select
-                            value={m.timeField ?? ""}
-                            width={210}
-                            searchable
-                            placeholder="A date field…"
-                            options={[{ value: "", label: "None (single bar/point)" }, ...timeFieldOptions]}
-                            onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
-                          />
-                        </div>
-                        {m.timeField && (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <span className="mb-1 block text-xs font-medium text-neutral-600">Group by</span>
-                            <Select value={m.timeUnit ?? "month"} width={210} options={TIME_UNIT_OPTIONS} onChange={(v) => set(ep.nodeId, { timeUnit: v })} />
+                            <span className="mb-1 block text-xs font-medium text-neutral-600">Time reference</span>
+                            <Select
+                              value={m.timeField ?? ""}
+                              width={260}
+                              searchable
+                              placeholder="Pick a field…"
+                              options={[{ value: "", label: "None (single bar/point)" }, ...timeFieldOptions]}
+                              onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
+                            />
                           </div>
-                        )}
+                          {m.timeField && (
+                            <div>
+                              <span className="mb-1 block text-xs font-medium text-neutral-600">Group by</span>
+                              <Select value={m.timeUnit ?? "month"} width={210} options={TIME_UNIT_OPTIONS} onChange={(v) => set(ep.nodeId, { timeUnit: v })} />
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-neutral-400">Which value says when each record happened — any field from any step (e.g. a Timestamp column from your sheet).</p>
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-2">

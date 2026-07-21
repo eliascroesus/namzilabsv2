@@ -186,6 +186,55 @@ describe("Combine node", () => {
     expect((await run(g)).outputs[0].tile.value).toBe(3);
   });
 
+  it("new edge shape: a chain input plus 'src' reference inputs combine the same way", async () => {
+    await seedTwoSources();
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN, source: "a" }),
+        N("b", "app", { connectionId: CONN, source: "b" }),
+        N("c", "combine", { mode: "stack" }),
+        N("agg", "aggregate", { aggregation: "count" }),
+        N("o", "output", {}),
+      ],
+      // The chain edge holds the step's place in the line; picked sources ride "src".
+      [E("a", "c"), ET("b", "c", "src"), E("c", "agg"), E("agg", "o")],
+    );
+    expect((await run(g)).outputs[0].tile.value).toBe(4);
+  });
+
+  it("deduping fills property gaps instead of overwriting real values with blanks", async () => {
+    const mk = (source: string, props: Record<string, unknown>) =>
+      db.insert(events).values({
+        eventId: `${source}:${randomUUID()}`,
+        orgId: ORG,
+        connectionId: CONN,
+        source,
+        eventType: "lead",
+        subject: "y",
+        occurredAt: new Date(Date.now() - 86_400_000),
+        value: null,
+        properties: props,
+      });
+    await mk("a", { plan: "pro" });
+    await mk("b", { plan: "" });
+    const g = (wins: "first" | "last") =>
+      G(
+        [
+          N("a", "app", { connectionId: CONN, source: "a" }),
+          N("b", "app", { connectionId: CONN, source: "b" }),
+          N("c", "combine", { mode: "dedupe", identityField: "subject", sourceWins: wins }),
+        ],
+        [E("a", "c"), E("b", "c")],
+      );
+    // Whichever source wins, the blank plan never erases the real one — collisions
+    // resolve on the backend, so the builder needs no scary overwrite warning.
+    for (const wins of ["first", "last"] as const) {
+      const r = await run(g(wins));
+      const c = r.nodes.get("c") as { sample: Array<{ properties: Record<string, unknown> }> };
+      expect(c.sample[0].properties.plan).toBe("pro");
+    }
+  });
+
   it("Match mode: the chosen base source controls which records survive", async () => {
     await ev({ source: "a", eventType: "lead", subject: "x" });
     await ev({ source: "a", eventType: "lead", subject: "y" });
@@ -291,44 +340,45 @@ describe("Paths node", () => {
     expect(other.tile.value).toBe(1);
   });
 
-  it("new model: branches self-filter and the fallback catches the rest (overlap)", async () => {
+  it("a fallback branch receives only records matching no custom branch", async () => {
     await ev({ eventType: "booked" });
     await ev({ eventType: "canceled" });
     await ev({ eventType: "noshow" });
     const g = G(
       [
         N("a", "app", { connectionId: CONN }),
-        N("p", "paths", { paths: [{ id: "p1", label: "Booked" }, { id: "p2", label: "Canceled" }], fallbackId: "fb", fallbackLabel: "Other", routing: "overlap" }),
+        N("p", "paths", { paths: [{ id: "p1", label: "Booked" }, { id: "p2", label: "Canceled" }, { id: "p3", label: "Everything else", mode: "fallback" }] }),
         N("f1", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "booked" }] }),
         N("f2", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "canceled" }] }),
-        N("aggF", "aggregate", { aggregation: "count" }),
+        N("f3", "filter", { combinator: "and", rules: [] }),
       ],
-      [E("a", "p"), EH("p", "f1", "p1"), EH("p", "f2", "p2"), EH("p", "aggF", "fb")],
+      [E("a", "p"), EH("p", "f1", "p1"), EH("p", "f2", "p2"), EH("p", "f3", "p3")],
     );
     const r = await run(g);
-    // Each branch receives all 3 records, then narrows them in its own conditions step.
+    // Custom branches receive everything and narrow it in their own conditions step.
     expect(r.nodes.get("f1")!.recordsIn).toBe(3);
     expect(r.nodes.get("f1")!.recordsOut).toBe(1);
     expect(r.nodes.get("f2")!.recordsOut).toBe(1);
-    // Fallback = records matching neither branch's conditions (the noshow).
-    expect(r.nodes.get("aggF")!.recordsIn).toBe(1);
+    // The fallback branch gets only the record neither custom branch matched (noshow).
+    expect(r.nodes.get("f3")!.recordsIn).toBe(1);
+    expect(r.nodes.get("f3")!.recordsOut).toBe(1);
   });
 
-  it("exclusive routing sends each record down only the first matching path", async () => {
+  it("an always-run branch receives every record", async () => {
     await ev({ eventType: "booked" });
-    await ev({ eventType: "booked" });
+    await ev({ eventType: "canceled" });
     const g = G(
       [
         N("a", "app", { connectionId: CONN }),
-        N("p", "paths", { paths: [{ id: "p1", label: "A" }, { id: "p2", label: "B" }], routing: "exclusive" }),
-        // Both branches would match "booked"; exclusive means only the first one gets them.
+        N("p", "paths", { paths: [{ id: "p1", label: "Booked" }, { id: "p2", label: "All records", mode: "always" }] }),
         N("f1", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "booked" }] }),
-        N("f2", "filter", { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "booked" }] }),
+        N("f2", "filter", { combinator: "and", rules: [] }),
       ],
       [E("a", "p"), EH("p", "f1", "p1"), EH("p", "f2", "p2")],
     );
     const r = await run(g);
-    expect(r.nodes.get("f1")!.recordsIn).toBe(2);
-    expect(r.nodes.get("f2")!.recordsIn).toBe(0);
+    expect(r.nodes.get("f1")!.recordsOut).toBe(1);
+    expect(r.nodes.get("f2")!.recordsIn).toBe(2);
+    expect(r.nodes.get("f2")!.recordsOut).toBe(2);
   });
 });

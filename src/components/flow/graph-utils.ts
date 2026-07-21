@@ -58,16 +58,17 @@ export function isCompareNode(n: FNode): boolean {
 
 /**
  * The edges that define the flow's SHAPE — the line the user reads. A compare step's
- * a/b number edges are data references chosen in the panel; once the step has a plain
- * chain edge holding its place in the line, its references are excluded here so that
- * changing which numbers it compares can never move any node. (A legacy compare step
- * without a plain chain edge keeps its "a" edge as its anchor so it doesn't float.)
+ * a/b number edges and a Combine's picked-source edges (targetHandle "src") are data
+ * references chosen in the panel; they are excluded here so that changing which data a
+ * step reads can never move any node. (A legacy compare step without a plain chain edge
+ * keeps its "a" edge as its anchor so it doesn't float.)
  */
 export function structuralEdges(nodes: FNode[], edges: Edge[]): Edge[] {
   const compareIds = new Set(nodes.filter(isCompareNode).map((n) => n.id));
   const hasPlainIn = new Set<string>();
   for (const e of edges) if (compareIds.has(e.target) && e.targetHandle == null) hasPlainIn.add(e.target);
   return edges.filter((e) => {
+    if (e.targetHandle === "src") return false;
     if (!compareIds.has(e.target)) return true;
     if (e.targetHandle === "b") return false;
     if (e.targetHandle === "a") return !hasPlainIn.has(e.target);
@@ -110,31 +111,87 @@ export function computeStepNumbers(nodes: FNode[], allEdges: Edge[]): Map<string
  * Managed top-to-bottom layout. Positions are always computed (users never place
  * nodes): depth flows downward via longest-path layering, and each layer is centred
  * horizontally so branches (Paths) fan out symmetrically. Only structural (chain)
- * edges shape the layout — a compare step's number references never move anything.
+ * edges shape the layout — a step's data references (a compare's numbers, a Combine's
+ * picked sources) NEVER move anything. The one deliberate exception: a Combine that
+ * merges two or more sibling branches of the same split is centred between (and below)
+ * those branches — that merge IS the flow's shape.
  */
 export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<string, { x: number; y: number }> {
-  const edges = structuralEdges(nodes, allEdges);
+  const structural = structuralEdges(nodes, allEdges);
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+
+  const structuralIncoming = new Map<string, Array<{ source: string; handle: string | null }>>();
+  for (const e of structural) {
+    if (!structuralIncoming.has(e.target)) structuralIncoming.set(e.target, []);
+    structuralIncoming.get(e.target)!.push({ source: e.source, handle: e.sourceHandle ?? null });
+  }
+  // A Combine's picked sources (reference edges) — never structural, but consulted below
+  // to detect a genuine branch merge.
+  const refSourcesBy = new Map<string, string[]>();
+  for (const e of allEdges) {
+    if (e.targetHandle !== "src" || !nodeById.has(e.source) || !nodeById.has(e.target)) continue;
+    if (!refSourcesBy.has(e.target)) refSourcesBy.set(e.target, []);
+    refSourcesBy.get(e.target)!.push(e.source);
+  }
+
+  /** The Paths branch a node lives in ("hubId::handle"), walking up its chain. */
+  const branchKeyOf = (startId: string): string | null => {
+    let cur: string | undefined = startId;
+    const guard = new Set<string>();
+    while (cur && !guard.has(cur)) {
+      guard.add(cur);
+      const up: { source: string; handle: string | null } | undefined = structuralIncoming.get(cur)?.[0];
+      if (!up) return null;
+      const parent = nodeById.get(up.source);
+      if (parent && parent.type === "paths" && up.handle) return `${up.source}::${up.handle}`;
+      cur = up.source;
+    }
+    return null;
+  };
+
+  // Nodes with multiple inputs (chain + references, or legacy plain multi-in Combine):
+  // decide once whether each is a genuine sibling-branch merge (centre it) or a chain
+  // step that merely references extra data (keep it glued to its anchor).
+  type Merge = { centering: boolean; allSources: string[]; anchor: { source: string; handle: string | null } | null };
+  const mergeInfo = new Map<string, Merge>();
+  for (const n of nodes) {
+    const refs = refSourcesBy.get(n.id) ?? [];
+    const chainIns = structuralIncoming.get(n.id) ?? [];
+    if (refs.length === 0 && chainIns.length <= 1) continue;
+    const anchor = chainIns[0] ?? null;
+    const allSources = [...new Set([...chainIns.map((i) => i.source), ...refs])];
+    const keys = allSources.map(branchKeyOf).filter((k): k is string => k != null);
+    const hubs = new Set(keys.map((k) => k.split("::")[0]));
+    const centering = (new Set(keys).size >= 2 && hubs.size === 1) || (!anchor && refs.length > 0);
+    mergeInfo.set(n.id, { centering, allSources, anchor });
+  }
+
+  // Depth: longest path over chain edges, plus a centred merge's reference edges — so a
+  // merge sits below every branch it joins (and its own chain keeps flowing under it).
+  const depthEdges: Array<{ source: string; target: string }> = structural.map((e) => ({ source: e.source, target: e.target }));
+  for (const [id, info] of mergeInfo) {
+    if (info.centering) for (const s of refSourcesBy.get(id) ?? []) depthEdges.push({ source: s, target: id });
+  }
   const indeg = new Map<string, number>();
   const adj = new Map<string, string[]>();
   for (const n of nodes) {
     indeg.set(n.id, 0);
     adj.set(n.id, []);
   }
-  for (const e of edges) {
+  for (const e of depthEdges) {
     if (!indeg.has(e.target) || !adj.has(e.source)) continue;
     indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
     adj.get(e.source)!.push(e.target);
   }
   const depth = new Map<string, number>();
-  const indeg2 = new Map(indeg);
   const queue = [...indeg.entries()].filter(([, d]) => d === 0).map(([id]) => id);
   for (const id of queue) depth.set(id, 0);
   while (queue.length) {
     const id = queue.shift()!;
     for (const nx of adj.get(id) ?? []) {
       depth.set(nx, Math.max(depth.get(nx) ?? 0, (depth.get(id) ?? 0) + 1));
-      indeg2.set(nx, (indeg2.get(nx) ?? 0) - 1);
-      if (indeg2.get(nx) === 0) queue.push(nx);
+      indeg.set(nx, (indeg.get(nx) ?? 0) - 1);
+      if (indeg.get(nx) === 0) queue.push(nx);
     }
   }
   for (const n of nodes) if (!depth.has(n.id)) depth.set(n.id, 0);
@@ -142,12 +199,6 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
   // Horizontal position: propagate a lane offset down each branch so a Paths split sends
   // its branches cleanly to the sides and every step in a branch stays in that branch's
   // column (instead of drifting back to centre). Non-branching chains stay at x = 0.
-  const incoming = new Map<string, Array<{ source: string; handle: string | null }>>();
-  for (const e of edges) {
-    if (!incoming.has(e.target)) incoming.set(e.target, []);
-    incoming.get(e.target)!.push({ source: e.source, handle: e.sourceHandle ?? null });
-  }
-  const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const pathIds = (n: FNode | undefined): string[] => {
     if (!n) return [];
     const paths = (n.data.config?.paths as Array<{ id: string }> | undefined) ?? [];
@@ -158,50 +209,34 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
   };
   const SPREAD = 320;
   const xById = new Map<string, number>();
+  /** X under one incoming edge: the parent's lane, offset if it's a Paths branch. */
+  const laneX = (edge: { source: string; handle: string | null }): number => {
+    const px = xById.get(edge.source) ?? 0;
+    const parent = nodeById.get(edge.source);
+    if (parent && parent.type === "paths" && edge.handle) {
+      const ids = pathIds(parent);
+      const idx = Math.max(0, ids.indexOf(edge.handle));
+      return px + (idx - (ids.length - 1) / 2) * SPREAD;
+    }
+    return px;
+  };
   const ordered = [...nodes].sort((a, b) => (depth.get(a.id) ?? 0) - (depth.get(b.id) ?? 0));
   for (const n of ordered) {
-    const ins = incoming.get(n.id) ?? [];
-    if (ins.length === 0) {
+    const ins = structuralIncoming.get(n.id) ?? [];
+    const info = mergeInfo.get(n.id);
+    if (info) {
+      if (info.centering) {
+        const uniqueXs = [...new Set(info.allSources.map((s) => xById.get(s) ?? 0))];
+        xById.set(n.id, uniqueXs.reduce((a, b) => a + b, 0) / Math.max(1, uniqueXs.length));
+      } else {
+        // Anchored: exactly where its chain predecessor puts it. Reference sources
+        // (whatever data it pulls in) never move it.
+        xById.set(n.id, info.anchor ? laneX(info.anchor) : 0);
+      }
+    } else if (ins.length === 0) {
       xById.set(n.id, 0);
-    } else if (ins.length === 1) {
-      const { source, handle } = ins[0];
-      const px = xById.get(source) ?? 0;
-      const parent = nodeById.get(source);
-      if (parent && parent.type === "paths" && handle) {
-        const ids = pathIds(parent);
-        const idx = Math.max(0, ids.indexOf(handle));
-        xById.set(n.id, px + (idx - (ids.length - 1) / 2) * SPREAD);
-      } else {
-        xById.set(n.id, px);
-      }
     } else {
-      // Multiple structural inputs — in practice only Combine. Keep its position stable:
-      //  - if it merges sibling branches of a single Paths split, centre it between them;
-      //  - otherwise it stays in its chain anchor's lane (the first input — the step it was
-      //    added after), so pulling in an off-to-the-side source (a Sheet, another app)
-      //    never drags the node out of its line. Position follows the flow, not the data.
-      const branchKeyOf = (startId: string): string | null => {
-        let cur: string | undefined = startId;
-        const guard = new Set<string>();
-        while (cur && !guard.has(cur)) {
-          guard.add(cur);
-          const up: { source: string; handle: string | null } | undefined = incoming.get(cur)?.[0];
-          if (!up) return null;
-          const parent = nodeById.get(up.source);
-          if (parent && parent.type === "paths" && up.handle) return `${up.source}::${up.handle}`;
-          cur = up.source;
-        }
-        return null;
-      };
-      const keys = ins.map((i) => branchKeyOf(i.source)).filter((k): k is string => k != null);
-      const hubs = new Set(keys.map((k) => k.split("::")[0]));
-      const siblingSplit = new Set(keys).size >= 2 && hubs.size === 1;
-      if (siblingSplit) {
-        const uniqueXs = [...new Set(ins.map((i) => xById.get(i.source) ?? 0))];
-        xById.set(n.id, uniqueXs.reduce((a, b) => a + b, 0) / uniqueXs.length);
-      } else {
-        xById.set(n.id, xById.get(ins[0].source) ?? 0);
-      }
+      xById.set(n.id, laneX(ins[0]));
     }
   }
 
@@ -625,8 +660,8 @@ function statusFor(node: FNode): InputDescriptor["status"] {
 }
 
 /** Describe each connected input of a node, in connection order (for Combine/Formula panels). */
-export function describeInputs(opts: { selectedId: string; nodes: FNode[]; edges: Edge[]; titleOf: (n: FNode) => string }): InputDescriptor[] {
-  const { selectedId, nodes, edges, titleOf } = opts;
+export function describeInputs(opts: { selectedId: string; nodes: FNode[]; edges: Edge[]; stepNoById?: Map<string, number>; titleOf: (n: FNode) => string }): InputDescriptor[] {
+  const { selectedId, nodes, edges, stepNoById, titleOf } = opts;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const inEdges = edges.filter((e) => e.target === selectedId);
 
@@ -635,6 +670,7 @@ export function describeInputs(opts: { selectedId: string; nodes: FNode[]; edges
     const desc: InputDescriptor = {
       nodeId: e.source,
       targetHandle: e.targetHandle ?? null,
+      stepNo: stepNoById?.get(e.source),
       title: sn ? titleOf(sn) : e.source,
       type: sn ? String(sn.type) : "?",
       status: sn ? statusFor(sn) : "untested",

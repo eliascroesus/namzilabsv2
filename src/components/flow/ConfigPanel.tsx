@@ -24,6 +24,9 @@ import { storedToValue, valueToStored, asFilterConfig } from "./panel-mappers";
 /** A reference to an earlier step, offered as a labeled pill for multi-input wiring. */
 export type StepRef = { id: string; title: string; stepNo?: number };
 
+/** Branch-head context: how records enter this Paths branch (mode lives on the hub). */
+export type BranchCtx = { mode: string; siblingHasFallback: boolean; siblingHasAlways: boolean; set: (mode: string) => void };
+
 const SELECT_BTN =
   "flex w-full items-center justify-between gap-2 rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-left text-sm hover:border-neutral-400 focus:outline-none";
 const INPUT = "w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm focus:border-neutral-400 focus:outline-none";
@@ -125,11 +128,11 @@ export function ConfigPanel({
   onRename,
   onTest,
   onAddNext,
+  branch,
   onSetInput,
   onSetSources,
   onAddBranch,
   onRemoveBranch,
-  onSetFallback,
 }: {
   node: FNode;
   stepNo?: number;
@@ -140,6 +143,7 @@ export function ConfigPanel({
   testing: boolean;
   numberGroups: DataGroup[];
   datasetCandidates: StepRef[];
+  branch: BranchCtx | null;
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
   onTest: () => void;
@@ -148,7 +152,6 @@ export function ConfigPanel({
   onSetSources: (ids: string[]) => void;
   onAddBranch: () => void;
   onRemoveBranch: (pathId: string) => void;
-  onSetFallback: (enabled: boolean) => void;
 }) {
   const type = String(node.type) as NodeType;
   const cfg = node.data.config;
@@ -199,17 +202,17 @@ export function ConfigPanel({
             inputs={inputs}
             numberGroups={numberGroups}
             datasetCandidates={datasetCandidates}
+            branch={branch}
             onChange={onChange}
             onSetInput={onSetInput}
             onSetSources={onSetSources}
             onAddBranch={onAddBranch}
             onRemoveBranch={onRemoveBranch}
-            onSetFallback={onSetFallback}
           />
 
           {/* Extra options + the test result sink to the bottom, just above the button. */}
           <div className="mt-auto space-y-4 pt-6">
-            <NodeExtras type={type} cfg={cfg} groups={groups} onChange={onChange} />
+            {!(branch && branch.mode !== "custom") && <NodeExtras type={type} cfg={cfg} groups={groups} onChange={onChange} />}
             {node.data.lastTest?.status === "ok" && <TestResults node={node} onChange={onChange} />}
           </div>
         </div>
@@ -249,12 +252,12 @@ function NodeConfig({
   inputs,
   numberGroups,
   datasetCandidates,
+  branch,
   onChange,
   onSetInput,
   onSetSources,
   onAddBranch,
   onRemoveBranch,
-  onSetFallback,
 }: {
   type: NodeType;
   cfg: Record<string, unknown>;
@@ -263,12 +266,12 @@ function NodeConfig({
   inputs: InputDescriptor[];
   numberGroups: DataGroup[];
   datasetCandidates: StepRef[];
+  branch: BranchCtx | null;
   onChange: (patch: Record<string, unknown>) => void;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
   onAddBranch: () => void;
   onRemoveBranch: (pathId: string) => void;
-  onSetFallback: (enabled: boolean) => void;
 }) {
 
   if (type === "app") {
@@ -332,10 +335,54 @@ function NodeConfig({
 
   if (type === "filter") {
     const fc = asFilterConfig(cfg);
+    const bmode = branch?.mode ?? "custom";
     return (
       <div className="space-y-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Only continue if…</p>
-        <ConditionEditor value={fc} groups={groups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />
+        {/* A branch head chooses how records enter its path (Zapier-style): custom
+            rules, always run, or fallback. The mode is stored on the hub's path entry. */}
+        {branch && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">How records enter this path</p>
+            <Select
+              value={bmode}
+              width={W}
+              options={[
+                { value: "custom", label: "Custom rules", hint: "Only records matching the conditions below continue." },
+                {
+                  value: "always",
+                  label: "Always run",
+                  disabled: branch.siblingHasFallback,
+                  hint: branch.siblingHasFallback
+                    ? "Can’t combine with a fallback branch — the fallback would never run."
+                    : "Every record continues down this path.",
+                },
+                {
+                  value: "fallback",
+                  label: "Fallback — everything else",
+                  disabled: branch.siblingHasFallback || branch.siblingHasAlways,
+                  hint: branch.siblingHasFallback
+                    ? "Another branch is already the fallback."
+                    : branch.siblingHasAlways
+                      ? "Can’t combine with an always-run branch — the fallback would never run."
+                      : "Records that match no other path’s conditions continue here.",
+                },
+              ]}
+              onChange={(v) => branch.set(v)}
+            />
+          </div>
+        )}
+        {bmode === "custom" ? (
+          <>
+            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Only continue if…</p>
+            <ConditionEditor value={fc} groups={groups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />
+          </>
+        ) : (
+          <p className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
+            {bmode === "always"
+              ? "Every record continues down this path — no conditions needed."
+              : "Records that didn’t match any other path’s conditions continue here — no conditions needed."}
+          </p>
+        )}
       </div>
     );
   }
@@ -397,43 +444,52 @@ function NodeConfig({
 
   if (type === "combine") {
     const mode = (cfg.mode as string) ?? "stack";
-    const connectedIds = inputs.map((i) => i.nodeId);
+    // The step above (the chain input) is always part of the combine and can't be
+    // removed — the picker manages only the ADDITIONAL sources, so choosing data can
+    // never re-route the step or move it on the canvas.
+    const chain = inputs.find((i) => i.targetHandle == null) ?? null;
+    const picked = inputs.filter((i) => i !== chain);
+    const pickedIds = picked.map((i) => i.nodeId);
+    const candidates = datasetCandidates.filter((c) => c.id !== chain?.nodeId);
     return (
       <div className="space-y-3">
         <div>
           <p className="mb-1 text-xs font-medium text-neutral-600">Data to combine</p>
-          {datasetCandidates.length === 0 ? (
-            <p className="text-xs text-neutral-400">Add earlier data steps to combine them here.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {connectedIds.map((id, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <Select
-                    value={id}
-                    width={320}
-                    placeholder="Choose a step…"
-                    options={datasetCandidates.filter((c) => c.id === id || !connectedIds.includes(c.id)).map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
-                    onChange={(v) => onSetSources(connectedIds.map((x, i) => (i === idx ? v : x)))}
-                  />
-                  <button type="button" onClick={() => onSetSources(connectedIds.filter((_, i) => i !== idx))} className="shrink-0 text-xs text-neutral-400 hover:text-red-600">
-                    Remove
-                  </button>
-                </div>
-              ))}
-              {connectedIds.length < datasetCandidates.length && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const avail = datasetCandidates.find((c) => !connectedIds.includes(c.id));
-                    if (avail) onSetSources([...connectedIds, avail.id]);
-                  }}
-                  className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-xs text-neutral-600 hover:border-neutral-400 hover:text-neutral-800"
-                >
-                  <span className="text-sm leading-none">+</span> Add data source
+          <div className="space-y-1.5">
+            {chain && (
+              <div className="flex items-center justify-between gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5">
+                <span className="min-w-0 truncate text-sm text-neutral-700">{chain.stepNo != null ? `${chain.stepNo}. ` : ""}{chain.title}</span>
+                <span className="shrink-0 text-[10px] uppercase tracking-wide text-neutral-400">the step above</span>
+              </div>
+            )}
+            {picked.map((inp, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <Select
+                  value={inp.nodeId}
+                  width={320}
+                  placeholder="Choose a step…"
+                  options={candidates.filter((c) => c.id === inp.nodeId || !pickedIds.includes(c.id)).map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
+                  onChange={(v) => onSetSources(pickedIds.map((x, i) => (i === idx ? v : x)))}
+                />
+                <button type="button" onClick={() => onSetSources(pickedIds.filter((_, i) => i !== idx))} className="shrink-0 text-xs text-neutral-400 hover:text-red-600">
+                  Remove
                 </button>
-              )}
-            </div>
-          )}
+              </div>
+            ))}
+            {pickedIds.length < candidates.length && (
+              <button
+                type="button"
+                onClick={() => {
+                  const avail = candidates.find((c) => !pickedIds.includes(c.id));
+                  if (avail) onSetSources([...pickedIds, avail.id]);
+                }}
+                className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-xs text-neutral-600 hover:border-neutral-400 hover:text-neutral-800"
+              >
+                <span className="text-sm leading-none">+</span> Add data source
+              </button>
+            )}
+            {candidates.length === 0 && picked.length === 0 && <p className="text-xs text-neutral-400">Add earlier data steps to combine them here.</p>}
+          </div>
         </div>
 
         <Field label="How should they be combined?">
@@ -483,51 +539,29 @@ function NodeConfig({
   }
 
   if (type === "paths") {
-    const paths = (cfg.paths as Array<{ id: string; label: string }>) ?? [];
-    const routing = String(cfg.routing ?? "overlap");
-    const fallbackOn = !!cfg.fallbackId;
+    // The hub configures NOTHING except its branches. How records enter a branch
+    // (custom rules / always run / fallback) is chosen inside that branch's own
+    // "Path conditions" step — exactly where the rules live.
+    const paths = (cfg.paths as Array<{ id: string; label: string; mode?: string }>) ?? [];
     const setLabel = (i: number, label: string) => onChange({ paths: paths.map((p, j) => (j === i ? { ...p, label } : p)) });
     return (
       <div className="space-y-3">
-        <p className="text-xs text-neutral-500">This step splits your records into branches. Set each branch’s “only continue if” conditions in its own <b>Path conditions</b> step on the canvas.</p>
+        <p className="text-xs text-neutral-500">
+          This step only splits your flow into branches. Open a branch’s own <b>Path conditions</b> step to choose how records enter it — custom rules, always run, or fallback.
+        </p>
         {paths.map((p, i) => (
           <div key={p.id} className="flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50/40 px-2 py-1.5">
             <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-pink-700">Branch {i + 1}</span>
             <input value={p.label} onChange={(e) => setLabel(i, e.target.value)} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
+            {(p.mode ?? "custom") !== "custom" && (
+              <span className="shrink-0 rounded bg-pink-100 px-1.5 py-0.5 text-[10px] font-medium text-pink-700">{p.mode === "always" ? "always runs" : "fallback"}</span>
+            )}
             {paths.length > 1 && (
               <button onClick={() => onRemoveBranch(p.id)} className="shrink-0 text-[11px] text-red-600 hover:underline" title="Remove this branch and its steps">Remove</button>
             )}
           </div>
         ))}
         <button onClick={onAddBranch} className="w-full rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">+ Add branch</button>
-
-        <Field label="How should records flow?">
-          <Select
-            value={routing}
-            width={W}
-            options={[
-              { value: "overlap", label: "Down every path it matches" },
-              { value: "exclusive", label: "Down only the first path it matches" },
-            ]}
-            onChange={(v) => onChange({ routing: v })}
-          />
-        </Field>
-        <p className="-mt-1 text-xs text-neutral-400">
-          {routing === "overlap"
-            ? "A record can continue down more than one branch (always continue)."
-            : "A record stops at the first branch whose conditions it meets."}
-        </p>
-
-        <label className="flex items-start gap-2 rounded-md border border-neutral-200 px-2 py-2 text-xs text-neutral-700">
-          <input type="checkbox" checked={fallbackOn} onChange={(e) => onSetFallback(e.target.checked)} className="mt-0.5 h-3.5 w-3.5" />
-          <span>Add a “fallback” branch for records that match no other path (everything else).</span>
-        </label>
-        {fallbackOn && (
-          <div className="flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50/40 px-2 py-1.5">
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-pink-700">Fallback</span>
-            <input value={(cfg.fallbackLabel as string) ?? "Everything else"} onChange={(e) => onChange({ fallbackLabel: e.target.value })} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
-          </div>
-        )}
       </div>
     );
   }
