@@ -2,7 +2,6 @@ import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { listConnections } from "@/lib/connections";
 import { CONNECTOR_CATALOG, type ConnectorCatalogEntry } from "@/connectors/catalog";
-import { ConfigFieldInput } from "@/components/config-field-input";
 import { ConnectionRow } from "./ConnectionRow";
 import { connectApiKeyAction } from "./actions";
 
@@ -105,9 +104,6 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </label>
-              ))}
-              {(entry.configFields ?? []).map((f) => (
-                <ConfigFieldInput key={f.key} field={f} />
               ))}
               <button
                 type="submit"

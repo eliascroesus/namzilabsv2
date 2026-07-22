@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { calendlyConnector } from "@/connectors/calendly";
 import { googleSheetsConnector } from "@/connectors/google-sheets";
+import { isStreamScoped, catalogEntry } from "@/connectors/catalog";
 
 function jsonResponse(data: unknown) {
   return {
@@ -91,6 +92,44 @@ describe("Calendly polling", () => {
     const url = await pollWith({ scope: "group", groupUri: "https://api.calendly.com/groups/G1" });
     expect(url).toContain("group=");
     expect(url).toContain("organization=");
+  });
+});
+
+describe("Calendly is stream-scoped (scope config lives on the flow node)", () => {
+  it("is stream-scoped, and scope is a per-flow field, not a connect-time one", () => {
+    expect(isStreamScoped("calendly")).toBe(true);
+    const entry = catalogEntry("calendly")!;
+    expect(entry.flowFields?.map((f) => f.key)).toEqual(["scope", "groupUri"]);
+    expect((entry as { configFields?: unknown }).configFields).toBeUndefined();
+    // Poll-based reconciliation, no connect-time webhook.
+    expect(entry.autoWebhook).toBe(false);
+  });
+
+  it("tags event ids with the stream hash so overlapping scopes stay distinct", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        ["/users/me", { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } }],
+        ["/scheduled_events", { collection: [{ uri: "https://api.calendly.com/scheduled_events/EVT1", name: "Demo", start_time: "2026-02-01T10:00:00Z" }] }],
+      ]),
+    );
+    const rows = await calendlyConnector.poll!({ connectionId: "c1", cursor: null, credentials: { accessToken: "tok" }, config: { scope: "organization" }, streamHash: "abc123" });
+    expect(rows.records[0].eventId).toBe("calendly:c1:abc123:https://api.calendly.com/scheduled_events/EVT1");
+  });
+
+  it("listOptions('groupUri') lists the token's Calendly groups", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        ["/users/me", { resource: { current_organization: "https://api.calendly.com/organizations/O1" } }],
+        ["/groups", { collection: [{ uri: "https://api.calendly.com/groups/G1", name: "Sales" }, { uri: "https://api.calendly.com/groups/G2", name: "Success" }] }],
+      ]),
+    );
+    const opts = await calendlyConnector.listOptions!("groupUri", { connectionId: "c1", credentials: { accessToken: "tok" } });
+    expect(opts).toEqual([
+      { value: "https://api.calendly.com/groups/G1", label: "Sales" },
+      { value: "https://api.calendly.com/groups/G2", label: "Success" },
+    ]);
   });
 });
 

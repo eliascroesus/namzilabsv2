@@ -4,10 +4,8 @@ import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { getConnection, getSigningSecret, previewLatest, webhookUrlFor } from "@/lib/connections";
 import { catalogEntry } from "@/connectors/catalog";
-import { ConfigFieldInput } from "@/components/config-field-input";
 import {
   disconnectAction,
-  updateConfigAction,
   syncNewAction,
   fullResyncAction,
   reprocessAction,
@@ -31,7 +29,6 @@ export default async function ConnectionPage({
   if (!conn) notFound();
 
   const entry = catalogEntry(conn.source);
-  const config = (conn.config ?? {}) as Record<string, unknown>;
   const signingSecret = getSigningSecret(conn);
   const webhookUrl = webhookUrlFor(conn.id);
 
@@ -84,27 +81,8 @@ export default async function ConnectionPage({
           <Field label="Polling / backfill" value={entry?.poll ? "Yes" : "No"} />
         </dl>
 
-        {/* Connection-level settings (auth-domain only, e.g. Calendly webhook scope). */}
-        {entry?.configFields && entry.configFields.length > 0 && (
-          <section className="mt-8">
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Configuration</h2>
-            <form action={updateConfigAction} className="space-y-3">
-              <input type="hidden" name="id" value={conn.id} />
-              {entry.configFields.map((f) => (
-                <ConfigFieldInput
-                  key={f.key}
-                  field={f}
-                  defaultValue={typeof config[f.key] === "string" ? (config[f.key] as string) : ""}
-                />
-              ))}
-              <button className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
-                Save &amp; preview
-              </button>
-            </form>
-          </section>
-        )}
-
-        {/* Stream-scoped sources choose WHAT to pull inside each flow, not here. */}
+        {/* No data config lives here — every "what to pull" choice is on the flow's Get
+            data step, so one connected account can feed many flows differently. */}
         {entry?.flowFields && entry.flowFields.length > 0 && (
           <section className="mt-8">
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Configuration</h2>

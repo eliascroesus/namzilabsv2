@@ -3,11 +3,15 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireOrg } from "@/lib/auth";
-import { createConnection, deleteConnection, updateConnectionConfig, updateConnectionName, getConnection } from "@/lib/connections";
+import { createConnection, deleteConnection, updateConnectionName, getConnection } from "@/lib/connections";
 import { catalogEntry } from "@/connectors/catalog";
 import { inngest } from "@/inngest/client";
 
-/** Connect an API-key / token based source (Calendly, Close, Instantly, Sendblue, custom webhook). */
+/**
+ * Connect an API-key / token based source (Calendly, Close, Instantly, Sendblue, custom
+ * webhook). Auth only — there is no "what to pull" config here; that lives on each
+ * flow's Get data step.
+ */
 export async function connectApiKeyAction(formData: FormData): Promise<void> {
   const { orgId } = await requireOrg();
   const source = String(formData.get("source") ?? "");
@@ -19,11 +23,6 @@ export async function connectApiKeyAction(formData: FormData): Promise<void> {
     const value = String(formData.get(`cred_${field.key}`) ?? "").trim();
     if (value) credentials[field.key] = value;
   }
-  const config: Record<string, unknown> = {};
-  for (const field of entry.configFields ?? []) {
-    const value = String(formData.get(`cfg_${field.key}`) ?? "").trim();
-    if (value) config[field.key] = value;
-  }
   const name = String(formData.get("name") ?? "").trim() || entry.name;
 
   const conn = await createConnection({
@@ -32,7 +31,6 @@ export async function connectApiKeyAction(formData: FormData): Promise<void> {
     name,
     authType: source === "webhook" ? "secret" : "apiKey",
     credentials,
-    config,
   });
   redirect(`/connections/${conn.id}`);
 }
@@ -43,21 +41,6 @@ export async function renameConnectionAction(id: string, name: string): Promise<
   await updateConnectionName(orgId, id, name);
   revalidatePath("/integrations");
   return { ok: true };
-}
-
-export async function updateConfigAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
-  const id = String(formData.get("id") ?? "");
-  const conn = await getConnection(orgId, id);
-  if (!conn) throw new Error("connection not found");
-  const entry = catalogEntry(conn.source);
-  const patch: Record<string, unknown> = {};
-  for (const field of entry?.configFields ?? []) {
-    const value = String(formData.get(`cfg_${field.key}`) ?? "").trim();
-    if (value) patch[field.key] = value;
-  }
-  await updateConnectionConfig(orgId, id, patch);
-  redirect(`/connections/${id}?preview=1`);
 }
 
 export async function resyncAction(formData: FormData): Promise<void> {

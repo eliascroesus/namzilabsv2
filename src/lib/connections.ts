@@ -126,19 +126,6 @@ export async function updateConnectionName(orgId: string, id: string, name: stri
     .where(and(eq(connections.id, id), eq(connections.orgId, orgId)));
 }
 
-export async function updateConnectionConfig(
-  orgId: string,
-  id: string,
-  patch: Record<string, unknown>,
-): Promise<void> {
-  const conn = await getConnection(orgId, id);
-  if (!conn) throw new Error("connection not found");
-  await getDb()
-    .update(connections)
-    .set({ config: { ...(conn.config ?? {}), ...patch }, updatedAt: new Date() })
-    .where(and(eq(connections.id, id), eq(connections.orgId, orgId)));
-}
-
 export async function deleteConnection(orgId: string, id: string): Promise<void> {
   const db = getDb();
   await db.delete(connections).where(and(eq(connections.id, id), eq(connections.orgId, orgId)));

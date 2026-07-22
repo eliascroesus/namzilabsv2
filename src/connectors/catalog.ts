@@ -4,22 +4,13 @@
  * the UI stays data-driven — adding a connector is one entry here.
  */
 export type CredentialField = { key: string; label: string; placeholder?: string };
-export type ConfigField = {
-  key: string;
-  label: string;
-  placeholder?: string;
-  required?: boolean;
-  /** Optional short help text shown under the field. */
-  hint?: string;
-  /** When present, render a dropdown instead of a text input. */
-  options?: { value: string; label: string }[];
-};
 
 /**
  * A per-flow resource field set inside the Get data step (never at connect time):
- * which spreadsheet + tab, which calendar, … `dynamic` fields load their options
- * live from the provider via the connector's listOptions; `dependsOn` gates a
- * field until its prerequisites are chosen (and changing those resets it).
+ * which spreadsheet + tab, which calendar, whose Calendly meetings, … `dynamic`
+ * fields load their options live from the provider via the connector's listOptions;
+ * `dependsOn` gates a field until its prerequisites are chosen (and changing those
+ * resets it); `showWhen` hides a field until another field holds a given value.
  */
 export type FlowConfigField = {
   key: string;
@@ -30,6 +21,8 @@ export type FlowConfigField = {
   /** Load options from the provider (connector.listOptions) instead of static ones. */
   dynamic?: boolean;
   dependsOn?: string[];
+  /** Only render this field when another field currently equals `equals`. */
+  showWhen?: { key: string; equals: string };
   options?: { value: string; label: string }[];
 };
 
@@ -44,12 +37,11 @@ export type ConnectorCatalogEntry = {
   /** Whether we auto-create the provider webhook subscription on connect. */
   autoWebhook: boolean;
   credentialFields: CredentialField[];
-  /** Connection-level settings (auth-domain only, e.g. Calendly webhook scope). */
-  configFields?: ConfigField[];
   /**
-   * Flow-level resource settings (the Get data step's Configure section). A
-   * connector with flowFields is stream-scoped: each distinct config becomes its
-   * own synced stream with its own cursor, and events are tagged per stream.
+   * Flow-level resource settings (the Get data step's Configure section) — the ONLY
+   * place any "what data to pull" choice lives. A connector with flowFields is
+   * stream-scoped: each distinct config becomes its own synced stream with its own
+   * cursor, and events are tagged per stream. Connecting an account asks for auth only.
    */
   flowFields?: FlowConfigField[];
   /** Manual webhook setup note shown on the connection page when not auto. */
@@ -62,27 +54,33 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     name: "Calendly",
     description: "Booked and canceled meetings, no-shows and routing forms.",
     connect: "apiKey",
-    instant: true,
+    // Poll-based (reliable reconciliation). The scope below makes it stream-scoped, so
+    // each flow pulls exactly the meetings it wants; instant per-stream webhooks are a
+    // later enhancement.
+    instant: false,
     poll: true,
-    autoWebhook: true,
+    autoWebhook: false,
     credentialFields: [{ key: "accessToken", label: "Personal Access Token", placeholder: "eyJ..." }],
-    configFields: [
+    // Whose meetings to import is chosen per flow, in the Get data step — not here.
+    flowFields: [
       {
         key: "scope",
         label: "Fetch meetings for",
         required: true,
+        hint: "Whose Calendly meetings this flow pulls.",
         options: [
-          { value: "user", label: "Just me (User)" },
+          { value: "user", label: "Just me" },
           { value: "organization", label: "Whole organization" },
           { value: "group", label: "A specific group" },
         ],
-        hint: "Choose whose Calendly meetings to import.",
       },
       {
         key: "groupUri",
-        label: "Group URI",
-        placeholder: "https://api.calendly.com/groups/…",
-        hint: "Only required when scope is a specific group.",
+        label: "Group",
+        dynamic: true,
+        dependsOn: ["scope"],
+        showWhen: { key: "scope", equals: "group" },
+        placeholder: "Choose a group…",
       },
     ],
   },

@@ -5,8 +5,8 @@ import type {
   NormalizeContext,
   PollArgs,
   PollResult,
-  RegisterWebhookArgs,
-  RegisterWebhookResult,
+  ListOptionsArgs,
+  SourceOption,
 } from "./types";
 import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
 import { fetchJson } from "@/lib/http-client";
@@ -76,27 +76,20 @@ export const calendlyConnector: Connector = {
     return listScheduledEvents(args, n, null);
   },
 
-  async registerWebhook(args: RegisterWebhookArgs): Promise<RegisterWebhookResult> {
+  /** Live options for the Get data step's dynamic fields. "group" lists the token's
+   *  Calendly groups (only shown when scope = A specific group). */
+  async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
+    if (key !== "groupUri") return [];
     const token = token_(args.credentials);
-    const me = await fetchJson<{ resource: { current_organization: string; uri: string } }>(`${API}/users/me`, {
+    const me = await fetchJson<{ resource: { current_organization: string } }>(`${API}/users/me`, {
       headers: { authorization: `Bearer ${token}` },
     });
-    const { scope, groupUri } = scopeOf(args.config);
-    const body: Record<string, unknown> = {
-      url: args.webhookUrl,
-      events: ["invitee.created", "invitee.canceled", "invitee_no_show.created"],
-      organization: me.resource.current_organization,
-      scope,
-    };
-    // Calendly requires the matching target for user/group-scoped subscriptions.
-    if (scope === "user") body.user = me.resource.uri;
-    if (scope === "group" && groupUri) body.group = groupUri;
-    const res = await fetchJson<{ resource: { uri: string; signing_key?: string } }>(`${API}/webhook_subscriptions`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    return { signingSecret: res.resource.signing_key, externalId: res.resource.uri };
+    const params = new URLSearchParams({ organization: me.resource.current_organization, count: "100" });
+    const data = await fetchJson<{ collection: Array<{ uri: string; name?: string }> }>(
+      `${API}/groups?${params.toString()}`,
+      { headers: { authorization: `Bearer ${token}` } },
+    );
+    return (data.collection ?? []).map((g) => ({ value: g.uri, label: g.name ?? g.uri }));
   },
 };
 
@@ -133,8 +126,11 @@ async function listScheduledEvents(args: PollArgs, count: number, cursor: string
     `${API}/scheduled_events?${params.toString()}`,
     { headers: { authorization: `Bearer ${token}` } },
   );
+  // A meeting can be visible under more than one scope (e.g. "just me" and "whole
+  // organization"); tag the id with the stream so each flow's stream keeps its own copy.
+  const streamTag = args.streamHash ? `${args.streamHash}:` : "";
   return data.collection.map((ev) => ({
-    eventId: `calendly:${args.connectionId}:${str(ev["uri"])}`,
+    eventId: `calendly:${args.connectionId}:${streamTag}${str(ev["uri"])}`,
     eventType: "booked",
     subject: str(ev["name"]) ?? null,
     occurredAt: parseDate(str(ev["start_time"])) ?? new Date(),

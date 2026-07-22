@@ -323,13 +323,21 @@ function NodeConfig({
         </div>
 
         {/* Configure: what to pull — set per flow, not on the integration. Stream-scoped
-            sources (Sheets, Calendar) pick their resource here via live dropdowns. */}
+            sources (Sheets, Calendar, Calendly) pick their resource here via dropdowns. */}
         {conn && (
           <div className="space-y-2">
             <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Configure</p>
-            {(catalogEntry(conn.source)?.flowFields ?? []).map((f) => (
-              <SourceConfigField key={f.key} field={f} conn={conn} cfg={cfg} onChange={onChange} />
-            ))}
+            {(catalogEntry(conn.source)?.flowFields ?? [])
+              .filter((f) => {
+                // A field can be gated on another field's current value (Calendly's Group
+                // only shows once scope = A specific group).
+                if (!f.showWhen) return true;
+                const sc = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
+                return String(sc[f.showWhen.key] ?? "") === f.showWhen.equals;
+              })
+              .map((f) => (
+                <SourceConfigField key={f.key} field={f} conn={conn} cfg={cfg} onChange={onChange} />
+              ))}
             <Field label="Which event">
               <Select
                 value={typeof cfg.eventType === "string" ? (cfg.eventType as string) : "__none"}
