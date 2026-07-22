@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { connections } from "@/db/schema";
 import { getConnector } from "@/connectors/registry";
+import { isStreamScoped } from "@/connectors/catalog";
 import { storeRawEvent } from "@/ingestion/raw-store";
 import { inngest } from "@/inngest/client";
 import { headersToObject } from "@/lib/http";
@@ -26,6 +27,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
 
   const connector = getConnector(conn.source);
   if (!connector) return NextResponse.json({ error: "no connector for source" }, { status: 400 });
+
+  // Stream-scoped sources (Calendly, Sheets…) are poll-driven: a connection-level
+  // webhook can't be attributed to a specific flow's stream, so it's acked and ignored.
+  // (Real-time per-stream webhooks — with the stream in the URL — are a later addition.)
+  if (isStreamScoped(conn.source)) return NextResponse.json({ ok: true, ignored: "stream-scoped" }, { status: 202 });
 
   // Read the exact raw bytes BEFORE parsing — HMAC must be computed over these.
   const rawBody = await req.text();

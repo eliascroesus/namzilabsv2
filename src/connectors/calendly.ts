@@ -12,6 +12,9 @@ import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
 import { fetchJson } from "@/lib/http-client";
 
 const API = "https://api.calendly.com";
+/** How far back / forward a poll scan looks by meeting time (a rolling window). */
+const BACKFILL_DAYS = 400;
+const FUTURE_DAYS = 400;
 
 /** invitee.created -> booked, invitee.canceled -> canceled, etc. */
 const EVENT_TYPE_MAP: Record<string, string> = {
@@ -67,13 +70,17 @@ export const calendlyConnector: Connector = {
   },
 
   async poll(args: PollArgs): Promise<PollResult> {
-    const records = await listScheduledEvents(args, 50, args.cursor);
-    const nextCursor = records.length > 0 ? records[0].occurredAt.toISOString() : args.cursor;
-    return { records, nextCursor };
+    return pollScheduledEvents(args, args.cursor);
   },
 
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
-    return listScheduledEvents(args, n, null);
+    // Newest few meetings for a preview — one page, sorted by soonest-first, no cursor.
+    const token = token_(args.credentials);
+    const target = await resolveTarget(token, args.config);
+    const params = new URLSearchParams({ ...target, count: String(Math.min(n, 100)), sort: "start_time:desc" });
+    const data = await fetchJson<CalendlyList>(`${API}/scheduled_events?${params.toString()}`, { headers: authHeader(token) });
+    const tag = streamTag(args);
+    return data.collection.map((ev) => bookedEvent(args.connectionId, tag, ev)).slice(0, n);
   },
 
   /** Live options for the Get data step's dynamic fields. "group" lists the token's
@@ -93,49 +100,124 @@ export const calendlyConnector: Connector = {
   },
 };
 
-/** Resolve the fetch scope from connection config (defaults to the user's own meetings). */
+type CalendlyList = { collection: Array<Record<string, unknown>>; pagination?: { next_page_token?: string | null } };
+type PollCursor = { floor: string; ceil: string; pageToken?: string | null };
+
+/**
+ * Poll one page of scheduled events for a stream, walking Calendly's pagination across
+ * calls. Unlike a naive newest-first fetch, this:
+ *  - queries ALL statuses (no `status` filter) so it sees cancellations, not just live
+ *    bookings — every meeting emits a "booked" event, and canceled ones ALSO emit a
+ *    "canceled" event (its own id) so the booking→cancellation transition survives
+ *    dedup-on-insert;
+ *  - scans a rolling meeting-time window oldest-first and follows `next_page_token`, so
+ *    the whole history imports instead of just the soonest ~50 meetings;
+ *  - buckets a booking by `created_at` (when it was booked), keeping the meeting time in
+ *    properties for use as a metric Time reference.
+ * When a scan finishes the cursor drops to null, so the next sweep rescans the window
+ * (reconciliation — dedup makes re-inserts cheap). Emitted ids are stream-tagged.
+ */
+async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Promise<PollResult> {
+  const token = token_(args.credentials);
+  const target = await resolveTarget(token, args.config);
+  const cur = parseCursor(rawCursor);
+  const url = (pageToken?: string | null) => {
+    const p = new URLSearchParams({ ...target, count: "100", sort: "start_time:asc", min_start_time: cur.floor, max_start_time: cur.ceil });
+    if (pageToken) p.set("page_token", pageToken);
+    return `${API}/scheduled_events?${p.toString()}`;
+  };
+
+  let data: CalendlyList;
+  try {
+    data = await fetchJson<CalendlyList>(url(cur.pageToken), { headers: authHeader(token) });
+  } catch (e) {
+    // A page token that expired between sweeps self-heals by restarting the scan.
+    if (!cur.pageToken) throw e;
+    data = await fetchJson<CalendlyList>(url(null), { headers: authHeader(token) });
+  }
+
+  const tag = streamTag(args);
+  const records: CanonicalEvent[] = [];
+  for (const ev of data.collection) {
+    if (!str(ev["uri"])) continue;
+    records.push(bookedEvent(args.connectionId, tag, ev));
+    if (str(ev["status"]) === "canceled") records.push(canceledEvent(args.connectionId, tag, ev));
+  }
+
+  const next = data.pagination?.next_page_token ?? null;
+  const nextCursor: string | null = next ? JSON.stringify({ floor: cur.floor, ceil: cur.ceil, pageToken: next } satisfies PollCursor) : null;
+  return { records, nextCursor };
+}
+
+/** Parse the opaque cursor into a rolling window + page token; a fresh/legacy cursor
+ *  starts a new window around now. */
+function parseCursor(raw: string | null): PollCursor {
+  if (raw) {
+    try {
+      const c = JSON.parse(raw) as Partial<PollCursor>;
+      if (typeof c.floor === "string" && typeof c.ceil === "string") {
+        return { floor: c.floor, ceil: c.ceil, pageToken: typeof c.pageToken === "string" ? c.pageToken : null };
+      }
+    } catch {
+      // Not our JSON (e.g. a legacy timestamp cursor) — fall through to a fresh window.
+    }
+  }
+  const now = Date.now();
+  return {
+    floor: new Date(now - BACKFILL_DAYS * 86_400_000).toISOString(),
+    ceil: new Date(now + FUTURE_DAYS * 86_400_000).toISOString(),
+    pageToken: null,
+  };
+}
+
+function bookedEvent(connectionId: string, tag: string, ev: Record<string, unknown>): CanonicalEvent {
+  const start = parseDate(str(ev["start_time"]));
+  return {
+    eventId: `calendly:${connectionId}:${tag}${str(ev["uri"])}`,
+    eventType: "booked",
+    subject: str(ev["name"]) ?? null,
+    occurredAt: parseDate(str(ev["created_at"])) ?? start ?? new Date(),
+    properties: ev,
+  };
+}
+
+function canceledEvent(connectionId: string, tag: string, ev: Record<string, unknown>): CanonicalEvent {
+  const start = parseDate(str(ev["start_time"]));
+  return {
+    eventId: `calendly:${connectionId}:${tag}canceled:${str(ev["uri"])}`,
+    eventType: "canceled",
+    subject: str(ev["name"]) ?? null,
+    occurredAt: parseDate(str(ev["updated_at"])) ?? start ?? new Date(),
+    properties: ev,
+  };
+}
+
+function streamTag(args: PollArgs): string {
+  // A meeting can be visible under more than one scope (e.g. "just me" and "whole
+  // organization"); tag the id with the stream so each flow's stream keeps its own copy.
+  return args.streamHash ? `${args.streamHash}:` : "";
+}
+
+/** Resolve the fetch scope from stream config (defaults to the user's own meetings) into
+ *  the exact /scheduled_events target params (user, organization, or organization+group). */
+async function resolveTarget(token: string, config?: Record<string, unknown> | null): Promise<Record<string, string>> {
+  const me = await fetchJson<{ resource: { uri: string; current_organization: string } }>(`${API}/users/me`, {
+    headers: authHeader(token),
+  });
+  const { scope, groupUri } = scopeOf(config);
+  if (scope === "organization") return { organization: me.resource.current_organization };
+  if (scope === "group" && groupUri) return { organization: me.resource.current_organization, group: groupUri };
+  return { user: me.resource.uri };
+}
+
 function scopeOf(config?: Record<string, unknown> | null): { scope: "user" | "organization" | "group"; groupUri: string | null } {
   const raw = str(config?.["scope"]);
   const scope = raw === "organization" || raw === "group" ? raw : "user";
   return { scope, groupUri: str(config?.["groupUri"]) };
 }
 
-async function listScheduledEvents(args: PollArgs, count: number, cursor: string | null): Promise<CanonicalEvent[]> {
-  const token = token_(args.credentials);
-  const me = await fetchJson<{ resource: { uri: string; current_organization: string } }>(`${API}/users/me`, {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  const { scope, groupUri } = scopeOf(args.config);
-  const params = new URLSearchParams({
-    count: String(Math.min(count, 100)),
-    sort: "start_time:desc",
-    status: "active",
-  });
-  // Calendly's /scheduled_events needs exactly one target: user, organization, or
-  // (organization + group). Pick it from the configured scope.
-  if (scope === "organization") {
-    params.set("organization", me.resource.current_organization);
-  } else if (scope === "group" && groupUri) {
-    params.set("organization", me.resource.current_organization);
-    params.set("group", groupUri);
-  } else {
-    params.set("user", me.resource.uri);
-  }
-  if (cursor) params.set("min_start_time", cursor);
-  const data = await fetchJson<{ collection: Array<Record<string, unknown>> }>(
-    `${API}/scheduled_events?${params.toString()}`,
-    { headers: { authorization: `Bearer ${token}` } },
-  );
-  // A meeting can be visible under more than one scope (e.g. "just me" and "whole
-  // organization"); tag the id with the stream so each flow's stream keeps its own copy.
-  const streamTag = args.streamHash ? `${args.streamHash}:` : "";
-  return data.collection.map((ev) => ({
-    eventId: `calendly:${args.connectionId}:${streamTag}${str(ev["uri"])}`,
-    eventType: "booked",
-    subject: str(ev["name"]) ?? null,
-    occurredAt: parseDate(str(ev["start_time"])) ?? new Date(),
-    properties: ev,
-  }));
+function authHeader(token: string): Record<string, string> {
+  return { authorization: `Bearer ${token}` };
 }
 
 function token_(credentials?: Record<string, unknown> | null): string {

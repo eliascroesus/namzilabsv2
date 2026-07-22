@@ -117,6 +117,42 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
     expect(rows.records[0].eventId).toBe("calendly:c1:abc123:https://api.calendly.com/scheduled_events/EVT1");
   });
 
+  it("emits booked + canceled, buckets bookings by created_at, and follows pagination", async () => {
+    const page1 = {
+      collection: [
+        { uri: "https://api.calendly.com/scheduled_events/EVTa", name: "Active", status: "active", start_time: "2026-03-01T10:00:00Z", created_at: "2026-02-01T08:00:00Z" },
+        { uri: "https://api.calendly.com/scheduled_events/EVTc", name: "Gone", status: "canceled", start_time: "2026-03-02T10:00:00Z", created_at: "2026-02-02T08:00:00Z", updated_at: "2026-02-15T09:00:00Z" },
+      ],
+      pagination: { next_page_token: "TOK2" },
+    };
+    const page2 = { collection: [], pagination: { next_page_token: null } };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+        if (url.includes("/scheduled_events")) return jsonResponse(url.includes("page_token=TOK2") ? page2 : page1);
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+    const base = { connectionId: "c1", credentials: { accessToken: "t" }, config: { scope: "user" }, streamHash: "h" };
+
+    const first = await calendlyConnector.poll!({ ...base, cursor: null });
+    // Active → 1 booked; canceled → booked + canceled = 3 records.
+    expect(first.records.map((r) => r.eventType).sort()).toEqual(["booked", "booked", "canceled"]);
+    // A booking is bucketed by when it was booked (created_at), not the meeting time.
+    expect(first.records.find((r) => r.eventId.endsWith("EVTa"))!.occurredAt.toISOString()).toBe("2026-02-01T08:00:00.000Z");
+    const canceled = first.records.find((r) => r.eventType === "canceled")!;
+    expect(canceled.eventId).toContain(":canceled:");
+    expect(canceled.occurredAt.toISOString()).toBe("2026-02-15T09:00:00.000Z"); // updated_at
+    expect(first.nextCursor).toContain("TOK2"); // more pages → cursor advances
+
+    // Following the cursor exhausts the scan → cursor resets so the next sweep rescans.
+    const second = await calendlyConnector.poll!({ ...base, cursor: first.nextCursor });
+    expect(second.records).toHaveLength(0);
+    expect(second.nextCursor).toBeNull();
+  });
+
   it("listOptions('groupUri') lists the token's Calendly groups", async () => {
     vi.stubGlobal(
       "fetch",
