@@ -183,14 +183,21 @@ see `.claude/plans/` and the code under `src/lib/flow/`.
   and **Publish** (validates → snapshots an immutable version → materializes tiles).
   The dashboard's primary "New flow" opens the canvas; the classic form builder
   remains as a secondary option.
-- **M3 (done):** the six advanced nodes, each with an engine executor, config UI,
-  and tests — **Time** (preset/rolling/between windows), **Formula** (add/subtract/
-  multiply/divide/percentage/percent-change/ratio/average over connected numbers,
-  with divide-by-zero errors), **Combine** (stack / dedupe / match with keep
-  matched|unmatched), **Group** (by field or custom categories + fallback),
-  **Formatter** (round/case/trim/normalize/replace/scale/rename), and **Paths**
-  (conditional branches with per-path source handles + fallback). Validation
-  enforces per-node input shapes across all 10 node types.
+- **M3 (done, since simplified):** advanced nodes with engine executors, config
+  UI, and tests — **Calculate** (one unified step: dataset aggregations
+  count/count-unique/sum/avg/min/max with an optional time split, OR two-number
+  comparisons add/subtract/multiply/divide/percentage/percent-change/ratio, with
+  divide-by-zero errors), **Unite** (join lanes back into one line), and
+  **Paths** (conditional branches with per-branch entry modes + fallback).
+  Validation enforces per-node input shapes across all node types.
+- **Simplifications (post-M3):** the Combine node is gone — **de-duplication is
+  a checkbox on the Get data step** (field-matched, newest copy wins, applied
+  before anything else runs); the Clean-up-values node is gone — **date-looking
+  values are detected and canonicalized automatically** at ingest and on read
+  (`src/lib/normalize-dates.ts`), so every date speaks ISO and the Review &
+  publish **time-reference picker lists only date fields**; the Count node is
+  merged into Calculate. Stored graphs from before migrate losslessly on load
+  (`parseGraph`): Count → Calculate, Combine/Clean-up → pass-through Filters.
 - **Next:** M4 sync system (historical backfill, live/importing/outdated statuses,
   versioned/safe full re-sync, Reprocess) + polish.
 

@@ -623,7 +623,7 @@ function calcOf(node: FNode): string | undefined {
   if (node.type === "formula") {
     const op = String(c.op ?? "percentage");
     if (op === "count") return "Count";
-    if (op === "count_distinct") return `Distinct ${String(c.field ?? "subject")}`;
+    if (op === "count_distinct") return `Distinct ${String(c.distinctField ?? "subject")}`;
     if (op === "sum") return `Sum of ${String(c.field ?? "value")}`;
     if (op === "avg") return `Average of ${String(c.field ?? "value")}`;
     if (op === "min") return `Min of ${String(c.field ?? "value")}`;

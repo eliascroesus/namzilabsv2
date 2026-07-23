@@ -166,7 +166,8 @@ export function summary(type: string, data: NodeData): string {
     const op = String(c.op ?? "percentage");
     if (isDatasetFormulaOp(op)) {
       const gb = c.groupBy as { type?: string; unit?: string } | null;
-      return `${datasetCalcExpression(op, String(c.field ?? "value"))}${gb?.type === "time" ? ` by ${gb.unit}` : ""}`;
+      const field = op === "count_distinct" ? String(c.distinctField ?? "subject") : String(c.field ?? "value");
+      return `${datasetCalcExpression(op, field)}${gb?.type === "time" ? ` by ${gb.unit}` : ""}`;
     }
     return formulaExpression(op, "A", "B");
   }

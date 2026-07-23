@@ -60,6 +60,8 @@ const FORMULA_OP_OPTIONS = FORMULA_OPS.map((o) => ({
   label: FORMULA_LABELS[o] ?? o,
   group: isDatasetFormulaOp(o) ? "Across your records" : "Compare two numbers",
 }));
+/** The legacy Calculate node's compare mode runs ONLY the two-number ops. */
+const BINARY_OP_OPTIONS = FORMULA_OPS.filter((o) => !isDatasetFormulaOp(o)).map((o) => ({ value: o as string, label: FORMULA_LABELS[o] ?? o }));
 const VIZ_LABELS: Record<string, string> = { number: "Single number", line: "Line chart", bar: "Bar chart", category: "Category breakdown", table: "Table", progress: "Progress bar", funnel: "Funnel" };
 const title = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
@@ -710,7 +712,7 @@ function CalcCompare({ cfg, inputs, numberGroups, onChange, onSetInput }: { cfg:
   return (
     <>
       <Field label="Calculation">
-        <Select value={op} width={W} options={FORMULA_OPS.map((o) => ({ value: o, label: FORMULA_LABELS[o] ?? title(o) }))} onChange={(v) => onChange({ op: v })} />
+        <Select value={op} width={W} options={BINARY_OP_OPTIONS} onChange={(v) => onChange({ op: v })} />
       </Field>
       <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
         <p className="font-medium">{formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}</p>
