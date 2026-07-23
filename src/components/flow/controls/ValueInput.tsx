@@ -2,6 +2,7 @@
 
 import { DataBrowser } from "./DataBrowser";
 import { DataPill } from "./Pill";
+import { DataIcon } from "../icons";
 import type { DataGroup, FieldRef, ValueModel } from "./types";
 import { emptyValue } from "./types";
 import { fieldRefIsStale, hasAnyFields } from "./field-utils";
@@ -15,6 +16,9 @@ const INPUT =
  * field pill snapshots the source/step/label/sample; if the producing step or field is
  * gone it renders a stale warning and is never silently remapped. Type-aware: number and
  * date fixed values get the appropriate input affordance.
+ *
+ * Zapier-style layout: the input runs the full width with the data icon INSIDE its
+ * right edge; the browser opens aligned under the input (and wider, extending left).
  */
 export function ValueInput({
   value,
@@ -62,17 +66,33 @@ export function ValueInput({
   const inputMode = fieldType === "number" ? "decimal" : undefined;
 
   return (
-    <div className="flex items-center gap-1.5">
-      <input
-        type={inputType}
-        inputMode={inputMode}
-        value={value.text}
-        disabled={disabled}
-        onChange={(e) => onChange({ mode: "fixed", text: e.target.value, field: null })}
-        placeholder={placeholder}
-        className={`${INPUT} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
-      />
-      {canInsert && <DataBrowser groups={groups} onPick={pickField} align="right" />}
-    </div>
+    <DataBrowser
+      groups={groups}
+      onPick={pickField}
+      trigger={({ toggle }) => (
+        <div className="relative">
+          <input
+            type={inputType}
+            inputMode={inputMode}
+            value={value.text}
+            disabled={disabled}
+            onChange={(e) => onChange({ mode: "fixed", text: e.target.value, field: null })}
+            placeholder={placeholder}
+            className={`${INPUT} ${canInsert ? "pr-9" : ""} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+          />
+          {canInsert && (
+            <button
+              type="button"
+              onClick={toggle}
+              title="Insert data from an earlier step"
+              aria-label="Insert data from an earlier step"
+              className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center justify-center rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+            >
+              <DataIcon />
+            </button>
+          )}
+        </div>
+      )}
+    />
   );
 }

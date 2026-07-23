@@ -121,7 +121,6 @@ export function ConditionEditor({
                   <DataBrowser
                     groups={groups}
                     onPick={(ref) => pickField(i, ref)}
-                    width={320}
                     trigger={({ toggle }) => (
                       <button type="button" onClick={toggle} className={SELECT_BTN}>
                         <span className={`min-w-0 truncate ${chosen ? "text-neutral-800" : "text-neutral-400"}`}>{chosen ?? "Choose a field…"}</span>

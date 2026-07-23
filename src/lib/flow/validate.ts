@@ -1,4 +1,4 @@
-import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, CalculateConfigSchema, FormulaConfigSchema, NODE_TYPES, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
+import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, CalculateConfigSchema, FormulaConfigSchema, NODE_TYPES, isDatasetFormulaOp, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
 
 export type ValidationIssue = { nodeId?: string; message: string };
 
@@ -11,14 +11,11 @@ function mappedRuleGaps(filters: FilterConfig | undefined): number {
 type ShapeKind = "dataset" | "value" | "none";
 
 /** Nodes that emit a record set. */
-const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths", "unite"]);
+const DATASET_PRODUCERS = new Set(["app", "filter", "time", "paths", "unite"]);
 /** Nodes that emit a computed value/series/grouped. */
-const VALUE_PRODUCERS = new Set(["aggregate", "formula", "group", "calculate"]);
+const VALUE_PRODUCERS = new Set(["formula", "group", "calculate"]);
 /** Nodes that consume record sets. */
-const DATASET_CONSUMERS = new Set(["filter", "aggregate", "time", "formatter", "group", "paths", "combine", "unite"]);
-/** Nodes that consume computed values. */
-const VALUE_CONSUMERS = new Set(["formula"]);
-
+const DATASET_CONSUMERS = new Set(["filter", "time", "group", "paths", "unite"]);
 
 function outputKind(node: FlowNode): ShapeKind {
   if (DATASET_PRODUCERS.has(node.type)) return "dataset";
@@ -81,14 +78,28 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
       }
     }
 
-    if (VALUE_CONSUMERS.has(node.type)) {
-      if (ins.length === 0) issues.push({ nodeId: node.id, message: `${cap(node.type)} node needs a connected number.` });
-      if (node.type === "formula") {
-        // Calculate is binary: each named input (a/b) is either one wired step's number
-        // OR a typed-in literal. A plain (no-handle) edge is the step's position in the
-        // line — always allowed.
-        const fEdges = incomingEdges.get(node.id) ?? [];
-        const fCfg = FormulaConfigSchema.safeParse(node.data.config ?? {});
+    if (node.type === "formula") {
+      const fCfg = FormulaConfigSchema.safeParse(node.data.config ?? {});
+      const op = fCfg.success ? fCfg.data.op : "percentage";
+      const fEdges = incomingEdges.get(node.id) ?? [];
+      if (isDatasetFormulaOp(op)) {
+        // A dataset Calculate (count/sum/avg/…) aggregates the records flowing in
+        // through its plain chain edge; a/b number handles play no part.
+        const plain = fEdges.filter((e) => e.targetHandle == null);
+        if (plain.length === 0) {
+          issues.push({ nodeId: node.id, message: "Calculate needs records as input — connect it after a data step." });
+        }
+        for (const e of plain) {
+          const src = byId.get(e.source);
+          if (src && outputKind(src) !== "dataset") {
+            issues.push({ nodeId: node.id, message: "Calculate needs records as input." });
+          }
+        }
+      } else {
+        // Binary Calculate: each named input (a/b) is either one wired step's number
+        // OR a typed-in literal. A plain (no-handle) edge is the step's position in
+        // the line — always allowed.
+        if (ins.length === 0) issues.push({ nodeId: node.id, message: `${cap(node.type)} node needs a connected number.` });
         const aFixed = fCfg.success ? fCfg.data.aFixed : null;
         const bFixed = fCfg.success ? fCfg.data.bFixed : null;
         const aCount = fEdges.filter((e) => e.targetHandle === "a").length;

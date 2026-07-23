@@ -21,22 +21,6 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="M12 8v4l3 2" />
     </>
   ),
-  formatter: (
-    <>
-      <path d="M4 7V5h11v2" />
-      <path d="M9.5 5v11" />
-      <path d="M7.5 16h4" />
-      <path d="M15 13l2.2 2.2L22 10.4" />
-    </>
-  ),
-  combine: (
-    <>
-      <path d="M4 6h5a4 4 0 0 1 4 4" />
-      <path d="M4 18h5a4 4 0 0 0 4-4" />
-      <path d="M13 12h7" />
-      <path d="M17 9l3 3-3 3" />
-    </>
-  ),
   paths: (
     <>
       <circle cx="6" cy="12" r="2" />
@@ -64,13 +48,6 @@ const PATHS: Record<string, React.ReactNode> = {
       <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
     </>
   ),
-  aggregate: (
-    <>
-      <path d="M5.5 20V11" />
-      <path d="M12 20V4" />
-      <path d="M18.5 20v-6" />
-    </>
-  ),
   formula: (
     <>
       <circle cx="7" cy="8" r="1.4" />
@@ -91,6 +68,17 @@ export function NodeGlyph({ type, className = "h-4 w-4" }: { type: string; class
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       {PATHS[type] ?? PATHS.app}
+    </svg>
+  );
+}
+
+/** The little database glyph on inputs that can insert data from an earlier step. */
+export function DataIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <ellipse cx="12" cy="6" rx="7" ry="3" />
+      <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+      <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
     </svg>
   );
 }

@@ -4,6 +4,7 @@ import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
 import { isStreamScoped } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
+import { normalizeDatesDeep } from "@/lib/normalize-dates";
 import { processRawEvent } from "@/ingestion/pipeline";
 import { activeStreams, syncStream } from "@/lib/sync/streams";
 import type { CanonicalEvent, Connector, PollArgs } from "@/connectors/types";
@@ -203,7 +204,7 @@ async function upsertEventsGen(
       occurredAt: ev.occurredAt,
       value: ev.value != null ? String(ev.value) : null,
       currency: ev.currency ?? null,
-      properties: ev.properties ?? {},
+      properties: normalizeDatesDeep(ev.properties),
       syncGeneration: generation,
       deletedAt: null,
       streamHash: meta.streamHash ?? null,

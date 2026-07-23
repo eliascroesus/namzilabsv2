@@ -163,29 +163,27 @@ describe("engine — Filter date range quick section", () => {
   });
 });
 
-describe("engine — Formatter date ops + mapped fallback", () => {
-  it("date_only strips the time portion", async () => {
-    await ev({});
+describe("engine — legacy Formatter nodes become pass-throughs (dates are automatic now)", () => {
+  it("a stored formatter node migrates to a rule-less Filter and passes records through", async () => {
+    await ev({ properties: { name: "x" } });
+    await ev({ properties: { name: "y" } });
     const g = parseGraph({
       nodes: [N("a", "app", { connectionId: CONN }), N("fm", "formatter", { field: "occurredAt", op: "date_only", outputField: "properties.day" })],
       edges: [E("a", "fm")],
     });
+    expect(g.nodes.find((n) => n.id === "fm")?.type).toBe("filter");
     const res = await runFlow({ db, orgId: ORG }, g, { untilNodeId: "fm" });
-    const rec = res.nodes.get("fm")!.sample[0] as { properties: Record<string, unknown> };
-    expect(String(rec.properties.day)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(res.nodes.get("fm")!.status).toBe("ok");
+    expect(res.nodes.get("fm")!.recordsOut).toBe(2); // pass-through, nothing dropped
   });
-  it("fallback (default) can pull from another field", async () => {
-    await ev({ properties: { name: "", fallback: "Anon" } });
-    const g = parseGraph({
-      nodes: [
-        N("a", "app", { connectionId: CONN }),
-        N("fm", "formatter", { field: "properties.name", op: "default", defaultValueKind: "field", defaultValueField: "properties.fallback", outputField: "properties.name" }),
-      ],
-      edges: [E("a", "fm")],
-    });
-    const res = await runFlow({ db, orgId: ORG }, g, { untilNodeId: "fm" });
-    const rec = res.nodes.get("fm")!.sample[0] as { properties: Record<string, unknown> };
-    expect(rec.properties.name).toBe("Anon");
+
+  it("date-looking property values are canonical on read — no cleanup step needed", async () => {
+    await ev({ properties: { Timestamp: "7/21/2026 14:23:45", note: "call on 7/21" } });
+    const g = parseGraph({ nodes: [N("a", "app", { connectionId: CONN })], edges: [] });
+    const res = await runFlow({ db, orgId: ORG }, g, { untilNodeId: "a" });
+    const rec = res.nodes.get("a")!.sample[0] as { properties: Record<string, unknown> };
+    expect(rec.properties.Timestamp).toBe("2026-07-21T14:23:45.000Z");
+    expect(rec.properties.note).toBe("call on 7/21"); // non-dates never touched
   });
 });
 

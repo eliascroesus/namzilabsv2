@@ -7,15 +7,13 @@ import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import {
   AppConfigSchema,
   FilterConfigSchema,
-  AggregateConfigSchema,
   OutputConfigSchema,
   TimeConfigSchema,
   FormulaConfigSchema,
-  CombineConfigSchema,
   GroupConfigSchema,
   CalculateConfigSchema,
-  FormatterConfigSchema,
   PathsConfigSchema,
+  isDatasetFormulaOp,
   type FlowGraph,
   type FlowNode,
   type FilterConfig,
@@ -124,18 +122,12 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
         return execFilter(node, inputs);
       case "time":
         return execTime(node, inputs);
-      case "formatter":
-        return execFormatter(node, inputs);
-      case "combine":
-        return execCombine(node, inputs);
       case "unite":
         return execUnite(node, inputs);
       case "paths":
         return execPaths(node, inputs, graph);
       case "group":
         return execGroup(node, inputs);
-      case "aggregate":
-        return execAggregate(node, inputs);
       case "formula":
         return execFormula(node, inputs);
       case "calculate":
@@ -167,8 +159,29 @@ async function execApp(ctx: EngineCtx, node: FlowNode): Promise<NodeExec> {
     .orderBy(desc(events.occurredAt))
     .limit(APP_LOAD_CAP);
 
-  const records = rows.map(eventToRecord);
-  return datasetExec("app", node.id, records, 0);
+  let records = rows.map(eventToRecord);
+  // Remove duplicates at the source — the FIRST thing that happens, before any
+  // later step runs, so a duplicate never costs downstream work. Records are
+  // newest-first here, so "keep the first seen" keeps the most recent copy.
+  if (cfg.dedupe) records = dedupeRecords(records, cfg.dedupeField || "subject");
+  return datasetExec("app", node.id, records, rows.length);
+}
+
+/** Keep one record per identity value (the newest); empty identities always pass. */
+function dedupeRecords(records: FlowRecord[], field: string): FlowRecord[] {
+  const seen = new Set<string>();
+  const out: FlowRecord[] = [];
+  for (const r of records) {
+    const key = String(getField(r, field) ?? "").trim();
+    if (key === "") {
+      out.push(r);
+      continue;
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
 }
 
 // ---------- Filter ----------
@@ -201,26 +214,6 @@ function execTime(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   return datasetExec("time", node.id, passed, input.records.length);
 }
 
-// ---------- Formatter ----------
-function execFormatter(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
-  const cfg = FormatterConfigSchema.parse(node.data.config ?? {});
-  const input = requireDataset(inputs, "Formatter");
-  const out = cfg.outputField || cfg.field;
-  const asStr = (v: unknown): string | undefined => (v == null ? undefined : String(v));
-  const records = input.records.map((r) => {
-    const copy: FlowRecord = { ...r, properties: { ...r.properties } };
-    // Resolve mapped "replace with" / "value for empty" against this record.
-    const eff = {
-      ...cfg,
-      replaceWith: cfg.replaceWithKind === "field" && cfg.replaceWithField ? asStr(getField(r, cfg.replaceWithField)) : cfg.replaceWith,
-      defaultValue: cfg.defaultValueKind === "field" && cfg.defaultValueField ? asStr(getField(r, cfg.defaultValueField)) : cfg.defaultValue,
-    };
-    setField(copy, out, formatValue(getField(r, cfg.field), eff));
-    return copy;
-  });
-  return datasetExec("formatter", node.id, records, input.records.length);
-}
-
 // ---------- Unite ----------
 /**
  * The opposite of Split into paths: joins every connected lane (branches, extra data
@@ -235,39 +228,6 @@ function execUnite(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   });
   const records = datasets.flat();
   return datasetExec("unite", node.id, records, records.length);
-}
-
-// ---------- Combine ----------
-function execCombine(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
-  const cfg = CombineConfigSchema.parse(node.data.config ?? {});
-  // In Match mode the base source controls which records are retained/enriched.
-  // Put the chosen base input first; otherwise keep the connection order.
-  let ordered = inputs;
-  if (cfg.mode === "match" && cfg.baseSourceId) {
-    const base = inputs.filter((i) => i.sourceNodeId === cfg.baseSourceId);
-    const rest = inputs.filter((i) => i.sourceNodeId !== cfg.baseSourceId);
-    if (base.length) ordered = [...base, ...rest];
-  }
-  const datasets = ordered.map((i) => {
-    if (i.shape.kind !== "dataset") throw new Error("Combine only accepts record inputs.");
-    return i.shape.records;
-  });
-  const totalIn = datasets.reduce((a, d) => a + d.length, 0);
-
-  let records: FlowRecord[];
-  if (cfg.mode === "stack") {
-    records = datasets.flat();
-  } else if (cfg.mode === "dedupe") {
-    records = dedupeBy(datasets.flat(), cfg.identityField, cfg.sourceWins);
-  } else if (datasets.length === 1) {
-    // The normal (new) shape: ONE stream flows in (often straight from a Unite), and
-    // "match" means matching records WITHIN it — the same person appearing more than
-    // once (e.g. from two united sources) counts as matched.
-    records = matchWithin(datasets[0], cfg.identityField, cfg.keep, cfg.sourceWins);
-  } else {
-    records = matchJoin(datasets, cfg.identityField, cfg.keep, cfg.sourceWins);
-  }
-  return datasetExec("combine", node.id, records, totalIn);
 }
 
 // ---------- Paths ----------
@@ -344,26 +304,10 @@ function execGroup(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   };
 }
 
-// ---------- Aggregate ----------
-function execAggregate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
-  const cfg = AggregateConfigSchema.parse(node.data.config ?? {});
-  const input = requireDataset(inputs, "Aggregate");
-  const shape = aggregate(input.records, cfg);
-  const recordsOut = shape.kind === "scalar" ? 1 : shape.kind === "series" ? shape.series.length : shape.groups.length;
-  return {
-    status: "ok",
-    nodeType: "aggregate",
-    shape,
-    recordsIn: input.records.length,
-    recordsOut,
-    sample: input.records.slice(0, 3),
-    outputSchema: [],
-  };
-}
-
-// ---------- Formula ----------
-// A Formula is a binary operation over two named inputs: handle "a" and handle "b".
-// (No edge-order fallback — all pre-v2 flows are wiped in migration 0003.)
+// ---------- Formula / Calculate ----------
+// A binary Calculate compares two named inputs: handle "a" and handle "b".
+// A dataset Calculate (count/sum/avg/min/max — the former Count node) instead
+// aggregates the records flowing in through its plain chain edge.
 /**
  * Read a single number from a named input handle (a/b). Shared by Formula + Calculate.
  * A scalar step (Count/Calculate) contributes its value; a dataset step (Get data,
@@ -412,6 +356,19 @@ function formulaValue(op: string, a: number, b: number): number {
 
 function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = FormulaConfigSchema.parse(node.data.config ?? {});
+
+  if (isDatasetFormulaOp(cfg.op)) {
+    // Aggregate the records flowing in through the chain (any stray a/b
+    // reference edges from an op switch are ignored).
+    const input = inputs.find((i) => i.targetHandle == null && i.shape.kind === "dataset");
+    if (!input) throw new Error("Calculate needs records flowing in — connect it after a data step.");
+    const records = (input.shape as Dataset).records;
+    const acfg: AggregateConfig = { aggregation: cfg.op as AggregateConfig["aggregation"], field: cfg.field, distinctField: cfg.distinctField, groupBy: cfg.groupBy };
+    const shape = aggregate(records, acfg);
+    const recordsOut = shape.kind === "scalar" ? 1 : shape.kind === "series" ? shape.series.length : shape.groups.length;
+    return { status: "ok", nodeType: "formula", shape, recordsIn: records.length, recordsOut, sample: records.slice(0, 3), outputSchema: [] };
+  }
+
   const value = formulaValue(cfg.op, scalarAt(inputs, "a", cfg.aFixed), scalarAt(inputs, "b", cfg.bFixed));
   return { status: "ok", nodeType: "formula", shape: { kind: "scalar", value: round(value) }, recordsIn: 2, recordsOut: 1, sample: [], outputSchema: [] };
 }
@@ -680,179 +637,6 @@ function groupByCategories(records: FlowRecord[], cfg: GroupConfig): Array<{ lab
     buckets.get(cat ? cat.label : cfg.fallbackLabel)!.push(r);
   }
   return [...buckets.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.valueField, cfg.distinctField) }));
-}
-
-function dedupeBy(records: FlowRecord[], idField: string, sourceWins: "first" | "last"): FlowRecord[] {
-  const map = new Map<string, FlowRecord>();
-  for (const r of records) {
-    const key = String(getField(r, idField) ?? "");
-    if (key === "") continue;
-    if (!map.has(key)) map.set(key, r);
-    else if (sourceWins === "last") map.set(key, mergeRecords(map.get(key)!, r));
-    else map.set(key, mergeRecords(r, map.get(key)!));
-  }
-  return [...map.values()];
-}
-
-/**
- * Match records WITHIN one stream by an identity field (the single-input Combine).
- * "Matched" = the identity appears more than once (e.g. the same email arriving from
- * two united sources); matched groups merge into one enriched record. Records with an
- * empty identity can never match — they count as unmatched.
- */
-function matchWithin(records: FlowRecord[], idField: string, keep: "all" | "matched" | "unmatched", sourceWins: "first" | "last"): FlowRecord[] {
-  const groups = new Map<string, FlowRecord[]>();
-  const noId: FlowRecord[] = [];
-  for (const r of records) {
-    const key = String(getField(r, idField) ?? "");
-    if (!key) {
-      noId.push(r);
-      continue;
-    }
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(r);
-  }
-  const out: FlowRecord[] = [];
-  for (const grp of groups.values()) {
-    const matched = grp.length > 1;
-    if (matched && keep === "unmatched") continue;
-    if (!matched && keep === "matched") continue;
-    if (!matched) {
-      out.push(grp[0]);
-      continue;
-    }
-    let merged = grp[0];
-    for (const r of grp.slice(1)) merged = sourceWins === "last" ? mergeRecords(r, merged) : mergeRecords(merged, r);
-    out.push(merged);
-  }
-  if (keep !== "matched") out.push(...noId);
-  return out;
-}
-
-function matchJoin(datasets: FlowRecord[][], idField: string, keep: "all" | "matched" | "unmatched", sourceWins: "first" | "last"): FlowRecord[] {
-  const base = datasets[0] ?? [];
-  const others = datasets.slice(1).flat();
-  const otherKeys = new Map<string, FlowRecord[]>();
-  for (const r of others) {
-    const k = String(getField(r, idField) ?? "");
-    if (!k) continue;
-    if (!otherKeys.has(k)) otherKeys.set(k, []);
-    otherKeys.get(k)!.push(r);
-  }
-  const out: FlowRecord[] = [];
-  for (const r of base) {
-    const k = String(getField(r, idField) ?? "");
-    const matches = k ? (otherKeys.get(k) ?? []) : [];
-    const hasMatch = matches.length > 0;
-    if (keep === "matched" && !hasMatch) continue;
-    if (keep === "unmatched" && hasMatch) continue;
-    let merged = r;
-    if (hasMatch && keep !== "unmatched") {
-      for (const m of matches) merged = sourceWins === "last" ? mergeRecords(merged, m) : mergeRecords(m, merged);
-    }
-    out.push(merged);
-  }
-  return out;
-}
-
-/**
- * Merge two records that share an identity. The winner's values take precedence, but a
- * blank/missing winner value falls back to the loser's — so combining sources enriches
- * (fills gaps) instead of overwriting good data with blanks. This is why the builder
- * needs no "these fields collide" warning: collisions resolve deterministically here.
- */
-function mergeRecords(winner: FlowRecord, loser: FlowRecord): FlowRecord {
-  const isBlank = (v: unknown) => v == null || v === "";
-  const properties = { ...loser.properties };
-  for (const [k, v] of Object.entries(winner.properties)) {
-    properties[k] = isBlank(v) && !isBlank(properties[k]) ? properties[k] : v;
-  }
-  return {
-    ...loser,
-    ...winner,
-    subject: isBlank(winner.subject) ? loser.subject : winner.subject,
-    value: winner.value ?? loser.value,
-    properties,
-  };
-}
-
-function formatValue(raw: unknown, cfg: { op: string; decimals: number; find?: string; replaceWith?: string; defaultValue?: string; factor?: number }): unknown {
-  const str = raw == null ? "" : String(raw);
-  switch (cfg.op) {
-    case "to_number":
-      return num(raw) ?? 0;
-    case "to_text":
-      return str;
-    case "round": {
-      const n = num(raw);
-      return n == null ? raw : Number(n.toFixed(cfg.decimals));
-    }
-    case "uppercase":
-      return str.toUpperCase();
-    case "lowercase":
-      return str.toLowerCase();
-    case "trim":
-      return str.trim();
-    case "normalize_email":
-      return str.trim().toLowerCase();
-    case "normalize_phone":
-      return str.replace(/[^\d]/g, "");
-    case "to_date": {
-      // Parse any recognizable date text (a Sheets "7/21/2026 14:23:45" timestamp, an
-      // ISO string, "Jan 5 2026"…) into a proper ISO date-time. Unparseable values
-      // pass through unchanged — cleanup never destroys data.
-      const t = dateMs(raw);
-      return t == null ? raw : new Date(t).toISOString();
-    }
-    case "date_only": {
-      const t = dateMs(raw);
-      return t == null ? raw : new Date(t).toISOString().slice(0, 10);
-    }
-    case "year_month": {
-      const t = dateMs(raw);
-      return t == null ? raw : new Date(t).toISOString().slice(0, 7);
-    }
-    case "hour": {
-      // "2026-01-05 14:00" — a per-hour bucket, usable for hour-by-hour breakdowns.
-      const t = dateMs(raw);
-      return t == null ? raw : `${new Date(t).toISOString().slice(0, 13).replace("T", " ")}:00`;
-    }
-    case "replace":
-      return cfg.find != null ? str.split(cfg.find).join(cfg.replaceWith ?? "") : str;
-    case "default":
-      return raw == null || str === "" ? (cfg.defaultValue ?? "") : raw;
-    case "multiply": {
-      const n = num(raw);
-      return n == null ? raw : round(n * (cfg.factor ?? 1));
-    }
-    case "divide": {
-      const n = num(raw);
-      return n == null || (cfg.factor ?? 0) === 0 ? raw : round(n / (cfg.factor ?? 1));
-    }
-    default:
-      return raw;
-  }
-}
-
-function setField(rec: FlowRecord, path: string, value: unknown): void {
-  switch (path) {
-    case "subject":
-      rec.subject = value == null ? null : String(value);
-      break;
-    case "value":
-      rec.value = typeof value === "number" ? value : num(value);
-      break;
-    case "source":
-      rec.source = String(value);
-      break;
-    case "eventType":
-      rec.eventType = String(value);
-      break;
-    default: {
-      const key = path.startsWith("properties.") ? path.slice("properties.".length) : path;
-      rec.properties[key] = value;
-    }
-  }
 }
 
 // ---------- time windows ----------

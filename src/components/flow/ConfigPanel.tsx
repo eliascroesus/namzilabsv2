@@ -9,17 +9,18 @@ import {
   VIZ_TYPES,
   TIME_PRESETS,
   FORMULA_OPS,
+  isDatasetFormulaOp,
   type NodeType,
 } from "@/lib/flow/types";
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
-import { computeNodeStatus } from "./graph-utils";
-import { STATUS_META, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
+import { computeNodeStatus, STD_META } from "./graph-utils";
+import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { RecordSamplePicker } from "./RecordSamplePicker";
-import { NodeGlyph } from "./icons";
-import { Select, DataBrowser, ValueInput, ConditionEditor, SourceBadge, humanizeKey } from "./controls";
+import { DataIcon, NodeGlyph } from "./icons";
+import { Select, DataBrowser, ConditionEditor, SourceBadge, humanizeKey } from "./controls";
 import type { DataGroup } from "./controls/types";
 import { toDataGroups } from "./field-groups";
-import { storedToValue, valueToStored, asFilterConfig } from "./panel-mappers";
+import { asFilterConfig } from "./panel-mappers";
 
 /** A reference to an earlier step, offered as a labeled pill for multi-input wiring. */
 export type StepRef = { id: string; title: string; stepNo?: number };
@@ -36,7 +37,29 @@ const SYNC_DOT: Record<string, string> = { live: "bg-green-500", synced: "bg-gre
 const syncStatusLabel = (s: string): string => ({ importing: "importing…", outdated: "outdated", error: "sync error" } as Record<string, string>)[s] ?? s;
 
 const AGG_LABELS: Record<string, string> = { count: "Count of records", count_distinct: "Count of distinct values", sum: "Sum of a field", avg: "Average of a field", min: "Minimum of a field", max: "Maximum of a field" };
-const FORMULA_LABELS: Record<string, string> = { add: "+  Add", subtract: "−  Subtract", multiply: "×  Multiply", divide: "÷  Divide", percentage: "%  Percentage", percent_change: "Δ%  Percent change", difference: "−  Difference", ratio: "∶  Ratio", average: "x̄  Average" };
+const FORMULA_LABELS: Record<string, string> = {
+  add: "+  Add",
+  subtract: "−  Subtract",
+  multiply: "×  Multiply",
+  divide: "÷  Divide",
+  percentage: "%  Percentage",
+  percent_change: "Δ%  Percent change",
+  difference: "−  Difference",
+  ratio: "∶  Ratio",
+  average: "x̄  Average of two numbers",
+  count: "#  Count records",
+  count_distinct: "#  Count unique values",
+  sum: "Σ  Sum",
+  avg: "x̄  Average",
+  min: "↓  Minimum (lowest value)",
+  max: "↑  Maximum (highest value)",
+};
+/** Binary (two-number) ops first, then the dataset aggregations at the end. */
+const FORMULA_OP_OPTIONS = FORMULA_OPS.map((o) => ({
+  value: o as string,
+  label: FORMULA_LABELS[o] ?? o,
+  group: isDatasetFormulaOp(o) ? "Across your records" : "Compare two numbers",
+}));
 const VIZ_LABELS: Record<string, string> = { number: "Single number", line: "Line chart", bar: "Bar chart", category: "Category breakdown", table: "Table", progress: "Progress bar", funnel: "Funnel" };
 const title = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
@@ -45,7 +68,7 @@ const title = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUppe
  * Empty input never snaps back to a forced value (the old `Number(x) || 1` bug), and
  * `min` is only applied to committed numbers — not while typing.
  */
-function NumberField({ value, onChange, min, allowNull = false, placeholder }: { value: number | null | undefined; onChange: (n: number | null) => void; min?: number; allowNull?: boolean; placeholder?: string }) {
+function NumberField({ value, onChange, min, allowNull = false, placeholder, className }: { value: number | null | undefined; onChange: (n: number | null) => void; min?: number; allowNull?: boolean; placeholder?: string; className?: string }) {
   const [text, setText] = useState(value == null ? "" : String(value));
   useEffect(() => {
     setText(value == null ? "" : String(value));
@@ -70,41 +93,10 @@ function NumberField({ value, onChange, min, allowNull = false, placeholder }: {
       onBlur={() => {
         if (text.trim() === "" && !allowNull) setText(value == null ? "" : String(value));
       }}
-      className={INPUT}
+      className={`${INPUT} ${className ?? ""}`}
     />
   );
 }
-
-/**
- * "Clean up values" is Zapier-style two-step: first WHAT KIND of values (text /
- * numbers / dates), then what to do with them — so the action list is short and
- * every option is relevant. Each action has a one-line example so it explains itself.
- */
-type FormatterCat = "text" | "number" | "date";
-const FORMATTER_CATEGORIES: Array<{ value: FormatterCat; label: string; hint: string }> = [
-  { value: "text", label: "Text", hint: "Trim, replace, tidy emails…" },
-  { value: "number", label: "Numbers", hint: "Convert, round." },
-  { value: "date", label: "Dates & times", hint: "Fix timestamps, keep day / month / hour." },
-];
-const FORMATTER_ACTIONS: Array<{ value: string; label: string; hint: string; cat: FormatterCat }> = [
-  // Text
-  { value: "trim", label: "Trim extra spaces", hint: "Removes spaces at the start and end.", cat: "text" },
-  { value: "uppercase", label: "Make UPPERCASE", hint: '"hello" → "HELLO".', cat: "text" },
-  { value: "lowercase", label: "Make lowercase", hint: '"HELLO" → "hello".', cat: "text" },
-  { value: "normalize_email", label: "Tidy up an email", hint: "Lowercases and trims the address.", cat: "text" },
-  { value: "normalize_phone", label: "Keep phone digits only", hint: '"(555) 12-34" → "5551234".', cat: "text" },
-  { value: "replace", label: "Find and replace text", hint: "Swap one piece of text for another.", cat: "text" },
-  { value: "default", label: "Fill in a value when empty", hint: "Use a fallback when the field is blank.", cat: "text" },
-  // Numbers
-  { value: "to_number", label: "Turn text into a number", hint: '"42" → 42, so it can be summed and compared.', cat: "number" },
-  { value: "round", label: "Round a number", hint: "Rounds to the decimals you choose.", cat: "number" },
-  // Dates & times
-  { value: "to_date", label: "Fix into a real date", hint: 'Reads text like "7/21/2026 14:23" and outputs a proper date-time.', cat: "date" },
-  { value: "date_only", label: "Keep the date only", hint: "Drops the time: 2026-01-05.", cat: "date" },
-  { value: "year_month", label: "Keep year & month", hint: "Drops the day: 2026-01.", cat: "date" },
-  { value: "hour", label: "Bucket into hours", hint: '"2026-01-05 14:00" — compare or total records per hour.', cat: "date" },
-];
-const formatterCatOf = (op: string): FormatterCat => FORMATTER_ACTIONS.find((a) => a.value === op)?.cat ?? "text";
 
 /** A Zapier-style field chooser (label + data browser with samples, search, drill-in). */
 function FieldSelect({ value, groups, onChange, placeholder = "Choose a field…" }: { value: string; groups: DataGroup[]; onChange: (path: string) => void; placeholder?: string }) {
@@ -112,7 +104,6 @@ function FieldSelect({ value, groups, onChange, placeholder = "Choose a field…
   return (
     <DataBrowser
       groups={groups}
-      width={W}
       onPick={(ref) => onChange(ref.fieldPath)}
       trigger={({ toggle }) => (
         <button type="button" onClick={toggle} className={SELECT_BTN}>
@@ -171,6 +162,18 @@ export function ConfigPanel({
   const tested = status === "ready";
   const groups = toDataGroups(fieldGroups);
 
+  // The step's OWN fields (from its last test) — used by pickers that configure the
+  // step itself (Get data's "Match duplicates by"). Falls back to the canonical
+  // fields before the first test so the picker is never empty.
+  const selfT = node.data.lastTest;
+  const selfFields =
+    selfT?.status === "ok" && (selfT.outputSchema ?? []).length > 0
+      ? (selfT.outputSchema ?? []).filter((f) => !f.path.startsWith("__")).map((f) => ({ path: f.path, label: f.label, type: f.type, sample: f.example, container: f.container }))
+      : Object.entries(STD_META).map(([path, m]) => ({ path, label: m.label, type: m.type }));
+  const selfGroups: DataGroup[] = [
+    { stepId: "self", stepNo, source: type === "app" ? String((cfg as { source?: unknown }).source ?? "") : undefined, title: "This step’s fields", fields: selfFields },
+  ];
+
   // Bottom action: complete setup → Test → (on pass) Add next step. No auto-testing.
   const cta = testing
     ? { label: "Testing…", disabled: true, run: () => {} }
@@ -209,6 +212,7 @@ export function ConfigPanel({
             cfg={cfg}
             connections={connections}
             groups={groups}
+            selfGroups={selfGroups}
             inputs={inputs}
             numberGroups={numberGroups}
             datasetCandidates={datasetCandidates}
@@ -259,6 +263,7 @@ function NodeConfig({
   cfg,
   connections,
   groups,
+  selfGroups,
   inputs,
   numberGroups,
   datasetCandidates,
@@ -273,6 +278,7 @@ function NodeConfig({
   cfg: Record<string, unknown>;
   connections: ConnMeta[];
   groups: DataGroup[];
+  selfGroups: DataGroup[];
   inputs: InputDescriptor[];
   numberGroups: DataGroup[];
   datasetCandidates: StepRef[];
@@ -347,6 +353,30 @@ function NodeConfig({
                 onChange={(v) => onChange({ eventType: v })}
               />
             </Field>
+
+            {/* Remove duplicates AT THE SOURCE — the very first thing that happens to
+                loaded records, so a duplicate never runs through the rest of the flow.
+                (This replaces the old Combine step.) */}
+            <div className="space-y-2 rounded-lg border border-neutral-200 p-2.5">
+              <button type="button" onClick={() => onChange({ dedupe: !cfg.dedupe })} className="flex items-center gap-2 text-xs font-medium text-neutral-700">
+                <span className={`flex h-4 w-4 items-center justify-center rounded border ${cfg.dedupe ? "border-neutral-800 bg-neutral-800 text-white" : "border-neutral-300"}`}>
+                  {cfg.dedupe ? "✓" : ""}
+                </span>
+                Remove duplicates
+              </button>
+              {cfg.dedupe ? (
+                <>
+                  <Field label="Match duplicates by">
+                    <FieldSelect value={(cfg.dedupeField as string) ?? "subject"} groups={selfGroups} onChange={(v) => onChange({ dedupeField: v })} />
+                  </Field>
+                  <p className="text-xs text-neutral-400">
+                    Records sharing the same value count as one — the newest is kept, the rest are dropped before anything else runs.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-neutral-400">Drop records that appear more than once, right as they load.</p>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -440,21 +470,68 @@ function NodeConfig({
 
   if (type === "formula") {
     const op = String(cfg.op ?? "percentage");
+    const datasetOp = isDatasetFormulaOp(op);
     const labels = formulaHandleLabels(op);
     const inA = inputs.find((i) => i.targetHandle === "a");
     const inB = inputs.find((i) => i.targetHandle === "b");
     const aFixed = typeof cfg.aFixed === "number" ? cfg.aFixed : null;
     const bFixed = typeof cfg.bFixed === "number" ? cfg.bFixed : null;
+    const gb = (cfg.groupBy as { type?: string; unit?: string } | null) ?? null;
+    const fieldPath = String((op === "count_distinct" ? cfg.distinctField : cfg.field) ?? (op === "count_distinct" ? "subject" : "value"));
+    const fieldLabel = groups.flatMap((g) => g.fields).find((f) => f.path === fieldPath)?.label ?? humanizeKey(fieldPath);
+    const setOp = (v: string) => {
+      onChange({ op: v });
+      // Numbers play no part in a dataset aggregation — clear any wired slots so
+      // stray a/b reference edges never linger on the canvas.
+      if (isDatasetFormulaOp(v) && !datasetOp) {
+        if (inA) onSetInput("a", null);
+        if (inB) onSetInput("b", null);
+      }
+    };
     return (
       <div className="space-y-3">
         <Field label="Calculation">
-          <Select value={op} width={W} options={FORMULA_OPS.map((o) => ({ value: o, label: FORMULA_LABELS[o] ?? title(o) }))} onChange={(v) => onChange({ op: v })} />
+          <Select value={op} width={W} options={FORMULA_OP_OPTIONS} onChange={setOp} />
         </Field>
         <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
-          <p className="font-medium">{formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}</p>
+          <p className="font-medium">
+            {datasetOp
+              ? datasetCalcExpression(op, op === "count" ? "records" : fieldLabel)
+              : formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}
+          </p>
         </div>
-        <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} fixed={aFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ aFixed: n })} />
-        <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} fixed={bFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ bFixed: n })} />
+        {datasetOp ? (
+          <>
+            {(op === "sum" || op === "avg" || op === "min" || op === "max") && (
+              <Field label="Field to calculate">
+                <FieldSelect value={String(cfg.field ?? "value")} groups={groups} onChange={(v) => onChange({ field: v })} placeholder="Pick the number field…" />
+              </Field>
+            )}
+            {op === "count_distinct" && (
+              <Field label="Count unique values of">
+                <FieldSelect value={String(cfg.distinctField ?? "subject")} groups={groups} onChange={(v) => onChange({ distinctField: v })} />
+              </Field>
+            )}
+            <Field label="Split over time?">
+              <Select
+                value={gb?.type === "time" ? "time" : "none"}
+                width={W}
+                options={[{ value: "none", label: "No — one total number" }, { value: "time", label: "Yes — a trend over time" }]}
+                onChange={(m) => onChange({ groupBy: m === "time" ? { type: "time", unit: "day" } : null })}
+              />
+            </Field>
+            {gb?.type === "time" && (
+              <Field label="Period">
+                <Select value={gb.unit ?? "day"} width={W} options={TIME_UNITS.map((u) => ({ value: u, label: title(u) }))} onChange={(v) => onChange({ groupBy: { type: "time", unit: v } })} />
+              </Field>
+            )}
+          </>
+        ) : (
+          <>
+            <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} fixed={aFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ aFixed: n })} />
+            <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} fixed={bFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ bFixed: n })} />
+          </>
+        )}
       </div>
     );
   }
@@ -497,40 +574,6 @@ function NodeConfig({
             {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-xs text-neutral-400">Add data steps first.</p>}
           </div>
         </div>
-      </div>
-    );
-  }
-
-  if (type === "combine") {
-    // A normal single-input step: it works on whatever records flow into it (after a
-    // Unite, that's every lane's records together). Same-record matching happens by
-    // the identity field — no source wiring here at all.
-    const mode = (cfg.mode as string) ?? "dedupe";
-    const keep = (cfg.keep as string) ?? "all";
-    const choice = mode === "match" ? (keep === "unmatched" ? "only_once" : "only_dupes") : "merge";
-    return (
-      <div className="space-y-3">
-        <Field label="Action">
-          <Select
-            value={choice}
-            width={W}
-            options={[
-              { value: "merge", label: "De-duplicate", hint: "Merge copies into one record." },
-              { value: "only_dupes", label: "Keep duplicates", hint: "Found more than once." },
-              { value: "only_once", label: "Keep uniques", hint: "Found only once." },
-            ]}
-            onChange={(v) => onChange(v === "merge" ? { mode: "dedupe" } : { mode: "match", keep: v === "only_once" ? "unmatched" : "matched" })}
-          />
-        </Field>
-        <Field label="Match records by">
-          <FieldSelect value={(cfg.identityField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ identityField: v })} />
-        </Field>
-        <Advanced>
-          <Field label="Which copy wins">
-            <Select value={(cfg.sourceWins as string) ?? "first"} width={W} options={[{ value: "first", label: "First seen" }, { value: "last", label: "Last seen" }]} onChange={(v) => onChange({ sourceWins: v })} />
-          </Field>
-          <p className="text-xs text-neutral-400">Blanks never overwrite real values.</p>
-        </Advanced>
       </div>
     );
   }
@@ -579,51 +622,6 @@ function NodeConfig({
     );
   }
 
-  if (type === "formatter") {
-    const op = String(cfg.op ?? "round");
-    const cat = formatterCatOf(op);
-    const actions = FORMATTER_ACTIONS.filter((a) => a.cat === cat);
-    const action = FORMATTER_ACTIONS.find((a) => a.value === op);
-    return (
-      <div className="space-y-3">
-        <p className="text-xs text-neutral-500">Fix one field&rsquo;s values — pick the field, what kind of data it is, then what to do.</p>
-        <Field label="Field to clean up">
-          <FieldSelect value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} />
-        </Field>
-        <Field label="What kind of values are they?">
-          <Select
-            value={cat}
-            width={W}
-            options={FORMATTER_CATEGORIES.map((c) => ({ value: c.value, label: c.label, hint: c.hint }))}
-            onChange={(c) => {
-              const first = FORMATTER_ACTIONS.find((a) => a.cat === c);
-              if (first && first.cat !== cat) onChange({ op: first.value });
-            }}
-          />
-        </Field>
-        <Field label="What should we do?">
-          <Select value={op} width={W} options={actions.map((a) => ({ value: a.value, label: a.label, hint: a.hint }))} onChange={(v) => onChange({ op: v })} />
-        </Field>
-        {action && <p className="-mt-1 text-xs text-neutral-400">{action.hint}</p>}
-
-        {op === "round" && <Field label="Decimal places"><NumberField value={Number(cfg.decimals ?? 2)} min={0} onChange={(n) => onChange({ decimals: n ?? 0 })} /></Field>}
-        {op === "replace" && (
-          <>
-            <Field label="Find this text"><input value={(cfg.find as string) ?? ""} onChange={(e) => onChange({ find: e.target.value })} className={INPUT} /></Field>
-            <Field label="Replace it with"><ValueInput value={storedToValue(cfg, "replaceWith", groups)} groups={groups} placeholder="new value" onChange={(v) => onChange(valueToStored(v, "replaceWith"))} /></Field>
-          </>
-        )}
-        {op === "default" && <Field label="Value to use when empty"><ValueInput value={storedToValue(cfg, "defaultValue", groups)} groups={groups} placeholder="fallback value" onChange={(v) => onChange(valueToStored(v, "defaultValue"))} /></Field>}
-
-        <Advanced>
-          <Field label="Save the result to a different field">
-            <input value={(cfg.outputField as string) ?? ""} placeholder="Leave blank to update the same field" onChange={(e) => onChange({ outputField: e.target.value || undefined })} className={INPUT} />
-          </Field>
-        </Advanced>
-      </div>
-    );
-  }
-
   if (type === "calculate") {
     const mode = String(cfg.mode ?? "number");
     return (
@@ -641,10 +639,6 @@ function NodeConfig({
         {mode === "compare" && <CalcCompare cfg={cfg} inputs={inputs} numberGroups={numberGroups} onChange={onChange} onSetInput={onSetInput} />}
       </div>
     );
-  }
-
-  if (type === "aggregate") {
-    return <CalcNumber cfg={cfg} groups={groups} onChange={onChange} />;
   }
 
   // output (legacy)
@@ -729,8 +723,9 @@ function CalcCompare({ cfg, inputs, numberGroups, onChange, onSetInput }: { cfg:
 
 /**
  * A compare step's number input: type a literal number directly, or use the data
- * button at the end to pick an earlier step's number instead (a scalar step's Result,
- * or a dataset step's Output number — its record count, e.g. "56 passed").
+ * icon INSIDE the input to pick an earlier step's number instead (a scalar step's
+ * Result, or a dataset step's Output number — its record count, e.g. "56 passed").
+ * The browser opens aligned under the input, extending left over the canvas.
  */
 function NumberPicker({
   handle,
@@ -757,43 +752,42 @@ function NumberPicker({
   const preview = chosen?.fields[0]?.sample ?? desc?.value;
   return (
     <Field label={label}>
-      <div className="flex items-stretch gap-1.5">
-        {desc ? (
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1.5">
-            <span className="min-w-0 truncate text-sm text-neutral-800">{chosenLabel}</span>
-            <button type="button" onClick={() => onSetInput(handle, null)} className="shrink-0 text-neutral-400 hover:text-neutral-700" title="Clear — type a number instead" aria-label="Clear the picked step">
-              ✕
-            </button>
-          </div>
-        ) : (
-          <div className="min-w-0 flex-1">
-            <NumberField value={fixed} allowNull placeholder="Type a number…" onChange={onSetFixed} />
-          </div>
-        )}
-        <DataBrowser
-          groups={groups}
-          width={W}
-          onPick={(ref) => {
-            onSetInput(handle, ref.producerStepId);
-            onSetFixed(null);
-          }}
-          trigger={({ toggle }) => (
+      <DataBrowser
+        groups={groups}
+        onPick={(ref) => {
+          onSetInput(handle, ref.producerStepId);
+          onSetFixed(null);
+        }}
+        trigger={({ toggle }) => (
+          <div className="relative">
+            {desc ? (
+              <div className="flex w-full items-center justify-between gap-2 rounded-md border border-neutral-300 bg-neutral-50 py-1.5 pl-2 pr-14 text-sm">
+                <span className="min-w-0 truncate text-neutral-800">{chosenLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => onSetInput(handle, null)}
+                  className="absolute right-8 top-1/2 -translate-y-1/2 rounded p-1 text-neutral-400 hover:text-neutral-700"
+                  title="Clear — type a number instead"
+                  aria-label="Clear the picked step"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <NumberField value={fixed} allowNull placeholder="Type a number…" onChange={onSetFixed} className="pr-9" />
+            )}
             <button
               type="button"
               onClick={toggle}
               title="Use a number from an earlier step"
               aria-label="Pick a number from an earlier step"
-              className="flex shrink-0 items-center justify-center rounded-md border border-neutral-300 px-2 text-neutral-500 hover:border-neutral-400 hover:bg-neutral-50 hover:text-neutral-800"
+              className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center justify-center rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <ellipse cx="12" cy="6" rx="7" ry="3" />
-                <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
-                <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
-              </svg>
+              <DataIcon />
             </button>
-          )}
-        />
-      </div>
+          </div>
+        )}
+      />
       {desc && preview != null && <p className="mt-1 text-xs text-neutral-500">= {String(preview)}</p>}
     </Field>
   );
@@ -1009,11 +1003,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Advanced({ children }: { children: React.ReactNode }) {
-  return (
-    <details className="rounded border border-neutral-200 p-2">
-      <summary className="cursor-pointer text-xs font-medium text-neutral-500">Advanced</summary>
-      <div className="mt-2 space-y-2">{children}</div>
-    </details>
-  );
-}

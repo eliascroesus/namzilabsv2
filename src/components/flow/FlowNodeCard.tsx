@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import type { NodeType } from "@/lib/flow/types";
+import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
 import type { FNode, NodeData } from "./graph-utils";
 import { STATUS_META, nodeTitle, pathHandles, resultLabel, type NodeStatus } from "./node-meta";
 import { NodeGlyph } from "./icons";
@@ -75,7 +75,9 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const sm = STATUS_META[status];
   const test = data.lastTest;
   const isPaths = t === "paths";
-  const isCompare = t === "formula" || (t === "calculate" && String(data.config.mode ?? "") === "compare");
+  const isCompare =
+    (t === "formula" && !isDatasetFormulaOp(data.config.op ?? "percentage")) ||
+    (t === "calculate" && String(data.config.mode ?? "") === "compare");
   const border = selected ? "border-blue-400 ring-2 ring-blue-500" : sm.border;
   const freeHandles = (data.freeHandles as Array<{ id: string; label: string }> | undefined) ?? [];
 
@@ -97,13 +99,6 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
               off-centre jog). The two numbers are chosen in the panel, not by port. */}
           <Handle type="target" id="a" position={Position.Top} style={HIDDEN_HANDLE} />
           <Handle type="target" id="b" position={Position.Top} style={HIDDEN_HANDLE} />
-        </>
-      ) : t === "combine" ? (
-        <>
-          {/* The plain handle anchors the chain edge; "src" anchors picked-source
-              reference edges (chosen in the panel — they never move the node). */}
-          <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE} />
-          <Handle type="target" id="src" position={Position.Top} style={HIDDEN_HANDLE} />
         </>
       ) : t !== "app" ? (
         <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE} />

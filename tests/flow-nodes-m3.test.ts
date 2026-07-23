@@ -18,7 +18,7 @@ afterEach(async () => {
   await close();
 });
 
-async function ev(o: { source?: string; eventType: string; subject?: string | null; value?: number; daysAgo?: number }) {
+async function ev(o: { source?: string; eventType: string; subject?: string | null; value?: number; daysAgo?: number; properties?: Record<string, unknown> }) {
   await db.insert(events).values({
     eventId: `${o.source ?? "webhook"}:${randomUUID()}`,
     orgId: ORG,
@@ -28,7 +28,7 @@ async function ev(o: { source?: string; eventType: string; subject?: string | nu
     subject: o.subject ?? null,
     occurredAt: new Date(Date.now() - (o.daysAgo ?? 1) * 86_400_000),
     value: o.value != null ? String(o.value) : null,
-    properties: {},
+    properties: o.properties ?? {},
   });
 }
 
@@ -148,154 +148,76 @@ describe("Formula node", () => {
   });
 });
 
-describe("Combine node", () => {
-  async function seedTwoSources() {
-    await ev({ source: "a", eventType: "lead", subject: "x" });
-    await ev({ source: "a", eventType: "lead", subject: "y" });
-    await ev({ source: "b", eventType: "lead", subject: "y" });
-    await ev({ source: "b", eventType: "lead", subject: "z" });
-  }
-  const base = (mode: string, extra: Record<string, unknown> = {}) =>
-    G(
-      [
-        N("a", "app", { connectionId: CONN, source: "a" }),
-        N("b", "app", { connectionId: CONN, source: "b" }),
-        N("c", "combine", { mode, identityField: "subject", ...extra }),
-        N("agg", "aggregate", { aggregation: "count" }),
-        N("o", "output", {}),
-      ],
-      [E("a", "c"), E("b", "c"), E("c", "agg"), E("agg", "o")],
+describe("Get data — Remove duplicates (replaces the Combine node)", () => {
+  it("dedupes by the chosen field, keeping the newest record, before anything else runs", async () => {
+    await ev({ eventType: "lead", subject: "x", daysAgo: 5, properties: { v: "old" } });
+    await ev({ eventType: "lead", subject: "x", daysAgo: 1, properties: { v: "new" } });
+    await ev({ eventType: "lead", subject: "y", daysAgo: 2 });
+    const g = G(
+      [N("a", "app", { connectionId: CONN, dedupe: true, dedupeField: "subject" }), N("agg", "formula", { op: "count" }), N("o", "output", {})],
+      [E("a", "agg"), E("agg", "o")],
     );
-
-  it("stacks all records", async () => {
-    await seedTwoSources();
-    expect((await run(base("stack"))).outputs[0].tile.value).toBe(4);
-  });
-  it("dedupes by identity", async () => {
-    await seedTwoSources();
-    expect((await run(base("dedupe"))).outputs[0].tile.value).toBe(3); // x,y,z
-  });
-  it("keeps only matched base records", async () => {
-    await seedTwoSources();
-    expect((await run(base("match", { keep: "matched" }))).outputs[0].tile.value).toBe(1); // y
-  });
-  it("keeps only unmatched base records", async () => {
-    await seedTwoSources();
-    expect((await run(base("match", { keep: "unmatched" }))).outputs[0].tile.value).toBe(1); // x
+    const r = await run(g);
+    expect(r.nodes.get("a")!.recordsOut).toBe(2); // duplicates never enter the flow
+    expect(r.outputs[0].tile.value).toBe(2);
+    const kept = (r.nodes.get("a") as { sample: Array<{ subject: string | null; properties: Record<string, unknown> }> }).sample.find((s) => s.subject === "x")!;
+    expect(kept.properties.v).toBe("new"); // the newest copy wins
   });
 
-  it("stacks three or more sources", async () => {
+  it("dedupes by a property field (e.g. an email column)", async () => {
+    await ev({ eventType: "lead", properties: { email: "a@b.com" } });
+    await ev({ eventType: "lead", properties: { email: "a@b.com" } });
+    await ev({ eventType: "lead", properties: { email: "c@d.com" } });
+    const g = G([N("a", "app", { connectionId: CONN, dedupe: true, dedupeField: "properties.email" })], []);
+    expect((await run(g)).nodes.get("a")!.recordsOut).toBe(2);
+  });
+
+  it("records with an empty identity always pass (they can't be duplicates)", async () => {
+    await ev({ eventType: "lead", subject: null });
+    await ev({ eventType: "lead", subject: null });
+    await ev({ eventType: "lead", subject: "x" });
+    await ev({ eventType: "lead", subject: "x" });
+    const g = G([N("a", "app", { connectionId: CONN, dedupe: true, dedupeField: "subject" })], []);
+    expect((await run(g)).nodes.get("a")!.recordsOut).toBe(3); // both empties + one x
+  });
+
+  it("dedupe off (the default) loads everything unchanged", async () => {
+    await ev({ eventType: "lead", subject: "x" });
+    await ev({ eventType: "lead", subject: "x" });
+    const g = G([N("a", "app", { connectionId: CONN })], []);
+    expect((await run(g)).nodes.get("a")!.recordsOut).toBe(2);
+  });
+
+  it("legacy Combine nodes migrate to pass-through Filters (and drop their src edges)", async () => {
     await ev({ source: "a", eventType: "lead", subject: "x" });
-    await ev({ source: "b", eventType: "lead", subject: "y" });
-    await ev({ source: "d", eventType: "lead", subject: "z" });
+    await ev({ source: "a", eventType: "lead", subject: "x" });
     const g = G(
       [
         N("a", "app", { connectionId: CONN, source: "a" }),
         N("b", "app", { connectionId: CONN, source: "b" }),
-        N("d", "app", { connectionId: CONN, source: "d" }),
-        N("c", "combine", { mode: "stack" }),
+        N("c", "combine", { mode: "dedupe", identityField: "subject" }),
         N("agg", "aggregate", { aggregation: "count" }),
         N("o", "output", {}),
       ],
-      [E("a", "c"), E("b", "c"), E("d", "c"), E("c", "agg"), E("agg", "o")],
-    );
-    expect((await run(g)).outputs[0].tile.value).toBe(3);
-  });
-
-  it("new edge shape: a chain input plus 'src' reference inputs combine the same way", async () => {
-    await seedTwoSources();
-    const g = G(
-      [
-        N("a", "app", { connectionId: CONN, source: "a" }),
-        N("b", "app", { connectionId: CONN, source: "b" }),
-        N("c", "combine", { mode: "stack" }),
-        N("agg", "aggregate", { aggregation: "count" }),
-        N("o", "output", {}),
-      ],
-      // The chain edge holds the step's place in the line; picked sources ride "src".
       [E("a", "c"), ET("b", "c", "src"), E("c", "agg"), E("agg", "o")],
     );
-    expect((await run(g)).outputs[0].tile.value).toBe(4);
+    expect(g.nodes.find((n) => n.id === "c")?.type).toBe("filter");
+    expect(g.edges.some((e) => e.targetHandle === "src")).toBe(false);
+    const r = await run(g);
+    expect(r.nodes.get("c")!.status).toBe("ok");
+    expect(r.outputs[0].tile.value).toBe(2); // pass-through: no silent dedupe anymore
   });
 
-  it("deduping fills property gaps instead of overwriting real values with blanks", async () => {
-    const mk = (source: string, props: Record<string, unknown>) =>
-      db.insert(events).values({
-        eventId: `${source}:${randomUUID()}`,
-        orgId: ORG,
-        connectionId: CONN,
-        source,
-        eventType: "lead",
-        subject: "y",
-        occurredAt: new Date(Date.now() - 86_400_000),
-        value: null,
-        properties: props,
-      });
-    await mk("a", { plan: "pro" });
-    await mk("b", { plan: "" });
-    const g = (wins: "first" | "last") =>
-      G(
-        [
-          N("a", "app", { connectionId: CONN, source: "a" }),
-          N("b", "app", { connectionId: CONN, source: "b" }),
-          N("c", "combine", { mode: "dedupe", identityField: "subject", sourceWins: wins }),
-        ],
-        [E("a", "c"), E("b", "c")],
-      );
-    // Whichever source wins, the blank plan never erases the real one — collisions
-    // resolve on the backend, so the builder needs no scary overwrite warning.
-    for (const wins of ["first", "last"] as const) {
-      const r = await run(g(wins));
-      const c = r.nodes.get("c") as { sample: Array<{ properties: Record<string, unknown> }> };
-      expect(c.sample[0].properties.plan).toBe("pro");
-    }
-  });
-
-  it("Unite joins lanes; a single-input Combine then merges/matches within the stream", async () => {
-    // Two sheets: x only in a, y in both, z only in b.
-    await seedTwoSources();
-    const g = (mode: string, keep = "all") =>
-      G(
-        [
-          N("a", "app", { connectionId: CONN, source: "a" }),
-          N("b", "app", { connectionId: CONN, source: "b" }),
-          N("u", "unite", {}),
-          N("c", "combine", { mode, identityField: "subject", keep }),
-        ],
-        [E("a", "u"), E("b", "u"), E("u", "c")],
-      );
-    // Unite = every record from every lane.
-    const united = await run(g("stack"));
-    expect(united.nodes.get("u")!.recordsOut).toBe(4);
-    // Merge duplicates → one record per subject (x, y, z).
-    expect((await run(g("dedupe"))).nodes.get("c")!.recordsOut).toBe(3);
-    // Only records found more than once → y.
-    const dupes = await run(g("match", "matched"));
-    expect(dupes.nodes.get("c")!.recordsOut).toBe(1);
-    expect((dupes.nodes.get("c") as { sample: Array<{ subject: string }> }).sample[0].subject).toBe("y");
-    // Only records found once → x and z.
-    expect((await run(g("match", "unmatched"))).nodes.get("c")!.recordsOut).toBe(2);
-  });
-
-  it("Match mode: the chosen base source controls which records survive", async () => {
+  it("Unite still joins lanes into one stream", async () => {
     await ev({ source: "a", eventType: "lead", subject: "x" });
     await ev({ source: "a", eventType: "lead", subject: "y" });
     await ev({ source: "b", eventType: "lead", subject: "y" });
     await ev({ source: "b", eventType: "lead", subject: "z" });
-    const mk = (baseSourceId: string) =>
-      G(
-        [
-          N("a", "app", { connectionId: CONN, source: "a" }),
-          N("b", "app", { connectionId: CONN, source: "b" }),
-          N("c", "combine", { mode: "match", identityField: "subject", keep: "unmatched", baseSourceId }),
-          N("o", "output", {}),
-        ],
-        [E("a", "c"), E("b", "c"), E("c", "o")],
-      );
-    const baseA = await run(mk("a"));
-    expect((baseA.nodes.get("c") as { sample: Array<{ subject: string }> }).sample[0].subject).toBe("x");
-    const baseB = await run(mk("b"));
-    expect((baseB.nodes.get("c") as { sample: Array<{ subject: string }> }).sample[0].subject).toBe("z");
+    const g = G(
+      [N("a", "app", { connectionId: CONN, source: "a" }), N("b", "app", { connectionId: CONN, source: "b" }), N("u", "unite", {})],
+      [E("a", "u"), E("b", "u")],
+    );
+    expect((await run(g)).nodes.get("u")!.recordsOut).toBe(4);
   });
 });
 
@@ -338,8 +260,40 @@ describe("Group node", () => {
   });
 });
 
-describe("Formatter node", () => {
-  it("rounds a numeric field before aggregation", async () => {
+describe("Automatic date normalization (replaces the Clean up values node)", () => {
+  it("a Sheets-style text timestamp reads as a canonical ISO date with no cleanup step", async () => {
+    await db.insert(events).values({
+      eventId: `gsheets:${randomUUID()}`,
+      orgId: ORG,
+      connectionId: CONN,
+      source: "gsheets",
+      eventType: "row_added",
+      subject: null,
+      occurredAt: new Date(),
+      value: null,
+      properties: { ts: "7/21/2026 14:23:45", Amount: "1250", Email: "a@b.com" },
+    });
+    const g = G([N("a", "app", { connectionId: CONN })], []);
+    const sample = ((await run(g)).nodes.get("a") as { sample: Array<{ properties: Record<string, unknown> }> }).sample[0];
+    expect(sample.properties.ts).toBe("2026-07-21T14:23:45.000Z"); // canonical, deterministic
+    expect(sample.properties.Amount).toBe("1250"); // non-dates byte-identical
+    expect(sample.properties.Email).toBe("a@b.com");
+  });
+
+  it("normalized date fields flow through filters and stay usable for date comparisons", async () => {
+    await ev({ eventType: "row_added", properties: { booked_on: "7/21/2026" } });
+    await ev({ eventType: "row_added", properties: { booked_on: "7/21/2020" } });
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("f", "filter", { combinator: "and", rules: [{ field: "properties.booked_on", op: "after", value: "2025-01-01" }] }),
+      ],
+      [E("a", "f")],
+    );
+    expect((await run(g)).nodes.get("f")!.recordsOut).toBe(1);
+  });
+
+  it("legacy Formatter nodes migrate to pass-through Filters", async () => {
     await ev({ eventType: "deal", value: 1.4 });
     await ev({ eventType: "deal", value: 1.6 });
     const g = G(
@@ -351,35 +305,8 @@ describe("Formatter node", () => {
       ],
       [E("a", "fmt"), E("fmt", "agg"), E("agg", "o")],
     );
-    expect((await run(g)).outputs[0].tile.value).toBe(3); // 1 + 2
-  });
-
-  it("fixes a text timestamp into a real date, and buckets into hours", async () => {
-    // A Sheets-style row whose Timestamp column is plain text.
-    await db.insert(events).values({
-      eventId: `gsheets:${randomUUID()}`,
-      orgId: ORG,
-      connectionId: CONN,
-      source: "gsheets",
-      eventType: "row_added",
-      subject: null,
-      occurredAt: new Date(),
-      value: null,
-      properties: { ts: "7/21/2026 14:23:45" },
-    });
-    const g = (op: string, outputField?: string) =>
-      G(
-        [N("a", "app", { connectionId: CONN }), N("fmt", "formatter", { field: "ts", op, outputField })],
-        [E("a", "fmt")],
-      );
-    const fixed = await run(g("to_date"));
-    const fixedSample = (fixed.nodes.get("fmt") as { sample: Array<{ properties: Record<string, unknown> }> }).sample[0];
-    expect(String(fixedSample.properties.ts)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/); // proper ISO date-time
-
-    const hourly = await run(g("hour", "ts_hour"));
-    const hourlySample = (hourly.nodes.get("fmt") as { sample: Array<{ properties: Record<string, unknown> }> }).sample[0];
-    expect(String(hourlySample.properties.ts_hour)).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:00$/); // "2026-07-21 14:00"
-    expect(hourlySample.properties.ts).toBe("7/21/2026 14:23:45"); // original kept (saved to a new field)
+    expect(g.nodes.find((n) => n.id === "fmt")?.type).toBe("filter");
+    expect((await run(g)).outputs[0].tile.value).toBe(3); // 1.4 + 1.6, unrounded pass-through
   });
 });
 

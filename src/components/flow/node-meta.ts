@@ -1,4 +1,4 @@
-import { type NodeType } from "@/lib/flow/types";
+import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
 import type { NodeData } from "./graph-utils";
 
 /** The four visible stages a metric flows through, in order. */
@@ -7,17 +7,13 @@ export type Stage = (typeof STAGES)[number];
 
 /** Plain-English node metadata. Labels read like instructions, not jargon. */
 export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: Stage; advanced: boolean; keywords: string; hidden?: boolean }> = {
-  app: { label: "Get data", blurb: "Pull records from a connected app", stage: "Data", advanced: false, keywords: "integration source connect data app get" },
+  app: { label: "Get data", blurb: "Pull records from a connected app", stage: "Data", advanced: false, keywords: "integration source connect data app get duplicates dedupe" },
   unite: { label: "Unite data", blurb: "Join lanes back into one line", stage: "Data", advanced: false, keywords: "unite merge join together branches lanes sources union bring back" },
-  combine: { label: "Combine data", blurb: "De-duplicate or match records", stage: "Data", advanced: true, keywords: "merge join dedupe union combine sources duplicates" },
   filter: { label: "Filter records", blurb: "Keep only the records you want", stage: "Conditions", advanced: false, keywords: "condition where keep only match date range filter" },
   paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", advanced: true, keywords: "split branch route condition paths" },
-  // "Count" and "Calculate" are two focused steps: Count turns records into a number
-  // (count/sum/avg/…), Calculate compares two numbers. They map to the aggregate + formula
-  // executors below. The old merged "calculate" node is retired from the picker.
-  aggregate: { label: "Count", blurb: "Count, sum, or average records into a number", stage: "Calculation", advanced: false, keywords: "count sum average total aggregate number records maximum minimum distinct" },
-  formula: { label: "Calculate", blurb: "Compare two numbers — rate, ratio, % change", stage: "Calculation", advanced: false, keywords: "calculate compare rate ratio percentage change difference formula divide" },
-  formatter: { label: "Clean up values", blurb: "Fix text, numbers, and dates", stage: "Calculation", advanced: true, keywords: "format clean text number round date formatter" },
+  // The one Calculation step: it aggregates records into a number (count/sum/avg/…,
+  // the former Count node) OR compares two numbers (rate, ratio, % change).
+  formula: { label: "Calculate", blurb: "Count, sum, or compare — rate, ratio, % change", stage: "Calculation", advanced: false, keywords: "calculate count sum average total maximum minimum distinct compare rate ratio percentage change difference formula divide aggregate number" },
   // Output is replaced by "Review & publish" (metrics are chosen there). Kept so old
   // flows with an Output node still render + run; hidden from the picker.
   output: { label: "Show on dashboard", blurb: "Save the metric as a dashboard tile", stage: "Dashboard", advanced: false, keywords: "dashboard tile metric result output show", hidden: true },
@@ -66,8 +62,6 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
       return { identityField: "subject" };
     case "filter":
       return { combinator: "and", rules: [] };
-    case "aggregate":
-      return { aggregation: "count", field: "value", distinctField: "subject", groupBy: null };
     case "calculate":
       return { mode: "number", aggregation: "count", field: "value", distinctField: "subject", groupBy: null, breakdownMode: "field", breakdownField: "source", categories: [], fallbackLabel: "Other", op: "percentage" };
     case "output":
@@ -76,14 +70,10 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
       return { dateField: "occurredAt", mode: "preset", preset: "last_30_days", days: 30 };
     case "formula":
       return { op: "percentage" };
-    case "combine":
-      return { mode: "dedupe", identityField: "subject", keep: "all", sourceWins: "first" };
     case "unite":
       return {};
     case "group":
       return { mode: "field", field: "source", aggregation: "count", valueField: "value", distinctField: "subject", categories: [], fallbackLabel: "Other" };
-    case "formatter":
-      return { field: "value", op: "round", decimals: 2 };
     case "paths":
       return { paths: [{ id: "p1", label: "Path A" }, { id: "p2", label: "Path B" }] };
     default:
@@ -119,6 +109,26 @@ export function formulaHandleLabels(op: string): { a: string; b: string } {
   }
 }
 
+/** A one-line human expression for a dataset Calculate (count/sum/avg/…). */
+export function datasetCalcExpression(op: string, fieldLabel: string): string {
+  switch (op) {
+    case "count":
+      return "Count of records";
+    case "count_distinct":
+      return `Unique values of ${fieldLabel}`;
+    case "sum":
+      return `Sum of ${fieldLabel}`;
+    case "avg":
+      return `Average of ${fieldLabel}`;
+    case "min":
+      return `Lowest ${fieldLabel}`;
+    case "max":
+      return `Highest ${fieldLabel}`;
+    default:
+      return op;
+  }
+}
+
 /** A one-line human expression for a Formula, using upstream titles when known. */
 export function formulaExpression(op: string, aName: string, bName: string): string {
   switch (op) {
@@ -147,18 +157,19 @@ export function summary(type: string, data: NodeData): string {
   const c = data.config;
   if (type === "app") return `${(c.connectionName as string) ?? "Choose app"} · ${(c.eventType as string) ?? "all events"}`;
   if (type === "filter") return `${((c.rules as unknown[]) ?? []).length} rule(s)`;
-  if (type === "aggregate") {
-    const agg = String(c.aggregation ?? "count");
-    const gb = c.groupBy as { type?: string; unit?: string; field?: string } | null;
-    const by = gb ? ` by ${gb.type === "time" ? gb.unit : gb.field}` : "";
-    return `${agg}${by}`;
-  }
   if (type === "output") return `${(c.viz as string) ?? "number"} · ${(c.format as string) ?? "number"}`;
   if (type === "time") {
     const mode = String(c.mode ?? "preset");
     return mode === "preset" ? String(c.preset ?? "last_30_days").replace(/_/g, " ") : mode === "rolling" ? `last ${c.days ?? 30} days` : "between dates";
   }
-  if (type === "formula") return formulaExpression(String(c.op ?? "percentage"), "A", "B");
+  if (type === "formula") {
+    const op = String(c.op ?? "percentage");
+    if (isDatasetFormulaOp(op)) {
+      const gb = c.groupBy as { type?: string; unit?: string } | null;
+      return `${datasetCalcExpression(op, String(c.field ?? "value"))}${gb?.type === "time" ? ` by ${gb.unit}` : ""}`;
+    }
+    return formulaExpression(op, "A", "B");
+  }
   if (type === "calculate") {
     const mode = String(c.mode ?? "number");
     if (mode === "compare") return formulaExpression(String(c.op ?? "percentage"), "First", "Second");
@@ -167,9 +178,7 @@ export function summary(type: string, data: NodeData): string {
     const gb = c.groupBy as { type?: string; unit?: string; field?: string } | null;
     return `${agg}${gb ? ` by ${gb.type === "time" ? gb.unit : gb.field}` : ""}`;
   }
-  if (type === "combine") return `${String(c.mode ?? "stack")} on ${String(c.identityField ?? "subject")}`;
   if (type === "group") return String(c.mode) === "field" ? `by ${String(c.field ?? "source")}` : `${((c.categories as unknown[]) ?? []).length} categories`;
-  if (type === "formatter") return `${String(c.op ?? "round")} · ${String(c.field ?? "value")}`;
   if (type === "paths") return ""; // the hub reads simply as "Split into paths" (its label)
   return "";
 }
@@ -186,17 +195,12 @@ export function resultLabel(type: string, test: { recordsIn: number; recordsOut:
       return `${recordsOut} passed`;
     case "time":
       return `${recordsOut} kept`;
-    case "formatter":
-      return `${recordsOut} cleaned`;
-    case "combine":
-      return `${recordsOut} combined`;
     case "unite":
       return `${recordsOut} united`;
     case "paths":
       return `${recordsOut} routed`;
     case "group":
       return `${recordsOut} groups`;
-    case "aggregate":
     case "formula":
     case "calculate":
     case "output":

@@ -1,12 +1,19 @@
 import { z } from "zod";
 
-/** All node types in the builder. M1 implements the core four; the rest arrive in M3. */
+/**
+ * All node types in the builder. Three former types no longer exist and are
+ * migrated on load by {@link parseGraph}:
+ *  - "combine"   → de-duplication now lives ON the Get data step (a checkbox);
+ *                  stored combine nodes become pass-through Filters.
+ *  - "formatter" → date cleanup is automatic on the backend (normalize-dates);
+ *                  stored formatter nodes become pass-through Filters.
+ *  - "aggregate" (Count) → merged into "formula" (Calculate), which now also
+ *                  aggregates records (count/sum/avg/min/max) directly.
+ */
 export const NODE_TYPES = [
   "app",
   "filter",
-  "aggregate",
   "output",
-  "combine",
   "paths",
   // Unite is the opposite of Split into paths: it joins several lanes (branches,
   // extra data sources) back into ONE line, so every later step can use all of
@@ -14,16 +21,12 @@ export const NODE_TYPES = [
   "unite",
   "group",
   "formula",
-  "formatter",
   "time",
-  // "calculate" merges Aggregate + Formula + Group into one step. The three legacy
-  // types remain in the engine so existing flows keep loading/running unchanged.
+  // "calculate" is the legacy merged node; it remains in the engine so existing
+  // flows keep loading/running unchanged (hidden from the picker).
   "calculate",
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
-
-/** Nodes the engine can execute today (M1/M2 core). */
-export const CORE_NODE_TYPES = ["app", "filter", "aggregate", "output"] as const;
 
 // ---------- Filter ----------
 export const FLOW_FILTER_OPS = [
@@ -137,6 +140,14 @@ export const AppConfigSchema = z.object({
    * step reads (events tagged with its hash). Empty for connection-scoped sources.
    */
   sourceConfig: z.record(z.string(), z.unknown()).default({}),
+  /**
+   * Remove duplicates at the source: the FIRST thing that happens to loaded
+   * records, before any later step runs. Records sharing the same `dedupeField`
+   * value collapse to the newest one; records with an empty value always pass
+   * (they can't be duplicates of anything). Replaces the old Combine node.
+   */
+  dedupe: z.boolean().default(false),
+  dedupeField: z.string().default("subject"),
 });
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 
@@ -197,7 +208,13 @@ export const TimeConfigSchema = z.object({
 });
 export type TimeConfig = z.infer<typeof TimeConfigSchema>;
 
-// ---------- Formula (advanced) ----------
+// ---------- Formula / Calculate ----------
+/**
+ * The unified Calculate step. The first nine ops compare TWO NUMBERS (its a/b
+ * inputs — wired steps or typed literals). The dataset ops (the former Count
+ * node, merged in here) aggregate the RECORDS flowing in through the chain
+ * edge instead — no numerator/denominator, just a field to aggregate.
+ */
 export const FORMULA_OPS = [
   "add",
   "subtract",
@@ -208,25 +225,34 @@ export const FORMULA_OPS = [
   "difference",
   "ratio",
   "average",
+  // Dataset aggregations (across the records flowing in):
+  "count",
+  "count_distinct",
+  "sum",
+  "avg",
+  "min",
+  "max",
 ] as const;
+export type FormulaOp = (typeof FORMULA_OPS)[number];
+
+/** Ops that aggregate the incoming records (vs. comparing two numbers). */
+export const DATASET_FORMULA_OPS = ["count", "count_distinct", "sum", "avg", "min", "max"] as const;
+export function isDatasetFormulaOp(op: unknown): boolean {
+  return (DATASET_FORMULA_OPS as readonly string[]).includes(String(op ?? ""));
+}
+
 export const FormulaConfigSchema = z.object({
   op: z.enum(FORMULA_OPS).default("percentage"),
   /** Typed-in literal numbers for the A/B inputs — used when no step is wired in. */
   aFixed: z.number().nullable().optional(),
   bFixed: z.number().nullable().optional(),
+  // Dataset ops: which field to aggregate (sum/avg/min/max read numbers from it,
+  // count_distinct counts its unique values), plus an optional time split.
+  field: z.string().default("value"),
+  distinctField: z.string().default("subject"),
+  groupBy: GroupBySchema,
 });
 export type FormulaConfig = z.infer<typeof FormulaConfigSchema>;
-
-// ---------- Combine (advanced) ----------
-export const CombineConfigSchema = z.object({
-  mode: z.enum(["stack", "dedupe", "match"]).default("stack"),
-  identityField: z.string().default("subject"),
-  keep: z.enum(["all", "matched", "unmatched"]).default("all"),
-  sourceWins: z.enum(["first", "last"]).default("first"),
-  /** Match mode: id of the connected source node whose records are the base set. */
-  baseSourceId: z.string().nullable().default(null),
-});
-export type CombineConfig = z.infer<typeof CombineConfigSchema>;
 
 // ---------- Group / Category (advanced) ----------
 export const GroupConfigSchema = z.object({
@@ -263,42 +289,6 @@ export const CalculateConfigSchema = z.object({
   bFixed: z.number().nullable().optional(),
 });
 export type CalculateConfig = z.infer<typeof CalculateConfigSchema>;
-
-// ---------- Formatter (advanced) ----------
-export const FORMATTER_OPS = [
-  "to_number",
-  "to_text",
-  "round",
-  "uppercase",
-  "lowercase",
-  "trim",
-  "normalize_email",
-  "normalize_phone",
-  "to_date",
-  "date_only",
-  "year_month",
-  "hour",
-  "replace",
-  "default",
-  "multiply",
-  "divide",
-] as const;
-export const FormatterConfigSchema = z.object({
-  field: z.string().default("value"),
-  op: z.enum(FORMATTER_OPS).default("round"),
-  decimals: z.number().int().min(0).max(6).default(2),
-  find: z.string().optional(),
-  // "Replace with" and "Value for empty" support a fixed literal or a mapped field.
-  replaceWith: z.string().optional(),
-  replaceWithKind: z.enum(VALUE_KINDS).default("fixed"),
-  replaceWithField: z.string().optional(),
-  defaultValue: z.string().optional(),
-  defaultValueKind: z.enum(VALUE_KINDS).default("fixed"),
-  defaultValueField: z.string().optional(),
-  factor: z.number().optional(),
-  outputField: z.string().optional(),
-});
-export type FormatterConfig = z.infer<typeof FormatterConfigSchema>;
 
 // ---------- Paths ----------
 // New model: the hub just splits (fan-out); each branch is its own "Path conditions"
@@ -385,8 +375,64 @@ export const FlowGraphSchema = z.object({
 });
 export type FlowGraph = z.infer<typeof FlowGraphSchema>;
 
+/**
+ * Migrate a stored graph from before the combine/formatter/aggregate removal.
+ * Runs inside {@link parseGraph} — the single choke point every load path uses
+ * (editor, publish, materializer) — so no stored flow ever fails to parse:
+ *  - "aggregate" (Count) → "formula" with the matching dataset op (lossless:
+ *    the unified Calculate runs the exact same aggregation, incl. time splits).
+ *  - "combine" / "formatter" → pass-through Filters (no rules). Their jobs
+ *    moved to the Get data step's Remove-duplicates checkbox and the automatic
+ *    backend date normalization respectively.
+ *  - A combine's picked-source ("src") reference edges are dropped with it.
+ */
+function migrateLegacyGraph(raw: unknown): unknown {
+  if (raw == null || typeof raw !== "object") return raw;
+  const g = raw as { nodes?: unknown; edges?: unknown };
+  if (!Array.isArray(g.nodes)) return raw;
+
+  type RawNode = { id?: unknown; type?: unknown; data?: { config?: unknown; [k: string]: unknown }; [k: string]: unknown };
+  const combineIds = new Set<string>();
+  let changed = false;
+
+  const nodes = (g.nodes as RawNode[]).map((n) => {
+    const type = n?.type;
+    if (type === "aggregate") {
+      changed = true;
+      const c = (n.data?.config ?? {}) as Record<string, unknown>;
+      const op = typeof c.aggregation === "string" && (FORMULA_OPS as readonly string[]).includes(c.aggregation) ? c.aggregation : "count";
+      return {
+        ...n,
+        type: "formula",
+        data: {
+          ...(n.data ?? {}),
+          config: {
+            op,
+            field: typeof c.field === "string" ? c.field : "value",
+            distinctField: typeof c.distinctField === "string" ? c.distinctField : "subject",
+            groupBy: c.groupBy ?? null,
+          },
+        },
+      };
+    }
+    if (type === "combine" || type === "formatter") {
+      changed = true;
+      if (type === "combine" && typeof n.id === "string") combineIds.add(n.id);
+      return { ...n, type: "filter", data: { ...(n.data ?? {}), config: { combinator: "and", rules: [] } } };
+    }
+    return n;
+  });
+
+  if (!changed) return raw;
+  type RawEdge = { target?: unknown; targetHandle?: unknown };
+  const edges = Array.isArray(g.edges)
+    ? (g.edges as RawEdge[]).filter((e) => !(e?.targetHandle === "src" && typeof e?.target === "string" && combineIds.has(e.target)))
+    : g.edges;
+  return { ...g, nodes, edges };
+}
+
 export function parseGraph(value: unknown): FlowGraph {
-  return FlowGraphSchema.parse(value ?? { nodes: [], edges: [] });
+  return FlowGraphSchema.parse(migrateLegacyGraph(value ?? { nodes: [], edges: [] }));
 }
 
 // ---------- Engine shapes ----------

@@ -1,5 +1,6 @@
 import type { Node, Edge } from "@xyflow/react";
 import { STANDARD_FIELDS, walkPath } from "@/lib/flow/records";
+import { isDatasetFormulaOp } from "@/lib/flow/types";
 import { catalogEntry } from "@/connectors/catalog";
 import type { NodeTestDTO } from "@/app/dashboard/flows/actions";
 
@@ -51,24 +52,25 @@ export type LibraryCtx = { fromNodeId?: string; sourceHandle?: string | null; on
 
 // ---------- Pure graph algorithms ----------
 
-/** A step that compares two numbers (its a/b inputs are data references, not chain links). */
+/** A step that compares two numbers (its a/b inputs are data references, not chain links).
+ * A Calculate running a dataset aggregation (count/sum/…) is NOT a compare step — its
+ * chain edge is its record input. */
 export function isCompareNode(n: FNode): boolean {
-  return n.type === "formula" || (n.type === "calculate" && String((n.data.config as { mode?: unknown }).mode ?? "") === "compare");
+  if (n.type === "formula") return !isDatasetFormulaOp((n.data.config as { op?: unknown }).op ?? "percentage");
+  return n.type === "calculate" && String((n.data.config as { mode?: unknown }).mode ?? "") === "compare";
 }
 
 /**
  * The edges that define the flow's SHAPE — the line the user reads. A compare step's
- * a/b number edges and a Combine's picked-source edges (targetHandle "src") are data
- * references chosen in the panel; they are excluded here so that changing which data a
- * step reads can never move any node. (A legacy compare step without a plain chain edge
- * keeps its "a" edge as its anchor so it doesn't float.)
+ * a/b number edges are data references chosen in the panel; they are excluded here so
+ * that changing which data a step reads can never move any node. (A legacy compare
+ * step without a plain chain edge keeps its "a" edge as its anchor so it doesn't float.)
  */
 export function structuralEdges(nodes: FNode[], edges: Edge[]): Edge[] {
   const compareIds = new Set(nodes.filter(isCompareNode).map((n) => n.id));
   const hasPlainIn = new Set<string>();
   for (const e of edges) if (compareIds.has(e.target) && e.targetHandle == null) hasPlainIn.add(e.target);
   return edges.filter((e) => {
-    if (e.targetHandle === "src") return false;
     if (!compareIds.has(e.target)) return true;
     if (e.targetHandle === "b") return false;
     if (e.targetHandle === "a") return !hasPlainIn.has(e.target);
@@ -111,10 +113,9 @@ export function computeStepNumbers(nodes: FNode[], allEdges: Edge[]): Map<string
  * Managed top-to-bottom layout. Positions are always computed (users never place
  * nodes): depth flows downward via longest-path layering, and each layer is centred
  * horizontally so branches (Paths) fan out symmetrically. Only structural (chain)
- * edges shape the layout — a step's data references (a compare's numbers, a Combine's
- * picked sources) NEVER move anything. The one deliberate exception: a Combine that
- * merges two or more sibling branches of the same split is centred between (and below)
- * those branches — that merge IS the flow's shape.
+ * edges shape the layout — a compare step's number references NEVER move anything.
+ * A junction that genuinely joins several lanes (a Unite, a branch merge) is centred
+ * between (and below) the lanes it joins — that merge IS the flow's shape.
  */
 export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<string, { x: number; y: number }> {
   const structural = structuralEdges(nodes, allEdges);
@@ -125,56 +126,18 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
     if (!structuralIncoming.has(e.target)) structuralIncoming.set(e.target, []);
     structuralIncoming.get(e.target)!.push({ source: e.source, handle: e.sourceHandle ?? null });
   }
-  // A Combine's picked sources (reference edges) — never structural, but consulted below
-  // to detect a genuine branch merge.
-  const refSourcesBy = new Map<string, string[]>();
-  for (const e of allEdges) {
-    if (e.targetHandle !== "src" || !nodeById.has(e.source) || !nodeById.has(e.target)) continue;
-    if (!refSourcesBy.has(e.target)) refSourcesBy.set(e.target, []);
-    refSourcesBy.get(e.target)!.push(e.source);
-  }
 
-  /** The Paths branch a node lives in ("hubId::handle"), walking up its chain. */
-  const branchKeyOf = (startId: string): string | null => {
-    let cur: string | undefined = startId;
-    const guard = new Set<string>();
-    while (cur && !guard.has(cur)) {
-      guard.add(cur);
-      const up: { source: string; handle: string | null } | undefined = structuralIncoming.get(cur)?.[0];
-      if (!up) return null;
-      const parent = nodeById.get(up.source);
-      if (parent && parent.type === "paths" && up.handle) return `${up.source}::${up.handle}`;
-      cur = up.source;
-    }
-    return null;
-  };
-
-  // Nodes with multiple inputs (chain + references, or legacy plain multi-in Combine):
-  // decide once whether each is a genuine sibling-branch merge (centre it) or a chain
-  // step that merely references extra data (keep it glued to its anchor).
+  // Multi-input junctions (Unite, legacy merges) are centred between their lanes.
   type Merge = { centering: boolean; allSources: string[]; anchor: { source: string; handle: string | null } | null };
   const mergeInfo = new Map<string, Merge>();
   for (const n of nodes) {
-    const refs = refSourcesBy.get(n.id) ?? [];
     const chainIns = structuralIncoming.get(n.id) ?? [];
-    if (refs.length === 0 && chainIns.length <= 1) continue;
-    const anchor = chainIns[0] ?? null;
-    const allSources = [...new Set([...chainIns.map((i) => i.source), ...refs])];
-    const keys = allSources.map(branchKeyOf).filter((k): k is string => k != null);
-    const hubs = new Set(keys.map((k) => k.split("::")[0]));
-    // Centre a junction whose SHAPE joins several lanes: a Unite (2+ chain inputs), or
-    // a merge of sibling branches. A step that merely references extra data (Combine's
-    // src edges) keeps its anchor.
-    const centering = chainIns.length >= 2 || (new Set(keys).size >= 2 && hubs.size === 1) || (!anchor && refs.length > 0);
-    mergeInfo.set(n.id, { centering, allSources, anchor });
+    if (chainIns.length <= 1) continue;
+    mergeInfo.set(n.id, { centering: true, allSources: [...new Set(chainIns.map((i) => i.source))], anchor: chainIns[0] ?? null });
   }
 
-  // Depth: longest path over chain edges, plus a centred merge's reference edges — so a
-  // merge sits below every branch it joins (and its own chain keeps flowing under it).
+  // Depth: longest path over chain edges, so a merge sits below every branch it joins.
   const depthEdges: Array<{ source: string; target: string }> = structural.map((e) => ({ source: e.source, target: e.target }));
-  for (const [id, info] of mergeInfo) {
-    if (info.centering) for (const s of refSourcesBy.get(id) ?? []) depthEdges.push({ source: s, target: id });
-  }
   const indeg = new Map<string, number>();
   const adj = new Map<string, string[]>();
   for (const n of nodes) {
@@ -289,7 +252,12 @@ export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, input
     const sc = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
     return flowFields.some((f) => f.required && String(sc[f.key] ?? "").trim() === "");
   }
-  if (type === "formula") return missingAB;
+  if (type === "formula") {
+    // A dataset Calculate (count/sum/…) just needs records flowing in through
+    // its plain chain edge; a binary one needs both of its numbers.
+    if (isDatasetFormulaOp(cfg.op ?? "percentage")) return !(handles ? handles.some((h) => h == null) : inputCount >= 1);
+    return missingAB;
+  }
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? missingAB : inputCount === 0;
   if (type === "output") return inputCount === 0 || !String(cfg.name ?? "").trim();
   return inputCount === 0;
@@ -349,14 +317,15 @@ export function bridgeEdgeFor(nodeId: string, edges: Edge[]): Edge | null {
 
 // ---------- Connection validity (shape compatibility) ----------
 
-const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths", "unite"]);
-const SCALAR_PRODUCERS = new Set(["aggregate", "formula"]);
-const VALUE_PRODUCERS = new Set(["aggregate", "formula", "group"]);
+const DATASET_PRODUCERS = new Set(["app", "filter", "time", "paths", "unite"]);
+const SCALAR_PRODUCERS = new Set(["formula"]);
+const VALUE_PRODUCERS = new Set(["formula", "group"]);
 
 /** Whether a source→target connection is shape-compatible (mirrors validate.ts). */
 export function isValidFlowConnection(sourceType: string, targetType: string): boolean {
   if (targetType === "app") return false; // App has no inputs.
-  if (targetType === "formula") return SCALAR_PRODUCERS.has(sourceType); // A/B need scalars.
+  // Calculate accepts records via its chain edge (dataset ops) or numbers on A/B.
+  if (targetType === "formula") return SCALAR_PRODUCERS.has(sourceType) || DATASET_PRODUCERS.has(sourceType);
   if (targetType === "output") return DATASET_PRODUCERS.has(sourceType) || VALUE_PRODUCERS.has(sourceType);
   return DATASET_PRODUCERS.has(sourceType); // dataset consumers
 }
@@ -584,7 +553,7 @@ export function flowChecks(nodes: FNode[], edges: Edge[], titleOf: (n: FNode) =>
       checks.push({ nodeId: n.id, title: `“${title}” isn’t connected to anything`, impact: "It has no records to work with, so it produces nothing.", fixLabel: "Connect an input" });
     }
 
-    if (n.type === "formula") {
+    if (n.type === "formula" && !isDatasetFormulaOp(cfg.op ?? "percentage")) {
       const aOk = ins.some((e) => e.targetHandle === "a");
       const bOk = ins.some((e) => e.targetHandle === "b");
       if (!aOk || !bOk) {
@@ -592,7 +561,7 @@ export function flowChecks(nodes: FNode[], edges: Edge[], titleOf: (n: FNode) =>
       }
       for (const e of ins) {
         const src = byId.get(e.source);
-        if (src?.type === "aggregate") {
+        if (src?.type === "formula" && isDatasetFormulaOp((src.data.config as { op?: unknown }).op)) {
           const gb = (src.data.config as { groupBy?: { type?: string; unit?: string; field?: string } | null }).groupBy;
           if (gb) {
             const by = gb.type === "time" ? `by ${gb.unit}` : `by ${gb.field}`;
@@ -651,16 +620,16 @@ export type InputDescriptor = {
 
 function calcOf(node: FNode): string | undefined {
   const c = node.data.config as Record<string, unknown>;
-  if (node.type === "aggregate") {
-    const agg = String(c.aggregation ?? "count");
-    if (agg === "count") return "Count";
-    if (agg === "count_distinct") return `Distinct ${String(c.distinctField ?? "subject")}`;
-    if (agg === "sum") return `Sum of ${String(c.field ?? "value")}`;
-    if (agg === "avg") return `Average of ${String(c.field ?? "value")}`;
-    if (agg === "min") return `Min of ${String(c.field ?? "value")}`;
-    if (agg === "max") return `Max of ${String(c.field ?? "value")}`;
+  if (node.type === "formula") {
+    const op = String(c.op ?? "percentage");
+    if (op === "count") return "Count";
+    if (op === "count_distinct") return `Distinct ${String(c.field ?? "subject")}`;
+    if (op === "sum") return `Sum of ${String(c.field ?? "value")}`;
+    if (op === "avg") return `Average of ${String(c.field ?? "value")}`;
+    if (op === "min") return `Min of ${String(c.field ?? "value")}`;
+    if (op === "max") return `Max of ${String(c.field ?? "value")}`;
+    return "Formula";
   }
-  if (node.type === "formula") return "Formula";
   return undefined;
 }
 

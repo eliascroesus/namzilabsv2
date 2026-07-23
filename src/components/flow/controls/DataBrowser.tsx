@@ -6,24 +6,23 @@ import { SourceBadge } from "./Pill";
 import type { DataField, DataGroup, FieldRef } from "./types";
 import { childFields, filterFields, formatSample, makeFieldRef } from "./field-utils";
 
-/** One selectable field row: human label + type + real sample, drill affordance for containers. */
+/** One selectable field row: human label + type + real sample, drill affordance for containers.
+ * The wide panel puts the sample beside the name (Zapier-style) so more rows fit on screen. */
 function FieldRow({ field, onDrill, onPick }: { field: DataField; onDrill: () => void; onPick: () => void }) {
   const sample = formatSample(field.sample);
   return (
     <button
       type="button"
       onClick={field.container ? onDrill : onPick}
-      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-neutral-100"
+      className="flex w-full items-center gap-3 rounded px-2 py-1.5 text-left hover:bg-neutral-100"
     >
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm text-neutral-800">{field.label}</span>
-          {field.type && field.type !== "unknown" && (
-            <span className="shrink-0 rounded border border-neutral-200 px-1 text-[9px] uppercase tracking-wide text-neutral-400">{field.type}</span>
-          )}
-        </span>
-        {sample != null && <span className="block truncate text-[11px] text-neutral-400">{sample}</span>}
+      <span className="flex min-w-0 max-w-[55%] shrink-0 items-center gap-1.5">
+        <span className="truncate text-sm text-neutral-800">{field.label}</span>
+        {field.type && field.type !== "unknown" && (
+          <span className="shrink-0 rounded border border-neutral-200 px-1 text-[9px] uppercase tracking-wide text-neutral-400">{field.type}</span>
+        )}
       </span>
+      <span className="min-w-0 flex-1 truncate text-right text-xs text-neutral-400">{sample ?? ""}</span>
       {field.container && <span className="shrink-0 text-neutral-400" aria-hidden>›</span>}
     </button>
   );
@@ -36,12 +35,16 @@ function FieldRow({ field, onDrill, onPick }: { field: DataField; onDrill: () =>
  * filters the current level. Picking a field emits a {@link FieldRef} (identity by
  * producing step + path). It only ever shows logically-valid upstream data (the caller
  * supplies the scoped groups), never every node on the canvas.
+ *
+ * The panel is viewport-positioned (escapes the config rail's scroll clipping),
+ * right-aligned under its trigger, and wider than the rail — it extends LEFT over
+ * the canvas so more fields and samples are visible at once, Zapier-style.
  */
 export function DataBrowser({
   groups,
   onPick,
-  align = "left",
-  width = 340,
+  align = "right",
+  width = 560,
   trigger,
   buttonLabel = "Insert data",
   disabled = false,
@@ -95,6 +98,7 @@ export function DataBrowser({
       setOpen={setOpen}
       width={width}
       align={align}
+      fixed
       anchor={
         trigger ? (
           trigger({ open, toggle })
@@ -112,14 +116,14 @@ export function DataBrowser({
         )
       }
     >
-      <div className="flex max-h-80 w-full flex-col">
-        <div className="border-b border-neutral-100 p-1.5">
+      <div className="flex max-h-[30rem] min-h-0 w-full flex-col">
+        <div className="border-b border-neutral-100 p-2">
           <input
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search fields…"
-            className="w-full rounded border border-neutral-300 px-2 py-1 text-xs focus:border-neutral-400 focus:outline-none"
+            className="w-full rounded border border-neutral-300 px-2.5 py-1.5 text-sm focus:border-neutral-400 focus:outline-none"
           />
         </div>
 

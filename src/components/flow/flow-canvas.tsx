@@ -4,7 +4,7 @@ import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ReactFlow, ReactFlowProvider, Background, useNodesState, useEdgesState, type Edge } from "@xyflow/react";
-import { type NodeType } from "@/lib/flow/types";
+import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
 import { saveDraftAction, testNodeAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 import {
   bridgeEdgeFor,
@@ -36,13 +36,13 @@ import { ReviewPublishModal, type Endpoint } from "./ReviewPublishModal";
 
 export type { ConnMeta };
 
-const DATASET_PRODUCERS = new Set(["app", "filter", "time", "formatter", "combine", "paths", "unite"]);
+const DATASET_PRODUCERS = new Set(["app", "filter", "time", "paths", "unite"]);
 const rid = () => `e_${Math.random().toString(36).slice(2, 9)}`;
 
 /** A step that yields a single number, usable as a First/Second number in Compare. */
 function isNumberProducer(n: FNode): boolean {
   const t = String(n.type);
-  if (t === "aggregate" || t === "formula") return true;
+  if (t === "formula") return true;
   if (t === "calculate") {
     const m = String((n.data.config as { mode?: unknown }).mode ?? "number");
     return m === "number" || m === "compare";
@@ -54,7 +54,7 @@ function isNumberProducer(n: FNode): boolean {
 function setupHint(type: string, cfg: Record<string, unknown>, inputCount: number): string {
   if (type === "app") return cfg.connectionId ? "Choose what data to pull." : "Choose an account to load data.";
   if (type === "unite") return "Pick the lanes to bring together.";
-  if (type === "formula") return "Pick or type a First and Second number.";
+  if (type === "formula") return isDatasetFormulaOp(cfg.op ?? "percentage") ? "Connect an input." : "Pick or type a First and Second number.";
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? "Pick a First and Second number." : "Connect an input.";
   if (type === "output") return inputCount === 0 ? "Connect an input." : "Name this metric.";
   return "Connect an input.";
@@ -110,7 +110,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     // numbers they compare can never move them (references are data, not position).
     for (const n of initialGraph.nodes) {
       const raw = n as { id: string; type: string; data?: { config?: unknown } };
-      const isCompare = raw.type === "formula" || (raw.type === "calculate" && String((raw.data?.config as { mode?: unknown } | undefined)?.mode ?? "") === "compare");
+      const cfg = (raw.data?.config ?? {}) as { mode?: unknown; op?: unknown };
+      const isCompare =
+        (raw.type === "formula" && !isDatasetFormulaOp(cfg.op ?? "percentage")) ||
+        (raw.type === "calculate" && String(cfg.mode ?? "") === "compare");
       if (!isCompare) continue;
       const ins = es.filter((e) => e.target === raw.id);
       if (ins.length === 0 || ins.some((e) => e.targetHandle == null)) continue;
@@ -708,29 +711,27 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     setPublishWarning(null);
     setReviewOpen(true);
   }, [endpoints]);
-  // Every field from every tested step — offered as a metric's "Time reference" (which
-  // value says WHEN each record happened). Date-typed fields float to the top, but ANY
-  // field is pickable: a Sheets "Timestamp" column often reads as text, and it still
-  // works as long as its values parse as dates.
+  // The metric's "Time reference" choices (which value says WHEN each record
+  // happened). ONLY date fields are offered: the backend canonicalizes every
+  // date-looking value at ingest (normalize-dates), so a real timestamp column
+  // always reads as a date here — and non-date fields would only be noise.
   const timeFieldOptions = useMemo<Array<{ value: string; label: string; hint?: string }>>(() => {
-    type Opt = { value: string; label: string; hint?: string; date: boolean; step: number };
+    type Opt = { value: string; label: string; hint?: string; step: number };
     const seen = new Map<string, Opt>();
-    seen.set("occurredAt", { value: "occurredAt", label: "When it happened", hint: "built-in", date: true, step: -1 });
+    seen.set("occurredAt", { value: "occurredAt", label: "When it happened", hint: "built-in", step: -1 });
     for (const n of nodes) {
       const t = n.data.lastTest;
       if (t?.status !== "ok") continue;
       const step = stepNoById.get(n.id) ?? 999;
       const title = nodeTitle(String(n.type) as NodeType, n.data);
       for (const f of t.outputSchema ?? []) {
-        if (f.path.startsWith("__")) continue;
+        if (f.path.startsWith("__") || f.type !== "date") continue;
         const prev = seen.get(f.path);
         if (prev && prev.step <= step) continue; // keep the earliest step's provenance
-        seen.set(f.path, { value: f.path, label: f.label, hint: `${step}. ${title}`, date: f.type === "date", step });
+        seen.set(f.path, { value: f.path, label: f.label, hint: `${step}. ${title}`, step });
       }
     }
-    return [...seen.values()]
-      .sort((a, b) => (a.date === b.date ? a.step - b.step : a.date ? -1 : 1))
-      .map(({ value, label, hint }) => ({ value, label, hint }));
+    return [...seen.values()].sort((a, b) => a.step - b.step).map(({ value, label, hint }) => ({ value, label, hint }));
   }, [nodes, stepNoById]);
   const inDegreeById = useMemo(() => {
     const m = new Map<string, number>();
@@ -781,43 +782,19 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   // its own mandatory conditions step.
   const displayEdges = useMemo(() => {
     const compareIds = new Set(nodes.filter(isCompareNode).map((n) => n.id));
-    // Chain ancestors per node, used to hide a Combine reference that points at a step
-    // already on its own line (that data flows in through the chain — a second line
-    // would just double the connector).
-    const ancestorCache = new Map<string, Set<string>>();
-    const chainAncestors = (id: string): Set<string> => {
-      const hit = ancestorCache.get(id);
-      if (hit) return hit;
-      const out = new Set<string>();
-      const stack = [id];
-      while (stack.length) {
-        const cur = stack.pop()!;
-        for (const e of sEdges) {
-          if (e.target === cur && !out.has(e.source)) {
-            out.add(e.source);
-            stack.push(e.source);
-          }
-        }
-      }
-      ancestorCache.set(id, out);
-      return out;
-    };
     const seen = new Set<string>();
     const out: Edge[] = [];
     for (const e of edges) {
       // A compare step's number references are picked in the panel, never drawn as lines.
       if (compareIds.has(e.target) && (e.targetHandle === "a" || e.targetHandle === "b")) continue;
-      // A Combine reference along its own line is invisible; a cross-lane one is drawn
-      // (without a "+" — you can't insert on a reference).
-      if (e.targetHandle === "src" && chainAncestors(e.target).has(e.source)) continue;
       // Collapse duplicate lines between the same two nodes (chain + reference pair).
       const key = `${e.source}::${e.sourceHandle ?? ""}->${e.target}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle || e.targetHandle === "src" ? undefined : insertOnEdge } });
+      out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge } });
     }
     return out;
-  }, [nodes, edges, sEdges, insertOnEdge]);
+  }, [nodes, edges, insertOnEdge]);
 
   const empty = nodes.length === 0;
 

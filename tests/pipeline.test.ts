@@ -66,6 +66,25 @@ describe("ingestion pipeline: dedup + idempotency", () => {
     expect(await db.select().from(events)).toHaveLength(1);
   });
 
+  it("canonicalizes date-looking property values at ingest (automatic date cleanup)", async () => {
+    const connectionId = await seedConnection(db);
+    const rawId = await storeAndGetId(connectionId, {
+      id: "e-dates",
+      type: "booked",
+      ts: "7/21/2026 14:23:45",
+      scheduled_on: "Jan 5, 2026",
+      amount: "1250",
+      note: "call on 7/21",
+    });
+    await processRawEvent(db, rawId);
+    const [row] = await db.select().from(events).where(eq(events.eventId, `webhook:${connectionId}:e-dates`));
+    const props = row.properties as Record<string, unknown>;
+    expect(props.ts).toBe("2026-07-21T14:23:45.000Z");
+    expect(props.scheduled_on).toBe("2026-01-05");
+    expect(props.amount).toBe("1250"); // non-dates stay byte-identical
+    expect(props.note).toBe("call on 7/21");
+  });
+
   it("updates the connection's lastEventAt on insert", async () => {
     const connectionId = await seedConnection(db);
     const rawId = await storeAndGetId(connectionId, { id: "e1" });

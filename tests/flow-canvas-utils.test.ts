@@ -23,20 +23,19 @@ const E = (source: string, target: string, extra: Partial<Edge> = {}): Edge => (
 const titleOf = (n: FNode) => (typeof n.data.label === "string" && n.data.label) || String(n.type);
 
 describe("isValidFlowConnection", () => {
-  it("only allows scalar producers into a Formula", () => {
-    expect(isValidFlowConnection("aggregate", "formula")).toBe(true);
+  it("Calculate accepts scalar producers (numbers) AND dataset producers (records)", () => {
     expect(isValidFlowConnection("formula", "formula")).toBe(true);
-    expect(isValidFlowConnection("app", "formula")).toBe(false);
-    expect(isValidFlowConnection("filter", "formula")).toBe(false);
-    expect(isValidFlowConnection("group", "formula")).toBe(false);
+    expect(isValidFlowConnection("app", "formula")).toBe(true); // dataset ops aggregate records
+    expect(isValidFlowConnection("filter", "formula")).toBe(true);
+    expect(isValidFlowConnection("group", "formula")).toBe(false); // grouped output is neither
   });
   it("only allows dataset producers into dataset consumers", () => {
     expect(isValidFlowConnection("app", "filter")).toBe(true);
-    expect(isValidFlowConnection("filter", "aggregate")).toBe(true);
-    expect(isValidFlowConnection("aggregate", "filter")).toBe(false); // scalar into a dataset consumer
+    expect(isValidFlowConnection("filter", "unite")).toBe(true);
+    expect(isValidFlowConnection("formula", "filter")).toBe(false); // scalar into a dataset consumer
   });
   it("lets anything meaningful into Output but nothing into App", () => {
-    expect(isValidFlowConnection("aggregate", "output")).toBe(true);
+    expect(isValidFlowConnection("formula", "output")).toBe(true);
     expect(isValidFlowConnection("filter", "output")).toBe(true);
     expect(isValidFlowConnection("filter", "app")).toBe(false);
   });
@@ -155,7 +154,7 @@ describe("buildFieldGroups — nearest-app example resolution + provenance", () 
   const filter = N("fN", "filter", {
     lastTest: { status: "ok", recordsIn: 1, recordsOut: 1, sample, inputSample: [], outputSchema: [{ path: "properties.utm", label: "utm", type: "object", container: true }, { path: "plan", label: "plan", type: "text" }] },
   });
-  const agg = N("aggN", "aggregate");
+  const agg = N("aggN", "formula", { config: { op: "count" } });
   const nodes = [app, filter, agg];
   const edges = [E("appN", "fN"), E("fN", "aggN")];
   const stepNoById = new Map([["appN", 1], ["fN", 2], ["aggN", 3]]);
@@ -251,7 +250,7 @@ describe("multiple Get data roots — parallel lanes", () => {
 
 describe("Unite layout — a junction joining lanes", () => {
   it("centres a unite between the lanes it joins, below all of them", () => {
-    const nodes = [N("s1", "app"), N("s2", "app"), N("u", "unite"), N("agg", "aggregate")];
+    const nodes = [N("s1", "app"), N("s2", "app"), N("u", "unite"), N("agg", "formula", { config: { op: "count" } })];
     const edges = [E("s1", "u"), E("s2", "u"), E("u", "agg")];
     const pos = computeVerticalLayout(nodes, edges);
     const mid = (pos.get("s1")!.x + pos.get("s2")!.x) / 2;
@@ -263,43 +262,31 @@ describe("Unite layout — a junction joining lanes", () => {
   });
 });
 
-describe("Combine layout — picked sources never move the node", () => {
-  it("keeps a combine glued to its chain anchor when it references another app", () => {
-    const nodes = [N("a", "app"), N("f", "filter"), N("c", "combine"), N("b", "app")];
-    const chain = [E("a", "f"), E("f", "c")];
-    const withRef = [...chain, E("b", "c", { targetHandle: "src" })];
-    // Picking the second app as a source changes NOTHING about the layout or numbering.
-    expect(computeVerticalLayout(nodes, withRef)).toEqual(computeVerticalLayout(nodes, chain));
-    expect(computeStepNumbers(nodes, withRef)).toEqual(computeStepNumbers(nodes, chain));
-    // The reference edge is not structural, and the referenced app is still a line end.
-    expect(structuralEdges(nodes, withRef).map((e) => e.id)).toEqual(chain.map((e) => e.id));
-    expect(terminalIds(nodes, withRef).has("b")).toBe(true);
-  });
-
-  it("centres a combine that merges two sibling branches of one split", () => {
+describe("Unite merging sibling branches of one split", () => {
+  it("centres a unite that joins two branch lanes, below both of them", () => {
     const hub = N("p", "paths", { config: { paths: [{ id: "p1", label: "A" }, { id: "p2", label: "B" }] } });
-    const nodes = [N("a", "app"), hub, N("f1", "filter"), N("f2", "filter"), N("c", "combine")];
+    const nodes = [N("a", "app"), hub, N("f1", "filter"), N("f2", "filter"), N("u", "unite")];
     const edges = [
       E("a", "p"),
       E("p", "f1", { sourceHandle: "p1" }),
       E("p", "f2", { sourceHandle: "p2" }),
-      E("f1", "c"), // chain anchor (added after Path A's step)
-      E("f2", "c", { targetHandle: "src" }), // merges in Path B
+      E("f1", "u"),
+      E("f2", "u"),
     ];
     const pos = computeVerticalLayout(nodes, edges);
     // Branch lanes fan out symmetrically; the merge sits centred between + below them.
     expect(pos.get("f1")!.x).toBeLessThan(0);
     expect(pos.get("f2")!.x).toBeGreaterThan(0);
-    expect(pos.get("c")!.x).toBe(0);
-    expect(pos.get("c")!.y).toBeGreaterThan(pos.get("f1")!.y);
-    expect(pos.get("c")!.y).toBeGreaterThan(pos.get("f2")!.y);
+    expect(pos.get("u")!.x).toBe(0);
+    expect(pos.get("u")!.y).toBeGreaterThan(pos.get("f1")!.y);
+    expect(pos.get("u")!.y).toBeGreaterThan(pos.get("f2")!.y);
   });
 });
 
 describe("flowChecks (Flow check rail)", () => {
-  it("explains that a grouped aggregate can't feed a formula", () => {
+  it("explains that a time-split Calculate can't feed a compare", () => {
     const app = N("a", "app", { config: { connectionId: "c", source: "gsheets" } });
-    const agg = N("g", "aggregate", { config: { aggregation: "count", groupBy: { type: "time", unit: "week" } } });
+    const agg = N("g", "formula", { config: { op: "count", groupBy: { type: "time", unit: "week" } } });
     const formula = N("f", "formula", { config: { op: "percentage" } });
     const nodes = [app, agg, formula];
     const edges = [E("a", "g"), E("g", "f", { targetHandle: "a" })];
@@ -315,7 +302,7 @@ describe("flowChecks (Flow check rail)", () => {
   });
 });
 
-describe("describeInputs / collidingFields (Combine + Formula panels)", () => {
+describe("describeInputs / collidingFields (Unite + Calculate panels)", () => {
   const mk = (id: string, src: string) =>
     N(id, "app", {
       config: { source: src, connectionName: `${src} acct`, eventType: "row_added" },
@@ -323,8 +310,8 @@ describe("describeInputs / collidingFields (Combine + Formula panels)", () => {
     });
   const a = mk("a", "gsheets");
   const b = mk("b", "close");
-  const combine = N("c", "combine");
-  const nodes = [a, b, combine];
+  const unite = N("c", "unite");
+  const nodes = [a, b, unite];
   const edges = [E("a", "c"), E("b", "c")];
 
   it("describes each connected source with app + record count", () => {

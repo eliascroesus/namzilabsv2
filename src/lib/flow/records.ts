@@ -1,4 +1,5 @@
 import type { events } from "@/db/schema";
+import { normalizeDatesDeep } from "@/lib/normalize-dates";
 
 /** A canonical event flattened into the record shape the engine operates on. */
 export type FlowRecord = {
@@ -25,7 +26,9 @@ export function eventToRecord(row: EventRow): FlowRecord {
     value: row.value != null ? Number(row.value) : null,
     currency: row.currency ?? null,
     connectionId: row.connectionId,
-    properties: (row.properties as Record<string, unknown>) ?? {},
+    // Idempotent date canonicalization on read: rows ingested before automatic
+    // normalization existed still present one date format to every flow.
+    properties: normalizeDatesDeep(row.properties as Record<string, unknown>),
   };
 }
 

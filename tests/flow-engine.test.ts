@@ -205,6 +205,60 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
     expect(res.nodes.get("f")!.recordsOut).toBe(2);
   });
 
+  it("Calculate runs dataset aggregations directly (the merged Count node)", async () => {
+    await ev({ eventType: "deal", subject: "a", value: 100 });
+    await ev({ eventType: "deal", subject: "a", value: 300 });
+    await ev({ eventType: "deal", subject: "b", value: 200 });
+    const calc = async (config: Record<string, unknown>) => {
+      const g = G([N("a", "app", { connectionId: CONN }), N("c", "formula", config)], [E("a", "c")]);
+      const c = (await runFlow({ db, orgId: ORG }, g, { untilNodeId: "c" })).nodes.get("c")!;
+      expect(c.status).toBe("ok");
+      return (c as { shape: { kind: string; value?: number } }).shape;
+    };
+    expect((await calc({ op: "count" })).value).toBe(3);
+    expect((await calc({ op: "sum", field: "value" })).value).toBe(600);
+    expect((await calc({ op: "avg", field: "value" })).value).toBe(200);
+    expect((await calc({ op: "min", field: "value" })).value).toBe(100);
+    expect((await calc({ op: "max", field: "value" })).value).toBe(300);
+    expect((await calc({ op: "count_distinct", distinctField: "subject" })).value).toBe(2);
+  });
+
+  it("a dataset Calculate can split over time (trend), like the old Count node", async () => {
+    await ev({ eventType: "booked", daysAgo: 1 });
+    await ev({ eventType: "booked", daysAgo: 1 });
+    await ev({ eventType: "booked", daysAgo: 3 });
+    const g = G(
+      [N("a", "app", { connectionId: CONN }), N("c", "formula", { op: "count", groupBy: { type: "time", unit: "day" } }), N("o", "output", { viz: "line" })],
+      [E("a", "c"), E("c", "o")],
+    );
+    const res = await runFlow({ db, orgId: ORG }, g);
+    expect(res.outputs[0].tile.series).toHaveLength(2);
+    expect(res.outputs[0].tile.value).toBe(3);
+  });
+
+  it("legacy Count (aggregate) nodes migrate to the unified Calculate on parse", async () => {
+    const g = G(
+      [N("a", "app", { connectionId: CONN }), N("agg", "aggregate", { aggregation: "sum", field: "value", groupBy: { type: "time", unit: "week" } })],
+      [E("a", "agg")],
+    );
+    const migrated = g.nodes.find((n) => n.id === "agg")!;
+    expect(migrated.type).toBe("formula");
+    expect(migrated.data.config).toMatchObject({ op: "sum", field: "value", groupBy: { type: "time", unit: "week" } });
+  });
+
+  it("errors clearly when a dataset Calculate has no records flowing in", async () => {
+    await ev({ eventType: "x" });
+    const g = G(
+      [N("a", "app", { connectionId: CONN }), N("cnt", "formula", { op: "count" }), N("c", "formula", { op: "sum", field: "value" })],
+      // c's only input is a scalar wired to handle "a" — no chain dataset.
+      [E("a", "cnt"), { id: "cnt->c", source: "cnt", target: "c", targetHandle: "a" }],
+    );
+    const res = await runFlow({ db, orgId: ORG }, g);
+    const c = res.nodes.get("c")!;
+    expect(c.status).toBe("error");
+    expect((c as { error: string }).error).toMatch(/records flowing in/);
+  });
+
   it("Calculate (formula) compares data-step record counts (Output numbers)", async () => {
     await ev({ eventType: "booked", subject: "a" });
     await ev({ eventType: "booked", subject: "b" });

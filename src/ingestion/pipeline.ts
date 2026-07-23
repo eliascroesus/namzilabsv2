@@ -3,6 +3,7 @@ import { rawEvents, events, deliveryLog, deadLetter, connections } from "@/db/sc
 import type { DB } from "@/db/types";
 import type { CanonicalEvent } from "@/connectors/types";
 import { getConnector } from "@/connectors/registry";
+import { normalizeDatesDeep } from "@/lib/normalize-dates";
 
 export type ProcessResult = { inserted: number; deduped: number; total: number };
 
@@ -35,7 +36,9 @@ export async function upsertEvents(db: DB, meta: EventMeta, canonical: Canonical
         occurredAt: ev.occurredAt,
         value: ev.value != null ? String(ev.value) : null,
         currency: ev.currency ?? null,
-        properties: ev.properties ?? {},
+        // Date-looking property values are canonicalized at ingest, so every
+        // stored event speaks one date format (raw_events keeps the original).
+        properties: normalizeDatesDeep(ev.properties),
         rawEventId: meta.rawEventId ?? null,
         streamHash: meta.streamHash ?? null,
       })
