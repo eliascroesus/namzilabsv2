@@ -34,6 +34,23 @@ const EVENT_TYPE_MAP: Record<string, string> = {
 export const calendlyConnector: Connector = {
   source: "calendly",
   authType: "oauth2",
+  // Bookings are mutable state (reschedules edit a meeting in place), scanned
+  // over a rolling meeting-time window — mirrored, with the window guarded by
+  // inMirrorScope below so meetings outside it are never soft-deleted.
+  syncStrategy: "mirror",
+
+  /**
+   * A mirror pass rescans meetings whose start_time lies in the rolling window.
+   * A stored row outside that window (or whose start_time can't be parsed) was
+   * not rescanned, so it must survive soft-delete.
+   */
+  inMirrorScope(row): boolean {
+    const raw = row.properties?.["start_time"];
+    const t = typeof raw === "string" ? Date.parse(raw) : NaN;
+    if (Number.isNaN(t)) return false;
+    const now = Date.now();
+    return t >= now - BACKFILL_DAYS * 86_400_000 && t <= now + FUTURE_DAYS * 86_400_000;
+  },
 
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     if (!secret) return false; // Calendly always signs when a key is configured.

@@ -41,14 +41,20 @@ for backfill and preview). Adding one is additive — the engine never changes.
 | **Close** | ✔ event log | HMAC `close-sig-hash` over `ts+body` | ✔ event log | ✔ (webhook API) |
 | **Instantly** | ✔ email/reply events | optional HMAC `x-instantly-signature` | — | manual URL + secret |
 | **Sendblue** | ✔ status/inbound | shared secret in header | — | manual URL + secret |
-| **Google Sheets** | (Apps Script push, optional) | HMAC | ✔ **poll-primary**, row cursor | n/a (OAuth) |
-| **Google Calendar** | — | — | ✔ incremental `syncToken` | n/a (OAuth) |
+| **Google Sheets** | (Apps Script push, optional) | HMAC | ✔ **mirror** — full tab re-read every sweep, 1:1 with the sheet | n/a (OAuth) |
+| **Google Calendar** | — | — | ✔ incremental `syncToken` (paginated; cancellations → soft-deletes) | n/a (OAuth) |
 | **Custom Webhook** | ✔ any app | optional HMAC | — | manual URL + secret |
 
 **Connect UX:** `/integrations` (gallery) → connect via API key or Google OAuth →
 webhook auto-registers where supported → `/connections/[id]` shows health, the
 inbound URL + signing secret, a **"Preview latest records"** pull, **Re-sync now**
 (fires reconciliation), and Disconnect. All connection data is org-scoped.
+
+**Accuracy contract:** every synced resource is kept **1:1 with its source** —
+mirror sources (Sheets, Calendly) are fully re-read and reconciled every sweep
+(edits refresh, removed rows soft-delete), incremental sources refresh on
+conflict. See **[docs/DATA_MODEL.md](docs/DATA_MODEL.md)** for the strategy
+table, the unified upsert semantics, generations, and the safety rails.
 
 ## Stack
 

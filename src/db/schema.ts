@@ -146,6 +146,13 @@ export const sourceStreams = pgTable(
     configHash: text("config_hash").notNull(),
     config: jsonb("config").$type<Record<string, unknown>>().default({}).notNull(),
     cursor: text("cursor"),
+    /**
+     * Per-stream full-refresh generation. A COMPLETE mirror pass stamps every
+     * record it saw with the next generation, then soft-deletes the stream's
+     * live rows still below it — that is what keeps a mirror stream's live rows
+     * exactly equal to the current source resource.
+     */
+    syncGeneration: integer("sync_generation").notNull().default(0),
     status: text("status").notNull().default("active"), // active | error | disabled
     lastPolledAt: timestamp("last_polled_at", { withTimezone: true }),
     lastError: text("last_error"),

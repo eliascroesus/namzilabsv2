@@ -7,16 +7,25 @@ const API = "https://sheets.googleapis.com/v4/spreadsheets";
 const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
 
 /**
- * Google Sheets. Poll-PRIMARY: Sheets has no native "new row" webhook, so we
- * page through the sheet with a row cursor (the reliable path). An optional
- * Apps Script/Drive push can POST rows to the inbound URL; those are verified
- * with an HMAC secret and normalized the same way.
+ * Google Sheets — a MIRROR source. A spreadsheet is mutable state (cells get
+ * edited, rows deleted, tabs sorted) with no changelog API, so every poll
+ * re-reads the ENTIRE tab in one request and the sync layer reconciles our copy
+ * 1:1 (refresh every row, soft-delete rows the read no longer saw). This is the
+ * Fivetran model — the only correct one for sheets; the old "new rows since a
+ * row-count cursor" model froze each row at first capture and could never see
+ * an edit again. An optional Apps Script push can still POST rows to the
+ * inbound URL; those are verified with an HMAC secret and normalized the same
+ * way.
  *
  * config: { spreadsheetId: string, range?: string }  (range e.g. "Sheet1")
  */
 export const googleSheetsConnector: Connector = {
   source: "gsheets",
   authType: "oauth2",
+  syncStrategy: "mirror",
+  // A row's occurredAt is "when we first saw content at this row" — synthetic,
+  // so the upsert keeps the stored value and mirror sweeps never churn order.
+  preserveOccurredAt: true,
 
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     if (!secret) return true;
@@ -42,7 +51,9 @@ export const googleSheetsConnector: Connector = {
   },
 
   async poll(args: PollArgs): Promise<PollResult> {
-    return readRows(args, args.cursor ? Number(args.cursor) : 0);
+    // Mirror semantics: the cursor is deliberately ignored — every poll is a
+    // full read of the tab (one API call), so edits anywhere are always seen.
+    return readRows(args);
   },
 
   async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
@@ -76,12 +87,13 @@ export const googleSheetsConnector: Connector = {
   },
 
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
-    const { records } = await readRows(args, 0);
+    const { records } = await readRows(args);
     return records.slice(-n).reverse();
   },
 };
 
-async function readRows(args: PollArgs, fromDataRow: number): Promise<PollResult> {
+/** Read the whole tab and map every non-empty data row to a canonical record. */
+async function readRows(args: PollArgs): Promise<PollResult> {
   const token = str(args.credentials?.["accessToken"]);
   if (!token) throw new Error("gsheets: missing access token");
   const spreadsheetId = str(args.config?.["spreadsheetId"]);
@@ -93,7 +105,7 @@ async function readRows(args: PollArgs, fromDataRow: number): Promise<PollResult
     { headers: { authorization: `Bearer ${token}` } },
   );
   const values = data.values ?? [];
-  if (values.length === 0) return { records: [], nextCursor: "0" };
+  if (values.length === 0) return { records: [], nextCursor: null };
 
   const header = values[0];
   const dataRows = values.slice(1);
@@ -101,8 +113,11 @@ async function readRows(args: PollArgs, fromDataRow: number): Promise<PollResult
   // the dedup key — two streams' "row 5" must never collide.
   const streamTag = args.streamHash ? `${args.streamHash}:` : "";
   const records: CanonicalEvent[] = [];
-  for (let i = fromDataRow; i < dataRows.length; i++) {
+  for (let i = 0; i < dataRows.length; i++) {
     const cells = dataRows[i];
+    // A fully-blank row is not a record. Skipping it must NOT shift the row
+    // numbers of everything below it, so the sheet row number stays i-based.
+    if (cells.every((c) => c == null || String(c).trim() === "")) continue;
     const obj: Record<string, unknown> = {};
     header.forEach((h, c) => (obj[h || `col${c}`] = cells[c] ?? null));
     const sheetRowNumber = i + 2; // account for header + 1-based rows
@@ -110,11 +125,12 @@ async function readRows(args: PollArgs, fromDataRow: number): Promise<PollResult
       eventId: `gsheets:${args.connectionId}:${streamTag}row:${sheetRowNumber}`,
       eventType: "row_added",
       subject: firstEmailLike(obj),
+      // First-seen timestamp: applied on insert only (preserveOccurredAt).
       occurredAt: new Date(),
       properties: obj,
     });
   }
-  return { records, nextCursor: String(dataRows.length) };
+  return { records, nextCursor: null };
 }
 
 function firstEmailLike(obj: Record<string, unknown>): string | null {

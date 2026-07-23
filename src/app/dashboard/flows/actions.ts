@@ -10,7 +10,7 @@ import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow } from "@/li
 import { runFlow, sampleAppFields, type NodeExec } from "@/lib/flow/engine";
 import { materializeFlow } from "@/lib/flow/materialize";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
-import { ensureStreamsForGraph, primeStream } from "@/lib/sync/streams";
+import { ensureStreamsForGraph, ensureFreshStream } from "@/lib/sync/streams";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { getConnector } from "@/connectors/registry";
 import { hasStreamConfig } from "@/lib/sync/stream-hash";
@@ -37,7 +37,7 @@ export async function saveDraftAction(
     try {
       await ensureStreamsForGraph(db, orgId, parseGraph(graph));
     } catch {
-      // The Test path (primeStream) and the sweep self-heal missing streams.
+      // The Test path (ensureFreshStream) and the sweep self-heal missing streams.
     }
     return { ok: true };
   } catch (e) {
@@ -92,11 +92,13 @@ function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTest
 }
 
 /**
- * First-use sync: if any app step feeding this test declares a resource whose
- * stream has never been polled, pull its first pages now — the Zapier "test
- * pulls samples" model. Errors surface on the Test result, never thrown.
+ * Freshness for an explicit Test: every app step feeding this test gets its
+ * stream registered AND brought current (a mirror stream re-reads its resource
+ * when its last poll is older than a minute) — the Zapier "test pulls samples"
+ * model, except the numbers are ALWAYS the source's current truth. Errors
+ * surface on the Test result, never thrown.
  */
-async function primeStreamsForTest(orgId: string, g: FlowGraph, nodeId: string): Promise<string | null> {
+async function refreshStreamsForTest(orgId: string, g: FlowGraph, nodeId: string): Promise<string | null> {
   const db = getDb();
   const incoming = new Map<string, string[]>();
   for (const e of g.edges) {
@@ -115,7 +117,7 @@ async function primeStreamsForTest(orgId: string, g: FlowGraph, nodeId: string):
     const connectionId = typeof cfg.connectionId === "string" ? cfg.connectionId : null;
     const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
     if (!connectionId || !hasStreamConfig(sourceConfig)) continue;
-    const r = await primeStream(db, orgId, connectionId, sourceConfig);
+    const r = await ensureFreshStream(db, orgId, connectionId, sourceConfig);
     if (!r.ok) return r.error;
   }
   return null;
@@ -126,7 +128,7 @@ export async function testNodeAction(graph: unknown, nodeId: string): Promise<No
   const { orgId } = await requireOrg();
   try {
     const g = parseGraph(graph);
-    const primeError = await primeStreamsForTest(orgId, g, nodeId);
+    const primeError = await refreshStreamsForTest(orgId, g, nodeId);
     if (primeError) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: primeError };
     const res = await runFlow({ db: getDb(), orgId }, g, { untilNodeId: nodeId });
     // The "before" side of the preview: the primary input node's output sample.
@@ -157,8 +159,8 @@ export async function listAppFieldsAction(
     const connectionId = typeof config.connectionId === "string" ? config.connectionId : null;
     const sourceConfig = (config.sourceConfig ?? {}) as Record<string, unknown>;
     if (connectionId && hasStreamConfig(sourceConfig)) {
-      // Best-effort first-use sync; the field listing proceeds on whatever is synced.
-      await primeStream(db, orgId, connectionId, sourceConfig);
+      // Best-effort freshness; the field listing proceeds on whatever is synced.
+      await ensureFreshStream(db, orgId, connectionId, sourceConfig);
     }
     return { ok: true, fields: await sampleAppFields({ db, orgId }, config) };
   } catch (e) {

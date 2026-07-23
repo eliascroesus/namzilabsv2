@@ -1,0 +1,1 @@
+ALTER TABLE "source_streams" ADD COLUMN "sync_generation" integer DEFAULT 0 NOT NULL;

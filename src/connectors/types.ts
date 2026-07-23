@@ -12,7 +12,29 @@ export type CanonicalEvent = {
   value?: number | null;
   currency?: string | null;
   properties?: Record<string, unknown>;
+  /**
+   * The source reports this record deleted/cancelled. Stored as a soft-delete
+   * (`events.deletedAt`) — the record disappears from every flow without the
+   * payload ever being lost.
+   */
+  deleted?: boolean;
 };
+
+/**
+ * How a source's data is kept 1:1 with the source (the Airbyte/Fivetran model —
+ * every stream declares its sync mode):
+ *  - "mirror": the source is MUTABLE STATE (a spreadsheet tab, a bookings
+ *    window). Every sweep re-reads the full resource, refreshes every record
+ *    (ON CONFLICT DO UPDATE), and soft-deletes live rows the scan no longer
+ *    saw. After any completed sweep, the stream's live rows ≡ the source.
+ *  - "incremental": the source emits EVENTS/CHANGES (webhooks, event logs,
+ *    sync tokens). Records append + dedup; a re-delivered record refreshes the
+ *    stored copy; explicit deletions arrive as `deleted: true` records.
+ */
+export type SyncStrategy = "mirror" | "incremental";
+
+/** A stored row a mirror pass is deciding whether to soft-delete. */
+export type MirrorRow = { eventId: string; occurredAt: Date; properties: Record<string, unknown> };
 
 export type VerifyArgs = {
   /** Exact raw request body bytes as a string (HMAC must be computed over these). */
@@ -80,6 +102,22 @@ export type RegisterWebhookResult = {
 export interface Connector {
   source: string;
   authType: "apiKey" | "oauth2" | "secret" | "none";
+  /** How this source's data is kept 1:1 (see {@link SyncStrategy}). */
+  syncStrategy: SyncStrategy;
+  /**
+   * Mirror connectors with a BOUNDED rescan window (e.g. Calendly's rolling
+   * ±400-day meeting window): return false for a stored row the scan could not
+   * have seen, so it survives soft-delete. Default (absent) = every stored row
+   * of the stream is in scope. When in doubt, return false — never delete what
+   * the scan can't prove was removed.
+   */
+  inMirrorScope?(row: MirrorRow, config?: Record<string, unknown>): boolean;
+  /**
+   * This connector's occurredAt is synthetic ("first time we saw it"), not a
+   * source timestamp — the upsert keeps the stored value on conflict so mirror
+   * sweeps never churn record order or time bucketing.
+   */
+  preserveOccurredAt?: boolean;
   /** Return true iff the inbound request is authentic (or no verification configured). */
   verifySignature(args: VerifyArgs): boolean;
   /** Map a raw webhook payload into zero or more canonical events. */

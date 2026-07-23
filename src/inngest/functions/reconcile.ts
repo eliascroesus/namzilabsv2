@@ -2,12 +2,15 @@ import { eq } from "drizzle-orm";
 import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { connections } from "@/db/schema";
-import { reconcileConnection } from "@/ingestion/reconcile";
+import { sweepConnection } from "@/ingestion/reconcile";
+import { materializeStaleAll } from "@/lib/flow/materialize";
 
 /**
- * Scheduled reconciliation/backfill sweep. Every 10 minutes it re-polls each
- * active connection and dedups the results against stored events, catching
- * anything the instant webhook path missed. This is the gap-filling safety net.
+ * The scheduled accuracy sweep. Every 10 minutes each active connection is
+ * brought back to 1:1 with its source (mirror streams full-refresh; incremental
+ * streams walk their cursors — see ingestion/reconcile.ts), dependent flows are
+ * marked stale, and stale dashboard tiles are recomputed in the same cycle —
+ * so a sheet edit reaches the dashboard without any user action.
  */
 export const reconcileAll = inngest.createFunction(
   { id: "reconcile-connections", retries: 3, triggers: [{ cron: "*/10 * * * *" }] },
@@ -17,11 +20,14 @@ export const reconcileAll = inngest.createFunction(
       db.select({ id: connections.id }).from(connections).where(eq(connections.status, "active")),
     );
 
-    const results: Array<{ connectionId: string; inserted: number; deduped: number }> = [];
+    const results: Array<{ connectionId: string; inserted: number; updated: number; softDeleted: number }> = [];
+    let changed = false;
     for (const conn of active) {
-      const r = await step.run(`reconcile-${conn.id}`, () => reconcileConnection(db, conn.id));
-      results.push({ connectionId: conn.id, inserted: r.inserted, deduped: r.deduped });
+      const r = await step.run(`reconcile-${conn.id}`, () => sweepConnection(db, conn.id));
+      changed = changed || r.changed;
+      results.push({ connectionId: conn.id, inserted: r.inserted, updated: r.updated, softDeleted: r.softDeleted });
     }
+    if (changed) await step.run("materialize-stale", () => materializeStaleAll(db));
     return { connections: active.length, results };
   },
 );
@@ -31,6 +37,8 @@ export const reconcileOne = inngest.createFunction(
   { id: "reconcile-one-connection", retries: 3, triggers: [{ event: "ingest/reconcile.requested" }] },
   async ({ event, step }) => {
     const { connectionId } = event.data as { connectionId: string };
-    return step.run("reconcile", () => reconcileConnection(getDb(), connectionId));
+    const res = await step.run("reconcile", () => sweepConnection(getDb(), connectionId));
+    if (res.changed) await step.run("materialize-stale", () => materializeStaleAll(getDb()));
+    return res;
   },
 );

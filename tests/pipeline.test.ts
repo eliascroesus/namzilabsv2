@@ -34,7 +34,7 @@ describe("ingestion pipeline: dedup + idempotency", () => {
     const rawId = await storeAndGetId(connectionId, { id: "e1", type: "booked", email: "a@b.com" });
 
     const res = await processRawEvent(db, rawId);
-    expect(res).toEqual({ inserted: 1, deduped: 0, total: 1 });
+    expect(res).toEqual({ inserted: 1, updated: 0, deduped: 0, total: 1 });
 
     const rows = await db.select().from(events);
     expect(rows).toHaveLength(1);
@@ -45,25 +45,32 @@ describe("ingestion pipeline: dedup + idempotency", () => {
     expect(logs).toHaveLength(1);
   });
 
-  it("is idempotent: re-processing the same raw event does not duplicate", async () => {
+  it("is idempotent: re-processing the same raw event refreshes, never duplicates", async () => {
     const connectionId = await seedConnection(db);
     const rawId = await storeAndGetId(connectionId, { id: "e1", type: "booked" });
 
     await processRawEvent(db, rawId);
     const second = await processRawEvent(db, rawId);
-    expect(second).toEqual({ inserted: 0, deduped: 1, total: 1 });
+    expect(second).toEqual({ inserted: 0, updated: 1, deduped: 1, total: 1 });
     expect(await db.select().from(events)).toHaveLength(1);
   });
 
-  it("dedups across separate deliveries carrying the same natural id", async () => {
+  it("dedups across separate deliveries carrying the same natural id — the LATEST payload wins, first-seen receivedAt stays", async () => {
     const connectionId = await seedConnection(db);
-    const rawA = await storeAndGetId(connectionId, { id: "same", type: "booked" });
-    const rawB = await storeAndGetId(connectionId, { id: "same", type: "booked" });
+    const rawA = await storeAndGetId(connectionId, { id: "same", type: "booked", status: "pending" });
+    const rawB = await storeAndGetId(connectionId, { id: "same", type: "booked", status: "confirmed" });
 
     await processRawEvent(db, rawA);
+    const [before] = await db.select().from(events);
     const res = await processRawEvent(db, rawB);
     expect(res.inserted).toBe(0);
-    expect(await db.select().from(events)).toHaveLength(1);
+    const rows = await db.select().from(events);
+    expect(rows).toHaveLength(1);
+    // Redelivery refreshes the mutable payload (source truth wins)...
+    expect((rows[0].properties as Record<string, unknown>).status).toBe("confirmed");
+    // ...but provenance fields are insert-only: first delivery's receivedAt/rawEventId stand.
+    expect(rows[0].receivedAt.toISOString()).toBe(before.receivedAt.toISOString());
+    expect(rows[0].rawEventId).toBe(before.rawEventId);
   });
 
   it("canonicalizes date-looking property values at ingest (automatic date cleanup)", async () => {

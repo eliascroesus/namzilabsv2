@@ -169,8 +169,8 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
   });
 });
 
-describe("Google Sheets polling", () => {
-  it("reads rows and maps header+cells into row_added events", async () => {
+describe("Google Sheets polling (mirror: every poll is a full tab read)", () => {
+  it("reads rows and maps header+cells into row_added events, with no cursor", async () => {
     vi.stubGlobal(
       "fetch",
       mockFetch([
@@ -195,14 +195,15 @@ describe("Google Sheets polling", () => {
     });
 
     expect(result.records).toHaveLength(2);
-    expect(result.nextCursor).toBe("2");
+    // Mirror source: no incremental cursor — the sync layer reconciles the full set.
+    expect(result.nextCursor).toBeNull();
     expect(result.records[0].eventType).toBe("row_added");
     expect(result.records[0].eventId).toBe("gsheets:c1:row:2");
     expect(result.records[0].subject).toBe("alice@acme.com");
     expect(result.records[0].properties).toEqual({ name: "Alice", email: "alice@acme.com" });
   });
 
-  it("dedup cursor advances so a second poll returns no new rows", async () => {
+  it("ignores any stored cursor: a repeat poll re-reads EVERY row (cell edits are always seen)", async () => {
     vi.stubGlobal(
       "fetch",
       mockFetch([
@@ -214,11 +215,39 @@ describe("Google Sheets polling", () => {
     );
     const second = await googleSheetsConnector.poll!({
       connectionId: "c1",
-      cursor: "2", // already processed 2 data rows
+      cursor: "2", // a legacy row-count cursor from the old model
       credentials: { accessToken: "tok" },
       config: { spreadsheetId: "SHEET1" },
     });
-    expect(second.records).toHaveLength(0);
-    expect(second.nextCursor).toBe("2");
+    // The old model returned [] here — freezing rows at first capture forever.
+    expect(second.records).toHaveLength(2);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it("skips fully-blank rows WITHOUT shifting the sheet row numbers below them", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        [
+          "/values/",
+          {
+            values: [
+              ["name", "email"],
+              ["Alice", "alice@acme.com"], // sheet row 2
+              ["", ""], //                    sheet row 3: blank → no record
+              ["Bob", "bob@acme.com"], //     sheet row 4 keeps its number
+            ],
+          },
+        ],
+      ]),
+    );
+    const result = await googleSheetsConnector.poll!({
+      connectionId: "c1",
+      cursor: null,
+      credentials: { accessToken: "tok" },
+      config: { spreadsheetId: "SHEET1" },
+      streamHash: "h1",
+    });
+    expect(result.records.map((r) => r.eventId)).toEqual(["gsheets:c1:h1:row:2", "gsheets:c1:h1:row:4"]);
   });
 });

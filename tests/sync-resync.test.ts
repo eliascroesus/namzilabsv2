@@ -20,6 +20,7 @@ const rec = (id: string, value: number): CanonicalEvent => ({
 });
 const resyncConnector: Connector = {
   source: "resync-poller",
+  syncStrategy: "incremental",
   authType: "none",
   verifySignature: () => true,
   normalize: () => [],
