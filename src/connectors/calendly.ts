@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
 import { fetchJson } from "@/lib/http-client";
+import { asObject, parseDate, str } from "./field-utils";
 
 const API = "https://api.calendly.com";
 /** How far back / forward a poll scan looks by meeting time (a rolling window). */
@@ -226,14 +227,3 @@ function token_(credentials?: Record<string, unknown> | null): string {
   return token;
 }
 
-function asObject(v: unknown): Record<string, unknown> {
-  return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
-}
-function str(v: unknown): string | null {
-  return typeof v === "string" && v.length > 0 ? v : null;
-}
-function parseDate(v: string | null): Date | null {
-  if (!v) return null;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
-}

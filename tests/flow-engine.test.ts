@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { createTestDb } from "./helpers/testdb";
 import { events } from "@/db/schema";
-import { runFlow } from "@/lib/flow/engine";
+import { runFlow, sampleAppFields } from "@/lib/flow/engine";
 import { parseGraph } from "@/lib/flow/types";
 import type { DB } from "@/db/types";
 
@@ -203,6 +203,17 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
     expect(res.nodes.has("f")).toBe(true);
     expect(res.nodes.has("agg")).toBe(false); // downstream not executed
     expect(res.nodes.get("f")!.recordsOut).toBe(2);
+  });
+
+  it("sampleAppFields lists a step's real data fields from its synced events", async () => {
+    await ev({ eventType: "row_added", subject: "a@b.com", properties: { Email: "a@b.com", Plan: "pro" } });
+    await ev({ eventType: "row_added", subject: "c@d.com", properties: { Email: "c@d.com", Plan: "free" } });
+    const fields = await sampleAppFields({ db, orgId: ORG }, { connectionId: CONN });
+    const paths = fields.map((f) => f.path);
+    expect(paths).toContain("properties.Email"); // the user's own columns are pickable
+    expect(paths).toContain("properties.Plan");
+    expect(paths).toContain("subject");
+    expect(paths.every((p) => !p.startsWith("__"))).toBe(true); // engine internals hidden
   });
 
   it("Calculate runs dataset aggregations directly (the merged Count node)", async () => {

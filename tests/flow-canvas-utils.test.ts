@@ -2,15 +2,11 @@ import { describe, it, expect } from "vitest";
 import type { Edge } from "@xyflow/react";
 import {
   bridgeEdgeFor,
-  isValidFlowConnection,
   buildFieldGroups,
   computeVerticalLayout,
   computeStepNumbers,
   resolveSampleField,
-  fieldProvenance,
-  flowChecks,
   describeInputs,
-  collidingFields,
   structuralEdges,
   terminalIds,
   type FNode,
@@ -21,25 +17,6 @@ const N = (id: string, type: string, data: Partial<FNode["data"]> = {}): FNode =
   ({ id, type, position: { x: 0, y: 0 }, data: { config: {}, ...data } }) as FNode;
 const E = (source: string, target: string, extra: Partial<Edge> = {}): Edge => ({ id: `${source}->${target}`, source, target, ...extra });
 const titleOf = (n: FNode) => (typeof n.data.label === "string" && n.data.label) || String(n.type);
-
-describe("isValidFlowConnection", () => {
-  it("Calculate accepts scalar producers (numbers) AND dataset producers (records)", () => {
-    expect(isValidFlowConnection("formula", "formula")).toBe(true);
-    expect(isValidFlowConnection("app", "formula")).toBe(true); // dataset ops aggregate records
-    expect(isValidFlowConnection("filter", "formula")).toBe(true);
-    expect(isValidFlowConnection("group", "formula")).toBe(false); // grouped output is neither
-  });
-  it("only allows dataset producers into dataset consumers", () => {
-    expect(isValidFlowConnection("app", "filter")).toBe(true);
-    expect(isValidFlowConnection("filter", "unite")).toBe(true);
-    expect(isValidFlowConnection("formula", "filter")).toBe(false); // scalar into a dataset consumer
-  });
-  it("lets anything meaningful into Output but nothing into App", () => {
-    expect(isValidFlowConnection("formula", "output")).toBe(true);
-    expect(isValidFlowConnection("filter", "output")).toBe(true);
-    expect(isValidFlowConnection("filter", "app")).toBe(false);
-  });
-});
 
 describe("bridgeEdgeFor (delete & reconnect)", () => {
   it("bridges a node with exactly one in and one out edge", () => {
@@ -168,16 +145,6 @@ describe("buildFieldGroups — nearest-app example resolution + provenance", () 
     expect(groups[0].fields.find((f) => f.path === "properties.utm")?.container).toBe(true);
   });
 
-  it("fieldProvenance resolves a drilled-in nested path to its originating step + sample", () => {
-    const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
-    const prov = fieldProvenance(groups, "properties.utm.source");
-    expect(prov.sample).toBe("google");
-    expect(prov.label).toBe("source");
-    // Every upstream step is now a group (in flow order), so the field is attributed to
-    // the step that first introduced it — the app (step 1) — not the pass-through Filter.
-    expect(prov.stepNo).toBe(1);
-  });
-
   it("a filter step exposes only its Output + Output number, not columns", () => {
     const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
     const filterGroup = groups.find((g) => g.stepNo === 2);
@@ -283,48 +250,25 @@ describe("Unite merging sibling branches of one split", () => {
   });
 });
 
-describe("flowChecks (Flow check rail)", () => {
-  it("explains that a time-split Calculate can't feed a compare", () => {
-    const app = N("a", "app", { config: { connectionId: "c", source: "gsheets" } });
-    const agg = N("g", "formula", { config: { op: "count", groupBy: { type: "time", unit: "week" } } });
-    const formula = N("f", "formula", { config: { op: "percentage" } });
-    const nodes = [app, agg, formula];
-    const edges = [E("a", "g"), E("g", "f", { targetHandle: "a" })];
-    const checks = flowChecks(nodes, edges, titleOf);
-    expect(checks.some((c) => c.nodeId === "g" && /grouped by week/.test(c.impact))).toBe(true);
-  });
-
-  it("flags a disconnected step and clears on a valid graph", () => {
-    const app = N("a", "app", { config: { connectionId: "c", source: "gsheets" } });
-    const out = N("o", "output", { config: { name: "Signups" } });
-    expect(flowChecks([app, out], [], titleOf).some((c) => c.nodeId === "o")).toBe(true);
-    expect(flowChecks([app, out], [E("a", "o")], titleOf)).toHaveLength(0);
-  });
-});
-
-describe("describeInputs / collidingFields (Unite + Calculate panels)", () => {
-  const mk = (id: string, src: string) =>
-    N(id, "app", {
-      config: { source: src, connectionName: `${src} acct`, eventType: "row_added" },
-      lastTest: { status: "ok", recordsIn: 2, recordsOut: 2, sample: [], inputSample: [], outputSchema: [{ path: "email", label: "email", type: "text" }] },
+describe("describeInputs (Unite + Calculate panels)", () => {
+  it("describes each connected input in connection order, with the producer's number", () => {
+    const a = N("a", "app", {
+      config: { source: "gsheets" },
+      lastTest: { status: "ok", recordsIn: 2, recordsOut: 2, sample: [], inputSample: [], outputSchema: [] },
     });
-  const a = mk("a", "gsheets");
-  const b = mk("b", "close");
-  const unite = N("c", "unite");
-  const nodes = [a, b, unite];
-  const edges = [E("a", "c"), E("b", "c")];
-
-  it("describes each connected source with app + record count", () => {
-    const inputs = describeInputs({ selectedId: "c", nodes, edges, titleOf });
+    const calc = N("k", "formula", {
+      config: { op: "count" },
+      lastTest: { status: "ok", recordsIn: 2, recordsOut: 1, sample: [], inputSample: [], outputSchema: [], value: 2 },
+    });
+    const unite = N("c", "unite");
+    const inputs = describeInputs({
+      selectedId: "c",
+      nodes: [a, calc, unite],
+      edges: [E("a", "c"), E("k", "c", { targetHandle: "a" })],
+      titleOf,
+    });
     expect(inputs).toHaveLength(2);
-    expect(inputs[0].appSource).toBe("gsheets");
-    expect(inputs[0].recordCount).toBe(2);
-    expect(inputs[0].status).toBe("ok");
-    expect(inputs[1].appSource).toBe("close");
-  });
-
-  it("flags fields shared across sources (overwrite warning)", () => {
-    const inputs = describeInputs({ selectedId: "c", nodes, edges, titleOf });
-    expect(collidingFields(inputs)).toContain("email");
+    expect(inputs[0]).toMatchObject({ nodeId: "a", targetHandle: null, title: "app" });
+    expect(inputs[1]).toMatchObject({ nodeId: "k", targetHandle: "a", value: 2 });
   });
 });

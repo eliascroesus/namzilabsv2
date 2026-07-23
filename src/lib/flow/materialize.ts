@@ -56,11 +56,6 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
   }
 }
 
-/** Mark a published flow's stored results stale (e.g. when new events land). */
-export async function markFlowStale(db: DB, flowId: string): Promise<void> {
-  await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.flowId, flowId));
-}
-
 /**
  * Mark stale every published flow whose graph pulls from `source` (or the given
  * connection). Called when new data lands so the dashboard shows freshness and a

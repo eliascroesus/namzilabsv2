@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
-    "inngest:dev": "inngest-cli dev"
+    "inngest:dev": "npx inngest-cli@latest dev"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

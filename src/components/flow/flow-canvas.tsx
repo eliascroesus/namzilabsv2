@@ -623,8 +623,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   );
 
   const selectedInputs = useMemo<InputDescriptor[]>(
-    () => (selected ? describeInputs({ selectedId: selected.id, nodes, edges, stepNoById, titleOf: (n) => nodeTitle(String(n.type) as NodeType, n.data) }) : []),
-    [selected, nodes, edges, stepNoById],
+    () => (selected ? describeInputs({ selectedId: selected.id, nodes, edges, titleOf: (n) => nodeTitle(String(n.type) as NodeType, n.data) }) : []),
+    [selected, nodes, edges],
   );
 
   // If the selected step is a branch head (the first step of a Paths branch), its panel

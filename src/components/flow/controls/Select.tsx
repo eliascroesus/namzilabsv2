@@ -18,8 +18,6 @@ export function Select({
   placeholder = "Choose…",
   searchable = false,
   width = 260,
-  align = "left",
-  buttonClassName,
   disabled = false,
 }: {
   value: string;
@@ -28,8 +26,6 @@ export function Select({
   placeholder?: string;
   searchable?: boolean;
   width?: number;
-  align?: "left" | "right";
-  buttonClassName?: string;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -94,7 +90,6 @@ export function Select({
       open={open}
       setOpen={setOpen}
       width={width}
-      align={align}
       anchor={
         <button
           type="button"
@@ -110,7 +105,7 @@ export function Select({
           }}
           aria-haspopup="listbox"
           aria-expanded={open}
-          className={`${buttonClassName ?? BTN} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+          className={`${BTN} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
         >
           <span className={`min-w-0 truncate ${current ? "text-neutral-800" : "text-neutral-400"}`}>{current?.label ?? placeholder}</span>
           <span className="shrink-0 text-neutral-400">▾</span>

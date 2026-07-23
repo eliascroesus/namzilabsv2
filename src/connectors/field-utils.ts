@@ -24,3 +24,13 @@ export function parseDate(value: string | null): Date | null {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
 }
+
+/** A non-empty string, or null. The standard defensive read for provider payloads. */
+export function str(v: unknown): string | null {
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+/** The value as a plain object, or {} — payload fields are never trusted to be shaped. */
+export function asObject(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+}

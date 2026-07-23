@@ -1,4 +1,4 @@
-import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
+import { type NodeType } from "@/lib/flow/types";
 import type { NodeData } from "./graph-utils";
 
 /** The four visible stages a metric flows through, in order. */
@@ -24,42 +24,12 @@ export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: 
 };
 export const ALL_TYPES = Object.keys(NODE_META) as NodeType[];
 
-export const SOURCE_ICON: Record<string, string> = {
-  calendly: "📅",
-  close: "💼",
-  instantly: "✉️",
-  sendblue: "💬",
-  gsheets: "📄",
-  gcal: "📆",
-  webhook: "🪝",
-};
-
-/**
- * A basic, brand-coloured badge for a data source. Deliberately app-agnostic: any
- * known connector gets its brand colour + short label, and any future/unknown
- * source falls back to a neutral badge derived from its key — so the data browser
- * and data pills work for every app, not just today's connectors.
- */
-export type SourceStyle = { label: string; color: string; short: string };
-const SOURCE_STYLE: Record<string, SourceStyle> = {
-  calendly: { label: "Calendly", color: "#006BFF", short: "Ca" },
-  close: { label: "Close", color: "#1E88E5", short: "Cl" },
-  instantly: { label: "Instantly", color: "#7C3AED", short: "In" },
-  sendblue: { label: "Sendblue", color: "#2563EB", short: "Sb" },
-  gsheets: { label: "Google Sheets", color: "#0F9D58", short: "Sh" },
-  gcal: { label: "Google Calendar", color: "#4285F4", short: "GC" },
-  webhook: { label: "Webhook", color: "#64748B", short: "Wh" },
-};
-export function sourceStyle(source?: string | null): SourceStyle {
-  if (source && SOURCE_STYLE[source]) return SOURCE_STYLE[source];
-  const key = (source ?? "").trim();
-  return { label: key || "App", color: "#64748B", short: (key || "ap").slice(0, 2).replace(/^\w/, (c) => c.toUpperCase()) };
-}
+// (Source badge styling lives in controls/source-style.ts — the one copy.)
 
 export function defaultConfig(type: NodeType): Record<string, unknown> {
   switch (type) {
     case "app":
-      return { identityField: "subject" };
+      return {};
     case "filter":
       return { combinator: "and", rules: [] };
     case "calculate":
@@ -151,37 +121,6 @@ export function formulaExpression(op: string, aName: string, bName: string): str
     default:
       return `${aName} ${op} ${bName}`;
   }
-}
-
-export function summary(type: string, data: NodeData): string {
-  const c = data.config;
-  if (type === "app") return `${(c.connectionName as string) ?? "Choose app"} · ${(c.eventType as string) ?? "all events"}`;
-  if (type === "filter") return `${((c.rules as unknown[]) ?? []).length} rule(s)`;
-  if (type === "output") return `${(c.viz as string) ?? "number"} · ${(c.format as string) ?? "number"}`;
-  if (type === "time") {
-    const mode = String(c.mode ?? "preset");
-    return mode === "preset" ? String(c.preset ?? "last_30_days").replace(/_/g, " ") : mode === "rolling" ? `last ${c.days ?? 30} days` : "between dates";
-  }
-  if (type === "formula") {
-    const op = String(c.op ?? "percentage");
-    if (isDatasetFormulaOp(op)) {
-      const gb = c.groupBy as { type?: string; unit?: string } | null;
-      const field = op === "count_distinct" ? String(c.distinctField ?? "subject") : String(c.field ?? "value");
-      return `${datasetCalcExpression(op, field)}${gb?.type === "time" ? ` by ${gb.unit}` : ""}`;
-    }
-    return formulaExpression(op, "A", "B");
-  }
-  if (type === "calculate") {
-    const mode = String(c.mode ?? "number");
-    if (mode === "compare") return formulaExpression(String(c.op ?? "percentage"), "First", "Second");
-    if (mode === "breakdown") return String(c.breakdownMode) === "field" ? `break down by ${String(c.breakdownField ?? "source")}` : `${((c.categories as unknown[]) ?? []).length} categories`;
-    const agg = String(c.aggregation ?? "count");
-    const gb = c.groupBy as { type?: string; unit?: string; field?: string } | null;
-    return `${agg}${gb ? ` by ${gb.type === "time" ? gb.unit : gb.field}` : ""}`;
-  }
-  if (type === "group") return String(c.mode) === "field" ? `by ${String(c.field ?? "source")}` : `${((c.categories as unknown[]) ?? []).length} categories`;
-  if (type === "paths") return ""; // the hub reads simply as "Split into paths" (its label)
-  return "";
 }
 
 /** Minimal wording for a successful test result — just the number + a short verb. */

@@ -17,10 +17,6 @@ export function getConnector(source: string): Connector | undefined {
   return registry.get(source);
 }
 
-export function listConnectors(): Connector[] {
-  return [...registry.values()];
-}
-
 // Built-in connectors.
 for (const connector of [
   catchHookConnector,

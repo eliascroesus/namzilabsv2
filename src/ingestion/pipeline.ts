@@ -89,23 +89,6 @@ export async function processRawEvent(db: DB, rawEventId: string): Promise<Proce
   return result;
 }
 
-/** Record a failed-but-will-retry attempt (used per retry by the durable layer). */
-export async function recordRetry(
-  db: DB,
-  raw: { id: string; orgId: string; connectionId: string },
-  attempt: number,
-  error: string,
-): Promise<void> {
-  await db.insert(deliveryLog).values({
-    orgId: raw.orgId,
-    connectionId: raw.connectionId,
-    rawEventId: raw.id,
-    status: "retry",
-    attempt,
-    error,
-  });
-}
-
 /**
  * Move an event to the dead-letter queue after retries are exhausted, and flag
  * the connection as errored. Nothing is dropped — the DLQ row is replayable.

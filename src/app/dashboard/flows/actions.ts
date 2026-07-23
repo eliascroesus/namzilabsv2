@@ -7,10 +7,9 @@ import { getDb } from "@/db/client";
 import { connections } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow } from "@/lib/flow/store";
-import { runFlow, type NodeExec } from "@/lib/flow/engine";
+import { runFlow, sampleAppFields, type NodeExec } from "@/lib/flow/engine";
 import { materializeFlow } from "@/lib/flow/materialize";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
-import { validateGraph } from "@/lib/flow/validate";
 import { ensureStreamsForGraph, primeStream } from "@/lib/sync/streams";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { getConnector } from "@/connectors/registry";
@@ -140,6 +139,33 @@ export async function testNodeAction(graph: unknown, nodeId: string): Promise<No
   }
 }
 
+export type AppFieldDTO = { path: string; label: string; type: string; example?: unknown; container?: boolean };
+
+/**
+ * The fields a Get data step's records actually carry — the user's real sheet
+ * columns, webhook keys, etc. — sampled straight from its synced events. Powers
+ * pickers on the step itself (e.g. "Match duplicates by") so they list real
+ * data fields even before the step's first test. Primes a freshly-configured
+ * stream first, so a brand-new resource still lists its fields.
+ */
+export async function listAppFieldsAction(
+  config: Record<string, unknown>,
+): Promise<{ ok: true; fields: AppFieldDTO[] } | { ok: false; error: string }> {
+  const { orgId } = await requireOrg();
+  try {
+    const db = getDb();
+    const connectionId = typeof config.connectionId === "string" ? config.connectionId : null;
+    const sourceConfig = (config.sourceConfig ?? {}) as Record<string, unknown>;
+    if (connectionId && hasStreamConfig(sourceConfig)) {
+      // Best-effort first-use sync; the field listing proceeds on whatever is synced.
+      await primeStream(db, orgId, connectionId, sourceConfig);
+    }
+    return { ok: true, fields: await sampleAppFields({ db, orgId }, config) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /**
  * Live choices for a Get data step's Configure dropdowns (spreadsheets, tabs,
  * calendars…), listed straight from the provider with the connection's
@@ -168,11 +194,6 @@ export async function listSourceOptionsAction(
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
-}
-
-export async function validateFlowAction(graph: unknown): Promise<{ issues: Array<{ nodeId?: string; message: string }> }> {
-  await requireOrg();
-  return { issues: validateGraph(parseGraph(graph)) };
 }
 
 /**

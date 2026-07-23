@@ -1,6 +1,7 @@
 import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext } from "./types";
 import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
 import { hashId } from "@/lib/ids";
+import { asObject, parseDate, str } from "./field-utils";
 
 const EVENT_TYPE_MAP: Record<string, string> = {
   email_sent: "email_sent",
@@ -50,14 +51,3 @@ export const instantlyConnector: Connector = {
   },
 };
 
-function asObject(v: unknown): Record<string, unknown> {
-  return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
-}
-function str(v: unknown): string | null {
-  return typeof v === "string" && v.length > 0 ? v : null;
-}
-function parseDate(v: string | null): Date | null {
-  if (!v) return null;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
-}

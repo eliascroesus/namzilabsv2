@@ -1,5 +1,6 @@
 import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs, PollResult, ListOptionsArgs, SourceOption } from "./types";
 import { fetchJson } from "@/lib/http-client";
+import { parseDate, str } from "./field-utils";
 
 const API = "https://www.googleapis.com/calendar/v3/calendars";
 
@@ -90,12 +91,4 @@ function firstAttendeeEmail(ev: Record<string, unknown>): string | null {
     return str(a["email"]);
   }
   return null;
-}
-function str(v: unknown): string | null {
-  return typeof v === "string" && v.length > 0 ? v : null;
-}
-function parseDate(v: string | null): Date | null {
-  if (!v) return null;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
 }

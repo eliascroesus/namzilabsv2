@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { catalogEntry, type FlowConfigField } from "@/connectors/catalog";
-import { listSourceOptionsAction } from "@/app/dashboard/flows/actions";
+import { listAppFieldsAction, listSourceOptionsAction, type AppFieldDTO } from "@/app/dashboard/flows/actions";
 import {
   AGGREGATIONS,
   TIME_UNITS,
@@ -17,7 +17,7 @@ import { computeNodeStatus, STD_META } from "./graph-utils";
 import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { RecordSamplePicker } from "./RecordSamplePicker";
 import { DataIcon, NodeGlyph } from "./icons";
-import { Select, DataBrowser, ConditionEditor, SourceBadge, humanizeKey } from "./controls";
+import { Select, DataBrowser, FieldInput, ConditionEditor, SourceBadge, humanizeKey } from "./controls";
 import type { DataGroup } from "./controls/types";
 import { toDataGroups } from "./field-groups";
 import { asFilterConfig } from "./panel-mappers";
@@ -28,8 +28,6 @@ export type StepRef = { id: string; title: string; stepNo?: number };
 /** Branch-head context: how records enter this Paths branch (mode lives on the hub). */
 export type BranchCtx = { mode: string; siblingHasFallback: boolean; siblingHasAlways: boolean; set: (mode: string) => void };
 
-const SELECT_BTN =
-  "flex w-full items-center justify-between gap-2 rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-left text-sm hover:border-neutral-400 focus:outline-none";
 const INPUT = "w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm focus:border-neutral-400 focus:outline-none";
 const W = 412;
 
@@ -100,22 +98,6 @@ function NumberField({ value, onChange, min, allowNull = false, placeholder, cla
   );
 }
 
-/** A Zapier-style field chooser (label + data browser with samples, search, drill-in). */
-function FieldSelect({ value, groups, onChange, placeholder = "Choose a field…" }: { value: string; groups: DataGroup[]; onChange: (path: string) => void; placeholder?: string }) {
-  const chosen = value ? groups.flatMap((g) => g.fields).find((f) => f.path === value)?.label ?? humanizeKey(value) : null;
-  return (
-    <DataBrowser
-      groups={groups}
-      onPick={(ref) => onChange(ref.fieldPath)}
-      trigger={({ toggle }) => (
-        <button type="button" onClick={toggle} className={SELECT_BTN}>
-          <span className={`min-w-0 truncate ${chosen ? "text-neutral-800" : "text-neutral-400"}`}>{chosen ?? placeholder}</span>
-          <span className="shrink-0 text-neutral-400">▾</span>
-        </button>
-      )}
-    />
-  );
-}
 
 export function ConfigPanel({
   node,
@@ -356,29 +338,7 @@ function NodeConfig({
               />
             </Field>
 
-            {/* Remove duplicates AT THE SOURCE — the very first thing that happens to
-                loaded records, so a duplicate never runs through the rest of the flow.
-                (This replaces the old Combine step.) */}
-            <div className="space-y-2 rounded-lg border border-neutral-200 p-2.5">
-              <button type="button" onClick={() => onChange({ dedupe: !cfg.dedupe })} className="flex items-center gap-2 text-xs font-medium text-neutral-700">
-                <span className={`flex h-4 w-4 items-center justify-center rounded border ${cfg.dedupe ? "border-neutral-800 bg-neutral-800 text-white" : "border-neutral-300"}`}>
-                  {cfg.dedupe ? "✓" : ""}
-                </span>
-                Remove duplicates
-              </button>
-              {cfg.dedupe ? (
-                <>
-                  <Field label="Match duplicates by">
-                    <FieldSelect value={(cfg.dedupeField as string) ?? "subject"} groups={selfGroups} onChange={(v) => onChange({ dedupeField: v })} />
-                  </Field>
-                  <p className="text-xs text-neutral-400">
-                    Records sharing the same value count as one — the newest is kept, the rest are dropped before anything else runs.
-                  </p>
-                </>
-              ) : (
-                <p className="text-xs text-neutral-400">Drop records that appear more than once, right as they load.</p>
-              )}
-            </div>
+            <DedupeSection cfg={cfg} fallbackGroups={selfGroups} onChange={onChange} />
           </div>
         )}
       </div>
@@ -440,7 +400,7 @@ function NodeConfig({
     return (
       <div className="space-y-3">
         <Field label="Date field">
-          <FieldSelect value={(cfg.dateField as string) ?? "occurredAt"} groups={groups} onChange={(v) => onChange({ dateField: v })} />
+          <FieldInput value={(cfg.dateField as string) ?? "occurredAt"} groups={groups} onChange={(v) => onChange({ dateField: v })} />
         </Field>
         <Field label="Window">
           <Select
@@ -506,12 +466,12 @@ function NodeConfig({
           <>
             {(op === "sum" || op === "avg" || op === "min" || op === "max") && (
               <Field label="Field to calculate">
-                <FieldSelect value={String(cfg.field ?? "value")} groups={groups} onChange={(v) => onChange({ field: v })} placeholder="Pick the number field…" />
+                <FieldInput value={String(cfg.field ?? "value")} groups={groups} onChange={(v) => onChange({ field: v })} placeholder="Pick the number field…" />
               </Field>
             )}
             {op === "count_distinct" && (
               <Field label="Count unique values of">
-                <FieldSelect value={String(cfg.distinctField ?? "subject")} groups={groups} onChange={(v) => onChange({ distinctField: v })} />
+                <FieldInput value={String(cfg.distinctField ?? "subject")} groups={groups} onChange={(v) => onChange({ distinctField: v })} />
               </Field>
             )}
             <Field label="Split over time?">
@@ -614,12 +574,12 @@ function NodeConfig({
         <Field label="Group by">
           <Select value={mode} width={W} options={[{ value: "field", label: "A field value" }, { value: "categories", label: "Custom categories" }]} onChange={(v) => onChange({ mode: v })} />
         </Field>
-        {mode === "field" && <Field label="Field"><FieldSelect value={(cfg.field as string) ?? "source"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
+        {mode === "field" && <Field label="Field"><FieldInput value={(cfg.field as string) ?? "source"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
         {mode === "categories" && <CategoryEditor cfg={cfg} groups={groups} onChange={onChange} />}
         <Field label="Value per group">
           <Select value={agg} width={W} options={[{ value: "count", label: "Count" }, { value: "sum", label: "Sum of a field" }, { value: "count_distinct", label: "Count distinct" }]} onChange={(v) => onChange({ aggregation: v })} />
         </Field>
-        {agg === "sum" && <Field label="Sum field"><FieldSelect value={(cfg.valueField as string) ?? "value"} groups={groups} onChange={(v) => onChange({ valueField: v })} /></Field>}
+        {agg === "sum" && <Field label="Sum field"><FieldInput value={(cfg.valueField as string) ?? "value"} groups={groups} onChange={(v) => onChange({ valueField: v })} /></Field>}
       </div>
     );
   }
@@ -667,8 +627,8 @@ function CalcNumber({ cfg, groups, onChange }: { cfg: Record<string, unknown>; g
       <Field label="Calculation">
         <Select value={agg} width={W} options={AGGREGATIONS.map((a) => ({ value: a, label: AGG_LABELS[a] ?? title(a) }))} onChange={(v) => onChange({ aggregation: v })} />
       </Field>
-      {(agg === "sum" || agg === "avg" || agg === "min" || agg === "max") && <Field label="Number field"><FieldSelect value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
-      {agg === "count_distinct" && <Field label="Distinct by"><FieldSelect value={(cfg.distinctField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ distinctField: v })} /></Field>}
+      {(agg === "sum" || agg === "avg" || agg === "min" || agg === "max") && <Field label="Number field"><FieldInput value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
+      {agg === "count_distinct" && <Field label="Distinct by"><FieldInput value={(cfg.distinctField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ distinctField: v })} /></Field>}
       <Field label="Split over time?">
         <Select
           value={gb?.type === "time" ? "time" : "none"}
@@ -691,12 +651,12 @@ function CalcBreakdown({ cfg, groups, onChange }: { cfg: Record<string, unknown>
       <Field label="Break down by">
         <Select value={bmode} width={W} options={[{ value: "field", label: "A field value" }, { value: "categories", label: "Custom categories" }]} onChange={(v) => onChange({ breakdownMode: v })} />
       </Field>
-      {bmode === "field" && <Field label="Field"><FieldSelect value={(cfg.breakdownField as string) ?? "source"} groups={groups} onChange={(v) => onChange({ breakdownField: v })} /></Field>}
+      {bmode === "field" && <Field label="Field"><FieldInput value={(cfg.breakdownField as string) ?? "source"} groups={groups} onChange={(v) => onChange({ breakdownField: v })} /></Field>}
       {bmode === "categories" && <CategoryEditor cfg={cfg} groups={groups} onChange={onChange} />}
       <Field label="Value per group">
         <Select value={agg} width={W} options={[{ value: "count", label: "Count" }, { value: "sum", label: "Sum of a field" }, { value: "count_distinct", label: "Count distinct" }]} onChange={(v) => onChange({ aggregation: v })} />
       </Field>
-      {agg === "sum" && <Field label="Sum field"><FieldSelect value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
+      {agg === "sum" && <Field label="Sum field"><FieldInput value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
     </>
   );
 }
@@ -896,6 +856,86 @@ function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigFi
   );
 }
 
+/**
+ * "Remove duplicates" on the Get data step — applied engine-side as the FIRST
+ * thing when records load, so a duplicate never runs through the rest of the
+ * flow. The match-field picker lists the step's REAL fields (the user's sheet
+ * columns, webhook keys…), sampled live from its synced events — no test
+ * needed first. Custom columns come first; canonical fields that carry data
+ * follow, humanised.
+ */
+function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, unknown>; fallbackGroups: DataGroup[]; onChange: (p: Record<string, unknown>) => void }) {
+  const on = !!cfg.dedupe;
+  const sig = JSON.stringify([cfg.connectionId ?? null, cfg.source ?? null, cfg.eventType ?? null, cfg.sourceConfig ?? {}]);
+  const [state, setState] = useState<{ sig: string | null; status: "idle" | "loading" | "ok" | "error"; fields: AppFieldDTO[] }>({ sig: null, status: "idle", fields: [] });
+
+  useEffect(() => {
+    if (!on || state.sig === sig) return;
+    let cancelled = false;
+    setState({ sig, status: "loading", fields: [] });
+    void listAppFieldsAction({
+      connectionId: cfg.connectionId,
+      source: cfg.source,
+      eventType: cfg.eventType,
+      sourceConfig: cfg.sourceConfig,
+    } as Record<string, unknown>).then((r) => {
+      if (cancelled) return;
+      if (r.ok) setState({ sig, status: "ok", fields: r.fields });
+      else setState({ sig, status: "error", fields: [] });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, sig]);
+
+  // The user's own columns first, then canonical fields that actually carry data.
+  const stdSet = new Set(Object.keys(STD_META));
+  const custom = state.fields.filter((f) => !stdSet.has(f.path));
+  const std = state.fields
+    .filter((f) => stdSet.has(f.path) && f.example != null && f.example !== "")
+    .map((f) => ({ ...f, label: STD_META[f.path]?.label ?? f.label, type: STD_META[f.path]?.type ?? f.type }));
+  const loaded = [...custom, ...std];
+  const groups: DataGroup[] =
+    loaded.length > 0
+      ? [
+          {
+            stepId: "self",
+            source: (typeof cfg.source === "string" && cfg.source) || undefined,
+            title: "This step’s data",
+            fields: loaded.map((f) => ({ path: f.path, label: f.label, type: f.type, sample: f.example, container: f.container })),
+          },
+        ]
+      : fallbackGroups;
+
+  return (
+    <div className="space-y-2 rounded-lg border border-neutral-200 p-2.5">
+      <button type="button" onClick={() => onChange({ dedupe: !on })} className="flex items-center gap-2 text-xs font-medium text-neutral-700">
+        <span className={`flex h-4 w-4 items-center justify-center rounded border ${on ? "border-neutral-800 bg-neutral-800 text-white" : "border-neutral-300"}`}>
+          {on ? "✓" : ""}
+        </span>
+        Remove duplicates
+      </button>
+      {on ? (
+        <>
+          <Field label="Match duplicates by">
+            <FieldInput value={(cfg.dedupeField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ dedupeField: v })} placeholder="Pick the field that identifies a duplicate…" />
+          </Field>
+          {state.status === "loading" && <p className="text-xs text-neutral-400">Loading your fields…</p>}
+          {state.status === "ok" && loaded.length === 0 && (
+            <p className="text-xs text-amber-700">No synced records yet — sync or test this step to see its fields.</p>
+          )}
+          <p className="text-xs text-neutral-400">
+            Records sharing the same value count as one — the newest is kept, the rest are dropped before anything else runs.
+          </p>
+        </>
+      ) : (
+        <p className="text-xs text-neutral-400">Drop records that appear more than once, right as they load.</p>
+      )}
+    </div>
+  );
+}
+
 const DATE_PRESETS: Array<{ value: string; label: string }> = TIME_PRESETS.map((p) => ({ value: p, label: title(p) }));
 
 type DateRange = { enabled?: boolean; dateField?: string; mode?: "preset" | "rolling" | "between"; preset?: string; days?: number; from?: string; to?: string };
@@ -914,7 +954,11 @@ function DateRangeSection({ cfg, groups, onChange }: { cfg: Record<string, unkno
   const mode = dr.mode ?? "preset";
   const set = (patch: Partial<DateRange>) =>
     onChange({ dateRange: { enabled, dateField: dr.dateField ?? "occurredAt", mode, preset: dr.preset ?? "last_30_days", days: dr.days ?? 30, from: dr.from, to: dr.to, ...patch } });
-  const dateFields = groups.flatMap((g) => g.fields).filter((f) => f.type === "date").map((f) => ({ value: f.path, label: f.label }));
+  // Only date fields make sense here; fall back to the built-in when none are known yet.
+  const dateGroups: DataGroup[] = groups
+    .map((g) => ({ ...g, fields: g.fields.filter((f) => f.type === "date") }))
+    .filter((g) => g.fields.length > 0);
+  if (dateGroups.length === 0) dateGroups.push({ stepId: "builtin", title: "Built-in", fields: [{ path: "occurredAt", label: "When it happened", type: "date" }] });
   return (
     <div className="rounded-lg border border-neutral-200">
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-neutral-600 hover:bg-neutral-50">
@@ -930,7 +974,7 @@ function DateRangeSection({ cfg, groups, onChange }: { cfg: Record<string, unkno
           {enabled && (
             <div className="space-y-2">
               <Field label="Date field">
-                <Select value={dr.dateField ?? "occurredAt"} width={W} options={dateFields.length ? dateFields : [{ value: "occurredAt", label: "When it happened" }]} onChange={(v) => set({ dateField: v })} />
+                <FieldInput value={dr.dateField ?? "occurredAt"} groups={dateGroups} onChange={(v) => set({ dateField: v })} />
               </Field>
               <Field label="Window">
                 <Select

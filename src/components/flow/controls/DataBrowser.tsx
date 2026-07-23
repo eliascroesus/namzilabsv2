@@ -43,19 +43,16 @@ function FieldRow({ field, onDrill, onPick }: { field: DataField; onDrill: () =>
 export function DataBrowser({
   groups,
   onPick,
-  align = "right",
+  onCustom,
   width = 560,
   trigger,
-  buttonLabel = "Insert data",
-  disabled = false,
 }: {
   groups: DataGroup[];
   onPick: (ref: FieldRef) => void;
-  align?: "left" | "right";
+  /** When set, the search text can be committed as-is (a custom field path). */
+  onCustom?: (text: string) => void;
   width?: number;
-  trigger?: (o: { open: boolean; toggle: () => void }) => ReactNode;
-  buttonLabel?: string;
-  disabled?: boolean;
+  trigger: (o: { open: boolean; toggle: () => void }) => ReactNode;
 }) {
   const [open, setOpenRaw] = useState(false);
   const [q, setQ] = useState("");
@@ -80,7 +77,7 @@ export function DataBrowser({
       else next.add(id);
       return next;
     });
-  const toggle = () => (disabled ? undefined : setOpen(!open));
+  const toggle = () => setOpen(!open);
 
   const drillGroup = drill ? groups.find((g) => g.stepId === drill.groupId) : undefined;
   const drillField = drill && drill.trail.length ? drill.trail[drill.trail.length - 1] : undefined;
@@ -93,29 +90,7 @@ export function DataBrowser({
   const anyFields = useMemo(() => groups.some((g) => g.fields.length > 0), [groups]);
 
   return (
-    <Popover
-      open={open}
-      setOpen={setOpen}
-      width={width}
-      align={align}
-      fixed
-      anchor={
-        trigger ? (
-          trigger({ open, toggle })
-        ) : (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={toggle}
-            className={`inline-flex items-center gap-1 rounded-md border border-dashed px-2 py-1 text-xs ${
-              disabled ? "cursor-not-allowed border-neutral-200 text-neutral-300" : "border-neutral-300 text-neutral-500 hover:border-neutral-400 hover:text-neutral-700"
-            }`}
-          >
-            <span className="text-sm leading-none">+</span> {buttonLabel}
-          </button>
-        )
-      }
-    >
+    <Popover open={open} setOpen={setOpen} width={width} align="right" fixed anchor={trigger({ open, toggle })}>
       <div className="flex max-h-[30rem] min-h-0 w-full flex-col">
         <div className="border-b border-neutral-100 p-2">
           <input
@@ -208,6 +183,20 @@ export function DataBrowser({
             <p className="px-2 py-4 text-center text-xs text-neutral-400">No fields match “{q.trim()}”.</p>
           )}
         </div>
+
+        {/* Free-typing escape hatch: commit the search text as a custom field path. */}
+        {onCustom && !drill && q.trim() && (
+          <button
+            type="button"
+            onClick={() => {
+              onCustom(q.trim());
+              setOpen(false);
+            }}
+            className="border-t border-neutral-100 px-3 py-2 text-left text-xs text-neutral-600 hover:bg-neutral-50"
+          >
+            Use “<span className="font-medium text-neutral-800">{q.trim()}</span>” exactly as typed
+          </button>
+        )}
       </div>
     </Popover>
   );

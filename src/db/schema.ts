@@ -72,26 +72,6 @@ export const connections = pgTable(
 );
 
 /**
- * The unique inbound URL(s) that external apps POST to. One per connection for
- * the generic catch-hook; providers with their own subscription API also get a
- * row so every inbound path is addressable and revocable.
- */
-export const webhookEndpoints = pgTable(
-  "webhook_endpoints",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    connectionId: uuid("connection_id")
-      .notNull()
-      .references(() => connections.id, { onDelete: "cascade" }),
-    orgId: text("org_id").notNull(),
-    slug: text("slug").notNull(),
-    secretEncrypted: text("secret_encrypted"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [uniqueIndex("webhook_endpoints_slug_uq").on(t.slug)],
-);
-
-/**
  * IMMUTABLE source of truth. Every inbound payload lands here first, exactly as
  * received, before any processing. This is what makes replay + audit possible.
  */

@@ -10,6 +10,7 @@ export { SourceBadge, DataPill } from "./Pill";
 export { OperatorSelect } from "./OperatorSelect";
 export { DataBrowser } from "./DataBrowser";
 export { ValueInput } from "./ValueInput";
+export { FieldInput } from "./FieldInput";
 export { ConditionEditor } from "./ConditionEditor";
 
 export { operatorsForType, operatorOptions } from "./operators";

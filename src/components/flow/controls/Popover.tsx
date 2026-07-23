@@ -19,7 +19,6 @@ export function Popover({
   children,
   width,
   align = "left",
-  panelClassName = "",
   fixed = false,
 }: {
   open: boolean;
@@ -28,7 +27,6 @@ export function Popover({
   children: ReactNode;
   width?: number;
   align?: "left" | "right";
-  panelClassName?: string;
   fixed?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -92,7 +90,7 @@ export function Popover({
         <div
           className={`z-30 flex flex-col overflow-hidden rounded-md border border-neutral-200 bg-white shadow-lg ${
             fixed ? "" : `absolute mt-1 ${align === "right" ? "right-0" : "left-0"}`
-          } ${panelClassName}`}
+          }`}
           style={panelStyle}
         >
           {children}

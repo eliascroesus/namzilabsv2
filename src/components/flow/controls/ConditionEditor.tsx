@@ -1,19 +1,17 @@
 "use client";
 
-import { DataBrowser } from "./DataBrowser";
 import { OperatorSelect } from "./OperatorSelect";
 import { Select } from "./Select";
 import { ValueInput } from "./ValueInput";
+import { FieldInput } from "./FieldInput";
 import { operatorsForType } from "./operators";
-import { humanizeKey, valueType } from "./field-utils";
-import type { DataGroup, FieldRef, ValueModel } from "./types";
+import { humanizeKey } from "./field-utils";
+import type { DataGroup, ValueModel } from "./types";
 import { NO_VALUE_FILTER_OPS, type FilterConfig } from "@/lib/flow/types";
 
 type Rule = FilterConfig["rules"][number];
 
 const LABEL = "mb-0.5 block text-[11px] font-medium text-neutral-500";
-const SELECT_BTN =
-  "flex w-full items-center justify-between gap-2 rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-left text-sm hover:border-neutral-400 focus:outline-none";
 
 /** Convert a stored rule's value side into the ValueInput model (looking up display info). */
 function ruleToValue(rule: Rule, groups: DataGroup[]): ValueModel {
@@ -70,12 +68,12 @@ export function ConditionEditor({
   const fieldMeta = (path: string) => allFields.find((f) => f.path === path);
   const typeOfRuleField = (rule: Rule) => fieldMeta(rule.field)?.type;
 
-  const pickField = (i: number, ref: FieldRef) => {
-    const newType = fieldMeta(ref.fieldPath)?.type ?? valueType(ref.sample);
+  const pickField = (i: number, path: string) => {
+    const newType = fieldMeta(path)?.type;
     const ops = operatorsForType(newType);
     const curOp = rules[i].op;
     updateRule(i, {
-      field: ref.fieldPath,
+      field: path,
       op: ops.includes(curOp) ? curOp : ops[0],
       value: "",
       value2: undefined,
@@ -107,7 +105,6 @@ export function ConditionEditor({
       <div className="space-y-2">
         {rules.map((rule, i) => {
           const ftype = typeOfRuleField(rule);
-          const chosen = rule.field ? fieldMeta(rule.field)?.label ?? humanizeKey(rule.field) : null;
           const noValue = NO_VALUE_FILTER_OPS.includes(rule.op);
           const isBetween = rule.op === "between";
           return (
@@ -118,16 +115,7 @@ export function ConditionEditor({
               <div className="grid grid-cols-1 gap-2">
                 <div>
                   <label className={LABEL}>Field</label>
-                  <DataBrowser
-                    groups={groups}
-                    onPick={(ref) => pickField(i, ref)}
-                    trigger={({ toggle }) => (
-                      <button type="button" onClick={toggle} className={SELECT_BTN}>
-                        <span className={`min-w-0 truncate ${chosen ? "text-neutral-800" : "text-neutral-400"}`}>{chosen ?? "Choose a field…"}</span>
-                        <span className="shrink-0 text-neutral-400">▾</span>
-                      </button>
-                    )}
-                  />
+                  <FieldInput value={rule.field} groups={groups} onChange={(path) => pickField(i, path)} />
                 </div>
                 <div>
                   <label className={LABEL}>Condition</label>

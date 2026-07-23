@@ -1,5 +1,5 @@
 import type { Node, Edge } from "@xyflow/react";
-import { STANDARD_FIELDS, walkPath } from "@/lib/flow/records";
+import { STANDARD_FIELDS, getField, type FlowRecord } from "@/lib/flow/records";
 import { isDatasetFormulaOp } from "@/lib/flow/types";
 import { catalogEntry } from "@/connectors/catalog";
 import type { NodeTestDTO } from "@/app/dashboard/flows/actions";
@@ -315,21 +315,6 @@ export function bridgeEdgeFor(nodeId: string, edges: Edge[]): Edge | null {
   };
 }
 
-// ---------- Connection validity (shape compatibility) ----------
-
-const DATASET_PRODUCERS = new Set(["app", "filter", "time", "paths", "unite"]);
-const SCALAR_PRODUCERS = new Set(["formula"]);
-const VALUE_PRODUCERS = new Set(["formula", "group"]);
-
-/** Whether a source→target connection is shape-compatible (mirrors validate.ts). */
-export function isValidFlowConnection(sourceType: string, targetType: string): boolean {
-  if (targetType === "app") return false; // App has no inputs.
-  // Calculate accepts records via its chain edge (dataset ops) or numbers on A/B.
-  if (targetType === "formula") return SCALAR_PRODUCERS.has(sourceType) || DATASET_PRODUCERS.has(sourceType);
-  if (targetType === "output") return DATASET_PRODUCERS.has(sourceType) || VALUE_PRODUCERS.has(sourceType);
-  return DATASET_PRODUCERS.has(sourceType); // dataset consumers
-}
-
 // ---------- Variable picker fields ----------
 
 /** Canonical (system) fields, grouped under a collapsed "System fields" section. */
@@ -344,29 +329,13 @@ export const STD_META: Record<string, { label: string; type: string }> = {
 };
 
 /**
- * Resolve a field path against a sample record (client mirror of records.getField),
- * including nested objects/arrays via dotted segments + numeric indices.
+ * Resolve a field path against a loosely-typed sample record. Thin guard over
+ * the engine's own `getField`, so path semantics can never drift between the
+ * picker previews and what actually runs.
  */
 export function resolveSampleField(rec: unknown, path: string): unknown {
   if (!rec || typeof rec !== "object") return undefined;
-  const r = rec as Record<string, unknown>;
-  switch (path) {
-    case "subject":
-    case "source":
-    case "eventType":
-    case "value":
-    case "currency":
-    case "occurredAt":
-    case "id":
-      return r[path];
-    default: {
-      const props = r.properties as Record<string, unknown> | undefined;
-      if (props == null) return undefined;
-      const rest = path.startsWith("properties.") ? path.slice("properties.".length) : path;
-      if (Object.prototype.hasOwnProperty.call(props, rest)) return props[rest];
-      return walkPath(props, rest);
-    }
-  }
+  return getField(rec as FlowRecord, path);
 }
 
 /**
@@ -486,208 +455,31 @@ export function nearestAppAncestor(start: FNode, nodes: FNode[], edges: Edge[]):
   return undefined;
 }
 
-/** Last segment of a dotted path, used as a fallback label for nested fields. */
-export function lastSegment(path: string): string {
-  const seg = path.split(".").pop() ?? path;
-  return STD_META[path]?.label ?? seg;
-}
+// ---------- Input descriptors (Unite / Calculate panels) ----------
 
-/**
- * Resolve a picked field path (including lazily-expanded nested paths not present in
- * the flat field list) to its provenance: originating step, source app, human label,
- * and the sample value from the selected preview record. Drives the data pill.
- */
-export function fieldProvenance(
-  fieldGroups: FieldGroup[],
-  path: string,
-): { stepNo?: number; source?: string; from?: string; label: string; sample?: unknown; type?: string } {
-  for (const g of fieldGroups) {
-    const exact = g.fields.find((f) => f.path === path);
-    if (exact) return { stepNo: g.stepNo, source: g.appSource, from: g.from, label: exact.label, sample: exact.example, type: exact.type };
-  }
-  // Nested (drilled-into) path: find the owning group by resolving against its sample.
-  for (const g of fieldGroups) {
-    if (g.system) continue;
-    const val = resolveSampleField(g.sampleRecord, path);
-    if (val !== undefined) {
-      const type = Array.isArray(val) ? "list" : val && typeof val === "object" ? "object" : typeof val === "number" ? "number" : typeof val === "boolean" ? "boolean" : "text";
-      return { stepNo: g.stepNo, source: g.appSource, from: g.from, label: lastSegment(path), sample: val, type };
-    }
-  }
-  return { label: lastSegment(path) };
-}
-
-// ---------- Flow check rail ----------
-
-export type FlowCheck = { nodeId?: string; title: string; impact: string; fixLabel: string };
-
-/** Count rules that map to a field but haven't chosen one. */
-function mappedGaps(filters: unknown): number {
-  const rules = ((filters as { rules?: Array<{ valueKind?: string; valueField?: string }> } | undefined)?.rules) ?? [];
-  return rules.filter((r) => r.valueKind === "field" && !(r.valueField ?? "").trim()).length;
-}
-
-/**
- * Live, human-readable checks for the Flow check rail. Each item says what's wrong,
- * what it changes, and offers one action that jumps to the exact step. Runs on the
- * client so the rail updates as you build (no server round-trip).
- */
-export function flowChecks(nodes: FNode[], edges: Edge[], titleOf: (n: FNode) => string): FlowCheck[] {
-  const checks: FlowCheck[] = [];
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const incoming = (id: string) => edges.filter((e) => e.target === id);
-
-  for (const n of nodes) {
-    const title = titleOf(n);
-    const cfg = n.data.config as Record<string, unknown>;
-    const ins = incoming(n.id);
-
-    if (n.type === "app") {
-      if (!cfg.connectionId && !cfg.source) {
-        checks.push({ nodeId: n.id, title: `“${title}” has no data source`, impact: "Nothing after it can run until this step loads data.", fixLabel: "Choose an account" });
-      }
-      continue;
-    }
-
-    if (ins.length === 0 && n.type !== "output") {
-      checks.push({ nodeId: n.id, title: `“${title}” isn’t connected to anything`, impact: "It has no records to work with, so it produces nothing.", fixLabel: "Connect an input" });
-    }
-
-    if (n.type === "formula" && !isDatasetFormulaOp(cfg.op ?? "percentage")) {
-      const aOk = ins.some((e) => e.targetHandle === "a");
-      const bOk = ins.some((e) => e.targetHandle === "b");
-      if (!aOk || !bOk) {
-        checks.push({ nodeId: n.id, title: `“${title}” needs two numbers`, impact: "A rate or ratio needs a number in both A and B.", fixLabel: "Connect A and B" });
-      }
-      for (const e of ins) {
-        const src = byId.get(e.source);
-        if (src?.type === "formula" && isDatasetFormulaOp((src.data.config as { op?: unknown }).op)) {
-          const gb = (src.data.config as { groupBy?: { type?: string; unit?: string; field?: string } | null }).groupBy;
-          if (gb) {
-            const by = gb.type === "time" ? `by ${gb.unit}` : `by ${gb.field}`;
-            checks.push({
-              nodeId: src.id,
-              title: `“${title}” can’t be calculated`,
-              impact: `“${titleOf(src)}” is grouped ${by}, so it’s a series of numbers, not one total. Change it to one total number.`,
-              fixLabel: `Fix “${titleOf(src)}”`,
-            });
-          }
-        }
-      }
-    }
-
-    if (n.type === "output") {
-      if (ins.length === 0) checks.push({ nodeId: n.id, title: `“${title}” has nothing to show`, impact: "Connect a step that produces a number or records.", fixLabel: "Connect an input" });
-      if (!String(cfg.name ?? "").trim()) checks.push({ nodeId: n.id, title: "Your metric needs a name", impact: "This is the label it shows under on the dashboard.", fixLabel: "Name this metric" });
-    }
-
-    // Conditions that map to a field but no field is chosen.
-    let gaps = 0;
-    if (n.type === "filter") gaps = mappedGaps(cfg);
-    else if (n.type === "paths") gaps = ((cfg.paths as Array<{ filters?: unknown }>) ?? []).reduce((a, p) => a + mappedGaps(p.filters), 0);
-    else if (n.type === "group") gaps = ((cfg.categories as Array<{ filters?: unknown }>) ?? []).reduce((a, c) => a + mappedGaps(c.filters), 0);
-    if (gaps > 0) {
-      checks.push({ nodeId: n.id, title: `“${title}” compares against a field that isn’t chosen`, impact: "Pick the field to compare against, or switch back to a fixed value.", fixLabel: "Open step" });
-    }
-  }
-
-  if (!nodes.some((n) => n.type === "output")) {
-    checks.push({ title: "No dashboard tile yet", impact: "Add a “Show on dashboard” step to save a metric.", fixLabel: "Add a step" });
-  }
-
-  return checks;
-}
-
-// ---------- Input descriptors (Combine / Formula config panels) ----------
-
+/** One connected input of the selected step — exactly what the panels read. */
 export type InputDescriptor = {
   nodeId: string;
   targetHandle: string | null;
-  stepNo?: number;
   title: string;
-  type: string;
-  status: "ok" | "error" | "dirty" | "untested";
-  recordCount?: number;
+  /** The producing step's computed number (for the "= N" preview under a picked slot). */
   value?: unknown;
-  calc?: string;
-  appSource?: string;
-  account?: string;
-  eventType?: string;
-  chain: string[];
-  sample: unknown[];
-  fieldPaths: string[];
 };
 
-function calcOf(node: FNode): string | undefined {
-  const c = node.data.config as Record<string, unknown>;
-  if (node.type === "formula") {
-    const op = String(c.op ?? "percentage");
-    if (op === "count") return "Count";
-    if (op === "count_distinct") return `Distinct ${String(c.distinctField ?? "subject")}`;
-    if (op === "sum") return `Sum of ${String(c.field ?? "value")}`;
-    if (op === "avg") return `Average of ${String(c.field ?? "value")}`;
-    if (op === "min") return `Min of ${String(c.field ?? "value")}`;
-    if (op === "max") return `Max of ${String(c.field ?? "value")}`;
-    return "Formula";
-  }
-  return undefined;
-}
-
-function statusFor(node: FNode): InputDescriptor["status"] {
-  const t = node.data.lastTest;
-  if (!t) return "untested";
-  if (node.data.dirty) return "dirty";
-  return t.status === "error" ? "error" : "ok";
-}
-
-/** Describe each connected input of a node, in connection order (for Combine/Formula panels). */
-export function describeInputs(opts: { selectedId: string; nodes: FNode[]; edges: Edge[]; stepNoById?: Map<string, number>; titleOf: (n: FNode) => string }): InputDescriptor[] {
-  const { selectedId, nodes, edges, stepNoById, titleOf } = opts;
+/** Describe each connected input of a node, in connection order. */
+export function describeInputs(opts: { selectedId: string; nodes: FNode[]; edges: Edge[]; titleOf: (n: FNode) => string }): InputDescriptor[] {
+  const { selectedId, nodes, edges, titleOf } = opts;
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  const inEdges = edges.filter((e) => e.target === selectedId);
-
-  return inEdges.map((e) => {
-    const sn = byId.get(e.source);
-    const desc: InputDescriptor = {
-      nodeId: e.source,
-      targetHandle: e.targetHandle ?? null,
-      stepNo: stepNoById?.get(e.source),
-      title: sn ? titleOf(sn) : e.source,
-      type: sn ? String(sn.type) : "?",
-      status: sn ? statusFor(sn) : "untested",
-      recordCount: sn?.data.lastTest?.recordsOut,
-      value: sn?.data.lastTest?.value ?? (sn?.data.lastTest?.tile != null ? (sn.data.lastTest!.tile as { value?: unknown }).value : undefined),
-      calc: sn ? calcOf(sn) : undefined,
-      chain: [],
-      sample: (sn?.data.lastTest?.sample ?? []) as unknown[],
-      fieldPaths: (sn?.data.lastTest?.outputSchema ?? []).map((f) => f.path).filter((p) => !(p in STD_META)),
-    };
-
-    // Walk upstream to the nearest App ancestor, building the chain of titles.
-    const chain: string[] = [];
-    const guard = new Set<string>();
-    let cur = sn;
-    while (cur && !guard.has(cur.id)) {
-      guard.add(cur.id);
-      chain.unshift(titleOf(cur));
-      if (cur.type === "app") {
-        const c = cur.data.config as Record<string, unknown>;
-        desc.appSource = (c.source as string) ?? undefined;
-        desc.account = (c.connectionName as string) ?? undefined;
-        desc.eventType = (c.eventType as string) ?? undefined;
-        break;
-      }
-      const up = edges.find((x) => x.target === cur!.id);
-      cur = up ? byId.get(up.source) : undefined;
-    }
-    desc.chain = chain;
-    return desc;
-  });
-}
-
-/** Field paths that appear in more than one input (Combine overwrite warning). */
-export function collidingFields(inputs: InputDescriptor[]): string[] {
-  const seen = new Map<string, number>();
-  for (const i of inputs) for (const p of new Set(i.fieldPaths)) seen.set(p, (seen.get(p) ?? 0) + 1);
-  return [...seen.entries()].filter(([, n]) => n > 1).map(([p]) => p);
+  return edges
+    .filter((e) => e.target === selectedId)
+    .map((e) => {
+      const sn = byId.get(e.source);
+      const tile = sn?.data.lastTest?.tile as { value?: unknown } | undefined;
+      return {
+        nodeId: e.source,
+        targetHandle: e.targetHandle ?? null,
+        title: sn ? titleOf(sn) : e.source,
+        value: sn?.data.lastTest?.value ?? tile?.value,
+      };
+    });
 }

@@ -8,6 +8,7 @@ import {
   AppConfigSchema,
   FilterConfigSchema,
   OutputConfigSchema,
+  type AppConfig,
   TimeConfigSchema,
   FormulaConfigSchema,
   GroupConfigSchema,
@@ -143,19 +144,40 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
 }
 
 // ---------- App ----------
-async function execApp(ctx: EngineCtx, node: FlowNode): Promise<NodeExec> {
-  const cfg = AppConfigSchema.parse(node.data.config ?? {});
-  const conds: SQL[] = [sql`${events.orgId} = ${ctx.orgId}`, isNull(events.deletedAt)];
+/** The org-scoped WHERE for a Get data step (shared by the executor and field sampling). */
+function appConds(orgId: string, cfg: AppConfig): SQL[] {
+  const conds: SQL[] = [sql`${events.orgId} = ${orgId}`, isNull(events.deletedAt)];
   if (cfg.connectionId) conds.push(eq(events.connectionId, cfg.connectionId));
   if (cfg.source) conds.push(eq(events.source, cfg.source));
   if (cfg.eventType) conds.push(eq(events.eventType, cfg.eventType));
   // A flow-level resource selection reads exactly its own stream's events.
   if (hasStreamConfig(cfg.sourceConfig)) conds.push(eq(events.streamHash, streamConfigHash(cfg.sourceConfig)));
+  return conds;
+}
 
+/**
+ * The fields a Get data step's records actually carry, inferred from a small
+ * sample of its own synced events. Powers pickers that need the step's fields
+ * BEFORE it has been tested (e.g. "Match duplicates by" listing the user's real
+ * sheet columns), without loading the full record set.
+ */
+export async function sampleAppFields(ctx: EngineCtx, config: unknown, limit = 100): Promise<FieldInfo[]> {
+  const cfg = AppConfigSchema.parse(config ?? {});
   const rows = await ctx.db
     .select()
     .from(events)
-    .where(and(...conds))
+    .where(and(...appConds(ctx.orgId, cfg)))
+    .orderBy(desc(events.occurredAt))
+    .limit(limit);
+  return inferSchema(rows.map(eventToRecord));
+}
+
+async function execApp(ctx: EngineCtx, node: FlowNode): Promise<NodeExec> {
+  const cfg = AppConfigSchema.parse(node.data.config ?? {});
+  const rows = await ctx.db
+    .select()
+    .from(events)
+    .where(and(...appConds(ctx.orgId, cfg)))
     .orderBy(desc(events.occurredAt))
     .limit(APP_LOAD_CAP);
 

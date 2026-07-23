@@ -43,15 +43,6 @@ export async function renameConnectionAction(id: string, name: string): Promise<
   return { ok: true };
 }
 
-export async function resyncAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
-  const id = String(formData.get("id") ?? "");
-  const conn = await getConnection(orgId, id);
-  if (!conn) throw new Error("connection not found");
-  await inngest.send({ name: "ingest/reconcile.requested", data: { connectionId: id } });
-  redirect(`/connections/${id}`);
-}
-
 /** Pull only new records since the last sync (additive). */
 export async function syncNewAction(formData: FormData): Promise<void> {
   const { orgId } = await requireOrg();

@@ -1,6 +1,7 @@
 import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext } from "./types";
 import { safeEqual } from "@/lib/signatures";
 import { hashId } from "@/lib/ids";
+import { asObject, parseDate, str } from "./field-utils";
 
 /** Candidate headers Sendblue may place the configured signing secret in. */
 const SECRET_HEADERS = [
@@ -59,14 +60,3 @@ function statusToType(status: string, inbound: boolean): string {
   return "sms_sent";
 }
 
-function asObject(v: unknown): Record<string, unknown> {
-  return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
-}
-function str(v: unknown): string | null {
-  return typeof v === "string" && v.length > 0 ? v : null;
-}
-function parseDate(v: string | null): Date | null {
-  if (!v) return null;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
-}

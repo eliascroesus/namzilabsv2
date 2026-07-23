@@ -71,26 +71,11 @@ export const FILTER_OP_LABELS: Record<FlowFilterOp, string> = {
   between: "Between (dates)",
 };
 
-/** Everyday operators shown first; the rest appear under a "More" divider. */
-export const PRIMARY_FILTER_OPS: FlowFilterOp[] = [
-  "equals",
-  "not_equals",
-  "contains",
-  "not_contains",
-  "starts_with",
-  "ends_with",
-  "gt",
-  "lt",
-  "is_empty",
-  "is_not_empty",
-];
-
 /** Operators that take no value input (the value box is hidden for these). */
 export const NO_VALUE_FILTER_OPS: FlowFilterOp[] = ["is_empty", "is_not_empty"];
 
 /** How a comparison value is supplied: a literal, or a mapped upstream field. */
-export const VALUE_KINDS = ["fixed", "field"] as const;
-export type ValueKind = (typeof VALUE_KINDS)[number];
+const VALUE_KINDS = ["fixed", "field"] as const;
 
 export const FilterRuleSchema = z.object({
   field: z.string().min(1),
@@ -119,7 +104,6 @@ export const FilterDateRangeSchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
 });
-export type FilterDateRange = z.infer<typeof FilterDateRangeSchema>;
 
 export const FilterConfigSchema = z.object({
   combinator: z.enum(["and", "or"]).default("and"),
@@ -133,7 +117,6 @@ export const AppConfigSchema = z.object({
   connectionId: z.string().nullable().default(null),
   source: z.string().nullable().default(null),
   eventType: z.string().nullable().default(null),
-  identityField: z.string().nullable().default("subject"),
   /**
    * Flow-level resource selection (which spreadsheet + tab, which calendar…).
    * The connection holds only auth; this config identifies the synced stream the
@@ -150,12 +133,14 @@ export const AppConfigSchema = z.object({
   dedupeField: z.string().default("subject"),
 });
 export type AppConfig = z.infer<typeof AppConfigSchema>;
+// (identityField, an M1 leftover nothing read, was removed from AppConfigSchema —
+// zod strips it from any stored config on parse, so old graphs are unaffected.)
 
 // ---------- Aggregate ----------
 export const AGGREGATIONS = ["count", "count_distinct", "sum", "avg", "min", "max"] as const;
 export const TIME_UNITS = ["day", "week", "month", "quarter", "year"] as const;
 
-export const GroupBySchema = z
+const GroupBySchema = z
   .discriminatedUnion("type", [
     z.object({ type: z.literal("time"), unit: z.enum(TIME_UNITS) }),
     z.object({ type: z.literal("field"), field: z.string().min(1) }),
@@ -163,7 +148,8 @@ export const GroupBySchema = z
   .nullable()
   .default(null);
 
-export const AggregateConfigSchema = z.object({
+// Not a node type anymore — kept (unexported) to type the shared aggregate machinery.
+const AggregateConfigSchema = z.object({
   aggregation: z.enum(AGGREGATIONS).default("count"),
   field: z.string().default("value"),
   distinctField: z.string().default("subject"),
@@ -233,7 +219,6 @@ export const FORMULA_OPS = [
   "min",
   "max",
 ] as const;
-export type FormulaOp = (typeof FORMULA_OPS)[number];
 
 /** Ops that aggregate the incoming records (vs. comparing two numbers). */
 export const DATASET_FORMULA_OPS = ["count", "count_distinct", "sum", "avg", "min", "max"] as const;
