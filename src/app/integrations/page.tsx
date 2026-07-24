@@ -1,5 +1,5 @@
 import { requireOrg } from "@/lib/auth";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { listConnections } from "@/lib/connections";
 import { CONNECTOR_CATALOG, type ConnectorCatalogEntry } from "@/connectors/catalog";
 import { ConnectionRow } from "./ConnectionRow";
@@ -16,8 +16,7 @@ export default async function IntegrationsPage() {
   }, {});
 
   return (
-    <>
-      <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-5xl px-6 py-10">
         <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
         <p className="mt-1 text-sm text-neutral-500">
@@ -47,7 +46,7 @@ export default async function IntegrationsPage() {
           </div>
         </section>
       </main>
-    </>
+    </AppShell>
   );
 }
 

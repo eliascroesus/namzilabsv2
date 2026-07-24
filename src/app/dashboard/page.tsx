@@ -3,7 +3,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { connections, deadLetter, events, flowResults, flows } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
 import { listMetrics, type Metric } from "@/lib/metrics/store";
@@ -105,8 +105,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   };
 
   return (
-    <>
-      <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-5xl px-6 py-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
@@ -225,7 +224,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           )}
         </section>
       </main>
-    </>
+    </AppShell>
   );
 }
 

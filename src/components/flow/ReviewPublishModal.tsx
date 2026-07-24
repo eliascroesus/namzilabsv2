@@ -59,38 +59,41 @@ export function ReviewPublishModal({
   const set = (nodeId: string, patch: Partial<MetricSpecT>) => onChange(metrics.map((m) => (m.nodeId === nodeId ? { ...m, ...patch } : m)));
   const enabledCount = metrics.filter((m) => m.enabled).length;
 
+  const inputCls =
+    "w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-sm text-neutral-800 transition-colors focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-4 pt-16" onClick={onClose}>
-      <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-lg border border-neutral-200 bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-neutral-100 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 p-4 pt-16 backdrop-blur-sm" onClick={onClose}>
+      <div className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white flow-shadow flow-pop-in" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
           <div>
-            <h2 className="text-sm font-semibold">Review &amp; publish</h2>
-            <p className="text-xs text-neutral-500">Choose which results appear on your dashboard.</p>
+            <h2 className="text-base font-semibold tracking-tight text-neutral-900">Review &amp; publish</h2>
+            <p className="mt-0.5 text-xs text-neutral-500">Choose which results appear on your dashboard.</p>
           </div>
-          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700">
+          <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700" aria-label="Close">
             ✕
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-neutral-50/60 p-4">
           {endpoints.length === 0 && <p className="text-sm text-neutral-500">This flow has no endpoints yet. Add a Calculate step, then come back.</p>}
           {endpoints.map((ep) => {
             const m = byId.get(ep.nodeId);
             if (!m) return null;
             return (
-              <div key={ep.nodeId} className={`rounded-md border p-3 ${m.enabled ? "border-neutral-300" : "border-neutral-200 opacity-70"}`}>
+              <div key={ep.nodeId} className={`rounded-xl border p-3.5 transition-colors ${m.enabled ? "border-indigo-200 bg-indigo-50/40" : "border-neutral-100 bg-white opacity-80"}`}>
                 <label className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
-                    <input type="checkbox" checked={m.enabled} onChange={(e) => set(ep.nodeId, { enabled: e.target.checked })} className="h-4 w-4" />
-                    <span className="truncate text-sm font-medium">{ep.title}</span>
+                    <input type="checkbox" checked={m.enabled} onChange={(e) => set(ep.nodeId, { enabled: e.target.checked })} className="h-4 w-4 accent-indigo-600" />
+                    <span className="truncate text-sm font-semibold text-neutral-800">{ep.title}</span>
                   </span>
-                  <span className="shrink-0 text-[10px] uppercase tracking-wide text-neutral-400">metric</span>
+                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-400">metric</span>
                 </label>
                 {m.enabled && (
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-3 space-y-2.5">
                     <label className="block">
                       <span className="mb-1 block text-xs font-medium text-neutral-600">Metric name</span>
-                      <input value={m.name} onChange={(e) => set(ep.nodeId, { name: e.target.value })} placeholder="e.g. Show-up rate" className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm" />
+                      <input value={m.name} onChange={(e) => set(ep.nodeId, { name: e.target.value })} placeholder="e.g. Show-up rate" className={inputCls} />
                     </label>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -102,47 +105,42 @@ export function ReviewPublishModal({
                         <Select value={m.format} width={210} options={FORMAT_OPTIONS} onChange={(v) => set(ep.nodeId, { format: v })} />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="mb-1 block text-xs font-medium text-neutral-600">Time reference</span>
-                          <Select
-                            value={m.timeField ?? ""}
-                            width={260}
-                            searchable
-                            placeholder="Pick a field…"
-                            options={[{ value: "", label: "None" }, ...timeFieldOptions]}
-                            onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
-                          />
-                        </div>
-                        {(m.viz === "line" || m.viz === "bar") && m.timeField && (
-                          <div>
-                            <span className="mb-1 block text-xs font-medium text-neutral-600">Group by</span>
-                            <Select value={m.timeUnit ?? "month"} width={210} options={TIME_UNIT_OPTIONS} onChange={(v) => set(ep.nodeId, { timeUnit: v })} />
-                          </div>
-                        )}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="mb-1 block text-xs font-medium text-neutral-600">Time reference</span>
+                        <Select
+                          value={m.timeField ?? ""}
+                          width={260}
+                          searchable
+                          placeholder="Pick a field…"
+                          options={[{ value: "", label: "None" }, ...timeFieldOptions]}
+                          onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
+                        />
                       </div>
-                      <p className="text-[11px] text-neutral-400">
-                        Which value says when each record happened (e.g. a Timestamp column from your sheet) — drives chart axes and the dashboard&rsquo;s 7 / 30 / 90-day views.
-                      </p>
+                      {(m.viz === "line" || m.viz === "bar") && m.timeField && (
+                        <div>
+                          <span className="mb-1 block text-xs font-medium text-neutral-600">Group by</span>
+                          <Select value={m.timeUnit ?? "month"} width={210} options={TIME_UNIT_OPTIONS} onChange={(v) => set(ep.nodeId, { timeUnit: v })} />
+                        </div>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Decimals</span>
-                        <input type="number" value={m.precision} onChange={(e) => set(ep.nodeId, { precision: Number(e.target.value) })} className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm" />
+                        <input type="number" value={m.precision} onChange={(e) => set(ep.nodeId, { precision: Number(e.target.value) })} className={inputCls} />
                       </label>
                       <label className="block">
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Goal / target</span>
                         {/* The goal is in the metric's own format: % for percentages, $ for currency. */}
                         <div className="relative">
-                          {m.format === "currency" && <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm text-neutral-400">$</span>}
+                          {m.format === "currency" && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400">$</span>}
                           <input
                             type="number"
                             value={m.target ?? ""}
                             onChange={(e) => set(ep.nodeId, { target: e.target.value === "" ? null : Number(e.target.value) })}
-                            className={`w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm ${m.format === "currency" ? "pl-6" : ""} ${m.format === "percent" ? "pr-7" : ""}`}
+                            className={`${inputCls} ${m.format === "currency" ? "pl-6" : ""} ${m.format === "percent" ? "pr-7" : ""}`}
                           />
-                          {m.format === "percent" && <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-neutral-400">%</span>}
+                          {m.format === "percent" && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400">%</span>}
                         </div>
                       </label>
                     </div>
@@ -154,12 +152,12 @@ export function ReviewPublishModal({
         </div>
 
         <div className="space-y-2 border-t border-neutral-100 p-4">
-          {error && <p className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">Can’t publish: {error}</p>}
-          {warning && <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{warning}</p>}
+          {error && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">Can’t publish: {error}</p>}
+          {warning && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{warning}</p>}
           <button
             onClick={onPublish}
             disabled={publishing || enabledCount === 0}
-            className="w-full rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+            className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50"
           >
             {publishing ? "Publishing…" : publishedVersion != null ? `Update dashboard (${enabledCount})` : `Publish ${enabledCount} metric${enabledCount === 1 ? "" : "s"}`}
           </button>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { computeFunnel, distinctSources, distinctEventTypes } from "@/lib/metrics/compute";
 import { FunnelSchema } from "@/lib/metrics/types";
@@ -47,8 +47,7 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
   const hiddenKeys = ["name", ...STAGES.flatMap((i) => [`stage${i}_label`, `stage${i}_source`, `stage${i}_eventType`])];
 
   return (
-    <>
-      <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
         <Link href="/dashboard" className="text-sm text-neutral-500 hover:text-neutral-800">
           &larr; Dashboard
@@ -120,6 +119,6 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
           </section>
         )}
       </main>
-    </>
+    </AppShell>
   );
 }

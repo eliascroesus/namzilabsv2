@@ -49,15 +49,20 @@ body {
   pointer-events: none;
 }
 /*
- * Connection lines. One clean, rounded stroke (rounded caps + rounded corners
- * from the edge geometry) with small endpoint dots drawn by InsertEdge — calm
- * and intentional instead of a hard grey pipe. Brightens to indigo on hover.
+ * Connection lines. A soft, cool-grey DASHED stroke with rounded caps and
+ * rounded corners (from the edge geometry) — calm and intentional, like
+ * Make.com. Brightens to indigo when the edge is hovered or selected.
  */
 .react-flow__edge-path {
-  /* Colour comes from a per-edge gradient set in InsertEdge; this is the fallback. */
-  stroke: #b9c1d2;
-  stroke-width: 2.5;
+  stroke: #aab4cb;
+  stroke-width: 2;
   stroke-linecap: round;
+  stroke-dasharray: 6 7;
+  transition: stroke 0.15s ease;
+}
+.react-flow__edge:hover .react-flow__edge-path,
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #818cf8;
 }
 
 /*

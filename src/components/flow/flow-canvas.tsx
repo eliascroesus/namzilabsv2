@@ -289,19 +289,31 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       const nextId = edges.find((e) => e.source === nodeId && !e.sourceHandle && e.targetHandle == null)?.target;
       if (nextId) return setSelectedId(nextId);
 
-      const findBtn = () => document.querySelector<HTMLElement>(`[data-add-btn="${nodeId}"]`);
-      const btn = findBtn();
+      const btn = document.querySelector<HTMLElement>(`[data-add-btn="${nodeId}"]`);
       if (!btn || !node) return addFromNode(nodeId, null, btn ? anchorFromRect(btn.getBoundingClientRect()) : undefined);
       const r = btn.getBoundingClientRect();
+      // The picker sits to the RIGHT of this button, vertically centred on it
+      // (NodeLibraryModal WIDTH/GAP). Move the canvas by the SMALLEST amount that
+      // brings that rect fully on-screen with 20px of breathing room — and move
+      // nothing at all when it already fits.
+      const PAD = 20;
+      const PICKER_W = 380;
+      const GAP = 14;
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const inView = r.top > 120 && r.bottom < vh - 120 && r.left > 24 && r.right < vw - 24;
-      if (inView) return addFromNode(nodeId, null, anchorFromRect(r));
-      rf.setCenter(node.position.x + 128, node.position.y + 120, { zoom: rf.getZoom(), duration: 250 });
-      window.setTimeout(() => {
-        const b2 = findBtn();
-        addFromNode(nodeId, null, b2 ? anchorFromRect(b2.getBoundingClientRect()) : undefined);
-      }, 300);
+      let dx = 0;
+      const pickerRight = r.right + GAP + PICKER_W; // picker's right edge in its default placement
+      if (pickerRight + PAD > vw) dx = vw - PAD - pickerRight; // slide left just enough to fit
+      if (r.left + dx < PAD) dx = PAD - r.left; // …but never push the button off the left edge
+      let dy = 0;
+      if (r.top < PAD) dy = PAD - r.top; // button above the viewport → nudge down
+      else if (r.bottom > vh - PAD) dy = vh - PAD - r.bottom; // button below the viewport → nudge up
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return addFromNode(nodeId, null, anchorFromRect(r));
+      const vp = rf.getViewport();
+      rf.setViewport({ x: vp.x + dx, y: vp.y + dy, zoom: vp.zoom }, { duration: 200 });
+      // Open at the picker's predicted final spot; it then stays glued to the live
+      // button (anchorSelector) as this short pan animates.
+      addFromNode(nodeId, null, { x: r.right + dx, y: r.top + dy + r.height / 2, leftX: r.left + dx });
     },
     [nodes, edges, rf, addFromNode],
   );

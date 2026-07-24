@@ -13,17 +13,11 @@ export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosit
   // hard right angle.
   const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 22 });
   const onInsert = (data as { onInsert?: (edgeId: string, anchor?: { x: number; y: number; leftX?: number }) => void } | undefined)?.onInsert;
-  const gradId = `edge-grad-${id}`;
   return (
     <>
-      {/* A cool indigo → violet gradient running along the line (Make.com feel). */}
-      <defs>
-        <linearGradient id={gradId} gradientUnits="userSpaceOnUse" x1={sourceX} y1={sourceY} x2={targetX} y2={targetY}>
-          <stop offset="0%" stopColor="#818cf8" />
-          <stop offset="100%" stopColor="#c084fc" />
-        </linearGradient>
-      </defs>
-      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={{ stroke: `url(#${gradId})` }} />
+      {/* Colour, width and the dashed pattern come from `.react-flow__edge-path`
+          in globals.css, so hover/selected states brighten the whole edge. */}
+      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} />
       {onInsert && (
         <EdgeLabelRenderer>
           <div
