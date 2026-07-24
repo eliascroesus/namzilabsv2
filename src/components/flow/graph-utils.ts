@@ -19,7 +19,7 @@ export type NodeData = {
   isTerminal?: boolean;
   issue?: string;
   freeHandles?: Array<{ id: string; label: string }>;
-  onAddFrom?: (sourceNodeId: string, sourceHandle?: string | null) => void;
+  onAddFrom?: (sourceNodeId: string, sourceHandle?: string | null, anchor?: { x: number; y: number }) => void;
   onDeleteNode?: (id: string) => void;
   onDuplicateNode?: (id: string) => void;
   [k: string]: unknown;

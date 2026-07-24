@@ -8,10 +8,15 @@ import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from "
  * mandatory branch step, where inserting isn't allowed) — keeping branch lines clean.
  */
 export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }: EdgeProps) {
-  const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
-  const onInsert = (data as { onInsert?: (edgeId: string) => void } | undefined)?.onInsert;
+  // Generously rounded corners give the line a calm, modern turn instead of a
+  // hard right angle.
+  const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 20 });
+  const onInsert = (data as { onInsert?: (edgeId: string, anchor?: { x: number; y: number }) => void } | undefined)?.onInsert;
   return (
     <>
+      {/* A soft light "track" beneath the main stroke — clean and a little unique,
+          without turning the connector into a heavy pipe. */}
+      <path d={edgePath} fill="none" stroke="#eef1f6" strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" />
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} />
       {onInsert && (
         <EdgeLabelRenderer>
@@ -20,10 +25,11 @@ export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosit
             className="group flex h-8 w-8 items-center justify-center"
           >
             <button
-              className="flex h-5 w-5 items-center justify-center rounded-full border border-neutral-300 bg-white text-xs leading-none text-neutral-600 opacity-0 shadow transition-opacity hover:bg-neutral-900 hover:text-white group-hover:opacity-100"
+              className="flex h-6 w-6 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm leading-none text-neutral-500 opacity-0 shadow-sm transition-all hover:scale-110 hover:border-indigo-400 hover:bg-indigo-500 hover:text-white group-hover:opacity-100"
               onClick={(e) => {
                 e.stopPropagation();
-                onInsert(id);
+                const r = e.currentTarget.getBoundingClientRect();
+                onInsert(id, { x: r.right, y: r.top });
               }}
               title="Insert a step here"
             >

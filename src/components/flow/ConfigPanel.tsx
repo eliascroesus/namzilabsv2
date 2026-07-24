@@ -16,8 +16,8 @@ import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./gr
 import { computeNodeStatus, STD_META } from "./graph-utils";
 import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { RecordSamplePicker } from "./RecordSamplePicker";
-import { DataIcon, NodeGlyph } from "./icons";
-import { Select, DataBrowser, FieldInput, ConditionEditor, SourceBadge, humanizeKey } from "./controls";
+import { DataIcon, NodeIcon } from "./icons";
+import { Select, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
 import type { DataGroup } from "./controls/types";
 import { toDataGroups } from "./field-groups";
 import { asFilterConfig } from "./panel-mappers";
@@ -30,6 +30,12 @@ export type BranchCtx = { mode: string; siblingHasFallback: boolean; siblingHasA
 
 const INPUT = "w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm focus:border-neutral-400 focus:outline-none";
 const W = 412;
+
+/** Shared button language for the config panel (Make.com vibe: rounded, soft, tactile). */
+const BTN_PRIMARY =
+  "flex-1 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-neutral-800 active:scale-[0.99] disabled:cursor-default disabled:opacity-40 disabled:shadow-none";
+const BTN_SECONDARY =
+  "flex-1 rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 active:scale-[0.99]";
 
 const SYNC_DOT: Record<string, string> = { live: "bg-green-500", synced: "bg-green-500", importing: "bg-blue-500", outdated: "bg-amber-500", error: "bg-red-500" };
 const syncStatusLabel = (s: string): string => ({ importing: "importing…", outdated: "outdated", error: "sync error" } as Record<string, string>)[s] ?? s;
@@ -132,7 +138,7 @@ export function ConfigPanel({
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
   onTest: () => void;
-  onAddNext: () => void;
+  onAddNext: (anchor?: { x: number; y: number }) => void;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
   onAddBranch: () => void;
@@ -146,6 +152,10 @@ export function ConfigPanel({
   const tested = status === "ready";
   const groups = toDataGroups(fieldGroups);
 
+  // Two tabs: set the step up, then test it. Remounts per step (keyed on id), so a
+  // freshly-opened step always starts on Configure.
+  const [tab, setTab] = useState<"configure" | "test">("configure");
+
   // The step's OWN fields (from its last test) — used by pickers that configure the
   // step itself (Get data's "Match duplicates by"). Falls back to the canonical
   // fields before the first test so the picker is never empty.
@@ -158,87 +168,169 @@ export function ConfigPanel({
     { stepId: "self", stepNo, source: type === "app" ? String((cfg as { source?: unknown }).source ?? "") : undefined, title: "This step’s fields", fields: selfFields },
   ];
 
-  // Bottom action: complete setup → Test → (on pass) Add next step. No auto-testing.
-  const cta = testing
-    ? { label: "Testing…", disabled: true, run: () => {} }
-    : status === "setup"
-      ? { label: "Fill in the fields above", disabled: true, run: () => {} }
-      : tested
-        ? { label: "+ Add next step", disabled: false, run: onAddNext }
-        : { label: node.data.lastTest ? "Test again" : "Test this step", disabled: false, run: onTest };
-
   return (
-    <aside className="flex w-[480px] shrink-0 flex-col border-l border-neutral-200 bg-white">
-      <div className="border-b border-neutral-200 px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="shrink-0 text-neutral-500">
-              {type === "app" ? <SourceBadge source={String((cfg as { source?: unknown }).source ?? "")} size={18} /> : <NodeGlyph type={type} className="h-4.5 w-4.5" />}
-            </span>
-            <input
-              value={node.data.label ?? ""}
-              onChange={(e) => onRename(e.target.value)}
-              placeholder={`${stepNo != null ? `${stepNo}. ` : ""}${defaultTitle(type, node.data)}`}
-              className="min-w-0 flex-1 rounded border border-transparent px-1 py-0.5 text-base font-medium hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
-            />
-          </div>
-          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>
+    <aside className="m-3 flex w-[440px] shrink-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white flow-shadow flow-pop-in">
+      {/* Header — a soft grey band with the step's colourful icon, so it reads as a
+          distinct "what am I editing" strip above the fields. */}
+      <div className="flex items-center justify-between gap-2 border-b border-neutral-200 bg-neutral-50 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} size={32} />
+          <input
+            value={node.data.label ?? ""}
+            onChange={(e) => onRename(e.target.value)}
+            placeholder={`${stepNo != null ? `${stepNo}. ` : ""}${defaultTitle(type, node.data)}`}
+            className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-base font-semibold text-neutral-900 hover:border-neutral-200 hover:bg-white focus:border-neutral-300 focus:bg-white focus:outline-none"
+          />
         </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-neutral-200 bg-white px-3">
+        {(["configure", "test"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`-mb-px border-b-2 px-2.5 py-2.5 text-sm capitalize transition-colors ${
+              tab === t ? "border-neutral-900 font-semibold text-neutral-900" : "border-transparent font-medium text-neutral-500 hover:text-neutral-800"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col p-4">
-          {err && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>}
-
-          {/* The main configuration — the focus of the step — sits at the top. */}
-          <NodeConfig
-            type={type}
-            cfg={cfg}
-            connections={connections}
-            groups={groups}
-            selfGroups={selfGroups}
-            inputs={inputs}
-            numberGroups={numberGroups}
-            datasetCandidates={datasetCandidates}
-            branch={branch}
-            onChange={onChange}
-            onSetInput={onSetInput}
-            onSetSources={onSetSources}
-            onAddBranch={onAddBranch}
-            onRemoveBranch={onRemoveBranch}
-          />
-
-          {/* Extra options + the test result sink to the bottom, just above the button. */}
-          <div className="mt-auto space-y-4 pt-6">
-            {!(branch && branch.mode !== "custom") && <NodeExtras type={type} cfg={cfg} groups={groups} onChange={onChange} />}
-            {node.data.lastTest?.status === "ok" && <TestResults node={node} onChange={onChange} />}
-          </div>
+          {tab === "configure" ? (
+            <>
+              <NodeConfig
+                type={type}
+                cfg={cfg}
+                connections={connections}
+                groups={groups}
+                selfGroups={selfGroups}
+                inputs={inputs}
+                numberGroups={numberGroups}
+                datasetCandidates={datasetCandidates}
+                branch={branch}
+                onChange={onChange}
+                onSetInput={onSetInput}
+                onSetSources={onSetSources}
+                onAddBranch={onAddBranch}
+                onRemoveBranch={onRemoveBranch}
+              />
+              {!(branch && branch.mode !== "custom") && <NodeExtras type={type} cfg={cfg} groups={groups} onChange={onChange} />}
+            </>
+          ) : (
+            <div className="space-y-4">
+              {err && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>}
+              {node.data.lastTest?.status === "ok" ? (
+                <TestResults node={node} onChange={onChange} />
+              ) : (
+                !err && (
+                  <div className="rounded-xl border border-dashed border-neutral-200 bg-neutral-50/60 p-6 text-center">
+                    <p className="text-sm font-medium text-neutral-700">{status === "setup" ? "Finish setting up this step first." : "Run the test to preview this step’s data."}</p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      {status === "setup" ? "Fill in the fields on the Configure tab." : "See exactly what this step returns before you continue."}
+                    </p>
+                  </div>
+                )
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="border-t border-neutral-200 p-3">
-        {tested && !testing ? (
-          // A ready step can be re-tested any time (e.g. to refresh a Get data count
-          // after new records arrived) and add the next step — two explicit actions.
-          <div className="flex gap-2">
-            <button onClick={onTest} className="flex-1 rounded-md border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
-              Test again
-            </button>
-            <button onClick={onAddNext} className="flex-1 rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800">
-              + Add next step
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={cta.run}
-            disabled={cta.disabled}
-            className="w-full rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-default disabled:opacity-50"
-          >
-            {cta.label}
-          </button>
-        )}
+      <div className="border-t border-neutral-200 bg-white p-3">
+        <Footer
+          tab={tab}
+          status={status}
+          testing={testing}
+          hasTest={!!node.data.lastTest}
+          tested={tested}
+          onContinueToTest={() => setTab("test")}
+          onBackToConfigure={() => setTab("configure")}
+          onTest={onTest}
+          onAddNext={onAddNext}
+        />
       </div>
     </aside>
+  );
+}
+
+/**
+ * The step's guided bottom action. On Configure: "Continue" advances to the Test
+ * tab. On Test: "Test" runs it; once it passes, "Retest" + "Continue" (add the
+ * next step). Wording and flow mirror Make.com's set-up → test → continue rhythm.
+ */
+function Footer({
+  tab,
+  status,
+  testing,
+  hasTest,
+  tested,
+  onContinueToTest,
+  onBackToConfigure,
+  onTest,
+  onAddNext,
+}: {
+  tab: "configure" | "test";
+  status: string;
+  testing: boolean;
+  hasTest: boolean;
+  tested: boolean;
+  onContinueToTest: () => void;
+  onBackToConfigure: () => void;
+  onTest: () => void;
+  onAddNext: (anchor?: { x: number; y: number }) => void;
+}) {
+  if (testing) {
+    return (
+      <button disabled className={BTN_PRIMARY}>
+        Testing…
+      </button>
+    );
+  }
+
+  if (tab === "configure") {
+    return (
+      <button onClick={onContinueToTest} disabled={status === "setup"} className={BTN_PRIMARY}>
+        {status === "setup" ? "Fill in the fields above" : "Continue"}
+      </button>
+    );
+  }
+
+  // Test tab.
+  if (tested) {
+    return (
+      <div className="flex gap-2">
+        <button onClick={onTest} className={BTN_SECONDARY}>
+          Retest
+        </button>
+        <button
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            onAddNext({ x: r.right, y: r.top });
+          }}
+          className={BTN_PRIMARY}
+        >
+          Continue
+        </button>
+      </div>
+    );
+  }
+  if (status === "setup") {
+    return (
+      <button onClick={onBackToConfigure} className={BTN_SECONDARY}>
+        ← Back to Configure
+      </button>
+    );
+  }
+  return (
+    <button onClick={onTest} className={BTN_PRIMARY}>
+      {hasTest ? "Test again" : "Test"}
+    </button>
   );
 }
 
@@ -278,10 +370,9 @@ function NodeConfig({
     const connId = (cfg.connectionId as string) ?? "";
     const conn = connections.find((c) => c.id === connId);
     return (
-      <div className="space-y-4">
-        {/* Setup: which connected account this flow pulls from. */}
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Account</p>
+      <div className="space-y-5">
+        {/* Which connected account this flow pulls from. */}
+        <Field label="Account">
           <Select
             value={connId}
             width={W}
@@ -295,7 +386,7 @@ function NodeConfig({
             }}
           />
           {conn?.syncStatus && (
-            <p className="text-xs text-neutral-500">
+            <p className="mt-1.5 text-xs text-neutral-500">
               Data status: <span className={`inline-block h-2 w-2 rounded-full align-middle ${SYNC_DOT[conn.syncStatus] ?? "bg-neutral-400"}`} /> {syncStatusLabel(conn.syncStatus)}
               {conn.syncStatus === "outdated" || conn.syncStatus === "error" ? (
                 <>
@@ -306,17 +397,16 @@ function NodeConfig({
             </p>
           )}
           {connections.length === 0 && (
-            <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+            <p className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
               No connected accounts yet. Connect one in <a className="underline" href="/integrations">Integrations</a>.
             </p>
           )}
-        </div>
+        </Field>
 
-        {/* Configure: what to pull — set per flow, not on the integration. Stream-scoped
-            sources (Sheets, Calendar, Calendly) pick their resource here via dropdowns. */}
+        {/* What to pull — set per flow. Stream-scoped sources (Sheets, Calendar,
+            Calendly) pick their resource here via dropdowns. */}
         {conn && (
-          <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Configure</p>
+          <>
             {(catalogEntry(conn.source)?.flowFields ?? [])
               .filter((f) => {
                 // A field can be gated on another field's current value (Calendly's Group
@@ -339,7 +429,7 @@ function NodeConfig({
             </Field>
 
             <DedupeSection cfg={cfg} fallbackGroups={selfGroups} onChange={onChange} />
-          </div>
+          </>
         )}
       </div>
     );
@@ -398,7 +488,7 @@ function NodeConfig({
   if (type === "time") {
     const mode = (cfg.mode as string) ?? "preset";
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         <Field label="Date field">
           <FieldInput value={(cfg.dateField as string) ?? "occurredAt"} groups={groups} onChange={(v) => onChange({ dateField: v })} />
         </Field>
@@ -451,7 +541,7 @@ function NodeConfig({
       }
     };
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         <Field label="Calculation">
           <Select value={op} width={W} options={FORMULA_OP_OPTIONS} onChange={setOp} />
         </Field>
@@ -502,7 +592,7 @@ function NodeConfig({
     // Unite is pure flow shape: pick which lanes flow into it. Its edges ARE the lanes.
     const laneIds = inputs.map((i) => i.nodeId);
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         <p className="text-xs text-neutral-500">Joins lanes into one line — later steps see data from all of them.</p>
         <div>
           <p className="mb-1 text-xs font-medium text-neutral-600">Lanes</p>
@@ -547,7 +637,7 @@ function NodeConfig({
     const paths = (cfg.paths as Array<{ id: string; label: string; mode?: string }>) ?? [];
     const setLabel = (i: number, label: string) => onChange({ paths: paths.map((p, j) => (j === i ? { ...p, label } : p)) });
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         <p className="text-xs text-neutral-500">Splits the flow into branches. Each branch’s rules live in its own <b>Path conditions</b> step.</p>
         {paths.map((p, i) => (
           <div key={p.id} className="flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50/40 px-2 py-1.5">
@@ -570,7 +660,7 @@ function NodeConfig({
     const mode = (cfg.mode as string) ?? "field";
     const agg = (cfg.aggregation as string) ?? "count";
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         <Field label="Group by">
           <Select value={mode} width={W} options={[{ value: "field", label: "A field value" }, { value: "categories", label: "Custom categories" }]} onChange={(v) => onChange({ mode: v })} />
         </Field>
@@ -587,7 +677,7 @@ function NodeConfig({
   if (type === "calculate") {
     const mode = String(cfg.mode ?? "number");
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         <Field label="What do you want to calculate?">
           <Select
             value={mode}
@@ -605,7 +695,7 @@ function NodeConfig({
 
   // output (legacy)
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <Field label="Metric name"><input value={(cfg.name as string) ?? ""} onChange={(e) => onChange({ name: e.target.value })} className={INPUT} /></Field>
       <Field label="Display as"><Select value={(cfg.viz as string) ?? "number"} width={W} options={VIZ_TYPES.map((v) => ({ value: v, label: VIZ_LABELS[v] ?? title(v) }))} onChange={(v) => onChange({ viz: v })} /></Field>
       <Field label="Format"><Select value={(cfg.format as string) ?? "number"} width={W} options={[{ value: "number", label: "Number" }, { value: "percent", label: "Percentage" }, { value: "currency", label: "Currency" }]} onChange={(v) => onChange({ format: v })} /></Field>
@@ -851,7 +941,6 @@ function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigFi
         searchable
         placeholder={field.dynamic && state.status === "loading" ? "Loading…" : `Choose a ${field.label.toLowerCase()}…`}
       />
-      {field.hint && <p className="mt-1 text-xs text-neutral-400">{field.hint}</p>}
     </Field>
   );
 }
@@ -1043,7 +1132,7 @@ function sampleLine(r: unknown): string {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="block">
-      <span className="mb-1 block text-xs font-medium text-neutral-600">{label}</span>
+      <span className="mb-1.5 block text-[13px] font-medium text-neutral-700">{label}</span>
       {children}
     </div>
   );

@@ -48,10 +48,66 @@ body {
   background: transparent;
   pointer-events: none;
 }
+/*
+ * Connection lines. A clean two-tone line: a soft light "track" underneath (drawn
+ * by InsertEdge) with the main rounded stroke on top. Rounded caps + rounded
+ * corners give it a calm, modern feel instead of a hard grey pipe.
+ */
 .react-flow__edge-path {
-  stroke: #cbd5e1;
-  stroke-width: 1.5;
+  stroke: #b6c0cf;
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #60a5fa;
+  stroke: #6366f1;
+}
+
+/*
+ * Interactive elements get a pointer cursor. Tailwind v4 ships buttons with the
+ * default arrow cursor; restore the click affordance app-wide (disabled controls
+ * keep the default/not-allowed cursor).
+ */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+summary {
+  cursor: pointer;
+}
+
+/*
+ * The flow builder's shared surface language (Make.com-style): one soft drop
+ * shadow and one quick scale-in ease-out used by BOTH the node picker and the
+ * config panel, so every floating surface feels like the same system.
+ */
+.flow-shadow {
+  box-shadow:
+    0 16px 48px -12px rgba(15, 23, 42, 0.28),
+    0 4px 14px -6px rgba(15, 23, 42, 0.14);
+}
+
+@keyframes flowPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.flow-pop-in {
+  animation: flowPopIn 0.14s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes flowPopOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+.flow-pop-out {
+  animation: flowPopOut 0.12s cubic-bezier(0.4, 0, 1, 1) both;
 }

@@ -5,8 +5,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
 import type { FNode, NodeData } from "./graph-utils";
 import { STATUS_META, nodeTitle, pathHandles, resultLabel, type NodeStatus } from "./node-meta";
-import { NodeGlyph } from "./icons";
-import { SourceBadge } from "./controls";
+import { NodeIcon } from "./icons";
 import { Popover } from "./controls/Popover";
 
 // Edges are auto-managed (never dragged), so the connection handles are visually
@@ -104,10 +103,8 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE} />
       ) : null}
 
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        <span className="shrink-0">
-          {t === "app" ? <SourceBadge source={String(data.config.source ?? "")} size={22} /> : <NodeGlyph type={t} className="h-5 w-5 text-neutral-500" />}
-        </span>
+      <div className="flex items-center gap-2.5 px-3 py-2.5">
+        <NodeIcon type={t} source={String(data.config.source ?? "")} size={30} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-neutral-800">
             {data.stepNo != null ? `${data.stepNo}. ` : ""}
@@ -132,10 +129,11 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            (data as NodeData).onAddFrom?.(id, null);
+            const r = e.currentTarget.getBoundingClientRect();
+            (data as NodeData).onAddFrom?.(id, null, { x: r.right, y: r.top });
           }}
           title="Add the next step"
-          className="nodrag absolute left-1/2 top-full z-10 mt-3 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm hover:bg-neutral-900 hover:text-white"
+          className="nodrag absolute left-1/2 top-full z-10 mt-3 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm transition-colors hover:border-neutral-900 hover:bg-neutral-900 hover:text-white"
         >
           + Add next step
         </button>
@@ -149,10 +147,11 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
               key={h.id}
               onClick={(e) => {
                 e.stopPropagation();
-                (data as NodeData).onAddFrom?.(id, h.id);
+                const r = e.currentTarget.getBoundingClientRect();
+                (data as NodeData).onAddFrom?.(id, h.id, { x: r.right, y: r.top });
               }}
               title={`Add a step to “${h.label}”`}
-              className="flex items-center gap-1 whitespace-nowrap rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm hover:bg-neutral-900 hover:text-white"
+              className="flex items-center gap-1 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm transition-colors hover:border-neutral-900 hover:bg-neutral-900 hover:text-white"
             >
               + Add to “{h.label}”
             </button>

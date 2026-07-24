@@ -1,5 +1,7 @@
 "use client";
 
+import { sourceStyle } from "./controls/source-style";
+
 /**
  * A consistent monochrome glyph family for internal operations. Everything is drawn
  * with `currentColor` so the surrounding element controls the colour — colour is
@@ -69,6 +71,53 @@ export function NodeGlyph({ type, className = "h-4 w-4" }: { type: string; class
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       {PATHS[type] ?? PATHS.app}
     </svg>
+  );
+}
+
+/**
+ * The one colourful step icon used everywhere a step is represented — the node
+ * picker, the canvas cards, the config panel header. Each step type gets a vivid
+ * accent (Make.com's coloured module tiles); a Get-data step instead shows its
+ * connected app's brand colour + initials, so a Sheets step reads as Sheets.
+ */
+export const NODE_ACCENT: Record<string, string> = {
+  unite: "#0EA5E9", // sky — a Data step
+  filter: "#3B82F6", // blue — Conditions
+  paths: "#EC4899", // pink — Conditions (split)
+  formula: "#8B5CF6", // violet — Calculation
+  calculate: "#8B5CF6", // violet — Calculation (legacy)
+  time: "#F59E0B", // amber — Conditions (date)
+  group: "#F97316", // orange — Calculation (legacy)
+  output: "#0F172A", // slate — Dashboard
+};
+
+export function NodeIcon({ type, source, size = 34 }: { type: string; source?: string | null; size?: number }) {
+  const radius = Math.max(6, Math.round(size * 0.3));
+  if (type === "app") {
+    const s = sourceStyle(source);
+    return (
+      <span
+        className="inline-flex shrink-0 items-center justify-center font-semibold leading-none text-white"
+        style={{ background: s.color, width: size, height: size, borderRadius: radius, fontSize: Math.round(size * 0.42) }}
+        title={s.label}
+        aria-hidden
+      >
+        {s.short}
+      </span>
+    );
+  }
+  const color = NODE_ACCENT[type] ?? "#64748B";
+  const glyph = Math.round(size * 0.56);
+  return (
+    <span
+      className="inline-flex shrink-0 items-center justify-center text-white"
+      style={{ background: color, width: size, height: size, borderRadius: radius }}
+      aria-hidden
+    >
+      <span className="inline-flex" style={{ width: glyph, height: glyph }}>
+        <NodeGlyph type={type} className="h-full w-full" />
+      </span>
+    </span>
   );
 }
 

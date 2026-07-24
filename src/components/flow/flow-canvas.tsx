@@ -31,7 +31,7 @@ import { ALL_TYPES, defaultConfig, nodeTitle, pathHandles } from "./node-meta";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
 import { ConfigPanel, type StepRef } from "./ConfigPanel";
-import { NodeLibraryModal } from "./NodeLibraryModal";
+import { NodeLibraryModal, type PickerAnchor } from "./NodeLibraryModal";
 import { ReviewPublishModal, type Endpoint } from "./ReviewPublishModal";
 
 export type { ConnMeta };
@@ -133,7 +133,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [publishWarning, setPublishWarning] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [library, setLibrary] = useState<{ open: boolean; ctx: LibraryCtx }>({ open: false, ctx: null });
+  const [library, setLibrary] = useState<{ open: boolean; ctx: LibraryCtx; anchor: PickerAnchor }>({ open: false, ctx: null, anchor: null });
   const [metrics, setMetrics] = useState<MetricSpecT[]>(initialGraph.metrics ?? []);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ message: string; run: () => void } | null>(null);
@@ -255,13 +255,19 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [commit, nodes, setNodes, setEdges],
   );
 
-  const addFromNode = useCallback((sourceNodeId: string, sourceHandle?: string | null) => {
-    setLibrary({ open: true, ctx: { fromNodeId: sourceNodeId, sourceHandle } });
+  // Opening the picker always closes the config window — it belongs to the step
+  // you were on, not the one you're about to add (Make.com behaviour).
+  const addFromNode = useCallback((sourceNodeId: string, sourceHandle?: string | null, anchor?: { x: number; y: number }) => {
+    setSelectedId(null);
+    setLibrary({ open: true, ctx: { fromNodeId: sourceNodeId, sourceHandle }, anchor: anchor ?? null });
   }, []);
   const insertOnEdge = useCallback(
-    (edgeId: string) => {
+    (edgeId: string, anchor?: { x: number; y: number }) => {
       const edge = edges.find((e) => e.id === edgeId);
-      if (edge) setLibrary({ open: true, ctx: { onEdge: edge } });
+      if (edge) {
+        setSelectedId(null);
+        setLibrary({ open: true, ctx: { onEdge: edge }, anchor: anchor ?? null });
+      }
     },
     [edges],
   );
@@ -862,7 +868,13 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="pointer-events-auto rounded-lg border border-dashed border-neutral-300 bg-white/80 p-8 text-center">
                 <p className="text-sm text-neutral-600">Start by pulling data from an app.</p>
-                <button onClick={() => setLibrary({ open: true, ctx: null })} className="mt-3 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+                <button
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setLibrary({ open: true, ctx: null, anchor: { x: r.right, y: r.top } });
+                  }}
+                  className="mt-3 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
+                >
                   + Add your first step
                 </button>
               </div>
@@ -888,7 +900,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             onChange={(patch) => updateConfig(selected.id, patch)}
             onRename={(v) => renameNode(selected.id, v)}
             onTest={() => testNode(selected.id)}
-            onAddNext={() => addFromNode(selected.id)}
+            onAddNext={(anchor) => addFromNode(selected.id, null, anchor)}
             onSetInput={(handle, sourceId) => setFormulaInput(selected.id, handle, sourceId)}
             onSetSources={(ids) => setUniteSources(selected.id, ids)}
             onAddBranch={() => addBranch(selected.id)}
@@ -899,10 +911,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
       {library.open && (
         <NodeLibraryModal
-          onClose={() => setLibrary({ open: false, ctx: null })}
+          anchor={library.anchor}
+          onClose={() => setLibrary({ open: false, ctx: null, anchor: null })}
           onPick={(type) => {
             createNode(type, library.ctx);
-            setLibrary({ open: false, ctx: null });
+            setLibrary({ open: false, ctx: null, anchor: null });
           }}
         />
       )}
@@ -923,12 +936,12 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       )}
 
       {pendingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setPendingDelete(null)}>
-          <div className="w-full max-w-sm rounded-lg border border-neutral-200 bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4" onClick={() => setPendingDelete(null)}>
+          <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-5 flow-shadow flow-pop-in" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm font-semibold text-neutral-900">Delete this step?</p>
             <p className="mt-1.5 text-sm text-neutral-600">{pendingDelete.message}</p>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setPendingDelete(null)} className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">
+              <button onClick={() => setPendingDelete(null)} className="rounded-lg border border-neutral-200 px-3.5 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50">
                 Cancel
               </button>
               <button
@@ -936,7 +949,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                   pendingDelete.run();
                   setPendingDelete(null);
                 }}
-                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+                className="rounded-lg bg-red-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
               >
                 Delete
               </button>
