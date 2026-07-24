@@ -37,9 +37,6 @@ const BTN_PRIMARY =
 const BTN_SECONDARY =
   "flex-1 rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 active:scale-[0.99]";
 
-const SYNC_DOT: Record<string, string> = { live: "bg-green-500", synced: "bg-green-500", importing: "bg-blue-500", outdated: "bg-amber-500", error: "bg-red-500" };
-const syncStatusLabel = (s: string): string => ({ importing: "importing…", outdated: "outdated", error: "sync error" } as Record<string, string>)[s] ?? s;
-
 const AGG_LABELS: Record<string, string> = { count: "Count of records", count_distinct: "Count of distinct values", sum: "Sum of a field", avg: "Average of a field", min: "Minimum of a field", max: "Maximum of a field" };
 const FORMULA_LABELS: Record<string, string> = {
   add: "+  Add",
@@ -387,17 +384,6 @@ function NodeConfig({
               onChange({ connectionId: c?.id ?? null, connectionName: c?.name ?? null, source: c?.source ?? null, eventType: null, sourceConfig: {} });
             }}
           />
-          {conn?.syncStatus && (
-            <p className="mt-1.5 text-xs text-neutral-500">
-              Data status: <span className={`inline-block h-2 w-2 rounded-full align-middle ${SYNC_DOT[conn.syncStatus] ?? "bg-neutral-400"}`} /> {syncStatusLabel(conn.syncStatus)}
-              {conn.syncStatus === "outdated" || conn.syncStatus === "error" ? (
-                <>
-                  {" "}&middot;{" "}
-                  <a className="underline" href={`/connections/${conn.id}`}>Manage</a>
-                </>
-              ) : null}
-            </p>
-          )}
           {connections.length === 0 && (
             <p className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
               No connected accounts yet. Connect one in <a className="underline" href="/integrations">Integrations</a>.
@@ -445,8 +431,8 @@ function NodeConfig({
         {/* A branch head chooses how records enter its path (Zapier-style): custom
             rules, always run, or fallback. The mode is stored on the hub's path entry. */}
         {branch && (
-          <div className="space-y-1">
-            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">How records enter this path</p>
+          <div className="space-y-2">
+            <SectionLabel>How records enter this path</SectionLabel>
             <Select
               value={bmode}
               width={W}
@@ -474,12 +460,12 @@ function NodeConfig({
           </div>
         )}
         {bmode === "custom" ? (
-          <>
-            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Only continue if…</p>
+          <div className="space-y-2.5">
+            <SectionLabel>Only continue if…</SectionLabel>
             <ConditionEditor value={fc} groups={groups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />
-          </>
+          </div>
         ) : (
-          <p className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
+          <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-[13px] text-neutral-600">
             {bmode === "always" ? "Every record continues — no conditions needed." : "Gets the records no other path matched."}
           </p>
         )}
@@ -1098,9 +1084,9 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
   const type = String(node.type);
   const sampleIndex = Number((node.data.config as { sampleIndex?: unknown }).sampleIndex ?? 0);
   return (
-    <div className="space-y-2 border-t border-neutral-100 pt-3 text-sm">
-      <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Test result</p>
-      <p className="rounded border border-neutral-200 bg-neutral-50 p-2 text-center font-medium">{resultLabel(type, t)}</p>
+    <div className="space-y-3 text-sm">
+      <SectionLabel>Result</SectionLabel>
+      <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-base font-semibold text-neutral-900">{resultLabel(type, t)}</p>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
       ) : (
@@ -1138,5 +1124,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </div>
   );
+}
+
+/** A small uppercase section heading, matching the step picker's group labels. */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">{children}</p>;
 }
 

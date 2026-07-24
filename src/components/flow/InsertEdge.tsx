@@ -10,14 +10,15 @@ import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from "
 export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }: EdgeProps) {
   // Generously rounded corners give the line a calm, modern turn instead of a
   // hard right angle.
-  const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 20 });
+  const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 22 });
   const onInsert = (data as { onInsert?: (edgeId: string, anchor?: { x: number; y: number; leftX?: number }) => void } | undefined)?.onInsert;
   return (
     <>
-      {/* A soft light "track" beneath the main stroke — clean and a little unique,
-          without turning the connector into a heavy pipe. */}
-      <path d={edgePath} fill="none" stroke="#eef1f6" strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" />
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} />
+      {/* Subtle rounded endpoints where the line meets each step — a small,
+          intentional detail (like Zapier/Make connection dots). */}
+      <circle cx={sourceX} cy={sourceY} r={3} className="fill-neutral-300" />
+      <circle cx={targetX} cy={targetY} r={3} className="fill-neutral-300" />
       {onInsert && (
         <EdgeLabelRenderer>
           <div

@@ -49,15 +49,17 @@ body {
   pointer-events: none;
 }
 /*
- * Connection lines. A clean two-tone line: a soft light "track" underneath (drawn
- * by InsertEdge) with the main rounded stroke on top. Rounded caps + rounded
- * corners give it a calm, modern feel instead of a hard grey pipe.
+ * Connection lines. One clean, rounded stroke (rounded caps + rounded corners
+ * from the edge geometry) with small endpoint dots drawn by InsertEdge — calm
+ * and intentional instead of a hard grey pipe. Brightens to indigo on hover.
  */
 .react-flow__edge-path {
-  stroke: #b6c0cf;
+  stroke: #aab4c4;
   stroke-width: 2;
   stroke-linecap: round;
+  transition: stroke 0.15s ease;
 }
+.react-flow__edge:hover .react-flow__edge-path,
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: #6366f1;
 }
