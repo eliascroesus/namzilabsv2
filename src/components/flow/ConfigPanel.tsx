@@ -17,7 +17,6 @@ import { computeNodeStatus, STD_META } from "./graph-utils";
 import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { RecordSamplePicker } from "./RecordSamplePicker";
 import { DataIcon, NodeIcon } from "./icons";
-import { anchorFromRect } from "./NodeLibraryModal";
 import { Select, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
 import type { DataGroup } from "./controls/types";
 import { toDataGroups } from "./field-groups";
@@ -185,7 +184,7 @@ export function ConfigPanel({
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-5 border-b border-neutral-200 bg-neutral-50 px-5">
+      <div data-config-tabs className="flex gap-5 border-b border-neutral-200 bg-neutral-50 px-5">
         {(["configure", "test"] as const).map((t) => (
           <button
             key={t}
@@ -307,10 +306,7 @@ function Footer({
         <button onClick={onTest} className={`${BTN_SECONDARY} flex-1`}>
           Retest
         </button>
-        <button
-          onClick={(e) => onAddNext(anchorFromRect(e.currentTarget.getBoundingClientRect()))}
-          className={`${BTN_PRIMARY} flex-1`}
-        >
+        <button onClick={() => onAddNext()} className={`${BTN_PRIMARY} flex-1`}>
           Continue
         </button>
       </div>

@@ -128,6 +128,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       {/* One "Add next step" at the end of a plain branch. */}
       {data.isTerminal && t !== "output" && !isPaths && (
         <button
+          data-add-btn={id}
           onClick={(e) => {
             e.stopPropagation();
             (data as NodeData).onAddFrom?.(id, null, anchorFromRect(e.currentTarget.getBoundingClientRect()));

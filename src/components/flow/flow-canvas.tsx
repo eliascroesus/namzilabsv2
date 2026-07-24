@@ -3,7 +3,7 @@
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, useNodesState, useEdgesState, type Edge } from "@xyflow/react";
+import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, useNodesState, useEdgesState, useReactFlow, type Edge } from "@xyflow/react";
 import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
 import { saveDraftAction, testNodeAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 import {
@@ -125,6 +125,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
+  const rf = useReactFlow();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState(initialName);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
@@ -270,6 +271,42 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       }
     },
     [edges],
+  );
+
+  // The config panel's tested "Continue" opens the picker exactly where this
+  // step's on-canvas "Add next step" button sits — the natural next-in-line
+  // spot. If that button is out of view, the canvas nudges it to centre first so
+  // the picker can sit beside it, then opens there.
+  const continueFromNode = useCallback(
+    (nodeId: string) => {
+      const findBtn = () => document.querySelector<HTMLElement>(`[data-add-btn="${nodeId}"]`);
+      const btn = findBtn();
+      if (!btn) {
+        // A mid-line step has no on-canvas add button — open the picker centred.
+        addFromNode(nodeId, null);
+        return;
+      }
+      const r = btn.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const inView = r.top > 120 && r.bottom < vh - 120 && r.left > 24 && r.right < vw - 24;
+      if (inView) {
+        addFromNode(nodeId, null, anchorFromRect(r));
+        return;
+      }
+      const node = nodes.find((n) => n.id === nodeId);
+      if (!node) {
+        addFromNode(nodeId, null, anchorFromRect(r));
+        return;
+      }
+      rf.setCenter(node.position.x + 128, node.position.y + 120, { zoom: rf.getZoom(), duration: 250 });
+      window.setTimeout(() => {
+        const b2 = findBtn();
+        if (b2) addFromNode(nodeId, null, anchorFromRect(b2.getBoundingClientRect()));
+        else addFromNode(nodeId, null);
+      }, 300);
+    },
+    [nodes, rf, addFromNode],
   );
 
   const updateConfig = useCallback(
@@ -908,7 +945,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                   onChange: (patch) => updateConfig(selected.id, patch),
                   onRename: (v) => renameNode(selected.id, v),
                   onTest: () => testNode(selected.id),
-                  onAddNext: (anchor) => addFromNode(selected.id, null, anchor),
+                  onAddNext: () => continueFromNode(selected.id),
                   onSetInput: (handle, sourceId) => setFormulaInput(selected.id, handle, sourceId),
                   onSetSources: (ids) => setUniteSources(selected.id, ids),
                   onAddBranch: () => addBranch(selected.id),
