@@ -124,7 +124,7 @@ export function Select({
             }}
             onKeyDown={onKey}
             placeholder="Search…"
-            className="mb-1 w-full rounded border border-neutral-300 px-2 py-1 text-xs focus:border-neutral-400 focus:outline-none"
+            className="mb-1 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-sm text-neutral-800 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100"
           />
         )}
         {filtered.length === 0 && <p className="p-2 text-center text-xs text-neutral-400">No matches</p>}
@@ -145,7 +145,7 @@ export function Select({
                     if (!o.disabled) pick(o.value);
                   }}
                   onMouseEnter={() => setActive(i)}
-                  className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-neutral-100" : ""}`}
+                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-indigo-50" : ""}`}
                 >
                   <span className="min-w-0">
                     <span className={`block ${o.disabled ? "" : "truncate"} ${o.value === value ? "font-medium text-neutral-900" : "text-neutral-700"}`}>{o.label}</span>

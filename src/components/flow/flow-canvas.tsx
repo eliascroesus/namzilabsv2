@@ -16,6 +16,7 @@ import {
   descendantsOf,
   isCompareNode,
   nearestAppAncestor,
+  resolveSampleField,
   structuralEdges,
   terminalIds,
   type ConnMeta,
@@ -27,6 +28,7 @@ import {
   type MetricSpecT,
 } from "./graph-utils";
 import type { DataGroup } from "./controls/types";
+import { formatSample } from "./controls/field-utils";
 import { ALL_TYPES, defaultConfig, nodeTitle, pathHandles } from "./node-meta";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
@@ -769,22 +771,33 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   // always reads as a date here — and non-date fields would only be noise.
   const timeFieldOptions = useMemo<Array<{ value: string; label: string; hint?: string }>>(() => {
     type Opt = { value: string; label: string; hint?: string; step: number };
+    // Preview each date field with its value from the FIRST step's chosen sample
+    // record (the same record the sample picker selects), so the user recognises
+    // the right timestamp column by seeing a real value — not just its name.
+    const chosenSampleOf = (n: FNode): unknown => {
+      const s = (n.data.lastTest?.sample ?? []) as unknown[];
+      const idx = Number((n.data.config as { sampleIndex?: unknown }).sampleIndex ?? 0);
+      return s[idx] ?? s[0];
+    };
     const seen = new Map<string, Opt>();
-    seen.set("occurredAt", { value: "occurredAt", label: "When it happened", hint: "built-in", step: -1 });
     for (const n of nodes) {
       const t = n.data.lastTest;
       if (t?.status !== "ok") continue;
       const step = stepNoById.get(n.id) ?? 999;
-      const title = nodeTitle(String(n.type) as NodeType, n.data);
+      const app = nearestAppAncestor(n, nodes, edges);
+      const appChosen = app ? chosenSampleOf(app) : undefined;
+      const upChosen = chosenSampleOf(n);
       for (const f of t.outputSchema ?? []) {
         if (f.path.startsWith("__") || f.type !== "date") continue;
         const prev = seen.get(f.path);
-        if (prev && prev.step <= step) continue; // keep the earliest step's provenance
-        seen.set(f.path, { value: f.path, label: f.label, hint: `${step}. ${title}`, step });
+        if (prev && prev.step <= step) continue; // keep the earliest step's value
+        let ex = appChosen !== undefined ? resolveSampleField(appChosen, f.path) : undefined;
+        if (ex === undefined) ex = upChosen !== undefined ? resolveSampleField(upChosen, f.path) : f.example;
+        seen.set(f.path, { value: f.path, label: f.label, hint: formatSample(ex) ?? undefined, step });
       }
     }
     return [...seen.values()].sort((a, b) => a.step - b.step).map(({ value, label, hint }) => ({ value, label, hint }));
-  }, [nodes, stepNoById]);
+  }, [nodes, stepNoById, edges]);
   const inDegreeById = useMemo(() => {
     const m = new Map<string, number>();
     for (const n of nodes) m.set(n.id, 0);
@@ -908,6 +921,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             nodesDraggable={false}
             nodesConnectable={false}
             fitView
+            // Never zoom IN past 100% when fitting — so the very first node (or a
+            // tiny flow) sits at natural size instead of filling the screen.
+            fitViewOptions={{ maxZoom: 1 }}
             deleteKeyCode={null}
             // Scroll/two-finger pans the canvas; pinch (or ⌘/Ctrl+scroll) zooms.
             panOnScroll

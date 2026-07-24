@@ -19,7 +19,7 @@ const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: stri
 export function Sidebar() {
   const pathname = usePathname() ?? "";
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col bg-gradient-to-b from-indigo-600 via-indigo-700 to-violet-800 text-white">
+    <aside className="flex h-full w-48 shrink-0 flex-col bg-gradient-to-b from-indigo-600 via-indigo-700 to-violet-800 text-white">
       <Link href="/dashboard" className="flex items-center gap-2.5 px-5 py-5">
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15 text-sm font-bold ring-1 ring-white/20">N</span>
         <span className="text-[15px] font-semibold tracking-tight">Namzilabs</span>
@@ -41,7 +41,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <p className="px-5 py-4 text-[11px] font-medium text-indigo-200/70">Analytics that match your data.</p>
     </aside>
   );
 }
