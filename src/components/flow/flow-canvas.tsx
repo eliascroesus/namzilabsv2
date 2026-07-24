@@ -843,8 +843,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1">
-        {/* Canvas */}
+      <div className="relative flex min-h-0 flex-1">
+        {/* Canvas — full width; the config panel floats OVER it as an overlay. */}
         <div className="relative min-w-0 flex-1">
           <ReactFlow
             nodes={displayNodes}

@@ -31,11 +31,10 @@ export type BranchCtx = { mode: string; siblingHasFallback: boolean; siblingHasA
 const INPUT = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100";
 const W = 412;
 
-/** Shared button language for the config panel (Make.com vibe: rounded, soft, tactile). */
-const BTN_PRIMARY =
-  "flex-1 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-neutral-800 active:scale-[0.99] disabled:cursor-default disabled:opacity-40 disabled:shadow-none";
-const BTN_SECONDARY =
-  "flex-1 rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 active:scale-[0.99]";
+/** Shared button language for the config panel (Make.com vibe: rounded, tactile, colourful). */
+const BTN_BASE = "rounded-xl px-4 py-3 text-sm font-semibold transition-all active:scale-[0.985]";
+const BTN_PRIMARY = `${BTN_BASE} bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700 disabled:cursor-default disabled:bg-neutral-200 disabled:text-neutral-400 disabled:shadow-none`;
+const BTN_SECONDARY = `${BTN_BASE} border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50`;
 
 const AGG_LABELS: Record<string, string> = { count: "Count of records", count_distinct: "Count of distinct values", sum: "Sum of a field", avg: "Average of a field", min: "Minimum of a field", max: "Maximum of a field" };
 const FORMULA_LABELS: Record<string, string> = {
@@ -168,7 +167,7 @@ export function ConfigPanel({
   ];
 
   return (
-    <aside className={`m-4 flex w-[452px] shrink-0 flex-col overflow-hidden rounded-2xl bg-white flow-shadow ${animClass}`}>
+    <aside className={`absolute inset-y-0 right-0 z-20 m-4 flex w-[452px] flex-col overflow-hidden rounded-2xl bg-white flow-shadow ${animClass}`}>
       {/* Header — a soft grey band with the step's colourful icon, so it reads as a
           distinct "what am I editing" strip above the fields. */}
       <div className="flex items-center justify-between gap-3 border-b border-neutral-200/70 bg-neutral-50 px-5 py-4">
@@ -286,7 +285,7 @@ function Footer({
 }) {
   if (testing) {
     return (
-      <button disabled className={BTN_PRIMARY}>
+      <button disabled className={`${BTN_PRIMARY} w-full`}>
         Testing…
       </button>
     );
@@ -294,7 +293,7 @@ function Footer({
 
   if (tab === "configure") {
     return (
-      <button onClick={onContinueToTest} disabled={status === "setup"} className={BTN_PRIMARY}>
+      <button onClick={onContinueToTest} disabled={status === "setup"} className={`${BTN_PRIMARY} w-full`}>
         {status === "setup" ? "Fill in the fields above" : "Continue"}
       </button>
     );
@@ -303,8 +302,8 @@ function Footer({
   // Test tab.
   if (tested) {
     return (
-      <div className="flex gap-2">
-        <button onClick={onTest} className={BTN_SECONDARY}>
+      <div className="flex gap-3">
+        <button onClick={onTest} className={`${BTN_SECONDARY} flex-1`}>
           Retest
         </button>
         <button
@@ -312,7 +311,7 @@ function Footer({
             const r = e.currentTarget.getBoundingClientRect();
             onAddNext({ x: r.right, y: r.top + r.height / 2, leftX: r.left });
           }}
-          className={BTN_PRIMARY}
+          className={`${BTN_PRIMARY} flex-1`}
         >
           Continue
         </button>
@@ -321,13 +320,13 @@ function Footer({
   }
   if (status === "setup") {
     return (
-      <button onClick={onBackToConfigure} className={BTN_SECONDARY}>
+      <button onClick={onBackToConfigure} className={`${BTN_SECONDARY} w-full`}>
         ← Back to Configure
       </button>
     );
   }
   return (
-    <button onClick={onTest} className={BTN_PRIMARY}>
+    <button onClick={onTest} className={`${BTN_PRIMARY} w-full`}>
       {hasTest ? "Test again" : "Test"}
     </button>
   );
@@ -859,6 +858,13 @@ function CategoryEditor({ cfg, groups, onChange }: { cfg: Record<string, unknown
  * prerequisite resets them. If listing fails, a manual text input takes over so the
  * step is never dead-ended.
  */
+/**
+ * Session cache of a resource id → its friendly name (e.g. a spreadsheet id →
+ * "NAMZI Cabal Leads"), so re-opening a Get data step shows the name instantly
+ * instead of flashing the raw id while the option list re-fetches.
+ */
+const sourceLabelCache = new Map<string, string>();
+
 function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigField; conn: ConnMeta; cfg: Record<string, unknown>; onChange: (p: Record<string, unknown>) => void }) {
   const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
   const value = String(sourceConfig[field.key] ?? "");
@@ -878,8 +884,11 @@ function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigFi
     setState({ sig: depsSignature, status: "loading", options: [] });
     void listSourceOptionsAction(conn.id, field.key, sourceConfig).then((r) => {
       if (cancelled) return;
-      if (r.ok) setState({ sig: depsSignature, status: "ok", options: r.options });
-      else setState({ sig: depsSignature, status: "error", options: [], error: r.error });
+      if (r.ok) {
+        // Remember every id→label so the next open resolves the name with no flash.
+        for (const o of r.options) sourceLabelCache.set(`${conn.id}:${field.key}:${o.value}`, o.label);
+        setState({ sig: depsSignature, status: "ok", options: r.options });
+      } else setState({ sig: depsSignature, status: "error", options: [], error: r.error });
     });
     return () => {
       cancelled = true;
@@ -916,8 +925,18 @@ function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigFi
   }
 
   const options = field.dynamic ? state.options : field.options ?? [];
-  // Keep a previously saved value selectable even if it's not in the freshly-listed set.
-  const withCurrent = value && !options.some((o) => o.value === value) ? [{ value, label: value }, ...options] : options;
+  // Keep the saved value selectable even before/while the list loads — but NEVER
+  // show the raw id. Prefer the cached friendly name; while it's still loading with
+  // no cached name, drop the option so the "Loading…" placeholder shows instead.
+  const cachedLabel = value ? sourceLabelCache.get(`${conn.id}:${field.key}:${value}`) : undefined;
+  const needsCurrent = value && !options.some((o) => o.value === value);
+  const withCurrent = needsCurrent
+    ? cachedLabel
+      ? [{ value, label: cachedLabel }, ...options]
+      : field.dynamic && state.status === "loading"
+        ? options
+        : [{ value, label: value }, ...options]
+    : options;
 
   return (
     <Field label={field.label}>
