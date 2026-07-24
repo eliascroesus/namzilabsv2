@@ -80,14 +80,17 @@ summary {
  */
 .flow-shadow {
   box-shadow:
-    0 16px 48px -12px rgba(15, 23, 42, 0.28),
-    0 4px 14px -6px rgba(15, 23, 42, 0.14);
+    0 20px 60px -16px rgba(15, 23, 42, 0.32),
+    0 8px 24px -12px rgba(15, 23, 42, 0.18),
+    0 0 0 1px rgba(15, 23, 42, 0.04);
 }
 
+/* A springy scale "pop" — grows from ~0.9 with a slight overshoot, so surfaces
+   feel like they spring into place rather than merely fade. */
 @keyframes flowPopIn {
   from {
     opacity: 0;
-    transform: scale(0.94);
+    transform: scale(0.9);
   }
   to {
     opacity: 1;
@@ -95,7 +98,7 @@ summary {
   }
 }
 .flow-pop-in {
-  animation: flowPopIn 0.14s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: flowPopIn 0.19s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 @keyframes flowPopOut {
@@ -105,7 +108,7 @@ summary {
   }
   to {
     opacity: 0;
-    transform: scale(0.94);
+    transform: scale(0.92);
   }
 }
 .flow-pop-out {

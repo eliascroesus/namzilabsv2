@@ -257,12 +257,12 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
   // Opening the picker always closes the config window — it belongs to the step
   // you were on, not the one you're about to add (Make.com behaviour).
-  const addFromNode = useCallback((sourceNodeId: string, sourceHandle?: string | null, anchor?: { x: number; y: number }) => {
+  const addFromNode = useCallback((sourceNodeId: string, sourceHandle?: string | null, anchor?: { x: number; y: number; leftX?: number }) => {
     setSelectedId(null);
     setLibrary({ open: true, ctx: { fromNodeId: sourceNodeId, sourceHandle }, anchor: anchor ?? null });
   }, []);
   const insertOnEdge = useCallback(
-    (edgeId: string, anchor?: { x: number; y: number }) => {
+    (edgeId: string, anchor?: { x: number; y: number; leftX?: number }) => {
       const edge = edges.find((e) => e.id === edgeId);
       if (edge) {
         setSelectedId(null);
@@ -871,7 +871,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                 <button
                   onClick={(e) => {
                     const r = e.currentTarget.getBoundingClientRect();
-                    setLibrary({ open: true, ctx: null, anchor: { x: r.right, y: r.top } });
+                    setLibrary({ open: true, ctx: null, anchor: { x: r.right, y: r.top + r.height / 2, leftX: r.left } });
                   }}
                   className="mt-3 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
                 >
@@ -883,30 +883,34 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
         </div>
 
-        {/* Config panel */}
-        {selected && (
-          <ConfigPanel
-            key={selected.id}
-            node={selected}
-            stepNo={stepNoById.get(selected.id)}
-            connections={connections}
-            fieldGroups={fieldGroups}
-            inputs={selectedInputs}
-            inputCount={edges.filter((e) => e.target === selected.id).length}
-            testing={testingId === selected.id}
-            numberGroups={numberGroups}
-            datasetCandidates={candidates.dataset}
-            branch={branch}
-            onChange={(patch) => updateConfig(selected.id, patch)}
-            onRename={(v) => renameNode(selected.id, v)}
-            onTest={() => testNode(selected.id)}
-            onAddNext={(anchor) => addFromNode(selected.id, null, anchor)}
-            onSetInput={(handle, sourceId) => setFormulaInput(selected.id, handle, sourceId)}
-            onSetSources={(ids) => setUniteSources(selected.id, ids)}
-            onAddBranch={() => addBranch(selected.id)}
-            onRemoveBranch={(pid) => removeBranch(selected.id, pid)}
-          />
-        )}
+        {/* Config panel — mounted through a host so it can scale OUT on deselect,
+            not just pop in. */}
+        <ConfigPanelHost
+          data={
+            selected
+              ? {
+                  node: selected,
+                  stepNo: stepNoById.get(selected.id),
+                  connections,
+                  fieldGroups,
+                  inputs: selectedInputs,
+                  inputCount: edges.filter((e) => e.target === selected.id).length,
+                  testing: testingId === selected.id,
+                  numberGroups,
+                  datasetCandidates: candidates.dataset,
+                  branch,
+                  onChange: (patch) => updateConfig(selected.id, patch),
+                  onRename: (v) => renameNode(selected.id, v),
+                  onTest: () => testNode(selected.id),
+                  onAddNext: (anchor) => addFromNode(selected.id, null, anchor),
+                  onSetInput: (handle, sourceId) => setFormulaInput(selected.id, handle, sourceId),
+                  onSetSources: (ids) => setUniteSources(selected.id, ids),
+                  onAddBranch: () => addBranch(selected.id),
+                  onRemoveBranch: (pid) => removeBranch(selected.id, pid),
+                }
+              : null
+          }
+        />
       </div>
 
       {library.open && (
@@ -967,4 +971,30 @@ function ToolButton({ onClick, children }: { onClick: () => void; children: Reac
       {children}
     </button>
   );
+}
+
+/**
+ * Keeps the config panel mounted for one exit animation after it's deselected, so
+ * it scales OUT (not just vanishes). While a step is selected it renders the live
+ * panel; on deselect it holds the last panel and plays `flow-pop-out`, then unmounts.
+ */
+function ConfigPanelHost({ data }: { data: React.ComponentProps<typeof ConfigPanel> | null }) {
+  const [visible, setVisible] = useState(false);
+  const last = useRef<React.ComponentProps<typeof ConfigPanel> | null>(null);
+  if (data) last.current = data;
+  const key = data ? data.node.id : null;
+  useEffect(() => {
+    if (key != null) {
+      setVisible(true);
+      return;
+    }
+    const t = setTimeout(() => setVisible(false), 140);
+    return () => clearTimeout(t);
+  }, [key]);
+
+  if (!data && !visible) return null;
+  const props = last.current;
+  if (!props) return null;
+  const closing = !data && visible;
+  return <ConfigPanel key={props.node.id} {...props} animClass={closing ? "flow-pop-out" : "flow-pop-in"} />;
 }

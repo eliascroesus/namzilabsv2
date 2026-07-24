@@ -130,7 +130,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           onClick={(e) => {
             e.stopPropagation();
             const r = e.currentTarget.getBoundingClientRect();
-            (data as NodeData).onAddFrom?.(id, null, { x: r.right, y: r.top });
+            (data as NodeData).onAddFrom?.(id, null, { x: r.right, y: r.top + r.height / 2, leftX: r.left });
           }}
           title="Add the next step"
           className="nodrag absolute left-1/2 top-full z-10 mt-3 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm transition-colors hover:border-neutral-900 hover:bg-neutral-900 hover:text-white"
@@ -148,7 +148,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
               onClick={(e) => {
                 e.stopPropagation();
                 const r = e.currentTarget.getBoundingClientRect();
-                (data as NodeData).onAddFrom?.(id, h.id, { x: r.right, y: r.top });
+                (data as NodeData).onAddFrom?.(id, h.id, { x: r.right, y: r.top + r.height / 2, leftX: r.left });
               }}
               title={`Add a step to “${h.label}”`}
               className="flex items-center gap-1 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm transition-colors hover:border-neutral-900 hover:bg-neutral-900 hover:text-white"

@@ -28,7 +28,7 @@ export type StepRef = { id: string; title: string; stepNo?: number };
 /** Branch-head context: how records enter this Paths branch (mode lives on the hub). */
 export type BranchCtx = { mode: string; siblingHasFallback: boolean; siblingHasAlways: boolean; set: (mode: string) => void };
 
-const INPUT = "w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm focus:border-neutral-400 focus:outline-none";
+const INPUT = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100";
 const W = 412;
 
 /** Shared button language for the config panel (Make.com vibe: rounded, soft, tactile). */
@@ -119,6 +119,7 @@ export function ConfigPanel({
   onRename,
   onTest,
   onAddNext,
+  animClass = "flow-pop-in",
   branch,
   onSetInput,
   onSetSources,
@@ -138,7 +139,8 @@ export function ConfigPanel({
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
   onTest: () => void;
-  onAddNext: (anchor?: { x: number; y: number }) => void;
+  onAddNext: (anchor?: { x: number; y: number; leftX?: number }) => void;
+  animClass?: string;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
   onAddBranch: () => void;
@@ -169,30 +171,30 @@ export function ConfigPanel({
   ];
 
   return (
-    <aside className="m-3 flex w-[440px] shrink-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white flow-shadow flow-pop-in">
+    <aside className={`m-4 flex w-[452px] shrink-0 flex-col overflow-hidden rounded-2xl bg-white flow-shadow ${animClass}`}>
       {/* Header — a soft grey band with the step's colourful icon, so it reads as a
           distinct "what am I editing" strip above the fields. */}
-      <div className="flex items-center justify-between gap-2 border-b border-neutral-200 bg-neutral-50 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} size={32} />
+      <div className="flex items-center justify-between gap-3 border-b border-neutral-200/70 bg-neutral-50 px-5 py-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} size={38} />
           <input
             value={node.data.label ?? ""}
             onChange={(e) => onRename(e.target.value)}
             placeholder={`${stepNo != null ? `${stepNo}. ` : ""}${defaultTitle(type, node.data)}`}
-            className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-base font-semibold text-neutral-900 hover:border-neutral-200 hover:bg-white focus:border-neutral-300 focus:bg-white focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-[17px] font-semibold text-neutral-900 hover:border-neutral-200 hover:bg-white focus:border-neutral-300 focus:bg-white focus:outline-none"
           />
         </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${sm.cls}`}>{sm.label}</span>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-neutral-200 bg-white px-3">
+      <div className="flex gap-5 border-b border-neutral-200 bg-white px-5">
         {(["configure", "test"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`-mb-px border-b-2 px-2.5 py-2.5 text-sm capitalize transition-colors ${
-              tab === t ? "border-neutral-900 font-semibold text-neutral-900" : "border-transparent font-medium text-neutral-500 hover:text-neutral-800"
+            className={`-mb-px border-b-2 py-3 text-sm capitalize transition-colors ${
+              tab === t ? "border-indigo-500 font-semibold text-neutral-900" : "border-transparent font-medium text-neutral-500 hover:text-neutral-800"
             }`}
           >
             {t}
@@ -201,7 +203,7 @@ export function ConfigPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex min-h-full flex-col p-4">
+        <div className="flex min-h-full flex-col p-5">
           {tab === "configure" ? (
             <>
               <NodeConfig
@@ -242,7 +244,7 @@ export function ConfigPanel({
         </div>
       </div>
 
-      <div className="border-t border-neutral-200 bg-white p-3">
+      <div className="border-t border-neutral-200 bg-white p-4">
         <Footer
           tab={tab}
           status={status}
@@ -283,7 +285,7 @@ function Footer({
   onContinueToTest: () => void;
   onBackToConfigure: () => void;
   onTest: () => void;
-  onAddNext: (anchor?: { x: number; y: number }) => void;
+  onAddNext: (anchor?: { x: number; y: number; leftX?: number }) => void;
 }) {
   if (testing) {
     return (
@@ -311,7 +313,7 @@ function Footer({
         <button
           onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect();
-            onAddNext({ x: r.right, y: r.top });
+            onAddNext({ x: r.right, y: r.top + r.height / 2, leftX: r.left });
           }}
           className={BTN_PRIMARY}
         >

@@ -5,7 +5,7 @@ import { Popover } from "./Popover";
 
 export type Option = { value: string; label: string; hint?: string; group?: string; disabled?: boolean };
 
-const BTN = "flex w-full items-center justify-between gap-2 rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-left text-sm hover:border-neutral-400 focus:border-neutral-400 focus:outline-none";
+const BTN = "flex w-full items-center justify-between gap-2 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-left text-sm transition-colors hover:border-neutral-400 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100";
 
 /**
  * A custom (non-native) select. Set `searchable` for combobox behaviour. Full keyboard

@@ -11,7 +11,7 @@ export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosit
   // Generously rounded corners give the line a calm, modern turn instead of a
   // hard right angle.
   const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 20 });
-  const onInsert = (data as { onInsert?: (edgeId: string, anchor?: { x: number; y: number }) => void } | undefined)?.onInsert;
+  const onInsert = (data as { onInsert?: (edgeId: string, anchor?: { x: number; y: number; leftX?: number }) => void } | undefined)?.onInsert;
   return (
     <>
       {/* A soft light "track" beneath the main stroke — clean and a little unique,
@@ -29,7 +29,7 @@ export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosit
               onClick={(e) => {
                 e.stopPropagation();
                 const r = e.currentTarget.getBoundingClientRect();
-                onInsert(id, { x: r.right, y: r.top });
+                onInsert(id, { x: r.right, y: r.top + r.height / 2, leftX: r.left });
               }}
               title="Insert a step here"
             >
