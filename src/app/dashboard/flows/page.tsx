@@ -1,5 +1,5 @@
 import { requireOrg } from "@/lib/auth";
-import { AppShell } from "@/components/app-shell";
+import { AppHeader } from "@/components/app-header";
 import { getDb } from "@/db/client";
 import { listFlows } from "@/lib/flow/store";
 import { createFlowAction } from "./actions";
@@ -12,7 +12,8 @@ export default async function FlowsPage() {
   const flows = await listFlows(getDb(), orgId).catch(() => []);
 
   return (
-    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
+    <>
+      <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
       <main className="mx-auto max-w-4xl px-6 py-10">
         <div className="flex items-center justify-between">
           <div>
@@ -43,6 +44,6 @@ export default async function FlowsPage() {
           </div>
         )}
       </main>
-    </AppShell>
+    </>
   );
 }

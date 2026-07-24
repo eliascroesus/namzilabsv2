@@ -7,6 +7,7 @@ import { listConnections } from "@/lib/connections";
 import { events } from "@/db/schema";
 import { parseGraph } from "@/lib/flow/types";
 import { FlowCanvas, type ConnMeta } from "@/components/flow/flow-canvas";
+import { Sidebar } from "@/components/sidebar";
 
 export const dynamic = "force-dynamic";
 
@@ -40,13 +41,20 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
   }));
 
   return (
-    <FlowCanvas
-      flowId={flow.id}
-      name={flow.name}
-      status={flow.status}
-      publishedVersion={flow.publishedVersion}
-      initialGraph={parseGraph(flow.draftGraph)}
-      connections={connections}
-    />
+    // The left rail lives ONLY here, in the canvas/flow view. FlowCanvas keeps its
+    // own full-height layout; the wrapper just reserves the width beside the rail.
+    <div className="flex h-screen">
+      <Sidebar />
+      <div className="min-w-0 flex-1">
+        <FlowCanvas
+          flowId={flow.id}
+          name={flow.name}
+          status={flow.status}
+          publishedVersion={flow.publishedVersion}
+          initialGraph={parseGraph(flow.draftGraph)}
+          connections={connections}
+        />
+      </div>
+    </div>
   );
 }
