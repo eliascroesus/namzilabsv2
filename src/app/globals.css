@@ -54,15 +54,10 @@ body {
  * and intentional instead of a hard grey pipe. Brightens to indigo on hover.
  */
 .react-flow__edge-path {
+  /* Colour comes from a per-edge gradient set in InsertEdge; this is the fallback. */
   stroke: #b9c1d2;
-  stroke-width: 2;
+  stroke-width: 2.5;
   stroke-linecap: round;
-  stroke-dasharray: 5 6;
-  transition: stroke 0.15s ease;
-}
-.react-flow__edge:hover .react-flow__edge-path,
-.react-flow__edge.selected .react-flow__edge-path {
-  stroke: #6366f1;
 }
 
 /*

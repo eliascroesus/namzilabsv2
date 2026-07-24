@@ -134,7 +134,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [publishWarning, setPublishWarning] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [library, setLibrary] = useState<{ open: boolean; ctx: LibraryCtx; anchor: PickerAnchor }>({ open: false, ctx: null, anchor: null });
+  const [library, setLibrary] = useState<{ open: boolean; ctx: LibraryCtx; anchor: PickerAnchor; anchorSelector: string | null }>({ open: false, ctx: null, anchor: null, anchorSelector: null });
   const [metrics, setMetrics] = useState<MetricSpecT[]>(initialGraph.metrics ?? []);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ message: string; run: () => void } | null>(null);
@@ -260,53 +260,50 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   // you were on, not the one you're about to add (Make.com behaviour).
   const addFromNode = useCallback((sourceNodeId: string, sourceHandle?: string | null, anchor?: { x: number; y: number; leftX?: number }) => {
     setSelectedId(null);
-    setLibrary({ open: true, ctx: { fromNodeId: sourceNodeId, sourceHandle }, anchor: anchor ?? null });
+    // Keep the picker glued to this source's live "Add next step" button as the canvas pans.
+    const anchorSelector = sourceHandle ? `[data-add-btn="${sourceNodeId}:${sourceHandle}"]` : `[data-add-btn="${sourceNodeId}"]`;
+    setLibrary({ open: true, ctx: { fromNodeId: sourceNodeId, sourceHandle }, anchor: anchor ?? null, anchorSelector });
   }, []);
   const insertOnEdge = useCallback(
     (edgeId: string, anchor?: { x: number; y: number; leftX?: number }) => {
       const edge = edges.find((e) => e.id === edgeId);
       if (edge) {
         setSelectedId(null);
-        setLibrary({ open: true, ctx: { onEdge: edge }, anchor: anchor ?? null });
+        setLibrary({ open: true, ctx: { onEdge: edge }, anchor: anchor ?? null, anchorSelector: null });
       }
     },
     [edges],
   );
 
-  // The config panel's tested "Continue" opens the picker exactly where this
-  // step's on-canvas "Add next step" button sits — the natural next-in-line
-  // spot. If that button is out of view, the canvas nudges it to centre first so
-  // the picker can sit beside it, then opens there.
+  // The config panel's "Continue": if a step already follows this one, open ITS
+  // config (walk the flow). A split hub steps into its first branch. Only at the
+  // end of the line does it add a step — opening the picker exactly where this
+  // step's "Add next step" button sits, nudging it into view first if needed.
   const continueFromNode = useCallback(
     (nodeId: string) => {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (node?.type === "paths") {
+        const firstBranch = edges.find((e) => e.source === nodeId && e.sourceHandle)?.target;
+        if (firstBranch) return setSelectedId(firstBranch);
+      }
+      const nextId = edges.find((e) => e.source === nodeId && !e.sourceHandle && e.targetHandle == null)?.target;
+      if (nextId) return setSelectedId(nextId);
+
       const findBtn = () => document.querySelector<HTMLElement>(`[data-add-btn="${nodeId}"]`);
       const btn = findBtn();
-      if (!btn) {
-        // A mid-line step has no on-canvas add button — open the picker centred.
-        addFromNode(nodeId, null);
-        return;
-      }
+      if (!btn || !node) return addFromNode(nodeId, null, btn ? anchorFromRect(btn.getBoundingClientRect()) : undefined);
       const r = btn.getBoundingClientRect();
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       const inView = r.top > 120 && r.bottom < vh - 120 && r.left > 24 && r.right < vw - 24;
-      if (inView) {
-        addFromNode(nodeId, null, anchorFromRect(r));
-        return;
-      }
-      const node = nodes.find((n) => n.id === nodeId);
-      if (!node) {
-        addFromNode(nodeId, null, anchorFromRect(r));
-        return;
-      }
+      if (inView) return addFromNode(nodeId, null, anchorFromRect(r));
       rf.setCenter(node.position.x + 128, node.position.y + 120, { zoom: rf.getZoom(), duration: 250 });
       window.setTimeout(() => {
         const b2 = findBtn();
-        if (b2) addFromNode(nodeId, null, anchorFromRect(b2.getBoundingClientRect()));
-        else addFromNode(nodeId, null);
+        addFromNode(nodeId, null, b2 ? anchorFromRect(b2.getBoundingClientRect()) : undefined);
       }, 300);
     },
-    [nodes, rf, addFromNode],
+    [nodes, edges, rf, addFromNode],
   );
 
   const updateConfig = useCallback(
@@ -814,10 +811,13 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         return {
           ...n,
           position: layout.get(n.id) ?? n.position,
+          // Drive the selection ring from OUR selection (the open config step), so
+          // programmatic selection (adding/continuing to a step) highlights the right card.
+          selected: n.id === selectedId,
           data: { ...n.data, stepNo: stepNoById.get(n.id), status, issue, isTerminal: terminals.has(n.id), freeHandles, onAddFrom: addFromNode, onDeleteNode: requestDelete, onDuplicateNode: duplicateNode },
         };
       }),
-    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode],
+    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId],
   );
   // Only the flow's chain edges are drawn — a compare step's number references are
   // picked in the panel and never rendered as lines (they'd cut across the canvas).
@@ -899,6 +899,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             deleteKeyCode={null}
             // Scroll/two-finger pans the canvas; pinch (or ⌘/Ctrl+scroll) zooms.
             panOnScroll
+            // A double-click/tap on the canvas does nothing (no accidental zoom).
+            zoomOnDoubleClick={false}
             // One step selected at a time — no box-select or shift/⌘ multi-select.
             multiSelectionKeyCode={null}
             selectionKeyCode={null}
@@ -915,7 +917,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
               <div className="pointer-events-auto rounded-lg border border-dashed border-neutral-300 bg-white/80 p-8 text-center">
                 <p className="text-sm text-neutral-600">Start by pulling data from an app.</p>
                 <button
-                  onClick={(e) => setLibrary({ open: true, ctx: null, anchor: anchorFromRect(e.currentTarget.getBoundingClientRect()) })}
+                  onClick={(e) => setLibrary({ open: true, ctx: null, anchor: anchorFromRect(e.currentTarget.getBoundingClientRect()), anchorSelector: null })}
                   className="mt-3 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
                 >
                   + Add your first step
@@ -959,10 +961,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       {library.open && (
         <NodeLibraryModal
           anchor={library.anchor}
-          onClose={() => setLibrary({ open: false, ctx: null, anchor: null })}
+          anchorSelector={library.anchorSelector}
+          onClose={() => setLibrary({ open: false, ctx: null, anchor: null, anchorSelector: null })}
           onPick={(type) => {
             createNode(type, library.ctx);
-            setLibrary({ open: false, ctx: null, anchor: null });
+            setLibrary({ open: false, ctx: null, anchor: null, anchorSelector: null });
           }}
         />
       )}

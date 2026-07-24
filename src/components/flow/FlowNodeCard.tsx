@@ -146,6 +146,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           {freeHandles.map((h) => (
             <button
               key={h.id}
+              data-add-btn={`${id}:${h.id}`}
               onClick={(e) => {
                 e.stopPropagation();
                 (data as NodeData).onAddFrom?.(id, h.id, anchorFromRect(e.currentTarget.getBoundingClientRect()));

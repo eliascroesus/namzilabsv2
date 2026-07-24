@@ -153,6 +153,9 @@ export function ConfigPanel({
   // Two tabs: set the step up, then test it. Remounts per step (keyed on id), so a
   // freshly-opened step always starts on Configure.
   const [tab, setTab] = useState<"configure" | "test">("configure");
+  // A split hub has nothing to test — only Configure.
+  const supportsTest = type !== "paths";
+  const activeTab = supportsTest ? tab : "configure";
 
   // The step's OWN fields (from its last test) — used by pickers that configure the
   // step itself (Get data's "Match duplicates by"). Falls back to the canonical
@@ -185,22 +188,24 @@ export function ConfigPanel({
 
       {/* Tabs */}
       <div data-config-tabs className="flex gap-5 border-b border-neutral-200 bg-neutral-50 px-5">
-        {(["configure", "test"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`-mb-px border-b-2 py-3 text-sm capitalize transition-colors ${
-              tab === t ? "border-indigo-500 font-semibold text-neutral-900" : "border-transparent font-medium text-neutral-500 hover:text-neutral-800"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+        {(["configure", "test"] as const)
+          .filter((t) => supportsTest || t === "configure")
+          .map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`-mb-px border-b-2 py-3 text-sm capitalize transition-colors ${
+                activeTab === t ? "border-indigo-500 font-semibold text-neutral-900" : "border-transparent font-medium text-neutral-500 hover:text-neutral-800"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col p-5">
-          {tab === "configure" ? (
+          {activeTab === "configure" ? (
             <div className="space-y-5">
               <NodeConfig
                 type={type}
@@ -242,10 +247,11 @@ export function ConfigPanel({
 
       <div className="border-t border-neutral-200 bg-neutral-50 p-4">
         <Footer
-          tab={tab}
+          tab={activeTab}
           status={status}
           testing={testing}
           hasTest={!!node.data.lastTest}
+          supportsTest={supportsTest}
           tested={tested}
           onContinueToTest={() => setTab("test")}
           onBackToConfigure={() => setTab("configure")}
@@ -267,6 +273,7 @@ function Footer({
   status,
   testing,
   hasTest,
+  supportsTest,
   tested,
   onContinueToTest,
   onBackToConfigure,
@@ -277,6 +284,7 @@ function Footer({
   status: string;
   testing: boolean;
   hasTest: boolean;
+  supportsTest: boolean;
   tested: boolean;
   onContinueToTest: () => void;
   onBackToConfigure: () => void;
@@ -292,8 +300,9 @@ function Footer({
   }
 
   if (tab === "configure") {
+    // Untestable steps (split hub) continue straight on; the rest advance to Test.
     return (
-      <button onClick={onContinueToTest} disabled={status === "setup"} className={`${BTN_PRIMARY} w-full`}>
+      <button onClick={supportsTest ? onContinueToTest : () => onAddNext()} disabled={status === "setup"} className={`${BTN_PRIMARY} w-full`}>
         {status === "setup" ? "Fill in the fields above" : "Continue"}
       </button>
     );
