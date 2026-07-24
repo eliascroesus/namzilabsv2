@@ -13,7 +13,6 @@ import type { DB } from "@/db/types";
 let capturedCreds: Record<string, unknown> | null | undefined;
 const recordingConnector: Connector = {
   source: "cred-poller",
-  syncStrategy: "incremental",
   authType: "apiKey",
   verifySignature: () => true,
   normalize: () => [],

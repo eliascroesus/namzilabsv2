@@ -11,8 +11,7 @@ export const syncConnection = inngest.createFunction(
   async ({ event, step }) => {
     const { connectionId, mode } = event.data as { connectionId: string; mode: "full" | "incremental" };
     const res = await step.run("sync", () => runSync(getDb(), connectionId, mode));
-    // A delete-only sync also changes dashboard numbers — mark stale for both.
-    if (res.upserted > 0 || res.softDeleted > 0) {
+    if (res.upserted > 0) {
       await step.run("mark-stale", () => markStaleForSource(getDb(), res.orgId, res.source));
     }
     return res;

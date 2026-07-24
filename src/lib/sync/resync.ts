@@ -1,12 +1,15 @@
 import { and, eq, gte, isNull, lt } from "drizzle-orm";
-import { connections, events, rawEvents, syncState } from "@/db/schema";
+import { connections, events, sourceStreams, syncState, rawEvents } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
 import { isStreamScoped } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
-import { processRawEvent, upsertEvents } from "@/ingestion/pipeline";
-import { activeStreams, mirrorStream, pollAll, syncStream } from "@/lib/sync/streams";
-import type { PollArgs } from "@/connectors/types";
+import { normalizeDatesDeep } from "@/lib/normalize-dates";
+import { processRawEvent } from "@/ingestion/pipeline";
+import { activeStreams, syncStream } from "@/lib/sync/streams";
+import type { CanonicalEvent, Connector, PollArgs } from "@/connectors/types";
+
+const PAGE_CAP = 200;
 
 export type SyncMode = "full" | "incremental";
 export type SyncResult = {
@@ -22,17 +25,12 @@ export type SyncResult = {
 /**
  * Sync a connection's data.
  *
- * Stream-scoped sources (Sheets, Calendar, Calendly — the connection is auth
- * only) sync per stream by the connector's declared strategy: mirror streams
- * run a full-refresh pass ({@link mirrorStream} — after it, live rows ≡ the
- * source), incremental streams walk their cursor with refresh-on-conflict.
- * "full" forces a mirror pass for every stream regardless of strategy.
- *
- * Connection-scoped sources (Close) keep the connection-level generation
- * model: gen 0 marks webhook-captured rows (NEVER soft-deleted — they share
- * the null streamHash with polled rows, so the generation floor is their
- * protection); a full re-sync upserts everything at gen N and only then
- * soft-deletes poll-managed rows (gen ≥ 1) still below N.
+ * Generation model (no extra column needed):
+ * - `syncGeneration = 0` marks append-only / webhook-captured rows — NEVER soft-deleted.
+ * - Poll/backfill/full-resync rows are tagged with generation >= 1.
+ * - A FULL re-sync bumps to generation N, upserts every polled record at N (working
+ *   data stays live the whole time), and only AFTER that succeeds soft-deletes
+ *   poll-managed rows still at an older generation (records removed upstream).
  */
 export async function runSync(db: DB, connectionId: string, mode: SyncMode): Promise<SyncResult> {
   const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId)).limit(1);
@@ -48,6 +46,8 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
   await db.update(connections).set({ syncStatus: "importing", updatedAt: new Date() }).where(eq(connections.id, connectionId));
 
   try {
+    // Stream-scoped sources (Sheets, Calendar): the connection is auth-only; each
+    // flow-configured resource is its own stream with its own cursor.
     if (isStreamScoped(conn.source)) return await runStreamSync(db, conn, mode);
 
     const credentials = await getConnectionCredentials(db, conn);
@@ -57,7 +57,7 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
     if (mode === "full") {
       const gen = Math.max(1, (conn.syncGeneration ?? 0) + 1);
       const { records, cursor } = await pollAll(connector, base);
-      const res = await upsertEvents(db, { ...meta, generation: gen }, records);
+      const upserted = await upsertEventsGen(db, meta, records, gen);
 
       // Only NOW (after the replacement generation is in) remove poll-managed rows
       // that were not seen this run — i.e. removed upstream. Webhook rows (gen 0) are safe.
@@ -73,21 +73,21 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
         .where(eq(connections.id, conn.id));
       await upsertCursor(db, conn.id, cursor);
 
-      return { mode: "full", polled: true, upserted: res.inserted + res.updated, softDeleted: del.length, generation: gen, orgId: conn.orgId, source: conn.source };
+      return { mode: "full", polled: true, upserted, softDeleted: del.length, generation: gen, orgId: conn.orgId, source: conn.source };
     }
 
-    // incremental: fetch from the stored cursor; re-seen records refresh in place.
+    // incremental: fetch from the stored cursor, additive (no soft-delete).
     const gen = Math.max(1, conn.syncGeneration ?? 0);
     const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, conn.id)).limit(1);
     const { records, nextCursor } = await connector.poll({ ...base, cursor: state?.cursor ?? null });
-    const res = await upsertEvents(db, { ...meta, generation: gen }, records);
+    const upserted = await upsertEventsGen(db, meta, records, gen);
     await db
       .update(connections)
       .set({ syncStatus: "live", lastEventAt: new Date(), lastError: null, updatedAt: new Date() })
       .where(eq(connections.id, conn.id));
     await upsertCursor(db, conn.id, nextCursor);
 
-    return { mode: "incremental", polled: true, upserted: res.inserted + res.updated, softDeleted: 0, generation: gen, orgId: conn.orgId, source: conn.source };
+    return { mode: "incremental", polled: true, upserted, softDeleted: 0, generation: gen, orgId: conn.orgId, source: conn.source };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await db.update(connections).set({ syncStatus: "error", lastError: message, updatedAt: new Date() }).where(eq(connections.id, connectionId));
@@ -98,47 +98,59 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
 type ConnRow = typeof connections.$inferSelect;
 
 /**
- * Sync every flow-configured resource (stream) of a stream-scoped connection.
- * Each stream is independent — its own generation, its own cursor, its own
- * try/catch, so one broken resource never blocks the others.
- *
- * incremental: each stream runs its connector's declared strategy (mirror
- * streams full-refresh — for them this IS the incremental sync).
- * full: every stream runs a mirror pass — the explicit "rebuild it 1:1" action.
+ * Full / incremental sync for a stream-scoped connection: every flow-configured
+ * resource (stream) is polled with its own cursor. A full re-sync repolls each
+ * stream from the start at a new generation, then soft-deletes poll-managed rows
+ * the run no longer saw — including rows of streams no flow references anymore.
  */
 async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<SyncResult> {
   const connector = getConnector(conn.source)!;
   const streams = (await activeStreams(db, conn.id)).filter((s) => s.status !== "disabled");
 
-  let upserted = 0;
-  let softDeleted = 0;
-  for (const stream of streams) {
-    try {
-      if (mode === "full" || connector.syncStrategy === "mirror") {
-        const r = await mirrorStream(db, conn, stream);
-        upserted += r.inserted + r.updated;
-        softDeleted += r.softDeleted;
-      } else {
+  if (mode === "incremental") {
+    let upserted = 0;
+    for (const stream of streams) {
+      try {
         const r = await syncStream(db, conn, stream, 5);
-        upserted += r.inserted + r.updated;
+        upserted += r.inserted;
+      } catch {
+        // Recorded on the stream row; other streams keep syncing.
       }
-    } catch {
-      // Recorded on the stream row; other streams keep syncing.
     }
+    await db
+      .update(connections)
+      .set({ syncStatus: "live", lastEventAt: upserted > 0 ? new Date() : conn.lastEventAt, lastError: null, updatedAt: new Date() })
+      .where(eq(connections.id, conn.id));
+    return { mode, polled: streams.length > 0, upserted, softDeleted: 0, generation: Math.max(1, conn.syncGeneration ?? 0), orgId: conn.orgId, source: conn.source };
   }
+
+  // Full: re-poll every stream from the beginning at the next generation, then
+  // remove poll-managed rows not seen this run (upstream-deleted or de-referenced).
+  const credentials = await getConnectionCredentials(db, conn);
+  const gen = Math.max(1, (conn.syncGeneration ?? 0) + 1);
+  let upserted = 0;
+  for (const stream of streams) {
+    const base: PollArgs = { connectionId: conn.id, cursor: null, credentials, config: stream.config ?? undefined, streamHash: stream.configHash };
+    const { records, cursor } = await pollAll(connector, base);
+    upserted += await upsertEventsGen(db, { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash }, records, gen);
+    await db
+      .update(sourceStreams)
+      .set({ cursor, status: "active", lastError: null, lastPolledAt: new Date(), updatedAt: new Date() })
+      .where(eq(sourceStreams.id, stream.id));
+  }
+
+  const del = await db
+    .update(events)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(events.connectionId, conn.id), gte(events.syncGeneration, 1), lt(events.syncGeneration, gen), isNull(events.deletedAt)))
+    .returning({ id: events.id });
 
   await db
     .update(connections)
-    .set({
-      syncStatus: "live",
-      lastEventAt: upserted > 0 ? new Date() : conn.lastEventAt,
-      ...(mode === "full" ? { historicalSyncedAt: new Date() } : {}),
-      lastError: null,
-      updatedAt: new Date(),
-    })
+    .set({ syncGeneration: gen, syncStatus: "live", historicalSyncedAt: new Date(), lastEventAt: new Date(), lastError: null, updatedAt: new Date() })
     .where(eq(connections.id, conn.id));
 
-  return { mode, polled: streams.length > 0, upserted, softDeleted, generation: Math.max(1, conn.syncGeneration ?? 0), orgId: conn.orgId, source: conn.source };
+  return { mode: "full", polled: streams.length > 0, upserted, softDeleted: del.length, generation: gen, orgId: conn.orgId, source: conn.source };
 }
 
 /** Re-run normalization from the immutable raw_events (no provider calls). */
@@ -158,6 +170,52 @@ export async function reprocessConnection(db: DB, orgId: string, connectionId: s
   }
   await db.update(connections).set({ syncStatus: "live", updatedAt: new Date() }).where(eq(connections.id, connectionId));
   return { processed };
+}
+
+async function pollAll(connector: Connector, base: PollArgs): Promise<{ records: CanonicalEvent[]; cursor: string | null }> {
+  const seen = new Map<string, CanonicalEvent>();
+  let cursor: string | null = null; // full re-sync starts from the beginning
+  let last: string | null = null;
+  for (let page = 0; page < PAGE_CAP; page++) {
+    const { records, nextCursor } = await connector.poll!({ ...base, cursor });
+    for (const r of records) seen.set(r.eventId, r);
+    if (!nextCursor || nextCursor === cursor || records.length === 0) {
+      cursor = nextCursor ?? cursor;
+      break;
+    }
+    if (nextCursor === last) break;
+    last = cursor;
+    cursor = nextCursor;
+  }
+  return { records: [...seen.values()], cursor };
+}
+
+async function upsertEventsGen(
+  db: DB,
+  meta: { orgId: string; connectionId: string; source: string; streamHash?: string | null },
+  records: CanonicalEvent[],
+  generation: number,
+): Promise<number> {
+  let n = 0;
+  for (const ev of records) {
+    const shared = {
+      eventType: ev.eventType,
+      subject: ev.subject ?? null,
+      occurredAt: ev.occurredAt,
+      value: ev.value != null ? String(ev.value) : null,
+      currency: ev.currency ?? null,
+      properties: normalizeDatesDeep(ev.properties),
+      syncGeneration: generation,
+      deletedAt: null,
+      streamHash: meta.streamHash ?? null,
+    };
+    await db
+      .insert(events)
+      .values({ eventId: ev.eventId, orgId: meta.orgId, connectionId: meta.connectionId, source: meta.source, ...shared })
+      .onConflictDoUpdate({ target: events.eventId, set: shared });
+    n += 1;
+  }
+  return n;
 }
 
 async function upsertCursor(db: DB, connectionId: string, cursor: string | null): Promise<void> {

@@ -21,8 +21,6 @@ const SECRET_HEADERS = [
 export const sendblueConnector: Connector = {
   source: "sendblue",
   authType: "secret",
-  // Message status/inbound webhooks are an event stream: append + dedup.
-  syncStrategy: "incremental",
 
   verifySignature({ headers, secret }: VerifyArgs): boolean {
     if (!secret) return true; // No secret configured => accept.

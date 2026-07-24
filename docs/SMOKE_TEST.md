@@ -49,9 +49,7 @@ migrations applied (`pnpm db:migrate`), WorkOS + Google + Inngest env configured
 - [ ] `/integrations` → **Connect with Google Sheets** → Google consent → back to the connection page (no `state_mismatch` error).
 - [ ] Tampered/replayed callback (old `state`) is rejected with `?error=state_mismatch`.
 - [ ] Set **Spreadsheet ID** + **range**, save → **Preview latest** shows the last 2–3 real rows.
-- [ ] Add a new row in the sheet → **Re-sync now** → the new row appears as a `row_added` event on `/dashboard`; re-syncing again does not duplicate it.
-- [ ] Edit a cell on an OLD row (e.g. flip `booked` to Yes) → **Test this step** on a flow reading the sheet → the count reflects the edit immediately; within one 10-minute sweep the dashboard tile updates with no user action (mirror sync).
-- [ ] Delete a middle row in the sheet → after the next sweep the flow count drops to match the sheet exactly (soft-deleted rows never show).
+- [ ] Add a new row in the sheet → **Re-sync now** → the new row appears as a `row_added` event on `/dashboard`; re-syncing again does not duplicate it (row cursor).
 - [ ] Let the OAuth access token expire (>1h) → a later poll/preview still works (token auto-refreshed and persisted).
 
 ## 5. Flows canvas + materialized dashboard (M1–M3)

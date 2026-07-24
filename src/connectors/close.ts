@@ -36,8 +36,6 @@ function canonicalType(objectType: string, action: string): string {
 export const closeConnector: Connector = {
   source: "close",
   authType: "apiKey",
-  // The Close event log is an append-only stream of immutable events.
-  syncStrategy: "incremental",
 
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     if (!secret) return false;

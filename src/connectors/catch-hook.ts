@@ -14,8 +14,6 @@ export const CATCH_HOOK_SIGNATURE_HEADER = "x-namzilabs-signature";
 export const catchHookConnector: Connector = {
   source: "webhook",
   authType: "secret",
-  // Inbound webhooks are an event stream: append + dedup.
-  syncStrategy: "incremental",
 
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     // No secret configured => open catch-hook (accept). Configuring a secret

@@ -23,8 +23,6 @@ const EVENT_TYPE_MAP: Record<string, string> = {
 export const instantlyConnector: Connector = {
   source: "instantly",
   authType: "apiKey",
-  // Email events (sent/opened/replied…) are immutable happenings: append + dedup.
-  syncStrategy: "incremental",
 
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     if (!secret) return true; // No secret configured => accept (verification optional).
