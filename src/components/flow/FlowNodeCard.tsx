@@ -92,7 +92,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           : null;
 
   return (
-    <div className={`w-64 rounded-xl border bg-white shadow-sm ${border}`}>
+    <div className={`w-64 rounded-xl border bg-white shadow-sm transition-[border-color,box-shadow] duration-150 ${border}`}>
       {isCompare ? (
         <>
           {/* Both number inputs anchor at top-centre; the edges enter straight down (no

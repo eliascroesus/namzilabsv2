@@ -20,6 +20,9 @@ export function Popover({
   width,
   align = "left",
   fixed = false,
+  placement = "below",
+  anchorRect,
+  panelClassName,
 }: {
   open: boolean;
   setOpen: (o: boolean) => void;
@@ -28,9 +31,19 @@ export function Popover({
   width?: number;
   align?: "left" | "right";
   fixed?: boolean;
+  /** "below" (default) opens under the trigger; "left" opens as a full-height
+   *  flyout to the LEFT of `anchorRect`'s element (the config panel). */
+  placement?: "below" | "left";
+  /** When set (with placement "left"), the rect to attach to instead of the trigger. */
+  anchorRect?: () => DOMRect | null;
+  /** Override the panel's border/radius/shadow (e.g. to match the config window). */
+  panelClassName?: string;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
+  // Kept in a ref so the positioning effect doesn't churn its listeners each render.
+  const anchorRectRef = useRef(anchorRect);
+  anchorRectRef.current = anchorRect;
 
   useEffect(() => {
     if (!open) return;
@@ -56,10 +69,20 @@ export function Popover({
       return;
     }
     const update = () => {
-      const r = wrapRef.current?.getBoundingClientRect();
-      if (!r) return;
       const vw = window.innerWidth;
       const vh = window.innerHeight;
+      const ref = anchorRectRef.current?.() ?? null;
+      // Left flyout: attach to the reference element (config panel), span its
+      // vertical extent, sit just to its left. Content wraps; height caps here.
+      if (placement === "left" && ref) {
+        const desired = width ?? 452;
+        const w = Math.max(240, Math.min(desired, ref.left - 24));
+        const left = Math.max(12, ref.left - 12 - w);
+        setPos({ top: ref.top, left, width: w, maxHeight: ref.height });
+        return;
+      }
+      const r = wrapRef.current?.getBoundingClientRect();
+      if (!r) return;
       const w = Math.min(width ?? 560, vw - 16);
       let left = align === "right" ? r.right - w : r.left;
       left = Math.max(8, Math.min(left, vw - w - 8));
@@ -73,7 +96,7 @@ export function Popover({
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [open, fixed, align, width]);
+  }, [open, fixed, align, width, placement]);
 
   const panelStyle = fixed
     ? pos
@@ -88,7 +111,7 @@ export function Popover({
       {anchor}
       {open && (
         <div
-          className={`z-30 flex flex-col overflow-hidden rounded-md border border-neutral-200 bg-white shadow-lg ${
+          className={`z-30 flex flex-col overflow-hidden ${panelClassName ?? "rounded-md border border-neutral-200 bg-white shadow-lg"} ${
             fixed ? "" : `absolute mt-1 ${align === "right" ? "right-0" : "left-0"}`
           }`}
           style={panelStyle}

@@ -44,7 +44,7 @@ export function DataBrowser({
   groups,
   onPick,
   onCustom,
-  width = 560,
+  width = 452,
   trigger,
 }: {
   groups: DataGroup[];
@@ -90,8 +90,17 @@ export function DataBrowser({
   const anyFields = useMemo(() => groups.some((g) => g.fields.length > 0), [groups]);
 
   return (
-    <Popover open={open} setOpen={setOpen} width={width} align="right" fixed anchor={trigger({ open, toggle })}>
-      <div className="flex max-h-[30rem] min-h-0 w-full flex-col">
+    <Popover
+      open={open}
+      setOpen={setOpen}
+      width={width}
+      fixed
+      placement="left"
+      anchorRect={() => document.querySelector<HTMLElement>("[data-config-panel]")?.getBoundingClientRect() ?? null}
+      panelClassName="rounded-2xl border border-neutral-200 bg-white flow-shadow"
+      anchor={trigger({ open, toggle })}
+    >
+      <>
         <div className="border-b border-neutral-100 p-2">
           <input
             autoFocus
@@ -197,7 +206,7 @@ export function DataBrowser({
             Use “<span className="font-medium text-neutral-800">{q.trim()}</span>” exactly as typed
           </button>
         )}
-      </div>
+      </>
     </Popover>
   );
 }

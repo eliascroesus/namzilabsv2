@@ -3,7 +3,7 @@
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ReactFlow, ReactFlowProvider, Background, useNodesState, useEdgesState, type Edge } from "@xyflow/react";
+import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, useNodesState, useEdgesState, type Edge } from "@xyflow/react";
 import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
 import { saveDraftAction, testNodeAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 import {
@@ -866,8 +866,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             multiSelectionKeyCode={null}
             selectionKeyCode={null}
             selectionOnDrag={false}
+            proOptions={{ hideAttribution: true }}
           >
-            <Background gap={16} />
+            {/* A soft grey canvas with a faint, wide-spaced dot grid — calm and
+                smooth while panning, not a busy pattern. */}
+            <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="#dfe1e8" bgColor="#f6f6f8" />
           </ReactFlow>
 
           {empty && (

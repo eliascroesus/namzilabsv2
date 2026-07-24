@@ -168,7 +168,7 @@ export function ConfigPanel({
   ];
 
   return (
-    <aside className={`absolute inset-y-0 right-0 z-20 m-4 flex w-[452px] flex-col overflow-hidden rounded-2xl bg-neutral-50 flow-shadow ${animClass}`}>
+    <aside data-config-panel className={`absolute inset-y-0 right-0 z-20 m-4 flex w-[452px] flex-col overflow-hidden rounded-2xl bg-neutral-50 flow-shadow ${animClass}`}>
       {/* Header — a slightly darker grey band with the step's colourful icon, so it
           reads as a distinct "what am I editing" strip above the fields. */}
       <div className="flex items-center justify-between gap-3 border-b border-neutral-200/70 bg-neutral-100 px-5 py-4">
