@@ -54,9 +54,10 @@ body {
  * and intentional instead of a hard grey pipe. Brightens to indigo on hover.
  */
 .react-flow__edge-path {
-  stroke: #c7cedb;
-  stroke-width: 2.5;
+  stroke: #b9c1d2;
+  stroke-width: 2;
   stroke-linecap: round;
+  stroke-dasharray: 5 6;
   transition: stroke 0.15s ease;
 }
 .react-flow__edge:hover .react-flow__edge-path,
@@ -101,7 +102,10 @@ summary {
   }
 }
 .flow-pop-in {
-  animation: flowPopIn 0.19s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  /* `backwards` (not `both`) so NO transform lingers after the animation — a
+     lingering transform would make `position: fixed` children (the data browser)
+     anchor to the panel instead of the viewport and render off-screen. */
+  animation: flowPopIn 0.19s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
 }
 
 @keyframes flowPopOut {

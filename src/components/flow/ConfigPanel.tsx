@@ -167,10 +167,10 @@ export function ConfigPanel({
   ];
 
   return (
-    <aside className={`absolute inset-y-0 right-0 z-20 m-4 flex w-[452px] flex-col overflow-hidden rounded-2xl bg-white flow-shadow ${animClass}`}>
-      {/* Header — a soft grey band with the step's colourful icon, so it reads as a
-          distinct "what am I editing" strip above the fields. */}
-      <div className="flex items-center justify-between gap-3 border-b border-neutral-200/70 bg-neutral-50 px-5 py-4">
+    <aside className={`absolute inset-y-0 right-0 z-20 m-4 flex w-[452px] flex-col overflow-hidden rounded-2xl bg-neutral-50 flow-shadow ${animClass}`}>
+      {/* Header — a slightly darker grey band with the step's colourful icon, so it
+          reads as a distinct "what am I editing" strip above the fields. */}
+      <div className="flex items-center justify-between gap-3 border-b border-neutral-200/70 bg-neutral-100 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} size={38} />
           <input
@@ -184,7 +184,7 @@ export function ConfigPanel({
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-5 border-b border-neutral-200 bg-white px-5">
+      <div className="flex gap-5 border-b border-neutral-200 bg-neutral-50 px-5">
         {(["configure", "test"] as const).map((t) => (
           <button
             key={t}
@@ -201,7 +201,7 @@ export function ConfigPanel({
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col p-5">
           {tab === "configure" ? (
-            <>
+            <div className="space-y-5">
               <NodeConfig
                 type={type}
                 cfg={cfg}
@@ -219,7 +219,7 @@ export function ConfigPanel({
                 onRemoveBranch={onRemoveBranch}
               />
               {!(branch && branch.mode !== "custom") && <NodeExtras type={type} cfg={cfg} groups={groups} onChange={onChange} />}
-            </>
+            </div>
           ) : (
             <div className="space-y-4">
               {err && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>}
@@ -240,7 +240,7 @@ export function ConfigPanel({
         </div>
       </div>
 
-      <div className="border-t border-neutral-200 bg-white p-4">
+      <div className="border-t border-neutral-200 bg-neutral-50 p-4">
         <Footer
           tab={tab}
           status={status}
@@ -813,14 +813,14 @@ function NumberPicker({
                 </button>
               </div>
             ) : (
-              <NumberField value={fixed} allowNull placeholder="Type a number…" onChange={onSetFixed} className="pr-9" />
+              <NumberField value={fixed} allowNull placeholder="Type a number…" onChange={onSetFixed} className="pr-11" />
             )}
             <button
               type="button"
               onClick={toggle}
               title="Use a number from an earlier step"
               aria-label="Pick a number from an earlier step"
-              className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center justify-center rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 p-1 text-indigo-500 transition-colors hover:border-indigo-300 hover:bg-indigo-100 hover:text-indigo-600"
             >
               <DataIcon />
             </button>
@@ -841,7 +841,7 @@ function CategoryEditor({ cfg, groups, onChange }: { cfg: Record<string, unknown
       {cats.map((c, i) => (
         <div key={i} className="space-y-2 rounded border border-neutral-200 p-2">
           <input value={c.label} placeholder="Category name" onChange={(e) => setCat(i, { label: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
-          <ConditionEditor value={asFilterConfig((c.filters as unknown as Record<string, unknown>) ?? {})} groups={groups} onChange={(v) => setCat(i, { filters: { combinator: v.combinator, rules: v.rules } })} emptyHint="No conditions — matches everything left over." />
+          <ConditionEditor value={asFilterConfig((c.filters as unknown as Record<string, unknown>) ?? {})} groups={groups} onChange={(v) => setCat(i, { filters: { combinator: v.combinator, rules: v.rules } })} />
           <button onClick={() => onChange({ categories: cats.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">Remove category</button>
         </div>
       ))}

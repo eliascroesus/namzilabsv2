@@ -860,6 +860,12 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             nodesConnectable={false}
             fitView
             deleteKeyCode={null}
+            // Scroll/two-finger pans the canvas; pinch (or ⌘/Ctrl+scroll) zooms.
+            panOnScroll
+            // One step selected at a time — no box-select or shift/⌘ multi-select.
+            multiSelectionKeyCode={null}
+            selectionKeyCode={null}
+            selectionOnDrag={false}
           >
             <Background gap={16} />
           </ReactFlow>

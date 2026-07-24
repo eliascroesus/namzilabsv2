@@ -17,8 +17,8 @@ export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosit
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} />
       {/* White "port" endpoints where the line meets each step — a clean,
           intentional connector detail (like Zapier/Make). */}
-      <circle cx={sourceX} cy={sourceY} r={4} fill="white" stroke="#c7cedb" strokeWidth={2} />
-      <circle cx={targetX} cy={targetY} r={4} fill="white" stroke="#c7cedb" strokeWidth={2} />
+      <circle cx={sourceX} cy={sourceY} r={4} fill="white" stroke="#b9c1d2" strokeWidth={2} />
+      <circle cx={targetX} cy={targetY} r={4} fill="white" stroke="#b9c1d2" strokeWidth={2} />
       {onInsert && (
         <EdgeLabelRenderer>
           <div

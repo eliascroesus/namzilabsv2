@@ -6,7 +6,7 @@ import { humanizeKey } from "./field-utils";
 import type { DataGroup } from "./types";
 
 const BOX =
-  "w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 pr-9 text-left text-sm transition-colors hover:border-neutral-400 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100";
+  "w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 pr-11 text-left text-sm transition-colors hover:border-neutral-400 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100";
 
 /**
  * The one field chooser used by every step (Filter conditions, Calculate's
@@ -41,9 +41,16 @@ export function FieldInput({
           <button type="button" onClick={toggle} className={BOX}>
             <span className={`block truncate ${chosen ? "text-neutral-800" : "text-neutral-400"}`}>{chosen ?? placeholder}</span>
           </button>
-          <span className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 items-center justify-center rounded p-1 text-neutral-400">
+          <button
+            type="button"
+            onClick={toggle}
+            tabIndex={-1}
+            title="Pick a field from your data"
+            aria-label="Pick a field from your data"
+            className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 p-1 text-indigo-500 transition-colors hover:border-indigo-300 hover:bg-indigo-100 hover:text-indigo-600"
+          >
             <DataIcon />
-          </span>
+          </button>
         </div>
       )}
     />

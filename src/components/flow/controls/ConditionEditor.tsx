@@ -11,7 +11,7 @@ import { NO_VALUE_FILTER_OPS, type FilterConfig } from "@/lib/flow/types";
 
 type Rule = FilterConfig["rules"][number];
 
-const LABEL = "mb-0.5 block text-[11px] font-medium text-neutral-500";
+const LABEL = "mb-1 block text-xs font-medium text-neutral-600";
 
 /** Convert a stored rule's value side into the ValueInput model (looking up display info). */
 function ruleToValue(rule: Rule, groups: DataGroup[]): ValueModel {
@@ -50,12 +50,10 @@ export function ConditionEditor({
   value,
   onChange,
   groups,
-  emptyHint = "No conditions yet — every record continues. Add one to narrow it down.",
 }: {
   value: FilterConfig;
   onChange: (v: FilterConfig) => void;
   groups: DataGroup[];
-  emptyHint?: string;
 }) {
   const rules = value.rules;
 
@@ -100,22 +98,20 @@ export function ConditionEditor({
         </div>
       )}
 
-      {rules.length === 0 && <p className="rounded-md bg-neutral-50 px-3 py-3 text-xs text-neutral-500">{emptyHint}</p>}
-
-      <div className="space-y-2">
+      <div className="space-y-3">
         {rules.map((rule, i) => {
           const ftype = typeOfRuleField(rule);
           const noValue = NO_VALUE_FILTER_OPS.includes(rule.op);
           const isBetween = rule.op === "between";
           return (
-            <div key={i} className="rounded-lg border border-neutral-200 bg-white p-2.5">
+            <div key={i} className="rounded-xl border border-neutral-200 bg-neutral-100 p-3">
               {i > 0 && (
                 <div className="-mt-1 mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{value.combinator === "or" ? "or" : "and"}</div>
               )}
-              <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-1 gap-3">
                 <div>
                   <label className={LABEL}>Field</label>
-                  <FieldInput value={rule.field} groups={groups} onChange={(path) => pickField(i, path)} />
+                  <FieldInput value={rule.field} groups={groups} onChange={(path) => pickField(i, path)} allowCustom={false} />
                 </div>
                 <div>
                   <label className={LABEL}>Condition</label>
