@@ -17,6 +17,7 @@ import { computeNodeStatus, STD_META } from "./graph-utils";
 import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { RecordSamplePicker } from "./RecordSamplePicker";
 import { DataIcon, NodeIcon } from "./icons";
+import { anchorFromRect } from "./NodeLibraryModal";
 import { Select, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
 import type { DataGroup } from "./controls/types";
 import { toDataGroups } from "./field-groups";
@@ -307,10 +308,7 @@ function Footer({
           Retest
         </button>
         <button
-          onClick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect();
-            onAddNext({ x: r.right, y: r.top + r.height / 2, leftX: r.left });
-          }}
+          onClick={(e) => onAddNext(anchorFromRect(e.currentTarget.getBoundingClientRect()))}
           className={`${BTN_PRIMARY} flex-1`}
         >
           Continue

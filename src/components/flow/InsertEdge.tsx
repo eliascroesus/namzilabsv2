@@ -1,6 +1,7 @@
 "use client";
 
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from "@xyflow/react";
+import { anchorFromRect } from "./NodeLibraryModal";
 
 /**
  * An edge whose "+" insert control appears only when you hover the midpoint. The control
@@ -29,8 +30,7 @@ export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosit
               className="flex h-6 w-6 items-center justify-center rounded-full border border-neutral-200 bg-white text-sm leading-none text-neutral-500 opacity-0 shadow-sm transition-all hover:scale-110 hover:border-indigo-400 hover:bg-indigo-500 hover:text-white group-hover:opacity-100"
               onClick={(e) => {
                 e.stopPropagation();
-                const r = e.currentTarget.getBoundingClientRect();
-                onInsert(id, { x: r.right, y: r.top + r.height / 2, leftX: r.left });
+                onInsert(id, anchorFromRect(e.currentTarget.getBoundingClientRect()));
               }}
               title="Insert a step here"
             >

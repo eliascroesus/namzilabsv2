@@ -9,6 +9,11 @@ import { NodeIcon } from "./icons";
  *  left edge, used when the card has to flip to the button's other side). */
 export type PickerAnchor = { x: number; y: number; leftX?: number } | null;
 
+/** The anchor for a picker opened from a button, from that button's rect. */
+export function anchorFromRect(r: DOMRect): { x: number; y: number; leftX: number } {
+  return { x: r.right, y: r.top + r.height / 2, leftX: r.left };
+}
+
 const WIDTH = 380;
 const GAP = 14;
 const MARGIN = 12;

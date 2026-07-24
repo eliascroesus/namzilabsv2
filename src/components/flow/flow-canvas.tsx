@@ -31,7 +31,7 @@ import { ALL_TYPES, defaultConfig, nodeTitle, pathHandles } from "./node-meta";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
 import { ConfigPanel, type StepRef } from "./ConfigPanel";
-import { NodeLibraryModal, type PickerAnchor } from "./NodeLibraryModal";
+import { NodeLibraryModal, anchorFromRect, type PickerAnchor } from "./NodeLibraryModal";
 import { ReviewPublishModal, type Endpoint } from "./ReviewPublishModal";
 
 export type { ConnMeta };
@@ -875,10 +875,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
               <div className="pointer-events-auto rounded-lg border border-dashed border-neutral-300 bg-white/80 p-8 text-center">
                 <p className="text-sm text-neutral-600">Start by pulling data from an app.</p>
                 <button
-                  onClick={(e) => {
-                    const r = e.currentTarget.getBoundingClientRect();
-                    setLibrary({ open: true, ctx: null, anchor: { x: r.right, y: r.top + r.height / 2, leftX: r.left } });
-                  }}
+                  onClick={(e) => setLibrary({ open: true, ctx: null, anchor: anchorFromRect(e.currentTarget.getBoundingClientRect()) })}
                   className="mt-3 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
                 >
                   + Add your first step

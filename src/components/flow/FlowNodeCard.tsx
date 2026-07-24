@@ -6,6 +6,7 @@ import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
 import type { FNode, NodeData } from "./graph-utils";
 import { STATUS_META, nodeTitle, pathHandles, resultLabel, type NodeStatus } from "./node-meta";
 import { NodeIcon } from "./icons";
+import { anchorFromRect } from "./NodeLibraryModal";
 import { Popover } from "./controls/Popover";
 
 // Edges are auto-managed (never dragged), so the connection handles are visually
@@ -129,8 +130,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            const r = e.currentTarget.getBoundingClientRect();
-            (data as NodeData).onAddFrom?.(id, null, { x: r.right, y: r.top + r.height / 2, leftX: r.left });
+            (data as NodeData).onAddFrom?.(id, null, anchorFromRect(e.currentTarget.getBoundingClientRect()));
           }}
           title="Add the next step"
           className="nodrag absolute left-1/2 top-full z-10 mt-3 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm transition-colors hover:border-neutral-900 hover:bg-neutral-900 hover:text-white"
@@ -147,8 +147,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
               key={h.id}
               onClick={(e) => {
                 e.stopPropagation();
-                const r = e.currentTarget.getBoundingClientRect();
-                (data as NodeData).onAddFrom?.(id, h.id, { x: r.right, y: r.top + r.height / 2, leftX: r.left });
+                (data as NodeData).onAddFrom?.(id, h.id, anchorFromRect(e.currentTarget.getBoundingClientRect()));
               }}
               title={`Add a step to “${h.label}”`}
               className="flex items-center gap-1 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm transition-colors hover:border-neutral-900 hover:bg-neutral-900 hover:text-white"

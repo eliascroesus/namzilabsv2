@@ -6,21 +6,21 @@ export const STAGES = ["Data", "Conditions", "Calculation", "Dashboard"] as cons
 export type Stage = (typeof STAGES)[number];
 
 /** Plain-English node metadata. Labels read like instructions, not jargon. */
-export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: Stage; advanced: boolean; keywords: string; hidden?: boolean }> = {
-  app: { label: "Get data", blurb: "Pull records from a connected app", stage: "Data", advanced: false, keywords: "integration source connect data app get duplicates dedupe" },
-  unite: { label: "Unite data", blurb: "Join lanes back into one line", stage: "Data", advanced: false, keywords: "unite merge join together branches lanes sources union bring back" },
-  filter: { label: "Filter records", blurb: "Keep only the records you want", stage: "Conditions", advanced: false, keywords: "condition where keep only match date range filter" },
-  paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", advanced: true, keywords: "split branch route condition paths" },
+export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: Stage; keywords: string; hidden?: boolean }> = {
+  app: { label: "Get data", blurb: "Pull records from a connected app", stage: "Data", keywords: "integration source connect data app get duplicates dedupe" },
+  unite: { label: "Unite data", blurb: "Join lanes back into one line", stage: "Data", keywords: "unite merge join together branches lanes sources union bring back" },
+  filter: { label: "Filter records", blurb: "Keep only the records you want", stage: "Conditions", keywords: "condition where keep only match date range filter" },
+  paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", keywords: "split branch route condition paths" },
   // The one Calculation step: it aggregates records into a number (count/sum/avg/…,
   // the former Count node) OR compares two numbers (rate, ratio, % change).
-  formula: { label: "Calculate", blurb: "Count, sum, or compare — rate, ratio, % change", stage: "Calculation", advanced: false, keywords: "calculate count sum average total maximum minimum distinct compare rate ratio percentage change difference formula divide aggregate number" },
+  formula: { label: "Calculate", blurb: "Count, sum, or compare — rate, ratio, % change", stage: "Calculation", keywords: "calculate count sum average total maximum minimum distinct compare rate ratio percentage change difference formula divide aggregate number" },
   // Output is replaced by "Review & publish" (metrics are chosen there). Kept so old
   // flows with an Output node still render + run; hidden from the picker.
-  output: { label: "Show on dashboard", blurb: "Save the metric as a dashboard tile", stage: "Dashboard", advanced: false, keywords: "dashboard tile metric result output show", hidden: true },
+  output: { label: "Show on dashboard", blurb: "Save the metric as a dashboard tile", stage: "Dashboard", keywords: "dashboard tile metric result output show", hidden: true },
   // Retired from the picker but kept so old flows still render + run.
-  calculate: { label: "Calculate a number", blurb: "Count, compare, or break down", stage: "Calculation", advanced: false, keywords: "count sum average metric number compare rate ratio break down group calculate", hidden: true },
-  time: { label: "Date range", blurb: "Limit records to a time window", stage: "Conditions", advanced: true, keywords: "date range window period time", hidden: true },
-  group: { label: "Group into categories", blurb: "Break records into groups", stage: "Calculation", advanced: true, keywords: "category breakdown segment group", hidden: true },
+  calculate: { label: "Calculate a number", blurb: "Count, compare, or break down", stage: "Calculation", keywords: "count sum average metric number compare rate ratio break down group calculate", hidden: true },
+  time: { label: "Date range", blurb: "Limit records to a time window", stage: "Conditions", keywords: "date range window period time", hidden: true },
+  group: { label: "Group into categories", blurb: "Break records into groups", stage: "Calculation", keywords: "category breakdown segment group", hidden: true },
 };
 export const ALL_TYPES = Object.keys(NODE_META) as NodeType[];
 

@@ -90,6 +90,7 @@ export function Select({
       open={open}
       setOpen={setOpen}
       width={width}
+      fixed
       anchor={
         <button
           type="button"
