@@ -15,6 +15,11 @@ export const processEvent = inngest.createFunction(
   {
     id: "process-inbound-event",
     retries: MAX_RETRIES,
+    // One durable run per stored raw event: a duplicate publish of the same
+    // rawEventId (webhook redelivery racing the sweep, manual replays) can't
+    // fan out into concurrent processors. The events-table dedup stays as the
+    // second line of defense.
+    idempotency: "event.data.rawEventId",
     triggers: [{ event: "ingest/raw.received" }],
     onFailure: async ({ error, event }) => {
       const original = event.data.event?.data as { rawEventId?: string } | undefined;
