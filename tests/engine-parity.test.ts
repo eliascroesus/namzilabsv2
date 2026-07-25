@@ -206,3 +206,113 @@ describe("determinism (E.3) — the compiled read has a total order", () => {
     expect(new Set(a).size).toBe(a.length); // no ties left unbroken
   });
 });
+
+/**
+ * LEGACY ROWS vs THE PUSHDOWN FLAG — the ordering constraint, made
+ * test-backed.
+ *
+ * The JS engine normalizes date-looking property values on READ
+ * (`eventToRecord` → `normalizeDatesDeep`). The compiled path compares what is
+ * STORED. For rows written by the unified writer those are the same thing —
+ * the writer normalizes at ingest, and the read-time pass is idempotent — so
+ * parity holds, which is what every test above proves.
+ *
+ * Pre-unification rows are the exception, and the divergence is NOT limited to
+ * date operators: a plain `equals` or `contains` on a date-SHAPED value
+ * disagrees, because the two engines are comparing different strings.
+ *
+ * Hence the rule pinned here and in PRE_LAUNCH_CHECKLIST.md item 5: the
+ * pushdown flag is flipped for an org only AFTER the legacy reconciliation and
+ * its reprocess replay have run for that org's connections.
+ */
+describe("legacy (pre-normalization) rows diverge until the reprocess replay", () => {
+  const LEGACY_ORG = "org_legacy_parity";
+
+  it("equals/contains on a date-shaped value disagree on an un-normalized row", async () => {
+    const legacyConn = await seedConnection(db, { orgId: LEGACY_ORG, source: "gsheets" });
+    // Written the way the OLD writer did: raw insert, no ingest normalization.
+    await db.insert(events).values({
+      eventId: "legacy:unnormalized",
+      orgId: LEGACY_ORG,
+      connectionId: legacyConn,
+      source: "gsheets",
+      eventType: "row_added",
+      occurredAt: new Date("2026-03-01T10:00:00Z"),
+      properties: { when: "7/21/2026 14:23:45", stage: "Won" },
+      syncGeneration: 1,
+    });
+
+    const rows = await db.select().from(events).where(and(eq(events.orgId, LEGACY_ORG), isNull(events.deletedAt)));
+    const jsRec = eventToRecord(rows[0]);
+    // The JS engine sees the NORMALIZED value…
+    expect((jsRec.properties as Record<string, unknown>).when).toBe("2026-07-21T14:23:45.000Z");
+    // …while the row still STORES the original string.
+    expect((rows[0].properties as Record<string, unknown>).when).toBe("7/21/2026 14:23:45");
+
+    const isoRule: CompiledRule = { field: "when", op: "equals", value: "2026-07-21T14:23:45.000Z" };
+    const jsKeeps = evalRule(jsRec, isoRule);
+    const sqlKeeps = (
+      await db
+        .select({ eventId: events.eventId })
+        .from(events)
+        .where(and(eq(events.orgId, LEGACY_ORG), isNull(events.deletedAt), compileRule(isoRule)))
+    ).length > 0;
+
+    // THE DIVERGENCE, documented: JS matches the normalized form, SQL does not.
+    expect(jsKeeps).toBe(true);
+    expect(sqlKeeps).toBe(false);
+
+    // It is not a date-operator problem — `contains` disagrees the same way.
+    const containsRule: CompiledRule = { field: "when", op: "contains", value: "2026-07-21" };
+    const sqlContains = (
+      await db
+        .select({ eventId: events.eventId })
+        .from(events)
+        .where(and(eq(events.orgId, LEGACY_ORG), isNull(events.deletedAt), compileRule(containsRule)))
+    ).length > 0;
+    expect(evalRule(jsRec, containsRule)).toBe(true);
+    expect(sqlContains).toBe(false);
+
+    // Non-date-shaped values are unaffected: normalization leaves them alone,
+    // so the vast majority of fields agree even on legacy rows.
+    const plainRule: CompiledRule = { field: "stage", op: "equals", value: "Won" };
+    const sqlPlain = (
+      await db
+        .select({ eventId: events.eventId })
+        .from(events)
+        .where(and(eq(events.orgId, LEGACY_ORG), isNull(events.deletedAt), compileRule(plainRule)))
+    ).length > 0;
+    expect(evalRule(jsRec, plainRule)).toBe(true);
+    expect(sqlPlain).toBe(true);
+  });
+
+  it("after a reprocess-equivalent rewrite through the writer, parity is restored", async () => {
+    const fixedConn = await seedConnection(db, { orgId: LEGACY_ORG, source: "gsheets" });
+    // What `reprocessConnection` does: re-normalize from raw and write through
+    // the unified writer.
+    await upsertEvents(
+      db,
+      { orgId: LEGACY_ORG, connectionId: fixedConn, source: "gsheets", generation: 1 },
+      [{
+        eventId: "legacy:repaired",
+        eventType: "row_added",
+        subject: null,
+        occurredAt: new Date("2026-03-01T10:00:00Z"),
+        properties: { when: "7/21/2026 14:23:45", stage: "Won" },
+      }],
+    );
+
+    const [row] = await db.select().from(events).where(eq(events.eventId, "legacy:repaired"));
+    expect((row.properties as Record<string, unknown>).when).toBe("2026-07-21T14:23:45.000Z");
+
+    const rule: CompiledRule = { field: "when", op: "equals", value: "2026-07-21T14:23:45.000Z" };
+    const sqlKeeps = (
+      await db
+        .select({ eventId: events.eventId })
+        .from(events)
+        .where(and(eq(events.eventId, "legacy:repaired"), compileRule(rule)))
+    ).length > 0;
+    expect(evalRule(eventToRecord(row), rule)).toBe(true);
+    expect(sqlKeeps).toBe(true); // agree again
+  });
+});

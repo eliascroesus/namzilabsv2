@@ -243,3 +243,89 @@ describe("E.4 — no silent truncation", () => {
     expect((exec as { truncated?: boolean }).truncated).toBeUndefined();
   });
 });
+
+describe("E.5 — provenance is stored with the number it explains", () => {
+  it("a compiled run records the ACTUAL SQL, its parameters, and what was folded", async () => {
+    const graph = parseGraph({
+      nodes: [
+        N("get", "app", appCfg),
+        N("f", "filter", { combinator: "and", rules: [{ field: "stage", op: "equals", value: "Won" }] }),
+      ],
+      edges: [E("get", "f")],
+    });
+    const provenance: CompileProvenance[] = [];
+    await runFlow({ db, orgId: ORG, compile: true, provenance }, graph);
+
+    const p = provenance[0];
+    expect(p.appNodeId).toBe("get");
+    expect(p.foldedFilterNodeIds).toEqual(["f"]);
+    expect(p.rowsLoaded).toBe(30);
+    expect(p.truncated).toBe(false);
+    // The real statement, not a reconstruction: it carries the folded predicate.
+    expect(p.sql).toContain("select");
+    expect(p.sql.toLowerCase()).toContain("properties");
+    expect(p.params).toContain("Won"); // the bound filter value
+    expect(p.params).toContain(ORG);
+  });
+
+  it("materializeFlow stores provenance + as-of on the result row", async () => {
+    const { flows, flowVersions, flowResults } = await import("@/db/schema");
+    const { materializeFlow } = await import("@/lib/flow/materialize");
+    const { eq } = await import("drizzle-orm");
+
+    const [flow] = await db
+      .insert(flows)
+      .values({ orgId: ORG, name: "Provenance flow", status: "published", publishedVersion: 1 })
+      .returning({ id: flows.id });
+    await db.insert(flowVersions).values({
+      orgId: ORG,
+      flowId: flow.id,
+      version: 1,
+      graph: {
+        nodes: [
+          N("get", "app", appCfg),
+          N("f", "filter", { combinator: "and", rules: [{ field: "stage", op: "equals", value: "Won" }] }),
+          N("agg", "aggregate", { aggregation: "count" }),
+          N("out", "output", { name: "Won" }),
+        ],
+        edges: [E("get", "f"), E("f", "agg"), E("agg", "out")],
+      },
+    });
+
+    const res = await materializeFlow(db, ORG, flow.id);
+    expect(res.ok).toBe(true);
+
+    const [row] = await db.select().from(flowResults).where(eq(flowResults.flowId, flow.id));
+    const prov = row.provenance as { asOf: string; engine: string; reads: CompileProvenance[] };
+    expect(prov).toBeTruthy();
+    expect(Date.parse(prov.asOf)).toBeGreaterThan(0); // as-of watermark
+    expect(prov.reads.length).toBeGreaterThan(0);
+    expect(prov.reads[0].sql).toContain("select"); // the query behind the number
+    expect(Array.isArray(prov.reads[0].params)).toBe(true);
+    expect(row.computedAt).not.toBeNull();
+  });
+});
+
+describe("E.4 — the memory bound for flows the compiler cannot cover", () => {
+  it("an uncompilable flow loads up to the ceiling and says so, rather than truncating silently", async () => {
+    // A date-only filter: nothing folds, so the JS path reads the stream.
+    const graph = parseGraph({
+      nodes: [
+        N("get", "app", appCfg),
+        N("f", "filter", { combinator: "and", rules: [{ field: "occurredAt", op: "after", value: "2020-01-01" }] }),
+      ],
+      edges: [E("get", "f")],
+    });
+    const provenance: CompileProvenance[] = [];
+    const run = await runFlow({ db, orgId: ORG, compile: true, provenance }, graph);
+
+    // The bound is explicit and reported: rowsLoaded is what the JS path holds
+    // in memory, and `truncated` states whether the ceiling clipped the read.
+    expect(provenance[0].rowsLoaded).toBe(60);
+    expect(provenance[0].truncated).toBe(false);
+    expect((run.nodes.get("get") as { truncated?: boolean }).truncated).toBeUndefined();
+    // Under the ceiling the answer is complete — the flag exists to make the
+    // ONE case where it isn't visible instead of silent.
+    expect(run.nodes.get("f")!.recordsOut).toBe(60);
+  });
+});

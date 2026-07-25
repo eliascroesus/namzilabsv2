@@ -1,0 +1,1 @@
+ALTER TABLE "flow_results" ADD COLUMN "provenance" jsonb;

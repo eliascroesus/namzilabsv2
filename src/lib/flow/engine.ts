@@ -37,14 +37,34 @@ export type EngineCtx = {
    * downstream filter chain into SQL (E.1) instead of loading everything and
    * filtering in JS. Off by default: a flow only opts in once the golden
    * parity suite covers it.
+   *
+   * ORDERING CONSTRAINT (pinned in PRE_LAUNCH_CHECKLIST.md item 5, proven in
+   * tests/engine-parity.test.ts): do NOT enable this for an org until the
+   * legacy-row reconciliation AND a reprocessConnection replay have run for
+   * that org. Pre-unification rows can store un-normalized date-shaped values;
+   * the JS engine normalizes them on read while the compiled path compares the
+   * stored string, so even `equals`/`contains` diverge on such rows until the
+   * replay re-normalizes them.
    */
   compile?: boolean;
   /** Collects what the compiler actually did, for E.5 provenance. */
   provenance?: CompileProvenance[];
 };
 
-/** E.5 — one record of compiled work, attached to the run. */
-export type CompileProvenance = { appNodeId: string; foldedFilterNodeIds: string[]; rowsLoaded: number };
+/**
+ * E.5 — one record of HOW a Get-data step's rows were produced: the exact SQL
+ * that ran, its bound parameters, which filters were folded into it, and how
+ * many rows came back. Stored with the materialized result so any number can
+ * be traced to the query behind it.
+ */
+export type CompileProvenance = {
+  appNodeId: string;
+  foldedFilterNodeIds: string[];
+  rowsLoaded: number;
+  sql: string;
+  params: unknown[];
+  truncated: boolean;
+};
 
 export type NodeExecOk = {
   status: "ok";
@@ -215,7 +235,7 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
     }
   }
 
-  const rows = await ctx.db
+  const query = ctx.db
     .select()
     .from(events)
     .where(and(...conds))
@@ -224,7 +244,26 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
     .orderBy(desc(events.occurredAt), desc(events.id))
     .limit(APP_LOAD_CEILING);
 
-  ctx.provenance?.push({ appNodeId: node.id, foldedFilterNodeIds: folded, rowsLoaded: rows.length });
+  const rows = await query;
+
+  if (ctx.provenance) {
+    // E.5: capture the ACTUAL statement, not a reconstruction of it.
+    let statement = { sql: "", params: [] as unknown[] };
+    try {
+      const q = (query as unknown as { toSQL: () => { sql: string; params: unknown[] } }).toSQL();
+      statement = { sql: q.sql, params: q.params };
+    } catch {
+      // Provenance is diagnostic; never fail a run to record it.
+    }
+    ctx.provenance.push({
+      appNodeId: node.id,
+      foldedFilterNodeIds: folded,
+      rowsLoaded: rows.length,
+      sql: statement.sql,
+      params: statement.params,
+      truncated: rows.length >= APP_LOAD_CEILING,
+    });
+  }
 
   let records = rows.map(eventToRecord);
   // Remove duplicates at the source — the FIRST thing that happens, before any

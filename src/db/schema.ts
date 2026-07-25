@@ -431,6 +431,13 @@ export const flowResults = pgTable(
     tile: jsonb("tile").$type<Record<string, unknown>>(),
     status: text("status").notNull().default("stale"), // fresh | stale | computing | error
     error: text("error"),
+    /**
+     * E.5 — provenance. HOW this number was produced: the compiled SQL and its
+     * bound parameters per Get-data node, which filters were folded, how many
+     * rows were read, and the as-of watermark. A number a customer questions
+     * can be traced to the exact query that produced it.
+     */
+    provenance: jsonb("provenance").$type<Record<string, unknown>>(),
     computedAt: timestamp("computed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

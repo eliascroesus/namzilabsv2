@@ -6,6 +6,11 @@ exactly what to run, where the key comes from, what PASS looks like, and what to
 do on FAIL. **This file is the single accumulator — new human steps get added
 here as they arise.**
 
+**This is the single LIVE document for the backend hardening effort.** The
+build is complete (phases P0–P5 merged, 430 tests green); everything still
+outstanding is a human action and it is listed here. The plan file is now a
+historical record.
+
 Run these against production (or a production-like account) shortly before
 launch, top to bottom. Items 1, 2 and 3 are independent; item 4 is a sequence
 with a soak period in the middle — start it early enough to finish the soak.
@@ -197,6 +202,20 @@ DATABASE_URL="postgresql://…" pnpm tsx scripts/reconcile-legacy-rows.ts --appl
 Backfills and replays are now unblocked.` A brand-new install prints
 `Nothing to do` — that is also a pass.
 
+**ALSO GATED ON THIS STEP — the compiled-engine flag.** Pre-unification rows can
+hold un-normalized date-shaped strings (`"7/21/2026 14:23:45"`). The JS engine
+normalizes those when it reads them; the compiled path compares what is stored.
+So on legacy rows even `equals` and `contains` — not just date operators —
+disagree between the two engines. This is proven, not theoretical: see the
+`legacy (pre-normalization) rows diverge until the reprocess replay` case in
+`tests/engine-parity.test.ts`, which also proves that rewriting the row through
+the writer restores parity.
+
+**Rule:** do not enable the pushdown flag for an org until (a) this
+reconciliation has run AND (b) a `reprocessConnection` replay has re-normalized
+that org's connections. Both are production data operations and both live in
+this step's ordering.
+
 **FAIL:** if it exits with `WARNING — rows remain`, simply re-run `--apply`:
 the script is idempotent and batched, so re-running (or resuming an
 interrupted run) is always safe and never double-deletes. If counts look
@@ -244,8 +263,43 @@ not an incident.
 
 ---
 
+## 8. Enable the compiled engine per flow (optional, after item 5)
+
+**Why:** the compiled path (filter pushdown into SQL) is built, proven
+parity-identical, and OFF by default. It is opt-in per flow via
+`EngineCtx.compile`. Nothing breaks if it is never enabled — it is a
+performance improvement, not a correctness fix.
+
+**Precondition (hard):** item 5 has run AND a `reprocessConnection` replay has
+re-normalized the org's connections. Legacy pre-normalization rows store
+un-normalized date-shaped strings; the JS engine normalizes those on read while
+the compiled path compares stored values, so even `equals`/`contains` diverge
+until the replay. Both the divergence and its repair are proven in
+`tests/engine-parity.test.ts`.
+
+**PASS:** dashboard numbers are unchanged after enabling (they must be —
+folded filters still run in JS, so the pushdown can only reduce rows loaded).
+The Get-data and filter steps in the editor will show LOWER row counts, which
+is expected and honest: fewer rows were fetched.
+
+**FAIL / rollback:** turn the flag off. There is no migration and no data
+change to undo.
+
+**Observability:** each materialized tile stores its provenance
+(`flow_results.provenance`) — the exact SQL, its bound parameters, which
+filters were folded, rows loaded, truncation state, and the as-of timestamp.
+Query it to see what produced any number.
+
+---
+
 ## Pending — will be added here when built
 
 - **Index rollout at scale**: if `events` has grown large (>10⁷ rows) before
   launch, apply new index migrations manually with `CREATE INDEX CONCURRENTLY`
   instead of the transactional migration runner. Not needed at current size.
+- **Full CTE-per-node compilation** (consciously descoped, not forgotten): a
+  flow whose filters cannot be folded loads up to 500,000 rows into the JS
+  engine. Crossing that ceiling is reported as a visible `truncated` state, and
+  `flow_results.provenance.reads[].rowsLoaded` shows the real distribution.
+  Revisit compiling aggregates/dedupe/group-by as CTEs if observed row counts
+  approach the ceiling for real flows.

@@ -2,7 +2,7 @@ import { and, eq, notInArray, sql } from "drizzle-orm";
 import { flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
-import { runFlow, buildTile } from "./engine";
+import { runFlow, buildTile, type CompileProvenance } from "./engine";
 import { getPublishedVersion } from "./store";
 import { parseGraph, type TileSpec } from "./types";
 
@@ -17,7 +17,11 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
   const { version, graph } = published;
 
   try {
-    const { nodes, outputs } = await runFlow({ db, orgId }, graph);
+    // E.5: collect provenance for this materialization — the SQL behind every
+    // number, stored with the number itself.
+    const provenance: CompileProvenance[] = [];
+    const asOf = new Date();
+    const { nodes, outputs } = await runFlow({ db, orgId, provenance }, graph);
 
     // Tiles come from Output nodes (legacy flows) and/or endpoint metrics chosen at
     // Review & publish (new flows) — one tile per enabled metric.
@@ -41,8 +45,13 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
       await db.update(flowResults).set({ status: "error", error: message }).where(eq(flowResults.flowId, flowId));
       return { ok: false, error: message };
     }
+    const record = {
+      asOf: asOf.toISOString(),
+      engine: provenance.some((p) => p.foldedFilterNodeIds.length > 0) ? "compiled" : "js",
+      reads: provenance,
+    };
     for (const t of tiles) {
-      await upsertResult(db, orgId, flowId, version, t.nodeId, t.tile, "fresh", null);
+      await upsertResult(db, orgId, flowId, version, t.nodeId, t.tile, "fresh", null, record);
     }
     // Drop results for tiles that no longer exist in the published flow.
     const keep = tiles.map((t) => t.nodeId);
@@ -156,7 +165,9 @@ async function upsertResult(
   tile: TileSpec,
   status: string,
   error: string | null,
+  provenance?: Record<string, unknown>,
 ): Promise<void> {
+  const now = new Date();
   await db
     .insert(flowResults)
     .values({
@@ -167,10 +178,11 @@ async function upsertResult(
       tile: tile as unknown as Record<string, unknown>,
       status,
       error,
-      computedAt: new Date(),
+      provenance: provenance ?? null,
+      computedAt: now,
     })
     .onConflictDoUpdate({
       target: [flowResults.flowId, flowResults.outputNodeId],
-      set: { version, tile: tile as unknown as Record<string, unknown>, status, error, computedAt: new Date() },
+      set: { version, tile: tile as unknown as Record<string, unknown>, status, error, provenance: provenance ?? null, computedAt: now },
     });
 }
