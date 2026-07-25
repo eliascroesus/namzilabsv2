@@ -330,11 +330,17 @@ API — the docs site is bot-walled from the build environment.
 **Key:** Close → Settings → Developer → API Keys → any key of the workspace you
 connect (read access is enough; the script only performs GETs).
 
-**Run:**
+**Run — no terminal needed.** Store the key as the repo secret `CLOSE_API_KEY`
+(Settings → Secrets and variables → Actions), then: Actions → **Verify providers
+(read-only)** → Run workflow → provider **close** (or **all**).
+
+<details><summary>Local equivalent</summary>
 
 ```bash
 CLOSE_API_KEY=api_xxx pnpm tsx scripts/verify-close-pagination.ts
 ```
+
+</details>
 
 **PASS:** every line prints `[PASS]` and the script ends with
 `All checks passed — the pinned contract holds.` (exit code 0). If the event
@@ -359,11 +365,17 @@ v2-era (v1 keys stopped working Jan 19, 2026).
 **Key:** Instantly → Settings → Integrations → API → create/copy a **v2** API
 key.
 
-**Run:**
+**Run — no terminal needed.** Store the key as the repo secret
+`INSTANTLY_API_KEY`, then: Actions → **Verify providers (read-only)** → Run
+workflow → provider **instantly** (or **all**).
+
+<details><summary>Local equivalent</summary>
 
 ```bash
 INSTANTLY_API_KEY=xxx pnpm tsx scripts/verify-instantly-pagination.ts
 ```
+
+</details>
 
 **PASS:** every line prints `[PASS]`, ending with
 `All checks passed — the pinned contract holds.` (exit 0).
@@ -391,17 +403,23 @@ pair entered when connecting Sendblue in the app).
 
 **Run:**
 
-```bash
-curl -sS -w "\nHTTP %{http_code}\n" \
-  -H "sb-api-key-id: YOUR_KEY_ID" \
-  -H "sb-api-secret-key: YOUR_SECRET" \
-  "https://api.sendblue.co/api/v2/messages?limit=1&offset=0"
+Store both credentials as the repo secrets `SENDBLUE_API_KEY_ID` and
+`SENDBLUE_API_SECRET`, then: Actions → **Verify providers (read-only)** → Run
+workflow → provider **sendblue** (or **all**).
 
-curl -sS -w "\nHTTP %{http_code}\n" \
-  -H "sb-api-key-id: YOUR_KEY_ID" \
-  -H "sb-api-secret-key: YOUR_SECRET" \
-  "https://api.sendblue.co/api/account/webhooks"
+`scripts/verify-sendblue.ts` checks S1-S5 (host answers, messages list,
+`message_handle` present, limit/offset honored, webhook list readable) and — the
+part that used to need a human guess — **automatically retries the alternate
+host** (`api.sendblue.com`) when the primary does not answer, then tells you
+which one worked so `API_BASE` can be corrected in one move.
+
+<details><summary>Local equivalent</summary>
+
+```bash
+SENDBLUE_API_KEY_ID=xxx SENDBLUE_API_SECRET=yyy pnpm tsx scripts/verify-sendblue.ts
 ```
+
+</details>
 
 **PASS:** both return `HTTP 200` with JSON — the first containing a message
 list (message objects with `message_handle`), the second a webhook list (may be
@@ -456,9 +474,16 @@ DB_DRIVER=pool
 **Step 4d — verify pool capabilities (activates C.1).** Run against production
 `DATABASE_URL` from a trusted machine:
 
+No terminal needed: Actions → **Verify pool driver** → Run workflow. It uses the
+existing `DATABASE_MIGRATION_URL` secret and sets `DB_DRIVER=pool` itself.
+
+<details><summary>Local equivalent</summary>
+
 ```bash
 DATABASE_URL="postgresql://…" DB_DRIVER=pool pnpm tsx scripts/verify-pool-driver.ts
 ```
+
+</details>
 
 **PASS:** the script prints `[PASS]` for transaction commit/rollback and
 advisory-lock acquire/contend/release, ending with `Pool driver verified`.
@@ -489,17 +514,19 @@ re-process ghost rows as if they were real data.
 
 **Keys:** production `DATABASE_URL` (the same one the app uses).
 
-**Run — inspect first, it writes nothing:**
+**Run — no terminal needed.** Actions → **Legacy row reconciliation** → Run
+workflow → mode **inspect** (the default; writes nothing). Review the
+per-connection breakdown in the run summary, then run it again with mode
+**apply**.
+
+<details><summary>Local equivalent</summary>
 
 ```bash
 DATABASE_URL="postgresql://…" pnpm tsx scripts/reconcile-legacy-rows.ts
-```
-
-Review the per-connection breakdown it prints. Then apply:
-
-```bash
 DATABASE_URL="postgresql://…" pnpm tsx scripts/reconcile-legacy-rows.ts --apply
 ```
+
+</details>
 
 **PASS:** the apply run ends with `PASS — every legacy ghost row is retired.
 Backfills and replays are now unblocked.` A brand-new install prints

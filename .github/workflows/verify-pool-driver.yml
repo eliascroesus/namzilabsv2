@@ -1,0 +1,95 @@
+name: Verify pool driver
+
+# Manual-only. Wraps PRE_LAUNCH_CHECKLIST.md item 4d — the gate on the
+# DB_DRIVER writer flip (step 4c), which happens roughly a week AFTER launch
+# once the read-path soak (4a/4b) has been clean.
+#
+# It proves the WebSocket pool driver can do the two things the HTTP driver
+# cannot, and which C.1's per-stream mutual exclusion depends on:
+#   - real interactive transactions (commit AND rollback)
+#   - session advisory locks that actually contend across connections
+#
+# Read-only in effect: it creates and rolls back its own scratch work and
+# releases every lock it takes. It does not touch application tables.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-pool-driver
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify pool driver capabilities
+        id: run
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+          DB_DRIVER: pool
+        run: |
+          set -uo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Secret DATABASE_MIGRATION_URL is not set on this repository."
+            exit 1
+          fi
+          log="$RUNNER_TEMP/pool.log"
+          pnpm tsx scripts/verify-pool-driver.ts 2>&1 | tee "$log"
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "log=$log" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          set -uo pipefail
+          log="${{ steps.run.outputs.log }}"
+          code="${{ steps.run.outputs.exit_code }}"
+          {
+            echo "## Pool driver verification (checklist 4d)"
+            echo ""
+            if [ -f "$log" ]; then
+              echo '```'
+              cat "$log"
+              echo '```'
+              echo ""
+            fi
+            case "${code:-1}" in
+              0)
+                echo "✅ **PASS — the pool driver works on this database.**"
+                echo ""
+                echo "Transactions commit and roll back, and advisory locks genuinely contend across"
+                echo "connections. It is now safe to set \`DB_DRIVER=pool\` on production (step 4c) and"
+                echo "redeploy. That activates the per-stream advisory-lock critical sections (C.1)."
+                ;;
+              1)
+                echo "❌ **FAIL — do NOT flip the writer.**"
+                echo ""
+                echo "Leave \`DB_DRIVER\` on \`http\`. The most likely cause is that the URL points at a"
+                echo "connection pooler that breaks session semantics — advisory locks silently fail to"
+                echo "contend through PgBouncer-style pooling. Use the DIRECT Neon host (the one without"
+                echo "\`-pooler\` in the hostname) for the pool driver and re-run."
+                ;;
+              *)
+                echo "❌ **Could not run.** The database URL is missing or unreachable — check the"
+                echo "\`DATABASE_MIGRATION_URL\` secret."
+                ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"

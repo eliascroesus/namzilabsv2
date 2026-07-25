@@ -1,0 +1,164 @@
+name: Verify providers (read-only)
+
+# Manual-only. Runs the one-time provider contract checks from
+# PRE_LAUNCH_CHECKLIST.md items 1-3 without needing a laptop with the keys on it.
+#
+# Every check is read-only — GETs against the provider APIs, nothing written
+# anywhere, no database involved. Safe to re-run at any time.
+#
+# Secrets are never echoed: they are passed to the scripts through `env:` only,
+# and GitHub masks their values in the log. A missing secret is a clean SKIP
+# with an explanation, not a crash.
+on:
+  workflow_dispatch:
+    inputs:
+      providers:
+        description: "Which provider(s) to verify"
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - close
+          - instantly
+          - sendblue
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Each provider writes one line to $RESULTS: PASS / FAIL / SKIP.
+      # `continue-on-error` lets every selected provider run even if an earlier
+      # one fails, so one dispatch tells you about all three.
+      - name: Prepare
+        run: echo "RESULTS=$RUNNER_TEMP/results.txt" >> "$GITHUB_ENV"
+
+      - name: Close — Event Log pagination contract
+        if: ${{ inputs.providers == 'all' || inputs.providers == 'close' }}
+        continue-on-error: true
+        env:
+          CLOSE_API_KEY: ${{ secrets.CLOSE_API_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CLOSE_API_KEY:-}" ]; then
+            echo "SKIP|Close|Secret CLOSE_API_KEY is not set on this repository." >> "$RESULTS"
+            echo "::warning::Skipping Close — add the CLOSE_API_KEY secret (Close → Settings → Developer → API Keys) to run it."
+            exit 0
+          fi
+          if pnpm tsx scripts/verify-close-pagination.ts; then
+            echo "PASS|Close|Pagination contract holds." >> "$RESULTS"
+          else
+            code=$?
+            echo "FAIL|Close|Script exited $code — see the Close step above for the failing check (C1-C5)." >> "$RESULTS"
+            exit 1
+          fi
+
+      - name: Instantly — v2 emails list contract
+        if: ${{ inputs.providers == 'all' || inputs.providers == 'instantly' }}
+        continue-on-error: true
+        env:
+          INSTANTLY_API_KEY: ${{ secrets.INSTANTLY_API_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${INSTANTLY_API_KEY:-}" ]; then
+            echo "SKIP|Instantly|Secret INSTANTLY_API_KEY is not set on this repository." >> "$RESULTS"
+            echo "::warning::Skipping Instantly — add the INSTANTLY_API_KEY secret (a v2 key) to run it."
+            exit 0
+          fi
+          if pnpm tsx scripts/verify-instantly-pagination.ts; then
+            echo "PASS|Instantly|Emails-list contract holds, and the key is v2-era." >> "$RESULTS"
+          else
+            code=$?
+            echo "FAIL|Instantly|Script exited $code — a 401 means the key is invalid or v1-era; otherwise see checks I1-I4 above." >> "$RESULTS"
+            exit 1
+          fi
+
+      - name: Sendblue — base URL, messages list, webhook list
+        if: ${{ inputs.providers == 'all' || inputs.providers == 'sendblue' }}
+        continue-on-error: true
+        env:
+          SENDBLUE_API_KEY_ID: ${{ secrets.SENDBLUE_API_KEY_ID }}
+          SENDBLUE_API_SECRET: ${{ secrets.SENDBLUE_API_SECRET }}
+        run: |
+          set -uo pipefail
+          if [ -z "${SENDBLUE_API_KEY_ID:-}" ] || [ -z "${SENDBLUE_API_SECRET:-}" ]; then
+            echo "SKIP|Sendblue|Secrets SENDBLUE_API_KEY_ID and/or SENDBLUE_API_SECRET are not set." >> "$RESULTS"
+            echo "::warning::Skipping Sendblue — add both SENDBLUE_API_KEY_ID and SENDBLUE_API_SECRET to run it."
+            exit 0
+          fi
+          if pnpm tsx scripts/verify-sendblue.ts; then
+            echo "PASS|Sendblue|Host, messages list and webhook list all confirmed." >> "$RESULTS"
+          else
+            code=$?
+            echo "FAIL|Sendblue|Script exited $code — see checks S1-S5 above (wrong host and wrong auth headers are named explicitly)." >> "$RESULTS"
+            exit 1
+          fi
+
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          set -uo pipefail
+          echo "## Provider verification" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ ! -s "${RESULTS:-/nonexistent}" ]; then
+            echo "Nothing ran. (No provider selected, or the job stopped early.)" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::No provider checks ran."
+            exit 1
+          fi
+
+          echo "| Provider | Result | What it means |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          while IFS='|' read -r status name detail; do
+            case "$status" in
+              PASS) icon="✅ PASS" ;;
+              FAIL) icon="❌ FAIL" ;;
+              *)    icon="⏭️ SKIPPED" ;;
+            esac
+            echo "| $name | $icon | $detail |" >> "$GITHUB_STEP_SUMMARY"
+          done < "$RESULTS"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          failed=$(grep -c '^FAIL|' "$RESULTS" || true)
+          passed=$(grep -c '^PASS|' "$RESULTS" || true)
+          skipped=$(grep -c '^SKIP|' "$RESULTS" || true)
+
+          echo "--- Provider verification summary ---"
+          cat "$RESULTS"
+          echo "-------------------------------------"
+
+          if [ "$failed" -gt 0 ]; then
+            {
+              echo "**$failed provider check(s) FAILED.** Do not ship the affected connector as-is —"
+              echo "update its module and tests to match what the live API actually does, then re-run."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$failed provider check(s) failed. See the table in the run summary."
+            exit 1
+          fi
+
+          if [ "$passed" -eq 0 ]; then
+            echo "**Nothing was verified** — every selected provider was skipped for a missing secret." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::All selected providers were skipped; no secrets configured."
+            exit 1
+          fi
+
+          msg="**All $passed verified provider(s) passed.** Their pinned contracts match the live APIs."
+          if [ "$skipped" -gt 0 ]; then
+            msg="$msg $skipped were skipped for missing secrets — add those secrets and re-run if you need them covered."
+          fi
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
