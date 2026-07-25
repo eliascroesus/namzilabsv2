@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, lte, or } from "drizzle-orm";
 import { connections, syncState } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
@@ -43,6 +43,31 @@ export type ReconcileResult = {
 /** Did this sweep change what dashboards would show? (drives staleness) */
 export function reconcileChanged(r: Pick<ReconcileResult, "inserted" | "updated" | "softDeleted">): boolean {
   return r.inserted + r.updated + r.softDeleted > 0;
+}
+
+/**
+ * The connections a sweep tick should dispatch: active, and not currently
+ * deferred.
+ *
+ * The expiry comparison is what makes F.3/F.6 self-healing REAL: a paused
+ * connection is excluded only while its pause is in the future, so the first
+ * tick after `paused_until` dispatches it again — that dispatch IS the probe
+ * whose success clears the breaker. Without the expiry check, "paused" would
+ * be the terminal state the spec forbids.
+ */
+export async function dueConnectionsForSweep(
+  db: DB,
+  now = new Date(),
+): Promise<Array<{ id: string; orgId: string }>> {
+  return db
+    .select({ id: connections.id, orgId: connections.orgId })
+    .from(connections)
+    .where(
+      and(
+        eq(connections.status, "active"),
+        or(isNull(connections.pausedUntil), lte(connections.pausedUntil, now)),
+      ),
+    );
 }
 
 /**

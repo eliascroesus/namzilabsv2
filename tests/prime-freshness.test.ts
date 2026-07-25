@@ -4,6 +4,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
 import { connections, events, sourceStreams } from "@/db/schema";
 import { primeStream } from "@/lib/sync/streams";
+import { claimCalls, laneLimit, pauseConnection } from "@/lib/provider-gateway/budget";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { encrypt } from "@/lib/crypto";
 import type { DB } from "@/db/types";
@@ -87,7 +88,7 @@ async function liveRows(): Promise<Array<Record<string, unknown>>> {
 describe("primeStream freshness gate (Defect #1)", () => {
   it("first prime pulls the sheet; a forced prime after an edit reflects the current source", async () => {
     const first = await primeStream(db, ORG, connId, CFG);
-    expect(first).toEqual({ ok: true });
+    expect(first).toEqual({ ok: true, refreshed: true });
     expect(await liveRows()).toEqual([{ name: "Alice", email: "alice@acme.com" }]);
 
     // The user edits the sheet (new row) AFTER the sweep has already polled once.
@@ -95,7 +96,7 @@ describe("primeStream freshness gate (Defect #1)", () => {
 
     // Explicit Test → force: must re-read even though lastPolledAt is fresh.
     const forced = await primeStream(db, ORG, connId, CFG, { force: true });
-    expect(forced).toEqual({ ok: true });
+    expect(forced).toEqual({ ok: true, refreshed: true });
     expect(await liveRows()).toEqual([
       { name: "Alice", email: "alice@acme.com" },
       { name: "Bob", email: "bob@acme.com" },
@@ -109,7 +110,7 @@ describe("primeStream freshness gate (Defect #1)", () => {
 
     // Field-picker-style prime right after: recently polled → no provider call.
     const lazy = await primeStream(db, ORG, connId, CFG);
-    expect(lazy).toEqual({ ok: true });
+    expect(lazy).toEqual({ ok: true, refreshed: false });
     expect(fetchCalls).toBe(callsAfterFirst);
     expect(await liveRows()).toHaveLength(1);
   });
@@ -127,7 +128,7 @@ describe("primeStream freshness gate (Defect #1)", () => {
       .where(and(eq(sourceStreams.connectionId, connId), eq(sourceStreams.configHash, hash)));
 
     const later = await primeStream(db, ORG, connId, CFG);
-    expect(later).toEqual({ ok: true });
+    expect(later).toEqual({ ok: true, refreshed: true });
     expect(await liveRows()).toHaveLength(2);
   });
 
@@ -146,7 +147,7 @@ describe("primeStream freshness gate (Defect #1)", () => {
         .where(and(eq(sourceStreams.connectionId, connId), eq(sourceStreams.configHash, hash)));
 
       const forced = await primeStream(db, ORG, connId, CFG, { force: true });
-      expect(forced).toEqual({ ok: true });
+      expect(forced).toEqual({ ok: true, refreshed: true });
       // No second provider call — the concurrent sync's read IS the fresh data.
       expect(fetchCalls).toBe(callsAfterFirst);
     } finally {
@@ -162,12 +163,58 @@ describe("primeStream freshness gate (Defect #1)", () => {
       SHEET.push(["Bob", "bob@acme.com"]);
 
       const forced = await primeStream(db, ORG, connId, CFG, { force: true });
-      expect(forced).toEqual({ ok: true });
+      expect(forced).toEqual({ ok: true, refreshed: true });
       expect(fetchCalls).toBeGreaterThan(callsAfterFirst); // own sync ran
       expect(await liveRows()).toHaveLength(2);
     } finally {
       delete process.env.DB_DRIVER;
     }
+  });
+
+  it("F.8: a paused connection makes Test compute on stored data with an honest note — never an error", async () => {
+    await primeStream(db, ORG, connId, CFG); // seed stored data
+    const callsAfterFirst = fetchCalls;
+    SHEET.push(["Bob", "bob@acme.com"]);
+
+    await pauseConnection(db, connId, 30 * 60_000, "Respecting Google's rate limit — resumes automatically");
+
+    const res = await primeStream(db, ORG, connId, CFG, { force: true });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.refreshed).toBe(false); // did NOT pretend to re-read
+      expect(res.note).toContain("Couldn't re-read the source");
+      expect(res.note).toContain("paused");
+    }
+    expect(fetchCalls).toBe(callsAfterFirst); // no provider call was spent
+    expect(await liveRows()).toHaveLength(1); // stored data is what Test computes on
+  });
+
+  it("F.8: an exhausted budget yields the same honesty (note, not failure); a healthy claim refreshes", async () => {
+    // Spend the whole interactive budget for this connection's minute window.
+    const total = laneLimit("gsheets", "*", "interactive");
+    for (let i = 0; i < total; i++) {
+      await claimCalls(db, { id: connId, orgId: ORG, source: "gsheets" }, "*", 1, new Date(), "interactive");
+    }
+    SHEET.push(["Bob", "bob@acme.com"]);
+
+    const denied = await primeStream(db, ORG, connId, CFG, { force: true });
+    expect(denied.ok).toBe(true);
+    if (denied.ok) {
+      expect(denied.refreshed).toBe(false);
+      expect(denied.note).toContain("Couldn't re-read the source");
+    }
+    expect(await liveRows()).toHaveLength(0); // nothing synced — but no error either
+
+    // Next minute: budget resets, the Test refreshes normally and says nothing.
+    vi.setSystemTime(new Date(Date.now() + 61_000));
+    const ok = await primeStream(db, ORG, connId, CFG, { force: true });
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.refreshed).toBe(true);
+      expect(ok.note).toBeUndefined();
+    }
+    expect(await liveRows()).toHaveLength(2);
+    vi.useRealTimers();
   });
 
   it("surfaces poll errors instead of throwing (Test shows the message)", async () => {

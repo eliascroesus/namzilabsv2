@@ -6,11 +6,13 @@ import {
   budgetFor,
   claimCalls,
   isPaused,
+  laneLimit,
   pauseConnection,
   recordProviderError,
   recordSuccess,
   tripBreaker,
 } from "@/lib/provider-gateway/budget";
+import { dueConnectionsForSweep } from "@/ingestion/reconcile";
 import type { DB } from "@/db/types";
 
 /**
@@ -45,12 +47,13 @@ describe("F.1 — budgets come from the catalog's declared limits", () => {
   });
 
   it("claims are atomic and deny once the window budget is spent", async () => {
+    // Interactive lane sees the full budget (background stops at the reserve).
     const limit = budgetFor("instantly", "emails.list");
     for (let i = 0; i < limit; i++) {
-      const r = await claimCalls(db, conn(), "emails.list", 1, NOW);
+      const r = await claimCalls(db, conn(), "emails.list", 1, NOW, "interactive");
       expect(r.allowed).toBe(true);
     }
-    const denied = await claimCalls(db, conn(), "emails.list", 1, NOW);
+    const denied = await claimCalls(db, conn(), "emails.list", 1, NOW, "interactive");
     expect(denied.allowed).toBe(false);
     if (!denied.allowed) {
       expect(denied.retryAfterMs).toBe(30_000); // remainder of the minute
@@ -66,7 +69,7 @@ describe("F.1 — budgets come from the catalog's declared limits", () => {
   it("concurrent claims cannot overspend the budget (atomic counter)", async () => {
     const limit = budgetFor("instantly", "emails.list");
     const results = await Promise.all(
-      Array.from({ length: limit + 10 }, () => claimCalls(db, conn(), "emails.list", 1, NOW)),
+      Array.from({ length: limit + 10 }, () => claimCalls(db, conn(), "emails.list", 1, NOW, "interactive")),
     );
     expect(results.filter((r) => r.allowed).length).toBe(limit);
     expect(results.filter((r) => !r.allowed).length).toBe(10);
@@ -89,6 +92,60 @@ describe("F.1 — budgets come from the catalog's declared limits", () => {
     // A different connection is unaffected.
     const other = await seedConnection(db, { source: "instantly" });
     expect((await claimCalls(db, { id: other, orgId: ORG, source: "instantly" }, "emails.list", 1, NOW)).allowed).toBe(true);
+  });
+});
+
+describe("F.8 — reserved headroom for interactive work", () => {
+  it("background stops short of the budget; interactive may use the reserve", () => {
+    // 14 total → 25% reserve (4) → background 10, interactive 14.
+    expect(laneLimit("instantly", "emails.list", "background")).toBe(10);
+    expect(laneLimit("instantly", "emails.list", "interactive")).toBe(14);
+    expect(laneLimit("instantly", "emails.list", "background")).toBeLessThan(budgetFor("instantly", "emails.list"));
+  });
+
+  it("a user's Test can still claim after background sweeps have spent their share", async () => {
+    const bg = laneLimit("instantly", "emails.list", "background");
+    for (let i = 0; i < bg; i++) {
+      expect((await claimCalls(db, conn(), "emails.list", 1, NOW, "background")).allowed).toBe(true);
+    }
+    // Background is done for this minute…
+    expect((await claimCalls(db, conn(), "emails.list", 1, NOW, "background")).allowed).toBe(false);
+    // …but the person clicking Test still gets through.
+    expect((await claimCalls(db, conn(), "emails.list", 1, NOW, "interactive")).allowed).toBe(true);
+  });
+
+  it("once even the reserve is spent, interactive claims are denied too (bounded, not unlimited)", async () => {
+    const total = laneLimit("instantly", "emails.list", "interactive");
+    for (let i = 0; i < total; i++) {
+      await claimCalls(db, conn(), "emails.list", 1, NOW, "interactive");
+    }
+    const denied = await claimCalls(db, conn(), "emails.list", 1, NOW, "interactive");
+    expect(denied.allowed).toBe(false);
+  });
+});
+
+describe("F.3/F.6 — the sweep filter is EXPIRY-aware (this is the probe)", () => {
+  it("dispatches a connection whose pause has expired, skips one still paused", async () => {
+    const paused = await seedConnection(db, { source: "instantly" });
+    const expired = await seedConnection(db, { source: "instantly" });
+    const healthy = await seedConnection(db, { source: "instantly" });
+
+    await pauseConnection(db, paused, 60 * 60_000, "still waiting", NOW); // 1h out
+    await pauseConnection(db, expired, -60_000, "pause elapsed", NOW); // already past
+
+    const due = (await dueConnectionsForSweep(db, NOW)).map((c) => c.id).sort();
+    expect(due).toContain(expired); // the expired pause IS dispatched → the probe fires
+    expect(due).toContain(healthy);
+    expect(due).toContain(connectionId); // never-paused connections unaffected
+    expect(due).not.toContain(paused); // still deferred → no queue traffic
+  });
+
+  it("disabled and error connections are never dispatched, paused or not", async () => {
+    const disabled = await seedConnection(db, { source: "instantly", status: "disabled" });
+    const errored = await seedConnection(db, { source: "instantly", status: "error" });
+    const due = (await dueConnectionsForSweep(db, NOW)).map((c) => c.id);
+    expect(due).not.toContain(disabled);
+    expect(due).not.toContain(errored);
   });
 });
 

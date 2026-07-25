@@ -1,8 +1,6 @@
-import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { inngest } from "../client";
 import { getDb } from "@/db/client";
-import { connections } from "@/db/schema";
-import { reconcileConnection, reconcileChanged } from "@/ingestion/reconcile";
+import { reconcileConnection, reconcileChanged, dueConnectionsForSweep } from "@/ingestion/reconcile";
 
 /**
  * C.4 — fan-out reconciliation.
@@ -37,17 +35,7 @@ export const reconcileAll = inngest.createFunction(
     // are skipped until `paused_until` — filtered here so they don't even
     // generate queue traffic. Because every pause carries an expiry, they
     // rejoin the sweep automatically (the probe) with no human intervention.
-    const active = await step.run("load-active-connections", () =>
-      db
-        .select({ id: connections.id, orgId: connections.orgId })
-        .from(connections)
-        .where(
-          and(
-            eq(connections.status, "active"),
-            or(isNull(connections.pausedUntil), lte(connections.pausedUntil, sql`now()`)),
-          ),
-        ),
-    );
+    const active = await step.run("load-active-connections", () => dueConnectionsForSweep(db));
 
     if (active.length > 0) {
       await step.sendEvent(

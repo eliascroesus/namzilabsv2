@@ -29,6 +29,15 @@ const BUDGET_SHARE = 0.7;
 const DEFAULT_RPM = 60;
 /** F.6 probe ladder: consecutive-failure count → how long to pause. */
 const PROBE_LADDER_MS = [60 * 60_000, 4 * 60 * 60_000, 24 * 60 * 60_000];
+/**
+ * F.8 — the slice of each budget that ONLY user-interactive work may claim.
+ * Background sweeps stop at `budget - reserve`, so a person clicking Test
+ * still has headroom even when the fleet has spent its share for the minute.
+ */
+const INTERACTIVE_RESERVE_SHARE = 0.25;
+
+/** Who is asking. Interactive callers may dip into the reserved headroom. */
+export type CallLane = "background" | "interactive";
 
 export type ClaimResult =
   | { allowed: true; remaining: number }
@@ -39,6 +48,17 @@ export function budgetFor(source: string, operation = "*"): number {
   const declared = catalogEntry(source)?.rateLimits?.[operation]?.requestsPerMinute;
   const rpm = declared ?? DEFAULT_RPM;
   return Math.max(1, Math.floor(rpm * BUDGET_SHARE));
+}
+
+/**
+ * The ceiling a given lane may spend (F.8). Background work leaves the reserve
+ * untouched; interactive work may use the whole budget.
+ */
+export function laneLimit(source: string, operation = "*", lane: CallLane = "background"): number {
+  const total = budgetFor(source, operation);
+  if (lane === "interactive") return total;
+  const reserve = Math.max(1, Math.ceil(total * INTERACTIVE_RESERVE_SHARE));
+  return Math.max(1, total - reserve);
 }
 
 function windowStart(now: Date): Date {
@@ -56,8 +76,9 @@ export async function claimCalls(
   operation = "*",
   cost = 1,
   now = new Date(),
+  lane: CallLane = "background",
 ): Promise<ClaimResult> {
-  const limit = budgetFor(conn.source, operation);
+  const limit = laneLimit(conn.source, operation, lane);
   const start = windowStart(now);
 
   const [row] = await db

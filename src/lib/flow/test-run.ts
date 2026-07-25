@@ -30,6 +30,13 @@ export type NodeTestDTO = {
   tile?: unknown;
   /** The computed number, when the step produces a single number (Count/Calculate). */
   value?: number;
+  /**
+   * F.8 honesty marker: set when the Test could NOT re-read the source (the
+   * provider budget is spent, or syncing is paused) and therefore computed on
+   * stored data. The editor shows this verbatim — a Test must never silently
+   * imply it refreshed when it didn't.
+   */
+  sourceNote?: string;
 };
 
 /** Shape one engine result into the compact DTO the editor renders. */
@@ -54,7 +61,12 @@ function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTest
  * never thrown. The explicit Test always forces a re-read of the CURRENT
  * source (never a staleness window).
  */
-async function primeStreamsForTest(db: DB, orgId: string, g: FlowGraph, nodeId: string): Promise<string | null> {
+async function primeStreamsForTest(
+  db: DB,
+  orgId: string,
+  g: FlowGraph,
+  nodeId: string,
+): Promise<{ error?: string; notes: string[] }> {
   const incoming = new Map<string, string[]>();
   for (const e of g.edges) {
     if (!incoming.has(e.target)) incoming.set(e.target, []);
@@ -66,6 +78,7 @@ async function primeStreamsForTest(db: DB, orgId: string, g: FlowGraph, nodeId: 
     const cur = stack.pop()!;
     for (const s of incoming.get(cur) ?? []) if (!wanted.has(s)) { wanted.add(s); stack.push(s); }
   }
+  const notes: string[] = [];
   for (const node of g.nodes) {
     if (!wanted.has(node.id) || node.type !== "app") continue;
     const cfg = node.data.config as { connectionId?: unknown; sourceConfig?: unknown };
@@ -73,22 +86,26 @@ async function primeStreamsForTest(db: DB, orgId: string, g: FlowGraph, nodeId: 
     const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
     if (!connectionId || !hasStreamConfig(sourceConfig)) continue;
     const r = await primeStream(db, orgId, connectionId, sourceConfig, { force: true });
-    if (!r.ok) return r.error;
+    if (!r.ok) return { error: r.error, notes };
+    if (r.note) notes.push(r.note);
   }
-  return null;
+  return { notes };
 }
 
 /** Prime (force-fresh) + run the engine up to the node. Never throws. */
 export async function executeNodeTest(db: DB, orgId: string, graph: unknown, nodeId: string): Promise<NodeTestDTO> {
   try {
     const g = parseGraph(graph);
-    const primeError = await primeStreamsForTest(db, orgId, g, nodeId);
-    if (primeError) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: primeError };
+    const primed = await primeStreamsForTest(db, orgId, g, nodeId);
+    if (primed.error) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: primed.error };
     const res = await runFlow({ db, orgId }, g, { untilNodeId: nodeId });
     const inNodeId = g.edges.find((e) => e.target === nodeId)?.source;
     const inExec = inNodeId ? res.nodes.get(inNodeId) : undefined;
     const inputSample = inExec && inExec.status === "ok" ? inExec.sample : [];
-    return execToDTO(res.nodes.get(nodeId), inputSample);
+    const dto = execToDTO(res.nodes.get(nodeId), inputSample);
+    // The Test computed on stored data — say so, rather than implying a refresh.
+    if (primed.notes.length > 0) dto.sourceNote = primed.notes.join(" ");
+    return dto;
   } catch (e) {
     return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: e instanceof Error ? e.message : String(e) };
   }

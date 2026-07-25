@@ -5,6 +5,7 @@ import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
+import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
 import { awaitStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
 import type { FlowGraph } from "@/lib/flow/types";
@@ -174,6 +175,10 @@ export async function activeStreams(db: DB, connectionId: string): Promise<Strea
  * polled more recently than this. The background sweep keeps it current anyway. */
 const PRIME_MAX_AGE_MS = 60_000;
 
+export type PrimeStreamResult =
+  | { ok: true; refreshed: boolean; note?: string }
+  | { ok: false; error: string };
+
 export type PrimeStreamOptions = {
   /**
    * Re-poll even if the stream was polled recently. The explicit user "Test"
@@ -207,11 +212,11 @@ export async function primeStream(
   connectionId: string,
   sourceConfig: Record<string, unknown>,
   opts: PrimeStreamOptions = {},
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<PrimeStreamResult> {
   const { force = false, maxAgeMs = PRIME_MAX_AGE_MS, maxPages = 3 } = opts;
   const [conn] = await db.select().from(connections).where(and(eq(connections.id, connectionId), eq(connections.orgId, orgId))).limit(1);
   if (!conn) return { ok: false, error: "This step's connected account no longer exists." };
-  if (!isStreamScoped(conn.source) || !hasStreamConfig(sourceConfig)) return { ok: true };
+  if (!isStreamScoped(conn.source) || !hasStreamConfig(sourceConfig)) return { ok: true, refreshed: false };
 
   const configHash = streamConfigHash(sourceConfig);
   await db
@@ -226,7 +231,30 @@ export async function primeStream(
   if (!stream) return { ok: false, error: "Couldn't register this data source." };
 
   if (!force && stream.lastPolledAt != null && Date.now() - stream.lastPolledAt.getTime() < maxAgeMs) {
-    return { ok: true }; // recently polled; the sweep keeps it current
+    return { ok: true, refreshed: false }; // recently polled; the sweep keeps it current
+  }
+
+  // F.3/F.6 — the connection is deferred (budget spent or breaker open).
+  // A Test must be HONEST, not broken: compute on stored data and say plainly
+  // that the source wasn't re-read, with when it resumes.
+  if (isPaused(conn)) {
+    const when = conn.pausedUntil ? ` Retrying around ${conn.pausedUntil.toLocaleTimeString()}.` : "";
+    return {
+      ok: true,
+      refreshed: false,
+      note: `Couldn't re-read the source — syncing is paused (${conn.pausedReason ?? "provider limit"}).${when} Showing the data we already have.`,
+    };
+  }
+
+  // F.8 — interactive lane: a user's Test may claim the reserved headroom that
+  // background sweeps never touch, so a busy fleet doesn't block a person.
+  const claim = await claimCalls(db, conn, "*", 1, new Date(), "interactive");
+  if (!claim.allowed) {
+    return {
+      ok: true,
+      refreshed: false,
+      note: `Couldn't re-read the source — ${claim.reason.toLowerCase()}. Showing the data we already have.`,
+    };
   }
 
   // Q6 (active on the pool driver): a forced Test that collides with an
@@ -240,14 +268,16 @@ export async function primeStream(
     if (waited === "free") {
       const [fresh] = await db.select().from(sourceStreams).where(eq(sourceStreams.id, stream.id)).limit(1);
       if (fresh?.lastPolledAt != null && fresh.lastPolledAt.getTime() >= t0 && fresh.status !== "error") {
-        return { ok: true }; // another sync just finished — its read IS the fresh data
+        // Another sync just finished — its read IS the fresh data (refreshed:
+        // true, because the source WAS re-read; we just didn't do it ourselves).
+        return { ok: true, refreshed: true };
       }
     }
   }
 
   try {
     await syncStream(db, conn, stream, maxPages);
-    return { ok: true };
+    return { ok: true, refreshed: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
