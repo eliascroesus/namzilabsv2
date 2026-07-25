@@ -26,6 +26,18 @@ export type FlowConfigField = {
   options?: { value: string; label: string }[];
 };
 
+/**
+ * How faithfully stored data tracks the source — the guarantee class shown to
+ * users and enforced by the sync machinery (docs/DATA_MODEL.md):
+ * - "mirror": every sweep re-reads the whole resource; rows refresh in place
+ *   and disappear when removed upstream. Stored data == source, always.
+ * - "incremental": cursor-forward polling with overlap; edits older than the
+ *   rollback window surface on full re-syncs.
+ * - "webhook-only": no list endpoint to reconcile against — data is as
+ *   complete as the webhooks that arrived (weakest class; stated in the UI).
+ */
+export type SyncGuarantee = "mirror" | "incremental" | "webhook-only";
+
 export type ConnectorCatalogEntry = {
   source: string;
   name: string;
@@ -34,6 +46,8 @@ export type ConnectorCatalogEntry = {
   connect: "apiKey" | "google";
   instant: boolean;
   poll: boolean;
+  /** Guarantee class (defaults: poll sources "incremental", else "webhook-only"). */
+  sync?: SyncGuarantee;
   /** Whether we auto-create the provider webhook subscription on connect. */
   autoWebhook: boolean;
   credentialFields: CredentialField[];
@@ -124,10 +138,13 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
   {
     source: "gsheets",
     name: "Google Sheets",
-    description: "New rows from any spreadsheet, polled reliably.",
+    description: "Rows from any spreadsheet, mirrored faithfully.",
     connect: "google",
     instant: false,
     poll: true,
+    // Full-read mirror: every sweep re-reads the whole tab, so edits and
+    // deletions anywhere in the sheet are reflected, not just appended rows.
+    sync: "mirror",
     autoWebhook: false,
     credentialFields: [],
     // Which spreadsheet + tab is chosen inside each flow's Get data step.
@@ -168,4 +185,16 @@ export function catalogEntry(source: string): ConnectorCatalogEntry | undefined 
 /** Sources whose resource lives on the flow (streams), not on the connection. */
 export function isStreamScoped(source: string | null | undefined): boolean {
   return (catalogEntry(source ?? "")?.flowFields?.length ?? 0) > 0;
+}
+
+/** The effective guarantee class of a source (see SyncGuarantee). */
+export function syncGuarantee(source: string | null | undefined): SyncGuarantee {
+  const entry = catalogEntry(source ?? "");
+  if (!entry) return "webhook-only";
+  return entry.sync ?? (entry.poll ? "incremental" : "webhook-only");
+}
+
+/** Mirror sources re-read the whole resource every sweep (stored == source). */
+export function isMirrorSource(source: string | null | undefined): boolean {
+  return syncGuarantee(source) === "mirror";
 }

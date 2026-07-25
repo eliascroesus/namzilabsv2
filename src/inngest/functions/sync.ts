@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { inngest } from "../client";
 import { getDb } from "@/db/client";
-import { runSync, reprocessConnection } from "@/lib/sync/resync";
+import { runSync, reprocessConnection, syncChanged } from "@/lib/sync/resync";
 import { markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
 import { rawEvents } from "@/db/schema";
 
@@ -11,8 +11,10 @@ export const syncConnection = inngest.createFunction(
   async ({ event, step }) => {
     const { connectionId, mode } = event.data as { connectionId: string; mode: "full" | "incremental" };
     const res = await step.run("sync", () => runSync(getDb(), connectionId, mode));
-    if (res.upserted > 0) {
-      await step.run("mark-stale", () => markStaleForSource(getDb(), res.orgId, res.source));
+    // Inserts, in-place updates and soft-deletes all change dashboard truth —
+    // a full re-sync that ONLY retired rows must still refresh tiles.
+    if (syncChanged(res)) {
+      await step.run("mark-stale", () => markStaleForSource(getDb(), res.orgId, res.source, connectionId));
     }
     return res;
   },

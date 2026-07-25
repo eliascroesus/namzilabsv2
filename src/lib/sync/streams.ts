@@ -1,8 +1,8 @@
-import { and, eq } from "drizzle-orm";
-import { connections, sourceStreams } from "@/db/schema";
+import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { connections, events, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
-import { isStreamScoped } from "@/connectors/catalog";
+import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
@@ -58,40 +58,93 @@ export async function ensureStreamsForGraph(db: DB, orgId: string, graph: FlowGr
   return { created };
 }
 
-export type StreamSyncResult = { inserted: number; deduped: number };
+export type StreamSyncResult = { inserted: number; updated: number; deduped: number; softDeleted: number };
 
 type StreamRow = typeof sourceStreams.$inferSelect;
 type ConnRow = typeof connections.$inferSelect;
 
 /**
- * Poll one stream incrementally from its stored cursor and upsert the results
- * (deduped, tagged with the stream's hash). `maxPages` bounds inline/first-run
- * syncs so a huge sheet can't blow a request timeout — the sweep finishes the
- * rest, page by page, on its schedule.
+ * Sync one stream and upsert the results (deduped, tagged with the stream's
+ * hash) at the connection's current generation.
+ *
+ * Two shapes, by the source's guarantee class (docs/DATA_MODEL.md):
+ * - MIRROR sources (Sheets): every sweep re-reads the ENTIRE resource,
+ *   refreshes rows in place (first-seen occurred_at preserved) and
+ *   soft-deletes this stream's rows that the read no longer produced — the
+ *   stored data is a faithful mirror of the current resource after every sweep.
+ * - Incremental sources (Calendar, Calendly): poll forward from the stored
+ *   cursor; `maxPages` bounds inline/first-run syncs so a huge resource can't
+ *   blow a request timeout — the sweep finishes the rest on its schedule.
  */
 export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPages = 1): Promise<StreamSyncResult> {
   const connector = getConnector(conn.source);
-  if (!connector?.poll) return { inserted: 0, deduped: 0 };
+  if (!connector?.poll) return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0 };
   const credentials = await getConnectionCredentials(db, conn);
+  const generation = Math.max(1, conn.syncGeneration ?? 0);
 
   let cursor = stream.cursor ?? null;
   let inserted = 0;
+  let updated = 0;
   let deduped = 0;
+  let softDeleted = 0;
   try {
-    for (let page = 0; page < maxPages; page++) {
+    if (isMirrorSource(conn.source)) {
+      // Full re-read, ignoring any stored cursor: the read IS the truth.
       const { records, nextCursor } = await connector.poll({
         connectionId: conn.id,
-        cursor,
+        cursor: null,
         credentials,
         config: stream.config ?? undefined,
         streamHash: stream.configHash,
       });
-      const res = await upsertEvents(db, { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash }, records);
-      inserted += res.inserted;
-      deduped += res.deduped;
-      const advanced = nextCursor != null && nextCursor !== cursor;
-      cursor = nextCursor ?? cursor;
-      if (!advanced || records.length === 0) break;
+      const res = await upsertEvents(
+        db,
+        { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation, preserveOccurredAt: true },
+        records,
+      );
+      inserted = res.inserted;
+      updated = res.updated;
+      deduped = res.deduped;
+
+      // Rows of THIS stream the read no longer produced were removed upstream
+      // (deleted, or their row blanked). Scoped strictly to the stream's hash,
+      // so webhook rows (null hash) and other streams are untouchable.
+      const present = records.map((r) => r.eventId);
+      const gone = await db
+        .update(events)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(events.connectionId, conn.id),
+            eq(events.streamHash, stream.configHash),
+            isNull(events.deletedAt),
+            ...(present.length ? [notInArray(events.eventId, present)] : []),
+          ),
+        )
+        .returning({ id: events.id });
+      softDeleted = gone.length;
+      cursor = nextCursor ?? null;
+    } else {
+      for (let page = 0; page < maxPages; page++) {
+        const { records, nextCursor } = await connector.poll({
+          connectionId: conn.id,
+          cursor,
+          credentials,
+          config: stream.config ?? undefined,
+          streamHash: stream.configHash,
+        });
+        const res = await upsertEvents(
+          db,
+          { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation },
+          records,
+        );
+        inserted += res.inserted;
+        updated += res.updated;
+        deduped += res.deduped;
+        const advanced = nextCursor != null && nextCursor !== cursor;
+        cursor = nextCursor ?? cursor;
+        if (!advanced || records.length === 0) break;
+      }
     }
     await db
       .update(sourceStreams)
@@ -105,7 +158,7 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
       .where(eq(sourceStreams.id, stream.id));
     throw e;
   }
-  return { inserted, deduped };
+  return { inserted, updated, deduped, softDeleted };
 }
 
 /** All streams of one connection that should be polled. */

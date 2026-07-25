@@ -34,7 +34,7 @@ describe("ingestion pipeline: dedup + idempotency", () => {
     const rawId = await storeAndGetId(connectionId, { id: "e1", type: "booked", email: "a@b.com" });
 
     const res = await processRawEvent(db, rawId);
-    expect(res).toEqual({ inserted: 1, deduped: 0, total: 1 });
+    expect(res).toEqual({ inserted: 1, updated: 0, deduped: 0, total: 1 });
 
     const rows = await db.select().from(events);
     expect(rows).toHaveLength(1);
@@ -51,7 +51,9 @@ describe("ingestion pipeline: dedup + idempotency", () => {
 
     await processRawEvent(db, rawId);
     const second = await processRawEvent(db, rawId);
-    expect(second).toEqual({ inserted: 0, deduped: 1, total: 1 });
+    // Identical redelivery is a true no-op: not an insert, not an update —
+    // occurred_at is pinned at first write, so synthetic timestamps can't drift.
+    expect(second).toEqual({ inserted: 0, updated: 0, deduped: 1, total: 1 });
     expect(await db.select().from(events)).toHaveLength(1);
   });
 

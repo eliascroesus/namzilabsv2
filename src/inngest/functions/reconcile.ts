@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { connections } from "@/db/schema";
-import { reconcileConnection } from "@/ingestion/reconcile";
+import { reconcileConnection, reconcileChanged } from "@/ingestion/reconcile";
 
 /**
  * Scheduled reconciliation/backfill sweep. Every 10 minutes it re-polls each
@@ -21,11 +21,12 @@ export const reconcileAll = inngest.createFunction(
       db.select({ id: connections.id }).from(connections).where(eq(connections.status, "active")),
     );
 
-    const results: Array<{ connectionId: string; inserted: number; deduped: number }> = [];
+    const results: Array<{ connectionId: string; inserted: number; updated: number; softDeleted: number; deduped: number }> = [];
     for (const conn of active) {
       const r = await step.run(`reconcile-${conn.id}`, () => reconcileConnection(db, conn.id));
-      results.push({ connectionId: conn.id, inserted: r.inserted, deduped: r.deduped });
-      if (r.inserted > 0) {
+      results.push({ connectionId: conn.id, inserted: r.inserted, updated: r.updated, softDeleted: r.softDeleted, deduped: r.deduped });
+      // Inserts, in-place updates AND soft-deletes all change dashboard truth.
+      if (reconcileChanged(r)) {
         await step.run(`notify-flows-${conn.id}`, () =>
           inngest.send({ name: "flow/data.changed", data: { orgId: r.orgId, source: r.source, connectionId: conn.id } }),
         );
@@ -41,7 +42,7 @@ export const reconcileOne = inngest.createFunction(
   async ({ event, step }) => {
     const { connectionId } = event.data as { connectionId: string };
     const r = await step.run("reconcile", () => reconcileConnection(getDb(), connectionId));
-    if (r.inserted > 0) {
+    if (reconcileChanged(r)) {
       await step.run("notify-flows", () =>
         inngest.send({ name: "flow/data.changed", data: { orgId: r.orgId, source: r.source, connectionId } }),
       );

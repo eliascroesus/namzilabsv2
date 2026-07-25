@@ -104,8 +104,9 @@ describe("Close Event Log poll (Defect #2)", () => {
     expect(Date.parse(gte)).toBeLessThan(Date.parse(hw));
     expect(calls[0].get("_cursor")).toBeNull();
 
-    // Everything at/after the overlap floor is (re)fetched — e30..e80 with 60s
-    // overlap — so nothing above the mark is missed and ties are kept; the
+    // Everything at/after the overlap floor is (re)fetched (5-minute cushion,
+    // per Close's own out-of-order guidance — here that spans the whole
+    // fixture), so nothing above the mark is missed and ties are kept; the
     // pipeline's event_id dedup absorbs the re-reads.
     const got = new Set(res.records.map((r) => r.eventId));
     for (let i = 51; i <= 80; i++) expect(got.has(`close:c1:e${i}`)).toBe(true);

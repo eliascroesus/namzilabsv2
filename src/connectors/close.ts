@@ -18,8 +18,12 @@ const API = "https://api.close.com/api/v1";
 const EVENT_LOG_LIMIT = 50;
 /** Pages walked per poll() call; deeper windows resume next sweep via the stored continuation. */
 const PAGES_PER_POLL = 4;
-/** Re-read cushion below the high-water mark; event_id dedup makes it free. */
-const OVERLAP_MS = 60_000;
+/**
+ * Re-read cushion below the high-water mark. Close's Events API docs recommend
+ * re-scanning the latest five minutes because events can surface out of order;
+ * event_id dedup makes the wider overlap free.
+ */
+const OVERLAP_MS = 5 * 60_000;
 
 /**
  * Poll cursor for the Close Event Log. Serialized as the plain high-water

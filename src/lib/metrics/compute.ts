@@ -81,6 +81,9 @@ function baseWhere(
 ): SQL {
   const conds: SQL[] = [
     sql`${events.orgId} = ${orgId}`,
+    // Soft-deleted rows are records the source no longer has — every reader
+    // must skip them or numbers stop matching the source.
+    sql`${events.deletedAt} is null`,
     sql`${events.occurredAt} >= ${range.from}`,
     sql`${events.occurredAt} <= ${range.to}`,
   ];
@@ -198,13 +201,13 @@ export async function distinctSources(db: DB, orgId: string): Promise<string[]> 
   const rows = await db
     .selectDistinct({ source: events.source })
     .from(events)
-    .where(sql`${events.orgId} = ${orgId}`);
+    .where(sql`${events.orgId} = ${orgId} and ${events.deletedAt} is null`);
   return rows.map((r) => r.source).sort();
 }
 
 /** Distinct event types present (optionally within a source). */
 export async function distinctEventTypes(db: DB, orgId: string, source?: string | null): Promise<string[]> {
-  const conds: SQL[] = [sql`${events.orgId} = ${orgId}`];
+  const conds: SQL[] = [sql`${events.orgId} = ${orgId}`, sql`${events.deletedAt} is null`];
   if (source) conds.push(sql`${events.source} = ${source}`);
   const rows = await db
     .selectDistinct({ eventType: events.eventType })

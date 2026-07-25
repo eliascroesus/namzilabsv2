@@ -40,7 +40,7 @@ describe("reconciliation / backfill", () => {
   it("polls, inserts new records, and stores the next cursor", async () => {
     const connectionId = await seedConnection(db, { source: "test-poller" });
     const res = await reconcileConnection(db, connectionId);
-    expect(res).toEqual({ inserted: 2, deduped: 0, polled: true, orgId: "org_test", source: "test-poller" });
+    expect(res).toEqual({ inserted: 2, updated: 0, softDeleted: 0, deduped: 0, polled: true, orgId: "org_test", source: "test-poller" });
 
     const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, connectionId));
     expect(state.cursor).toBe("cursor-1");
@@ -51,14 +51,14 @@ describe("reconciliation / backfill", () => {
     const connectionId = await seedConnection(db, { source: "test-poller" });
     await reconcileConnection(db, connectionId);
     const second = await reconcileConnection(db, connectionId);
-    expect(second).toEqual({ inserted: 0, deduped: 2, polled: true, orgId: "org_test", source: "test-poller" });
+    expect(second).toEqual({ inserted: 0, updated: 0, softDeleted: 0, deduped: 2, polled: true, orgId: "org_test", source: "test-poller" });
     expect(await db.select().from(events)).toHaveLength(2);
   });
 
   it("no-ops for a push-only source with no poll()", async () => {
     const connectionId = await seedConnection(db, { source: "webhook" });
     const res = await reconcileConnection(db, connectionId);
-    expect(res).toEqual({ inserted: 0, deduped: 0, polled: false, orgId: "org_test", source: "webhook" });
+    expect(res).toEqual({ inserted: 0, updated: 0, softDeleted: 0, deduped: 0, polled: false, orgId: "org_test", source: "webhook" });
   });
 });
 
