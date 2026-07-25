@@ -40,7 +40,7 @@ describe("fetchJson — success & plain failures", () => {
   it("throws a typed HttpError (legacy message format) on non-retryable 4xx, without retrying", async () => {
     const fetchMock = scriptedFetch([res(403, { error: "nope" })]);
     vi.stubGlobal("fetch", fetchMock);
-    const err = await fetchJson("https://api.test/x", { sleep: instantSleep }).catch((e) => e);
+    const err = await fetchJson<never>("https://api.test/x", { sleep: instantSleep }).catch((e) => e as HttpError);
     expect(err).toBeInstanceOf(HttpError);
     expect(err.status).toBe(403);
     expect(err.message).toContain("HTTP 403");
@@ -62,7 +62,7 @@ describe("fetchJson — 429 rate limiting", () => {
   it("throws HttpError with retryAfterMs once retries are exhausted", async () => {
     const fetchMock = scriptedFetch([res(429, {}, { "Retry-After": "1" })]);
     vi.stubGlobal("fetch", fetchMock);
-    const err = await fetchJson("https://api.test/x", { retries: 2, sleep: instantSleep }).catch((e) => e);
+    const err = await fetchJson<never>("https://api.test/x", { retries: 2, sleep: instantSleep }).catch((e) => e as HttpError);
     expect(err).toBeInstanceOf(HttpError);
     expect(err.status).toBe(429);
     expect(err.retryAfterMs).toBe(1000);
@@ -82,7 +82,7 @@ describe("fetchJson — 5xx & network errors respect idempotency", () => {
   it("does NOT retry POST on 500 (the write may have been applied)", async () => {
     const fetchMock = scriptedFetch([res(500, {}), res(200, { ok: 1 })]);
     vi.stubGlobal("fetch", fetchMock);
-    const err = await fetchJson("https://api.test/x", { method: "POST", sleep: instantSleep }).catch((e) => e);
+    const err = await fetchJson<never>("https://api.test/x", { method: "POST", sleep: instantSleep }).catch((e) => e as HttpError);
     expect(err).toBeInstanceOf(HttpError);
     expect(err.status).toBe(500);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -115,7 +115,7 @@ describe("fetchJson — timeout", () => {
         });
       }),
     );
-    const err = await fetchJson("https://api.test/slow", { timeoutMs: 25, retries: 0 }).catch((e) => e);
+    const err = await fetchJson<never>("https://api.test/slow", { timeoutMs: 25, retries: 0 }).catch((e) => e as HttpTimeoutError);
     expect(err).toBeInstanceOf(HttpTimeoutError);
     expect(err.timeoutMs).toBe(25);
   });
@@ -130,7 +130,7 @@ describe("fetchJson — timeout", () => {
         });
       }),
     );
-    const p = fetchJson("https://api.test/slow", { signal: caller.signal, timeoutMs: 5_000, retries: 0, method: "POST" }).catch((e) => e);
+    const p = fetchJson<never>("https://api.test/slow", { signal: caller.signal, timeoutMs: 5_000, retries: 0, method: "POST" }).catch((e) => e as DOMException);
     caller.abort();
     const err = await p;
     expect(err).toBeInstanceOf(DOMException);
