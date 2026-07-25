@@ -115,7 +115,8 @@ async function primeStreamsForTest(orgId: string, g: FlowGraph, nodeId: string):
     const connectionId = typeof cfg.connectionId === "string" ? cfg.connectionId : null;
     const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
     if (!connectionId || !hasStreamConfig(sourceConfig)) continue;
-    const r = await primeStream(db, orgId, connectionId, sourceConfig);
+    // Explicit Test must read the CURRENT source, not the last swept snapshot.
+    const r = await primeStream(db, orgId, connectionId, sourceConfig, { force: true });
     if (!r.ok) return r.error;
   }
   return null;

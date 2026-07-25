@@ -116,19 +116,45 @@ export async function activeStreams(db: DB, connectionId: string): Promise<Strea
     .where(and(eq(sourceStreams.connectionId, connectionId)));
 }
 
+/** Default freshness window for a non-forced prime: skip re-polling a stream
+ * polled more recently than this. The background sweep keeps it current anyway. */
+const PRIME_MAX_AGE_MS = 60_000;
+
+export type PrimeStreamOptions = {
+  /**
+   * Re-poll even if the stream was polled recently. The explicit user "Test"
+   * demands the CURRENT source, so it forces a fresh read regardless of age.
+   */
+  force?: boolean;
+  /**
+   * Skip re-polling when the last poll is younger than this (ms). Ignored when
+   * `force`. Defaults to {@link PRIME_MAX_AGE_MS}.
+   */
+  maxAgeMs?: number;
+  /** Page bound for the inline first-run / refresh poll. */
+  maxPages?: number;
+};
+
 /**
- * First-use sync for a flow's freshly configured resource: make sure the stream
- * exists and, if it has never been polled, pull its first pages right now so the
- * user's explicit Test has real data to show. Returns the error message instead
- * of throwing so the Test surface can present it.
+ * First-use / on-demand sync for a flow's configured resource: make sure the
+ * stream exists and pull its pages now so the caller sees real data. Returns the
+ * error message instead of throwing so the Test surface can present it.
+ *
+ * Freshness gate (Defect #1): a stream is re-polled when the caller `force`s it
+ * (explicit Test), when it has never been polled, or when its last poll is older
+ * than `maxAgeMs`. The previous behavior skipped forever after the first poll —
+ * so once the 10-minute sweep touched a stream, every Test read stale, pre-edit
+ * data indefinitely. `force` closes that; the small age window keeps incidental
+ * primers (e.g. field listing) from re-polling on every call.
  */
 export async function primeStream(
   db: DB,
   orgId: string,
   connectionId: string,
   sourceConfig: Record<string, unknown>,
-  maxPages = 3,
+  opts: PrimeStreamOptions = {},
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { force = false, maxAgeMs = PRIME_MAX_AGE_MS, maxPages = 3 } = opts;
   const [conn] = await db.select().from(connections).where(and(eq(connections.id, connectionId), eq(connections.orgId, orgId))).limit(1);
   if (!conn) return { ok: false, error: "This step's connected account no longer exists." };
   if (!isStreamScoped(conn.source) || !hasStreamConfig(sourceConfig)) return { ok: true };
@@ -144,7 +170,10 @@ export async function primeStream(
     .where(and(eq(sourceStreams.connectionId, connectionId), eq(sourceStreams.configHash, configHash)))
     .limit(1);
   if (!stream) return { ok: false, error: "Couldn't register this data source." };
-  if (stream.lastPolledAt != null) return { ok: true }; // already syncing on the sweep
+
+  if (!force && stream.lastPolledAt != null && Date.now() - stream.lastPolledAt.getTime() < maxAgeMs) {
+    return { ok: true }; // recently polled; the sweep keeps it current
+  }
 
   try {
     await syncStream(db, conn, stream, maxPages);

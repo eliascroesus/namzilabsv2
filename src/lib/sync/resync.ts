@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 import { connections, events, sourceStreams, syncState, rawEvents } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
@@ -125,25 +125,40 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
   }
 
   // Full: re-poll every stream from the beginning at the next generation, then
-  // remove poll-managed rows not seen this run (upstream-deleted or de-referenced).
+  // remove poll-managed rows not seen this run (upstream-deleted).
   const credentials = await getConnectionCredentials(db, conn);
   const gen = Math.max(1, (conn.syncGeneration ?? 0) + 1);
   let upserted = 0;
+  const polledHashes: string[] = [];
   for (const stream of streams) {
     const base: PollArgs = { connectionId: conn.id, cursor: null, credentials, config: stream.config ?? undefined, streamHash: stream.configHash };
     const { records, cursor } = await pollAll(connector, base);
     upserted += await upsertEventsGen(db, { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash }, records, gen);
+    polledHashes.push(stream.configHash);
     await db
       .update(sourceStreams)
       .set({ cursor, status: "active", lastError: null, lastPolledAt: new Date(), updatedAt: new Date() })
       .where(eq(sourceStreams.id, stream.id));
   }
 
-  const del = await db
-    .update(events)
-    .set({ deletedAt: new Date() })
-    .where(and(eq(events.connectionId, conn.id), gte(events.syncGeneration, 1), lt(events.syncGeneration, gen), isNull(events.deletedAt)))
-    .returning({ id: events.id });
+  // Soft-delete is scoped to the streams actually re-polled THIS run. A blanket
+  // connection-wide delete would tombstone rows of streams the run never read
+  // (e.g. a disabled/paused stream) — cross-stream data loss, not cleanup.
+  const del = polledHashes.length
+    ? await db
+        .update(events)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(events.connectionId, conn.id),
+            inArray(events.streamHash, polledHashes),
+            gte(events.syncGeneration, 1),
+            lt(events.syncGeneration, gen),
+            isNull(events.deletedAt),
+          ),
+        )
+        .returning({ id: events.id })
+    : [];
 
   await db
     .update(connections)
