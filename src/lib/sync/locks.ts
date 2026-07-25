@@ -63,3 +63,36 @@ export async function withStreamWriteLock<T>(
     return { acquired: true, result: await fn(tx as unknown as DB) };
   });
 }
+
+/**
+ * Q6 — the user-initiated Test's side of contention: AWAIT the in-flight
+ * writer, never skip and never error. Blocks (bounded by `timeoutMs`) until no
+ * writer holds the scope's swap lock, then releases immediately — the caller's
+ * next step is to RE-CHECK freshness and read, not to hold the lock.
+ *
+ * Returns "free" when the lock was acquired (any prior writer has finished),
+ * "timeout" when the holder outlived the bound (the caller proceeds with its
+ * own sync — safe under the guarded writer, and strictly better than erroring
+ * at the user), and "unsupported" on the http driver (no session semantics —
+ * the Inngest per-connection concurrency key is the serializer there).
+ */
+export async function awaitStreamWriteLock(
+  db: DB,
+  scope: string,
+  timeoutMs = 15_000,
+): Promise<"free" | "timeout" | "unsupported"> {
+  if (!advisoryLocksEnabled()) return "unsupported";
+  const key = advisoryLockKey(scope);
+  try {
+    await db.transaction(async (tx) => {
+      // lock_timeout is LOCAL to the transaction; the enum-free integer is
+      // validated by Number() at the boundary.
+      await tx.execute(sql.raw(`set local lock_timeout = ${Math.max(1, Math.floor(Number(timeoutMs)))}`));
+      await tx.execute(sql`select pg_advisory_xact_lock(${key})`);
+      // Acquired → the previous holder committed; releasing via commit.
+    });
+    return "free";
+  } catch {
+    return "timeout";
+  }
+}

@@ -22,6 +22,12 @@ export type ReconcileResult = {
    * Undefined when the source has no verifiable subscription.
    */
   webhook?: "ok" | "reregistered" | "failed";
+  /**
+   * Stream hashes whose data actually changed this sweep (G.1) — staleness can
+   * be scoped to flows reading THOSE streams. Empty for connection-scoped
+   * sources (no streams; source/connection-level staleness applies).
+   */
+  changedStreamHashes: string[];
   /** Tenant + source identity, so callers can mark dependent flows stale. */
   orgId: string;
   source: string;
@@ -76,7 +82,8 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   }
 
   // Sources that only push (no list endpoint) have nothing to reconcile.
-  if (!connector?.poll) return { inserted: 0, updated: 0, softDeleted: 0, deduped: 0, polled: false, webhook, orgId: conn.orgId, source: conn.source };
+  if (!connector?.poll)
+    return { inserted: 0, updated: 0, softDeleted: 0, deduped: 0, polled: false, webhook, changedStreamHashes: [], orgId: conn.orgId, source: conn.source };
 
   if (isStreamScoped(conn.source)) {
     const streams = await activeStreams(db, connectionId);
@@ -84,6 +91,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     let updated = 0;
     let softDeleted = 0;
     let deduped = 0;
+    const changedStreamHashes: string[] = [];
     for (const stream of streams) {
       if (stream.status === "disabled") continue;
       try {
@@ -92,11 +100,13 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
         updated += r.updated;
         softDeleted += r.softDeleted;
         deduped += r.deduped;
+        // G.1: remember WHICH streams changed, so staleness stays stream-scoped.
+        if (r.inserted + r.updated + r.softDeleted > 0) changedStreamHashes.push(stream.configHash);
       } catch {
         // Recorded on the stream row; other streams keep syncing.
       }
     }
-    return { inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, orgId: conn.orgId, source: conn.source };
+    return { inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, changedStreamHashes, orgId: conn.orgId, source: conn.source };
   }
 
   const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, connectionId)).limit(1);
@@ -121,7 +131,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   );
   await upsertSyncCursor(db, connectionId, nextCursor);
 
-  return { inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped, polled: true, webhook, orgId: conn.orgId, source: conn.source };
+  return { inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped, polled: true, webhook, changedStreamHashes: [], orgId: conn.orgId, source: conn.source };
 }
 
 async function upsertSyncCursor(db: DB, connectionId: string, cursor: string | null): Promise<void> {

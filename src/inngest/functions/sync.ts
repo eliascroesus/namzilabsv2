@@ -38,30 +38,64 @@ export const reprocessConnectionFn = inngest.createFunction(
   },
 );
 
-/** New data landed — mark dependent published flows stale (debounced by the cron below). */
+/** New data landed — mark dependent published flows stale, then kick the debounced recompute. */
 export const flowDataChanged = inngest.createFunction(
   { id: "flow-data-changed", retries: 2, triggers: [{ event: "flow/data.changed" }] },
   async ({ event, step }) => {
-    const data = event.data as { orgId?: string; source?: string; rawEventId?: string; connectionId?: string };
+    const data = event.data as {
+      orgId?: string;
+      source?: string;
+      rawEventId?: string;
+      connectionId?: string;
+      /** G.1: which streams actually changed, when the producer knows. */
+      streamHashes?: string[];
+    };
+    let marked: string[] = [];
+    let orgId = data.orgId ?? null;
     if (data.orgId && data.source) {
-      return step.run("mark", () => markStaleForSource(getDb(), data.orgId as string, data.source as string, data.connectionId ?? null));
-    }
-    if (data.rawEventId) {
-      return step.run("mark-from-raw", async () => {
+      marked = await step.run("mark", () =>
+        markStaleForSource(getDb(), data.orgId as string, data.source as string, data.connectionId ?? null, data.streamHashes ?? null),
+      );
+    } else if (data.rawEventId) {
+      const res = await step.run("mark-from-raw", async () => {
         const db = getDb();
         const [raw] = await db
           .select({ orgId: rawEvents.orgId, source: rawEvents.source, connectionId: rawEvents.connectionId })
           .from(rawEvents)
           .where(eq(rawEvents.id, data.rawEventId as string))
           .limit(1);
-        return raw ? markStaleForSource(db, raw.orgId, raw.source, raw.connectionId) : [];
+        return raw ? { orgId: raw.orgId, marked: await markStaleForSource(db, raw.orgId, raw.source, raw.connectionId) } : null;
       });
+      marked = res?.marked ?? [];
+      orgId = res?.orgId ?? null;
     }
-    return [];
+    // G.2: something went stale → ask for a recompute; the debounced function
+    // coalesces a burst of these into one run per org.
+    if (marked.length > 0 && orgId) {
+      await step.run("kick-recompute", () => inngest.send({ name: "flow/recompute.requested", data: { orgId } }));
+    }
+    return marked;
   },
 );
 
-/** Recompute stale published-flow results on a schedule. */
+/**
+ * G.2 — debounced recompute. A burst of data changes (webhook storm, one busy
+ * sweep) collapses into ONE materialization per org: each new event inside the
+ * period pushes the run back, and the run recomputes everything stale at once.
+ * Work scales with data-change rate, never with event volume.
+ */
+export const recomputeStaleFlows = inngest.createFunction(
+  {
+    id: "recompute-stale-flows",
+    retries: 2,
+    debounce: { key: "event.data.orgId", period: "10s" },
+    concurrency: { key: "event.data.orgId", limit: 1 },
+    triggers: [{ event: "flow/recompute.requested" }],
+  },
+  async ({ step }) => step.run("materialize-stale", () => materializeStaleAll(getDb())),
+);
+
+/** Scheduled backstop: anything the event path missed still recomputes. */
 export const materializeStale = inngest.createFunction(
   { id: "materialize-stale", retries: 2, triggers: [{ cron: "*/10 * * * *" }] },
   async ({ step }) => step.run("materialize-stale", () => materializeStaleAll(getDb())),

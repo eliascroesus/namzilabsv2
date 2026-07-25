@@ -63,6 +63,11 @@ an unchanged sweep costs no recompute.
   re-syncs.
 - Deletes are **soft-only** (`deleted_at`); every reader filters `deleted_at IS NULL`. Resurrection
   happens only through the guarded writer path above.
+- **Query convention (load-bearing):** the composite indexes on `events` are PARTIAL over live rows
+  (`WHERE deleted_at IS NULL`) and the non-partial fallbacks were dropped — a new query that omits
+  the predicate is both semantically wrong (counts records the source deleted) and un-indexed
+  (sequential scan at scale). Only `event_id` lookups (unique index) and deliberate tombstone
+  inspection are exempt. See the convention note on the table in `src/db/schema.ts`.
 
 ## Guarantee classes per connector
 

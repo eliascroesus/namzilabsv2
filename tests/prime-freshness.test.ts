@@ -131,6 +131,45 @@ describe("primeStream freshness gate (Defect #1)", () => {
     expect(await liveRows()).toHaveLength(2);
   });
 
+  it("Q6 (pool driver): a forced Test adopts a just-completed concurrent sync instead of double-polling", async () => {
+    process.env.DB_DRIVER = "pool";
+    try {
+      await primeStream(db, ORG, connId, CFG); // initial import
+      const callsAfterFirst = fetchCalls;
+
+      // Simulate the awaited in-flight sync finishing DURING our wait: its
+      // completion stamps lastPolledAt after our call starts.
+      const hash = streamConfigHash(CFG);
+      await db
+        .update(sourceStreams)
+        .set({ lastPolledAt: new Date(Date.now() + 250), status: "active" })
+        .where(and(eq(sourceStreams.connectionId, connId), eq(sourceStreams.configHash, hash)));
+
+      const forced = await primeStream(db, ORG, connId, CFG, { force: true });
+      expect(forced).toEqual({ ok: true });
+      // No second provider call — the concurrent sync's read IS the fresh data.
+      expect(fetchCalls).toBe(callsAfterFirst);
+    } finally {
+      delete process.env.DB_DRIVER;
+    }
+  });
+
+  it("Q6 (pool driver): with no fresh concurrent sync, the forced Test still re-polls itself", async () => {
+    process.env.DB_DRIVER = "pool";
+    try {
+      await primeStream(db, ORG, connId, CFG);
+      const callsAfterFirst = fetchCalls;
+      SHEET.push(["Bob", "bob@acme.com"]);
+
+      const forced = await primeStream(db, ORG, connId, CFG, { force: true });
+      expect(forced).toEqual({ ok: true });
+      expect(fetchCalls).toBeGreaterThan(callsAfterFirst); // own sync ran
+      expect(await liveRows()).toHaveLength(2);
+    } finally {
+      delete process.env.DB_DRIVER;
+    }
+  });
+
   it("surfaces poll errors instead of throwing (Test shows the message)", async () => {
     vi.stubGlobal(
       "fetch",

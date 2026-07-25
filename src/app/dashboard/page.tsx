@@ -47,7 +47,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     [metrics, sources, recentEvents, dlqCount, connCount] = await Promise.all([
       listMetrics(orgId),
       distinctSources(db, orgId),
-      db.select().from(events).where(eq(events.orgId, orgId)).orderBy(desc(events.receivedAt)).limit(6),
+      // Live rows only (query convention: every events read filters deleted_at,
+      // src/db/schema.ts). receivedAt ordering is intentional for an activity
+      // feed; the top-6 sort over one org's live rows is bounded and cheap.
+      db.select().from(events).where(and(eq(events.orgId, orgId), isNull(events.deletedAt))).orderBy(desc(events.receivedAt)).limit(6),
       db
         .select({ c: sql<number>`count(*)::int` })
         .from(deadLetter)

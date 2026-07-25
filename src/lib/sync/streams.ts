@@ -5,6 +5,7 @@ import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
+import { awaitStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
 import type { FlowGraph } from "@/lib/flow/types";
 
@@ -226,6 +227,22 @@ export async function primeStream(
 
   if (!force && stream.lastPolledAt != null && Date.now() - stream.lastPolledAt.getTime() < maxAgeMs) {
     return { ok: true }; // recently polled; the sweep keeps it current
+  }
+
+  // Q6 (active on the pool driver): a forced Test that collides with an
+  // in-flight writer AWAITS its completion — bounded, never skipped, never an
+  // error at the user — then adopts that sync's result instead of
+  // double-polling the provider. If the wait times out (wedged holder), we
+  // proceed with our own sync; the guarded writer makes that safe.
+  if (force) {
+    const t0 = Date.now();
+    const waited = await awaitStreamWriteLock(db, `stream:${stream.id}`);
+    if (waited === "free") {
+      const [fresh] = await db.select().from(sourceStreams).where(eq(sourceStreams.id, stream.id)).limit(1);
+      if (fresh?.lastPolledAt != null && fresh.lastPolledAt.getTime() >= t0 && fresh.status !== "error") {
+        return { ok: true }; // another sync just finished — its read IS the fresh data
+      }
+    }
   }
 
   try {

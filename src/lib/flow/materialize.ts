@@ -1,6 +1,7 @@
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import { flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
+import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import { runFlow, buildTile } from "./engine";
 import { getPublishedVersion } from "./store";
 import { parseGraph, type TileSpec } from "./types";
@@ -60,9 +61,24 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
  * Mark stale every published flow whose graph pulls from `source` (or the given
  * connection). Called when new data lands so the dashboard shows freshness and a
  * later recompute refreshes only what changed.
+ *
+ * G.1 — stream precision: when the caller knows WHICH streams changed
+ * (`streamHashes` non-empty), a Get-data step with a chosen resource only
+ * matches when ITS stream is among them — a change in spreadsheet A no longer
+ * recomputes flows that read only spreadsheet B. A step with no chosen
+ * resource reads the whole connection, so it matches any change there; callers
+ * without stream knowledge (webhook path, full re-syncs) pass no hashes and
+ * keep source/connection-level matching.
  */
-export async function markStaleForSource(db: DB, orgId: string, source: string, connectionId?: string | null): Promise<string[]> {
+export async function markStaleForSource(
+  db: DB,
+  orgId: string,
+  source: string,
+  connectionId?: string | null,
+  streamHashes?: string[] | null,
+): Promise<string[]> {
   const published = await db.select().from(flows).where(and(eq(flows.orgId, orgId), eq(flows.status, "published")));
+  const changedHashes = streamHashes?.length ? new Set(streamHashes) : null;
   const affected: string[] = [];
   for (const f of published) {
     if (!f.publishedVersion) continue;
@@ -75,8 +91,13 @@ export async function markStaleForSource(db: DB, orgId: string, source: string, 
     const graph = parseGraph(ver.graph);
     const uses = graph.nodes.some((n) => {
       if (n.type !== "app") return false;
-      const c = (n.data.config ?? {}) as { source?: string; connectionId?: string };
-      return c.source === source || (connectionId != null && c.connectionId === connectionId);
+      const c = (n.data.config ?? {}) as { source?: string; connectionId?: string; sourceConfig?: Record<string, unknown> };
+      const matchesOrigin = c.source === source || (connectionId != null && c.connectionId === connectionId);
+      if (!matchesOrigin) return false;
+      if (changedHashes && hasStreamConfig(c.sourceConfig ?? {})) {
+        return changedHashes.has(streamConfigHash(c.sourceConfig ?? {}));
+      }
+      return true; // whole-connection read, or caller without stream knowledge
     });
     if (uses) {
       await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.flowId, f.id));
@@ -84,6 +105,26 @@ export async function markStaleForSource(db: DB, orgId: string, source: string, 
     }
   }
   return affected;
+}
+
+/**
+ * G.4 — the cheap freshness beacon the dashboard polls. One aggregate over the
+ * org's flow_results (a handful of rows): any recompute, staleness flip, tile
+ * add/remove or error changes the string. Clients poll this (visibility-gated,
+ * 10–15s) and refetch tiles only when it moves — refresh cost scales with
+ * data-change rate, not with viewers holding dashboards open.
+ */
+export async function resultsVersion(db: DB, orgId: string): Promise<string> {
+  const [row] = await db
+    .select({
+      tiles: sql<number>`count(*)::int`,
+      nonFresh: sql<number>`count(*) filter (where ${flowResults.status} <> 'fresh')::int`,
+      maxComputedAt: sql<string | null>`max(${flowResults.computedAt})`,
+    })
+    .from(flowResults)
+    .where(eq(flowResults.orgId, orgId));
+  const maxMs = row?.maxComputedAt ? Date.parse(String(row.maxComputedAt)) : 0;
+  return `${row?.tiles ?? 0}.${row?.nonFresh ?? 0}.${maxMs}`;
 }
 
 /** Recompute every flow that currently has stale results (scheduled + on-demand). */

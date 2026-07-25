@@ -95,6 +95,15 @@ export const rawEvents = pgTable(
  * The canonical, source-agnostic event model. EVERY connector normalizes into
  * this shape. `eventId` is the stable dedup primary key — unique across the
  * whole table (it is namespaced with source + connection by the connector).
+ *
+ * QUERY CONVENTION (load-bearing since the B.1 index redesign): every read of
+ * this table MUST filter `deleted_at IS NULL` — soft-deleted rows are records
+ * the source no longer has, and the composite indexes are PARTIAL over live
+ * rows, so a query without the predicate silently degrades to a sequential
+ * scan at scale. The only exemptions are lookups by `event_id` (unique index)
+ * and deliberate tombstone inspection (admin/debug). Audited call sites:
+ * engine appConds, metrics baseWhere/distinct*, resync + mirror sweeps,
+ * dashboard widgets, flow editor type listing.
  */
 export const events = pgTable(
   "events",

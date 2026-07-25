@@ -57,6 +57,32 @@ async function main() {
         const after = await b.query("select pg_try_advisory_xact_lock(42424242) as ok");
         check("lock released on commit (conn B acquires)", after.rows[0].ok === true);
         await b.query("select pg_advisory_unlock_all()");
+
+        // Q6: the Test path's bounded BLOCKING wait — while A holds the lock,
+        // B's blocking acquire must respect lock_timeout instead of hanging.
+        await a.query("begin");
+        await a.query("select pg_advisory_xact_lock(52525252)");
+        await b.query("begin");
+        await b.query("set local lock_timeout = 300");
+        let timedOut = false;
+        try {
+          await b.query("select pg_advisory_xact_lock(52525252)");
+        } catch {
+          timedOut = true;
+        }
+        await b.query("rollback");
+        check("bounded blocking wait times out while held (Q6 await path)", timedOut);
+        await a.query("commit");
+        await b.query("begin");
+        await b.query("set local lock_timeout = 300");
+        let acquiredAfterRelease = true;
+        try {
+          await b.query("select pg_advisory_xact_lock(52525252)");
+        } catch {
+          acquiredAfterRelease = false;
+        }
+        await b.query("commit");
+        check("blocking wait acquires once released (Q6 await path)", acquiredAfterRelease);
       } finally {
         b.release();
       }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createTestDb, seedConnection } from "./helpers/testdb";
-import { advisoryLockKey, advisoryLocksEnabled, withStreamWriteLock } from "@/lib/sync/locks";
+import { advisoryLockKey, advisoryLocksEnabled, awaitStreamWriteLock, withStreamWriteLock } from "@/lib/sync/locks";
 import { events } from "@/db/schema";
 import type { DB } from "@/db/types";
 
@@ -69,6 +69,19 @@ describe("withStreamWriteLock", () => {
     const again = await withStreamWriteLock(db, "conn-1:stream-a", insertOne);
     expect(again.acquired).toBe(true);
     expect(await db.select().from(events)).toHaveLength(2);
+  });
+
+  it("awaitStreamWriteLock: unsupported on http; acquires-and-releases (\"free\") on pool", async () => {
+    delete process.env.DB_DRIVER;
+    expect(await awaitStreamWriteLock(db, "conn-1:stream-a")).toBe("unsupported");
+
+    process.env.DB_DRIVER = "pool";
+    expect(await awaitStreamWriteLock(db, "conn-1:stream-a", 500)).toBe("free");
+    // Released on return: the try-lock path can acquire immediately after.
+    const r = await withStreamWriteLock(db, "conn-1:stream-a", insertOne);
+    expect(r.acquired).toBe(true);
+    // Cross-session blocking/timeout behavior is proven by
+    // scripts/verify-pool-driver.ts (PGlite is single-session).
   });
 
   it("pool driver: a throwing body rolls the whole critical section back", async () => {
