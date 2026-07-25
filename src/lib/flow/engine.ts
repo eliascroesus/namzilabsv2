@@ -530,7 +530,9 @@ function datasetExec(nodeType: string, nodeId: string, records: FlowRecord[], re
   };
 }
 
-function evalRules(rec: FlowRecord, cfg: FilterConfig): boolean {
+/** Exported for the E.2 parity suite: the JS side is the ORACLE the
+ * compiled SQL must match exactly. */
+export function evalRules(rec: FlowRecord, cfg: FilterConfig): boolean {
   if (cfg.rules.length === 0) return true;
   const results = cfg.rules.map((rule) => evalRule(rec, rule));
   return cfg.combinator === "or" ? results.some(Boolean) : results.every(Boolean);
@@ -538,7 +540,7 @@ function evalRules(rec: FlowRecord, cfg: FilterConfig): boolean {
 
 type Rule = { field: string; op: string; value: string; value2?: string; valueKind?: string; valueField?: string };
 
-function evalRule(rec: FlowRecord, rule: Rule): boolean {
+export function evalRule(rec: FlowRecord, rule: Rule): boolean {
   const raw = getField(rec, rule.field);
   const str = raw == null ? "" : String(raw);
   // Comparison value: a mapped upstream field (resolved per-record) or a literal.
