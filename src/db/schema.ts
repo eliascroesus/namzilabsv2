@@ -78,6 +78,21 @@ export const connections = pgTable(
     /** Why it's paused, in plain language, for the connection page. */
     pausedReason: text("paused_reason"),
     consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+    /**
+     * H.2 — adaptive cadence. Background work scales with CHANGE RATE, not
+     * tenant count: `next_sweep_at` is when this connection is next due, and
+     * the sweep only dispatches connections that are due. Quiet connections
+     * back off (10min → hourly → daily); any activity promotes them instantly.
+     */
+    nextSweepAt: timestamp("next_sweep_at", { withTimezone: true }),
+    /** H.1 — consecutive sweeps that found nothing; drives the backoff tier. */
+    consecutiveNoOpSweeps: integer("consecutive_no_op_sweeps").notNull().default(0),
+    /**
+     * F.5 — when the provider-side webhook subscription was last verified
+     * healthy. A live instant path makes frequent polling redundant, so the
+     * poll demotes to a slow backstop instead of racing the webhook.
+     */
+    webhookHealthyAt: timestamp("webhook_healthy_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

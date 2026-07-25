@@ -7,6 +7,7 @@ import { getConnectionCredentials } from "@/lib/credentials";
 import { claimCalls, isPaused, pauseConnection, recordProviderError, recordSuccess, tripBreaker } from "@/lib/provider-gateway/budget";
 import { upsertEvents } from "./pipeline";
 import { activeStreams, syncStream } from "@/lib/sync/streams";
+import { applyCadence, decideCadence } from "@/lib/sync/cadence";
 
 export type ReconcileResult = {
   inserted: number;
@@ -66,6 +67,9 @@ export async function dueConnectionsForSweep(
       and(
         eq(connections.status, "active"),
         or(isNull(connections.pausedUntil), lte(connections.pausedUntil, now)),
+        // H.2: only connections whose adaptive cadence says they're due. A
+        // never-swept connection (null) is due immediately.
+        or(isNull(connections.nextSweepAt), lte(connections.nextSweepAt, now)),
       ),
     );
 }
@@ -84,13 +88,32 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId)).limit(1);
   if (!conn) throw new Error(`connection ${connectionId} not found`);
 
+  /**
+   * H.1/H.2/F.5 — every exit path records the next due time, so a connection
+   * can never be left without a cadence. Wrapped here rather than sprinkled
+   * through the returns.
+   */
+  const withCadence = async (result: ReconcileResult): Promise<ReconcileResult> => {
+    // Deferred sweeps keep their existing cadence — the pause already schedules
+    // the retry, and a no-op streak shouldn't grow from work we never did.
+    if (result.deferredUntil) return result;
+    const healthy = result.webhook === "ok" || result.webhook === "reregistered";
+    const decision = decideCadence({
+      changed: reconcileChanged(result),
+      previousNoOps: conn.consecutiveNoOpSweeps ?? 0,
+      webhookHealthyAt: healthy ? new Date() : conn.webhookHealthyAt,
+    });
+    await applyCadence(db, conn.id, decision, healthy);
+    return result;
+  };
+
   const connector = getConnector(conn.source);
 
   // F.3/F.6 — deferred work is not lost work. A connection paused by budget
   // exhaustion or a tripped breaker is skipped until its expiry; every pause
   // HAS an expiry, so this can never become a permanent halt.
   if (isPaused(conn)) {
-    return {
+    return withCadence({
       inserted: 0,
       updated: 0,
       softDeleted: 0,
@@ -100,7 +123,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
       deferredUntil: conn.pausedUntil ?? undefined,
       orgId: conn.orgId,
       source: conn.source,
-    };
+    });
   }
 
   // Webhook-subscription health (D.6): sources whose connector can check the
@@ -132,7 +155,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
 
   // Sources that only push (no list endpoint) have nothing to reconcile.
   if (!connector?.poll)
-    return { inserted: 0, updated: 0, softDeleted: 0, deduped: 0, polled: false, webhook, changedStreamHashes: [], orgId: conn.orgId, source: conn.source };
+    return withCadence({ inserted: 0, updated: 0, softDeleted: 0, deduped: 0, polled: false, webhook, changedStreamHashes: [], orgId: conn.orgId, source: conn.source });
 
   if (isStreamScoped(conn.source)) {
     const streams = (await activeStreams(db, connectionId)).filter((s) => s.status !== "disabled");
@@ -147,11 +170,11 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
       const claim = await claimCalls(db, conn, "*");
       if (!claim.allowed) {
         const until = await pauseConnection(db, conn.id, claim.retryAfterMs, `${claim.reason} — resumes automatically`);
-        return {
+        return withCadence({
           inserted, updated, softDeleted, deduped,
           polled: true, webhook, changedStreamHashes,
           deferredUntil: until, orgId: conn.orgId, source: conn.source,
-        };
+        });
       }
       try {
         const r = await syncStream(db, conn, stream, 5);
@@ -168,27 +191,27 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
         if (failures === streams.length) {
           // EVERY stream failed → the connection itself is unhealthy.
           const until = await tripBreaker(db, conn.id, e instanceof Error ? e.message : String(e));
-          return {
+          return withCadence({
             inserted, updated, softDeleted, deduped,
             polled: true, webhook, changedStreamHashes,
             deferredUntil: until.pausedUntil, orgId: conn.orgId, source: conn.source,
-          };
+          });
         }
       }
     }
     if (streams.length > 0 && failures === 0) await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
-    return { inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, changedStreamHashes, orgId: conn.orgId, source: conn.source };
+    return withCadence({ inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, changedStreamHashes, orgId: conn.orgId, source: conn.source });
   }
 
   // F.1: claim before spending a provider call.
   const claim = await claimCalls(db, conn, "*");
   if (!claim.allowed) {
     const until = await pauseConnection(db, conn.id, claim.retryAfterMs, `${claim.reason} — resumes automatically`);
-    return {
+    return withCadence({
       inserted: 0, updated: 0, softDeleted: 0, deduped: 0,
       polled: false, webhook, changedStreamHashes: [],
       deferredUntil: until, orgId: conn.orgId, source: conn.source,
-    };
+    });
   }
 
   const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, connectionId)).limit(1);
@@ -209,11 +232,11 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     // F.6: trip one notch of the probe ladder — paused, never terminal.
     await recordProviderError(db, conn);
     const until = await tripBreaker(db, conn.id, e instanceof Error ? e.message : String(e));
-    return {
+    return withCadence({
       inserted: 0, updated: 0, softDeleted: 0, deduped: 0,
       polled: true, webhook, changedStreamHashes: [],
       deferredUntil: until.pausedUntil, orgId: conn.orgId, source: conn.source,
-    };
+    });
   }
 
   // Connection-scoped reconciliation writes at the connection's current
@@ -229,7 +252,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   // (but never erases a standing webhook-health warning).
   await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
 
-  return { inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped, polled: true, webhook, changedStreamHashes: [], orgId: conn.orgId, source: conn.source };
+  return withCadence({ inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped, polled: true, webhook, changedStreamHashes: [], orgId: conn.orgId, source: conn.source });
 }
 
 async function upsertSyncCursor(db: DB, connectionId: string, cursor: string | null): Promise<void> {

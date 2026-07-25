@@ -64,6 +64,13 @@
       "when": 1784989934295,
       "tag": "0008_same_mysterio",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784992767604,
+      "tag": "0009_clear_wendigo",
+      "breakpoints": true
     }
   ]
 }

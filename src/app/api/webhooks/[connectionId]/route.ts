@@ -8,6 +8,7 @@ import { storeRawEvent } from "@/ingestion/raw-store";
 import { inngest } from "@/inngest/client";
 import { headersToObject } from "@/lib/http";
 import { decrypt, getEncryptionKey } from "@/lib/crypto";
+import { promoteToBaseCadence } from "@/lib/sync/cadence";
 
 export const runtime = "nodejs";
 
@@ -68,6 +69,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
 
   // orgId rides along for the processor's per-tenant concurrency cap (C.3).
   await inngest.send({ name: "ingest/raw.received", data: { rawEventId: raw.id, orgId: conn.orgId } });
+
+  // H.2: inbound data proves this connection is live — cancel any idle backoff
+  // so the reconcile backstop returns to base cadence immediately.
+  await promoteToBaseCadence(db, conn.id).catch(() => {});
 
   return NextResponse.json({ ok: true, rawEventId: raw.id }, { status: 202 });
 }
