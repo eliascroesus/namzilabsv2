@@ -7,7 +7,14 @@ import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "./pipeline";
 import { activeStreams, syncStream } from "@/lib/sync/streams";
 
-export type ReconcileResult = { inserted: number; deduped: number; polled: boolean };
+export type ReconcileResult = {
+  inserted: number;
+  deduped: number;
+  polled: boolean;
+  /** Tenant + source identity, so callers can mark dependent flows stale. */
+  orgId: string;
+  source: string;
+};
 
 /**
  * The safety net that makes "never breaks" true: re-pull recent records from the
@@ -25,7 +32,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
 
   const connector = getConnector(conn.source);
   // Sources that only push (no list endpoint) have nothing to reconcile.
-  if (!connector?.poll) return { inserted: 0, deduped: 0, polled: false };
+  if (!connector?.poll) return { inserted: 0, deduped: 0, polled: false, orgId: conn.orgId, source: conn.source };
 
   if (isStreamScoped(conn.source)) {
     const streams = await activeStreams(db, connectionId);
@@ -41,7 +48,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
         // Recorded on the stream row; other streams keep syncing.
       }
     }
-    return { inserted, deduped, polled: streams.length > 0 };
+    return { inserted, deduped, polled: streams.length > 0, orgId: conn.orgId, source: conn.source };
   }
 
   const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, connectionId)).limit(1);
@@ -59,7 +66,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   const res = await upsertEvents(db, { orgId: conn.orgId, connectionId, source: conn.source }, records);
   await upsertSyncCursor(db, connectionId, nextCursor);
 
-  return { inserted: res.inserted, deduped: res.deduped, polled: true };
+  return { inserted: res.inserted, deduped: res.deduped, polled: true, orgId: conn.orgId, source: conn.source };
 }
 
 async function upsertSyncCursor(db: DB, connectionId: string, cursor: string | null): Promise<void> {

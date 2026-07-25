@@ -31,9 +31,9 @@ export const reprocessConnectionFn = inngest.createFunction(
 export const flowDataChanged = inngest.createFunction(
   { id: "flow-data-changed", retries: 2, triggers: [{ event: "flow/data.changed" }] },
   async ({ event, step }) => {
-    const data = event.data as { orgId?: string; source?: string; rawEventId?: string };
+    const data = event.data as { orgId?: string; source?: string; rawEventId?: string; connectionId?: string };
     if (data.orgId && data.source) {
-      return step.run("mark", () => markStaleForSource(getDb(), data.orgId as string, data.source as string));
+      return step.run("mark", () => markStaleForSource(getDb(), data.orgId as string, data.source as string, data.connectionId ?? null));
     }
     if (data.rawEventId) {
       return step.run("mark-from-raw", async () => {
