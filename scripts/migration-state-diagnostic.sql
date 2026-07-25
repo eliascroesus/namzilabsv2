@@ -3,10 +3,14 @@
 -- Paste into the Neon SQL Editor. Contains NO writes, NO DDL, NO DML.
 -- Every check uses to_regclass / catalog views, so it never errors on a
 -- missing table, column or index -- it just reports false.
+--
+-- !! BEFORE YOU ACT ON THE RESULTS, READ THE WARNING IN SECTION 6. !!
+-- The obvious repair (deleting the 0003 row from the tracker) is itself the
+-- trigger for total, silent loss of every flow in the database.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- Q1a. Does the drizzle tracker exist, and where?
+-- 1a. Does the drizzle tracker exist, and where?
 -- ---------------------------------------------------------------------------
 SELECT
   to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS tracker_in_drizzle_schema,
@@ -14,30 +18,75 @@ SELECT
   EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'drizzle') AS drizzle_schema_exists;
 
 -- ---------------------------------------------------------------------------
--- Q1b. Full tracker contents.  (Run ONLY if tracker_in_drizzle_schema = true.)
+-- 1b. Full tracker contents.  (Run ONLY if tracker_in_drizzle_schema = true.)
+--
+-- The `migration` column maps each stored hash back to the file that produced
+-- it. drizzle hashes the ENTIRE raw .sql file (sha256 of the UTF-8 bytes,
+-- including comments and the --> statement-breakpoint markers). A hash that
+-- shows as 'UNKNOWN' means the .sql file was edited after it was applied --
+-- which drizzle will never notice, because it never reads the hash back.
 -- ---------------------------------------------------------------------------
 SELECT
   id,
-  hash,
   created_at,
-  to_timestamp(created_at / 1000.0) AT TIME ZONE 'UTC' AS created_at_utc
+  CASE WHEN created_at IS NULL THEN NULL
+       ELSE to_timestamp(created_at / 1000.0) AT TIME ZONE 'UTC' END AS created_at_utc,
+  CASE hash
+    WHEN 'd7e87874bd0924b9a56d461ae1ab5a3f0b5b91f07964c03f5ecf5bee85be8dc0' THEN '0000_salty_karen_page'
+    WHEN '0e58a801112632a53bcffabc9a8e3bed0973868a0a13036b0741b5f91762be96' THEN '0001_quick_big_bertha'
+    WHEN 'ecef4f9c267c0bc312f95e22204d079d775a8c5d6c874e39935e6442afac8f53' THEN '0002_easy_joshua_kane'
+    WHEN '2d903d9ed440ad3ce76489a101073f6df3034132ac3d201a415eee67a8e99ba2' THEN '0003_wipe_flows  <-- THE DANGEROUS ONE'
+    WHEN '39f21e599d00d29399c8f630c413afc682369b93757396314aee31010ca72f83' THEN '0004_source_streams'
+    WHEN '1899b942e43ecd2686895a1ce727c3871563faa132fbe2b6aa6106bc72c86b6f' THEN '0005_workable_titania'
+    WHEN 'f694393da00ee27c0bdd4ea0f61615661f0e3c51c5281bbb6c834796812e4cbd' THEN '0006_dashing_ma_gnuci'
+    WHEN '05bb5f001a8970d83a8122b99a95577d2b709e450f15d2e819e0617c9d410dbc' THEN '0007_quiet_lyja'
+    WHEN '7bd8b4695964096ba126af13f500d28c1ebc2a71733a2f5f8151453d8de81deb' THEN '0008_same_mysterio'
+    WHEN 'aa74ed4452f7e8e7ad1b87e4484b83dcfd930e5f1bb0a92574c9fe637fa4ff75' THEN '0009_clear_wendigo'
+    WHEN 'fb29db4846f58954c5ff207f1eff519f856988d68956a815f2d94b97748bc1d4' THEN '0010_youthful_spencer_smythe'
+    WHEN '54f64f851f85103737cafe8248cd1ee378b27a2277cefafc31e0dda125d44729' THEN '0011_brainy_pepper_potts'
+    ELSE 'UNKNOWN (file edited after apply, or hand-written row)'
+  END AS migration,
+  hash
 FROM drizzle.__drizzle_migrations
-ORDER BY created_at;
+ORDER BY created_at NULLS FIRST;
 
 -- ---------------------------------------------------------------------------
--- Q1c. THE ONE NUMBER THAT DECIDES EVERYTHING.
--- drizzle reads exactly this (order by created_at desc limit 1) and applies
--- every journal entry whose `when` is strictly greater. Nothing else matters --
--- the hash column is written but never compared.
+-- 1c. THE ONE VALUE THAT DECIDES EVERYTHING -- read exactly as drizzle reads it.
+--
+-- This is drizzle's own query, verbatim from
+--   node_modules/drizzle-orm/neon-http/migrator.js
+-- It then applies every journal entry whose `when` is STRICTLY GREATER than
+-- Number(created_at) of this single row. The `hash` column is never compared.
+--
+-- DO NOT substitute max(created_at) here. In Postgres, ORDER BY ... DESC
+-- implies NULLS FIRST, so a row with a NULL created_at WINS this query --
+-- and Number(null) === 0 in JavaScript, which makes EVERY migration eligible.
+-- max() ignores NULLs and would report a confidently wrong answer.
+-- A hand-written INSERT that omitted created_at produces exactly this row.
 -- ---------------------------------------------------------------------------
+SELECT id, hash, created_at
+FROM drizzle.__drizzle_migrations
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- 1d. Interpretation of 1c, plus the NULL trap made explicit.
 SELECT
-  count(*)                                                AS rows_in_tracker,
-  max(created_at)                                         AS high_water_mark,
-  to_timestamp(max(created_at) / 1000.0) AT TIME ZONE 'UTC' AS high_water_mark_utc
+  count(*)                                    AS rows_in_tracker,
+  count(*) FILTER (WHERE created_at IS NULL)  AS rows_with_null_created_at,
+  CASE
+    WHEN count(*) = 0 THEN
+      'EMPTY TRACKER -> drizzle replays ALL 12 from 0000 -> dies on CREATE TABLE "connections" (42P07). Loud, no data loss.'
+    WHEN count(*) FILTER (WHERE created_at IS NULL) > 0 THEN
+      'NULL created_at ROW PRESENT -> drizzle picks it, Number(null)=0, ALL 12 replay from 0000 -> dies on CREATE TABLE "connections" (42P07). Loud, no data loss.'
+    WHEN max(created_at) >= 1785600000000 THEN
+      'HWM >= 0003 stamp -> NOTHING runs. db:migrate prints "Migrations applied." and applies zero statements. 0004-0011 are skipped PERMANENTLY.'
+    ELSE
+      'HWM < 0003 stamp -> 0003_wipe_flows WILL RE-RUN AND DELETE ALL flows/flow_versions/flow_results. See section 6.'
+  END AS what_db_migrate_would_do
 FROM drizzle.__drizzle_migrations;
 
 -- ---------------------------------------------------------------------------
--- Q3a. Physical evidence: tables. One row, one column per migration's marker.
+-- 2a. Physical evidence: tables. One row, one column per migration's marker.
 -- ---------------------------------------------------------------------------
 SELECT
   to_regclass('public.connections')       IS NOT NULL AS m0000_connections,
@@ -53,7 +102,7 @@ SELECT
   to_regclass('public.stream_fields')     IS NOT NULL AS m0010_stream_fields;
 
 -- ---------------------------------------------------------------------------
--- Q3b. Physical evidence: columns added by ALTER TABLE migrations.
+-- 2b. Physical evidence: columns added by ALTER TABLE migrations.
 -- ---------------------------------------------------------------------------
 SELECT
   bool_or(table_name='connections'  AND column_name='sync_generation')          AS m0002_conn_sync_generation,
@@ -73,7 +122,7 @@ FROM information_schema.columns
 WHERE table_schema = 'public';
 
 -- ---------------------------------------------------------------------------
--- Q3c. Physical evidence: indexes. 0006 is the only migration that DROPS
+-- 2c. Physical evidence: indexes. 0006 is the only migration that DROPS
 -- indexes, so the three "old_*_still_present" flags must be FALSE if it ran.
 -- ---------------------------------------------------------------------------
 SELECT
@@ -91,9 +140,28 @@ FROM pg_indexes
 WHERE schemaname = 'public';
 
 -- ---------------------------------------------------------------------------
--- Q4. DATA AT RISK. These three counts are exactly what 0003_wipe_flows.sql
--- deletes. It is pure DML (DELETE FROM), so unlike every other migration it
--- SUCCEEDS on a re-run instead of failing -- and takes these rows with it.
+-- 6. DATA AT RISK -- and the warning.
+--
+-- These three counts are exactly what 0003_wipe_flows.sql deletes:
+--     DELETE FROM "flow_results"; DELETE FROM "flow_versions"; DELETE FROM "flows";
+--
+-- 0003 is the ONLY migration made of DML rather than DDL. Every other migration
+-- fails loudly on a re-run ("relation already exists"). 0003 SUCCEEDS.
+--
+-- Its journal timestamp (1785600000000 = 2026-08-01T16:00:00Z) is HIGHER than
+-- every other entry, including 0011. So it re-fires in every tracker state
+-- EXCEPT one where the stored high-water mark is already >= that value.
+--
+-- !!! THE OBVIOUS REPAIR IS THE TRIGGER !!!
+-- Deleting or nulling 0003's tracker row LOWERS the high-water mark below
+-- 1785600000000, which makes 0003 eligible again -- and because every other
+-- migration sits below the new mark, 0003 runs ALONE, succeeds, and exits 0.
+-- A healthy production database is silently emptied of its entire flow
+-- subsystem by a green deploy.
+--
+-- The safe repair edits drizzle/meta/_journal.json FIRST and ships it, and
+-- only THEN touches the tracker row (UPDATE, never DELETE, never to NULL).
+-- Do not run pnpm db:migrate until that has been done in that order.
 -- ---------------------------------------------------------------------------
 SELECT
   (SELECT count(*) FROM flows)         AS flows_at_risk,
