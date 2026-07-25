@@ -11,6 +11,12 @@ import { Inngest } from "inngest";
  * boost — sweep runs send 0; interactive senders (the future Test lane) send
  * high values. Backfill gets its own low-priority function when E.8 lands.
  *
+ * SENDER RULE for ingest/reconcile.requested: the cron dispatcher ONLY. The
+ * worker is singleton-skip (an in-flight connection's new events are silently
+ * dropped — correct for a sweep that re-dispatches every tick, a trust bug for
+ * anything user-initiated). User actions ride sync/connection.requested, which
+ * QUEUES per connection and always runs. Pinned in tests/inngest-config.test.ts.
+ *
  * The durable execution client. Inngest gives us retries with exponential
  * backoff, concurrency control, scheduled (cron) functions, step-level
  * memoization, and a failure hook — the reliability backbone. We do not
