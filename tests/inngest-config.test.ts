@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { reconcileAll, reconcileOne } from "@/inngest/functions/reconcile";
 import { processEvent } from "@/inngest/functions/process-event";
+import { runFlowTest } from "@/inngest/functions/test-run";
 import { syncConnection, recomputeStaleFlows, materializeStale } from "@/inngest/functions/sync";
 
 /**
@@ -62,5 +63,13 @@ describe("Inngest safety configuration is pinned", () => {
   it("materializeStale backstop cron stays in place", () => {
     const o = opts(materializeStale);
     expect(o.triggers).toEqual([{ cron: "*/10 * * * *" }]);
+  });
+
+  it("runFlowTest (interactive Test lane): no auto-retries, org-fair, priority-boosted", () => {
+    const o = opts(runFlowTest);
+    expect(o.id).toBe("run-flow-test");
+    expect(o.retries).toBe(0); // retries would make the editor spinner lie
+    expect(o.concurrency).toEqual([{ limit: 6 }, { key: "event.data.orgId", limit: 2 }]);
+    expect(o.priority).toEqual({ run: "event.data.priority ?? 180" });
   });
 });

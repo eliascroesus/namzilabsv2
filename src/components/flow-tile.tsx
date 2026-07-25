@@ -74,8 +74,12 @@ export function FlowTile({ row }: { row: FlowResultRow }) {
         </>
       )}
 
+      {/* The honesty marker (G.3): every materialized number says WHEN it was
+          true. A stale tile's timestamp shows exactly how far behind it is. */}
       {row.computedAt && (
-        <p className="mt-3 text-xs text-neutral-400">Updated {new Date(row.computedAt).toLocaleString()}</p>
+        <p className="mt-3 text-xs text-neutral-400" title={new Date(row.computedAt).toLocaleString()}>
+          Data as of {new Date(row.computedAt).toLocaleString()}
+        </p>
       )}
     </div>
   );

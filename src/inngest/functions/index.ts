@@ -1,6 +1,7 @@
 import { processEvent } from "./process-event";
 import { reconcileAll, reconcileOne } from "./reconcile";
 import { materializeFlowFn } from "./materialize";
+import { runFlowTest } from "./test-run";
 import { syncConnection, reprocessConnectionFn, flowDataChanged, recomputeStaleFlows, materializeStale } from "./sync";
 
 export const functions = [
@@ -8,6 +9,7 @@ export const functions = [
   reconcileAll,
   reconcileOne,
   materializeFlowFn,
+  runFlowTest,
   syncConnection,
   reprocessConnectionFn,
   flowDataChanged,

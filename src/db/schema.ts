@@ -297,6 +297,28 @@ export const flowVersions = pgTable(
 );
 
 /**
+ * One user-initiated Test execution (D.1-full): the editor's Test button
+ * enqueues a run on the high-priority lane and polls this row for the result,
+ * so the interactive path never holds a long request open and never loses to a
+ * serverless timeout. Rows are ephemeral working state (TTL cleanup rides the
+ * delivery_log retention job when that ships).
+ */
+export const testRuns = pgTable(
+  "test_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    status: text("status").notNull().default("queued"), // queued | running | ok | error
+    /** The NodeTestDTO the editor renders, once settled. */
+    result: jsonb("result").$type<Record<string, unknown>>(),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("test_runs_org_idx").on(t.orgId), index("test_runs_created_idx").on(t.createdAt)],
+);
+
+/**
  * Materialized latest result for each Output node of a published flow. The
  * dashboard reads these (fast) instead of recomputing flows on every load; a
  * materializer refreshes them on publish, on relevant new data, on a schedule,
