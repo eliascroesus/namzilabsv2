@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { storeRawEvent } from "@/ingestion/raw-store";
-import { processRawEvent } from "@/ingestion/pipeline";
+import { processRawEvent, upsertEvents } from "@/ingestion/pipeline";
 import { events, deliveryLog, connections } from "@/db/schema";
 import type { DB } from "@/db/types";
 
@@ -55,6 +55,27 @@ describe("ingestion pipeline: dedup + idempotency", () => {
     // occurred_at is pinned at first write, so synthetic timestamps can't drift.
     expect(second).toEqual({ inserted: 0, updated: 0, deduped: 1, total: 1 });
     expect(await db.select().from(events)).toHaveLength(1);
+  });
+
+  it("a webhook redelivery arriving AFTER a higher-generation poll refresh cannot regress the row", async () => {
+    const connectionId = await seedConnection(db);
+    const rawId = await storeAndGetId(connectionId, { id: "e1", type: "booked", stage: "old" });
+    await processRawEvent(db, rawId); // gen 0 insert
+
+    // A poll later refreshes the SAME event_id at generation 3 with newer data.
+    await upsertEvents(
+      db,
+      { orgId: "org_test", connectionId, source: "webhook", generation: 3 },
+      [{ eventId: `webhook:${connectionId}:e1`, eventType: "booked", subject: null, occurredAt: new Date("2026-02-01T00:00:00Z"), properties: { id: "e1", type: "booked", stage: "fresh" } }],
+    );
+
+    // The provider redelivers the ORIGINAL webhook (gen 0) afterwards.
+    const redelivery = await processRawEvent(db, rawId);
+    expect(redelivery).toEqual({ inserted: 0, updated: 0, deduped: 1, total: 1 });
+
+    const [row] = await db.select().from(events).where(eq(events.eventId, `webhook:${connectionId}:e1`));
+    expect((row.properties as Record<string, unknown>).stage).toBe("fresh"); // no content regression
+    expect(row.syncGeneration).toBe(3); // no downgrade
   });
 
   it("dedups across separate deliveries carrying the same natural id", async () => {

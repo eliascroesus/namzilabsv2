@@ -1,6 +1,6 @@
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
-import { getDb } from "@/db/client";
+import { getReadDb } from "@/db/client";
 import { listFlows } from "@/lib/flow/store";
 import { createFlowAction } from "./actions";
 import { FlowRow } from "./FlowRow";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function FlowsPage() {
   const { orgId, userId, auth } = await requireOrg();
-  const flows = await listFlows(getDb(), orgId).catch(() => []);
+  const flows = await listFlows(getReadDb(), orgId).catch(() => []);
 
   return (
     <>

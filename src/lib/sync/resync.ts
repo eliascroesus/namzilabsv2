@@ -175,6 +175,13 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
   // Soft-delete is scoped to the streams actually re-polled THIS run. A blanket
   // connection-wide delete would tombstone rows of streams the run never read
   // (e.g. a disabled/paused stream) — cross-stream data loss, not cleanup.
+  //
+  // The webhook exemption here is STRUCTURAL, not numeric: webhook/instant rows
+  // carry stream_hash = NULL and can never match the polled-hash scope. Rows
+  // WITH a polled stream's hash are stream-managed whatever their generation —
+  // including legacy generation-0 rows from the pre-unified writer — so a row
+  // whose sheet row disappeared before the first new-style sweep is still
+  // retired by this pass instead of lingering as a ghost.
   const del = polledHashes.length
     ? await db
         .update(events)
@@ -183,7 +190,6 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
           and(
             eq(events.connectionId, conn.id),
             inArray(events.streamHash, polledHashes),
-            gte(events.syncGeneration, 1),
             lt(events.syncGeneration, gen),
             isNull(events.deletedAt),
           ),

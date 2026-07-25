@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { getReadDb } from "@/db/client";
 import { connections, deadLetter, events, flowResults, flows } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
@@ -30,7 +30,7 @@ type Tile =
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const { orgId, userId, auth } = await requireOrg();
-  const db = getDb();
+  const db = getReadDb(); // read-only surface: rides the DB_DRIVER_READ soak seam (B.3)
 
   const rangeKey = one(sp.range) || "7d";
   const { range } = resolveRange(rangeKey);

@@ -48,6 +48,12 @@ export type ConnectorCatalogEntry = {
   poll: boolean;
   /** Guarantee class (defaults: poll sources "incremental", else "webhook-only"). */
   sync?: SyncGuarantee;
+  /**
+   * Provider-declared budgets per operation (from published docs), keyed
+   * `"resource.verb"`. The reactive layer sizes page walks under them today;
+   * the provider-gateway token buckets (workstream F) will enforce them.
+   */
+  rateLimits?: Record<string, { requestsPerMinute: number }>;
   /** Whether we auto-create the provider webhook subscription on connect. */
   autoWebhook: boolean;
   credentialFields: CredentialField[];
@@ -114,9 +120,12 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     description: "Emails sent, opens, replies and bounces from cold outreach.",
     connect: "apiKey",
     instant: true,
-    poll: false,
+    // Poll backstop over the v2 emails list (requires a v2 API key).
+    poll: true,
+    // Instantly's published endpoint-specific budget for GET /api/v2/emails.
+    rateLimits: { "emails.list": { requestsPerMinute: 20 } },
     autoWebhook: false,
-    credentialFields: [{ key: "apiKey", label: "API Key", placeholder: "..." }],
+    credentialFields: [{ key: "apiKey", label: "API Key (v2)", placeholder: "..." }],
     webhookSetup:
       "In Instantly, add a webhook pointing to the URL below. Optionally set an HMAC secret and paste it here to verify signatures.",
   },
@@ -126,7 +135,9 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     description: "iMessage/SMS sent, delivered and received.",
     connect: "apiKey",
     instant: true,
-    poll: false,
+    // Poll backstop over the message history list; the sweep also verifies the
+    // provider-side webhook subscription and re-registers it when missing.
+    poll: true,
     autoWebhook: false,
     credentialFields: [
       { key: "apiKey", label: "API Key ID", placeholder: "..." },

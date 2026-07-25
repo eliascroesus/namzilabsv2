@@ -15,6 +15,13 @@ export type ReconcileResult = {
   softDeleted: number;
   deduped: number;
   polled: boolean;
+  /**
+   * Provider-side webhook subscription state, for sources whose connector can
+   * verify it: "ok" (present), "reregistered" (was missing, re-created this
+   * sweep), "failed" (couldn't verify — detail on the connection's lastError).
+   * Undefined when the source has no verifiable subscription.
+   */
+  webhook?: "ok" | "reregistered" | "failed";
   /** Tenant + source identity, so callers can mark dependent flows stale. */
   orgId: string;
   source: string;
@@ -40,8 +47,36 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   if (!conn) throw new Error(`connection ${connectionId} not found`);
 
   const connector = getConnector(conn.source);
+
+  // Webhook-subscription health (D.6): sources whose connector can check the
+  // provider side get verified every sweep, re-registering a lost subscription
+  // before its absence turns into a data gap. Never blocks the poll below.
+  let webhook: ReconcileResult["webhook"];
+  if (connector?.verifyWebhookSubscription) {
+    try {
+      const credentials = await getConnectionCredentials(db, conn);
+      // Same construction as webhookUrlFor (src/lib/connections.ts), inlined so
+      // the ingestion layer doesn't pull in app-layer modules.
+      const webhookUrl = `${process.env.APP_BASE_URL ?? ""}/api/webhooks/${conn.id}`;
+      const v = await connector.verifyWebhookSubscription({ connectionId: conn.id, webhookUrl, credentials });
+      webhook = v.healthy ? (v.reregistered ? "reregistered" : "ok") : "failed";
+      if (!v.healthy) {
+        await db
+          .update(connections)
+          .set({ lastError: `Webhook subscription check failed: ${v.detail ?? "unknown"}`, updatedAt: new Date() })
+          .where(eq(connections.id, conn.id));
+      }
+    } catch (e) {
+      webhook = "failed";
+      await db
+        .update(connections)
+        .set({ lastError: `Webhook subscription check failed: ${e instanceof Error ? e.message : String(e)}`, updatedAt: new Date() })
+        .where(eq(connections.id, conn.id));
+    }
+  }
+
   // Sources that only push (no list endpoint) have nothing to reconcile.
-  if (!connector?.poll) return { inserted: 0, updated: 0, softDeleted: 0, deduped: 0, polled: false, orgId: conn.orgId, source: conn.source };
+  if (!connector?.poll) return { inserted: 0, updated: 0, softDeleted: 0, deduped: 0, polled: false, webhook, orgId: conn.orgId, source: conn.source };
 
   if (isStreamScoped(conn.source)) {
     const streams = await activeStreams(db, connectionId);
@@ -61,7 +96,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
         // Recorded on the stream row; other streams keep syncing.
       }
     }
-    return { inserted, updated, softDeleted, deduped, polled: streams.length > 0, orgId: conn.orgId, source: conn.source };
+    return { inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, orgId: conn.orgId, source: conn.source };
   }
 
   const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, connectionId)).limit(1);
@@ -86,7 +121,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   );
   await upsertSyncCursor(db, connectionId, nextCursor);
 
-  return { inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped, polled: true, orgId: conn.orgId, source: conn.source };
+  return { inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped, polled: true, webhook, orgId: conn.orgId, source: conn.source };
 }
 
 async function upsertSyncCursor(db: DB, connectionId: string, cursor: string | null): Promise<void> {

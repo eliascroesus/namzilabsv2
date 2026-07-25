@@ -128,6 +128,42 @@ describe("full re-sync scopes soft-delete to the streams it re-polled", () => {
     expect(await liveNames(hashA)).toEqual(["a-row-1"]);
   });
 
+  it("full re-sync sweeps legacy generation-0 stream rows (structural exemption: hash, not generation)", async () => {
+    const hashA = streamConfigHash(CFG_A);
+    // A pre-unification leftover: stream-tagged but generation 0, and its
+    // sheet row no longer exists upstream.
+    await db.insert(events).values({
+      eventId: `gsheets:${connId}:${hashA}:row:99`,
+      orgId: ORG,
+      connectionId: connId,
+      source: "gsheets",
+      eventType: "row_added",
+      occurredAt: new Date("2026-01-01T00:00:00Z"),
+      properties: { name: "ghost" },
+      streamHash: hashA,
+      syncGeneration: 0,
+    });
+    // A webhook push row (NULL hash, generation 0) that must survive.
+    await db.insert(events).values({
+      eventId: `gsheets:${connId}:row:push-1`,
+      orgId: ORG,
+      connectionId: connId,
+      source: "gsheets",
+      eventType: "row_added",
+      occurredAt: new Date("2026-01-01T00:00:00Z"),
+      properties: { name: "push" },
+      streamHash: null,
+      syncGeneration: 0,
+    });
+
+    await runSync(db, connId, "full");
+
+    const [ghost] = await db.select().from(events).where(eq(events.eventId, `gsheets:${connId}:${hashA}:row:99`));
+    expect(ghost.deletedAt).not.toBeNull(); // swept on the first full pass
+    const [push] = await db.select().from(events).where(eq(events.eventId, `gsheets:${connId}:row:push-1`));
+    expect(push.deletedAt).toBeNull(); // structurally exempt (NULL stream_hash)
+  });
+
   it("still tombstones upstream-deleted rows of every re-polled stream", async () => {
     const hashA = streamConfigHash(CFG_A);
     const hashB = streamConfigHash(CFG_B);

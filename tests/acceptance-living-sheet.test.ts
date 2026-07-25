@@ -149,6 +149,45 @@ describe("living spreadsheet — live rows equal the sheet after every sweep", (
     expect((await liveRows()).every((r) => "Channel" in r && !("Source" in r))).toBe(true);
   });
 
+  it("legacy generation-0 stream rows are swept: a pre-unification leftover whose sheet row is gone gets tombstoned by the first sweep", async () => {
+    // The pre-unified writer stamped stream rows with generation 0 (the
+    // webhook class). Simulate one whose sheet row was deleted upstream before
+    // any new-style sweep ran: row 99 doesn't exist in the fixture.
+    await db.insert(events).values({
+      eventId: `gsheets:${connId}:${HASH}:row:99`,
+      orgId: ORG,
+      connectionId: connId,
+      source: "gsheets",
+      eventType: "row_added",
+      occurredAt: new Date("2026-01-01T00:00:00Z"),
+      properties: { Name: "Ghost", Source: "ig", Booked: "Yes" },
+      streamHash: HASH,
+      syncGeneration: 0, // legacy class
+    });
+    // A webhook push row (NULL stream_hash) must survive every sweep — the
+    // exemption is structural, not numeric.
+    await db.insert(events).values({
+      eventId: `gsheets:${connId}:row:push-1`,
+      orgId: ORG,
+      connectionId: connId,
+      source: "gsheets",
+      eventType: "row_added",
+      occurredAt: new Date("2026-01-01T00:00:00Z"),
+      properties: { Name: "Push" },
+      streamHash: null,
+      syncGeneration: 0,
+    });
+
+    const first = await sweep();
+    expect(first.softDeleted).toBeGreaterThan(0);
+    await expectMirror(); // the ghost is gone from live rows
+
+    const [ghost] = await db.select().from(events).where(eq(events.eventId, `gsheets:${connId}:${HASH}:row:99`));
+    expect(ghost.deletedAt).not.toBeNull();
+    const [push] = await db.select().from(events).where(eq(events.eventId, `gsheets:${connId}:row:push-1`));
+    expect(push.deletedAt).toBeNull();
+  });
+
   it("occurredAt is stable across refreshes (first-seen time survives edits)", async () => {
     await sweep();
     const before = await db.select().from(events).where(eq(events.eventId, `gsheets:${connId}:${HASH}:row:2`));

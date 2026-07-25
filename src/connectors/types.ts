@@ -71,6 +71,22 @@ export type RegisterWebhookResult = {
   externalId?: string;
 };
 
+export type VerifyWebhookArgs = {
+  connectionId: string;
+  /** Our inbound URL the provider must be pointing a subscription at. */
+  webhookUrl: string;
+  credentials?: Record<string, unknown> | null;
+};
+
+export type VerifyWebhookResult = {
+  /** True when a subscription to our URL verifiably exists after this call. */
+  healthy: boolean;
+  /** True when the subscription was missing and this call re-created it. */
+  reregistered: boolean;
+  /** Human-readable detail when unhealthy (surfaced on the connection). */
+  detail?: string;
+};
+
 /**
  * The contract every integration implements. `verifySignature` + `normalize`
  * power the instant (webhook) path; `poll` powers the reconciliation/backfill
@@ -92,4 +108,9 @@ export interface Connector {
   testFetchLatest?(n: number, args: PollArgs): Promise<CanonicalEvent[]>;
   /** Optional: auto-create the provider's webhook subscription at connect time. */
   registerWebhook?(args: RegisterWebhookArgs): Promise<RegisterWebhookResult>;
+  /**
+   * Optional: verify the provider-side subscription still points at our URL and
+   * re-create it when missing (webhook-health backstop, run by the sweep).
+   */
+  verifyWebhookSubscription?(args: VerifyWebhookArgs): Promise<VerifyWebhookResult>;
 }

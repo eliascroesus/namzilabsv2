@@ -5,7 +5,7 @@ import { reconcileConnection } from "@/ingestion/reconcile";
 import { registerConnector } from "@/connectors/registry";
 import { markStaleForSource } from "@/lib/flow/materialize";
 import type { Connector, CanonicalEvent } from "@/connectors/types";
-import { syncState, events, flows, flowVersions, flowResults } from "@/db/schema";
+import { syncState, events, flows, flowVersions, flowResults, connections } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 let db: DB;
@@ -28,6 +28,18 @@ const pollConnector: Connector = {
   poll: async () => ({ records: [record("a"), record("b")], nextCursor: "cursor-1" }),
 };
 registerConnector(pollConnector);
+
+// A connector with provider-side webhook verification (the D.6 sweep hook).
+let WEBHOOK_HEALTH: { healthy: boolean; reregistered: boolean; detail?: string } = { healthy: true, reregistered: false };
+const hookedConnector: Connector = {
+  source: "hooked-poller",
+  authType: "none",
+  verifySignature: () => true,
+  normalize: () => [],
+  poll: async () => ({ records: [], nextCursor: null }),
+  verifyWebhookSubscription: async () => WEBHOOK_HEALTH,
+};
+registerConnector(hookedConnector);
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
@@ -59,6 +71,29 @@ describe("reconciliation / backfill", () => {
     const connectionId = await seedConnection(db, { source: "webhook" });
     const res = await reconcileConnection(db, connectionId);
     expect(res).toEqual({ inserted: 0, updated: 0, softDeleted: 0, deduped: 0, polled: false, orgId: "org_test", source: "webhook" });
+  });
+});
+
+describe("webhook subscription health (D.6) runs with the sweep", () => {
+  it("reports ok / reregistered states on the reconcile result", async () => {
+    const connectionId = await seedConnection(db, { source: "hooked-poller" });
+    WEBHOOK_HEALTH = { healthy: true, reregistered: false };
+    expect((await reconcileConnection(db, connectionId)).webhook).toBe("ok");
+
+    WEBHOOK_HEALTH = { healthy: true, reregistered: true };
+    expect((await reconcileConnection(db, connectionId)).webhook).toBe("reregistered");
+  });
+
+  it("a failed check surfaces on the connection without blocking the poll", async () => {
+    const connectionId = await seedConnection(db, { source: "hooked-poller" });
+    WEBHOOK_HEALTH = { healthy: false, reregistered: false, detail: "provider 500" };
+    const res = await reconcileConnection(db, connectionId);
+    expect(res.webhook).toBe("failed");
+    expect(res.polled).toBe(true); // the poll still ran
+
+    const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId));
+    expect(conn.lastError).toContain("Webhook subscription check failed");
+    expect(conn.lastError).toContain("provider 500");
   });
 });
 
