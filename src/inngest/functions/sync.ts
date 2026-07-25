@@ -7,7 +7,16 @@ import { rawEvents } from "@/db/schema";
 
 /** Sync a connection (full backfill/re-sync or incremental). */
 export const syncConnection = inngest.createFunction(
-  { id: "sync-connection", retries: 3, triggers: [{ event: "sync/connection.requested" }] },
+  {
+    id: "sync-connection",
+    retries: 3,
+    // C.1: one sync per connection at a time — a full re-sync's generation
+    // bump + retire sweep must never interleave with another sync of the same
+    // connection. (Cross-function exclusion vs the cron sweep arrives with the
+    // advisory-lock critical sections once the pool driver is live.)
+    concurrency: { key: "event.data.connectionId", limit: 1 },
+    triggers: [{ event: "sync/connection.requested" }],
+  },
   async ({ event, step }) => {
     const { connectionId, mode } = event.data as { connectionId: string; mode: "full" | "incremental" };
     const res = await step.run("sync", () => runSync(getDb(), connectionId, mode));

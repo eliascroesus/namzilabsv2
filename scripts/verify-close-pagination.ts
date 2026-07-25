@@ -102,3 +102,5 @@ main().catch((e) => {
   console.error(`\nAborted: ${e instanceof Error ? e.message : e}`);
   process.exit(2);
 });
+
+export {};

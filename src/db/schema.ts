@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -121,10 +122,25 @@ export const events = pgTable(
   },
   (t) => [
     uniqueIndex("events_event_id_uq").on(t.eventId),
+    // Only index carrying event_type (distinct-type dropdowns, type filters).
     index("events_org_type_idx").on(t.orgId, t.eventType),
-    index("events_occurred_idx").on(t.occurredAt),
-    index("events_conn_idx").on(t.connectionId),
-    index("events_conn_stream_idx").on(t.connectionId, t.streamHash),
+    // B.1 partial composites over LIVE rows — every production reader filters
+    // deleted_at IS NULL. EXPLAIN-verified in tests/indexes-explain.test.ts.
+    // The old single-purpose indexes (occurred_at), (connection_id) and
+    // (connection_id, stream_hash) were strictly dominated by these for every
+    // live query shape in the code and were dropped: redundant indexes cost
+    // every write and left the planner picking between near-identical paths.
+    //
+    // Engine Get-data reads: newest-first scan of one stream (prefix also
+    // serves whole-connection reads); (occurred_at DESC, id DESC) matches the
+    // compiled engine's future deterministic total order.
+    index("events_conn_stream_live_idx")
+      .on(t.connectionId, t.streamHash, t.occurredAt.desc(), t.id.desc())
+      .where(sql`deleted_at is null`),
+    // Classic metrics / org-wide reads: org + time-range over live rows.
+    index("events_org_live_occurred_idx").on(t.orgId, t.occurredAt).where(sql`deleted_at is null`),
+    // Full-resync sweeps: retire live rows below the new generation.
+    index("events_conn_gen_live_idx").on(t.connectionId, t.syncGeneration).where(sql`deleted_at is null`),
   ],
 );
 

@@ -14,7 +14,15 @@ import { reconcileConnection, reconcileChanged } from "@/ingestion/reconcile";
  * stale and dashboards refresh — previously only webhooks and full re-syncs did.
  */
 export const reconcileAll = inngest.createFunction(
-  { id: "reconcile-connections", retries: 3, triggers: [{ cron: "*/10 * * * *" }] },
+  {
+    id: "reconcile-connections",
+    retries: 3,
+    // C.1: never let two sweeps stack. A sweep that outlives its 10-minute
+    // interval (the serial-saturation scenario) must finish before the next
+    // starts, or the same connections get polled concurrently.
+    concurrency: { limit: 1 },
+    triggers: [{ cron: "*/10 * * * *" }],
+  },
   async ({ step }) => {
     const db = getDb();
     const active = await step.run("load-active-connections", () =>
@@ -38,7 +46,14 @@ export const reconcileAll = inngest.createFunction(
 
 /** On-demand reconciliation for a single connection (admin "re-sync now"). */
 export const reconcileOne = inngest.createFunction(
-  { id: "reconcile-one-connection", retries: 3, triggers: [{ event: "ingest/reconcile.requested" }] },
+  {
+    id: "reconcile-one-connection",
+    retries: 3,
+    // C.1: serialize per connection — two "re-sync now" clicks (or a click
+    // racing a retry) never poll the same connection concurrently.
+    concurrency: { key: "event.data.connectionId", limit: 1 },
+    triggers: [{ event: "ingest/reconcile.requested" }],
+  },
   async ({ event, step }) => {
     const { connectionId } = event.data as { connectionId: string };
     const r = await step.run("reconcile", () => reconcileConnection(getDb(), connectionId));
