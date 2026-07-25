@@ -28,8 +28,12 @@ export const reconcileAll = inngest.createFunction(
   },
   async ({ step }) => {
     const db = getDb();
+    // Only ACTIVE connections are swept: "disabled" is the user's off switch,
+    // and "error" means credentials/processing are broken — polling would burn
+    // provider quota on guaranteed failures until the connection is repaired
+    // (reconnect / replay flips it back to active).
     const active = await step.run("load-active-connections", () =>
-      db.select({ id: connections.id }).from(connections).where(eq(connections.status, "active")),
+      db.select({ id: connections.id, orgId: connections.orgId }).from(connections).where(eq(connections.status, "active")),
     );
 
     if (active.length > 0) {
@@ -39,9 +43,10 @@ export const reconcileAll = inngest.createFunction(
           name: "ingest/reconcile.requested" as const,
           data: {
             connectionId: conn.id,
+            orgId: conn.orgId,
             // Sweep lane: lowest priority — interactive work outranks it.
             priority: 0,
-            // F.4: spread the herd across the tick (0–5s, slept in-process).
+            // F.4: spread the herd across the tick (slept durably in the worker).
             jitterMs: Math.floor(Math.random() * 5_000),
           },
         })),
@@ -60,22 +65,29 @@ export const reconcileOne = inngest.createFunction(
   {
     id: "reconcile-one-connection",
     retries: 3,
-    // Two levels: a global cap so a big fleet can't stampede providers/Neon,
-    // and per-connection serialization (C.1) so the same connection is never
-    // polled concurrently.
-    concurrency: [{ limit: 10 }, { key: "event.data.connectionId", limit: 1 }],
+    // Pileup guard: while a run for this connection is in flight, NEW events
+    // for it are SKIPPED, not queued — a slow/wedged connection can't
+    // accumulate a backlog across successive cron ticks. (Per-tick idempotency
+    // wouldn't help: each tick mints a distinct key and still queues.) The
+    // skipped tick loses nothing — the next tick re-dispatches, and singleton
+    // also serializes per connection (C.1's queue-level guarantee).
+    singleton: { key: "event.data.connectionId", mode: "skip" },
+    // C.3: a global cap so a big fleet can't stampede providers/Neon, and a
+    // per-TENANT cap so one org's many connections can't monopolize the pool.
+    concurrency: [{ limit: 10 }, { key: "event.data.orgId", limit: 3 }],
     // Interactive lanes outrank the sweep: priority is seconds of queue boost.
     priority: { run: "event.data.priority ?? 0" },
     triggers: [{ event: "ingest/reconcile.requested" }],
   },
   async ({ event, step }) => {
     const { connectionId, jitterMs } = event.data as { connectionId: string; jitterMs?: number };
-    const r = await step.run("reconcile", async () => {
-      // In-process jitter (no extra Inngest step): only the sweep lane sets it.
-      const wait = Math.min(Math.max(jitterMs ?? 0, 0), 10_000);
-      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-      return reconcileConnection(getDb(), connectionId);
-    });
+    // F.4, durable form: step.sleep suspends the run WITHOUT holding a
+    // concurrency slot (an in-process sleep would idle one of the 10 global
+    // workers). Costs one extra step, only on sweep-lane runs; the Q8 sharded
+    // scheduler replaces this dispatcher before that step count matters.
+    const wait = Math.min(Math.max(jitterMs ?? 0, 0), 10_000);
+    if (wait > 0) await step.sleep("jitter", wait);
+    const r = await step.run("reconcile", () => reconcileConnection(getDb(), connectionId));
     if (reconcileChanged(r)) {
       await step.run("notify-flows", () =>
         inngest.send({

@@ -66,7 +66,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
     signatureValid: true,
   });
 
-  await inngest.send({ name: "ingest/raw.received", data: { rawEventId: raw.id } });
+  // orgId rides along for the processor's per-tenant concurrency cap (C.3).
+  await inngest.send({ name: "ingest/raw.received", data: { rawEventId: raw.id, orgId: conn.orgId } });
 
   return NextResponse.json({ ok: true, rawEventId: raw.id }, { status: 202 });
 }
