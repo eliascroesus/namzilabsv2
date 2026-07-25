@@ -17,7 +17,33 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     steps:
+      # NOTE: checkout has no `ref:`, so on workflow_dispatch it checks out the
+      # branch chosen in the "Run workflow" dropdown — which DEFAULTS TO THE
+      # REPOSITORY DEFAULT BRANCH (main). Running this before the migration-fix
+      # branch is merged, with the dropdown left on main, would check out the
+      # pre-2026-07-25 journal in which 0003_wipe_flows carries the future-dated
+      # stamp 1785600000000. Against a baselined tracker that makes 0003 the one
+      # eligible migration: it deletes every flow, flow_version and flow_result
+      # and exits 0. The guard below makes that impossible rather than relying on
+      # whoever dispatches the run picking the right branch.
       - uses: actions/checkout@v4
+
+      - name: Refuse to run an armed 0003_wipe_flows
+        run: |
+          set -euo pipefail
+          fail=0
+          if grep -q '1785600000000' drizzle/meta/_journal.json; then
+            echo "::error::_journal.json still carries the armed 0003 stamp 1785600000000."
+            echo "::error::This ref predates the migration-tracker repair. Re-run with the"
+            echo "::error::repaired branch selected, or merge it to the default branch first."
+            fail=1
+          fi
+          if grep -qE '^[[:space:]]*DELETE[[:space:]]+FROM' drizzle/0003_wipe_flows.sql; then
+            echo "::error::0003_wipe_flows.sql contains a live DELETE. It must stay disarmed."
+            fail=1
+          fi
+          if [ "$fail" -ne 0 ]; then exit 1; fi
+          echo "✅ 0003_wipe_flows is disarmed and the journal stamp is corrected."
 
       - uses: pnpm/action-setup@v4
         with:

@@ -82,22 +82,55 @@ code 0 and no error message**. Verified by simulation against the real journal:
 | **Tracker baselined with the corrected stamp while the deployed journal still says `1785600000000`** | 1784588933782 | `0003` becomes eligible → **runs → all flows deleted → exit 0.** |
 | Tracker baselined using the *unpatched* `1785600000000` | 1785600000000 | Nothing ever runs again. `0005`–`0011` stranded permanently, `db:migrate` reports success. |
 
-**Do not run step 0b until step 0a is deployed.**
+**Do not run step 0c until step 0a is pushed, and take the 0b snapshot first.**
 
-### Step 0a — correct the journal timestamp, commit, deploy
+### Step 0a — repo-side fixes ✅ DONE (commit `9bef3bb`..`HEAD`)
 
-In `drizzle/meta/_journal.json`, entry `idx: 3` (`0003_wipe_flows`):
+No database writes. Three changes, all shipped and verified (typecheck clean,
+430/430 tests, build green):
 
-```
-"when": 1785600000000   ->   "when": 1784400000000
-```
+1. **`drizzle/meta/_journal.json`**, entry `idx: 3`:
+   `"when": 1785600000000` → `"when": 1784400000000` (2026-07-18T18:40:00Z),
+   strictly between `0002` (1784305785818) and `0004` (1784588933782), where
+   `0003` actually belongs chronologically.
 
-`1784400000000` sits strictly between `0002` (1784305785818) and `0004`
-(1784588933782), which is where `0003` actually belongs chronologically. Commit
-and **deploy** this before touching the database. Until it is deployed, an
-accidental `db:migrate` still just fails safely at `0000`.
+2. **`drizzle/0003_wipe_flows.sql` disarmed.** The three `DELETE` statements are
+   replaced by `SELECT 1;` — a statement that cannot fail on any schema in any
+   state. The originals are preserved verbatim in the file's header comment
+   along with their original stated purpose and the reason for disabling, so the
+   history of what ran on 2026-07-19 is not lost. Safe to edit an applied
+   migration because drizzle writes each file's sha256 into the tracker but
+   **never reads it back** — there is no drift detection to violate.
+   New hash: `f152771ebbfaa216bef6a5930d857e78303e904aa45c5c47a44c252d5bd70667`.
 
-### Step 0b — baseline the tracker (Neon SQL Editor)
+   *Why the file and not just the timestamp:* the corrected stamp protects **this**
+   database. A restored Neon branch carries real data but can carry a reset or
+   empty tracker — exactly the state in which an armed `0003` deletes live flows.
+   With backup branches now routine, the file itself has to be inert everywhere.
+
+3. **`.github/workflows/db-migrate.yml` guarded** — see step 0d for why this was
+   necessary.
+
+`scripts/migration-state-diagnostic.sql` was updated to map both hashes: the new
+one reports `0003_wipe_flows (DISARMED — no-op)`, the old one reports
+`*** ARMED PRE-2026-07-25 VERSION ***` so a restored branch is identifiable at a
+glance.
+
+### Step 0b — SNAPSHOT (do this immediately before 0c)
+
+Create a Neon branch backup **after** 0a is pushed and **before** the first
+tracker write in 0c. Nothing before this point touches the database, so there is
+nothing to protect until now; and taking it immediately before 0c means the
+restore point is minutes old rather than days.
+
+Neon Console → your project → **Branches** → **Create branch** from `production`
+at **current time**. Name it something like `pre-migration-baseline-2026-07-26`.
+
+**PASS:** the branch appears and reports the same row counts (1 flow,
+2 flow_versions, 1 flow_result). Keep it until step 0d has succeeded and the app
+has been exercised.
+
+### Step 0c — baseline the tracker (Neon SQL Editor)
 
 Records `0000`–`0004` as already applied **without re-running any of their
 SQL**. Idempotent: re-running inserts nothing, because each row is guarded by a
@@ -112,7 +145,7 @@ FROM (VALUES
   ('d7e87874bd0924b9a56d461ae1ab5a3f0b5b91f07964c03f5ecf5bee85be8dc0', 1784203484509::bigint), -- 0000_salty_karen_page
   ('0e58a801112632a53bcffabc9a8e3bed0973868a0a13036b0741b5f91762be96', 1784250722039::bigint), -- 0001_quick_big_bertha
   ('ecef4f9c267c0bc312f95e22204d079d775a8c5d6c874e39935e6442afac8f53', 1784305785818::bigint), -- 0002_easy_joshua_kane
-  ('2d903d9ed440ad3ce76489a101073f6df3034132ac3d201a415eee67a8e99ba2', 1784400000000::bigint), -- 0003_wipe_flows  <-- CORRECTED, must match _journal.json
+  ('f152771ebbfaa216bef6a5930d857e78303e904aa45c5c47a44c252d5bd70667', 1784400000000::bigint), -- 0003_wipe_flows (disarmed) <-- CORRECTED, must match _journal.json
   ('39f21e599d00d29399c8f630c413afc682369b93757396314aee31010ca72f83', 1784588933782::bigint)  -- 0004_source_streams
 ) AS v(hash, created_at)
 WHERE NOT EXISTS (
@@ -135,13 +168,85 @@ SELECT (SELECT count(*) FROM flows)         AS flows,
        (SELECT count(*) FROM flow_results)  AS flow_results;
 ```
 
-### Step 0c — run the migrator
+### Step 0d — run the migrator — ⏸ HOLD UNTIL LAUNCH DAY (walkthrough step 2.3)
 
-```bash
-DATABASE_URL="postgresql://…" pnpm db:migrate
-```
+**Decision: do NOT apply 0005–0011 early.** Run it on launch day, immediately
+before the merge, via the **DB Migrate (production)** Action.
 
-**PASS:** exits 0 printing `Migrations applied.`, and the tracker now holds 12
+**⚠ The Action does not check out the right branch by default.**
+`actions/checkout@v4` is used with no `ref:`, so on `workflow_dispatch` it checks
+out whatever branch is selected in the "Run workflow" dropdown — which
+**defaults to the repository default branch, `main`**. `main` still carries the
+pre-repair journal with `0003`'s armed stamp `1785600000000`. Dispatching from
+`main` **after** step 0c would make `0003` the single eligible migration: it
+would delete every flow, flow_version and flow_result, and exit 0.
+
+A guard now blocks this at the source. The workflow fails before installing
+anything if the checked-out ref still contains `1785600000000` in
+`_journal.json`, or a live `DELETE FROM` in `0003_wipe_flows.sql`. Verified
+against both refs: it **blocks** `main` and **passes** on the repaired branch.
+Selecting the right branch is still correct practice — the guard is the net, not
+the plan.
+
+**Run:** Actions → *DB Migrate (production)* → *Run workflow* → **select the
+repaired branch** (or dispatch after it is merged to `main`).
+
+**Why hold rather than run now** (in order of weight):
+
+1. **The runner is not transactional and its bookkeeping is deferred.**
+   `neon-http` auto-commits each statement and drizzle writes *all* tracker rows
+   only after the last migration succeeds. A failure partway through leaves
+   earlier migrations committed with **zero** rows recorded — the same
+   hand-repair situation this item exists to fix. That is worth doing with a
+   fresh snapshot and someone watching, not on an ordinary afternoon.
+2. **Nothing is unblocked by running early.** The new code is not deployed, so
+   the schema would simply sit ahead of it with no benefit.
+3. **`0006` costs a little and gains nothing during the wait** — detail below.
+
+**Schema-ahead-of-code was checked and is otherwise safe.** `0005` drops
+`webhook_endpoints`; that table is referenced nowhere in `main`'s application
+code (only in migration SQL, snapshots and `docs/BUILD_PLAN.md`), so dropping it
+cannot break production. `0007`/`0008`/`0010` add unused tables;
+`0008`/`0009`/`0010`/`0011` add columns old code ignores. `0010`'s
+`ADD COLUMN identifiers jsonb NOT NULL DEFAULT '{}'` is metadata-only on
+PG 11+ — no table rewrite.
+
+**The `0006` index question, answered.** It drops
+`events_occurred_idx (occurred_at)`, `events_conn_idx (connection_id)` and
+`events_conn_stream_idx (connection_id, stream_hash)`, replacing them with three
+partial indexes carrying `WHERE deleted_at IS NULL`. A partial index is only
+usable when the planner can prove the query implies its predicate — so the
+answer depends entirely on whether production's queries filter `deleted_at`.
+Both call sites on `main` were checked:
+
+- **Flow engine (`src/lib/flow/engine.ts`, `appConds`) — gets FASTER.** It already
+  emits `org_id = $1 AND deleted_at IS NULL` plus optional
+  `connection_id`/`source`/`event_type`/`stream_hash`, ordered by
+  `occurred_at DESC`. That is an exact match for
+  `events_conn_stream_live_idx (connection_id, stream_hash, occurred_at DESC, id DESC)`,
+  which also satisfies the sort. This is the hot path and it improves.
+- **Classic metrics (`src/lib/metrics/compute.ts`) — slightly slower.** All six
+  `events` queries there filter `org_id` + an `occurred_at` range and carry **no
+  `deleted_at` predicate at all** (this is the gap the predicate audit found and
+  fixed on the branch, so the fix is not in production yet). They cannot use the
+  new partial indexes and they lose `events_occurred_idx`.
+
+  They do **not** fall back to a sequential scan: `events_org_type_idx
+  (org_id, event_type)` survives `0006`, and `org_id` is its leading column, so
+  `WHERE org_id = $1` still drives an index scan with the date range applied as a
+  filter. The index they lose was a global `occurred_at` btree — the wrong access
+  path for a multi-tenant query in the first place.
+
+  Net: a real but small regression, confined to classic dashboard metrics, on a
+  pre-launch table. It disappears the moment the branch deploys, since the
+  `deleted_at IS NULL` predicate lands with it.
+
+`DROP INDEX` and `CREATE INDEX` here are non-concurrent, so they take brief
+table locks. Negligible at current size; if `events` has grown past ~10⁷ rows by
+launch, see the note in *Pending* about running index migrations with
+`CREATE INDEX CONCURRENTLY` instead.
+
+**PASS:** the run exits 0 printing `Migrations applied.` and the tracker holds 12
 rows. Re-running `scripts/migration-state-diagnostic.sql` should show every
 `m00xx_*` marker `true`, `m0005_webhook_endpoints_dropped` `true`, all three
 `m0006_old_*_still_present` **false**, and the flow counts still 1 / 2 / 1.
@@ -200,21 +305,18 @@ rewritten to `1784400000000`, the highest stamp in the journal becomes `0011`'s
 `1785004537576` (2026-07-25T18:35:37Z) — already in the past. Every migration
 generated from now on carries a larger `Date.now()` and is always eligible.
 
-### Optional hardening (beyond the fix above — your call)
+### Order of operations, at a glance
 
-Steps 0a–0c stop `0003` from ever firing *in this database*. The file itself
-stays armed for any future fresh database, new branch or reset tracker. To
-disarm it everywhere, replace the three `DELETE` statements in
-`drizzle/0003_wipe_flows.sql` with a no-op (`DELETE FROM "flows" WHERE false;`)
-plus a comment explaining why. This is safe because drizzle never reads the
-stored hash back, so an edited file is never detected as drift.
+| | Step | Who | Touches the DB? |
+|---|---|---|---|
+| ✅ | **0a** journal stamp + disarm `0003` + workflow guard | done, pushed | no |
+| ⬜ | **0b** Neon branch snapshot | you | no (creates a copy) |
+| ⬜ | **0c** baseline INSERT (5 rows) | you, SQL Editor | yes — tracker only |
+| ⏸ | **0d** apply `0005`–`0011` | Action, launch day | yes — schema |
 
-**Tradeoff:** the file then no longer records what was actually executed on
-2026-07-19. If you take this option, the hash in step 0b's `0003` row will no
-longer match the file — harmless functionally, but
-`scripts/migration-state-diagnostic.sql` will label that row
-`UNKNOWN (file edited after apply…)` unless its `CASE` is updated to the new
-hash.
+The gap between 0a and 0c is safe in both directions: with the journal patched
+and the tracker still empty, an accidental `db:migrate` dies at `0000` exactly as
+it does today.
 
 ---
 

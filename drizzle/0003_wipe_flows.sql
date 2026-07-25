@@ -1,7 +1,53 @@
--- Canvas v2: reset all visual flows. The new Formula named-handle model is not
--- backward compatible with graphs built under the old edge-order model, so every
--- flow is rebuilt clean. Child tables cascade from `flows`, but we delete them
--- explicitly for clarity and to be independent of FK settings.
-DELETE FROM "flow_results";--> statement-breakpoint
-DELETE FROM "flow_versions";--> statement-breakpoint
-DELETE FROM "flows";
+-- ============================================================================
+-- 0003_wipe_flows — DISARMED 2026-07-25. This migration is now a no-op.
+-- ============================================================================
+--
+-- WHAT THIS MIGRATION ORIGINALLY DID (applied by hand in the Neon SQL Editor
+-- on 2026-07-19, not through the migration runner):
+--
+--     DELETE FROM "flow_results";--> statement-breakpoint
+--     DELETE FROM "flow_versions";--> statement-breakpoint
+--     DELETE FROM "flows";
+--
+-- Its stated purpose, verbatim from the file as authored:
+--
+--     Canvas v2: reset all visual flows. The new Formula named-handle model is
+--     not backward compatible with graphs built under the old edge-order model,
+--     so every flow is rebuilt clean. Child tables cascade from `flows`, but we
+--     delete them explicitly for clarity and to be independent of FK settings.
+--
+-- WHY IT IS DISABLED:
+--
+-- This is the only migration in the set made of DML rather than DDL. Every
+-- other migration fails loudly when re-run against a schema that already has
+-- its changes ("relation already exists"). This one SUCCEEDS — silently, with
+-- exit code 0 — and takes every flow, every published version and every
+-- computed dashboard tile with it.
+--
+-- That made it a live hazard rather than a historical artifact. drizzle decides
+-- what to apply from a single high-water mark: it reads the largest created_at
+-- in drizzle.__drizzle_migrations and runs every journal entry whose `when`
+-- exceeds it. This entry carried when = 1785600000000 (2026-08-01T16:00:00Z) —
+-- a hand-typed, future-dated value HIGHER than every migration after it — so it
+-- re-fired in nearly every reachable tracker state. The journal has since been
+-- corrected to 1784400000000, placing it between 0002 and 0004 where it belongs.
+--
+-- The corrected timestamp alone protects the production database. This file is
+-- neutered as well because a RESTORED NEON BRANCH carries real data but can
+-- carry a reset or empty migration tracker — precisely the state in which an
+-- armed 0003 deletes live flows. Backup branches are now routine, so the file
+-- itself must be inert on every database, not only on this one.
+--
+-- Editing an applied migration is safe here: drizzle writes each file's sha256
+-- into the tracker but NEVER reads it back, so there is no drift detection to
+-- violate. The baseline tracker row and the hash map in
+-- scripts/migration-state-diagnostic.sql both use this file's NEW hash.
+--
+-- DO NOT restore the DELETE statements above. If a future canvas change
+-- genuinely needs to reset flows, write it as a NEW numbered migration, scoped
+-- to the orgs that need it.
+--
+-- The statement below touches nothing and cannot fail on any schema, in any
+-- state, on any database.
+-- ============================================================================
+SELECT 1;
