@@ -148,6 +148,13 @@ export const events = pgTable(
     currency: text("currency"),
     properties: jsonb("properties").$type<Record<string, unknown>>().default({}).notNull(),
     rawEventId: uuid("raw_event_id"),
+    /**
+     * A.2 — normalized identity handles extracted from the record (emails
+     * lowercased, phones E.164, provider ids as-is). Additive and defaulted,
+     * so nothing depends on it yet; it is what a future person/company
+     * resolution joins on WITHOUT another schema change.
+     */
+    identifiers: jsonb("identifiers").$type<Record<string, unknown>>().default({}).notNull(),
     // Full-sync generation this row was last seen in (for versioned/safe re-sync).
     syncGeneration: integer("sync_generation").notNull().default(0),
     // Soft-delete: set when a full re-sync no longer sees a previously-synced record.
@@ -177,6 +184,36 @@ export const events = pgTable(
     index("events_org_live_occurred_idx").on(t.orgId, t.occurredAt).where(sql`deleted_at is null`),
     // Full-resync sweeps: retire live rows below the new generation.
     index("events_conn_gen_live_idx").on(t.connectionId, t.syncGeneration).where(sql`deleted_at is null`),
+  ],
+);
+
+/**
+ * A.1 — the field registry. What fields a stream's records actually carry,
+ * maintained by the WRITER instead of inferred by reading a sample at query
+ * time. Field pickers read this (one indexed lookup, no scan), and E.7 uses
+ * `approxCardinality` to warn when a dedupe key would collapse unrelated rows.
+ */
+export const streamFields = pgTable(
+  "stream_fields",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    connectionId: uuid("connection_id").notNull(),
+    /** Null for connection-scoped sources (the connection is the resource). */
+    streamHash: text("stream_hash"),
+    fieldPath: text("field_path").notNull(),
+    inferredType: text("inferred_type").notNull().default("string"),
+    /** Distinct values seen (approximate — sampled, not exact). */
+    approxCardinality: integer("approx_cardinality").notNull().default(0),
+    /** Rows seen carrying this field, for the null-rate estimate. */
+    seenCount: integer("seen_count").notNull().default(0),
+    sample: jsonb("sample").$type<Record<string, unknown>>(),
+    firstSeen: timestamp("first_seen", { withTimezone: true }).defaultNow().notNull(),
+    lastSeen: timestamp("last_seen", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("stream_fields_key_uq").on(t.connectionId, t.streamHash, t.fieldPath),
+    index("stream_fields_org_idx").on(t.orgId),
   ],
 );
 

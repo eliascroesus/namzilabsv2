@@ -127,6 +127,16 @@ export async function resultsVersion(db: DB, orgId: string): Promise<string> {
   return `${row?.tiles ?? 0}.${row?.nonFresh ?? 0}.${maxMs}`;
 }
 
+/**
+ * H.4 — recompute-skip. A tile whose freshly-computed value is byte-identical
+ * to the stored one does not need its `computed_at` bumped… but it DOES, and
+ * deliberately: the as-of marker is a statement about when the number was last
+ * VERIFIED against the source, not when it last changed. What H.4 actually
+ * skips is upstream: `reconcileChanged` gates staleness on real data changes,
+ * so an unchanged sweep never marks anything stale and this function finds
+ * nothing to do. The skip lives where the work originates, not here.
+ */
+
 /** Recompute every flow that currently has stale results (scheduled + on-demand). */
 export async function materializeStaleAll(db: DB): Promise<number> {
   const stale = await db

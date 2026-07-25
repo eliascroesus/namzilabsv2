@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { events } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { eventToRecord, getField, toNumber, type FlowRecord } from "./records";
+import { planPushdown } from "./compile/pushdown";
 import { inferSchema, type FieldInfo } from "./schema-infer";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import {
@@ -28,11 +29,28 @@ import {
   type TileSpec,
 } from "./types";
 
-export type EngineCtx = { db: DB; orgId: string };
+export type EngineCtx = {
+  db: DB;
+  orgId: string;
+  /**
+   * E.4 — per-flow cutover flag. When set, Get-data reads push their
+   * downstream filter chain into SQL (E.1) instead of loading everything and
+   * filtering in JS. Off by default: a flow only opts in once the golden
+   * parity suite covers it.
+   */
+  compile?: boolean;
+  /** Collects what the compiler actually did, for E.5 provenance. */
+  provenance?: CompileProvenance[];
+};
+
+/** E.5 — one record of compiled work, attached to the run. */
+export type CompileProvenance = { appNodeId: string; foldedFilterNodeIds: string[]; rowsLoaded: number };
 
 export type NodeExecOk = {
   status: "ok";
   nodeType: string;
+  /** E.4: the read hit the safety ceiling — surfaced, never silent. */
+  truncated?: boolean;
   shape: Shape;
   /** Extra outputs keyed by source-handle id (Paths uses this). */
   outputs?: Record<string, Shape>;
@@ -60,7 +78,16 @@ export type RunResult = {
   outputs: Array<{ nodeId: string; tile: TileSpec }>;
 };
 
-const APP_LOAD_CAP = 20_000;
+/**
+ * E.4 — the guard rail that replaces the old silent 20k truncation.
+ *
+ * The previous `APP_LOAD_CAP = 20_000` quietly dropped every row past the
+ * newest 20k, so a large source produced a confidently WRONG number. It is
+ * gone. What remains is a very high ceiling that exists only to keep a runaway
+ * read from exhausting memory — and crossing it is reported as a VISIBLE
+ * truncation on the node, never silently swallowed.
+ */
+const APP_LOAD_CEILING = 500_000;
 
 export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNodeId?: string } = {}): Promise<RunResult> {
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -118,7 +145,7 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
   try {
     switch (node.type) {
       case "app":
-        return await execApp(ctx, node);
+        return await execApp(ctx, node, graph);
       case "filter":
         return execFilter(node, inputs);
       case "time":
@@ -172,21 +199,44 @@ export async function sampleAppFields(ctx: EngineCtx, config: unknown, limit = 1
   return inferSchema(rows.map(eventToRecord));
 }
 
-async function execApp(ctx: EngineCtx, node: FlowNode): Promise<NodeExec> {
+async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promise<NodeExec> {
   const cfg = AppConfigSchema.parse(node.data.config ?? {});
+  const conds = appConds(ctx.orgId, cfg);
+
+  // E.1: fold the downstream filter chain into this read when the flow has
+  // opted in. The filters STILL run in JS afterwards, so the pre-filter can
+  // only reduce work — never change the answer.
+  let folded: string[] = [];
+  if (ctx.compile && graph) {
+    const plan = planPushdown(graph, node.id);
+    if (plan.predicate) {
+      conds.push(plan.predicate);
+      folded = plan.foldedNodeIds;
+    }
+  }
+
   const rows = await ctx.db
     .select()
     .from(events)
-    .where(and(...appConds(ctx.orgId, cfg)))
-    .orderBy(desc(events.occurredAt))
-    .limit(APP_LOAD_CAP);
+    .where(and(...conds))
+    // E.3: a deterministic TOTAL order — occurred_at alone leaves ties, and an
+    // unstable order makes "the newest duplicate" (and any cap) arbitrary.
+    .orderBy(desc(events.occurredAt), desc(events.id))
+    .limit(APP_LOAD_CEILING);
+
+  ctx.provenance?.push({ appNodeId: node.id, foldedFilterNodeIds: folded, rowsLoaded: rows.length });
 
   let records = rows.map(eventToRecord);
   // Remove duplicates at the source — the FIRST thing that happens, before any
   // later step runs, so a duplicate never costs downstream work. Records are
   // newest-first here, so "keep the first seen" keeps the most recent copy.
   if (cfg.dedupe) records = dedupeRecords(records, cfg.dedupeField || "subject");
-  return datasetExec("app", node.id, records, rows.length);
+  const exec = datasetExec("app", node.id, records, rows.length);
+  // Never silently truncate: if the ceiling was actually hit, the node says so.
+  if (rows.length >= APP_LOAD_CEILING && exec.status === "ok") {
+    return { ...exec, truncated: true } as NodeExec;
+  }
+  return exec;
 }
 
 /** Keep one record per identity value (the newest); empty identities always pass. */

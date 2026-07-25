@@ -71,6 +71,13 @@
       "when": 1784992767604,
       "tag": "0009_clear_wendigo",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784994470354,
+      "tag": "0010_youthful_spencer_smythe",
+      "breakpoints": true
     }
   ]
 }

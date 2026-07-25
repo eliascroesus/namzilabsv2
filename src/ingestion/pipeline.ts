@@ -4,6 +4,8 @@ import type { DB } from "@/db/types";
 import type { CanonicalEvent } from "@/connectors/types";
 import { getConnector } from "@/connectors/registry";
 import { normalizeDatesDeep } from "@/lib/normalize-dates";
+import { extractIdentifiers } from "@/lib/identity/normalize";
+import { recordFields } from "@/lib/schema-registry/registry";
 
 export type ProcessResult = {
   /** Rows that did not exist before. */
@@ -80,6 +82,8 @@ export async function upsertEvents(db: DB, meta: EventMeta, canonical: Canonical
       // Date-looking property values are canonicalized at ingest, so every
       // stored event speaks one date format (raw_events keeps the original).
       properties: normalizeDatesDeep(ev.properties),
+      // A.2: harvested at write time so later identity work needs no re-ingest.
+      identifiers: extractIdentifiers({ subject: ev.subject ?? null, properties: ev.properties ?? null }),
       rawEventId: meta.rawEventId ?? null,
       streamHash: meta.streamHash ?? null,
       syncGeneration: generation,
@@ -102,6 +106,7 @@ export async function upsertEvents(db: DB, meta: EventMeta, canonical: Canonical
           value: sql`excluded.value`,
           currency: sql`excluded.currency`,
           properties: sql`excluded.properties`,
+          identifiers: sql`excluded.identifiers`,
           streamHash: sql`excluded.stream_hash`,
           syncGeneration: sql`greatest(${events.syncGeneration}, excluded.sync_generation)`,
           deletedAt: sql`null`,
@@ -114,6 +119,7 @@ export async function upsertEvents(db: DB, meta: EventMeta, canonical: Canonical
           or ${events.value} is distinct from excluded.value
           or ${events.currency} is distinct from excluded.currency
           or ${events.properties} is distinct from excluded.properties
+          or ${events.identifiers} is distinct from excluded.identifiers
           or ${events.streamHash} is distinct from excluded.stream_hash
           or ${occurredAtChanged}
         )`,
@@ -131,6 +137,14 @@ export async function upsertEvents(db: DB, meta: EventMeta, canonical: Canonical
       .update(connections)
       .set({ lastEventAt: new Date(), updatedAt: new Date() })
       .where(eq(connections.id, meta.connectionId));
+    // A.1: record what we wrote so field pickers read an index instead of
+    // scanning a sample. Best-effort — the registry is a convenience, and a
+    // hiccup here must never fail an ingest.
+    try {
+      await recordFields(db, { orgId: meta.orgId, connectionId: meta.connectionId, streamHash: meta.streamHash ?? null }, canonical);
+    } catch {
+      // Registry is rebuildable from the events themselves.
+    }
   }
   return { inserted, updated, deduped: canonical.length - inserted - updated, total: canonical.length };
 }

@@ -104,3 +104,62 @@ Rows written before the unified writer:
   re-runnable). Connection-scoped connections are never touched — there a null `stream_hash` is
   correct for every row. **Ordering:** PRE_LAUNCH_CHECKLIST.md item 5 — run after the production
   deploy and BEFORE any fleet backfill or `reprocessConnection` replay.
+
+## The compute engines (P5 build track)
+
+Two engines exist, deliberately, with a one-way door between them.
+
+**The JS flow engine** (`src/lib/flow/engine.ts`) is the source of truth and the
+ORACLE. Every operator's meaning is defined by `evalRule`, not by a spec.
+
+**The compiled path** (`src/lib/flow/compile/*`) pushes a Get-data step's
+downstream filter chain into SQL. It is opt-in per flow (`EngineCtx.compile`)
+and gated absolutely: `tests/engine-parity.test.ts` runs both implementations
+over the same rows and they must agree exactly. Nothing flips without that.
+
+What is compiled, and what deliberately is not:
+
+| | |
+|---|---|
+| **Compiled (14 ops)** | equals, not_equals, contains, not_contains, starts_with, ends_with, gt, lt, gte, lte, is_empty, is_not_empty, is_one_of, is_not_one_of |
+| **Never compiled (3 ops)** | before, after, between — `Date.parse` accepts grammars SQL cannot reproduce (`"42"` is the year 2042, `"100"` is the year 100). A flow using them stays on the JS engine. |
+| **Not folded** | filters after a fan-out, filters with more than one input, rules whose right side is an unresolved upstream field. |
+
+Two properties make this safe rather than clever:
+
+- **The pushdown cannot change an answer.** Folded filters STILL run in JS
+  afterwards; the SQL predicate only reduces what is loaded. A compiler bug can
+  cost work, never correctness.
+- **Truncation is visible.** `APP_LOAD_CAP = 20_000` — which silently dropped
+  every row past the newest 20k and produced confidently wrong numbers — is
+  gone. A very high safety ceiling remains, and crossing it marks the node
+  `truncated`, surfaced rather than swallowed.
+
+**Ordering (E.3):** reads are `(occurred_at DESC, id DESC)` — a total order, so
+"the newest duplicate" and any ceiling are deterministic rather than arbitrary.
+
+**Incremental computation policy (E.6):** full recompute is the default and the
+only path currently enabled. Deltas are permitted ONLY for additive aggregates
+(count, sum) over append-only data, and are forbidden for count-distinct,
+dedupe, min/max, and any mirror source — where a soft-delete or in-place edit
+makes an increment wrong. Any delta path must be verified against a periodic
+full recompute before it is trusted.
+
+**Provenance (E.5):** a compiled run records, per Get-data node, which filter
+nodes were folded and how many rows were loaded (`EngineCtx.provenance`).
+
+## Field registry and identity (A.1 / A.2)
+
+- `stream_fields` is maintained by the WRITER: one row per (connection, stream,
+  field path) with an inferred type, an approximate cardinality and an
+  occurrence count. Field pickers read an index instead of scanning a sample,
+  and the answer covers everything ever seen. Cardinality is a MAX across
+  batches (repeated mirror sweeps must not inflate it) while counts accumulate.
+- `events.identifiers` holds normalized handles harvested at write time —
+  emails lowercased, phones E.164 — sorted and deduplicated so an unchanged
+  record stays byte-identical to the writer's change detection. This is
+  format normalization only: deciding two handles are the same person is a
+  separate, later decision that will not need a schema change or a re-ingest.
+- **E.7 dedupe guardrail:** `dedupeWarningFor` uses the registry's cardinality
+  to catch a "match duplicates by" key that would collapse most of the dataset
+  — the failure mode that produces a plausible-looking wrong number.
