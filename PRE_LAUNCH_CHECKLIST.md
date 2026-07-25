@@ -164,7 +164,48 @@ set from here on.
 
 ---
 
-## 5. Post-deploy sanity pass (after 1–4)
+## 5. One-time legacy-row reconciliation (AFTER deploy, BEFORE any backfill/replay)
+
+**Why:** rows written before the unified writer can sit on stream-scoped
+connections (Sheets, Calendar, Calendly) with no stream identity
+(`sync_generation >= 1 AND stream_hash IS NULL`). Every sweep today is
+stream-scoped, so nothing can ever retire them — they're ghosts of resources
+that may be long gone, still counted by reads that aren't stream-filtered
+(a Get-data step with no resource chosen, classic metrics). This retires
+exactly those.
+
+**Ordering (load-bearing):** run this AFTER the production deploy and BEFORE
+any fleet backfill or `reprocessConnection` replay (the A.1/A.2 registry
+backfills and the engine track's replays). Those operations would otherwise
+re-process ghost rows as if they were real data.
+
+**Keys:** production `DATABASE_URL` (the same one the app uses).
+
+**Run — inspect first, it writes nothing:**
+
+```bash
+DATABASE_URL="postgresql://…" pnpm tsx scripts/reconcile-legacy-rows.ts
+```
+
+Review the per-connection breakdown it prints. Then apply:
+
+```bash
+DATABASE_URL="postgresql://…" pnpm tsx scripts/reconcile-legacy-rows.ts --apply
+```
+
+**PASS:** the apply run ends with `PASS — every legacy ghost row is retired.
+Backfills and replays are now unblocked.` A brand-new install prints
+`Nothing to do` — that is also a pass.
+
+**FAIL:** if it exits with `WARNING — rows remain`, simply re-run `--apply`:
+the script is idempotent and batched, so re-running (or resuming an
+interrupted run) is always safe and never double-deletes. If counts look
+wildly larger than expected, stop and inspect: rows are only soft-deleted, so
+nothing is lost, and `deleted_at` can be cleared for a mistaken batch.
+
+---
+
+## 6. Post-deploy sanity pass (after 1–5)
 
 - Open **Integrations** in the app: no connection should show a red error strip.
   An Instantly connection showing the "reconnect with a v2 key" message means a
@@ -176,7 +217,7 @@ set from here on.
 
 ---
 
-## 6. Provider budget sanity (after the first day of production traffic)
+## 7. Provider budget sanity (after the first day of production traffic)
 
 **Why:** the token buckets spend a configurable SHARE (70%) of each provider's
 published limit. If a share is set too low for a busy tenant, sweeps defer
@@ -205,10 +246,6 @@ not an incident.
 
 ## Pending — will be added here when built
 
-- **One-time legacy-row reconciliation** (P1-exit item, gated before any
-  replay/fleet backfill): soft-delete `sync_generation >= 1 AND stream_hash IS
-  NULL` rows on stream-scoped connections. The runbook entry (exact command,
-  dry-run mode, PASS counts) lands here with the implementation.
 - **Index rollout at scale**: if `events` has grown large (>10⁷ rows) before
   launch, apply new index migrations manually with `CREATE INDEX CONCURRENTLY`
   instead of the transactional migration runner. Not needed at current size.

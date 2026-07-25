@@ -95,8 +95,12 @@ Rows written before the unified writer:
   webhook-era poll rows may have **`stream_hash = NULL` with generation ≥ 1**. The scoped full-resync
   delete intentionally never touches null-hash rows, so those legacy rows can linger and are
   reachable via connection-wide reads (a Get data step with no resource selected; classic metrics).
-- **One-time reconciliation (planned, before any fleet backfill):** for stream-scoped connections,
-  retire (soft-delete) rows with `sync_generation >= 1 AND stream_hash IS NULL`, and let mirror
-  sweeps re-key generation-0 stream rows — after which every poll-managed row carries its stream
-  and a real generation. Tracked in the hardening plan; must land before `reprocessConnection`
-  replays or registry backfills run at fleet scale.
+- **One-time reconciliation — BUILT, awaiting its production run.** For stream-scoped connections,
+  it retires (soft-deletes) rows with `sync_generation >= 1 AND stream_hash IS NULL`; generation-0
+  stream rows are handled structurally by the scoped sweep (which keys on `stream_hash`, not
+  generation), so they need no separate pass. Implementation:
+  `src/lib/sync/legacy-reconciliation.ts` + `scripts/reconcile-legacy-rows.ts` (inspect by
+  default, `--apply` to write; batched and idempotent, so an interrupted run is safely
+  re-runnable). Connection-scoped connections are never touched — there a null `stream_hash` is
+  correct for every row. **Ordering:** PRE_LAUNCH_CHECKLIST.md item 5 — run after the production
+  deploy and BEFORE any fleet backfill or `reprocessConnection` replay.
