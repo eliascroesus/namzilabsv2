@@ -3,6 +3,7 @@ import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { runSync, reprocessConnection, syncChanged } from "@/lib/sync/resync";
 import { markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
+import { pruneOperationalTables, pruneSettledTestRuns } from "@/lib/storage-lifecycle";
 import { rawEvents } from "@/db/schema";
 
 /** Sync a connection (full backfill/re-sync or incremental). */
@@ -99,4 +100,18 @@ export const recomputeStaleFlows = inngest.createFunction(
 export const materializeStale = inngest.createFunction(
   { id: "materialize-stale", retries: 2, triggers: [{ cron: "*/10 * * * *" }] },
   async ({ step }) => step.run("materialize-stale", () => materializeStaleAll(getDb())),
+);
+
+/**
+ * H.6 storage lifecycle: nightly retention over the operational tables that
+ * grow with activity (delivery_log, test_runs), plus a frequent sweep of
+ * settled Test runs so the editor's working state never accumulates.
+ */
+export const pruneStorage = inngest.createFunction(
+  { id: "prune-storage", retries: 2, concurrency: { limit: 1 }, triggers: [{ cron: "17 3 * * *" }] },
+  async ({ step }) => {
+    const settled = await step.run("prune-settled-test-runs", () => pruneSettledTestRuns(getDb()));
+    const retained = await step.run("prune-operational-tables", () => pruneOperationalTables(getDb()));
+    return { settledTestRuns: settled, ...retained };
+  },
 );

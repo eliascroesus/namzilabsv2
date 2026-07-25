@@ -66,6 +66,18 @@ export const connections = pgTable(
     // Incremented by a full re-sync; events are tagged with the generation they were last seen in.
     syncGeneration: integer("sync_generation").notNull().default(0),
     historicalSyncedAt: timestamp("historical_synced_at", { withTimezone: true }),
+    /**
+     * F.3/F.6 — never a terminal state. When a connection is throttled
+     * (budget exhausted) or its breaker trips (consecutive failures), work is
+     * DEFERRED to `pausedUntil` and retried automatically: the sweep skips it
+     * until then, and the connection page shows a countdown, not a dead end.
+     * `consecutiveFailures` drives the probe ladder (1h → 4h → daily) and
+     * resets to 0 on any success.
+     */
+    pausedUntil: timestamp("paused_until", { withTimezone: true }),
+    /** Why it's paused, in plain language, for the connection page. */
+    pausedReason: text("paused_reason"),
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -180,6 +192,36 @@ export const sourceStreams = pgTable(
   (t) => [
     uniqueIndex("source_streams_conn_cfg_uq").on(t.connectionId, t.configHash),
     index("source_streams_org_idx").on(t.orgId),
+  ],
+);
+
+/**
+ * F.1/F.7 — provider-call accounting. One row per
+ * (connection, provider, operation, minute window): the token bucket's
+ * counter, incremented atomically via INSERT … ON CONFLICT DO UPDATE so
+ * concurrent workers can't overspend a published budget. Also the audit trail
+ * for "how much of our quota did we actually use", and the breaker's evidence.
+ */
+export const usageLedger = pgTable(
+  "usage_ledger",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    connectionId: uuid("connection_id").notNull(),
+    provider: text("provider").notNull(), // = connections.source
+    /** Catalog rateLimits key, e.g. "emails.list"; "*" = whole-provider budget. */
+    operation: text("operation").notNull().default("*"),
+    /** Start of the counting window (minute-aligned). */
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    calls: integer("calls").notNull().default(0),
+    throttled: integer("throttled").notNull().default(0),
+    errors: integer("errors").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("usage_ledger_bucket_uq").on(t.connectionId, t.operation, t.windowStart),
+    index("usage_ledger_org_idx").on(t.orgId),
+    index("usage_ledger_window_idx").on(t.windowStart),
   ],
 );
 

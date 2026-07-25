@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { connections } from "@/db/schema";
@@ -32,8 +32,21 @@ export const reconcileAll = inngest.createFunction(
     // and "error" means credentials/processing are broken — polling would burn
     // provider quota on guaranteed failures until the connection is repaired
     // (reconnect / replay flips it back to active).
+    //
+    // F.3/F.6: connections DEFERRED by budget exhaustion or a tripped breaker
+    // are skipped until `paused_until` — filtered here so they don't even
+    // generate queue traffic. Because every pause carries an expiry, they
+    // rejoin the sweep automatically (the probe) with no human intervention.
     const active = await step.run("load-active-connections", () =>
-      db.select({ id: connections.id, orgId: connections.orgId }).from(connections).where(eq(connections.status, "active")),
+      db
+        .select({ id: connections.id, orgId: connections.orgId })
+        .from(connections)
+        .where(
+          and(
+            eq(connections.status, "active"),
+            or(isNull(connections.pausedUntil), lte(connections.pausedUntil, sql`now()`)),
+          ),
+        ),
     );
 
     if (active.length > 0) {

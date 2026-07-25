@@ -57,6 +57,13 @@
       "when": 1784978435029,
       "tag": "0007_quiet_lyja",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784989934295,
+      "tag": "0008_same_mysterio",
+      "breakpoints": true
     }
   ]
 }

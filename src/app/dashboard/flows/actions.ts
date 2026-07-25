@@ -71,9 +71,18 @@ export type StartNodeTestResult =
 
 /**
  * D.1-full: start a Test on the high-priority lane and return a run id the
- * editor polls. When Inngest isn't reachable (local dev without the dev
- * server), the test executes inline and the settled result returns
- * immediately — same DTO either way.
+ * editor polls.
+ *
+ * INLINE FALLBACK — decided policy: enabled in ALL environments, including
+ * production, as documented graceful degradation. If the lane can't be
+ * reached (local dev without the Inngest dev server, or an Inngest outage in
+ * production), the Test executes inline in this request and returns its
+ * settled result. That is safe — it runs the identical code path, including
+ * the force-fresh prime and the Q6 lock-await, so it cannot corrupt data or
+ * double-poll a provider — it only bypasses lane fairness and the request
+ * timeout protection, which is strictly better than telling a user their Test
+ * is unavailable. The production case is LOGGED so an Inngest outage surfaces
+ * as a visible signal instead of silently degrading everyone's editor.
  */
 export async function startNodeTestAction(graph: unknown, nodeId: string): Promise<StartNodeTestResult> {
   const { orgId } = await requireOrg();
@@ -82,8 +91,12 @@ export async function startNodeTestAction(graph: unknown, nodeId: string): Promi
   try {
     await inngest.send({ name: "flow/test.requested", data: { testRunId: runId, orgId, graph, nodeId, priority: 180 } });
     return { runId };
-  } catch {
-    // Inngest not configured — run inline (the pre-lane behavior).
+  } catch (e) {
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        `[test-lane-fallback] Inngest unreachable — running test inline (orgId=${orgId}, runId=${runId}): ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
     const result = await executeAndSettleTestRun(db, orgId, runId, graph, nodeId);
     return { runId, result };
   }

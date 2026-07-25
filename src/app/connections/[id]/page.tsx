@@ -58,10 +58,20 @@ export default async function ConnectionPage({
           <StatusBadge status={conn.status} />
         </div>
 
-        {conn.lastError && (
-          <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {conn.lastError}
+        {/* F.3/F.6: a paused connection is never a dead end — it says WHY and
+            WHEN it resumes, and it retries itself with no human action. */}
+        {conn.pausedUntil && new Date(conn.pausedUntil).getTime() > Date.now() ? (
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <b>Paused, retrying automatically.</b>{" "}
+            {conn.pausedReason ?? "Waiting before the next attempt."} Next attempt around{" "}
+            {new Date(conn.pausedUntil).toLocaleTimeString()} — nothing is lost, syncing resumes on its own.
           </div>
+        ) : (
+          conn.lastError && (
+            <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {conn.lastError}
+            </div>
+          )
         )}
 
         <dl className="mt-6 grid grid-cols-2 gap-4 rounded-md border border-neutral-200 p-4 text-sm">

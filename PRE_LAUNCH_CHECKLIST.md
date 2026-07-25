@@ -176,6 +176,33 @@ set from here on.
 
 ---
 
+## 6. Provider budget sanity (after the first day of production traffic)
+
+**Why:** the token buckets spend a configurable SHARE (70%) of each provider's
+published limit. If a share is set too low for a busy tenant, sweeps defer
+often (visible as "paused, retrying" on connections); too high risks provider
+throttling. One look at the ledger after real traffic confirms the setting.
+
+**Run** (against production `DATABASE_URL`, read-only):
+
+```sql
+SELECT provider, operation,
+       sum(calls) AS calls, sum(throttled) AS throttled, sum(errors) AS errors
+FROM usage_ledger
+WHERE window_start > now() - interval '24 hours'
+GROUP BY 1, 2 ORDER BY throttled DESC, calls DESC;
+```
+
+**PASS:** `throttled` is 0 or a negligible fraction of `calls` for every row.
+
+**FAIL (throttled is significant):** the budget share is too tight for that
+provider — raise `BUDGET_SHARE` in `src/lib/provider-gateway/budget.ts`, or
+declare a higher per-operation limit in the connector catalog if the provider
+actually allows more. Deferred work is never lost, so this is a tuning issue,
+not an incident.
+
+---
+
 ## Pending — will be added here when built
 
 - **One-time legacy-row reconciliation** (P1-exit item, gated before any
