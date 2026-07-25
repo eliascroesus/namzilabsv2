@@ -72,4 +72,30 @@ describe("catch-hook connector: normalization", () => {
     expect(ev.eventType).toBe("webhook.received");
     expect(ev.occurredAt).toBeInstanceOf(Date);
   });
+
+  it("prefers the delivery id header (webhook-id/svix-id) over the payload hash", () => {
+    const withDelivery = { ...ctx, headers: { "Webhook-Id": "msg_1" } };
+    // Redelivery of the same message → same id, even if the sender injected noise.
+    const [a] = catchHookConnector.normalize({ foo: "bar", sent_at_ms: 1 }, withDelivery);
+    const [b] = catchHookConnector.normalize({ foo: "bar", sent_at_ms: 2 }, withDelivery);
+    expect(a.eventId).toBe("webhook:conn-123:delivery:msg_1:0");
+    expect(b.eventId).toBe(a.eventId);
+
+    // Two DIFFERENT deliveries with equal payloads stay two events.
+    const other = { ...ctx, headers: { "svix-id": "msg_2" } };
+    const [c] = catchHookConnector.normalize({ foo: "bar" }, other);
+    expect(c.eventId).toBe("webhook:conn-123:delivery:msg_2:0");
+    expect(c.eventId).not.toBe(a.eventId);
+
+    // An array delivery keeps one event per item.
+    const evs = catchHookConnector.normalize([{ foo: 1 }, { foo: 2 }], withDelivery);
+    expect(evs.map((e) => e.eventId)).toEqual([
+      "webhook:conn-123:delivery:msg_1:0",
+      "webhook:conn-123:delivery:msg_1:1",
+    ]);
+
+    // A payload natural id still wins over the delivery id.
+    const [n] = catchHookConnector.normalize({ id: "abc" }, withDelivery);
+    expect(n.eventId).toBe("webhook:conn-123:abc");
+  });
 });

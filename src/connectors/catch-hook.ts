@@ -28,18 +28,37 @@ export const catchHookConnector: Connector = {
 
   normalize(rawPayload: unknown, ctx: NormalizeContext): CanonicalEvent[] {
     const items = Array.isArray(rawPayload) ? rawPayload : [rawPayload];
-    return items.map((item) => toCanonical(item, ctx));
+    return items.map((item, index) => toCanonical(item, ctx, index));
   },
 };
 
-function toCanonical(item: unknown, ctx: NormalizeContext): CanonicalEvent {
+/** Standard-webhooks delivery id headers (stable across redeliveries of one message). */
+function deliveryId(headers: Record<string, string> | undefined): string | null {
+  if (!headers) return null;
+  for (const [k, v] of Object.entries(headers)) {
+    const key = k.toLowerCase();
+    if ((key === "webhook-id" || key === "svix-id") && v) return v;
+  }
+  return null;
+}
+
+function toCanonical(item: unknown, ctx: NormalizeContext, index: number): CanonicalEvent {
   const obj: Record<string, unknown> =
     item && typeof item === "object" ? (item as Record<string, unknown>) : { value: item };
 
+  // Dedup key preference: (1) the payload's own natural id — identifies the
+  // business record; (2) the delivery id header (standard-webhooks/svix) —
+  // identical on every redelivery of the same message but distinct for two
+  // deliveries that happen to carry equal payloads; (3) payload hash, last
+  // resort. Array payloads suffix the item index so one delivery of N items
+  // stays N events.
   const natural = firstString(obj, ["id", "event_id", "eventId", "uuid", "ID"]);
+  const delivery = deliveryId(ctx.headers);
   const eventId = natural
     ? `webhook:${ctx.connectionId}:${natural}`
-    : hashId(`webhook:${ctx.connectionId}`, obj);
+    : delivery
+      ? `webhook:${ctx.connectionId}:delivery:${delivery}:${index}`
+      : hashId(`webhook:${ctx.connectionId}`, obj);
 
   const eventType = firstString(obj, ["event_type", "eventType", "type", "event"]) ?? "webhook.received";
   const subject = firstString(obj, ["email", "subject", "phone", "contact", "name", "user"]);
