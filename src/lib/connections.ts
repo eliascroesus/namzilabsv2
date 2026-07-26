@@ -7,6 +7,7 @@ import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
 import { getConnector } from "@/connectors/registry";
 import { catalogEntry } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
+import { retireConnectionEvents } from "@/lib/sync/retire-connection";
 import { inngest } from "@/inngest/client";
 import type { CanonicalEvent } from "@/connectors/types";
 
@@ -126,11 +127,28 @@ export async function updateConnectionName(orgId: string, id: string, name: stri
     .where(and(eq(connections.id, id), eq(connections.orgId, orgId)));
 }
 
-export async function deleteConnection(orgId: string, id: string): Promise<void> {
+/**
+ * Remove a connection the user no longer wants, and take its data out of
+ * circulation with it.
+ *
+ * Order is deliberate: retire the events FIRST. `events.connection_id` has no
+ * foreign key, so if the connection row went first and this then failed, the
+ * rows would be orphaned — live, still counted org-wide by classic metrics, and
+ * with no connection left in the UI to retry the removal from. Retiring first
+ * means a failure leaves the connection in place and the operation simply
+ * re-runnable.
+ *
+ * Events are SOFT-deleted (see retireConnectionEvents); the connection row and
+ * its streams are removed outright, since their cursors and credentials are
+ * meaningless once the integration is gone.
+ */
+export async function deleteConnection(orgId: string, id: string): Promise<{ retiredEvents: number }> {
   const db = getDb();
+  const retiredEvents = await retireConnectionEvents(db, orgId, id);
   await db.delete(connections).where(and(eq(connections.id, id), eq(connections.orgId, orgId)));
   // A connection's synced streams die with it (their cursors are meaningless without auth).
   await db.delete(sourceStreams).where(and(eq(sourceStreams.connectionId, id), eq(sourceStreams.orgId, orgId)));
+  return { retiredEvents };
 }
 
 /** Decrypt the connection's signing secret for display (manual webhook setup). */

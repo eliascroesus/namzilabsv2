@@ -180,10 +180,13 @@ export default async function ConnectionPage({
           </div>
         </section>
 
-        <div className="mt-8 flex justify-end">
+        <div className="mt-8 flex items-center justify-end gap-4">
+          <p className="text-right text-xs text-neutral-500">
+            Stops syncing and takes this connection&rsquo;s records out of your dashboards and flows.
+          </p>
           <form action={disconnectAction}>
             <input type="hidden" name="id" value={conn.id} />
-            <button className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
+            <button className="shrink-0 rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
               Disconnect
             </button>
           </form>
