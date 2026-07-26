@@ -81,7 +81,6 @@ describe("calendar attendance is countable, not positional", () => {
     expect(p.guests_accepted).toBe(2); // "2 yes"
     expect(p.guests_pending).toBe(2); // "2 awaiting"
     expect(p.guests_declined).toBe(0);
-    expect(p.guests_tentative).toBe(0);
   });
 
   it("counts the organizer's own acceptance like anyone else's", async () => {
@@ -105,7 +104,7 @@ describe("calendar attendance is countable, not positional", () => {
     expect(bothAccepted.guests_accepted).toBe(2);
   });
 
-  it("separates every RSVP state", async () => {
+  it("separates the RSVP states that get built on", async () => {
     const p = await propsFor(
       evt([
         { email: "closer@acme.com", organizer: true, responseStatus: "accepted" },
@@ -119,8 +118,35 @@ describe("calendar attendance is countable, not positional", () => {
     expect(p.guests_total).toBe(6);
     expect(p.guests_accepted).toBe(2);
     expect(p.guests_declined).toBe(1);
-    expect(p.guests_tentative).toBe(1);
     expect(p.guests_pending).toBe(2); // needsAction + the missing key
+  });
+
+  /**
+   * "Maybe" is deliberately not a field: nobody builds a number on it. The
+   * consequence is worth pinning rather than discovering — a tentative guest is
+   * inside `guests_total` but in none of the buckets, so the parts sum to the
+   * whole only when nobody answered Maybe.
+   */
+  it("keeps a tentative guest in the total without a bucket of their own", async () => {
+    const p = await propsFor(
+      evt([
+        { email: "closer@acme.com", organizer: true, responseStatus: "accepted" },
+        { email: "maybe@prospect.io", responseStatus: "tentative" },
+      ]),
+    );
+    expect(p.guests_total).toBe(2);
+    expect(Number(p.guests_accepted) + Number(p.guests_declined) + Number(p.guests_pending)).toBe(1);
+    expect(p).not.toHaveProperty("guests_tentative");
+  });
+
+  /**
+   * A per-event rate is the wrong shape: averaging it weights a 2-person call
+   * the same as a 20-person one. The counts let Calculate do sum ÷ sum instead,
+   * which is the number people actually mean.
+   */
+  it("exposes no per-event acceptance rate", async () => {
+    const p = await propsFor(evt([{ email: "lead@prospect.io", responseStatus: "accepted" }]));
+    expect(p).not.toHaveProperty("guest_acceptance_rate");
   });
 
   it("separates the prospect from the colleague you added to the call", async () => {
@@ -183,24 +209,12 @@ describe("calendar attendance is countable, not positional", () => {
     expect(p.guests_accepted).toBe(1);
   });
 
-  it("reports no acceptance rate rather than zero when nobody was invited", async () => {
-    // A solo focus block must not drag an average acceptance rate toward zero.
+  it("reports zeroes, not absence, for an event nobody was invited to", async () => {
+    // A solo focus block still has to aggregate cleanly alongside real meetings.
     const p = await propsFor({ id: "e2", summary: "Focus", start: { dateTime: "2026-07-26T16:00:00Z" } });
     expect(p.guests_total).toBe(0);
-    expect(p.guest_acceptance_rate).toBeNull();
+    expect(p.guests_accepted).toBe(0);
     expect(p.is_external_meeting).toBe(false);
-  });
-
-  it("gives a usable rate when guests exist", async () => {
-    const p = await propsFor(
-      evt([
-        { email: "closer@acme.com", organizer: true, responseStatus: "accepted" },
-        { email: "a@prospect.io", responseStatus: "accepted" },
-        { email: "b@prospect.io", responseStatus: "declined" },
-        { email: "c@prospect.io", responseStatus: "needsAction" },
-      ]),
-    );
-    expect(p.guest_acceptance_rate).toBeCloseTo(0.5, 5); // 2 of 4
   });
 
   it("falls back to the attendee flagged organizer when the event has no organizer block", async () => {

@@ -161,10 +161,14 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
         label: "What to pull",
         required: true,
         hint: "Daily performance is the usual choice — one row per day, restated as Instantly updates it.",
+        // No per-email option. It answers no question the analytics rows do not
+        // answer better, and it is the expensive one: tens of thousands of rows
+        // against Instantly's tightest rate bucket. The connector still handles
+        // `raw_emails` so any stream already configured that way keeps syncing —
+        // it just cannot be chosen again.
         options: [
           { value: "analytics_daily", label: "Daily performance (one row per day)" },
           { value: "analytics_totals", label: "Campaign totals (one row)" },
-          { value: "raw_emails", label: "Individual emails (slower, large)" },
         ],
       },
       {

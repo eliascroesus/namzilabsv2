@@ -146,12 +146,18 @@ The raw `attendees` list is left untouched alongside them.
 | Field | Meaning |
 |---|---|
 | `guests_total` | Every invited person, organizer included; rooms excluded |
-| `guests_accepted` / `_declined` / `_tentative` / `_pending` | Those guests by RSVP |
+| `guests_accepted` / `_declined` / `_pending` | Those guests by RSVP |
 | `guests_external` | Guests whose email domain differs from the organizer's |
 | `guests_external_accepted` | …of those, the ones who accepted |
-| `guest_acceptance_rate` | `accepted / total`, **null** (not 0) when nobody was invited |
 | `is_external_meeting` | Someone outside the organizer's company was invited |
 | `organizer_email` / `organizer_domain` | Provenance for the external split |
+
+There is no `guests_tentative` and no per-event `guest_acceptance_rate`. "Maybe"
+is not a state anyone builds a number on, and a per-event rate is the wrong
+shape: averaging it weights a 2-person call the same as a 20-person one. Ask
+Calculate for `sum(guests_accepted) ÷ sum(guests_total)` instead. One consequence
+worth knowing: a tentative guest is inside `guests_total` but in none of the
+buckets, so the parts sum to the whole only when nobody answered Maybe.
 
 **The counts must equal the line Google prints on the event.** Open it in Google
 Calendar and it reads *"4 guests · 2 yes, 2 awaiting"*; `guests_total`,
@@ -184,6 +190,35 @@ Two ways to ask "did the other side accept", differing in what they assume:
   accepted meeting read as 1.
 - `guests_external_accepted >= 1` — no assumption at all, and the right one when
   the meeting is with someone outside the company.
+
+## Sendblue: the messages ARE the analytics
+
+Sendblue's own dashboard shows response rate, messages sent/received, unresponded
+conversations, speed to dial and average rep response time. None of those come
+from an analytics API — their product computes them from message history, which
+is the same history this connector already polls. So Sendblue is the mirror image
+of Instantly: there, per-email rows are 37.9K against the tightest rate bucket in
+the catalog and provider-computed analytics are the only sane read; here the
+whole account is on the order of a thousand messages and every dashboard tile is
+a Filter + Calculate away. Adding an analytics stream would add a second source
+of truth for numbers we can already derive.
+
+What did need fixing was that the poll could answer **zero** when it meant *I did
+not understand the response* — twice, once per layer:
+
+1. **The envelope.** Sendblue v2 documents `{status, message, data}`; the
+   connector read `messages` off the top level, got `undefined`, and `?? []` made
+   a busy account look empty. `extractMessages` now checks every plausible
+   position and **throws, naming the keys that did arrive**, when the list is in
+   none of them.
+2. **The timestamp.** The first sweep floors at 30 days. A renamed date field
+   makes every message parse as epoch 0, fall below the floor, and vanish — a
+   silent zero one layer down. If a page returns messages and not one carries a
+   readable date, that is now an error naming the keys the message did have.
+
+The distinction the code must preserve: an empty account and an old account both
+legitimately return zero records, and still do. Only an unreadable response is an
+error.
 
 **Backfill.** These are computed on write, and Calendar syncs incrementally by
 sync token — so events already stored keep their old `properties` until they

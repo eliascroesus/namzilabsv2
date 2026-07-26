@@ -82,22 +82,30 @@ export const sendblueConnector: Connector = {
     let maxSeen: string | null = args.cursor ?? null;
 
     for (let page = 0; page < PAGES_PER_POLL; page++) {
-      const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(page * PAGE_LIMIT) });
-      const data = await fetchJson<{ messages?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>(
-        `${API_BASE}/api/v2/messages?${params.toString()}`,
-        { headers: auth },
-      );
-      const messages = Array.isArray(data) ? data : (data.messages ?? []);
+      const messages = await listMessages(auth, PAGE_LIMIT, page * PAGE_LIMIT);
       if (messages.length === 0) break;
 
       let pageAllBelowFloor = true;
+      let anyDated = false;
       for (const msg of messages) {
         const ts = messageDate(msg);
+        if (ts) anyDated = true;
         const t = ts ? Date.parse(ts) || 0 : 0;
-        if (floor == null || t >= floor) pageAllBelowFloor = false;
-        if (floor != null && t < floor) continue;
+        if (t >= floor) pageAllBelowFloor = false;
+        if (t < floor) continue;
         records.push(toCanonical(msg, args.connectionId));
         if (ts && (maxSeen == null || (Date.parse(ts) || 0) > (Date.parse(maxSeen) || 0))) maxSeen = ts;
+      }
+      // Messages came back and not one carried a timestamp we recognise. The
+      // floor then silently rejects every single one, and the sweep reports
+      // "0 loaded" for a busy account — the same lie as an unparsed envelope,
+      // one layer down. Say which keys arrived so the fix is one line.
+      if (!anyDated) {
+        throw new Error(
+          `sendblue: ${messages.length} message(s) returned but none carried a readable date ` +
+            `(looked for ${DATE_KEYS.join(", ")}; the first message has: ${keyList(messages[0])}). ` +
+            `The date field has been renamed — messageDate() needs the new key.`,
+        );
       }
       if (pageAllBelowFloor || messages.length < PAGE_LIMIT) break;
     }
@@ -106,12 +114,7 @@ export const sendblueConnector: Connector = {
 
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
     const auth = authHeaders(args.credentials);
-    const params = new URLSearchParams({ limit: String(Math.min(n, PAGE_LIMIT)), offset: "0" });
-    const data = await fetchJson<{ messages?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>(
-      `${API_BASE}/api/v2/messages?${params.toString()}`,
-      { headers: auth },
-    );
-    const messages = Array.isArray(data) ? data : (data.messages ?? []);
+    const messages = await listMessages(auth, Math.min(n, PAGE_LIMIT), 0);
     return messages.slice(0, n).map((m) => toCanonical(m, args.connectionId));
   },
 
@@ -150,8 +153,68 @@ function authHeaders(credentials?: Record<string, unknown> | null): Record<strin
   return { "sb-api-key-id": id, "sb-api-secret-key": secret };
 }
 
+/** Timestamp keys Sendblue has been seen to use, in preference order. */
+const DATE_KEYS = ["date_sent", "date_received", "date_updated", "created_at", "sent_at", "timestamp"] as const;
+
 function messageDate(msg: Record<string, unknown>): string | null {
-  return str(msg["date_sent"]) ?? str(msg["date_received"]) ?? str(msg["date_updated"]) ?? str(msg["created_at"]) ?? null;
+  for (const k of DATE_KEYS) {
+    const v = str(msg[k]);
+    if (v) return v;
+  }
+  return null;
+}
+
+/**
+ * Where the message array sits in Sendblue's response.
+ *
+ * Their v2 API documents a `{status, message, data}` envelope, but this endpoint
+ * has also been described as returning a bare array and as `{messages: […]}`.
+ * Reading one fixed key is what let this connector report "0 loaded" against an
+ * account with hundreds of messages: the HTTP call succeeded, the key we happened
+ * to read was absent, and `?? []` turned "I did not understand the response" into
+ * "the account is empty" — indistinguishable to the user, and wrong.
+ *
+ * Checking every plausible position costs nothing and removes the guess. What
+ * matters more is the last line: if the array is in NONE of them, that is an
+ * error, not a zero.
+ */
+const LIST_PATHS: readonly (readonly string[])[] = [
+  ["messages"],
+  ["data"],
+  ["data", "messages"],
+  ["results"],
+  ["data", "results"],
+  ["items"],
+  ["data", "items"],
+];
+
+function extractMessages(payload: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(payload)) return payload as Array<Record<string, unknown>>;
+  for (const path of LIST_PATHS) {
+    let cur: unknown = payload;
+    for (const key of path) cur = asObject(cur)[key];
+    if (Array.isArray(cur)) return cur as Array<Record<string, unknown>>;
+  }
+  throw new Error(
+    `sendblue: could not find the message list in the response ` +
+      `(top-level keys: ${keyList(payload)}; looked at ${LIST_PATHS.map((p) => p.join(".")).join(", ")}). ` +
+      `Reporting this as an error rather than as zero messages, because it is not the same thing.`,
+  );
+}
+
+/** One page of message history, parsed. Shared by the poll and the preview. */
+async function listMessages(auth: Record<string, string>, limit: number, offset: number): Promise<Array<Record<string, unknown>>> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  const data = await fetchJson<unknown>(`${API_BASE}/api/v2/messages?${params.toString()}`, { headers: auth });
+  return extractMessages(data);
+}
+
+function keyList(v: unknown): string {
+  if (v == null) return "none (null)";
+  if (Array.isArray(v)) return `array of ${v.length}`;
+  if (typeof v !== "object") return typeof v;
+  const keys = Object.keys(v as Record<string, unknown>);
+  return keys.length > 0 ? keys.join(", ") : "none (empty object)";
 }
 
 /** Shared by the webhook path and the poll: both speak the message shape. */

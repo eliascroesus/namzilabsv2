@@ -183,13 +183,16 @@ function attendanceRollup(ev: Record<string, unknown>): Record<string, unknown> 
     guests_total: guestsTotal,
     guests_accepted: guestsAccepted,
     guests_declined: guests.filter((a) => status(a) === "declined").length,
-    guests_tentative: guests.filter((a) => status(a) === "tentative").length,
+    // No `guests_tentative` and no `guest_acceptance_rate`: a "maybe" is not a
+    // signal anyone builds on, and a per-event rate is the wrong shape for the
+    // question — averaging per-event rates weights a 2-person call the same as a
+    // 20-person one. Sum accepted ÷ sum total across the dataset instead, which
+    // Calculate already does from the counts below. Note the consequence:
+    // tentative replies are inside `guests_total` but in none of the buckets, so
+    // the parts only sum to the whole when nobody answered Maybe.
     guests_pending: guests.filter((a) => status(a) === "needsAction").length,
     guests_external: external.length,
     guests_external_accepted: accepted(external),
-    /** 0–1, and null rather than 0 when nobody was invited — a solo focus block
-     *  must not drag an average acceptance rate down. */
-    guest_acceptance_rate: guestsTotal > 0 ? guestsAccepted / guestsTotal : null,
     /** True when someone outside the organizer's company was invited — the
      *  cheap way to separate real calls from internal meetings. */
     is_external_meeting: external.length > 0,
