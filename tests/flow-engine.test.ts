@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { createTestDb } from "./helpers/testdb";
-import { events } from "@/db/schema";
+import { connections, events } from "@/db/schema";
 import { runFlow, sampleAppFields } from "@/lib/flow/engine";
 import { recordFields } from "@/lib/schema-registry/registry";
+import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { parseGraph } from "@/lib/flow/types";
 import type { DB } from "@/db/types";
 
@@ -353,5 +354,82 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
     const calc = res.nodes.get("calc")!;
     expect(calc.status).toBe("ok");
     expect((calc as { shape: { value: number } }).shape.value).toBe(75); // 3 passed ÷ 4 loaded × 100
+  });
+});
+
+/**
+ * Meeting type narrows the READ, not the sync — the fix for a step that showed
+ * `0 loaded` the moment a type was picked.
+ *
+ * It used to be an ordinary `sourceConfig` key, so it entered `streamConfigHash`
+ * and gave that step its own stream: a fresh cursor, no rows, and a scan that
+ * had to start over before anything appeared. Every flow on the connection now
+ * reads ONE stream and the choice is a WHERE clause over it, so switching types
+ * is instant and can never point at an empty stream.
+ */
+describe("read filters — a setting the provider cannot act on", () => {
+  const CAL = { scope: "organization" };
+  const AAA = "https://api.calendly.com/event_types/AAA";
+  const BBB = "https://api.calendly.com/event_types/BBB";
+
+  /** One shared Calendly stream, holding both meeting types. */
+  async function seedShared() {
+    await db.insert(connections).values({ id: CONN, orgId: ORG, source: "calendly", name: "Calendly", status: "active", authType: "oauth2" });
+    const streamHash = streamConfigHash(CAL, "calendly");
+    const rows = [
+      { uri: "M1", type: AAA, name: "Invite Only Creator Program" },
+      { uri: "M2", type: BBB, name: "Invite Only Creator Program" }, // same NAME, different type
+      { uri: "M3", type: AAA, name: "Invite Only Creator Program" },
+      { uri: "M4", type: "https://api.calendly.com/event_types/CCC", name: "30 Minute Meeting" },
+    ];
+    for (const r of rows) {
+      await db.insert(events).values({
+        eventId: `calendly:${CONN}:${streamHash}:${r.uri}`,
+        orgId: ORG,
+        connectionId: CONN,
+        source: "calendly",
+        streamHash,
+        eventType: "booked",
+        subject: r.name,
+        occurredAt: new Date(Date.now() - 86_400_000),
+        properties: { event_type: r.type, meeting_type: r.name },
+      });
+    }
+  }
+
+  const countWith = async (sourceConfig: Record<string, unknown>) => {
+    const res = await runFlow(
+      { db, orgId: ORG },
+      G(
+        [N("a", "app", { connectionId: CONN, source: "calendly", sourceConfig }), N("agg", "aggregate", { aggregation: "count" }), N("o", "output", {})],
+        [E("a", "agg"), E("agg", "o")],
+      ),
+    );
+    return res.nodes.get("a")!.recordsOut;
+  };
+
+  it("reads the shared stream and returns only the chosen type — no second stream, no zero", async () => {
+    await seedShared();
+    expect(await countWith(CAL)).toBe(4); // everything the sync holds
+    expect(await countWith({ ...CAL, meetingType: AAA })).toBe(2);
+    // The other of two SAME-NAMED types selects only itself, which is the whole
+    // reason the value is the type's URI rather than its name.
+    expect(await countWith({ ...CAL, meetingType: BBB })).toBe(1);
+    expect(await countWith({ ...CAL, meetingType: "https://api.calendly.com/event_types/NOPE" })).toBe(0);
+  });
+
+  it("does not fork the stream — a filtered step reads exactly what an unfiltered one wrote", async () => {
+    // If meetingType entered the identity these would differ, and the filtered
+    // step would read a hash nothing was ever written under.
+    expect(streamConfigHash({ ...CAL, meetingType: AAA }, "calendly")).toBe(streamConfigHash(CAL, "calendly"));
+    // Settings the provider CAN act on still must fork it.
+    expect(streamConfigHash({ ...CAL, status: "active" }, "calendly")).not.toBe(streamConfigHash(CAL, "calendly"));
+  });
+
+  it("still honors a meeting type saved as a NAME, from before the value was a URI", async () => {
+    await seedShared();
+    // Both same-named types match, which is what that config always meant.
+    expect(await countWith({ ...CAL, meetingType: "Invite Only Creator Program" })).toBe(3);
+    expect(await countWith({ ...CAL, meetingType: "30 Minute Meeting" })).toBe(1);
   });
 });

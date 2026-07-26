@@ -45,6 +45,12 @@ export type ReconcileResult = {
    * the lease is doing exactly this work, and the next tick re-covers it.
    */
   skipped?: boolean;
+  /**
+   * At least one stream stopped on its page budget with more to fetch. Carried
+   * so the cadence can tell "nothing changed" from "not finished" — see
+   * CadenceInput.incomplete.
+   */
+  incomplete?: boolean;
   /** Tenant + source identity, so callers can mark dependent flows stale. */
   orgId: string;
   source: string;
@@ -111,6 +117,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     const healthy = result.webhook === "ok" || result.webhook === "reregistered";
     const decision = decideCadence({
       changed: reconcileChanged(result),
+      incomplete: result.incomplete,
       previousNoOps: conn.consecutiveNoOpSweeps ?? 0,
       webhookHealthyAt: healthy ? new Date() : conn.webhookHealthyAt,
     });
@@ -179,6 +186,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     let softDeleted = 0;
     let deduped = 0;
     let failures = 0;
+    let incomplete = false;
     const changedStreamHashes: string[] = [];
     for (const stream of streams) {
       // F.1: each stream poll claims from the connection's per-minute budget,
@@ -199,6 +207,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
         updated += r.updated;
         softDeleted += r.softDeleted;
         deduped += r.deduped;
+        if (r.incomplete) incomplete = true;
         // G.1: remember WHICH streams changed, so staleness stays stream-scoped.
         if (r.inserted + r.updated + r.softDeleted > 0) changedStreamHashes.push(stream.configHash);
       } catch (e) {
@@ -217,7 +226,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
       }
     }
     if (streams.length > 0 && failures === 0) await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
-    return withCadence({ inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, changedStreamHashes, orgId: conn.orgId, source: conn.source });
+    return withCadence({ inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, changedStreamHashes, incomplete, orgId: conn.orgId, source: conn.source });
   }
 
   /**

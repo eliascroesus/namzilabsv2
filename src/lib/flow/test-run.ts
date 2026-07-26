@@ -88,18 +88,25 @@ async function primeStreamsForTest(
     const cur = stack.pop()!;
     for (const s of incoming.get(cur) ?? []) if (!wanted.has(s)) { wanted.add(s); stack.push(s); }
   }
+  // The step's source decides which of its settings are stream identity and
+  // which only narrow the read, so it has to be known before the config is
+  // hashed. Read once for the whole graph rather than per node.
+  const sourceOf = new Map<string, string>(
+    (await db.select({ id: connections.id, source: connections.source }).from(connections).where(eq(connections.orgId, orgId))).map((c) => [c.id, c.source]),
+  );
   const notes: string[] = [];
   for (const node of g.nodes) {
     if (!wanted.has(node.id) || node.type !== "app") continue;
-    const cfg = node.data.config as { connectionId?: unknown; sourceConfig?: unknown };
+    const cfg = node.data.config as { connectionId?: unknown; source?: unknown; sourceConfig?: unknown };
     const connectionId = typeof cfg.connectionId === "string" ? cfg.connectionId : null;
     const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
     if (!connectionId) continue;
+    const source = typeof cfg.source === "string" ? cfg.source : sourceOf.get(connectionId);
     // A source with no per-flow resource (Sendblue, Close) has an empty
     // sourceConfig, so primeStream has nothing to key on. Refresh the whole
     // connection instead — skipping it silently is what made Test report "0
     // loaded" for sources it had never actually asked.
-    const r = hasStreamConfig(sourceConfig)
+    const r = hasStreamConfig(sourceConfig, source)
       ? await primeStream(db, orgId, connectionId, sourceConfig, { force: true })
       : await primeConnection(db, orgId, connectionId);
     if (!r.ok) return { error: r.error, notes };
@@ -131,7 +138,8 @@ async function dedupeWarningForNode(db: DB, orgId: string, g: FlowGraph, nodeId:
     if (!connectionId) return null;
     const field = typeof cfg.dedupeField === "string" && cfg.dedupeField ? cfg.dedupeField : "subject";
     const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
-    const streamHash = hasStreamConfig(sourceConfig) ? streamConfigHash(sourceConfig) : null;
+    const [conn] = await db.select({ source: connections.source }).from(connections).where(eq(connections.id, connectionId)).limit(1);
+    const streamHash = hasStreamConfig(sourceConfig, conn?.source) ? streamConfigHash(sourceConfig, conn?.source) : null;
     const warning = await dedupeWarningFor(db, { orgId, connectionId, streamHash }, field);
     return warning?.message ?? null;
   } catch {
@@ -165,7 +173,7 @@ async function missingSourcePrompt(db: DB, orgId: string, g: FlowGraph, nodeId: 
   }
 
   const entry = catalogEntry(conn.source);
-  if (isStreamScoped(conn.source) && !hasStreamConfig((cfg.sourceConfig ?? {}) as Record<string, unknown>)) {
+  if (isStreamScoped(conn.source) && !hasStreamConfig((cfg.sourceConfig ?? {}) as Record<string, unknown>, conn.source)) {
     const what = entry?.flowFields?.map((f) => f.label.toLowerCase()).join(" and ") ?? "a resource";
     return `Choose ${what} for this step — ${entry?.name ?? conn.source} needs to know which data to pull before it can return anything.`;
   }

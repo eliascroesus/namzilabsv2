@@ -16,13 +16,11 @@ const API = "https://api.calendly.com";
 /**
  * The rolling window every Calendly stream reads, by MEETING time.
  *
- * The past half is deliberately short. It is the ONLY real lever on how much we
- * pull: `/scheduled_events` has no event-type filter, so the number of pages is
- * decided by scope × window and nothing else. Thirty days instead of a year is a
- * twelvefold cut in pages walked every sweep.
- *
- * The forward half stays generous: upcoming meetings are most of what a calendar
- * is asked about, and they arrive on the same pages.
+ * Both halves are deliberately short. The window is the ONLY real lever on how
+ * much we pull: `/scheduled_events` has no event-type filter, so the number of
+ * pages is decided by scope × window and nothing else. A year forward was a scan
+ * a busy organization could not finish between sweeps, which meant its numbers
+ * never settled; a quarter drains in one or two.
  *
  * STORED DATA TRACKS THIS WINDOW. The poll declares it as `retireOutsideWindow`,
  * so rows that fall outside are retired rather than left stranded — narrowing
@@ -36,7 +34,7 @@ const API = "https://api.calendly.com";
  * stable while it drains; a later sweep opens a fresh window around then-now.
  */
 const PAST_DAYS = 30;
-const FUTURE_DAYS = 365;
+const FUTURE_DAYS = 90;
 
 /** invitee.created -> booked, invitee.canceled -> canceled, etc. */
 const EVENT_TYPE_MAP: Record<string, string> = {
@@ -114,21 +112,17 @@ export const calendlyConnector: Connector = {
   },
 
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
-    // Newest few meetings for a preview — one page, sorted by soonest-first, no cursor.
+    // Newest few meetings for the connect-time preview — one page, no cursor.
+    // Keeps no filter of its own, exactly as `poll` keeps none: meeting type is
+    // a read filter now, so a connector-side copy could only disagree with it.
+    // The two DID drift once, previewing one set of meetings and syncing
+    // another; there is now nothing left to drift.
     const token = token_(args.credentials);
     const target = await resolveTarget(token, args.connectionId, args.config);
     const params = new URLSearchParams({ ...target, count: String(Math.min(n, 100)), sort: "start_time:desc" });
     const data = await fetchJson<CalendlyList>(`${API}/scheduled_events?${params.toString()}`, { headers: authHeader(token) });
-    // Filters exactly as `poll` does — same helper, so they cannot drift. They
-    // did once: the preview kept matching on one field after the poll had moved
-    // to another, so one config previewed one set of meetings and synced a
-    // different one. tests/connectors-poll.test.ts pins them together.
-    const matches = meetingTypeMatcher(args.config);
     const tag = streamTag(args);
-    return data.collection
-      .filter(matches)
-      .map((ev) => bookedEvent(args.connectionId, tag, ev))
-      .slice(0, n);
+    return data.collection.map((ev) => bookedEvent(args.connectionId, tag, ev)).slice(0, n);
   },
 
   /**
@@ -181,24 +175,6 @@ export const calendlyConnector: Connector = {
   },
 };
 
-/**
- * Does this scheduled event belong to the meeting type the flow picked?
- *
- * Matched on `event_type` — the type's URI, which is its identity. Names are not:
- * two types sharing one are two types, and matching on the name pulled both
- * whichever was selected.
- *
- * A config holding a NAME rather than a URI is from before that was true, and
- * keeps matching on the name. Switching the key underneath a saved flow would
- * return zero rows and read exactly like the sync breaking — the failure this
- * codebase keeps having to unpick. Re-picking the type in the step upgrades it.
- */
-function meetingTypeMatcher(config?: Record<string, unknown> | null): (ev: Record<string, unknown>) => boolean {
-  const wanted = str(config?.["meetingType"]);
-  if (!wanted) return () => true;
-  if (wanted.includes("/event_types/")) return (ev) => str(ev["event_type"]) === wanted;
-  return (ev) => str(ev["name"]) === wanted;
-}
 
 /**
  * Every page of a Calendly list endpoint, not just the first.
@@ -227,29 +203,67 @@ async function listAll<T>(token: string, path: string, params: Record<string, st
 }
 
 type CalendlyList = { collection: Array<Record<string, unknown>>; pagination?: { next_page_token?: string | null } };
-type PollCursor = { floor: string; ceil: string; pageToken?: string | null };
+
+type Side = "past" | "future";
 
 /**
- * Poll one page of scheduled events for a stream, walking Calendly's pagination across
- * calls. Unlike a naive newest-first fetch, this:
- *  - queries ALL statuses (no `status` filter) so it sees cancellations, not just live
- *    bookings — every meeting emits a "booked" event, and canceled ones ALSO emit a
- *    "canceled" event (its own id) so the booking→cancellation transition survives
- *    dedup-on-insert;
- *  - scans a rolling meeting-time window oldest-first and follows `next_page_token`, so
- *    the whole history imports instead of just the soonest ~50 meetings;
- *  - buckets a booking by `created_at` (when it was booked), keeping the meeting time in
- *    properties for use as a metric Time reference.
- * When a scan finishes the cursor drops to null, so the next sweep rescans the window
- * (reconciliation — dedup makes re-inserts cheap). Emitted ids are stream-tagged.
+ * A scan's whole state: the window it is draining, the instant it calls "now",
+ * and one page token per direction.
+ *
+ * `undefined` = that side has not started, `null` = it is drained. All three
+ * boundaries are pinned when the scan starts, so pagination stays stable while
+ * it runs and a later sweep opens a fresh window around then-now.
+ */
+type PollCursor = {
+  floor: string;
+  ceil: string;
+  pivot: string;
+  past?: string | null;
+  future?: string | null;
+  next: Side;
+};
+
+/**
+ * Poll one page of scheduled events, walking Calendly's pagination across calls.
+ *
+ *  - Queries ALL statuses (no `status` filter) unless the flow narrowed it, so
+ *    cancellations are seen: every meeting emits a "booked" event, and canceled
+ *    ones ALSO emit a "canceled" event with its own id, so the booking →
+ *    cancellation transition survives dedup-on-insert.
+ *  - **Scans OUTWARD FROM NOW, alternating direction.** The past side runs
+ *    `start_time:desc` from the pivot (most recent meeting first); the future
+ *    side runs `start_time:asc` from the pivot (soonest first); each call takes
+ *    one page from whichever side is next and not yet drained.
+ *  - Emits ids tagged with the stream.
+ *
+ * The alternation is the point. This used to run `start_time:asc` from the
+ * window's floor, so the first pages were the OLDEST meetings in it — a 4-page
+ * Test on a busy account returned 400 meetings from a month ago and nothing
+ * else, while "Latest 3 records" showed appointments two weeks stale and every
+ * upcoming meeting was missing. Whatever budget a scan gets, it should be spent
+ * on the meetings nearest to now in both directions, because those are the ones
+ * anyone is looking at.
+ *
+ * The cursor goes null only when BOTH sides are drained, which is what makes the
+ * next sweep rescan the window (reconciliation — dedup makes re-inserts cheap).
  */
 async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Promise<PollResult> {
   const token = token_(args.credentials);
   const target = await resolveTarget(token, args.connectionId, args.config);
   const cur = parseCursor(rawCursor);
   const status = statusOf(args.config);
+
+  // Whichever side is due, unless it is finished — then the other one. Both
+  // finished cannot reach here: that returns a null cursor and starts over.
+  const side: Side = drained(cur, cur.next) ? other(cur.next) : cur.next;
   const url = (pageToken?: string | null) => {
-    const p = new URLSearchParams({ ...target, count: "100", sort: "start_time:asc", min_start_time: cur.floor, max_start_time: cur.ceil });
+    const p = new URLSearchParams({
+      ...target,
+      count: "100",
+      ...(side === "past"
+        ? { sort: "start_time:desc", min_start_time: cur.floor, max_start_time: cur.pivot }
+        : { sort: "start_time:asc", min_start_time: cur.pivot, max_start_time: cur.ceil }),
+    });
     // Sent only when the flow narrowed it. Omitted, Calendly returns every
     // status — which is what lets a cancellation be seen at all.
     if (status) p.set("status", status);
@@ -257,32 +271,28 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
     return `${API}/scheduled_events?${p.toString()}`;
   };
 
+  const token_in = cur[side] ?? null;
   let data: CalendlyList;
   try {
-    data = await fetchJson<CalendlyList>(url(cur.pageToken), { headers: authHeader(token) });
+    data = await fetchJson<CalendlyList>(url(token_in), { headers: authHeader(token) });
   } catch (e) {
-    // A page token that expired between sweeps self-heals by restarting the scan.
-    if (!cur.pageToken) throw e;
+    // A page token that expired between sweeps self-heals by restarting that side.
+    if (!token_in) throw e;
     data = await fetchJson<CalendlyList>(url(null), { headers: authHeader(token) });
   }
 
-  // A STORAGE filter, and labelled as one in the UI.
-  //
-  // `/scheduled_events` has no event_type parameter, so this cannot reduce what
-  // we pull — the pages fetched are identical either way. What it does is keep
-  // the stored dataset to the one meeting type a flow is about, matched on the
-  // type's URI so that picking one of two same-named types gets that one.
-  //
-  // `meeting_type`, `host_email` and the rest are still flattened onto every
-  // record below, so a Filter step remains the way to slice a shared sync.
-  const matches = meetingTypeMatcher(args.config);
+  // Every meeting the window returns is stored. Narrowing to one meeting type is
+  // a READ filter now (catalog `readFilter`), applied by the engine over a sync
+  // every flow on this connection shares — filtering here bought no API calls
+  // (there is no event_type parameter) and cost a stream, a cursor and a
+  // duplicate row per type, so a freshly-picked type read 0 until its own scan
+  // caught up.
   const tag = streamTag(args);
   const records: CanonicalEvent[] = [];
   let typed = 0;
   for (const ev of data.collection) {
     if (!str(ev["uri"])) continue;
     if (str(ev["event_type"])) typed += 1;
-    if (!matches(ev)) continue;
     records.push(bookedEvent(args.connectionId, tag, ev));
     if (str(ev["status"]) === "canceled") records.push(canceledEvent(args.connectionId, tag, ev));
   }
@@ -293,22 +303,23 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
   // only evidence available. `returned=0` on an organization scope is the
   // signature of a token without org admin rights.
   //
-  // `typed` is the count of returned events that actually carry an `event_type`
-  // URI. The meeting-type filter matches on that field, so `typed` well below
-  // `returned` is the one way this filter could quietly keep nothing — worth
-  // seeing in a log rather than inferring from an empty dashboard.
-  if (!cur.pageToken) {
+  // `typed` counts returned events carrying an `event_type` URI — the field the
+  // meeting-type read filter matches on. `typed` well below `returned` is the
+  // one way that filter could quietly show nothing, and it belongs in a log
+  // rather than being inferred from an empty dashboard.
+  if (!token_in) {
     console.log(
-      `[calendly-probe] returned=${data.collection.length} typed=${typed} kept=${records.length} ` +
+      `[calendly-probe] side=${side} returned=${data.collection.length} typed=${typed} ` +
         `paginated=${Boolean(data.pagination?.next_page_token)} scope=${Object.keys(target).join("+")} status=${status ?? "all"}`,
     );
   }
 
-  const next = data.pagination?.next_page_token ?? null;
-  const nextCursor: string | null = next ? JSON.stringify({ floor: cur.floor, ceil: cur.ceil, pageToken: next } satisfies PollCursor) : null;
+  // Advance this side, then hand the turn to the other one.
+  const advanced: PollCursor = { ...cur, [side]: data.pagination?.next_page_token ?? null, next: other(side) };
+  const done = drained(advanced, "past") && drained(advanced, "future");
   return {
     records,
-    nextCursor,
+    nextCursor: done ? null : JSON.stringify(advanced),
     // Stored data tracks the window rather than only growing past it. Without
     // this, narrowing the history window left the older import stranded behind
     // the new floor with a gap in between — data matching neither window.
@@ -318,14 +329,30 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
   };
 }
 
-/** Parse the opaque cursor into a rolling window + page token; a fresh/legacy cursor
- *  opens a new window around now. */
+const other = (side: Side): Side => (side === "past" ? "future" : "past");
+
+/** A side is drained once it has run and come back with no next page. */
+function drained(cur: PollCursor, side: Side): boolean {
+  return side in cur && cur[side] === null;
+}
+
+/** Parse the opaque cursor into a scan state; a fresh/legacy cursor opens a new
+ *  window around now. */
 function parseCursor(raw: string | null): PollCursor {
   if (raw) {
     try {
       const c = JSON.parse(raw) as Partial<PollCursor>;
-      if (typeof c.floor === "string" && typeof c.ceil === "string") {
-        return { floor: c.floor, ceil: c.ceil, pageToken: typeof c.pageToken === "string" ? c.pageToken : null };
+      // `pivot` is required, so a cursor from before the scan became two-sided
+      // restarts rather than being read as a half-finished one.
+      if (typeof c.floor === "string" && typeof c.ceil === "string" && typeof c.pivot === "string") {
+        return {
+          floor: c.floor,
+          ceil: c.ceil,
+          pivot: c.pivot,
+          ...("past" in c ? { past: typeof c.past === "string" ? c.past : null } : {}),
+          ...("future" in c ? { future: typeof c.future === "string" ? c.future : null } : {}),
+          next: c.next === "future" ? "future" : "past",
+        };
       }
     } catch {
       // Not our JSON (e.g. a legacy timestamp cursor) — fall through to a fresh window.
@@ -335,7 +362,10 @@ function parseCursor(raw: string | null): PollCursor {
   return {
     floor: new Date(now - PAST_DAYS * 86_400_000).toISOString(),
     ceil: new Date(now + FUTURE_DAYS * 86_400_000).toISOString(),
-    pageToken: null,
+    pivot: new Date(now).toISOString(),
+    // Recent past first: "the latest records" is the question a preview answers,
+    // and a meeting that already happened is the one a person recognises.
+    next: "past",
   };
 }
 

@@ -45,6 +45,19 @@ export type CadenceInput = {
   changed: boolean;
   /** Consecutive no-op sweeps BEFORE this one. */
   previousNoOps: number;
+  /**
+   * A stream stopped on its page budget rather than on the end of its data, so
+   * there is known work left to do.
+   *
+   * Kept separate from `changed` because the two are genuinely different: a
+   * re-scan of an unchanged window inserts nothing and updates nothing, so it
+   * reads as idle — while the walk is only part-way through. Calendly hit this
+   * exactly, and it compounds: each demotion makes the remaining pages arrive
+   * more slowly, so a big window slid onto the 6-hour tier and its numbers never
+   * caught up. A connection still telling us it has more to fetch is the
+   * opposite of idle.
+   */
+  incomplete?: boolean;
   /** When the provider webhook was last verified healthy (F.5). */
   webhookHealthyAt?: Date | null;
   now?: Date;
@@ -55,7 +68,7 @@ export type CadenceDecision = {
   nextSweepAt: Date;
   consecutiveNoOpSweeps: number;
   /** Why this interval — surfaced in tests and useful for support. */
-  reason: "changed" | "idle-tier" | "webhook-backstop";
+  reason: "changed" | "idle-tier" | "webhook-backstop" | "scan-incomplete";
 };
 
 /** Pure cadence policy — no I/O, so the rules are directly testable. */
@@ -67,6 +80,19 @@ export function decideCadence(input: CadenceInput): CadenceDecision {
   // moment a connection proves it's live.
   if (input.changed) {
     return { intervalMs: BASE_INTERVAL_MS, nextSweepAt: new Date(now.getTime() + BASE_INTERVAL_MS), consecutiveNoOpSweeps: 0, reason: "changed" };
+  }
+
+  // Mid-scan. Nothing changed only because the rest has not been fetched yet —
+  // backing off here is what made a big window take days to land. The no-op
+  // streak is held rather than advanced, so the connection cannot tier down on
+  // the strength of sweeps that were still working.
+  if (input.incomplete) {
+    return {
+      intervalMs: BASE_INTERVAL_MS,
+      nextSweepAt: new Date(now.getTime() + BASE_INTERVAL_MS),
+      consecutiveNoOpSweeps: input.previousNoOps,
+      reason: "scan-incomplete",
+    };
   }
 
   let intervalMs = BASE_INTERVAL_MS;

@@ -300,53 +300,100 @@ Both are one-line `return null` sites, which is why the ambiguity stayed
 invisible. `tests/cursor-contract.test.ts` drives the real connector through the
 real runner for each case.
 
-## Ingest filters must say they are ingest filters
+## A setting either shapes the request or narrows the read
 
-A per-flow setting either changes the REQUEST or it does not, and the two are
-worth different things:
+A per-flow setting is one of two things, and conflating them is expensive:
 
-- **Changes the request** (Calendly's scope, status): fewer API calls. Pure win.
-- **Cannot change the request** (Calendly's meeting type — there is no
-  `event_type` parameter): the same pages are fetched either way. It narrows what
-  is STORED, which is a real thing to want, but it buys no quota. Because the
-  setting is part of `streamConfigHash` it also gives that flow its own stream, so
-  two flows on two meeting types scan the same account twice.
+- **It changes the REQUEST** (Calendly's scope and status, Sheets' spreadsheet
+  and tab): fewer API calls, and it must be part of `streamConfigHash`, because
+  two different requests are two different syncs.
+- **The provider cannot act on it** (Calendly's meeting type — `/scheduled_events`
+  has no `event_type` parameter): the same pages are fetched either way. It
+  belongs in `FlowConfigField.readFilter`, which keeps it OUT of the stream
+  identity and applies it as a WHERE clause in `appConds`.
 
-Both are legitimate; conflating them is not. Every hint names which it is.
+The second kind was an ordinary config key once, and every cost landed at the
+same time: a fresh stream with a fresh cursor per choice (so a newly-picked
+meeting type showed `0 loaded` until its own scan caught up), a duplicate row per
+copy, and the same account scanned once per type against one 60/min bucket. None
+of it bought a single API call.
 
-A flow can also slice a SHARED sync without a second stream, and connectors make
-that possible by flattening the narrowing axes onto every record. Calendly grew
-`meeting_type`, `host_email` and `host_name` for exactly this — the first was
-otherwise reachable only as the ambiguous `name` (and again as "Subject /
+`normalizeStreamConfig` therefore takes the SOURCE, and the argument is required
+rather than optional on purpose: only the catalog can tell a read filter from a
+resource selector, and an un-updated call site would fork the stream silently.
+
+A `readFilter` may name several paths, OR'd together, which is how a value whose
+meaning changed stays readable — Calendly's is an event-type URI now and was the
+type's name before, and a URI never equals a name.
+
+A flow can slice the same shared sync further with a Filter step, and connectors
+make that possible by flattening the narrowing axes onto every record. Calendly
+grew `meeting_type`, `host_email` and `host_name` for exactly this — the first
+was otherwise reachable only as the ambiguous `name` (and again as "Subject /
 person"), and the other two were buried in `event_memberships`, an array a picker
 can offer only positionally.
 
+## Streams are retired when no flow reads them
+
+A stream is created when a Get data step declares a resource, and nothing used to
+remove it when that step changed — so every edit left the previous one behind,
+still returned by `activeStreams`, still polled every sweep, still spending the
+connection's budget on data nobody could read.
+
+`pruneOrphanStreams` (run on flow save) disables any stream of the org that no
+draft or published graph references. Disabled, never deleted: the sweep filters
+on `status`, so the cost stops immediately, and `ensureStreamsForGraph`
+re-activates one the moment a flow points at it again.
+
+It does NOT retire the rows by default. It runs on every draft save, including
+half-finished ones, and a user switching a setting to look at something must not
+find their import gone; dead rows are unreadable anyway (the read is
+stream-scoped) and cost only storage. `scripts/prune-orphan-streams.ts --apply
+--retire-rows` is the deliberate cleanup.
+
 ## Calendly: what reduces API calls, and what only reduces storage
 
-Calendly is stream-scoped like Instantly — each distinct config is its own stream
-with its own cursor.
+Calendly is stream-scoped like Instantly — each distinct REQUEST is its own
+stream with its own cursor.
 
 `/scheduled_events` accepts `organization` | `user` | `group`, `min_start_time`,
 `max_start_time`, `status`, `invitee_email`, `sort`, `count`, `page_token`. That
 is the whole list. **There is no `event_type` parameter**, which is why meeting
-type is not a flowField.
+type is a read filter rather than part of the sync.
 
 | Lever | Effect |
 |---|---|
 | **Fetch meetings for** (me / group / whole org) | fewer API calls |
 | **Meetings to include** (booked / canceled / both) | fewer API calls |
 | History window (fixed in the connector) | fewer API calls |
-| **Meeting type** | fewer rows STORED — API cost unchanged |
+| **Meeting type** | a WHERE clause over the shared sync — instant, and costs nothing |
 | Host, and meeting type again | Filter step, on `host_email` / `meeting_type` — nothing extra fetched |
-
-Every hint in the panel says which of those two it is, because the difference is
-otherwise invisible and it is the difference between saving quota and not.
 
 **Whole organization needs an admin or owner token.** A personal access token
 from a non-admin member carries user scope only, and an organization-scoped read
 from one returns an empty collection — indistinguishable from an account with no
 meetings unless you read the `[calendly-probe]` log line, which records
 `returned=` straight from the response.
+
+### The scan walks OUTWARD FROM NOW, alternating
+
+A scan pins three boundaries: the window's `floor` and `ceil`, and a `pivot` —
+the instant it started. Each poll takes one page from whichever side is due:
+
+| side | request |
+|---|---|
+| `past` | `min_start_time=floor`, `max_start_time=pivot`, `sort=start_time:desc` |
+| `future` | `min_start_time=pivot`, `max_start_time=ceil`, `sort=start_time:asc` |
+
+then hands the turn to the other side. The cursor clears — restarting the whole
+thing next sweep — only when BOTH sides are drained.
+
+This was one `start_time:asc` walk from the floor, which meant every partial
+state of a scan held the OLDEST meetings in the window and nothing else. On a
+busy organization a 4-page Test returned 400 meetings from a month ago: "Latest 3
+records" showed appointments two weeks stale, and every upcoming meeting was
+missing. A page budget should be spent on the meetings nearest to now in both
+directions, because those are the ones anyone is looking at.
 
 ### A meeting is dated by when it HAPPENS
 
@@ -362,11 +409,12 @@ statement about when meetings happen; only this axis puts a future meeting in th
 future. Booking time is still there as `booked_at` (and `canceled_at`), so
 "meetings booked per day" remains a metric anyone can build.
 
-### The window: 30 days back, 365 forward — and stored data tracks it
+### The window: 30 days back, 90 forward — and stored data tracks it
 
-The past half is short because it is the only real lever on volume: with no
-event-type filter, pages walked is decided by scope × window and nothing else.
-Thirty days rather than a year is a twelvefold cut per sweep.
+Both halves are short because the window is the only real lever on volume: with
+no event-type filter, pages walked is decided by scope × window and nothing else.
+A year forward was a scan a busy organization could not finish between sweeps, so
+its numbers never settled; a quarter drains in one or two.
 
 The poll declares that window as `retireOutsideWindow`, and `syncStream` retires
 this stream's rows that fall outside it. **A rolling window that only ever adds
@@ -411,8 +459,17 @@ cursor means there IS more, and `maxPages` bounds the walk.
 **Calendly gives every host their own copy of a shared event type.** An
 organization running one programme across three people has three `event_types`
 rows with the same name and different URIs — the same label two or three times in
-any client's picker, Zapier's included. Matching on the URI narrowed an org-wide
-read to whichever copy was picked. No longer reachable: the setting is gone.
+any client's picker, Zapier's included. The picker keys options by URI and labels
+them by name (Zapier's split exactly), so two rows can read alike and each still
+selects only its own meetings. Collapsing them by name instead made one entry
+that pulled both, which is the opposite of what a picker is for.
+
+**A mid-scan sweep is not an idle one.** `reconcileChanged` counts inserts,
+updates and soft-deletes, and a re-scan of an unchanged window produces only
+dedups — so a part-finished walk read as idle and slid down the cadence ladder
+(30 min → 2 h → 6 h → daily). It compounds: each demotion makes the remaining
+pages arrive more slowly. `CadenceInput.incomplete` holds the connection at base
+cadence, and holds its no-op streak, while any stream still has pages to fetch.
 
 ## Never a bare zero while a scan is incomplete
 

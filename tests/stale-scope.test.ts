@@ -65,7 +65,7 @@ describe("G.1 — staleness is scoped to the streams that changed", () => {
     const flowB = await publishFlow("reads B", CFG_B);
     const flowAll = await publishFlow("reads whole connection", null);
 
-    const affected = await markStaleForSource(db, ORG, "gsheets", connId, [streamConfigHash(CFG_A)]);
+    const affected = await markStaleForSource(db, ORG, "gsheets", connId, [streamConfigHash(CFG_A, "gsheets")]);
     expect(affected.sort()).toEqual([flowA, flowAll].sort());
     expect(await statusOf(flowA)).toBe("stale");
     expect(await statusOf(flowAll)).toBe("stale");
@@ -87,7 +87,7 @@ describe("G.4 — results-version beacon", () => {
     expect(await resultsVersion(db, ORG)).toBe(v1); // stable when nothing changes
 
     // Staleness flip moves it.
-    await markStaleForSource(db, ORG, "gsheets", connId, [streamConfigHash(CFG_A)]);
+    await markStaleForSource(db, ORG, "gsheets", connId, [streamConfigHash(CFG_A, "gsheets")]);
     const v2 = await resultsVersion(db, ORG);
     expect(v2).not.toBe(v1);
 

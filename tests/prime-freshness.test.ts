@@ -122,7 +122,7 @@ describe("primeStream freshness gate (Defect #1)", () => {
 
     // Backdate the stream's lastPolledAt beyond the window — the old code
     // skipped forever here; the gate must re-poll now.
-    const hash = streamConfigHash(CFG);
+    const hash = streamConfigHash(CFG, "gsheets");
     await db
       .update(sourceStreams)
       .set({ lastPolledAt: new Date(Date.now() - 10 * 60_000) })
@@ -141,7 +141,7 @@ describe("primeStream freshness gate (Defect #1)", () => {
 
       // Simulate the awaited in-flight sync finishing DURING our wait: its
       // completion stamps lastPolledAt after our call starts.
-      const hash = streamConfigHash(CFG);
+      const hash = streamConfigHash(CFG, "gsheets");
       await db
         .update(sourceStreams)
         .set({ lastPolledAt: new Date(Date.now() + 250), status: "active" })

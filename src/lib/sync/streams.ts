@@ -1,5 +1,5 @@
 import { and, eq, gt, gte, isNull, lt, lte, notInArray, or } from "drizzle-orm";
-import { connections, events, sourceStreams } from "@/db/schema";
+import { connections, events, flows, flowVersions, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
@@ -9,7 +9,7 @@ import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { awaitStreamWriteLock, withStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
-import type { FlowGraph } from "@/lib/flow/types";
+import { parseGraph, type FlowGraph } from "@/lib/flow/types";
 
 /**
  * Streams are the unit of sync for connectors whose resource is chosen per flow
@@ -30,11 +30,11 @@ export function streamRefsOfGraph(graph: FlowGraph, sourceOf: (connectionId: str
     const cfg = (node.data.config ?? {}) as { connectionId?: unknown; source?: unknown; sourceConfig?: unknown };
     const connectionId = typeof cfg.connectionId === "string" ? cfg.connectionId : null;
     const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
-    if (!connectionId || !hasStreamConfig(sourceConfig)) continue;
+    if (!connectionId) continue;
     const source = typeof cfg.source === "string" ? cfg.source : sourceOf(connectionId);
-    if (!isStreamScoped(source)) continue;
-    const configHash = streamConfigHash(sourceConfig);
-    seen.set(`${connectionId}:${configHash}`, { connectionId, config: normalizeStreamConfig(sourceConfig), configHash });
+    if (!isStreamScoped(source) || !hasStreamConfig(sourceConfig, source)) continue;
+    const configHash = streamConfigHash(sourceConfig, source);
+    seen.set(`${connectionId}:${configHash}`, { connectionId, config: normalizeStreamConfig(sourceConfig, source), configHash });
   }
   return [...seen.values()];
 }
@@ -57,8 +57,81 @@ export async function ensureStreamsForGraph(db: DB, orgId: string, graph: FlowGr
       .onConflictDoNothing({ target: [sourceStreams.connectionId, sourceStreams.configHash] })
       .returning({ id: sourceStreams.id });
     created += rows.length;
+    // A referenced stream is by definition not an orphan: undo any earlier
+    // prune, so editing a step back to a previous resource resumes its sync
+    // instead of leaving it permanently disabled.
+    if (rows.length === 0) {
+      await db
+        .update(sourceStreams)
+        .set({ status: "active", updatedAt: new Date() })
+        .where(and(eq(sourceStreams.connectionId, ref.connectionId), eq(sourceStreams.configHash, ref.configHash), eq(sourceStreams.status, "disabled")));
+    }
   }
   return { created };
+}
+
+/**
+ * Retire the streams of an org that no flow references any more.
+ *
+ * A stream is created when a Get data step declares a resource and is never
+ * removed when that step changes — so every edit to a stream-identity setting
+ * leaves the previous one behind, still returned by `activeStreams`, still
+ * polled every sweep, still spending the connection's per-minute budget on data
+ * nobody can read. Calendly made that expensive and then visible: the meeting
+ * type used to be part of the identity, so a few clicks through a dropdown left
+ * a stream per click, each re-walking the same account.
+ *
+ * DISABLED, never deleted: the sweep already filters on `status`
+ * (`reconcile.ts`), so this stops the cost immediately, and
+ * `ensureStreamsForGraph` re-activates one the moment a flow references it
+ * again.
+ *
+ * `retireRows` is OFF by default, and that is the important part. This runs on
+ * every draft save, including the half-finished ones — a user switching scope to
+ * look at something and switching back must not find their import gone. Dead
+ * rows are unreadable anyway (the read is stream-scoped) and cost only storage,
+ * so clearing them is a deliberate cleanup, not a side effect of typing.
+ *
+ * Reads the draft AND published graph of every flow in the org, because either
+ * can be the one referencing a stream.
+ */
+export async function pruneOrphanStreams(db: DB, orgId: string, opts: { retireRows?: boolean } = {}): Promise<{ disabled: number; retired: number }> {
+  const conns = await db.select({ id: connections.id, source: connections.source }).from(connections).where(eq(connections.orgId, orgId));
+  if (conns.length === 0) return { disabled: 0, retired: 0 };
+  const sourceOf = (id: string) => conns.find((c) => c.id === id)?.source;
+
+  const referenced = new Set<string>();
+  const rows = await db.select({ draftGraph: flows.draftGraph, id: flows.id }).from(flows).where(eq(flows.orgId, orgId));
+  const versions = await db.select({ graph: flowVersions.graph }).from(flowVersions).where(eq(flowVersions.orgId, orgId));
+  for (const raw of [...rows.map((r) => r.draftGraph), ...versions.map((v) => v.graph)]) {
+    let graph: FlowGraph;
+    try {
+      graph = parseGraph(raw);
+    } catch {
+      continue; // an unparseable graph must never license retiring live data
+    }
+    for (const ref of streamRefsOfGraph(graph, sourceOf)) referenced.add(`${ref.connectionId}:${ref.configHash}`);
+  }
+
+  const all = await db
+    .select({ id: sourceStreams.id, connectionId: sourceStreams.connectionId, configHash: sourceStreams.configHash, status: sourceStreams.status })
+    .from(sourceStreams)
+    .where(eq(sourceStreams.orgId, orgId));
+  let disabled = 0;
+  let retired = 0;
+  for (const s of all) {
+    if (s.status === "disabled" || referenced.has(`${s.connectionId}:${s.configHash}`)) continue;
+    await db.update(sourceStreams).set({ status: "disabled", updatedAt: new Date() }).where(eq(sourceStreams.id, s.id));
+    disabled += 1;
+    if (!opts.retireRows) continue;
+    const gone = await db
+      .update(events)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(events.connectionId, s.connectionId), eq(events.streamHash, s.configHash), isNull(events.deletedAt)))
+      .returning({ id: events.id });
+    retired += gone.length;
+  }
+  return { disabled, retired };
 }
 
 export type StreamSyncResult = {
@@ -304,6 +377,13 @@ export async function activeStreams(db: DB, connectionId: string): Promise<Strea
  * polled more recently than this. The background sweep keeps it current anyway. */
 const PRIME_MAX_AGE_MS = 60_000;
 
+/**
+ * Pages an interactive Test walks inline. Even, because a connector that scans
+ * outward from now alternates directions (Calendly: recent past / soonest
+ * upcoming) — an odd budget gives one side more than the other for no reason.
+ */
+const PRIME_MAX_PAGES = 4;
+
 export type PrimeStreamResult =
   | { ok: true; refreshed: boolean; note?: string }
   | { ok: false; error: string };
@@ -342,15 +422,15 @@ export async function primeStream(
   sourceConfig: Record<string, unknown>,
   opts: PrimeStreamOptions = {},
 ): Promise<PrimeStreamResult> {
-  const { force = false, maxAgeMs = PRIME_MAX_AGE_MS, maxPages = 3 } = opts;
+  const { force = false, maxAgeMs = PRIME_MAX_AGE_MS, maxPages = PRIME_MAX_PAGES } = opts;
   const [conn] = await db.select().from(connections).where(and(eq(connections.id, connectionId), eq(connections.orgId, orgId))).limit(1);
   if (!conn) return { ok: false, error: "This step's connected account no longer exists." };
-  if (!isStreamScoped(conn.source) || !hasStreamConfig(sourceConfig)) return { ok: true, refreshed: false };
+  if (!isStreamScoped(conn.source) || !hasStreamConfig(sourceConfig, conn.source)) return { ok: true, refreshed: false };
 
-  const configHash = streamConfigHash(sourceConfig);
+  const configHash = streamConfigHash(sourceConfig, conn.source);
   await db
     .insert(sourceStreams)
-    .values({ orgId, connectionId, configHash, config: normalizeStreamConfig(sourceConfig) })
+    .values({ orgId, connectionId, configHash, config: normalizeStreamConfig(sourceConfig, conn.source) })
     .onConflictDoNothing({ target: [sourceStreams.connectionId, sourceStreams.configHash] });
   const [stream] = await db
     .select()

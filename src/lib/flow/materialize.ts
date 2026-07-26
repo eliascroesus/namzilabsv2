@@ -103,8 +103,12 @@ export async function markStaleForSource(
       const c = (n.data.config ?? {}) as { source?: string; connectionId?: string; sourceConfig?: Record<string, unknown> };
       const matchesOrigin = c.source === source || (connectionId != null && c.connectionId === connectionId);
       if (!matchesOrigin) return false;
-      if (changedHashes && hasStreamConfig(c.sourceConfig ?? {})) {
-        return changedHashes.has(streamConfigHash(c.sourceConfig ?? {}));
+      // The NODE's source, falling back to the caller's: a node matched by
+      // connection id alone may not name one, and the hash has to be taken the
+      // same way the writer took it or a changed stream looks unchanged.
+      const nodeSource = c.source ?? source;
+      if (changedHashes && hasStreamConfig(c.sourceConfig ?? {}, nodeSource)) {
+        return changedHashes.has(streamConfigHash(c.sourceConfig ?? {}, nodeSource));
       }
       return true; // whole-connection read, or caller without stream knowledge
     });

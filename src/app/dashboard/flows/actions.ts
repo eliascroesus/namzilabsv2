@@ -11,7 +11,7 @@ import { sampleAppFields } from "@/lib/flow/engine";
 import { materializeFlow } from "@/lib/flow/materialize";
 import { parseGraph } from "@/lib/flow/types";
 import { createTestRun, executeAndSettleTestRun, getTestRun, type NodeTestDTO, type TestRunState } from "@/lib/flow/test-run";
-import { ensureStreamsForGraph, primeStream } from "@/lib/sync/streams";
+import { ensureStreamsForGraph, primeStream, pruneOrphanStreams } from "@/lib/sync/streams";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { getConnector } from "@/connectors/registry";
 import { hasStreamConfig } from "@/lib/sync/stream-hash";
@@ -37,6 +37,10 @@ export async function saveDraftAction(
     // them up. Best-effort: a stream hiccup must never fail the save.
     try {
       await ensureStreamsForGraph(db, orgId, parseGraph(graph));
+      // …and stop paying for the ones this edit just orphaned. A stream whose
+      // step changed is never referenced again, but the sweep keeps polling it
+      // and spending the connection's budget on data nobody can read.
+      await pruneOrphanStreams(db, orgId);
     } catch {
       // The Test path (primeStream) and the sweep self-heal missing streams.
     }
@@ -151,7 +155,8 @@ export async function listAppFieldsAction(
     const db = getDb();
     const connectionId = typeof config.connectionId === "string" ? config.connectionId : null;
     const sourceConfig = (config.sourceConfig ?? {}) as Record<string, unknown>;
-    if (connectionId && hasStreamConfig(sourceConfig)) {
+    const source = typeof config.source === "string" ? config.source : undefined;
+    if (connectionId && hasStreamConfig(sourceConfig, source)) {
       // Best-effort first-use sync; the field listing proceeds on whatever is synced.
       await primeStream(db, orgId, connectionId, sourceConfig);
     }

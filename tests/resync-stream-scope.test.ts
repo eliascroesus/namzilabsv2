@@ -77,8 +77,8 @@ beforeEach(async () => {
     await db.insert(sourceStreams).values({
       orgId: ORG,
       connectionId: connId,
-      configHash: streamConfigHash(cfg),
-      config: normalizeStreamConfig(cfg),
+      configHash: streamConfigHash(cfg, "gsheets"),
+      config: normalizeStreamConfig(cfg, "gsheets"),
     });
   }
 });
@@ -98,8 +98,8 @@ async function liveNames(streamHash: string): Promise<string[]> {
 
 describe("full re-sync scopes soft-delete to the streams it re-polled", () => {
   it("a disabled stream's rows survive another stream's full re-sync", async () => {
-    const hashA = streamConfigHash(CFG_A);
-    const hashB = streamConfigHash(CFG_B);
+    const hashA = streamConfigHash(CFG_A, "gsheets");
+    const hashB = streamConfigHash(CFG_B, "gsheets");
 
     // Initial full import: both streams land at generation 1.
     const r1 = await runSync(db, connId, "full");
@@ -129,7 +129,7 @@ describe("full re-sync scopes soft-delete to the streams it re-polled", () => {
   });
 
   it("full re-sync sweeps legacy generation-0 stream rows (structural exemption: hash, not generation)", async () => {
-    const hashA = streamConfigHash(CFG_A);
+    const hashA = streamConfigHash(CFG_A, "gsheets");
     // A pre-unification leftover: stream-tagged but generation 0, and its
     // sheet row no longer exists upstream.
     await db.insert(events).values({
@@ -165,8 +165,8 @@ describe("full re-sync scopes soft-delete to the streams it re-polled", () => {
   });
 
   it("still tombstones upstream-deleted rows of every re-polled stream", async () => {
-    const hashA = streamConfigHash(CFG_A);
-    const hashB = streamConfigHash(CFG_B);
+    const hashA = streamConfigHash(CFG_A, "gsheets");
+    const hashB = streamConfigHash(CFG_B, "gsheets");
     await runSync(db, connId, "full");
 
     // Both tabs shrink; both streams active → both cleaned.

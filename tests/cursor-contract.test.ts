@@ -67,9 +67,9 @@ afterEach(async () => {
   await close();
 });
 
-/** A stream row for the gsheets connection, with a cursor already stored. */
+/** A stream row for the Calendar connection, with a cursor already stored. */
 async function seedStream(cursor: string | null) {
-  const configHash = streamConfigHash(CFG);
+  const configHash = streamConfigHash(CFG, "gcal");
   await db.insert(sourceStreams).values({ orgId: ORG, connectionId: connId, configHash, config: CFG, cursor });
   const [stream] = await db.select().from(sourceStreams).where(eq(sourceStreams.configHash, configHash)).limit(1);
   return stream;
@@ -166,7 +166,7 @@ describe("an empty page does not end the scan", () => {
 
   beforeEach(async () => {
     await db.update(connections).set({ source: "calendly" }).where(eq(connections.id, connId));
-    const configHash = streamConfigHash(CAL_CFG);
+    const configHash = streamConfigHash(CAL_CFG, "calendly");
     await db.insert(sourceStreams).values({ orgId: ORG, connectionId: connId, configHash, config: CAL_CFG, cursor: null });
   });
 
@@ -245,7 +245,7 @@ describe("an empty page does not end the scan", () => {
       orgId: ORG,
       connectionId: connId,
       source: "calendly",
-      streamHash: streamConfigHash(CAL_CFG),
+      streamHash: streamConfigHash(CAL_CFG, "calendly"),
       eventId: "calendly:old:stranded",
       eventType: "booked",
       occurredAt: new Date(stranded),
@@ -287,7 +287,7 @@ describe("an empty page does not end the scan", () => {
       orgId: ORG,
       connectionId: connId,
       source: "calendly",
-      streamHash: streamConfigHash(CAL_CFG),
+      streamHash: streamConfigHash(CAL_CFG, "calendly"),
       eventId: "calendly:old:stranded",
       eventType: "booked",
       occurredAt: new Date(Date.now() - 300 * 86_400_000),

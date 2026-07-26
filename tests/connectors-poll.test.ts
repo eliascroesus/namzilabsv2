@@ -119,22 +119,23 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
     expect(rows.records[0].eventId).toBe("calendly:c1:abc123:https://api.calendly.com/scheduled_events/EVT1");
   });
 
-  it("emits booked + canceled, dates both by meeting time, and follows pagination", async () => {
-    const page1 = {
+  it("emits booked + canceled, dates both by meeting time, and alternates sides until both drain", async () => {
+    const meetings = {
       collection: [
         { uri: "https://api.calendly.com/scheduled_events/EVTa", name: "Active", status: "active", start_time: "2026-03-01T10:00:00Z", created_at: "2026-02-01T08:00:00Z" },
         { uri: "https://api.calendly.com/scheduled_events/EVTc", name: "Gone", status: "canceled", start_time: "2026-03-02T10:00:00Z", created_at: "2026-02-02T08:00:00Z", updated_at: "2026-02-15T09:00:00Z" },
       ],
       pagination: { next_page_token: "TOK2" },
     };
-    const page2 = { collection: [], pagination: { next_page_token: null } };
+    const lastPage = { collection: [], pagination: { next_page_token: null } };
+    const sides: string[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
-        const url = String(input);
-        if (url.includes("/users/me")) return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
-        if (url.includes("/scheduled_events")) return jsonResponse(url.includes("page_token=TOK2") ? page2 : page1);
-        throw new Error(`unexpected fetch: ${url}`);
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/users/me")) return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+        sides.push(url.searchParams.get("sort")!);
+        return jsonResponse(url.searchParams.get("page_token") === "TOK2" ? lastPage : meetings);
       }),
     );
     const base = { connectionId: "c1", credentials: { accessToken: "t" }, config: { scope: "user" }, streamHash: "h" };
@@ -155,10 +156,18 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
     expect((canceled.properties as Record<string, unknown>).canceled_at).toBe("2026-02-15T09:00:00Z");
     expect(first.nextCursor).toContain("TOK2"); // more pages → cursor advances
 
-    // Following the cursor exhausts the scan → cursor resets so the next sweep rescans.
-    const second = await calendlyConnector.poll!({ ...base, cursor: first.nextCursor });
-    expect(second.records).toHaveLength(0);
-    expect(second.nextCursor).toBeNull();
+    // Walk it out. Each call takes one page from whichever side is due, and the
+    // cursor only clears once BOTH have run out — a scan that stopped when the
+    // first side finished would leave the other half of the window unread.
+    let cursor = first.nextCursor;
+    for (let i = 0; i < 3; i++) {
+      const next = await calendlyConnector.poll!({ ...base, cursor });
+      cursor = next.nextCursor;
+    }
+    expect(cursor).toBeNull();
+    // Recent past first (the question a preview answers), then upcoming, then
+    // back again — never four pages of one end of the window.
+    expect(sides).toEqual(["start_time:desc", "start_time:asc", "start_time:desc", "start_time:asc"]);
   });
 
   it("listOptions('groupUri') lists the token's Calendly groups", async () => {
@@ -272,7 +281,7 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
     event_memberships: [{ user: "https://api.calendly.com/users/U9", user_email: host, user_name: "Idris Bulduk" }],
   });
 
-  async function pollUrl(config: Record<string, unknown>): Promise<string> {
+  async function pollUrl(config: Record<string, unknown>, cursor: string | null = null): Promise<string> {
     let seen = "";
     vi.stubGlobal(
       "fetch",
@@ -283,7 +292,7 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
         return jsonResponse({ collection: [], pagination: { next_page_token: null } });
       }),
     );
-    await calendlyConnector.poll!({ connectionId: `c-${Math.random()}`, cursor: null, credentials: { accessToken: "t" }, config });
+    await calendlyConnector.poll!({ connectionId: `c-${Math.random()}`, cursor, credentials: { accessToken: "t" }, config });
     return seen;
   }
 
@@ -296,16 +305,45 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
   });
 
   /**
-   * 30 days back, not a year. With no event-type filter, pages walked is decided
-   * by scope × window and nothing else — this is the only real lever on volume,
-   * and it is a twelvefold cut per sweep.
+   * The first page of a fresh scan is the MOST RECENT past meetings — bounded
+   * below by the 30-day floor and above by now.
+   *
+   * This ran `start_time:asc` from the floor, so the first pages were the oldest
+   * meetings in the window. On a busy account a 4-page Test returned 400
+   * meetings from a month ago and nothing else: "Latest 3 records" showed
+   * appointments two weeks stale, and every upcoming meeting was missing.
    */
-  it("reads 30 days back and a year forward", async () => {
+  it("starts at now and walks backwards, over a 30-day floor", async () => {
     const url = new URL(await pollUrl({ scope: "user" }));
+    expect(url.searchParams.get("sort")).toBe("start_time:desc");
     const back = Math.round((Date.now() - Date.parse(url.searchParams.get("min_start_time")!)) / 86_400_000);
-    const fwd = Math.round((Date.parse(url.searchParams.get("max_start_time")!) - Date.now()) / 86_400_000);
+    const toNow = Math.round((Date.parse(url.searchParams.get("max_start_time")!) - Date.now()) / 86_400_000);
     expect(back).toBe(30);
-    expect(fwd).toBe(365);
+    expect(Math.abs(toNow)).toBe(0); // the pivot is now, not the far end of the window
+  });
+
+  /** The other side of the same window: upcoming meetings, soonest first. */
+  it("takes the upcoming side next, soonest first, out to 90 days", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) return jsonResponse(ME[1]);
+        urls.push(url);
+        return jsonResponse({ collection: [], pagination: { next_page_token: "MORE" } });
+      }),
+    );
+    const base = { connectionId: "c-sides", credentials: { accessToken: "t" }, config: { scope: "user" } };
+    const first = await calendlyConnector.poll!({ ...base, cursor: null });
+    await calendlyConnector.poll!({ ...base, cursor: first.nextCursor });
+
+    const url = new URL(urls[1]);
+    expect(url.searchParams.get("sort")).toBe("start_time:asc");
+    const from = Math.round((Date.parse(url.searchParams.get("min_start_time")!) - Date.now()) / 86_400_000);
+    const fwd = Math.round((Date.parse(url.searchParams.get("max_start_time")!) - Date.now()) / 86_400_000);
+    expect(Math.abs(from)).toBe(0); // the pivot: the two sides meet at now
+    expect(fwd).toBe(90); // a year forward was a scan a busy org never finished
   });
 
   it("sends status only when the flow narrowed it — omitted, cancellations stay visible", async () => {
@@ -314,19 +352,40 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
   });
 
   /**
-   * Meeting type is offered, and its hint has to say what it is: Calendly has no
-   * event_type parameter, so it narrows what is KEPT, never what is fetched.
-   * Scope and status are the settings that actually cut API usage.
+   * Scope and status change the REQUEST, so they cut API usage and their hints
+   * say so. Meeting type cannot — there is no event_type parameter — so it is
+   * declared a `readFilter` instead: not part of the stream identity, applied by
+   * the engine over a sync every flow on the connection shares.
+   *
+   * The declaration is the contract. While it was an ordinary key it silently
+   * entered `streamConfigHash`, so picking a type pointed the step at a stream
+   * with no rows in it and the Test read 0.
    */
-  it("labels each setting by whether it saves API calls or only storage", () => {
+  it("declares meeting type as a read filter, and the request-shaping settings as such", () => {
     const fields = catalogEntry("calendly")!.flowFields ?? [];
-    const hintOf = (k: string) => fields.find((f) => f.key === k)?.hint ?? "";
-    expect(hintOf("scope")).toMatch(/Fewer API calls/i);
-    expect(hintOf("status")).toMatch(/Fewer API calls/i);
-    expect(hintOf("meetingType")).toMatch(/Storage only/i);
+    const field = (k: string) => fields.find((f) => f.key === k)!;
+    expect(field("scope").hint).toMatch(/Fewer API calls/i);
+    expect(field("status").hint).toMatch(/Fewer API calls/i);
+    // Scope and status shape the request, so they MUST stay stream identity.
+    expect(field("scope").readFilter).toBeUndefined();
+    expect(field("status").readFilter).toBeUndefined();
+    expect(field("groupUri").readFilter).toBeUndefined();
+    // Both paths, so a config saved when the value was the type's NAME still
+    // matches — a URI never equals a name, so the OR needs no disambiguation.
+    expect(field("meetingType").readFilter?.paths).toEqual(["properties.event_type", "properties.meeting_type"]);
   });
 
-  it("filters by meeting type on the type's URI, so one of two same-named types selects only itself", async () => {
+  /**
+   * The poll keeps EVERY meeting type, whatever the step picked.
+   *
+   * Narrowing here saved nothing — `/scheduled_events` has no event_type
+   * parameter, so the same pages are fetched either way — and cost a stream, a
+   * cursor and a duplicate row per type. A freshly-picked type therefore started
+   * a scan from zero and read 0 until it caught up, which is how this was
+   * reported. Meeting type is a `readFilter` now; `tests/flow-engine.test.ts`
+   * covers the narrowing itself.
+   */
+  it("stores every meeting type, so one shared sync serves every flow on the connection", async () => {
     vi.stubGlobal(
       "fetch",
       mockFetch([
@@ -335,10 +394,9 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
           "/scheduled_events",
           {
             collection: [
-              // Two DIFFERENT types with one name — the shape that was collapsing.
               { ...meeting("E1", "NAMZI Invite Only Creator Program"), event_type: "https://api.calendly.com/event_types/AAA" },
               { ...meeting("E2", "NAMZI Invite Only Creator Program"), event_type: "https://api.calendly.com/event_types/BBB" },
-              { ...meeting("E3", "30 Minute Meeting"), event_type: "https://api.calendly.com/event_types/CCC" },
+              { ...meeting("E3", "Call with Tristan - Personal Calendar"), event_type: "https://api.calendly.com/event_types/CCC" },
             ],
             pagination: {},
           },
@@ -351,114 +409,15 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
       credentials: { accessToken: "t" },
       config: { scope: "organization", meetingType: "https://api.calendly.com/event_types/BBB" },
     });
-    expect(records.map((r) => r.subject)).toEqual(["NAMZI Invite Only Creator Program"]);
-    expect(records[0].eventId).toContain("E2"); // the one that was picked, not its namesake
-  });
-
-  /**
-   * Configs saved before the value became a URI hold the type's NAME. Switching
-   * the match underneath them would return zero rows and read exactly like the
-   * sync breaking — so a name-valued config keeps matching on the name.
-   */
-  it("still honors a meeting type saved as a name, before URIs were the value", async () => {
-    vi.stubGlobal(
-      "fetch",
-      mockFetch([
-        ME,
-        [
-          "/scheduled_events",
-          {
-            // One programme, three hosts → three different event_type URIs.
-            collection: [
-              meeting("E1", "NAMZI Invite Only Creator Program", "idris@namzi.com"),
-              meeting("E2", "NAMZI Invite Only Creator Program", "mazhar@namzi.com"),
-              meeting("E3", "NAMZI Invite Only Creator Program", "ismail@namzi.com"),
-              meeting("E4", "Call with Tristan - Personal Calendar"),
-            ],
-            pagination: {},
-          },
-        ],
-      ]),
-    );
-    const { records } = await calendlyConnector.poll!({
-      connectionId: "c1",
-      cursor: null,
-      credentials: { accessToken: "t" },
-      config: { scope: "organization", meetingType: "NAMZI Invite Only Creator Program" },
-    });
     expect(records).toHaveLength(3);
-  });
-
-  /**
-   * A name is a display detail; the URI is the identity. Two types sharing a
-   * name are two types, and each must be selectable on its own — keying options
-   * by name collapsed them into one entry that pulled both.
-   *
-   * The label is the name and NOTHING else. Two rows reading alike is fine: they
-   * are still separate options carrying separate URIs, and each selects only its
-   * own meetings.
-   */
-  it("keeps two same-named meeting types as two separate choices, labelled by name alone", async () => {
-    vi.stubGlobal(
-      "fetch",
-      mockFetch([
-        ME,
-        [
-          "/event_types",
-          {
-            collection: [
-              { uri: "https://api.calendly.com/event_types/AAA", name: "NAMZI Invite Only Creator Program", slug: "invite-idris", duration: 30 },
-              { uri: "https://api.calendly.com/event_types/BBB", name: "NAMZI Invite Only Creator Program", slug: "invite-mazhar", duration: 45 },
-              { uri: "https://api.calendly.com/event_types/CCC", name: "30 Minute Meeting", slug: "30min", duration: 30 },
-            ],
-          },
-        ],
-      ]),
-    );
-    const opts = await calendlyConnector.listOptions!("meetingType", {
-      connectionId: "c-types",
-      credentials: { accessToken: "t" },
-      config: { scope: "organization" },
-    });
-    // Three options, three URIs — and no slug, duration or owner anywhere in a label.
-    expect(opts).toEqual([
-      { value: "https://api.calendly.com/event_types/CCC", label: "30 Minute Meeting" },
-      { value: "https://api.calendly.com/event_types/AAA", label: "NAMZI Invite Only Creator Program" },
-      { value: "https://api.calendly.com/event_types/BBB", label: "NAMZI Invite Only Creator Program" },
+    // …and every record carries what the read filter matches on, both ways.
+    const props = records.map((r) => r.properties as Record<string, unknown>);
+    expect(props.map((p) => p.event_type)).toEqual([
+      "https://api.calendly.com/event_types/AAA",
+      "https://api.calendly.com/event_types/BBB",
+      "https://api.calendly.com/event_types/CCC",
     ]);
-  });
-
-  /**
-   * `count=100` is Calendly's page SIZE, not a result limit. Stopping at the
-   * first page silently dropped every type past the hundredth — indistinguishable
-   * at the picker from "it cannot see my meeting types", which is how it was
-   * reported.
-   */
-  it("walks event_type pagination instead of stopping at the first page", async () => {
-    const pages = new Map<string | null, { collection: Array<{ uri: string; name: string }>; pagination: { next_page_token: string | null } }>([
-      [null, { collection: [{ uri: "https://api.calendly.com/event_types/ET1", name: "Page one type" }], pagination: { next_page_token: "P2" } }],
-      ["P2", { collection: [{ uri: "https://api.calendly.com/event_types/ET2", name: "Page two type" }], pagination: { next_page_token: null } }],
-    ]);
-    const seen: Array<string | null> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        const url = new URL(String(input));
-        if (url.pathname.endsWith("/users/me")) {
-          return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
-        }
-        const token = url.searchParams.get("page_token");
-        seen.push(token);
-        return jsonResponse(pages.get(token) ?? { collection: [], pagination: { next_page_token: null } });
-      }),
-    );
-    const opts = await calendlyConnector.listOptions!("meetingType", {
-      connectionId: "c-pages",
-      credentials: { accessToken: "t" },
-      config: { scope: "organization" },
-    });
-    expect(seen).toEqual([null, "P2"]); // followed the token, then stopped
-    expect(opts.map((o) => o.label)).toEqual(["Page one type", "Page two type"]);
+    expect(props[0].meeting_type).toBe("NAMZI Invite Only Creator Program");
   });
 
   /**
@@ -549,9 +508,10 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
 
   /**
    * The poll and the connect-time preview must agree about one config. They
-   * drifted: testFetchLatest kept reading `eventTypeUri` and matching
-   * `event_type` after the poll had moved to `meetingType` matched on `name`, so
-   * the same config could preview one set of meetings and sync another.
+   * drifted once — the preview matched on one field after the poll had moved to
+   * another — so the same config previewed one set of meetings and synced a
+   * different one. Neither filters at all now, which is the strongest form of
+   * agreement available.
    */
   it("poll and testFetchLatest keep the same records for the same config", async () => {
     const collection = [
@@ -559,8 +519,8 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
       meeting("E2", "Call with Tristan - Personal Calendar"),
       meeting("E3", "30 Minute Meeting"),
     ];
-    // A config WITH a filter — the drift only showed when one was set.
-    const config = { scope: "organization", meetingType: "NAMZI Invite Only Creator Program" };
+    // A config WITH a meeting type set — the drift only showed when one was.
+    const config = { scope: "organization", meetingType: "https://api.calendly.com/event_types/AAA" };
 
     vi.stubGlobal("fetch", mockFetch([ME, ["/scheduled_events", { collection, pagination: {} }]]));
     const { records } = await calendlyConnector.poll!({ connectionId: "c1", cursor: null, credentials: { accessToken: "t" }, config });
@@ -568,9 +528,8 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
     vi.stubGlobal("fetch", mockFetch([ME, ["/scheduled_events", { collection, pagination: {} }]]));
     const preview = await calendlyConnector.testFetchLatest!(10, { connectionId: "c1", cursor: null, credentials: { accessToken: "t" }, config });
 
-    // Same key, same field, same result — they drifted once and must not again.
     expect(records.map((r) => r.eventId)).toEqual(preview.map((r) => r.eventId));
-    expect(preview).toHaveLength(1);
+    expect(preview).toHaveLength(3);
   });
 
   it("asks who the token belongs to once per connection, not once per poll", async () => {

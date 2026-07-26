@@ -26,7 +26,7 @@ import type { DB } from "@/db/types";
 const ORG = "org_accept";
 const KEY = randomBytes(32).toString("base64");
 const CFG = { spreadsheetId: "LIVING", range: "Leads" };
-const HASH = streamConfigHash(CFG);
+const HASH = streamConfigHash(CFG, "gsheets");
 
 let db: DB;
 let close: () => Promise<void>;
@@ -74,7 +74,7 @@ beforeEach(async () => {
     })
     .returning({ id: connections.id });
   connId = conn.id;
-  await db.insert(sourceStreams).values({ orgId: ORG, connectionId: connId, configHash: HASH, config: normalizeStreamConfig(CFG) });
+  await db.insert(sourceStreams).values({ orgId: ORG, connectionId: connId, configHash: HASH, config: normalizeStreamConfig(CFG, "gsheets") });
 });
 
 afterEach(async () => {

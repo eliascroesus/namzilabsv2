@@ -1,10 +1,12 @@
-import { and, desc, eq, isNull, sql, type SQL } from "drizzle-orm";
-import { events } from "@/db/schema";
+import { and, desc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
+import { connections, events } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { eventToRecord, getField, toNumber, STANDARD_FIELDS, type FlowRecord } from "./records";
 import { planPushdown } from "./compile/pushdown";
+import { compileRule } from "./compile/operators";
 import { inferSchema, buildFieldInfo, type FieldInfo } from "./schema-infer";
 import { listRegisteredFields } from "@/lib/schema-registry/registry";
+import { readFilterFields } from "@/connectors/catalog";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import {
   AppConfigSchema,
@@ -192,15 +194,59 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
 }
 
 // ---------- App ----------
+/**
+ * The source this step reads.
+ *
+ * Almost always on the config; resolved from the connection when it is not,
+ * because the source now decides BOTH which rows belong to the step's stream and
+ * which of its settings are read filters rather than stream identity. Getting it
+ * wrong points the read at a stream hash nothing was ever written under, which
+ * renders as an empty step rather than an error.
+ */
+async function appSource(ctx: EngineCtx, cfg: AppConfig): Promise<string | null> {
+  if (cfg.source) return cfg.source;
+  if (!cfg.connectionId) return null;
+  const [c] = await ctx.db.select({ source: connections.source }).from(connections).where(eq(connections.id, cfg.connectionId)).limit(1);
+  return c?.source ?? null;
+}
+
 /** The org-scoped WHERE for a Get data step (shared by the executor and field sampling). */
-function appConds(orgId: string, cfg: AppConfig): SQL[] {
+function appConds(orgId: string, cfg: AppConfig, source: string | null): SQL[] {
   const conds: SQL[] = [sql`${events.orgId} = ${orgId}`, isNull(events.deletedAt)];
   if (cfg.connectionId) conds.push(eq(events.connectionId, cfg.connectionId));
   if (cfg.source) conds.push(eq(events.source, cfg.source));
   if (cfg.eventType) conds.push(eq(events.eventType, cfg.eventType));
   // A flow-level resource selection reads exactly its own stream's events.
-  if (hasStreamConfig(cfg.sourceConfig)) conds.push(eq(events.streamHash, streamConfigHash(cfg.sourceConfig)));
+  if (hasStreamConfig(cfg.sourceConfig, source)) conds.push(eq(events.streamHash, streamConfigHash(cfg.sourceConfig, source)));
+  conds.push(...readFilterConds(cfg, source));
   return conds;
+}
+
+/**
+ * The step's read filters (FlowConfigField.readFilter) as WHERE clauses.
+ *
+ * These settings deliberately do NOT shape the sync — every flow on the
+ * connection shares one stream — so they have to be applied here or not at all.
+ * Applying them here is also what makes changing one instant: no new cursor, no
+ * re-scan, no window to wait out.
+ *
+ * A field may name several paths, OR'd, so a value whose meaning changed still
+ * matches (Calendly's is an event-type URI now and was the type's name before).
+ * An unset field adds nothing — the step reads the whole stream, which is the
+ * safe direction to be wrong in.
+ */
+function readFilterConds(cfg: AppConfig, source: string | null): SQL[] {
+  const out: SQL[] = [];
+  for (const field of readFilterFields(source)) {
+    const raw = (cfg.sourceConfig as Record<string, unknown> | undefined)?.[field.key];
+    const value = typeof raw === "string" ? raw.trim() : "";
+    if (!value) continue;
+    const paths = field.readFilter?.paths ?? [];
+    const anyPath = paths.map((path) => compileRule({ field: path, op: "equals", value, valueKind: "fixed" }));
+    if (anyPath.length === 1) out.push(anyPath[0]);
+    else if (anyPath.length > 1) out.push(or(...anyPath)!);
+  }
+  return out;
 }
 
 /**
@@ -227,7 +273,7 @@ export async function sampleAppFields(ctx: EngineCtx, config: unknown, limit = 1
   const rows = await ctx.db
     .select()
     .from(events)
-    .where(and(...appConds(ctx.orgId, cfg)))
+    .where(and(...appConds(ctx.orgId, cfg, await appSource(ctx, cfg))))
     .orderBy(desc(events.occurredAt))
     .limit(limit);
   return inferSchema(rows.map(eventToRecord));
@@ -241,7 +287,8 @@ export async function sampleAppFields(ctx: EngineCtx, config: unknown, limit = 1
 async function registeredAppFields(ctx: EngineCtx, cfg: AppConfig): Promise<FieldInfo[] | null> {
   if (!cfg.connectionId) return null;
   try {
-    const streamHash = hasStreamConfig(cfg.sourceConfig) ? streamConfigHash(cfg.sourceConfig) : null;
+    const source = await appSource(ctx, cfg);
+    const streamHash = hasStreamConfig(cfg.sourceConfig, source) ? streamConfigHash(cfg.sourceConfig, source) : null;
     const fields = await listRegisteredFields(ctx.db, {
       orgId: ctx.orgId,
       connectionId: cfg.connectionId,
@@ -269,7 +316,7 @@ async function registeredAppFields(ctx: EngineCtx, cfg: AppConfig): Promise<Fiel
 
 async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promise<NodeExec> {
   const cfg = AppConfigSchema.parse(node.data.config ?? {});
-  const conds = appConds(ctx.orgId, cfg);
+  const conds = appConds(ctx.orgId, cfg, await appSource(ctx, cfg));
 
   // E.1: fold the downstream filter chain into this read when the flow has
   // opted in. The filters STILL run in JS afterwards, so the pre-filter can

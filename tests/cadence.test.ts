@@ -115,4 +115,32 @@ describe("cadence is enforced by the sweep filter", () => {
     [row] = await db.select().from(connections).where(eq(connections.id, id));
     expect(row.webhookHealthyAt).not.toBeNull();
   });
+
+  /**
+   * A stream still telling us it has more to fetch is the opposite of idle.
+   *
+   * `changed` counts inserts, updates and soft-deletes — and a re-scan of an
+   * unchanged window produces only dedups, so a part-finished walk read as an
+   * idle connection and slid down the tier ladder. It compounds: each demotion
+   * makes the remaining pages arrive more slowly, so a big Calendly window
+   * reached the 6-hour tier and its numbers never caught up.
+   */
+  it("holds base cadence while a scan is incomplete, however long the no-op streak", () => {
+    const idle = decideCadence({ changed: false, previousNoOps: 50, now: NOW });
+    expect(idle.intervalMs).toBe(6 * 60 * 60_000); // would have been demoted…
+    expect(idle.consecutiveNoOpSweeps).toBe(51);
+
+    const midScan = decideCadence({ changed: false, incomplete: true, previousNoOps: 50, now: NOW });
+    expect(midScan.intervalMs).toBe(BASE_INTERVAL_MS);
+    expect(midScan.reason).toBe("scan-incomplete");
+    // …and the streak is HELD, not advanced: sweeps that were still working
+    // must not push the connection further down the ladder.
+    expect(midScan.consecutiveNoOpSweeps).toBe(50);
+  });
+
+  it("a real change still wins over an incomplete scan", () => {
+    const d = decideCadence({ changed: true, incomplete: true, previousNoOps: 9, now: NOW });
+    expect(d.reason).toBe("changed");
+    expect(d.consecutiveNoOpSweeps).toBe(0);
+  });
 });

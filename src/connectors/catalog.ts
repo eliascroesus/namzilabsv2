@@ -24,6 +24,25 @@ export type FlowConfigField = {
   /** Only render this field when another field currently equals `equals`. */
   showWhen?: { key: string; equals: string };
   options?: { value: string; label: string }[];
+  /**
+   * This field narrows the stored READ, not the provider request — and is
+   * therefore NOT part of the stream identity.
+   *
+   * The distinction is the difference between a setting that works and one that
+   * reads as broken. A setting the provider cannot act on (Calendly has no
+   * `event_type` parameter) buys no quota at ingest; all it can do there is give
+   * that flow its own stream, its own cursor and its own copy of every row —
+   * so choosing one starts a scan from zero and shows nothing until it catches
+   * up, while N choices scan the same account N times.
+   *
+   * Declared here instead, the choice is a WHERE clause over a sync every flow
+   * on the connection shares: instant, no extra API calls, no duplicate storage.
+   *
+   * A row matches when ANY path equals the value. More than one path is how a
+   * value whose meaning changed stays readable — Calendly's is an event-type URI
+   * now and was the type's name before, and a URI never equals a name.
+   */
+  readFilter?: { paths: readonly string[] };
 };
 
 /**
@@ -112,20 +131,19 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "groups.list": { requestsPerMinute: 60 },
     },
     /**
-     * ONLY the settings Calendly can act on server-side live here.
-     *
      * `/scheduled_events` accepts organization | user | group, a start-time
      * window and a status — and nothing else.
      *
      * Scope and status change the REQUEST, so they cut API usage. Meeting type
      * cannot: there is no event-type parameter, so the pages fetched are
-     * identical either way and it only narrows what is KEPT. Both are offered,
-     * and each hint says which it is, because the difference is otherwise
-     * invisible and it is the difference between saving quota and not.
+     * identical either way. It is therefore a `readFilter` — a WHERE clause over
+     * the shared sync, not a second stream. Ingesting per type bought nothing
+     * and cost everything: a fresh cursor per choice (so a newly-picked type
+     * showed 0 until its own scan caught up), a duplicate row per copy, and the
+     * same account scanned once per type against one 60/min bucket.
      *
-     * A shared sync can still be sliced per flow without a second stream:
-     * `meeting_type`, `host_email` and `host_name` are flattened onto every
-     * record for the Filter step.
+     * A flow can slice the same sync further with a Filter step: `meeting_type`,
+     * `host_email` and `host_name` are flattened onto every record.
      */
     flowFields: [
       {
@@ -164,7 +182,10 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
         dynamic: true,
         dependsOn: ["scope"],
         placeholder: "All meeting types",
-        hint: "Storage only — Calendly cannot filter by type, so this narrows what is kept, not what is fetched. Two meeting types sharing a name stay separate choices.",
+        hint: "Shows only this type — Calendly cannot filter by type, so the same meetings are fetched either way and this narrows what you see. Changing it takes effect immediately. Two meeting types sharing a name stay separate choices.",
+        // The value is the type's URI; configs saved before that was true hold
+        // its name. Either matches, so no saved step silently reads zero.
+        readFilter: { paths: ["properties.event_type", "properties.meeting_type"] },
       },
     ],
   },
@@ -323,6 +344,26 @@ export function catalogEntry(source: string): ConnectorCatalogEntry | undefined 
 /** Sources whose resource lives on the flow (streams), not on the connection. */
 export function isStreamScoped(source: string | null | undefined): boolean {
   return (catalogEntry(source ?? "")?.flowFields?.length ?? 0) > 0;
+}
+
+/**
+ * The flowFields of a source that narrow the READ rather than the request
+ * (see FlowConfigField.readFilter).
+ */
+export function readFilterFields(source: string | null | undefined): FlowConfigField[] {
+  return (catalogEntry(source ?? "")?.flowFields ?? []).filter((f) => (f.readFilter?.paths.length ?? 0) > 0);
+}
+
+/**
+ * Config keys that must NOT enter a stream's identity, because they describe how
+ * a flow READS the sync rather than what the sync fetches.
+ *
+ * Keyed by source, deliberately: `normalizeStreamConfig` cannot tell a read
+ * filter from a resource selector by looking at the value, and guessing from the
+ * key name would make one connector's choice silently reshape another's streams.
+ */
+export function readFilterKeys(source: string | null | undefined): Set<string> {
+  return new Set(readFilterFields(source).map((f) => f.key));
 }
 
 /** The effective guarantee class of a source (see SyncGuarantee). */
