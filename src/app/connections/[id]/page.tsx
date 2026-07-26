@@ -123,7 +123,7 @@ export default async function ConnectionPage({
           <section className="mt-8">
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Inbound webhook</h2>
             {entry.webhookSetup && <p className="mb-2 text-sm text-neutral-600">{entry.webhookSetup}</p>}
-            <CopyField label="URL" value={webhookUrl} />
+            <CopyField label="URL" value={webhookUrl} isUrl />
             {signingSecret && <CopyField label="Signing secret" value={signingSecret} />}
           </section>
         )}

@@ -158,6 +158,7 @@ export function ConnectionRow({
           <CopyField
             label="POST events to this URL"
             value={webhookUrl}
+            isUrl
             hint="Anything this URL receives is stored and available to flows straight away."
           />
           <Link href={`/connections/${id}`} className="text-xs text-blue-600 hover:underline">
