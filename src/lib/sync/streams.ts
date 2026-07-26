@@ -76,6 +76,13 @@ export type StreamSyncResult = {
    * mode this codebase keeps having to unpick.
    */
   incomplete?: boolean;
+  /**
+   * The occurred-at window this stream now covers, when the connector declared
+   * one (`retireOutsideWindow`). Carried out so the UI can name the window in
+   * plain words rather than leaving a short count looking like a bug — a
+   * Calendly source reads the last 30 days plus everything upcoming BY DESIGN.
+   */
+  covered?: { from: Date; to: Date };
 };
 
 type StreamRow = typeof sourceStreams.$inferSelect;
@@ -282,7 +289,7 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
       .where(eq(sourceStreams.id, stream.id));
     throw e;
   }
-  return { inserted, updated, deduped, softDeleted, incomplete };
+  return { inserted, updated, deduped, softDeleted, incomplete, covered: covered ?? undefined };
 }
 
 /** All streams of one connection that should be polled. */
@@ -399,18 +406,29 @@ export async function primeStream(
 
   try {
     const res = await syncStream(db, conn, stream, maxPages);
-    if (res.incomplete) {
-      // A count taken now is a floor, not the answer. Saying so is the whole
-      // point: "0 loaded" and "0 loaded so far" are different claims, and a
-      // Test that renders them identically is the silent zero all over again.
-      return {
-        ok: true,
-        refreshed: true,
-        note: "Still importing this source — the numbers below cover what has arrived so far. The background sync is continuing; re-test in a few minutes for the full window.",
-      };
-    }
+    if (res.incomplete) return { ok: true, refreshed: true, note: partialScanNote(res.covered) };
     return { ok: true, refreshed: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/**
+ * The line shown when a scan stopped on its page budget rather than on the end
+ * of the data.
+ *
+ * It leads with the WINDOW, because that is the fact worth knowing: a source
+ * that deliberately reads the last 30 days plus everything upcoming will show a
+ * count that looks short, and calling that "still importing" invited the user to
+ * wait for numbers that were never coming. Naming the window says the number is
+ * bounded on purpose.
+ *
+ * The second clause stays — shortened — for the same reason it existed: a count
+ * taken mid-scan is a floor, and a Test that renders "0 loaded" and "0 loaded so
+ * far" identically is the silent zero this codebase keeps having to unpick.
+ */
+function partialScanNote(covered?: { from: Date; to: Date }, now = Date.now()): string {
+  if (!covered) return "Still loading — the numbers below cover what has arrived so far.";
+  const days = Math.max(1, Math.round((now - covered.from.getTime()) / 86_400_000));
+  return `Only getting the last ${days} days and onwards — still loading, so the numbers below can still grow.`;
 }

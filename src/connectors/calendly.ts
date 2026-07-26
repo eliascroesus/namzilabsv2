@@ -142,19 +142,25 @@ export const calendlyConnector: Connector = {
    * type, so an organization running one programme across three people has three
    * rows with identical names and different URIs; listing them raw put the same
    * label in the dropdown three times, each selecting one person's meetings.
-   * Names collapse that to one honest choice.
+   * Names collapse that to one honest choice — and because the poll filters on
+   * the name too, that one choice keeps ALL of them.
+   *
+   * Which is invisible unless it is said, so a collapsed entry is labelled with
+   * how many types it stands for. "2 types share this name" reads as deliberate;
+   * a single row where the account has two reads as data going missing, and
+   * that is exactly how it was reported.
+   *
+   * Both listings walk their pagination. `count=100` is a page size, not a
+   * result limit: an account past 100 event types lost the rest with no error,
+   * which looks identical to a picker that cannot see them.
    */
   async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
     const token = token_(args.credentials);
 
     if (key === "groupUri") {
       const { organization } = await identity(token, args.connectionId);
-      const params = new URLSearchParams({ organization, count: "100" });
-      const data = await fetchJson<{ collection: Array<{ uri: string; name?: string }> }>(
-        `${API}/groups?${params.toString()}`,
-        { headers: authHeader(token) },
-      );
-      return (data.collection ?? []).map((g) => ({ value: g.uri, label: g.name ?? g.uri }));
+      const groups = await listAll<{ uri: string; name?: string }>(token, "/groups", { organization });
+      return groups.map((g) => ({ value: g.uri, label: g.name ?? g.uri }));
     }
 
     if (key === "meetingType") {
@@ -162,20 +168,50 @@ export const calendlyConnector: Connector = {
       // Listed in the same scope the poll will use, so nobody is offered a type
       // their chosen scope cannot return.
       const { scope } = scopeOf(args.config);
-      const params = new URLSearchParams(
-        scope === "user" ? { user: me.uri, count: "100" } : { organization: me.organization, count: "100" },
+      const types = await listAll<{ uri: string; name?: string }>(
+        token,
+        "/event_types",
+        scope === "user" ? { user: me.uri } : { organization: me.organization },
       );
-      const data = await fetchJson<{ collection: Array<{ uri: string; name?: string }> }>(
-        `${API}/event_types?${params.toString()}`,
-        { headers: authHeader(token) },
-      );
-      const names = new Set((data.collection ?? []).map((t) => t.name).filter((n): n is string => Boolean(n)));
-      return [...names].sort().map((n) => ({ value: n, label: n }));
+      const counts = new Map<string, number>();
+      for (const t of types) {
+        if (!t.name) continue;
+        counts.set(t.name, (counts.get(t.name) ?? 0) + 1);
+      }
+      return [...counts.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, n]) => ({ value: name, label: n > 1 ? `${name} (${n} types share this name)` : name }));
     }
 
     return [];
   },
 };
+
+/**
+ * Every page of a Calendly list endpoint, not just the first.
+ *
+ * Bounded, because a config panel waiting on an unbounded walk is its own
+ * failure: ten pages is 1000 rows, far past any real account's event types or
+ * groups, and stopping there degrades to the old behavior rather than hanging.
+ */
+const MAX_OPTION_PAGES = 10;
+
+async function listAll<T>(token: string, path: string, params: Record<string, string>): Promise<T[]> {
+  const out: T[] = [];
+  let pageToken: string | null = null;
+  for (let page = 0; page < MAX_OPTION_PAGES; page++) {
+    const p = new URLSearchParams({ ...params, count: "100" });
+    if (pageToken) p.set("page_token", pageToken);
+    const data = await fetchJson<{ collection?: T[]; pagination?: { next_page_token?: string | null } }>(
+      `${API}${path}?${p.toString()}`,
+      { headers: authHeader(token) },
+    );
+    out.push(...(data.collection ?? []));
+    pageToken = data.pagination?.next_page_token ?? null;
+    if (!pageToken) break;
+  }
+  return out;
+}
 
 type CalendlyList = { collection: Array<Record<string, unknown>>; pagination?: { next_page_token?: string | null } };
 type PollCursor = { floor: string; ceil: string; pageToken?: string | null };

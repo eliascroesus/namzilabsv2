@@ -656,15 +656,45 @@ function datasetExec(nodeType: string, nodeId: string, records: FlowRecord[], re
   const ckey = `__count_${nodeId}`;
   const pkey = `__passed_${nodeId}`;
   const stamped = records.map((r) => ({ ...r, properties: { ...r.properties, [ckey]: count, [pkey]: true } }));
+  // The preview reads "Latest N records", so it has to mean that. The dataset is
+  // ordered newest-first by `occurred_at`, which was the same thing until a
+  // source started dating records by when they WILL happen — Calendly's meetings
+  // reach a year ahead, so the head of the list became appointments in eleven
+  // months' time, shown under a label promising the opposite.
+  //
+  // Ordering the dataset differently is not an option: `execApp` relies on
+  // newest-first so dedupe keeps the most recent copy. So only the SAMPLE is
+  // re-ordered — most recent first, then whatever is coming up soonest.
+  const preview = previewOrder(stamped);
   return {
     status: "ok",
     nodeType,
     shape: { kind: "dataset", records: stamped },
     recordsIn,
     recordsOut: count,
-    sample: stamped.slice(0, 3),
+    sample: preview.slice(0, 3),
     outputSchema: inferSchema(stamped),
   };
+}
+
+/**
+ * Records ordered the way a human reads "latest": what just happened, newest
+ * first — and only then what is coming up, soonest first.
+ *
+ * A plain newest-first sort puts the furthest-future record at the top, which is
+ * the least recognisable row a preview could show. Copies the array; the dataset
+ * keeps its own order, which `execApp` depends on for dedupe.
+ */
+function previewOrder(records: FlowRecord[], now = Date.now()): FlowRecord[] {
+  const at = (r: FlowRecord) => Date.parse(r.occurredAt) || 0;
+  return [...records].sort((a, b) => {
+    const ta = at(a);
+    const tb = at(b);
+    const aFuture = ta > now;
+    const bFuture = tb > now;
+    if (aFuture !== bFuture) return aFuture ? 1 : -1; // already happened wins
+    return aFuture ? ta - tb : tb - ta; // upcoming: soonest first; past: newest first
+  });
 }
 
 /** Exported for the E.2 parity suite: the JS side is the ORACLE the

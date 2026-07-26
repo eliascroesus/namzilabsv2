@@ -197,10 +197,15 @@ describe("an empty page does not end the scan", () => {
     const partial = await syncStream(db, conn, stream, 2);
     expect(partial.incomplete).toBe(true);
 
-    // And the Test path turns that into something the user can read.
+    // And the Test path turns that into something the user can read: the window
+    // it actually covers (Calendly's 30 days back plus everything upcoming),
+    // followed by the reason the count can still move.
     const primed = await primeStream(db, ORG, connId, CAL_CFG, { force: true, maxPages: 2 });
     expect(primed.ok).toBe(true);
-    if (primed.ok) expect(primed.note).toContain("Still importing");
+    if (primed.ok) {
+      expect(primed.note).toContain("last 30 days and onwards");
+      expect(primed.note).toContain("still loading");
+    }
   });
 
   it("does not cry partial when the scan actually finished", async () => {

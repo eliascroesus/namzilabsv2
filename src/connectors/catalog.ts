@@ -164,7 +164,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
         dynamic: true,
         dependsOn: ["scope"],
         placeholder: "All meeting types",
-        hint: "Storage only — Calendly cannot filter by type, so this narrows what is kept, not what is fetched. Matches every host running it.",
+        hint: "Storage only — Calendly cannot filter by type, so this narrows what is kept, not what is fetched. Matched by name, so one entry covers every host's copy; types sharing a name are listed once and all of them are included.",
       },
     ],
   },

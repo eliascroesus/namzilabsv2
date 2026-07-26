@@ -206,6 +206,38 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
     expect(res.nodes.get("f")!.recordsOut).toBe(2);
   });
 
+  /**
+   * The preview is labelled "Latest N records", so it has to be the latest ones.
+   *
+   * Newest-by-occurred_at used to mean that, and stopped once a source started
+   * dating records by when they WILL happen: Calendly stores a meeting at its
+   * start time and reads a year ahead, so the top of the list became appointments
+   * eleven months out — under a label promising the opposite. The dataset's own
+   * order is untouched (execApp's dedupe depends on newest-first); only the
+   * sample is re-ordered.
+   */
+  it("previews what just happened first, then what is coming up soonest", async () => {
+    await ev({ eventType: "booked", subject: "yesterday", daysAgo: 1 });
+    await ev({ eventType: "booked", subject: "last week", daysAgo: 7 });
+    await ev({ eventType: "booked", subject: "next month", daysAgo: -30 });
+    await ev({ eventType: "booked", subject: "next year", daysAgo: -300 });
+
+    const res = await runFlow(
+      { db, orgId: ORG },
+      G([N("a", "app", { connectionId: CONN }), N("agg", "aggregate", { aggregation: "count" }), N("o", "output", {})], [E("a", "agg"), E("agg", "o")]),
+    );
+    const app = res.nodes.get("a")!;
+    if (app.status !== "ok") throw new Error("app step failed");
+    // A plain newest-first sort would lead with "next year" — the least
+    // recognisable row a preview could open with.
+    expect(app.sample.map((r) => r.subject)).toEqual(["yesterday", "last week", "next month"]);
+    // …and the dataset itself still runs newest-first, which dedupe relies on.
+    expect(app.shape.kind).toBe("dataset");
+    if (app.shape.kind === "dataset") {
+      expect(app.shape.records.map((r) => r.subject)).toEqual(["next year", "next month", "yesterday", "last week"]);
+    }
+  });
+
   it("sampleAppFields lists a step's real data fields from its synced events", async () => {
     await ev({ eventType: "row_added", subject: "a@b.com", properties: { Email: "a@b.com", Plan: "pro" } });
     await ev({ eventType: "row_added", subject: "c@d.com", properties: { Email: "c@d.com", Plan: "free" } });

@@ -377,10 +377,45 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
       credentials: { accessToken: "t" },
       config: { scope: "organization" },
     });
+    // One row per name — and the collapsed one SAYS it stands for two, because a
+    // single entry where the account has two reads as data going missing.
     expect(opts).toEqual([
       { value: "30 Minute Meeting", label: "30 Minute Meeting" },
-      { value: "NAMZI Invite Only Creator Program", label: "NAMZI Invite Only Creator Program" },
+      { value: "NAMZI Invite Only Creator Program", label: "NAMZI Invite Only Creator Program (2 types share this name)" },
     ]);
+  });
+
+  /**
+   * `count=100` is Calendly's page SIZE, not a result limit. Stopping at the
+   * first page silently dropped every type past the hundredth — indistinguishable
+   * at the picker from "it cannot see my meeting types", which is how it was
+   * reported.
+   */
+  it("walks event_type pagination instead of stopping at the first page", async () => {
+    const pages = new Map<string | null, { collection: Array<{ uri: string; name: string }>; pagination: { next_page_token: string | null } }>([
+      [null, { collection: [{ uri: "ET1", name: "Page one type" }], pagination: { next_page_token: "P2" } }],
+      ["P2", { collection: [{ uri: "ET2", name: "Page two type" }], pagination: { next_page_token: null } }],
+    ]);
+    const seen: Array<string | null> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/users/me")) {
+          return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+        }
+        const token = url.searchParams.get("page_token");
+        seen.push(token);
+        return jsonResponse(pages.get(token) ?? { collection: [], pagination: { next_page_token: null } });
+      }),
+    );
+    const opts = await calendlyConnector.listOptions!("meetingType", {
+      connectionId: "c-pages",
+      credentials: { accessToken: "t" },
+      config: { scope: "organization" },
+    });
+    expect(seen).toEqual([null, "P2"]); // followed the token, then stopped
+    expect(opts.map((o) => o.value)).toEqual(["Page one type", "Page two type"]);
   });
 
   /**
