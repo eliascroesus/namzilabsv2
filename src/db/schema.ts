@@ -289,6 +289,19 @@ export const syncState = pgTable("sync_state", {
   channelExpiry: timestamp("channel_expiry", { withTimezone: true }),
   lastPolledAt: timestamp("last_polled_at", { withTimezone: true }),
   lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+  /**
+   * C.1 (connection scope): the lease held by whoever is currently syncing this
+   * connection, and the deadline it expires at. See `withConnectionSyncLock` in
+   * src/lib/sync/locks.ts for why the connection-level critical section is a
+   * durable lease and not an advisory lock — in short, it has to span a provider
+   * HTTP call, which an advisory lock cannot do without holding a transaction
+   * open across the network.
+   *
+   * The token fences the release: a waiter that timed out and proceeded anyway
+   * must never clear the lease of the writer it gave up on.
+   */
+  syncLockUntil: timestamp("sync_lock_until", { withTimezone: true }),
+  syncLockToken: text("sync_lock_token"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

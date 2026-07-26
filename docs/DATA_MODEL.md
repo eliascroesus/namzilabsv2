@@ -223,6 +223,41 @@ must be reachable only when we actually asked.** A skip that looks like an empty
 result is the most expensive bug shape in this codebase — it has now appeared in
 the migration tracker, the flow Test, and both layers of the Sendblue poll.
 
+### One writer per connection (C.1, connection scope)
+
+Adding `primeConnection` opened a race: the Test now syncs inline, so a Test and
+the 10-minute sweep could both read the connection cursor, both call the
+provider for the same page, and both write a cursor — leaving the stored
+high-water mark behind what one of them had already consumed.
+
+**Inngest's keys do not cover it**, though they look like they should.
+`sync-connection` carries `concurrency: {key: connectionId, limit: 1}` and
+`reconcile-one-connection` carries `singleton: {key: connectionId, mode: skip}` —
+but those scope **per function**, so the two never exclude each other, and the
+inline Test path does not go through Inngest at all. Three entry points, no
+shared guard.
+
+`sync_state.sync_lock_until` / `sync_lock_token` is that guard: a lease over the
+whole read-poll-write span, taken by `runSync` and by the sweep's
+connection-scoped branch alike.
+
+| Contender | On collision |
+|---|---|
+| Sweep (`reconcileConnection`) | **Skips.** No poll, no budget spent, no cadence change — the holder is doing this work. |
+| Sync now / full re-sync (`runSync`) | **Skips**, reporting `skipped: true` rather than a silent no-op. |
+| Test (`primeConnection`) | **Waits, then adopts** (Q6). If a sync lands while it waits, its read is the answer — no second provider call. |
+
+**Why a lease and not an advisory lock.** The section has to span the provider
+poll — excluding only the write still lets both writers read the same cursor and
+call out — and holding a transaction across an HTTP call is exactly what the
+header of `src/lib/sync/locks.ts` forbids. Advisory locks also need sessions, so
+they are inert until `DB_DRIVER=pool`, while this race is live on the http
+driver today. And a serverless container killed mid-poll (`maxDuration = 60`)
+leaves no session to die with, so the deadline is what makes recovery automatic.
+The lease is one `INSERT … ON CONFLICT DO UPDATE … WHERE`, hence atomic on every
+driver. The token fences release, so a Test that timed out and proceeded cannot
+clear the lease of the writer it gave up on.
+
 ### Sendblue: the messages ARE the analytics
 
 Sendblue's own dashboard shows response rate, messages sent/received, unresponded

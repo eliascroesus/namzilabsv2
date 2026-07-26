@@ -6,6 +6,7 @@ import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { processRawEvent, upsertEvents } from "@/ingestion/pipeline";
 import { activeStreams, syncStream, type PrimeStreamResult } from "@/lib/sync/streams";
+import { awaitConnectionSyncLock, releaseConnectionSyncLock, tryConnectionSyncLock } from "@/lib/sync/locks";
 import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import type { CanonicalEvent, Connector, PollArgs } from "@/connectors/types";
@@ -26,6 +27,12 @@ export type SyncResult = {
   generation: number;
   orgId: string;
   source: string;
+  /**
+   * Another writer held this connection, so this run did nothing. Distinct from
+   * a run that polled and found nothing: `polled` is false and every count is
+   * zero, so downstream staleness marking correctly stays quiet either way.
+   */
+  skipped?: boolean;
 };
 
 /** Did this run change what dashboards would show? (drives staleness) */
@@ -52,6 +59,26 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
     // Webhook-only source: nothing to poll.
     await db.update(connections).set({ syncStatus: "live", updatedAt: new Date() }).where(eq(connections.id, connectionId));
     return { mode, polled: false, upserted: 0, inserted: 0, updated: 0, softDeleted: 0, generation: conn.syncGeneration, orgId: conn.orgId, source: conn.source };
+  }
+
+  /**
+   * C.1 — one sync per connection, across every entry point.
+   *
+   * Inngest's per-connection keys are the first-line serializer but cannot
+   * cover this on their own: `singleton`/`concurrency` scope PER FUNCTION, so
+   * `sync-connection` and `reconcile-one-connection` never see each other, and
+   * the inline Test path (`primeConnection`) does not go through Inngest at
+   * all. The lease is the one guard all three share.
+   *
+   * Taken BEFORE the `importing` status write: a skipped run must leave no
+   * trace, least of all a status the winning writer then has to correct.
+   */
+  const lock = await tryConnectionSyncLock(db, connectionId);
+  if (!lock) {
+    return {
+      mode, polled: false, upserted: 0, inserted: 0, updated: 0, softDeleted: 0,
+      generation: conn.syncGeneration, orgId: conn.orgId, source: conn.source, skipped: true,
+    };
   }
 
   await db.update(connections).set({ syncStatus: "importing", updatedAt: new Date() }).where(eq(connections.id, connectionId));
@@ -103,6 +130,9 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
     const message = e instanceof Error ? e.message : String(e);
     await db.update(connections).set({ syncStatus: "error", lastError: message, updatedAt: new Date() }).where(eq(connections.id, connectionId));
     throw e;
+  } finally {
+    // A failed sync must not hold the connection for the rest of the TTL.
+    await releaseConnectionSyncLock(db, connectionId, lock.token);
   }
 }
 
@@ -295,6 +325,29 @@ export async function primeConnection(db: DB, orgId: string, connectionId: strin
     };
   }
 
+  /**
+   * Q6, connection scope. A Test that collides with an in-flight sync — the
+   * 10-minute sweep, a "Sync now", the previous Test — AWAITS it and adopts its
+   * result rather than skipping (which would show stale data) or erroring
+   * (which would blame the user for good luck). Bounded, so a wedged holder
+   * cannot hang the editor.
+   *
+   * Ahead of the budget claim, for the same reason the sweep takes its lease
+   * first: a read we end up adopting rather than making should not spend a
+   * provider call from the connection's quota.
+   */
+  const t0 = new Date();
+  const waited = await awaitConnectionSyncLock(db, connectionId);
+  if (waited === "free") {
+    const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, connectionId)).limit(1);
+    if (state?.lastPolledAt != null && state.lastPolledAt.getTime() >= t0.getTime()) {
+      // A sync finished while we waited, and it polled AFTER we arrived — its
+      // read is the fresh data. Adopt it: refreshed, but not by us, and above
+      // all not a second provider call for the same records.
+      return { ok: true, refreshed: true };
+    }
+  }
+
   const claim = await claimCalls(db, conn, pollOperation(conn.source, conn.config), 1, new Date(), "interactive");
   if (!claim.allowed) {
     return {
@@ -305,7 +358,12 @@ export async function primeConnection(db: DB, orgId: string, connectionId: strin
   }
 
   try {
-    await runSync(db, connectionId, "incremental");
+    const res = await runSync(db, connectionId, "incremental");
+    // The holder outlived the wait and still has the lease. Say so plainly
+    // rather than implying a refresh that did not happen.
+    if (res.skipped) {
+      return { ok: true, refreshed: false, note: "A sync of this source is already running — showing the data we have so far." };
+    }
     return { ok: true, refreshed: true };
   } catch (e) {
     // A provider error now reaches the user as an error, where before the Test

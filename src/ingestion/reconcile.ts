@@ -6,6 +6,7 @@ import { isStreamScoped } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { claimCalls, isPaused, pauseConnection, recordProviderError, recordSuccess, tripBreaker } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
+import { withConnectionSyncLock } from "@/lib/sync/locks";
 import { upsertEvents } from "./pipeline";
 import { activeStreams, syncStream } from "@/lib/sync/streams";
 import { applyCadence, decideCadence } from "@/lib/sync/cadence";
@@ -37,6 +38,13 @@ export type ReconcileResult = {
    * connection resumes automatically at `pausedUntil`.
    */
   deferredUntil?: Date;
+  /**
+   * C.1 — another writer held this connection's sync lease (a user's Test, a
+   * "Sync now", the previous tick still finishing), so this sweep stood down.
+   * The sweep SKIPS rather than waits: nothing is lost, because whoever holds
+   * the lease is doing exactly this work, and the next tick re-covers it.
+   */
+  skipped?: boolean;
   /** Tenant + source identity, so callers can mark dependent flows stale. */
   orgId: string;
   source: string;
@@ -97,7 +105,9 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   const withCadence = async (result: ReconcileResult): Promise<ReconcileResult> => {
     // Deferred sweeps keep their existing cadence — the pause already schedules
     // the retry, and a no-op streak shouldn't grow from work we never did.
-    if (result.deferredUntil) return result;
+    // A skipped sweep is the same case for the same reason, plus one more: the
+    // writer that DID hold the lease sets the cadence from real work.
+    if (result.deferredUntil || result.skipped) return result;
     const healthy = result.webhook === "ok" || result.webhook === "reregistered";
     const decision = decideCadence({
       changed: reconcileChanged(result),
@@ -158,6 +168,10 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   if (!connector?.poll)
     return withCadence({ inserted: 0, updated: 0, softDeleted: 0, deduped: 0, polled: false, webhook, changedStreamHashes: [], orgId: conn.orgId, source: conn.source });
 
+  // Bound here, where the guard above has narrowed it: a closure cannot carry
+  // the narrowing of a mutable property across its boundary.
+  const poll = connector.poll.bind(connector);
+
   if (isStreamScoped(conn.source)) {
     const streams = (await activeStreams(db, connectionId)).filter((s) => s.status !== "disabled");
     let inserted = 0;
@@ -206,57 +220,78 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     return withCadence({ inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, changedStreamHashes, orgId: conn.orgId, source: conn.source });
   }
 
-  // F.1: claim before spending a provider call, against the endpoint the poll
-  // will hit (see pollOperation — "*" is correct for one-bucket providers).
-  const claim = await claimCalls(db, conn, pollOperation(conn.source, conn.config));
-  if (!claim.allowed) {
-    const until = await pauseConnection(db, conn.id, claim.retryAfterMs, `${claim.reason} — resumes automatically`);
-    return withCadence({
-      inserted: 0, updated: 0, softDeleted: 0, deduped: 0,
-      polled: false, webhook, changedStreamHashes: [],
-      deferredUntil: until, orgId: conn.orgId, source: conn.source,
-    });
-  }
+  /**
+   * C.1 — the whole read-poll-write span is one critical section, held under
+   * the connection's lease. It has to include the poll: excluding only the
+   * write would still let this sweep and a concurrent Test both read the same
+   * cursor and both call the provider, which is the duplicate call and the
+   * cursor interleave the lease exists to prevent.
+   *
+   * Taken BEFORE the budget claim, so a sweep that stands down spends no quota
+   * on work it is not going to do.
+   */
+  const swept = await withConnectionSyncLock(db, connectionId, async (): Promise<ReconcileResult> => {
+    // F.1: claim before spending a provider call, against the endpoint the poll
+    // will hit (see pollOperation — "*" is correct for one-bucket providers).
+    const claim = await claimCalls(db, conn, pollOperation(conn.source, conn.config));
+    if (!claim.allowed) {
+      const until = await pauseConnection(db, conn.id, claim.retryAfterMs, `${claim.reason} — resumes automatically`);
+      return withCadence({
+        inserted: 0, updated: 0, softDeleted: 0, deduped: 0,
+        polled: false, webhook, changedStreamHashes: [],
+        deferredUntil: until, orgId: conn.orgId, source: conn.source,
+      });
+    }
 
-  const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, connectionId)).limit(1);
-  const cursor = state?.cursor ?? null;
+    const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, connectionId)).limit(1);
+    const cursor = state?.cursor ?? null;
 
-  const credentials = await getConnectionCredentials(db, conn);
+    const credentials = await getConnectionCredentials(db, conn);
 
-  let records: Awaited<ReturnType<NonNullable<typeof connector.poll>>>["records"];
-  let nextCursor: string | null;
-  try {
-    ({ records, nextCursor } = await connector.poll({
-      connectionId,
-      cursor,
-      credentials,
-      config: conn.config ?? undefined,
-    }));
-  } catch (e) {
-    // F.6: trip one notch of the probe ladder — paused, never terminal.
-    await recordProviderError(db, conn);
-    const until = await tripBreaker(db, conn.id, e instanceof Error ? e.message : String(e));
-    return withCadence({
-      inserted: 0, updated: 0, softDeleted: 0, deduped: 0,
-      polled: true, webhook, changedStreamHashes: [],
-      deferredUntil: until.pausedUntil, orgId: conn.orgId, source: conn.source,
-    });
-  }
+    let records: Awaited<ReturnType<typeof poll>>["records"];
+    let nextCursor: string | null;
+    try {
+      ({ records, nextCursor } = await poll({
+        connectionId,
+        cursor,
+        credentials,
+        config: conn.config ?? undefined,
+      }));
+    } catch (e) {
+      // F.6: trip one notch of the probe ladder — paused, never terminal.
+      await recordProviderError(db, conn);
+      const until = await tripBreaker(db, conn.id, e instanceof Error ? e.message : String(e));
+      return withCadence({
+        inserted: 0, updated: 0, softDeleted: 0, deduped: 0,
+        polled: true, webhook, changedStreamHashes: [],
+        deferredUntil: until.pausedUntil, orgId: conn.orgId, source: conn.source,
+      });
+    }
 
-  // Connection-scoped reconciliation writes at the connection's current
-  // generation (>= 1): these are poll-managed rows a future full re-sync must
-  // be able to retire, not append-only webhook rows.
-  const res = await upsertEvents(
-    db,
-    { orgId: conn.orgId, connectionId, source: conn.source, generation: Math.max(1, conn.syncGeneration ?? 0) },
-    records,
-  );
-  await upsertSyncCursor(db, connectionId, nextCursor);
-  // A clean poll clears any breaker state — the connection is healthy again
-  // (but never erases a standing webhook-health warning).
-  await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
+    // Connection-scoped reconciliation writes at the connection's current
+    // generation (>= 1): these are poll-managed rows a future full re-sync must
+    // be able to retire, not append-only webhook rows.
+    const res = await upsertEvents(
+      db,
+      { orgId: conn.orgId, connectionId, source: conn.source, generation: Math.max(1, conn.syncGeneration ?? 0) },
+      records,
+    );
+    await upsertSyncCursor(db, connectionId, nextCursor);
+    // A clean poll clears any breaker state — the connection is healthy again
+    // (but never erases a standing webhook-health warning).
+    await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
 
-  return withCadence({ inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped, polled: true, webhook, changedStreamHashes: [], orgId: conn.orgId, source: conn.source });
+    return withCadence({ inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped, polled: true, webhook, changedStreamHashes: [], orgId: conn.orgId, source: conn.source });
+  });
+
+  if (swept.acquired && swept.result) return swept.result;
+  // Someone else is mid-sync on this connection. Stand down — no poll, no
+  // cadence change, nothing lost: the holder is doing this work right now.
+  return withCadence({
+    inserted: 0, updated: 0, softDeleted: 0, deduped: 0,
+    polled: false, webhook, changedStreamHashes: [],
+    skipped: true, orgId: conn.orgId, source: conn.source,
+  });
 }
 
 async function upsertSyncCursor(db: DB, connectionId: string, cursor: string | null): Promise<void> {
