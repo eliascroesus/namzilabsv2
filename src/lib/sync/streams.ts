@@ -400,11 +400,18 @@ export async function activeStreams(db: DB, connectionId: string): Promise<Strea
 const PRIME_MAX_AGE_MS = 60_000;
 
 /**
- * Pages an interactive Test walks inline. Even, because a connector that scans
- * outward from now alternates directions (Calendly: recent past / soonest
- * upcoming) — an odd budget gives one side more than the other for no reason.
+ * Pages an interactive Test walks inline — and the ONLY thing in the Test path
+ * that is real work. Each page is one sequential provider request, so a person
+ * waits for all of them; everything else here is indexed queries in the
+ * milliseconds.
+ *
+ * Two, not four. Even, because a connector that scans outward from now
+ * alternates directions (Calendly: recent past / soonest upcoming), so this is
+ * exactly one page from each end — which is what a preview is: the newest
+ * meetings and the nearest upcoming ones. The rest of the window is the sweep's
+ * job, and nobody is sitting in front of the sweep.
  */
-const PRIME_MAX_PAGES = 4;
+const PRIME_MAX_PAGES = 2;
 
 export type PrimeStreamResult =
   | { ok: true; refreshed: boolean; note?: string }
