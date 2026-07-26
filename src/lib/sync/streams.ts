@@ -160,7 +160,7 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
       cursor = nextCursor ?? null;
     } else {
       for (let page = 0; page < maxPages; page++) {
-        const { records, nextCursor, mirrorScope } = await connector.poll({
+        const { records, nextCursor, mirrorScope, preserveOccurredAt } = await connector.poll({
           connectionId: conn.id,
           cursor,
           credentials,
@@ -173,7 +173,7 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
             // A window-scoped mirror restates rows in place, so its stored
             // occurred_at must stay the day it describes, not drift to
             // first-seen — same reason whole-resource mirrors preserve it.
-            { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation, preserveOccurredAt: mirrorScope != null },
+            { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation, preserveOccurredAt: mirrorScope != null || preserveOccurredAt === true },
             records,
           );
           // Per-stream mirror-ness: a source that is incremental overall can

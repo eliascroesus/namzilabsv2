@@ -86,10 +86,9 @@ describe("buildFieldGroups (variable picker)", () => {
   it("shows the step's own fields (no separate System group), canonical ones humanised", () => {
     const groups = buildFieldGroups({ selectedId: "f1", nodes, edges, stepNoById, titleOf });
     expect(groups[0].from).toBe("app");
-    // Custom fields first, then canonical fields that carry data, then Output number.
-    expect(groups[0].fields.map((f) => f.path)).toEqual(["plan", "properties.seats", "subject", "__count_app1"]);
+    // Custom fields first, then canonical fields that carry data. Nothing else.
+    expect(groups[0].fields.map((f) => f.path)).toEqual(["plan", "properties.seats", "subject"]);
     expect(groups[0].fields.find((f) => f.path === "subject")?.label).toBe("Subject / person");
-    expect(groups[0].fields.find((f) => f.path === "__count_app1")?.label).toBe("Output number");
     // No trailing System group anymore.
     expect(groups.some((g) => g.system)).toBe(false);
   });
@@ -145,20 +144,32 @@ describe("buildFieldGroups — nearest-app example resolution + provenance", () 
     expect(groups[0].fields.find((f) => f.path === "properties.utm")?.container).toBe(true);
   });
 
-  it("a filter step exposes only its Output + Output number, not columns", () => {
+  it("a filter step exposes only its Output, not columns", () => {
     const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
     const filterGroup = groups.find((g) => g.stepNo === 2);
-    expect(filterGroup?.fields.map((f) => f.label)).toEqual(["Output", "Output number"]);
-    expect(filterGroup?.fields.map((f) => f.path)).toEqual(["__passed_fN", "__count_fN"]);
-    expect(filterGroup?.fields.find((f) => f.label === "Output number")?.example).toBe(1); // recordsOut
+    expect(filterGroup?.fields.map((f) => f.label)).toEqual(["Output"]);
+    expect(filterGroup?.fields.map((f) => f.path)).toEqual(["__passed_fN"]);
     expect(filterGroup?.fields.find((f) => f.label === "Output")?.type).toBe("boolean");
   });
 
-  it("a data step exposes its columns plus an Output number", () => {
+  it("a data step exposes its columns and nothing synthetic", () => {
     const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
     const appGroup = groups.find((g) => g.stepNo === 1);
-    expect(appGroup?.fields.map((f) => f.label)).toContain("Output number");
     expect(appGroup?.fields.some((f) => f.path === "plan")).toBe(true);
+  });
+
+  /**
+   * The record-count scalar was offered in the per-record picker and was pure noise
+   * there: it is a property of the dataset, identical on every row, so a filter on it
+   * passes everything or nothing and an aggregate over it multiplies the count by
+   * itself. Comparing two steps' sizes is real, but that is Calculate's number slots
+   * (`numberGroups`), a different picker that mints `__count_<id>` on its own.
+   */
+  it("never offers a step's record count as a per-record field", () => {
+    const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
+    const paths = groups.flatMap((g) => g.fields.map((f) => f.path));
+    expect(paths.some((p) => p.startsWith("__count_"))).toBe(false);
+    expect(groups.flatMap((g) => g.fields).some((f) => f.label === "Output number")).toBe(false);
   });
 });
 

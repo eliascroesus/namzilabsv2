@@ -111,6 +111,70 @@ wrong in the cheap direction would have been silent:
   published figure we have. Each endpoint now has its own enforced bucket, so
   raising any one of them later is a one-line change.
 
+A third, since it shows up in the UI: **a campaign total has no timestamp.** It
+is a running number, not something that happened at a moment. The connector uses
+the campaign's own creation date when the API supplies one and otherwise sets
+`preserveOccurredAt`, which pins first-seen. Both alternatives were visibly
+wrong: the epoch put *1970* in front of the user, and `now` made the row march
+forward every sweep — reordering it and making each unchanged sweep look like a
+change, which defeats the no-op skip that keeps dashboards from recomputing.
+
+## Derived fields: when a connector computes rather than copies
+
+A connector normally copies the provider's payload into `properties`. Sometimes
+that payload cannot answer the question the integration exists to answer, and no
+amount of picker cleverness fixes it. Then the connector computes the answer
+once, at read time, and the whole existing filter/aggregate vocabulary works on
+it unchanged.
+
+The rule for adding one: it must be **derivable from the same payload**
+(so it needs no extra provider call and re-derives identically on a re-sync),
+and it must answer a question a **list cannot** — because a list of objects can
+only be offered positionally in the builder, and position is rarely meaningful.
+
+### Google Calendar attendance
+
+"How many invited people accepted?" is the question a calendar is bought for,
+and `attendees` cannot answer it: it is a list, so the builder can only offer
+*Item 1, Item 2*. Every meeting has different people, **Google does not
+guarantee attendee order**, and the organizer is not reliably first — so a
+metric on "Item 1's response status" measures a different person on every row.
+
+`attendanceRollup` (`src/connectors/google-calendar.ts`) flattens it into counts.
+The raw `attendees` list is left untouched alongside them.
+
+| Field | Meaning |
+|---|---|
+| `guests_total` | Invitees excluding the organizer and the calendar owner |
+| `guests_accepted` / `_declined` / `_tentative` / `_pending` | Those guests by RSVP |
+| `guests_external` | Guests whose email domain differs from the organizer's |
+| `guests_external_accepted` | …of those, the ones who accepted |
+| `guest_acceptance_rate` | `accepted / total`, **null** (not 0) when there were no guests |
+| `any_guest_accepted` | At least one guest accepted |
+| `is_external_meeting` | Someone outside the organizer's company was invited |
+| `organizer_email` / `organizer_domain` / `attendee_count` | Provenance for the above |
+
+Three definitions carry the design, each chosen so the common sales case falls
+out with no configuration:
+
+1. **A guest is not the host.** Attendees flagged `organizer` or `self` are
+   excluded from every count. Counting the closer's own acceptance would mark
+   every meeting accepted — the exact noise the field exists to remove.
+2. **Rooms are not people.** `resource: true` attendees are dropped before
+   anything is counted.
+3. **External = a different domain from the organizer.** This separates the
+   prospect from the colleague added to the call, which is what "did the lead
+   show intent" actually means.
+
+`guest_acceptance_rate` is null rather than 0 on a solo block so that averaging
+it over a calendar is not dragged down by focus time.
+
+**Backfill.** These are computed on write, and Calendar syncs incrementally by
+sync token — so events already stored keep their old `properties` until they
+change. To populate them across existing history, run **Full re-sync** on the
+connection (`/connections/[id]`), which clears the cursor and re-lists the
+bounded window.
+
 ## Freshness rules
 
 - The user's explicit **Test always forces a fresh read** of its streams (`primeStream` with

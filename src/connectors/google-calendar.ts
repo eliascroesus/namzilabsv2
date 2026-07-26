@@ -78,7 +78,7 @@ export const googleCalendarConnector: Connector = {
           eventType: "calendar_event",
           subject: str(ev["summary"]) ?? firstAttendeeEmail(ev) ?? null,
           occurredAt: eventStart(ev) ?? new Date(),
-          properties: ev,
+          properties: { ...ev, ...attendanceRollup(ev) },
         });
       }
 
@@ -117,6 +117,83 @@ function eventStart(ev: Record<string, unknown>): Date | null {
   }
   return null;
 }
+/**
+ * Flatten `attendees` into countable fields.
+ *
+ * The raw list is unusable for the question people actually ask of a calendar:
+ * "how many invitees accepted?". A list of attendee objects can only be picked
+ * POSITIONALLY in the flow builder — Item 1, Item 2 — and position means nothing
+ * here. Every sales call has different people, Google does not guarantee an
+ * order, and the organizer is not reliably first. So a metric built on "Item 1's
+ * response status" is measuring a different person on every row.
+ *
+ * The fix is not a smarter picker, it is different data: counts are what the
+ * question is about, so the connector computes them once at read time and every
+ * existing filter and aggregate works on them unchanged.
+ *
+ * Definitions, chosen so the common sales case falls out for free:
+ * - Rooms and equipment (`resource: true`) are never people, and are excluded
+ *   from every count.
+ * - A GUEST is an attendee who is neither the organizer nor the calendar owner
+ *   (`self`). Counting the closer's own acceptance would make every meeting look
+ *   accepted, which is exactly the noise being complained about.
+ * - EXTERNAL guests are those whose email domain differs from the organizer's —
+ *   the prospect, as distinct from the colleague you added to the call. This is
+ *   what separates "did the lead show intent" from internal chatter, and it needs
+ *   no configuration from the user.
+ *
+ * Everything here is derived; the original `attendees` list is left untouched
+ * alongside it for anyone who needs the detail.
+ */
+function attendanceRollup(ev: Record<string, unknown>): Record<string, unknown> {
+  const raw = Array.isArray(ev["attendees"]) ? (ev["attendees"] as Array<Record<string, unknown>>) : [];
+  // Rooms/equipment are attendees to Google, never to a person asking "who came".
+  const people = raw.filter((a) => a["resource"] !== true);
+
+  const organizerEmail =
+    str((ev["organizer"] as Record<string, unknown> | undefined)?.["email"]) ??
+    str(people.find((a) => a["organizer"] === true)?.["email"]) ??
+    null;
+  const organizerDomain = domainOf(organizerEmail);
+
+  const guests = people.filter((a) => a["organizer"] !== true && a["self"] !== true);
+  const external = guests.filter((a) => {
+    const d = domainOf(str(a["email"]));
+    return d != null && organizerDomain != null && d !== organizerDomain;
+  });
+
+  const status = (a: Record<string, unknown>) => str(a["responseStatus"]) ?? "needsAction";
+  const accepted = (list: Array<Record<string, unknown>>) => list.filter((a) => status(a) === "accepted").length;
+
+  const guestsTotal = guests.length;
+  const guestsAccepted = accepted(guests);
+
+  return {
+    guests_total: guestsTotal,
+    guests_accepted: guestsAccepted,
+    guests_declined: guests.filter((a) => status(a) === "declined").length,
+    guests_tentative: guests.filter((a) => status(a) === "tentative").length,
+    guests_pending: guests.filter((a) => status(a) === "needsAction").length,
+    guests_external: external.length,
+    guests_external_accepted: accepted(external),
+    /** 0–1, and null rather than 0 when there were no guests to accept — an
+     *  internal solo block must not drag an average acceptance rate down. */
+    guest_acceptance_rate: guestsTotal > 0 ? guestsAccepted / guestsTotal : null,
+    any_guest_accepted: guestsAccepted > 0,
+    /** True when someone outside the organizer's company was invited — the
+     *  cheap way to separate real calls from internal meetings. */
+    is_external_meeting: external.length > 0,
+    organizer_email: organizerEmail,
+    organizer_domain: organizerDomain,
+    attendee_count: people.length,
+  };
+}
+
+function domainOf(email: string | null | undefined): string | null {
+  const at = email?.lastIndexOf("@") ?? -1;
+  return at > 0 ? email!.slice(at + 1).toLowerCase() : null;
+}
+
 function firstAttendeeEmail(ev: Record<string, unknown>): string | null {
   const attendees = ev["attendees"];
   if (Array.isArray(attendees) && attendees.length > 0) {

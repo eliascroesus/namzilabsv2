@@ -383,16 +383,21 @@ export function buildFieldGroups(opts: {
       if (sn.type === "unite") continue;
       // Untested steps expose nothing yet (explicit-test model).
       if (sn.data.lastTest?.status !== "ok") continue;
-      const recordsOut = sn.data.lastTest.recordsOut;
       const app = nearestAppAncestor(sn, nodes, edges);
       const appChosen = app ? chosenSample(app, sampleIndexOf) : undefined;
       const upChosen = chosenSample(sn, sampleIndexOf);
 
-      // Every tested step exposes an "Output number" (how many records it produced), and
-      // filters/windows also expose "Output" (whether records continued — always true for
-      // the ones that got through). These resolve at runtime via the engine's per-step
-      // stamp (__count_<id> / __passed_<id>), so they can feed conditions and calculations.
-      const outNum: PickField = { path: `__count_${sn.id}`, label: "Output number", type: "number", example: recordsOut };
+      // Filters/windows expose "Output" — whether the record continued past that step.
+      // It is genuinely per-record: on a Paths flow a record that took branch B carries
+      // no `__passed_<A>` stamp, so "passed step 3" distinguishes rows.
+      //
+      // A step's "Output number" (`__count_<id>`) deliberately does NOT appear here. It is
+      // a property of the DATASET, not of a record — the engine stamps the identical count
+      // on every row — so in a per-record picker it can only produce nonsense: a condition
+      // on it passes all rows or none, and summing it multiplies the count by itself. It
+      // has one real use, comparing two steps' sizes, and that has its own picker
+      // (`numberGroups` in flow-canvas.tsx, feeding Calculate's number slots), which builds
+      // the same `__count_<id>` path itself and is unaffected by this.
       const outBool: PickField = { path: `__passed_${sn.id}`, label: "Output", type: "boolean", example: true };
       const isPassThrough = sn.type === "filter" || sn.type === "time";
 
@@ -400,7 +405,7 @@ export function buildFieldGroups(opts: {
       if (isPassThrough) {
         // A filter/window introduces no columns of its own (they come from the source
         // step); it reads out purely as its result.
-        fields = [outBool, outNum];
+        fields = [outBool];
       } else {
         // W3b: examples come from the field's nearest App ancestor's *selected* preview
         // record, so changing the record updates values everywhere. Transform-added fields
@@ -418,7 +423,7 @@ export function buildFieldGroups(opts: {
             custom.push({ path: f.path, label: f.label, type: f.type, example: ex, container: f.container });
           }
         }
-        fields = [...custom, ...std, outNum];
+        fields = [...custom, ...std];
       }
 
       groups.push({

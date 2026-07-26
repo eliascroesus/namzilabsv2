@@ -259,13 +259,16 @@ async function pollCampaignTotals(args: PollArgs): Promise<PollResult> {
         eventId: `instantly:${args.connectionId}:${campaignId}:totals`,
         eventType: "campaign_totals",
         subject: campaignId,
-        // Pinned to the epoch of the campaign row rather than "now", so the
-        // single row does not march forward on every sweep and reorder itself.
-        occurredAt: parseDate(str(row["created_at"]) ?? str(row["campaign_created_at"])) ?? new Date(0),
+        // A campaign total did not "happen" at a time. Use the campaign's own
+        // creation date when the API supplies one; otherwise first-seen, which
+        // preserveOccurredAt below pins so it neither shows 1970 nor marches
+        // forward on every sweep.
+        occurredAt: parseDate(str(row["created_at"]) ?? str(row["campaign_created_at"])) ?? new Date(),
         properties: { ...row, campaign_id: campaignId },
       },
     ],
     nextCursor: null,
+    preserveOccurredAt: true,
   };
 }
 

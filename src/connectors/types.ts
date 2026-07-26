@@ -72,6 +72,20 @@ export type PollResult = {
    * retired.
    */
   mirrorScope?: { from: Date; to: Date };
+  /**
+   * "These records have no timestamp of their own — keep the first one we saw."
+   *
+   * A running total is not an event: it did not happen at a time. Stamping it
+   * with `now` makes it march forward on every sweep, which reorders it and
+   * makes every unchanged sweep look like a change (defeating the no-op skip
+   * that keeps dashboards from recomputing every ten minutes). Stamping it with
+   * the epoch, as this connector first did, puts 1970 in front of the user.
+   *
+   * Preserving first-seen is the honest third option: stable, ordered, and true.
+   * Window-scoped mirrors get this implicitly — a restated day must keep
+   * describing its own day — so they need not set it.
+   */
+  preserveOccurredAt?: boolean;
 };
 
 export type RegisterWebhookArgs = {
