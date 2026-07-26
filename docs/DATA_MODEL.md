@@ -145,29 +145,45 @@ The raw `attendees` list is left untouched alongside them.
 
 | Field | Meaning |
 |---|---|
-| `guests_total` | Invitees excluding the organizer and the calendar owner |
+| `guests_total` | Every invited person, organizer included; rooms excluded |
 | `guests_accepted` / `_declined` / `_tentative` / `_pending` | Those guests by RSVP |
 | `guests_external` | Guests whose email domain differs from the organizer's |
 | `guests_external_accepted` | …of those, the ones who accepted |
-| `guest_acceptance_rate` | `accepted / total`, **null** (not 0) when there were no guests |
-| `any_guest_accepted` | At least one guest accepted |
+| `guest_acceptance_rate` | `accepted / total`, **null** (not 0) when nobody was invited |
 | `is_external_meeting` | Someone outside the organizer's company was invited |
-| `organizer_email` / `organizer_domain` / `attendee_count` | Provenance for the above |
+| `organizer_email` / `organizer_domain` | Provenance for the external split |
 
-Three definitions carry the design, each chosen so the common sales case falls
-out with no configuration:
+**The counts must equal the line Google prints on the event.** Open it in Google
+Calendar and it reads *"4 guests · 2 yes, 2 awaiting"*; `guests_total`,
+`guests_accepted` and `guests_pending` are that line, field for field. That is
+the whole constraint, and it is written down because the first version broke it:
+it excluded `organizer` and `self` on the theory that the closer's automatic
+acceptance would make every meeting look accepted. On a real event where the
+organizer and the calendar owner were the only two who *had* accepted, it
+reported **0** — a number the user could disprove at a glance. A definition that
+cannot be checked against the source is not worth its cleverness.
 
-1. **A guest is not the host.** Attendees flagged `organizer` or `self` are
-   excluded from every count. Counting the closer's own acceptance would mark
-   every meeting accepted — the exact noise the field exists to remove.
-2. **Rooms are not people.** `resource: true` attendees are dropped before
-   anything is counted.
-3. **External = a different domain from the organizer.** This separates the
-   prospect from the colleague added to the call, which is what "did the lead
-   show intent" actually means.
+What survives:
+
+1. **Rooms are not people.** `resource: true` attendees are dropped before
+   anything is counted — Google lists them, its own guest line does not.
+2. **External = a different domain from the organizer.** This separates the
+   prospect from the colleague added to the call. When no organizer can be
+   identified there is no inside to be outside of, so nobody is external — the
+   rollup never guesses.
+3. **Missing means pending.** Google omits `responseStatus` entirely for someone
+   who has not replied; that counts as `needsAction`.
 
 `guest_acceptance_rate` is null rather than 0 on a solo block so that averaging
 it over a calendar is not dragged down by focus time.
+
+Two ways to ask "did the other side accept", differing in what they assume:
+
+- `guests_accepted > 1` — cheap and reads naturally, but assumes the host always
+  auto-accepts. A host who leaves their own invite unanswered makes a genuinely
+  accepted meeting read as 1.
+- `guests_external_accepted >= 1` — no assumption at all, and the right one when
+  the meeting is with someone outside the company.
 
 **Backfill.** These are computed on write, and Calendar syncs incrementally by
 sync token — so events already stored keep their old `properties` until they

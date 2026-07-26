@@ -131,37 +131,48 @@ function eventStart(ev: Record<string, unknown>): Date | null {
  * question is about, so the connector computes them once at read time and every
  * existing filter and aggregate works on them unchanged.
  *
- * Definitions, chosen so the common sales case falls out for free:
- * - Rooms and equipment (`resource: true`) are never people, and are excluded
- *   from every count.
- * - A GUEST is an attendee who is neither the organizer nor the calendar owner
- *   (`self`). Counting the closer's own acceptance would make every meeting look
- *   accepted, which is exactly the noise being complained about.
- * - EXTERNAL guests are those whose email domain differs from the organizer's —
- *   the prospect, as distinct from the colleague you added to the call. This is
- *   what separates "did the lead show intent" from internal chatter, and it needs
- *   no configuration from the user.
+ * THE COUNTS MUST MATCH WHAT GOOGLE SHOWS. Open the event in Google Calendar and
+ * it reads "4 guests · 2 yes, 2 awaiting". `guests_total` / `guests_accepted` /
+ * `guests_pending` are that line, field for field. This is the whole design
+ * constraint, and it is worth stating because the first version broke it: it
+ * excluded the organizer and the calendar owner on the theory that the closer's
+ * own auto-acceptance would make every meeting look accepted. On a real event
+ * where the organizer and the owner were the two people who HAD accepted, it
+ * reported 0 — a number the user could disprove at a glance. A definition that
+ * cannot be checked against the source is not worth its cleverness; anyone who
+ * wants the host discounted can say `guests_accepted > 1`, and anyone who wants
+ * it exactly can use the external counts below.
+ *
+ * So a GUEST here is what Google calls a guest — every invited person, organizer
+ * included. Two things are still not people:
+ * - Rooms and equipment (`resource: true`), which Google lists as attendees.
+ * - Nothing else. `self` and `organizer` are counted like anyone else.
+ *
+ * EXTERNAL guests are those whose email domain differs from the organizer's —
+ * the prospect, as distinct from the colleague added to the call. That is the
+ * assumption-free version of "did the lead show intent", needing no user config
+ * and no "the closer always accepts" premise.
  *
  * Everything here is derived; the original `attendees` list is left untouched
  * alongside it for anyone who needs the detail.
  */
 function attendanceRollup(ev: Record<string, unknown>): Record<string, unknown> {
   const raw = Array.isArray(ev["attendees"]) ? (ev["attendees"] as Array<Record<string, unknown>>) : [];
-  // Rooms/equipment are attendees to Google, never to a person asking "who came".
-  const people = raw.filter((a) => a["resource"] !== true);
+  // Rooms/equipment are attendees to Google, never to a person asking "who accepted".
+  const guests = raw.filter((a) => a["resource"] !== true);
 
   const organizerEmail =
     str((ev["organizer"] as Record<string, unknown> | undefined)?.["email"]) ??
-    str(people.find((a) => a["organizer"] === true)?.["email"]) ??
+    str(guests.find((a) => a["organizer"] === true)?.["email"]) ??
     null;
   const organizerDomain = domainOf(organizerEmail);
 
-  const guests = people.filter((a) => a["organizer"] !== true && a["self"] !== true);
   const external = guests.filter((a) => {
     const d = domainOf(str(a["email"]));
     return d != null && organizerDomain != null && d !== organizerDomain;
   });
 
+  // Google omits responseStatus for an attendee who has not replied at all.
   const status = (a: Record<string, unknown>) => str(a["responseStatus"]) ?? "needsAction";
   const accepted = (list: Array<Record<string, unknown>>) => list.filter((a) => status(a) === "accepted").length;
 
@@ -176,16 +187,14 @@ function attendanceRollup(ev: Record<string, unknown>): Record<string, unknown> 
     guests_pending: guests.filter((a) => status(a) === "needsAction").length,
     guests_external: external.length,
     guests_external_accepted: accepted(external),
-    /** 0–1, and null rather than 0 when there were no guests to accept — an
-     *  internal solo block must not drag an average acceptance rate down. */
+    /** 0–1, and null rather than 0 when nobody was invited — a solo focus block
+     *  must not drag an average acceptance rate down. */
     guest_acceptance_rate: guestsTotal > 0 ? guestsAccepted / guestsTotal : null,
-    any_guest_accepted: guestsAccepted > 0,
     /** True when someone outside the organizer's company was invited — the
      *  cheap way to separate real calls from internal meetings. */
     is_external_meeting: external.length > 0,
     organizer_email: organizerEmail,
     organizer_domain: organizerDomain,
-    attendee_count: people.length,
   };
 }
 
