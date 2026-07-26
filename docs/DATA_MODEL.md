@@ -340,10 +340,17 @@ remove it when that step changed — so every edit left the previous one behind,
 still returned by `activeStreams`, still polled every sweep, still spending the
 connection's budget on data nobody could read.
 
-`pruneOrphanStreams` (run on flow save) disables any stream of the org that no
-draft or published graph references. Disabled, never deleted: the sweep filters
-on `status`, so the cost stops immediately, and `ensureStreamsForGraph`
+`pruneOrphanStreams` (run on PUBLISH) disables any stream of the org that no
+draft or currently-published graph references. Disabled, never deleted: the sweep
+filters on `status`, so the cost stops immediately, and `ensureStreamsForGraph`
 re-activates one the moment a flow points at it again.
+
+On publish rather than on save, deliberately. The draft autosaves 900ms after
+every canvas change, and this reads every flow's graph in the org — running it
+there made dragging a node pay for the whole workspace. It also reads each flow's
+CURRENT published version only: `flow_versions` gains a row per publish forever,
+each holding a whole graph, so counting all of them scaled the cost with a team's
+publishing history instead of with what is running.
 
 It does NOT retire the rows by default. It runs on every draft save, including
 half-finished ones, and a user switching a setting to look at something must not

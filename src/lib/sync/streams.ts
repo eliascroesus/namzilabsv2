@@ -71,6 +71,39 @@ export async function ensureStreamsForGraph(db: DB, orgId: string, graph: FlowGr
 }
 
 /**
+ * `connectionId:configHash` for every stream an org's flows currently read.
+ *
+ * Each flow's DRAFT graph and its CURRENTLY PUBLISHED version — not every
+ * version ever published. `flow_versions` grows by a row per publish and each
+ * row holds a whole graph, so reading them all made this cost scale with a
+ * team's publishing history rather than with what is actually running.
+ */
+export async function referencedStreamKeys(
+  db: DB,
+  orgId: string,
+  sourceOf: (connectionId: string) => string | undefined,
+): Promise<Set<string>> {
+  const drafts = await db.select({ graph: flows.draftGraph }).from(flows).where(eq(flows.orgId, orgId));
+  const published = await db
+    .select({ graph: flowVersions.graph })
+    .from(flowVersions)
+    .innerJoin(flows, and(eq(flowVersions.flowId, flows.id), eq(flowVersions.version, flows.publishedVersion)))
+    .where(eq(flows.orgId, orgId));
+
+  const keys = new Set<string>();
+  for (const { graph: raw } of [...drafts, ...published]) {
+    let graph: FlowGraph;
+    try {
+      graph = parseGraph(raw);
+    } catch {
+      continue; // an unparseable graph must never license retiring live data
+    }
+    for (const ref of streamRefsOfGraph(graph, sourceOf)) keys.add(`${ref.connectionId}:${ref.configHash}`);
+  }
+  return keys;
+}
+
+/**
  * Retire the streams of an org that no flow references any more.
  *
  * A stream is created when a Get data step declares a resource and is never
@@ -100,18 +133,7 @@ export async function pruneOrphanStreams(db: DB, orgId: string, opts: { retireRo
   if (conns.length === 0) return { disabled: 0, retired: 0 };
   const sourceOf = (id: string) => conns.find((c) => c.id === id)?.source;
 
-  const referenced = new Set<string>();
-  const rows = await db.select({ draftGraph: flows.draftGraph, id: flows.id }).from(flows).where(eq(flows.orgId, orgId));
-  const versions = await db.select({ graph: flowVersions.graph }).from(flowVersions).where(eq(flowVersions.orgId, orgId));
-  for (const raw of [...rows.map((r) => r.draftGraph), ...versions.map((v) => v.graph)]) {
-    let graph: FlowGraph;
-    try {
-      graph = parseGraph(raw);
-    } catch {
-      continue; // an unparseable graph must never license retiring live data
-    }
-    for (const ref of streamRefsOfGraph(graph, sourceOf)) referenced.add(`${ref.connectionId}:${ref.configHash}`);
-  }
+  const referenced = await referencedStreamKeys(db, orgId, sourceOf);
 
   const all = await db
     .select({ id: sourceStreams.id, connectionId: sourceStreams.connectionId, configHash: sourceStreams.configHash, status: sourceStreams.status })

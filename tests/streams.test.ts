@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq, isNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { createTestDb } from "./helpers/testdb";
-import { connections, events, flows, sourceStreams } from "@/db/schema";
+import { connections, events, flows, flowVersions, sourceStreams } from "@/db/schema";
 import { normalizeStreamConfig, streamConfigHash, hasStreamConfig } from "@/lib/sync/stream-hash";
-import { ensureStreamsForGraph, pruneOrphanStreams, streamRefsOfGraph } from "@/lib/sync/streams";
+import { ensureStreamsForGraph, pruneOrphanStreams, referencedStreamKeys, streamRefsOfGraph } from "@/lib/sync/streams";
 import { runFlow } from "@/lib/flow/engine";
 import { parseGraph } from "@/lib/flow/types";
 import type { DB } from "@/db/types";
@@ -204,5 +204,33 @@ describe("pruneOrphanStreams — stop paying for streams no flow reads", () => {
       }),
     );
     expect(await statusOf(orphanHash)).toBe("active");
+  });
+
+  /**
+   * `flow_versions` grows by a row per publish, forever, and each row holds a
+   * whole graph. Reading every one of them made this cost scale with a team's
+   * publishing history rather than with what is actually running — which is why
+   * it no longer runs on the draft autosave either.
+   */
+  it("counts the CURRENT published version, not every version ever published", async () => {
+    const [conn] = await db
+      .insert(connections)
+      .values({ orgId: ORG, source: "gsheets", name: "Sheets", status: "active", authType: "oauth2" })
+      .returning({ id: connections.id });
+    const graphFor = (sheet: string) => ({
+      nodes: [{ id: "a1", type: "app", data: { config: { connectionId: conn.id, source: "gsheets", sourceConfig: { spreadsheetId: sheet, range: "Tab1" } } } }],
+      edges: [],
+    });
+    // Draft and v2 read SHEET_NEW; v1 is history and reads SHEET_OLD.
+    const [flow] = await db
+      .insert(flows)
+      .values({ orgId: ORG, name: "F", draftGraph: graphFor("SHEET_NEW"), status: "published", publishedVersion: 2 })
+      .returning({ id: flows.id });
+    await db.insert(flowVersions).values({ flowId: flow.id, orgId: ORG, version: 1, graph: graphFor("SHEET_OLD") });
+    await db.insert(flowVersions).values({ flowId: flow.id, orgId: ORG, version: 2, graph: graphFor("SHEET_NEW") });
+
+    const keys = await referencedStreamKeys(db, ORG, () => "gsheets");
+    expect(keys.has(`${conn.id}:${streamConfigHash({ spreadsheetId: "SHEET_NEW", range: "Tab1" }, "gsheets")}`)).toBe(true);
+    expect(keys.has(`${conn.id}:${streamConfigHash({ spreadsheetId: "SHEET_OLD", range: "Tab1" }, "gsheets")}`)).toBe(false);
   });
 });

@@ -37,10 +37,6 @@ export async function saveDraftAction(
     // them up. Best-effort: a stream hiccup must never fail the save.
     try {
       await ensureStreamsForGraph(db, orgId, parseGraph(graph));
-      // …and stop paying for the ones this edit just orphaned. A stream whose
-      // step changed is never referenced again, but the sweep keeps polling it
-      // and spending the connection's budget on data nobody can read.
-      await pruneOrphanStreams(db, orgId);
     } catch {
       // The Test path (primeStream) and the sweep self-heal missing streams.
     }
@@ -230,6 +226,21 @@ export async function publishFlowAction(
     await inngest.send({ name: "flow/materialize.requested", data: { orgId, flowId: id } });
   } catch {
     // Inngest not configured — the inline materialize above already ran.
+  }
+
+  // Stop paying for streams the edits since the last publish orphaned: a Get
+  // data step that changed its resource leaves the old stream behind, and the
+  // sweep keeps polling it against the connection's budget for data nobody can
+  // read.
+  //
+  // Here rather than on save, deliberately. The draft autosaves on a 900ms
+  // debounce after EVERY canvas change, and this reads every flow's graph in the
+  // org — putting it there made dragging a node pay for the whole workspace.
+  // Publish is rare, deliberate, and the moment the resource set settles.
+  try {
+    await pruneOrphanStreams(getDb(), orgId);
+  } catch {
+    // Never fail a publish over housekeeping; the next publish retries it.
   }
 
   return mat.ok

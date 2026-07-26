@@ -22,10 +22,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { connections, events, sourceStreams } from "@/db/schema";
-import { pruneOrphanStreams } from "@/lib/sync/streams";
-import { streamRefsOfGraph } from "@/lib/sync/streams";
-import { flows, flowVersions } from "@/db/schema";
-import { parseGraph } from "@/lib/flow/types";
+import { pruneOrphanStreams, referencedStreamKeys } from "@/lib/sync/streams";
 
 function arg(name: string): string | undefined {
   return process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
@@ -42,16 +39,9 @@ async function main() {
 
   const conns = await db.select({ id: connections.id, source: connections.source }).from(connections).where(eq(connections.orgId, orgId));
   const sourceOf = (id: string) => conns.find((c) => c.id === id)?.source;
-  const referenced = new Set<string>();
-  const drafts = await db.select({ draftGraph: flows.draftGraph }).from(flows).where(eq(flows.orgId, orgId));
-  const versions = await db.select({ graph: flowVersions.graph }).from(flowVersions).where(eq(flowVersions.orgId, orgId));
-  for (const raw of [...drafts.map((d) => d.draftGraph), ...versions.map((v) => v.graph)]) {
-    try {
-      for (const ref of streamRefsOfGraph(parseGraph(raw), sourceOf)) referenced.add(`${ref.connectionId}:${ref.configHash}`);
-    } catch {
-      // An unparseable graph is not evidence that anything is unused.
-    }
-  }
+  // The same reachability the prune itself uses, so the report can never
+  // disagree with what --apply would do.
+  const referenced = await referencedStreamKeys(db, orgId, sourceOf);
 
   const all = await db
     .select({
