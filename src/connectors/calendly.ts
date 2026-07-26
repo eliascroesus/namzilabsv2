@@ -16,17 +16,23 @@ const API = "https://api.calendly.com";
 /**
  * The rolling window every Calendly stream reads, by MEETING time.
  *
- * Fixed rather than configurable: a per-flow "days of history" box asked the
- * user to tune something they have no way to reason about, and every honest
- * answer to "how far back should this go" is "far enough". A year covers any
- * quarter-over-quarter question, and the forward half is generous because
- * upcoming meetings are most of what a calendar is asked about and cost nothing
- * extra — they arrive on the same pages.
+ * The past half is deliberately short. It is the ONLY real lever on how much we
+ * pull: `/scheduled_events` has no event-type filter, so the number of pages is
+ * decided by scope × window and nothing else. Thirty days instead of a year is a
+ * twelvefold cut in pages walked every sweep, and history accumulates forward
+ * from here anyway — an incremental source never retires what it already stored,
+ * so shortening the window costs nothing that is already in the table.
+ *
+ * The forward half stays generous: upcoming meetings are most of what a calendar
+ * is asked about, and they arrive on the same pages.
+ *
+ * Reaching further BACK than this is a one-time historical import, not a wider
+ * sweep — see PRE_LAUNCH_CHECKLIST.md item 9a (E.8 backfill lane).
  *
  * The window is captured in the cursor when a scan starts, so pagination stays
  * stable while it drains; a later sweep opens a fresh window around then-now.
  */
-const PAST_DAYS = 365;
+const PAST_DAYS = 30;
 const FUTURE_DAYS = 365;
 
 /** invitee.created -> booked, invitee.canceled -> canceled, etc. */
@@ -110,69 +116,35 @@ export const calendlyConnector: Connector = {
     const target = await resolveTarget(token, args.connectionId, args.config);
     const params = new URLSearchParams({ ...target, count: String(Math.min(n, 100)), sort: "start_time:desc" });
     const data = await fetchJson<CalendlyList>(`${API}/scheduled_events?${params.toString()}`, { headers: authHeader(token) });
-    const wanted = str(args.config?.["eventTypeUri"]);
+    // Same rule as `poll`: no filtering here either. This used to read a config
+    // key the poll had stopped using (`eventTypeUri`) and match a field the poll
+    // had stopped matching (`event_type`), so the preview and the sync could
+    // disagree about the same config.
     const tag = streamTag(args);
-    return data.collection
-      .filter((ev) => !wanted || str(ev["event_type"]) === wanted)
-      .map((ev) => bookedEvent(args.connectionId, tag, ev))
-      .slice(0, n);
+    return data.collection.map((ev) => bookedEvent(args.connectionId, tag, ev)).slice(0, n);
   },
 
   /**
-   * Live options for the Get data step's dynamic fields.
+   * `groupUri` — the token's Calendly groups (shown when scope = a group).
+   * Groups are a paid-tier feature, so an empty list is a legitimate answer for
+   * a plan that has none, not a failure.
    *
-   * - `groupUri` — the token's Calendly groups (shown when scope = a group).
-   *   Groups are a paid-tier feature, so an empty list here is a legitimate
-   *   answer for a plan that has none, not a failure.
-   * - `eventTypeUri` — the account's meeting types ("30 Minute Meeting", …).
-   *   Deliberately NOT called "event type" in the UI: that name already means
-   *   the canonical booked/canceled/no_show in this product.
+   * There is no meeting-type listing any more. It backed a setting that could
+   * not change the request, and it could not even be presented honestly:
+   * Calendly gives every host their own copy of a shared event type, so an
+   * organization running one programme across three people produced the same
+   * label three times, each selecting a different person's meetings.
    */
   async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
+    if (key !== "groupUri") return [];
     const token = token_(args.credentials);
-
-    if (key === "groupUri") {
-      const { organization } = await identity(token, args.connectionId);
-      const params = new URLSearchParams({ organization, count: "100" });
-      const data = await fetchJson<{ collection: Array<{ uri: string; name?: string }> }>(
-        `${API}/groups?${params.toString()}`,
-        { headers: authHeader(token) },
-      );
-      return (data.collection ?? []).map((g) => ({ value: g.uri, label: g.name ?? g.uri }));
-    }
-
-    if (key === "meetingType") {
-      const me = await identity(token, args.connectionId);
-      // Scope the listing the same way the poll will be scoped, so the user is
-      // never offered a meeting type their chosen scope cannot return.
-      const { scope } = scopeOf(args.config);
-      const params = new URLSearchParams(
-        scope === "user" ? { user: me.uri, count: "100" } : { organization: me.organization, count: "100" },
-      );
-      const data = await fetchJson<{ collection: Array<{ uri: string; name?: string }> }>(
-        `${API}/event_types?${params.toString()}`,
-        { headers: authHeader(token) },
-      );
-      // DEDUPED BY NAME, and the name is the value.
-      //
-      // Calendly gives every host their own copy of a shared event type, so an
-      // organization running one programme across three people has three
-      // `event_types` rows with identical names and different URIs. Listing them
-      // raw put the same label in the dropdown two or three times; picking one
-      // silently narrowed to a single host, and the poll then matched almost
-      // nothing — the whole-organization scope was returning zero for exactly
-      // this reason while "just me" (one host, one copy) worked.
-      //
-      // A scheduled event carries its type's NAME in `name`, so matching on that
-      // catches every host's copy at once, which is what picking "NAMZI Invite
-      // Only Creator Program" plainly means. The cost is that renaming the type
-      // in Calendly orphans the filter — visible, and far better than a filter
-      // that is wrong from the first day on any multi-host account.
-      const names = new Set((data.collection ?? []).map((t) => t.name).filter((n): n is string => Boolean(n)));
-      return [...names].sort().map((n) => ({ value: n, label: n }));
-    }
-
-    return [];
+    const { organization } = await identity(token, args.connectionId);
+    const params = new URLSearchParams({ organization, count: "100" });
+    const data = await fetchJson<{ collection: Array<{ uri: string; name?: string }> }>(
+      `${API}/groups?${params.toString()}`,
+      { headers: authHeader(token) },
+    );
+    return (data.collection ?? []).map((g) => ({ value: g.uri, label: g.name ?? g.uri }));
   },
 };
 
@@ -216,25 +188,21 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
     data = await fetchJson<CalendlyList>(url(null), { headers: authHeader(token) });
   }
 
-  const wanted = str(args.config?.["meetingType"]);
+  // NOTHING IS FILTERED HERE, and that is the design.
+  //
+  // A meeting-type filter used to run at this point. It could not reduce what we
+  // pull — `/scheduled_events` has no event_type parameter, so the pages fetched
+  // are identical either way — it only reduced what we kept. That makes it
+  // strictly worse than the same filter in a flow: same API cost, less data, and
+  // one stream per meeting type instead of one stream serving every flow.
+  //
+  // Everything a flow might narrow by is flattened into properties below
+  // (`meeting_type`, `host_email`, …) so a Filter step can do it, once, over
+  // data one sync already paid for.
   const tag = streamTag(args);
   const records: CanonicalEvent[] = [];
-  let dropped = 0;
   for (const ev of data.collection) {
     if (!str(ev["uri"])) continue;
-    // Calendly's /scheduled_events has no event_type query parameter — the type
-    // is a field on each returned event, so this narrows what we STORE and what
-    // flows compute over, not how many calls we make. Scope and window are what
-    // reduce calls. Stated here because the difference is invisible in the UI.
-    //
-    // Matched on the type's NAME (`ev.name`), not its URI: Calendly gives each
-    // host their own copy of a shared event type, so URI matching silently
-    // narrowed an organization-wide read to one person's meetings. See
-    // listOptions("meetingType").
-    if (wanted && str(ev["name"]) !== wanted) {
-      dropped += 1;
-      continue;
-    }
     records.push(bookedEvent(args.connectionId, tag, ev));
     if (str(ev["status"]) === "canceled") records.push(canceledEvent(args.connectionId, tag, ev));
   }
@@ -242,11 +210,12 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
   // Settle the unverified parts of this contract from production logs rather
   // than another guess (the same approach Instantly's probe takes): the docs
   // host is unreachable from CI, so what the response ACTUALLY contains is the
-  // only evidence available.
+  // only evidence available. `returned=0` on an organization scope is the
+  // signature of a token without org admin rights.
   if (!cur.pageToken) {
     console.log(
       `[calendly-probe] returned=${data.collection.length} paginated=${Boolean(data.pagination?.next_page_token)} ` +
-        `scope=${Object.keys(target).join("+")} status=${status ?? "all"} eventTypeFilter=${wanted ? "on" : "off"} dropped=${dropped}`,
+        `scope=${Object.keys(target).join("+")} status=${status ?? "all"}`,
     );
   }
 
@@ -289,7 +258,7 @@ function bookedEvent(connectionId: string, tag: string, ev: Record<string, unkno
     eventType: "booked",
     subject: str(ev["name"]) ?? null,
     occurredAt: parseDate(str(ev["created_at"])) ?? start ?? new Date(),
-    properties: ev,
+    properties: { ...ev, ...meetingFacts(ev) },
   };
 }
 
@@ -300,7 +269,35 @@ function canceledEvent(connectionId: string, tag: string, ev: Record<string, unk
     eventType: "canceled",
     subject: str(ev["name"]) ?? null,
     occurredAt: parseDate(str(ev["updated_at"])) ?? start ?? new Date(),
-    properties: ev,
+    properties: { ...ev, ...meetingFacts(ev) },
+  };
+}
+
+/**
+ * The things a flow narrows a Calendly dataset by, as flat fields.
+ *
+ * Narrowing moved out of ingest — it saved no API calls there, and cost a stream
+ * per meeting type — so a Filter step is now the way to do it. That only works
+ * if the axes are pickable, and two of them were not:
+ *
+ * - **Meeting type.** The raw payload carries it as `name`, which a picker shows
+ *   as the ambiguous "name", and again as the canonical "Subject / person".
+ *   Neither reads as the thing it is.
+ * - **Host.** Buried in `event_memberships`, an array — so the picker could only
+ *   offer it positionally (Item 1, Item 2), which is meaningless. This is the
+ *   same shape as Google Calendar's attendee list, and gets the same treatment:
+ *   flatten what the question is actually about.
+ *
+ * Host matters now in a way it did not before: whole-organization is the
+ * recommended scope, and without this you cannot tell whose meeting a row is.
+ */
+function meetingFacts(ev: Record<string, unknown>): Record<string, unknown> {
+  const memberships = Array.isArray(ev["event_memberships"]) ? (ev["event_memberships"] as Array<Record<string, unknown>>) : [];
+  const host = memberships[0] ?? {};
+  return {
+    meeting_type: str(ev["name"]) ?? null,
+    host_email: str(host["user_email"]) ?? null,
+    host_name: str(host["user_name"]) ?? null,
   };
 }
 

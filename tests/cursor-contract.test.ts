@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
 import { connections, sourceStreams } from "@/db/schema";
-import { syncStream } from "@/lib/sync/streams";
+import { primeStream, syncStream } from "@/lib/sync/streams";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { encrypt } from "@/lib/crypto";
 import type { DB } from "@/db/types";
@@ -146,21 +146,15 @@ describe("nextCursor: null means start over, not carry on", () => {
 });
 
 /**
- * A page that yields no records is not the end of the data.
+ * A page that yields no records is not the end of the data, and a scan cut short
+ * by its page budget must say so.
  *
- * Calendly's API has no `event_type` parameter, so narrowing to one meeting type
- * has to happen after the fetch — which means a page can legitimately come back
- * full and leave nothing. The walk used to stop there, and the wider the scope
- * the likelier it was: "just me" fits on page one and worked, the whole
- * organization reported "0 loaded" for an account with hundreds of matching
- * meetings.
- *
- * Driven through Calendly rather than Calendar because Calendar drains its
- * pages inside a single poll; Calendly returns one page per call, which is what
- * puts the decision in the runner's hands.
+ * Driven through Calendly rather than Calendar because Calendar drains its pages
+ * inside a single poll; Calendly returns one page per call, which is what puts
+ * the decision in the runner's hands.
  */
 describe("an empty page does not end the scan", () => {
-  const CAL_CFG = { scope: "user", meetingType: "Wanted" };
+  const CAL_CFG = { scope: "user" };
 
   const ev = (uri: string, name: string) => ({
     uri,
@@ -176,7 +170,57 @@ describe("an empty page does not end the scan", () => {
     await db.insert(sourceStreams).values({ orgId: ORG, connectionId: connId, configHash, config: CAL_CFG, cursor: null });
   });
 
-  it("walks past pages the meeting-type filter empties, and finds the data behind them", async () => {
+  /**
+   * "0 loaded" and "0 loaded so far" are different claims. When the walk stops
+   * because it ran out of page budget rather than data, the count is a floor —
+   * and a Test that renders the two identically is the silent zero again.
+   */
+  it("reports an incomplete scan, so a partial count is never shown as the answer", async () => {
+    let endless = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) {
+          return respond(200, { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+        }
+        // Always another page, and a DIFFERENT token each time so the cursor
+        // genuinely advances — the source never runs out, so only the page
+        // budget can stop the walk.
+        endless += 1;
+        return respond(200, { collection: [ev(`A${endless}`, "Wanted")], pagination: { next_page_token: `P${endless}` } });
+      }),
+    );
+
+    const [conn] = await db.select().from(connections).where(eq(connections.id, connId)).limit(1);
+    const [stream] = await db.select().from(sourceStreams).where(eq(sourceStreams.connectionId, connId)).limit(1);
+    const partial = await syncStream(db, conn, stream, 2);
+    expect(partial.incomplete).toBe(true);
+
+    // And the Test path turns that into something the user can read.
+    const primed = await primeStream(db, ORG, connId, CAL_CFG, { force: true, maxPages: 2 });
+    expect(primed.ok).toBe(true);
+    if (primed.ok) expect(primed.note).toContain("Still importing");
+  });
+
+  it("does not cry partial when the scan actually finished", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) {
+          return respond(200, { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+        }
+        return respond(200, { collection: [ev("A", "Wanted")], pagination: { next_page_token: null } });
+      }),
+    );
+    const [conn] = await db.select().from(connections).where(eq(connections.id, connId)).limit(1);
+    const [stream] = await db.select().from(sourceStreams).where(eq(sourceStreams.connectionId, connId)).limit(1);
+    const done = await syncStream(db, conn, stream, 5);
+    expect(done.incomplete).toBeFalsy();
+  });
+
+  it("walks past pages that come back empty, and finds the data behind them", async () => {
     let pages = 0;
     vi.stubGlobal(
       "fetch",
@@ -186,9 +230,10 @@ describe("an empty page does not end the scan", () => {
           return respond(200, { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
         }
         pages += 1;
-        // Pages 1 and 2 are other hosts' meeting types — every row filtered out.
-        if (pages === 1) return respond(200, { collection: [ev("A", "Other")], pagination: { next_page_token: "P2" } });
-        if (pages === 2) return respond(200, { collection: [ev("B", "Other")], pagination: { next_page_token: "P3" } });
+        // A provider may legitimately return an empty page mid-scan. The walk
+        // used to stop at the first one and report "0 loaded".
+        if (pages === 1) return respond(200, { collection: [], pagination: { next_page_token: "P2" } });
+        if (pages === 2) return respond(200, { collection: [], pagination: { next_page_token: "P3" } });
         return respond(200, { collection: [ev("C", "Wanted")], pagination: { next_page_token: null } });
       }),
     );
@@ -198,7 +243,7 @@ describe("an empty page does not end the scan", () => {
     const res = await syncStream(db, conn, stream, 3);
 
     expect(pages).toBe(3); // it kept going past both empty pages
-    expect(res.inserted).toBe(1); // and found the one matching meeting
+    expect(res.inserted).toBe(1); // and found the meeting behind them
   });
 });
 

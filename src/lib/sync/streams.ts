@@ -61,7 +61,22 @@ export async function ensureStreamsForGraph(db: DB, orgId: string, graph: FlowGr
   return { created };
 }
 
-export type StreamSyncResult = { inserted: number; updated: number; deduped: number; softDeleted: number };
+export type StreamSyncResult = {
+  inserted: number;
+  updated: number;
+  deduped: number;
+  softDeleted: number;
+  /**
+   * The walk stopped because it ran out of its page budget, not because the
+   * source ran out of data — so what was written is a PREFIX of the window, and
+   * a count taken now is smaller than the truth.
+   *
+   * Worth carrying all the way to the user. "0 loaded" and "0 loaded so far"
+   * are different claims, and a Test that cannot tell them apart is the failure
+   * mode this codebase keeps having to unpick.
+   */
+  incomplete?: boolean;
+};
 
 type StreamRow = typeof sourceStreams.$inferSelect;
 type ConnRow = typeof connections.$inferSelect;
@@ -126,6 +141,7 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
   let updated = 0;
   let deduped = 0;
   let softDeleted = 0;
+  let incomplete = false;
   try {
     if (isMirrorSource(conn.source)) {
       // Full re-read, ignoring any stored cursor: the read IS the truth.
@@ -206,6 +222,9 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
         // whole organization did not. An advancing cursor is the connector
         // saying there IS more; `maxPages` is what bounds the walk.
         if (!advanced || nextCursor == null) break;
+        // Still more to fetch, and no budget left to fetch it: what we wrote is
+        // a prefix, and the caller must be able to say so.
+        if (page === maxPages - 1) incomplete = true;
       }
     }
     await db
@@ -220,7 +239,7 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
       .where(eq(sourceStreams.id, stream.id));
     throw e;
   }
-  return { inserted, updated, deduped, softDeleted };
+  return { inserted, updated, deduped, softDeleted, incomplete };
 }
 
 /** All streams of one connection that should be polled. */
@@ -336,7 +355,17 @@ export async function primeStream(
   }
 
   try {
-    await syncStream(db, conn, stream, maxPages);
+    const res = await syncStream(db, conn, stream, maxPages);
+    if (res.incomplete) {
+      // A count taken now is a floor, not the answer. Saying so is the whole
+      // point: "0 loaded" and "0 loaded so far" are different claims, and a
+      // Test that renders them identically is the silent zero all over again.
+      return {
+        ok: true,
+        refreshed: true,
+        note: "Still importing this source — the numbers below cover what has arrived so far. The background sync is continuing; re-test in a few minutes for the full window.",
+      };
+    }
     return { ok: true, refreshed: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

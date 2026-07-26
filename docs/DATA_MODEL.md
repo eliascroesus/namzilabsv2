@@ -300,51 +300,102 @@ Both are one-line `return null` sites, which is why the ambiguity stayed
 invisible. `tests/cursor-contract.test.ts` drives the real connector through the
 real runner for each case.
 
-## Calendly: what a flow narrows, and what that actually saves
+## A flowField earns its place by changing the REQUEST
 
-Calendly is stream-scoped like Instantly — each distinct config is its own
-stream with its own cursor. The Get data step decides before anything is pulled:
+Connectors do not filter at ingest. A per-flow setting belongs in the Get data
+step only if the provider can act on it; anything else belongs in a Filter step.
 
-| Field | Effect |
-|---|---|
-| **Fetch meetings for** (me / group / whole org) | fewer API calls |
-| **Meeting type** | fewer rows stored and computed — **not** fewer calls |
-| **Meetings to include** (booked / canceled / both) | fewer API calls |
+The reasoning is arithmetic. If a setting cannot change the request, filtering at
+ingest costs exactly as many API calls as not filtering, stores less data, and —
+because the setting is part of `streamConfigHash` — splits one account into a
+stream per value, each running its own full scan of the same pages. Same cost,
+less data, more scans. A Filter step gets the same result over data one sync
+already paid for, and one sync then serves every flow.
 
-The window is fixed at **365 days back and 365 days forward**, by meeting time.
-It is not a per-flow setting: "how far back should this go" has no answer a user
-can reason about, and a year covers any quarter-over-quarter question. The window
-is captured in the cursor when a scan starts so pagination stays stable while it
-drains; a later sweep opens a fresh window around then-now.
+Where that leaves a narrowing axis the user still wants: the connector flattens
+it onto every record, so the Filter picker can offer it cleanly. Calendly grew
+`meeting_type`, `host_email` and `host_name` for exactly this reason — the first
+was only reachable as the ambiguous `name` (and again as "Subject / person"), and
+the other two were buried in `event_memberships`, an array, which a picker can
+only offer positionally.
 
-The distinction in row 2 is worth stating plainly because the UI cannot show it:
-`/scheduled_events` has **no `event_type` query parameter**. The type is a field
-on each returned event, so the connector filters after the fetch. Narrowing to
-one meeting type makes a flow's dataset smaller and its metrics sharper; it does
-not spend less of the 60/min budget. Scope is what does that.
+## Calendly: what reduces API calls, and what only reduces storage
 
-### Two ways that client-side filter reported zero
+Calendly is stream-scoped like Instantly — each distinct config is its own stream
+with its own cursor.
 
-Both were found on a real account where "Just me" worked and "Whole organization"
-returned nothing, and both are now regression-tested.
+`/scheduled_events` accepts `organization` | `user` | `group`, `min_start_time`,
+`max_start_time`, `status`, `invitee_email`, `sort`, `count`, `page_token`. That
+is the whole list. **There is no `event_type` parameter**, which is why meeting
+type is not a flowField.
+
+| Lever | Where | Effect |
+|---|---|---|
+| **Fetch meetings for** (me / group / whole org) | Get data step | fewer API calls |
+| **Meetings to include** (booked / canceled / both) | Get data step | fewer API calls |
+| History window | fixed in the connector | fewer API calls |
+| Meeting type, host | Filter step, on `meeting_type` / `host_email` | less computed — API cost unchanged |
+
+**Whole organization needs an admin or owner token.** A personal access token
+from a non-admin member carries user scope only, and an organization-scoped read
+from one returns an empty collection — indistinguishable from an account with no
+meetings unless you read the `[calendly-probe]` log line, which records
+`returned=` straight from the response.
+
+### The window: 30 days back, 365 forward
+
+The past half is short because it is the only real lever on volume: with no
+event-type filter, pages walked is decided by scope × window and nothing else.
+Thirty days rather than a year is a twelvefold cut per sweep.
+
+Narrowing it is safe by construction. Calendly never declares a `mirrorScope`, so
+`syncStream` never retires its rows — shortening the window changes what is
+FETCHED, never what is already stored.
+
+**History therefore accumulates forward from the connect date.** The first sweep
+imports the preceding 30 days and every sweep after that extends the record
+forward; it never reaches further back on its own. Wanting last year's meetings
+is a **one-time historical import**, not a wider sweep — see
+PRE_LAUNCH_CHECKLIST.md item 9a (the E.8 backfill lane), which is the gate that
+has to land before any deep backfill runs.
+
+A window that has been narrowed leaves the older import stranded behind the new
+floor, with a gap between. **Full re-sync** on the connection page clears it:
+it bumps the generation, re-polls every stream, then soft-deletes rows carrying
+those stream hashes at an older generation that the run did not see again —
+which is exactly the rows outside the new window. The retire is scoped to the
+hashes actually polled, so webhook rows (null hash) and other streams cannot be
+touched. `scripts/stream-inventory.sql` shows the before and after.
+
+### How a client-side filter used to report zero
+
+Kept as the record of why the rule above exists. Both were found on a real
+account where "Just me" worked and "Whole organization" returned nothing.
 
 **A page that filters to nothing is not the end of the data.** `syncStream`'s
-walk stopped on `records.length === 0`, which is a sound signal when a connector
-returns what the provider returned — and wrong the moment it filters first. Page
-one of an org-wide read is other hosts' meetings, so the walk ended there. The
-narrower the scope the less it mattered: one person's meetings fit on page one.
-An advancing cursor is the connector saying there IS more; `maxPages` bounds the
-walk, not an empty page.
+walk stopped on `records.length === 0` — sound when a connector returns what the
+provider returned, wrong the moment it filters first. Page one of an org-wide
+read is other hosts' meetings, so the walk ended there. One person's meetings fit
+on page one, which is why the narrow scope looked fine. Fixed: an advancing
+cursor means there IS more, and `maxPages` bounds the walk.
 
 **Calendly gives every host their own copy of a shared event type.** An
 organization running one programme across three people has three `event_types`
-rows with the same name and different URIs — visible in any client's picker as
-the same label two or three times. Matching a scheduled event on the event-type
-URI therefore narrowed an org-wide read to whichever host's copy happened to be
-picked. The picker now dedupes by name and the filter matches the event's `name`,
-so picking a programme means the programme. The cost is that renaming the type in
-Calendly orphans the filter — visible, and far better than a filter that is wrong
-from day one on every multi-host account.
+rows with the same name and different URIs — the same label two or three times in
+any client's picker, Zapier's included. Matching on the URI narrowed an org-wide
+read to whichever copy was picked. No longer reachable: the setting is gone.
+
+## Never a bare zero while a scan is incomplete
+
+`syncStream` reports `incomplete` when its walk stopped because it ran out of
+page budget rather than because the source ran out of data. `primeStream` turns
+that into a note and the editor shows it above the result.
+
+"0 loaded" and "0 loaded so far" are different claims. A count taken mid-scan is
+a floor, not an answer, and a Test that renders the two identically is the same
+silent zero this codebase keeps having to unpick — it has now appeared in the
+migration tracker, the flow Test's skipped refresh, both layers of the Sendblue
+poll, and Calendly's page walk.
 
 "Meeting type" is deliberately not called "event type": that name already means
 the canonical `booked` / `canceled` / `no_show` in this product, and the panel's

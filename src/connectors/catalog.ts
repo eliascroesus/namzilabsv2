@@ -111,15 +111,25 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "event_types.list": { requestsPerMinute: 60 },
       "groups.list": { requestsPerMinute: 60 },
     },
-    // What to import is chosen per flow, in the Get data step — not here. Scope
-    // and window are what actually reduce provider calls; meeting type narrows
-    // what gets stored (Calendly cannot filter by it server-side).
+    /**
+     * ONLY the settings Calendly can act on server-side live here.
+     *
+     * `/scheduled_events` accepts organization | user | group, a start-time
+     * window and a status — and nothing else. There is no event-type parameter,
+     * so a "meeting type" setting could never reduce what we pull; it only
+     * reduced what we kept, while splitting one account into a stream per type.
+     * That belongs in a Filter step, over data one sync already paid for, and
+     * the connector flattens `meeting_type` / `host_email` / `host_name` onto
+     * every record so it is a clean pick there.
+     *
+     * The rule this leaves: a flowField earns its place by changing the REQUEST.
+     */
     flowFields: [
       {
         key: "scope",
         label: "Fetch meetings for",
         required: true,
-        hint: "Whose Calendly meetings this flow pulls. The narrower the scope, the fewer calls.",
+        hint: "Fewer API calls: the narrower the scope, the less Calendly is asked for. Whole organization needs an admin or owner token.",
         options: [
           { value: "user", label: "Just me" },
           { value: "organization", label: "Whole organization" },
@@ -136,14 +146,6 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
         hint: "Groups are a paid Calendly feature — an empty list means this account has none.",
       },
       {
-        key: "meetingType",
-        label: "Meeting type",
-        dynamic: true,
-        dependsOn: ["scope"],
-        placeholder: "All meeting types",
-        hint: "Matches every host running that meeting type — Calendly gives each person their own copy.",
-      },
-      {
         key: "status",
         label: "Meetings to include",
         options: [
@@ -151,7 +153,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
           { value: "active", label: "Booked only" },
           { value: "canceled", label: "Canceled only" },
         ],
-        hint: "Booked only stops recording cancellations — a meeting that gets canceled will still read as booked.",
+        hint: "Fewer API calls. Booked only stops recording cancellations — a meeting that gets canceled will still read as booked.",
       },
     ],
   },
