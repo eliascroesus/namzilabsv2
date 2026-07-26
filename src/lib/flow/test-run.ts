@@ -1,9 +1,10 @@
 import { and, eq } from "drizzle-orm";
-import { testRuns } from "@/db/schema";
+import { connections, testRuns } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { runFlow, type NodeExec } from "./engine";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
+import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { dedupeWarningFor } from "@/lib/schema-registry/registry";
 import { primeStream } from "@/lib/sync/streams";
 
@@ -131,10 +132,47 @@ async function dedupeWarningForNode(db: DB, orgId: string, g: FlowGraph, nodeId:
   }
 }
 
+/**
+ * A Get-data step whose source is gone must SAY so.
+ *
+ * Removing an integration retires its events, so a flow still pointing at it
+ * now computes over nothing and renders a confident zero. Empty is a legitimate
+ * answer to a real question; it must never be how "this step is broken" looks.
+ * Same for a stream-scoped source with no resource chosen — after Instantly
+ * became campaign-scoped, every pre-existing step is in exactly that state.
+ */
+async function missingSourcePrompt(db: DB, orgId: string, g: FlowGraph, nodeId: string): Promise<string | null> {
+  const node = g.nodes.find((n) => n.id === nodeId);
+  if (!node || node.type !== "app") return null;
+  const cfg = (node.data.config ?? {}) as { connectionId?: unknown; sourceConfig?: unknown };
+  const connectionId = typeof cfg.connectionId === "string" ? cfg.connectionId : null;
+  if (!connectionId) return "Choose a connection for this step — it isn't reading from anything yet.";
+
+  const [conn] = await db
+    .select({ id: connections.id, name: connections.name, source: connections.source })
+    .from(connections)
+    .where(and(eq(connections.id, connectionId), eq(connections.orgId, orgId)))
+    .limit(1);
+  if (!conn) {
+    return "This step's connection was removed. Pick another connection, or reconnect that integration and choose it here.";
+  }
+
+  const entry = catalogEntry(conn.source);
+  if (isStreamScoped(conn.source) && !hasStreamConfig((cfg.sourceConfig ?? {}) as Record<string, unknown>)) {
+    const what = entry?.flowFields?.map((f) => f.label.toLowerCase()).join(" and ") ?? "a resource";
+    return `Choose ${what} for this step — ${entry?.name ?? conn.source} needs to know which data to pull before it can return anything.`;
+  }
+  return null;
+}
+
 /** Prime (force-fresh) + run the engine up to the node. Never throws. */
 export async function executeNodeTest(db: DB, orgId: string, graph: unknown, nodeId: string): Promise<NodeTestDTO> {
   try {
     const g = parseGraph(graph);
+    // Before anything else: if this step has no source to read, say which
+    // choice is missing rather than returning a confident zero.
+    const missing = await missingSourcePrompt(db, orgId, g, nodeId);
+    if (missing) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: missing };
     const primed = await primeStreamsForTest(db, orgId, g, nodeId);
     if (primed.error) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: primed.error };
     const res = await runFlow({ db, orgId }, g, { untilNodeId: nodeId });

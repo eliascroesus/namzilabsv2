@@ -105,6 +105,29 @@ describe("test-run lifecycle (the lane's unit of work)", () => {
     expect(state?.result?.status).toBe("error");
   });
 
+  it("a step whose connection was removed says so instead of returning zero", async () => {
+    const runId = await createTestRun(db, ORG);
+    const orphaned = {
+      nodes: [{ id: "get", type: "app", data: { config: { connectionId: "00000000-0000-0000-0000-000000000000", source: "gsheets", sourceConfig: CFG } } }],
+      edges: [],
+    };
+    const dto = await executeAndSettleTestRun(db, ORG, runId, orphaned, "get");
+    expect(dto.status).toBe("error");
+    expect(dto.error).toContain("connection was removed");
+    expect(dto.recordsOut).toBe(0); // zero, but never presented as an answer
+  });
+
+  it("a stream-scoped step with no resource chosen prompts for the choice", async () => {
+    const runId = await createTestRun(db, ORG);
+    const unconfigured = {
+      nodes: [{ id: "get", type: "app", data: { config: { connectionId: connId, source: "gsheets", sourceConfig: {} } } }],
+      edges: [],
+    };
+    const dto = await executeAndSettleTestRun(db, ORG, runId, unconfigured, "get");
+    expect(dto.status).toBe("error");
+    expect(dto.error).toMatch(/Choose .*spreadsheet/i);
+  });
+
   it("polling is org-scoped: another org cannot read the run", async () => {
     const runId = await createTestRun(db, ORG);
     expect(await getTestRun(db, "org_other", runId)).toBeNull();

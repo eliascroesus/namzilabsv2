@@ -507,6 +507,20 @@ that may be long gone, still counted by reads that aren't stream-filtered
 (a Get-data step with no resource chosen, classic metrics). This retires
 exactly those.
 
+**⚠ Instantly's existing rows are now in scope for this step.** Instantly became
+stream-scoped when it gained `flowFields` (campaign + stream type). That flips
+`isStreamScoped("instantly")` to true, so its pre-existing events — written by
+the old workspace-wide poll, carrying `sync_generation >= 1` and no
+`stream_hash` — match this reconciliation's target shape exactly and WILL be
+retired by the apply run.
+
+That is the correct outcome: those rows are a partial, unfinishable dump from a
+sync that could never complete, and nothing can ever refresh or retire them
+otherwise. It is called out here so it is a decision rather than a surprise.
+Expect the inspect run to report a non-zero count against the Instantly
+connection. Rows are soft-deleted, so a mistaken run is reversible by clearing
+`deleted_at`.
+
 **Ordering (load-bearing):** run this AFTER the production deploy and BEFORE
 any fleet backfill or `reprocessConnection` replay (the A.1/A.2 registry
 backfills and the engine track's replays). Those operations would otherwise
@@ -619,6 +633,53 @@ change to undo.
 (`flow_results.provenance`) — the exact SQL, its bound parameters, which
 filters were folded, rows loaded, truncation state, and the as-of timestamp.
 Query it to see what produced any number.
+
+---
+
+## 9. DEFERRED — with the triggers that un-defer them
+
+These are not "someday". Each has a condition that makes it required, written
+down so it cannot be quietly forgotten.
+
+### 9a. E.8 backfill lane — REQUIRED BEFORE either of these happens
+
+**Trigger (whichever comes first):**
+1. **Any Records-class stream ships to a real account** — Instantly's
+   `raw_emails` stream type, or per-object scoping for the Close event log.
+2. **Any account with large history onboards** — more than roughly a month of
+   data behind the first sweep of a record-mirroring source.
+
+**Why it is not needed yet:** every stream that ships today is either bounded
+(Sheets = one tab; Calendly, Calendar, Sendblue, Instantly raw-emails = a dated
+window) or tiny (Instantly analytics = one row per day). Nothing currently has
+a large first import to checkpoint.
+
+**Why the trigger is real:** the migration runner's failure mode applies to
+imports too — work committed with no bookkeeping, and no way to resume except
+starting over. A Records-class stream over real history is exactly where that
+bites, and it bites a customer rather than an operator.
+
+**What it is:** a checkpointed, resumable, low-priority Inngest lane with its
+own budget share (≤50%), `backfill_status`/`backfill_progress` on
+`source_streams`, and a Test that reports "importing, N% done" through the
+existing F.8 `sourceNote` seam rather than erroring.
+
+### 9b. Compiled-engine flag — post-launch, per flow, default OFF
+
+**Trigger:** deliberate opt-in per flow, after checklist item 5 AND a
+`reprocessConnection` replay for that org.
+
+**Status:** built and parity-proven; `EngineCtx.compile` has no caller, so the
+path is unreachable in production. That is the intended default. Wiring it
+means adding per-flow storage for the flag and a UI to set it — post-launch
+work, gated on the parity suite staying green.
+
+### 9c. Close per-object scoping — deferred, no trigger
+
+Close polls its whole workspace event log with only a date bound and no
+server-side `object_type` filter, so it fetches every type and maps five. It
+works today and is cursor-friendly; this is optimization, not correctness. If
+it is ever scoped per flow, 9a's trigger 1 applies.
 
 ---
 
