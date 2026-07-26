@@ -63,11 +63,30 @@ export type FetchJsonOptions = RequestInit & {
 
 const RETRYABLE_STATUS = new Set([500, 502, 503, 504]);
 
+/**
+ * The ceiling ONE fetchJson call may consume, including retries and backoff.
+ *
+ * This exists because the two budgets were inverted: the defaults were 30s
+ * timeout x 3 attempts = 90s for a single provider call, inside a serverless
+ * function the platform kills at 10-15s. The work was budgeted in minutes and
+ * the container in seconds, so every sync-touching function died mid-flight —
+ * and because the test_runs row is stamped `running` before the work starts,
+ * that looked like a hang rather than an error.
+ *
+ * Worst case now: 2 attempts x 10s + one jittered backoff <= 10s = 30s, safely
+ * inside the 60s `maxDuration` the routes declare. A provider that is slower
+ * than this returns a typed HttpTimeoutError the breaker already understands
+ * (recordProviderError / tripBreaker), instead of taking the whole run with it.
+ *
+ * If you raise maxDuration, this may rise with it — never past it.
+ */
+export const PROVIDER_CALL_BUDGET_MS = 30_000;
+
 /** JSON fetch with timeout, jittered retries and Retry-After handling. */
 export async function fetchJson<T = unknown>(url: string, init?: FetchJsonOptions): Promise<T> {
   const {
-    timeoutMs = 30_000,
-    retries = 2,
+    timeoutMs = 10_000,
+    retries = 1,
     backoffBaseMs = 500,
     backoffCapMs = 10_000,
     sleep = defaultSleep,
@@ -96,7 +115,10 @@ export async function fetchJson<T = unknown>(url: string, init?: FetchJsonOption
       const canRetry = err.status === 429 ? true : RETRYABLE_STATUS.has(err.status) && idempotent;
       if (!canRetry || attempt >= retries) throw err;
       const backoff = fullJitter(backoffBaseMs, backoffCapMs, attempt);
-      await sleep(err.retryAfterMs != null ? Math.min(err.retryAfterMs, backoffCapMs * 6) : backoff);
+      // Honor Retry-After, but never past the per-call budget: a provider
+      // asking us to wait 60s must not take the entire function down with it.
+      // Exceeding it is the breaker's job (defer and retry later), not a sleep's.
+      await sleep(err.retryAfterMs != null ? Math.min(err.retryAfterMs, backoffCapMs) : backoff);
       lastError = err;
       continue;
     } catch (e) {

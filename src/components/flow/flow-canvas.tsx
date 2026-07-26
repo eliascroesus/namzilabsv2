@@ -7,25 +7,50 @@ import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, useNodesSt
 import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
 import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 
-/** Poll a lane Test run until it settles (bounded; ~90s of 800ms ticks). */
+/**
+ * Poll a handed-off Test run until it settles (bounded; ~90s of 800ms ticks).
+ *
+ * The three not-finished outcomes are DIFFERENT failures and say so. Previously
+ * they all produced "the sync may still be running", which was an assertion the
+ * client had no basis for: a run nobody ever picked up, and a run whose
+ * container was killed mid-flight, both looked like slowness. That copy is why
+ * a dead background worker could sit unnoticed — it reads as patience.
+ */
 async function pollTestResult(runId: string): Promise<NodeTestDTO> {
-  const timeoutError: NodeTestDTO = {
+  const fail = (error: string): NodeTestDTO => ({
     status: "error",
     recordsIn: 0,
     recordsOut: 0,
     sample: [],
     inputSample: [],
     outputSchema: [],
-    error: "The test is taking too long — the sync may still be running. Try again in a moment.",
-  };
+    error,
+  });
+  /** Past this with no state change, "still working" stops being credible. */
+  const STALL_MS = 45_000;
+  let last: { status: string; ageMs: number } | null = null;
+
   for (let tick = 0; tick < 112; tick++) {
     await new Promise((resolve) => setTimeout(resolve, 800));
     const state = await pollNodeTestAction(runId);
-    if (!state) return { ...timeoutError, error: "This test run no longer exists — try again." };
+    if (!state) return fail("This test run no longer exists — try again.");
     if (state.status === "ok" && state.result) return state.result;
-    if (state.status === "error") return { ...timeoutError, error: state.error ?? "The test run failed — try again." };
+    if (state.status === "error") return fail(state.error ?? "The test run failed — try again.");
+    last = { status: state.status, ageMs: state.ageMs };
   }
-  return timeoutError;
+
+  // Never started: the row is still queued, so nothing ever claimed it.
+  if (last?.status === "queued") {
+    return fail(
+      "This test was queued but never picked up — the background worker isn't running. Check the Inngest connection, then try again.",
+    );
+  }
+  // Started and went quiet: the run began and stopped reporting, which is what a
+  // container killed at its time limit looks like from here.
+  if (last?.status === "running" && last.ageMs > STALL_MS) {
+    return fail("The test started but stopped responding — it likely hit the time limit. Try a smaller date range, or try again.");
+  }
+  return fail("The test is still running after 90 seconds. It may finish on its own — reopen this step shortly to see the result.");
 }
 import {
   bridgeEdgeFor,

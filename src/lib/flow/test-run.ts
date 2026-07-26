@@ -190,7 +190,19 @@ export async function executeNodeTest(db: DB, orgId: string, graph: unknown, nod
   }
 }
 
-export type TestRunState = { status: "queued" | "running" | "ok" | "error"; result?: NodeTestDTO; error?: string };
+export type TestRunState = {
+  status: "queued" | "running" | "ok" | "error";
+  result?: NodeTestDTO;
+  error?: string;
+  /**
+   * Milliseconds since the row last changed state. Without this the poller can
+   * only see "not finished yet" and has to guess why — which is how a run that
+   * was never picked up, and a run whose container was killed, both came out as
+   * "the sync may still be running". They are different failures and the user
+   * needs different things from each.
+   */
+  ageMs: number;
+};
 
 /** Create the polling row for a Test run. */
 export async function createTestRun(db: DB, orgId: string): Promise<string> {
@@ -223,5 +235,6 @@ export async function getTestRun(db: DB, orgId: string, runId: string): Promise<
     status: row.status as TestRunState["status"],
     result: (row.result as unknown as NodeTestDTO) ?? undefined,
     error: row.error ?? undefined,
+    ageMs: Math.max(0, Date.now() - new Date(row.updatedAt).getTime()),
   };
 }

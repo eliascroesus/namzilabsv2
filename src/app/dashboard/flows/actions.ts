@@ -64,42 +64,68 @@ export async function deleteFlowAction(id: string): Promise<{ ok: true } | { ok:
 
 export type { NodeTestDTO } from "@/lib/flow/test-run";
 
+/**
+ * How long a Test may run in-request before it is handed to the lane. Sits
+ * comfortably inside the page segment's `maxDuration` (60s) with room for the
+ * handoff itself — the point is to return fast, not to use the whole budget.
+ */
+const INLINE_TEST_BUDGET_MS = 8_000;
+
 export type StartNodeTestResult =
   | { runId: string; result?: undefined }
   /** Inline fallback (Inngest unavailable): the run already settled. */
   | { runId: string; result: NodeTestDTO };
 
 /**
- * D.1-full: start a Test on the high-priority lane and return a run id the
- * editor polls.
+ * Start a Test. INLINE FIRST, lane as overflow.
  *
- * INLINE FALLBACK — decided policy: enabled in ALL environments, including
- * production, as documented graceful degradation. If the lane can't be
- * reached (local dev without the Inngest dev server, or an Inngest outage in
- * production), the Test executes inline in this request and returns its
- * settled result. That is safe — it runs the identical code path, including
- * the force-fresh prime and the Q6 lock-await, so it cannot corrupt data or
- * double-poll a provider — it only bypasses lane fairness and the request
- * timeout protection, which is strictly better than telling a user their Test
- * is unavailable. The production case is LOGGED so an Inngest outage surfaces
- * as a visible signal instead of silently degrading everyone's editor.
+ * This order is deliberate and was inverted before. Test is the single most
+ * important interactive path in the product, and routing it through a queue
+ * made it depend on that queue being healthy — a dependency it does not need.
+ * Most tests are now fast enough to finish in-request: Instantly is
+ * analytics-first (one or two calls), Calendar and Sendblue are date-bounded,
+ * Sheets is one tab.
+ *
+ * So: run it here under a time budget. If it finishes — the common case — the
+ * user gets a result in one round trip with no polling at all. Only when it
+ * overruns do we hand off to the lane, which is what the lane was actually for:
+ * genuinely long first syncs that would otherwise blow the request.
+ *
+ * The critical property is that a Test now works with Inngest completely down.
+ * The previous fallback only fired when `inngest.send` THREW; when Inngest
+ * accepted the event and then never ran it, nothing settled the row and the
+ * editor showed "the sync may still be running" for ninety seconds about work
+ * that was never started.
+ *
+ * Handing off is safe: `executeAndSettleTestRun` is idempotent on the row, and
+ * the lane re-runs the identical code path (force-fresh prime, Q6 lock-await),
+ * so at worst the work is repeated — never corrupted, never double-counted.
  */
 export async function startNodeTestAction(graph: unknown, nodeId: string): Promise<StartNodeTestResult> {
   const { orgId } = await requireOrg();
   const db = getDb();
   const runId = await createTestRun(db, orgId);
+
+  const inline = executeAndSettleTestRun(db, orgId, runId, graph, nodeId);
+  const overran = Symbol("overran");
+  const raced = await Promise.race([
+    inline.then((result) => ({ result })).catch((e) => ({ error: e as Error })),
+    new Promise<typeof overran>((resolve) => setTimeout(() => resolve(overran), INLINE_TEST_BUDGET_MS)),
+  ]);
+
+  if (raced !== overran && "result" in raced) return { runId, result: raced.result };
+
+  // Overran the budget, or threw. Either way the lane takes it from here and
+  // the editor polls. A send failure is not fatal — an inline run may still be
+  // in flight and will settle the row itself.
   try {
     await inngest.send({ name: "flow/test.requested", data: { testRunId: runId, orgId, graph, nodeId, priority: 180 } });
-    return { runId };
   } catch (e) {
-    if (process.env.NODE_ENV === "production") {
-      console.error(
-        `[test-lane-fallback] Inngest unreachable — running test inline (orgId=${orgId}, runId=${runId}): ${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
-    const result = await executeAndSettleTestRun(db, orgId, runId, graph, nodeId);
-    return { runId, result };
+    console.error(
+      `[test-lane] handoff failed (orgId=${orgId}, runId=${runId}): ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
+  return { runId };
 }
 
 /** Poll a Test run started by startNodeTestAction (org-scoped). */
