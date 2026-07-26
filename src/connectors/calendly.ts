@@ -144,11 +144,9 @@ export const calendlyConnector: Connector = {
    * the opposite of what a picker is for.
    *
    * Same split Zapier's Calendly trigger uses — show the name, send the URI —
-   * and the poll matches on `event_type`, the URI, accordingly.
-   *
-   * Duplicate names are qualified until the labels are genuinely distinct (see
-   * {@link labelEventTypes}), so two rows reading identically is not a state the
-   * dropdown can reach.
+   * and the poll matches on `event_type`, the URI, accordingly. The label is the
+   * name and nothing else; two rows can read alike, and that is fine, because
+   * they are still two different types and each selects only its own meetings.
    *
    * Both listings walk their pagination. `count=100` is a page size, not a
    * result limit: an account past 100 event types lost the rest with no error,
@@ -168,71 +166,20 @@ export const calendlyConnector: Connector = {
       // Listed in the same scope the poll will use, so nobody is offered a type
       // their chosen scope cannot return.
       const { scope } = scopeOf(args.config);
-      const types = await listAll<CalendlyEventType>(
+      const types = await listAll<{ uri: string; name?: string }>(
         token,
         "/event_types",
         scope === "user" ? { user: me.uri } : { organization: me.organization },
       );
-      return labelEventTypes(types.filter((t) => Boolean(t.uri))).sort((a, b) => a.label.localeCompare(b.label));
+      return types
+        .filter((t) => Boolean(t.uri))
+        .map((t) => ({ value: t.uri, label: t.name ?? t.uri }))
+        .sort((a, b) => a.label.localeCompare(b.label));
     }
 
     return [];
   },
 };
-
-type CalendlyEventType = {
-  uri: string;
-  name?: string;
-  slug?: string;
-  duration?: number;
-  /** Absent on adhoc types; `name` here is the host or team that owns the type. */
-  profile?: { name?: string } | null;
-};
-
-/**
- * What tells two identically-named meeting types apart, in the order a person
- * would reach for: who owns it, how long it is, its slug, then the tail of its
- * URI.
- *
- * The last one is unique by construction, so a qualified group is always
- * genuinely distinct — there is no fallback where two rows read the same.
- */
-const TYPE_QUALIFIERS: Array<(t: CalendlyEventType) => string | null> = [
-  (t) => t.profile?.name ?? null,
-  (t) => (typeof t.duration === "number" ? `${t.duration} min` : null),
-  (t) => t.slug ?? null,
-  (t) => t.uri.split("/").pop() ?? null,
-];
-
-/**
- * One option per type, keyed by URI. A name shared by several types is qualified
- * with the first attribute that separates the WHOLE group — not the first one
- * that happens to be set, which can still leave two rows reading alike.
- */
-function labelEventTypes(types: CalendlyEventType[]): SourceOption[] {
-  const byName = new Map<string, CalendlyEventType[]>();
-  for (const t of types) {
-    const name = t.name ?? t.slug ?? t.uri;
-    const group = byName.get(name);
-    if (group) group.push(t);
-    else byName.set(name, [t]);
-  }
-
-  const out: SourceOption[] = [];
-  for (const [name, group] of byName) {
-    if (group.length === 1) {
-      out.push({ value: group[0].uri, label: name });
-      continue;
-    }
-    const qualifier =
-      TYPE_QUALIFIERS.find((f) => {
-        const values = group.map(f);
-        return values.every((v): v is string => Boolean(v)) && new Set(values).size === group.length;
-      }) ?? TYPE_QUALIFIERS[TYPE_QUALIFIERS.length - 1];
-    for (const t of group) out.push({ value: t.uri, label: `${name} — ${qualifier(t) ?? t.uri}` });
-  }
-  return out;
-}
 
 /**
  * Does this scheduled event belong to the meeting type the flow picked?

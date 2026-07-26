@@ -393,8 +393,12 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
    * A name is a display detail; the URI is the identity. Two types sharing a
    * name are two types, and each must be selectable on its own — keying options
    * by name collapsed them into one entry that pulled both.
+   *
+   * The label is the name and NOTHING else. Two rows reading alike is fine: they
+   * are still separate options carrying separate URIs, and each selects only its
+   * own meetings.
    */
-  it("keeps two same-named meeting types as two separate, distinguishable choices", async () => {
+  it("keeps two same-named meeting types as two separate choices, labelled by name alone", async () => {
     vi.stubGlobal(
       "fetch",
       mockFetch([
@@ -403,9 +407,9 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
           "/event_types",
           {
             collection: [
-              { uri: "https://api.calendly.com/event_types/AAA", name: "NAMZI Invite Only Creator Program", profile: { name: "Idris" } },
-              { uri: "https://api.calendly.com/event_types/BBB", name: "NAMZI Invite Only Creator Program", profile: { name: "Mazhar" } },
-              { uri: "https://api.calendly.com/event_types/CCC", name: "30 Minute Meeting", profile: { name: "Idris" } },
+              { uri: "https://api.calendly.com/event_types/AAA", name: "NAMZI Invite Only Creator Program", slug: "invite-idris", duration: 30 },
+              { uri: "https://api.calendly.com/event_types/BBB", name: "NAMZI Invite Only Creator Program", slug: "invite-mazhar", duration: 45 },
+              { uri: "https://api.calendly.com/event_types/CCC", name: "30 Minute Meeting", slug: "30min", duration: 30 },
             ],
           },
         ],
@@ -416,46 +420,12 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
       credentials: { accessToken: "t" },
       config: { scope: "organization" },
     });
+    // Three options, three URIs — and no slug, duration or owner anywhere in a label.
     expect(opts).toEqual([
       { value: "https://api.calendly.com/event_types/CCC", label: "30 Minute Meeting" },
-      { value: "https://api.calendly.com/event_types/AAA", label: "NAMZI Invite Only Creator Program — Idris" },
-      { value: "https://api.calendly.com/event_types/BBB", label: "NAMZI Invite Only Creator Program — Mazhar" },
+      { value: "https://api.calendly.com/event_types/AAA", label: "NAMZI Invite Only Creator Program" },
+      { value: "https://api.calendly.com/event_types/BBB", label: "NAMZI Invite Only Creator Program" },
     ]);
-  });
-
-  /**
-   * Qualifying on the first attribute that happens to be SET can still leave two
-   * rows reading identically. The qualifier has to separate the whole group, and
-   * the URI tail — unique by construction — is the backstop that guarantees one
-   * always does.
-   */
-  it("qualifies a duplicate name until the labels are actually distinct", async () => {
-    vi.stubGlobal(
-      "fetch",
-      mockFetch([
-        ME,
-        [
-          "/event_types",
-          {
-            collection: [
-              // Same name, SAME owner: the owner cannot separate them, duration can.
-              { uri: "https://api.calendly.com/event_types/AAA", name: "Intro", profile: { name: "Idris" }, duration: 15 },
-              { uri: "https://api.calendly.com/event_types/BBB", name: "Intro", profile: { name: "Idris" }, duration: 30 },
-              // Same name, same owner, same duration, no slug: only the URI is left.
-              { uri: "https://api.calendly.com/event_types/CCC", name: "Sync", profile: { name: "Idris" }, duration: 30 },
-              { uri: "https://api.calendly.com/event_types/DDD", name: "Sync", profile: { name: "Idris" }, duration: 30 },
-            ],
-          },
-        ],
-      ]),
-    );
-    const opts = await calendlyConnector.listOptions!("meetingType", {
-      connectionId: "c-qualify",
-      credentials: { accessToken: "t" },
-      config: { scope: "organization" },
-    });
-    expect(opts.map((o) => o.label)).toEqual(["Intro — 15 min", "Intro — 30 min", "Sync — CCC", "Sync — DDD"]);
-    expect(new Set(opts.map((o) => o.label)).size).toBe(opts.length); // never two rows reading alike
   });
 
   /**
