@@ -33,10 +33,14 @@ export type FlowConfigField = {
  *   and disappear when removed upstream. Stored data == source, always.
  * - "incremental": cursor-forward polling with overlap; edits older than the
  *   rollback window surface on full re-syncs.
+ * - "derived-mirror": numbers COMPUTED by the provider, re-read on a schedule
+ *   and refreshed in place. Faithful to what the provider reports, including
+ *   restatements of recent periods — but not independently verifiable by us,
+ *   and the provider's metric definitions govern.
  * - "webhook-only": no list endpoint to reconcile against — data is as
  *   complete as the webhooks that arrived (weakest class; stated in the UI).
  */
-export type SyncGuarantee = "mirror" | "incremental" | "webhook-only";
+export type SyncGuarantee = "mirror" | "incremental" | "derived-mirror" | "webhook-only";
 
 export type ConnectorCatalogEntry = {
   source: string;
@@ -117,15 +121,60 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
   {
     source: "instantly",
     name: "Instantly",
-    description: "Emails sent, opens, replies and bounces from cold outreach.",
+    description: "Campaign performance — sent, opens, replies, bounces — per campaign.",
     connect: "apiKey",
     instant: true,
-    // Poll backstop over the v2 emails list (requires a v2 API key).
     poll: true,
-    // Instantly's published endpoint-specific budget for GET /api/v2/emails.
-    rateLimits: { "emails.list": { requestsPerMinute: 20 } },
+    // Analytics-first: the primary streams read provider-COMPUTED totals, which
+    // is a different guarantee from mirroring records. See docs/DATA_MODEL.md.
+    sync: "derived-mirror",
+    /**
+     * CONSERVATIVE by decision (documented in DATA_MODEL.md): the analytics
+     * endpoints are assumed to share the same tight 20/min bucket as the emails
+     * list, because that is the only published figure we have and being wrong
+     * in this direction only costs throughput. If they turn out to be more
+     * generous, raise these — they are enforced per endpoint now, so each moves
+     * independently.
+     */
+    rateLimits: {
+      "emails.list": { requestsPerMinute: 20 },
+      "campaigns.list": { requestsPerMinute: 20 },
+      "campaigns.analytics": { requestsPerMinute: 20 },
+      "campaigns.analytics.daily": { requestsPerMinute: 20 },
+    },
     autoWebhook: false,
     credentialFields: [{ key: "apiKey", label: "API Key (v2)", placeholder: "..." }],
+    // Which campaign, and what shape of data, is chosen per flow — never at
+    // connect time. A workspace-wide pull is what made a 37.9K-email account
+    // unable to finish a first sync at all.
+    flowFields: [
+      {
+        key: "campaignId",
+        label: "Campaign",
+        required: true,
+        dynamic: true,
+        placeholder: "Choose a campaign…",
+        hint: "Each flow reads one campaign. Add another Get data step for a second campaign.",
+      },
+      {
+        key: "streamType",
+        label: "What to pull",
+        required: true,
+        hint: "Daily performance is the usual choice — one row per day, restated as Instantly updates it.",
+        options: [
+          { value: "analytics_daily", label: "Daily performance (one row per day)" },
+          { value: "analytics_totals", label: "Campaign totals (one row)" },
+          { value: "raw_emails", label: "Individual emails (slower, large)" },
+        ],
+      },
+      {
+        key: "days",
+        label: "Days of history",
+        showWhen: { key: "streamType", equals: "analytics_daily" },
+        placeholder: "30",
+        hint: "How far back each refresh re-reads. Older days stay stored.",
+      },
+    ],
     webhookSetup:
       "In Instantly, add a webhook pointing to the URL below. Optionally set an HMAC secret and paste it here to verify signatures.",
   },

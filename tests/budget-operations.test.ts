@@ -6,7 +6,7 @@ import { registerConnector, getConnector } from "@/connectors/registry";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { budgetFor } from "@/lib/provider-gateway/budget";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
-import { usageLedger } from "@/db/schema";
+import { usageLedger, sourceStreams } from "@/db/schema";
 import type { Connector } from "@/connectors/types";
 import type { DB } from "@/db/types";
 
@@ -41,7 +41,7 @@ const fakeInstantly: Connector = {
   verifySignature: () => true,
   normalize: () => [],
   operations: ["emails.list"] as const,
-  operationFor: () => "emails.list",
+  operationFor: (config) => (config?.["streamType"] === "raw_emails" ? "emails.list" : "campaigns.analytics.daily"),
   poll: async () => ({ records: [], nextCursor: null }),
 };
 
@@ -57,6 +57,14 @@ describe("the sweep claims against the endpoint it actually calls", () => {
   it("records the declared operation in the ledger, not the wildcard", async () => {
     registerConnector(fakeInstantly);
     const connectionId = await seedConnection(db, { source: "instantly" });
+    // Instantly is stream-scoped, so the sweep claims PER STREAM — and resolves
+    // the endpoint from that stream's own config, which is the point.
+    await db.insert(sourceStreams).values({
+      orgId: "org_test",
+      connectionId,
+      configHash: "h1",
+      config: { campaignId: "camp-1", streamType: "raw_emails" },
+    });
 
     await reconcileConnection(db, connectionId);
 
@@ -131,13 +139,11 @@ describe("pollOperation resolution", () => {
   });
 
   it("is resolved from config, so per-stream endpoints get separate budgets", () => {
-    registerConnector({
-      ...fakeInstantly,
-      operations: ["a.list", "b.list"] as const,
-      operationFor: (config) => (config?.["kind"] === "b" ? "b.list" : "a.list"),
-    });
-    expect(pollOperation("instantly", { kind: "a" })).toBe("a.list");
-    expect(pollOperation("instantly", { kind: "b" })).toBe("b.list");
+    // The real connector already does this: two streams on ONE Instantly
+    // connection hit different endpoints and draw on different buckets.
+    expect(pollOperation("instantly", { streamType: "analytics_daily" })).toBe("campaigns.analytics.daily");
+    expect(pollOperation("instantly", { streamType: "analytics_totals" })).toBe("campaigns.analytics");
+    expect(pollOperation("instantly", { streamType: "raw_emails" })).toBe("emails.list");
   });
 
   it("is safe for an unknown source", () => {

@@ -232,6 +232,7 @@ function PreviewTable({ rows }: { rows: CanonicalEvent[] }) {
 const GUARANTEE_LABEL: Record<ReturnType<typeof syncGuarantee>, string> = {
   mirror: "Mirror — always matches the source",
   incremental: "Incremental — gaps reconciled by polling",
+  "derived-mirror": "Provider totals — the numbers Instantly reports, refreshed",
   "webhook-only": "Webhook-only — no poll backstop",
 };
 

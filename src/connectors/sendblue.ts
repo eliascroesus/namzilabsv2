@@ -22,6 +22,8 @@ import { asObject, parseDate, str } from "./field-utils";
 const API_BASE = "https://api.sendblue.co";
 
 /** Pages walked per poll; offset pagination, newest-first. */
+/** How far back an initial, cursor-less sweep reaches. */
+const FIRST_SYNC_DAYS = 30;
 const PAGES_PER_POLL = 3;
 const PAGE_LIMIT = 100;
 /** Re-read cushion below the high-water mark; message_handle dedup absorbs it. */
@@ -70,7 +72,12 @@ export const sendblueConnector: Connector = {
   async poll(args: PollArgs): Promise<PollResult> {
     const auth = authHeaders(args.credentials);
     const hw = args.cursor ? Date.parse(args.cursor) || 0 : null;
-    const floor = hw != null ? hw - OVERLAP_MS : null;
+    // A FIRST sweep has no high-water mark, and this endpoint pages by offset
+    // over the whole account — so without a floor it walks all history on
+    // connect. Bound it: the first sweep imports a recent window, and the
+    // cursor carries it forward from there. (Deeper history needs the E.8
+    // backfill lane; see the deferred triggers in the plan.)
+    const floor = hw != null ? hw - OVERLAP_MS : Date.now() - FIRST_SYNC_DAYS * 86_400_000;
     const records: CanonicalEvent[] = [];
     let maxSeen: string | null = args.cursor ?? null;
 

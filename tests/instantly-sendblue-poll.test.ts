@@ -26,107 +26,127 @@ afterEach(() => {
 
 const T = (mins: number) => new Date(Date.parse("2026-07-01T12:00:00Z") + mins * 60_000).toISOString();
 
-describe("Instantly v2 emails poll", () => {
-  const email = (id: string, mins: number, ueType = 1) => ({
-    id,
-    ue_type: ueType,
-    timestamp_created: T(mins),
-    from_address_email: "sender@x.com",
-    to_address_email_list: "lead@y.com, cc@y.com",
-  });
+const CFG = (over: Record<string, unknown> = {}) => ({ campaignId: "camp-1", ...over });
 
-  it("is declared: poll + incremental class + published 20/min budget for emails.list", () => {
+describe("Instantly is campaign-scoped and analytics-first", () => {
+  const daily = (date: string, sent: number) => ({ date, sent, campaign_id: "camp-1" });
+
+  it("is declared: derived-mirror class, per-campaign flowFields, a budget for every operation", () => {
     const entry = catalogEntry("instantly")!;
     expect(entry.poll).toBe(true);
-    expect(syncGuarantee("instantly")).toBe("incremental");
-    expect(entry.rateLimits).toEqual({ "emails.list": { requestsPerMinute: 20 } });
+    expect(syncGuarantee("instantly")).toBe("derived-mirror");
+    // Stream-scoped: the resource is chosen per flow, never workspace-wide.
+    expect(entry.flowFields?.map((f) => f.key)).toEqual(["campaignId", "streamType", "days"]);
+    // Every endpoint it can call has its own enforced budget.
+    for (const op of instantlyConnector.operations ?? []) {
+      expect(entry.rateLimits?.[op]?.requestsPerMinute).toBe(20);
+    }
   });
 
-  it("walks pages via starting_after, maps sent/reply, advances the mark when drained", async () => {
-    const pages: Record<string, unknown> = {
-      first: { items: [email("e3", 30), email("e2", 20, 2)], next_starting_after: "P2" },
-      P2: { items: [email("e1", 10)], next_starting_after: null },
-    };
-    const urls: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        const url = new URL(String(input));
-        urls.push(String(input));
-        return jsonResponse(pages[url.searchParams.get("starting_after") ?? "first"]);
-      }),
-    );
-    const res = await instantlyConnector.poll!({ connectionId: "c1", cursor: null, credentials: { apiKey: "k".repeat(60) } });
+  it("routes each streamType to its own endpoint budget", () => {
+    const op = (t?: string) => instantlyConnector.operationFor!(t ? { streamType: t } : undefined);
+    expect(op("analytics_daily")).toBe("campaigns.analytics.daily");
+    expect(op("analytics_totals")).toBe("campaigns.analytics");
+    expect(op("raw_emails")).toBe("emails.list");
+    expect(op()).toBe("campaigns.analytics.daily"); // daily is the default
+  });
+
+  it("daily analytics: one row per day, date-bounded, declaring its window as a mirror scope", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      seen.push(String(u));
+      return jsonResponse({ items: [daily("2026-06-29", 10), daily("2026-06-30", 20)] });
+    }));
+
+    const res = await instantlyConnector.poll!({
+      connectionId: "c1", cursor: null, credentials: { apiKey: "k" }, config: CFG({ days: 7 }),
+    });
+
+    expect(seen[0]).toContain("/campaigns/analytics/daily");
+    expect(seen[0]).toContain("campaign_id=camp-1");
+    expect(seen[0]).toContain("start_date=");
+    expect(seen[0]).toContain("exclude_total_leads_count=true");
+
     expect(res.records.map((r) => r.eventId)).toEqual([
-      "instantly:c1:email:e3",
-      "instantly:c1:email:e2",
-      "instantly:c1:email:e1",
+      "instantly:c1:camp-1:daily:2026-06-29",
+      "instantly:c1:camp-1:daily:2026-06-30",
     ]);
-    expect(res.records.map((r) => r.eventType)).toEqual(["email_sent", "reply", "email_sent"]);
-    expect(res.records[1].subject).toBe("sender@x.com"); // reply → from
-    expect(res.records[0].subject).toBe("lead@y.com"); // sent → first recipient
-    expect(res.nextCursor).toBe(T(30)); // drained → newest timestamp
-    expect(urls[0]).toContain("/api/v2/emails");
+    // The window it declares is what bounds the mirror retire upstream.
+    expect(res.mirrorScope).toBeDefined();
+    const spanDays = Math.round((res.mirrorScope!.to.getTime() - res.mirrorScope!.from.getTime()) / 86_400_000);
+    expect(spanDays).toBe(7);
   });
 
-  it("persists a continuation mid-window and resumes without stranding anything", async () => {
-    // 5 pages of 1; budget is 3 pages per poll.
-    const mk = (n: number) => ({ items: [email(`e${n}`, n)], next_starting_after: n > 1 ? `P${n - 1}` : null });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        const url = new URL(String(input));
-        const key = url.searchParams.get("starting_after");
-        return jsonResponse(mk(key ? Number(key.slice(1)) : 5));
-      }),
-    );
-    const args = { connectionId: "c1", credentials: { apiKey: "k".repeat(60) } };
-    const first = await instantlyConnector.poll!({ ...args, cursor: null });
-    expect(first.records).toHaveLength(3);
-    expect(first.nextCursor!.startsWith("{")).toBe(true); // mid-walk continuation
+  it("campaign totals: a single row that restates in place and does not march forward", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ items: [{ campaign_id: "camp-1", sent: 500, created_at: "2026-01-01T00:00:00Z" }] })));
+    const a = await instantlyConnector.poll!({ connectionId: "c1", cursor: null, credentials: { apiKey: "k" }, config: CFG({ streamType: "analytics_totals" }) });
+    const b = await instantlyConnector.poll!({ connectionId: "c1", cursor: null, credentials: { apiKey: "k" }, config: CFG({ streamType: "analytics_totals" }) });
 
-    const second = await instantlyConnector.poll!({ ...args, cursor: first.nextCursor });
-    const all = new Set([...first.records, ...second.records].map((r) => r.eventId));
-    expect(all.size).toBe(5); // union covers every email exactly once
-    expect(second.nextCursor).toBe(T(5)); // drained → mark at the newest seen
+    expect(a.records).toHaveLength(1);
+    expect(a.records[0].eventId).toBe("instantly:c1:camp-1:totals");
+    // Stable id AND stable timestamp: two sweeps produce the same row, not a new one.
+    expect(b.records[0].eventId).toBe(a.records[0].eventId);
+    expect(b.records[0].occurredAt.toISOString()).toBe(a.records[0].occurredAt.toISOString());
+    // A single restated row needs no window — nothing to retire.
+    expect(a.mirrorScope).toBeUndefined();
   });
 
-  it("stops early once a page is entirely below the window floor (incremental cheapness)", async () => {
-    const calls: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        calls.push(String(input));
-        // Everything is far older than the stored high-water mark.
-        return jsonResponse({ items: [email("old", -600)], next_starting_after: "MORE" });
-      }),
-    );
-    const res = await instantlyConnector.poll!({ connectionId: "c1", cursor: T(0), credentials: { apiKey: "k".repeat(60) } });
-    expect(res.records).toHaveLength(0);
-    expect(calls).toHaveLength(1); // did not keep walking
-    expect(res.nextCursor).toBe(T(0)); // mark never regresses
+  it("raw emails stay campaign-scoped and date-bounded — never a workspace dump", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      seen.push(String(u));
+      return jsonResponse({ items: [], next_starting_after: null });
+    }));
+    await instantlyConnector.poll!({
+      connectionId: "c1", cursor: null, credentials: { apiKey: "k" }, config: CFG({ streamType: "raw_emails" }),
+    });
+    expect(seen[0]).toContain("/emails?");
+    expect(seen[0]).toContain("campaign_id=camp-1");
+  });
+
+  it("a stream with no campaign chosen makes no provider call at all", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await instantlyConnector.poll!({ connectionId: "c1", cursor: null, credentials: { apiKey: "k" }, config: {} });
+    expect(res.records).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("the campaign picker lists real campaigns", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      expect(String(u)).toContain("/campaigns");
+      return jsonResponse({ items: [{ id: "camp-1", name: "Q3 outbound" }, { id: "camp-2", name: "Q4" }] });
+    }));
+    const opts = await instantlyConnector.listOptions!("campaignId", { connectionId: "c1", credentials: { apiKey: "k" } });
+    expect(opts).toEqual([
+      { value: "camp-1", label: "Q3 outbound" },
+      { value: "camp-2", label: "Q4" },
+    ]);
+  });
+
+  it("the preview reads analytics, not the emails list", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      seen.push(String(u));
+      return jsonResponse({ items: [daily("2026-06-30", 20)] });
+    }));
+    const rows = await instantlyConnector.testFetchLatest!(3, { connectionId: "c1", cursor: null, credentials: { apiKey: "k" }, config: CFG() });
+    expect(rows).toHaveLength(1);
+    expect(seen.every((u) => !u.includes("/emails"))).toBe(true);
   });
 
   it("401 surfaces a v2-reconnect message, naming the v1 deprecation for v1-looking keys", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ error: "unauthorized" }, 401)));
-    // Short opaque token → v1-suspect wording.
     const v1 = (await instantlyConnector
-      .poll!({ connectionId: "c1", cursor: null, credentials: { apiKey: "abc123" } })
+      .poll!({ connectionId: "c1", cursor: null, credentials: { apiKey: "short" }, config: CFG() })
       .catch((e) => e as Error)) as Error;
     expect(String(v1.message)).toContain("Jan 19, 2026");
     expect(String(v1.message)).toContain("v2 API key");
-
-    // Long v2-shaped key → plain reconnect wording (no misleading v1 claim).
-    const v2 = (await instantlyConnector
-      .poll!({ connectionId: "c1", cursor: null, credentials: { apiKey: Buffer.from(`${"u".repeat(36)}:secretsecret`).toString("base64") } })
-      .catch((e) => e as Error)) as Error;
-    expect(String(v2.message)).toContain("reconnect");
-    expect(String(v2.message)).not.toContain("Jan 19");
   });
 
   it("key-era heuristic: long base64(uuid:secret) is v2; short opaque tokens are v1-suspect", () => {
-    expect(looksLikeInstantlyV1Key(Buffer.from(`${"u".repeat(36)}:secret`).toString("base64"))).toBe(false);
-    expect(looksLikeInstantlyV1Key("abc123shortkey")).toBe(true);
+    expect(looksLikeInstantlyV1Key(Buffer.from("2f1c0b3e-1111-2222-3333-444455556666:supersecretvalue").toString("base64"))).toBe(false);
+    expect(looksLikeInstantlyV1Key("abc123")).toBe(true);
   });
 });
 

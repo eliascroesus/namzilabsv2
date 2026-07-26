@@ -44,6 +44,12 @@ export const googleCalendarConnector: Connector = {
     } else {
       params.set("orderBy", "startTime");
       params.set("timeMin", new Date(Date.now() - 30 * 864e5).toISOString());
+      // Bound the FORWARD horizon too. A calendar with a long-running recurring
+      // event expands to an unbounded number of instances, so a first sync with
+      // only a lower bound can grind indefinitely on connect. A year ahead
+      // covers every realistic dashboard question; the sync token takes over
+      // afterwards and picks up anything created beyond it.
+      params.set("timeMax", new Date(Date.now() + 365 * 864e5).toISOString());
     }
 
     const streamTag = args.streamHash ? `${args.streamHash}:` : "";

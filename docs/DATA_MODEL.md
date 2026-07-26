@@ -76,8 +76,40 @@ Declared in `src/connectors/catalog.ts` (`sync` field; UI copy states the class)
 | Class | Meaning | Connectors |
 |---|---|---|
 | **mirror** | Every sweep re-reads the ENTIRE resource, refreshes rows in place and soft-deletes rows no longer present. Stored live rows ≡ source after every sweep. Row identity = sheet row number (per stream); blank rows mirror as deleted; `occurred_at` = first-seen. | Google Sheets |
-| **incremental** | Cursor-forward polling with an overlap window; nothing is stranded (windows are drained to their end, deeper windows resume next sweep). Edits older than the overlap surface on a full re-sync. | Close (5-min overlap, continuation cursor), Google Calendar (sync token, page-token drain), Calendly |
-| **webhook-only** | No list endpoint to reconcile against: data is as complete as the webhooks that arrived. Weakest class; the connection UI must say so. | Instantly, Sendblue, custom webhook |
+| **derived-mirror** | Numbers **computed by the provider**, re-read on a schedule and refreshed in place. Faithful to what the provider reports — including restatements of recent periods, which are normal, not edits. Reads declare a `mirrorScope` (the span they enumerate completely), so a row that disappears from inside the window is retired while history behind it is untouched. | Instantly (campaign analytics) |
+| **incremental** | Cursor-forward polling with an overlap window; nothing is stranded (windows are drained to their end, deeper windows resume next sweep). Edits older than the overlap surface on a full re-sync. | Close (5-min overlap, continuation cursor), Google Calendar (sync token, ±window bound on first sync), Calendly, Sendblue (30-day first-sweep bound), Instantly raw-emails streams |
+| **webhook-only** | No list endpoint to reconcile against: data is as complete as the webhooks that arrived. Weakest class; the connection UI must say so. | Custom webhook |
+
+### What `derived-mirror` does NOT promise
+
+The other classes mirror *records we hold*. This one mirrors *the provider's
+answer*, which differs in four ways worth stating plainly:
+
+1. **We cannot verify it.** There is no local recount that confirms
+   "sent = 412" — we are repeating what the provider said.
+2. **Restatement is expected.** Today's row legitimately changes as the day
+   progresses. In a record mirror, a changed row means someone edited the
+   source; here it means nothing at all.
+3. **Identity is synthetic** — `(campaign, date)`, not a provider record id.
+4. **Their definitions govern.** A provider's "sent" need not equal a count of
+   our `email_sent` events. **A flow that mixes provider totals with raw
+   records can double-count**; prefer one or the other per number.
+
+### Instantly: stated assumptions
+
+Two things were decided conservatively rather than verified, because being
+wrong in the cheap direction would have been silent:
+
+- **One analytics call per campaign.** We do not know whether the daily
+  endpoint accepts several campaign ids at once. Asking per-campaign is correct
+  either way; batching would only be cheaper. The connector logs
+  `[instantly-probe]` lines recording what the response actually contains, so
+  this can be settled from production logs rather than another guess — and it
+  warns loudly if rows come back for campaigns we did not ask for, which would
+  mean the filter is being ignored.
+- **Analytics shares the emails-list budget (20/min).** That is the only
+  published figure we have. Each endpoint now has its own enforced bucket, so
+  raising any one of them later is a one-line change.
 
 ## Freshness rules
 
