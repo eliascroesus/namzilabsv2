@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { and, eq, isNull } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { events } from "@/db/schema";
-import { countLiveEvents, retireConnectionEvents } from "@/lib/sync/retire-connection";
+import { retireConnectionEvents } from "@/lib/sync/retire-connection";
 import type { DB } from "@/db/types";
 
 /**
@@ -64,7 +64,7 @@ describe("removing a connection retires its events", () => {
     for (let i = 0; i < 3; i++) await seedEvent(doomed);
     for (let i = 0; i < 2; i++) await seedEvent(keeper);
 
-    expect(await countLiveEvents(db, "org_test", doomed)).toBe(3);
+    expect(await liveCount(doomed)).toBe(3);
 
     const retired = await retireConnectionEvents(db, "org_test", doomed);
 
@@ -120,6 +120,6 @@ describe("removing a connection retires its events", () => {
   it("a connection with no events removes cleanly", async () => {
     const conn = await seedConnection(db);
     expect(await retireConnectionEvents(db, "org_test", conn)).toBe(0);
-    expect(await countLiveEvents(db, "org_test", conn)).toBe(0);
+    expect(await liveCount(conn)).toBe(0);
   });
 });

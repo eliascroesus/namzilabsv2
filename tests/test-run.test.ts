@@ -110,3 +110,74 @@ describe("test-run lifecycle (the lane's unit of work)", () => {
     expect(await getTestRun(db, "org_other", runId)).toBeNull();
   });
 });
+
+/**
+ * E.7 dedupe guardrail, end to end.
+ *
+ * The judgement comes from the field registry the WRITER maintains, so it
+ * reflects everything ever synced for the stream rather than the sample this
+ * Test happened to load. These cases drive the real lane path
+ * (executeAndSettleTestRun → prime → run → warn), not the registry module in
+ * isolation — the module was already tested and still never reached a user.
+ */
+describe("dedupe guardrail reaches the Test result", () => {
+  const dedupeGraph = (field: string) => ({
+    nodes: [
+      {
+        id: "get",
+        type: "app",
+        data: { config: { connectionId: connId, source: "gsheets", sourceConfig: CFG, dedupe: true, dedupeField: field } },
+      },
+    ],
+    edges: [],
+  });
+
+  /** 20 rows, 2 distinct "Booked" values, 20 distinct "Name" values. */
+  const wideSheet = () => {
+    const rows: string[][] = [["Name", "Booked"]];
+    for (let i = 0; i < 20; i++) rows.push([`Person ${i}`, i % 2 === 0 ? "Yes" : "No"]);
+    return rows;
+  };
+
+  it("warns when the dedupe field cannot identify a record", async () => {
+    SHEET = wideSheet();
+    const runId = await createTestRun(db, ORG);
+    const dto = await executeAndSettleTestRun(db, ORG, runId, dedupeGraph("Booked"), "get");
+
+    expect(dto.status).toBe("ok");
+    expect(dto.dedupeWarning).toBeTruthy();
+    expect(dto.dedupeWarning).toContain("Booked");
+    // The point of the warning: it names how much was thrown away.
+    expect(dto.dedupeWarning).toMatch(/collapse about 18 of 20 records/);
+
+    // And it survives the round trip through the polled run row, which is what
+    // the editor actually reads.
+    const state = await getTestRun(db, ORG, runId);
+    expect(state?.result?.dedupeWarning).toBe(dto.dedupeWarning);
+  });
+
+  it("stays silent for a field that genuinely identifies a record", async () => {
+    SHEET = wideSheet();
+    const runId = await createTestRun(db, ORG);
+    const dto = await executeAndSettleTestRun(db, ORG, runId, dedupeGraph("Name"), "get");
+    expect(dto.status).toBe("ok");
+    expect(dto.dedupeWarning).toBeUndefined();
+  });
+
+  it("stays silent when dedupe is off, however bad the field would be", async () => {
+    SHEET = wideSheet();
+    const graphNoDedupe = {
+      nodes: [
+        {
+          id: "get",
+          type: "app",
+          data: { config: { connectionId: connId, source: "gsheets", sourceConfig: CFG, dedupe: false, dedupeField: "Booked" } },
+        },
+      ],
+      edges: [],
+    };
+    const runId = await createTestRun(db, ORG);
+    const dto = await executeAndSettleTestRun(db, ORG, runId, graphNoDedupe, "get");
+    expect(dto.dedupeWarning).toBeUndefined();
+  });
+});

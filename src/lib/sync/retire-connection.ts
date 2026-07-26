@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { events } from "@/db/schema";
 import type { DB } from "@/db/types";
 
@@ -42,15 +42,6 @@ function liveRowsOf(orgId: string, connectionId: string) {
     eq(events.connectionId, connectionId),
     isNull(events.deletedAt),
   );
-}
-
-/** How many live events a removal would retire. Read-only — used for confirmation copy. */
-export async function countLiveEvents(db: DB, orgId: string, connectionId: string): Promise<number> {
-  const [row] = await db
-    .select({ c: sql<number>`count(*)::int` })
-    .from(events)
-    .where(liveRowsOf(orgId, connectionId));
-  return Number(row?.c ?? 0);
 }
 
 /**

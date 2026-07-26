@@ -1113,6 +1113,11 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
       {t.sourceNote && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{t.sourceNote}</p>
       )}
+      {/* E.7: the dedupe field can't identify a record, so this number is built
+          on a silent collapse. Said before the number is read, not after. */}
+      {t.dedupeWarning && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{t.dedupeWarning}</p>
+      )}
       <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-base font-semibold text-neutral-900">{resultLabel(type, t)}</p>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />

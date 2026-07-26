@@ -3,7 +3,8 @@ import { testRuns } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { runFlow, type NodeExec } from "./engine";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
-import { hasStreamConfig } from "@/lib/sync/stream-hash";
+import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
+import { dedupeWarningFor } from "@/lib/schema-registry/registry";
 import { primeStream } from "@/lib/sync/streams";
 
 /**
@@ -37,6 +38,13 @@ export type NodeTestDTO = {
    * imply it refreshed when it didn't.
    */
   sourceNote?: string;
+  /**
+   * E.7 guardrail: set when this step's "Match duplicates by" field has too few
+   * distinct values to identify a record, so the dedupe is silently collapsing
+   * most of the data into a plausible-looking number. Surfaced BEFORE the
+   * number is trusted — a wrong answer nobody questions is worse than an error.
+   */
+  dedupeWarning?: string;
 };
 
 /** Shape one engine result into the compact DTO the editor renders. */
@@ -92,6 +100,37 @@ async function primeStreamsForTest(
   return { notes };
 }
 
+/**
+ * E.7: does the node being tested dedupe on a field that cannot identify a
+ * record? Reads the field registry the writer maintains, so the judgement is
+ * made over everything ever synced for the stream — not over the sample the
+ * Test happened to load.
+ *
+ * Diagnostic only: any failure here returns null rather than failing the Test.
+ */
+async function dedupeWarningForNode(db: DB, orgId: string, g: FlowGraph, nodeId: string): Promise<string | null> {
+  try {
+    const node = g.nodes.find((n) => n.id === nodeId);
+    if (!node || node.type !== "app") return null;
+    const cfg = (node.data.config ?? {}) as {
+      connectionId?: unknown;
+      sourceConfig?: unknown;
+      dedupe?: unknown;
+      dedupeField?: unknown;
+    };
+    if (cfg.dedupe !== true) return null;
+    const connectionId = typeof cfg.connectionId === "string" ? cfg.connectionId : null;
+    if (!connectionId) return null;
+    const field = typeof cfg.dedupeField === "string" && cfg.dedupeField ? cfg.dedupeField : "subject";
+    const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
+    const streamHash = hasStreamConfig(sourceConfig) ? streamConfigHash(sourceConfig) : null;
+    const warning = await dedupeWarningFor(db, { orgId, connectionId, streamHash }, field);
+    return warning?.message ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Prime (force-fresh) + run the engine up to the node. Never throws. */
 export async function executeNodeTest(db: DB, orgId: string, graph: unknown, nodeId: string): Promise<NodeTestDTO> {
   try {
@@ -105,6 +144,8 @@ export async function executeNodeTest(db: DB, orgId: string, graph: unknown, nod
     const dto = execToDTO(res.nodes.get(nodeId), inputSample);
     // The Test computed on stored data — say so, rather than implying a refresh.
     if (primed.notes.length > 0) dto.sourceNote = primed.notes.join(" ");
+    const warning = await dedupeWarningForNode(db, orgId, g, nodeId);
+    if (warning) dto.dedupeWarning = warning;
     return dto;
   } catch (e) {
     return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: e instanceof Error ? e.message : String(e) };

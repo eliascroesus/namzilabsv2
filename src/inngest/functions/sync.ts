@@ -3,7 +3,7 @@ import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { runSync, reprocessConnection, syncChanged } from "@/lib/sync/resync";
 import { markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
-import { pruneOperationalTables, pruneSettledTestRuns } from "@/lib/storage-lifecycle";
+import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
 import { rawEvents } from "@/db/schema";
 
 /** Sync a connection (full backfill/re-sync or incremental). */
@@ -112,6 +112,10 @@ export const pruneStorage = inngest.createFunction(
   async ({ step }) => {
     const settled = await step.run("prune-settled-test-runs", () => pruneSettledTestRuns(getDb()));
     const retained = await step.run("prune-operational-tables", () => pruneOperationalTables(getDb()));
-    return { settledTestRuns: settled, ...retained };
+    // H.6 capacity signal: what is STILL past retention after this run. A
+    // non-zero backlog that persists night after night means pruning is not
+    // keeping up with ingest — visible here before it becomes a disk problem.
+    const backlog = await step.run("measure-retention-backlog", () => retentionBacklog(getDb()));
+    return { settledTestRuns: settled, ...retained, backlog };
   },
 );
