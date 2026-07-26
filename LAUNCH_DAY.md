@@ -1,5 +1,17 @@
 # Launch day — one-sitting run sheet
 
+> **STATUS (updated after the Instantly/hardening phase).**
+> **Phases A–C are DONE.** The tracker was repaired, migrations `0005`–`0011`
+> applied (verified: 12 tracker rows, high-water mark `1785004537576`, flow
+> counts unchanged at 1 / 2 / 1), and the branch merged.
+>
+> **Everything since has been code-only — no new migration.** The schema is
+> still at `0011`; `drizzle/` holds 12 files and the journal 12 entries. So
+> **there is no database sequence left to run.** Deploy is just merge → Vercel
+> build, which has already happened for every increment.
+>
+> **What remains: Phase D onward.** Start at **D1**.
+
 The complete sequence, in exact execution order, for doing the whole launch in
 one go. Every step says what to click, what to paste, what PASS looks like in
 plain language, and what to do on FAIL.
@@ -48,7 +60,7 @@ selected**. A guard in the workflow enforces this (it refuses to run an armed
 *No database, no deploy. Fully reversible. Do this first because a provider
 failure changes what you ship.*
 
-## A1. Confirm the repository secrets exist
+## A1. Confirm the repository secrets exist ✅ DONE / optional
 
 GitHub → repo → **Settings → Secrets and variables → Actions**. You should have:
 
@@ -64,7 +76,12 @@ GitHub → repo → **Settings → Secrets and variables → Actions**. You shou
 provider key is not a blocker — A2 skips that provider with a clear message —
 but `DATABASE_MIGRATION_URL` is required and everything from B3 on depends on it.
 
-## A2. Verify the provider contracts 🛑
+## A2. Verify the provider contracts 🛑 — OPTIONAL, run in-app instead
+
+> You chose to test connections in the app after launch rather than wiring
+> provider secrets into CI. The **Verify providers** Action stays available if
+> you'd rather confirm a contract without touching the app; it skips cleanly
+> for any secret that isn't set.
 
 **Do:** Actions → **Verify providers (read-only)** → *Run workflow* → providers
 = **all** → Run.
@@ -93,9 +110,9 @@ The rest of the sequence continues unchanged.
 
 ---
 
-# Phase B — Database repair
+# Phase B — Database repair ✅ COMPLETE
 
-*This is the part with real risk. Take it slowly.*
+*Kept for the record. All four steps ran and verified; nothing here to repeat.*
 
 ## B1. Snapshot the database
 
@@ -226,7 +243,7 @@ The B1 snapshot is the way back.
 
 ---
 
-# Phase C — Deploy
+# Phase C — Deploy ✅ COMPLETE (and repeats automatically on every push to main)
 
 ## C1. Merge
 
@@ -249,7 +266,7 @@ fix forward.
 
 ---
 
-# Phase D — Post-deploy
+# Phase D — Post-deploy ← **START HERE**
 
 ## D1. Legacy row reconciliation — inspect 🛑
 
@@ -294,6 +311,12 @@ double-deletes. Rows are soft-deleted only, so nothing is lost.
    no `Webhook subscription check failed`, and the Sendblue dashboard should now
    list your webhook URL (the sweep registers it automatically if missing).
 4. Open a dashboard. Tiles should show a **"Data as of …"** timestamp.
+5. **Instantly only —** open any flow with an Instantly *Get data* step and
+   pick a **Campaign** and **What to pull** (daily performance is the usual
+   choice). Instantly is campaign-scoped now, so a pre-existing step has no
+   resource selected; testing it says exactly that rather than showing a zero.
+   Then hit **Test** — it reads campaign analytics, so it returns in seconds
+   even on a 37.9K-email workspace.
 
 **PASS:** all four. **FAIL:** note which connection and what the strip says —
 these are per-connector issues, not launch blockers.
