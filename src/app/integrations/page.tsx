@@ -1,7 +1,7 @@
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
-import { listConnections } from "@/lib/connections";
-import { CONNECTOR_CATALOG, type ConnectorCatalogEntry } from "@/connectors/catalog";
+import { listConnections, webhookUrlFor } from "@/lib/connections";
+import { CONNECTOR_CATALOG, catalogEntry, type ConnectorCatalogEntry } from "@/connectors/catalog";
 import { ConnectionRow } from "./ConnectionRow";
 import { connectApiKeyAction } from "./actions";
 
@@ -32,7 +32,19 @@ export default async function IntegrationsPage() {
             </h2>
             <div className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
               {connected.map((c) => (
-                <ConnectionRow key={c.id} id={c.id} name={c.name} source={c.source} status={c.status} />
+                <ConnectionRow
+                  key={c.id}
+                  id={c.id}
+                  name={c.name}
+                  source={c.source}
+                  status={c.status}
+                  // Webhook-capable sources carry their inbound URL right here.
+                  // It used to live only on the connection page, which meant a
+                  // Custom Webhook — a connector that is nothing BUT its URL —
+                  // was saved and then led nowhere.
+                  webhookUrl={catalogEntry(c.source)?.instant ? webhookUrlFor(c.id) : undefined}
+                  webhookSetup={catalogEntry(c.source)?.webhookSetup}
+                />
               ))}
             </div>
           </section>
@@ -111,6 +123,15 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
               >
                 Save connection
               </button>
+              {/* A source with no credentials to enter (Custom Webhook) gives no
+                  clue that saving is only step one — the URL it mints is the
+                  whole product, and it appears above once the row exists. */}
+              {entry.credentialFields.length === 0 && entry.instant && (
+                <p className="text-xs text-neutral-500">
+                  Saving creates the inbound URL. It appears under <b>Your connections</b> above —
+                  open <b>Webhook URL</b> on the new row and point any app at it.
+                </p>
+              )}
             </form>
           </details>
         )}

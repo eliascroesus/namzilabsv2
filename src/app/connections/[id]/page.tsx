@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { getConnection, getSigningSecret, previewLatest, webhookUrlFor } from "@/lib/connections";
+import { CopyField } from "@/components/copy-field";
 import { catalogEntry, syncGuarantee } from "@/connectors/catalog";
 import {
   disconnectAction,
@@ -122,8 +123,8 @@ export default async function ConnectionPage({
           <section className="mt-8">
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Inbound webhook</h2>
             {entry.webhookSetup && <p className="mb-2 text-sm text-neutral-600">{entry.webhookSetup}</p>}
-            <CopyRow label="URL" value={webhookUrl} />
-            {signingSecret && <CopyRow label="Signing secret" value={signingSecret} />}
+            <CopyField label="URL" value={webhookUrl} />
+            {signingSecret && <CopyField label="Signing secret" value={signingSecret} />}
           </section>
         )}
 
@@ -245,16 +246,6 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CopyRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="mb-2">
-      <span className="text-xs text-neutral-500">{label}</span>
-      <code className="mt-0.5 block overflow-x-auto rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs">
-        {value}
-      </code>
-    </div>
-  );
-}
 
 function StatusBadge({ status }: { status: string }) {
   const color =

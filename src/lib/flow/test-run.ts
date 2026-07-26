@@ -7,6 +7,7 @@ import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { dedupeWarningFor } from "@/lib/schema-registry/registry";
 import { primeStream } from "@/lib/sync/streams";
+import { primeConnection } from "@/lib/sync/resync";
 
 /**
  * D.1-full — the user-initiated Test execution path.
@@ -93,8 +94,14 @@ async function primeStreamsForTest(
     const cfg = node.data.config as { connectionId?: unknown; sourceConfig?: unknown };
     const connectionId = typeof cfg.connectionId === "string" ? cfg.connectionId : null;
     const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
-    if (!connectionId || !hasStreamConfig(sourceConfig)) continue;
-    const r = await primeStream(db, orgId, connectionId, sourceConfig, { force: true });
+    if (!connectionId) continue;
+    // A source with no per-flow resource (Sendblue, Close) has an empty
+    // sourceConfig, so primeStream has nothing to key on. Refresh the whole
+    // connection instead — skipping it silently is what made Test report "0
+    // loaded" for sources it had never actually asked.
+    const r = hasStreamConfig(sourceConfig)
+      ? await primeStream(db, orgId, connectionId, sourceConfig, { force: true })
+      : await primeConnection(db, orgId, connectionId);
     if (!r.ok) return { error: r.error, notes };
     if (r.note) notes.push(r.note);
   }

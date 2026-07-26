@@ -191,7 +191,39 @@ Two ways to ask "did the other side accept", differing in what they assume:
 - `guests_external_accepted >= 1` — no assumption at all, and the right one when
   the meeting is with someone outside the company.
 
-## Sendblue: the messages ARE the analytics
+## Test must actually re-read the source — including sources with no resource
+
+Sources split in two, and only one half was being refreshed.
+
+**Stream-scoped** sources pick a resource inside the flow: a Sheets tab, a
+calendar, an Instantly campaign. That choice is the step's `sourceConfig`, which
+is what `primeStream` keys on.
+
+**Connection-scoped** sources — Sendblue, Close — have no such choice. The
+account IS the resource, so the Get data step's config is empty. And
+`primeStreamsForTest` skipped any step whose config was empty:
+
+```ts
+if (!connectionId || !hasStreamConfig(sourceConfig)) continue;   // ← Sendblue, Close
+```
+
+So Test never contacted those providers. It ran the flow over whatever storage
+happened to hold and printed *"0 loaded · No records returned"* — indistinguishable
+from a source that genuinely is empty, and undebuggable, because the request that
+would have failed was never made. It also made connector work look inert:
+changing a poll cannot change a Test that does not call it.
+
+`primeConnection` (`src/lib/sync/resync.ts`) closes it, running
+`runSync(…, "incremental")` behind the same pause and budget guards `primeStream`
+applies. A provider error now reaches the user as an error. An empty account and
+an old account still legitimately return zero.
+
+The general rule this leaves behind: **every branch that can produce "no data"
+must be reachable only when we actually asked.** A skip that looks like an empty
+result is the most expensive bug shape in this codebase — it has now appeared in
+the migration tracker, the flow Test, and both layers of the Sendblue poll.
+
+### Sendblue: the messages ARE the analytics
 
 Sendblue's own dashboard shows response rate, messages sent/received, unresponded
 conversations, speed to dial and average rep response time. None of those come
@@ -203,22 +235,26 @@ whole account is on the order of a thousand messages and every dashboard tile is
 a Filter + Calculate away. Adding an analytics stream would add a second source
 of truth for numbers we can already derive.
 
-What did need fixing was that the poll could answer **zero** when it meant *I did
-not understand the response* — twice, once per layer:
+The connector's own response parsing is still **unverified against the live API**
+(`API_BASE`, the message-list envelope and the date field are all assumptions —
+see the header comment in `src/connectors/sendblue.ts`). `docs.sendblue.com` is
+blocked by this environment's egress policy, so it has not been possible to
+confirm them from the documentation. Confirm against a live account before
+trusting Sendblue numbers.
 
-1. **The envelope.** Sendblue v2 documents `{status, message, data}`; the
-   connector read `messages` off the top level, got `undefined`, and `?? []` made
-   a busy account look empty. `extractMessages` now checks every plausible
-   position and **throws, naming the keys that did arrive**, when the list is in
-   none of them.
-2. **The timestamp.** The first sweep floors at 30 days. A renamed date field
-   makes every message parse as epoch 0, fall below the floor, and vanish — a
-   silent zero one layer down. If a page returns messages and not one carries a
-   readable date, that is now an error naming the keys the message did have.
+## Custom Webhook: the URL is the product
 
-The distinction the code must preserve: an empty account and an old account both
-legitimately return zero records, and still do. Only an unreadable response is an
-error.
+The catch-hook connector has no credentials — saving a connection mints an
+inbound URL and that URL is the entire feature. It used to appear only on
+`/connections/[id]`, as plain uncopyable text, so the integrations page's flow
+ended at "Save connection" with no next step. The URL now appears on the
+connection's row under **Your connections** with a real copy button
+(`src/components/copy-field.tsx`), and the card says where to find it.
+
+`webhookUrlFor` builds on `APP_BASE_URL`. Unset, it yields a path with no origin —
+which still looks like a URL and pastes cleanly, but can never receive anything.
+`CopyField` detects the missing `https://`, disables copying and names the
+variable rather than handing over a value that silently does nothing.
 
 **Backfill.** These are computed on write, and Calendar syncs incrementally by
 sync token — so events already stored keep their old `properties` until they

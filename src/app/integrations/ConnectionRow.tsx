@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { CopyField } from "@/components/copy-field";
 import { renameConnectionAction, disconnectAction } from "./actions";
 
 /**
@@ -15,13 +16,34 @@ import { renameConnectionAction, disconnectAction } from "./actions";
  * directly on top of each other, so a single-click delete here is a mis-click
  * away from taking out the wrong integration — and unlike rename, the user
  * cannot see what they destroyed in order to put it back.
+ *
+ * Webhook-capable connections also expose their inbound URL here. It previously
+ * lived only on the connection page, which left the Custom Webhook connector —
+ * whose entire function IS that URL — saving successfully and then telling the
+ * user nothing about what to do next. It is a disclosure rather than always-on
+ * text because most rows are OAuth sources nobody needs to paste anywhere.
  */
-export function ConnectionRow({ id, name, source, status }: { id: string; name: string; source: string; status: string }) {
+export function ConnectionRow({
+  id,
+  name,
+  source,
+  status,
+  webhookUrl,
+  webhookSetup,
+}: {
+  id: string;
+  name: string;
+  source: string;
+  status: string;
+  webhookUrl?: string;
+  webhookSetup?: string;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [showHook, setShowHook] = useState(false);
 
   const save = async () => {
     const next = draft.trim();
@@ -66,7 +88,8 @@ export function ConnectionRow({ id, name, source, status }: { id: string; name: 
   }
 
   return (
-    <div className="group flex items-center justify-between px-4 py-3 hover:bg-neutral-50">
+    <div className="group">
+      <div className="flex items-center justify-between px-4 py-3 hover:bg-neutral-50">
       {editing ? (
         <input
           autoFocus
@@ -104,6 +127,16 @@ export function ConnectionRow({ id, name, source, status }: { id: string; name: 
         </span>
       )}
       <span className="ml-3 flex shrink-0 items-center gap-3 text-sm text-neutral-500">
+        {webhookUrl && (
+          <button
+            type="button"
+            onClick={() => setShowHook((v) => !v)}
+            aria-expanded={showHook}
+            className="rounded border border-neutral-200 px-2 py-0.5 text-xs font-medium text-neutral-600 hover:bg-white hover:text-neutral-900"
+          >
+            {showHook ? "Hide webhook URL" : "Webhook URL"}
+          </button>
+        )}
         <span>{source}</span>
         <StatusDot status={status} />
         <button
@@ -118,6 +151,20 @@ export function ConnectionRow({ id, name, source, status }: { id: string; name: 
           </svg>
         </button>
       </span>
+      </div>
+      {showHook && webhookUrl && (
+        <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-3">
+          {webhookSetup && <p className="mb-2 text-xs text-neutral-600">{webhookSetup}</p>}
+          <CopyField
+            label="POST events to this URL"
+            value={webhookUrl}
+            hint="Anything this URL receives is stored and available to flows straight away."
+          />
+          <Link href={`/connections/${id}`} className="text-xs text-blue-600 hover:underline">
+            Signing secret and delivery status →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

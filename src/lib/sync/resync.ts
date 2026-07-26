@@ -5,7 +5,9 @@ import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { processRawEvent, upsertEvents } from "@/ingestion/pipeline";
-import { activeStreams, syncStream } from "@/lib/sync/streams";
+import { activeStreams, syncStream, type PrimeStreamResult } from "@/lib/sync/streams";
+import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
+import { pollOperation } from "@/lib/provider-gateway/operations";
 import type { CanonicalEvent, Connector, PollArgs } from "@/connectors/types";
 
 const PAGE_CAP = 200;
@@ -248,4 +250,66 @@ async function upsertCursor(db: DB, connectionId: string, cursor: string | null)
     .insert(syncState)
     .values({ connectionId, cursor, lastPolledAt: now, updatedAt: now })
     .onConflictDoUpdate({ target: syncState.connectionId, set: { cursor, lastPolledAt: now, updatedAt: now } });
+}
+
+/**
+ * On-demand refresh for a connection that has NO per-flow resource — the
+ * counterpart to `primeStream`, for sources `primeStream` cannot serve.
+ *
+ * Not every source is stream-scoped. Sheets picks a tab, Calendar a calendar,
+ * Instantly a campaign; each has a `sourceConfig`, which is what `primeStream`
+ * keys on. Sendblue and Close have none — the account IS the resource, so their
+ * Get data step carries an empty config and `hasStreamConfig` is false.
+ *
+ * That gap made Test silently skip the refresh for exactly those sources: it
+ * never called the provider, ran the flow against whatever storage happened to
+ * hold, and printed "0 loaded — No records returned". Which is the same lie this
+ * codebase keeps having to unpick. It is indistinguishable from a source that
+ * genuinely is empty, and undebuggable, because the request that would have
+ * failed was never made. Worse, it makes connector fixes look ineffective —
+ * changing the poll cannot change a Test that does not call it.
+ *
+ * `runSync(…, "incremental")` is the connection-level equivalent of syncStream:
+ * poll from the stored cursor, upsert, advance. The guards are deliberately the
+ * same ones `primeStream` applies — paused connection, then a budget claim on
+ * the interactive lane — so both kinds of source behave alike under a tripped
+ * breaker or an exhausted quota.
+ */
+export async function primeConnection(db: DB, orgId: string, connectionId: string): Promise<PrimeStreamResult> {
+  const [conn] = await db
+    .select()
+    .from(connections)
+    .where(and(eq(connections.id, connectionId), eq(connections.orgId, orgId)))
+    .limit(1);
+  if (!conn) return { ok: false, error: "This step's connected account no longer exists." };
+  // Stream-scoped sources go through primeStream. Webhook-only sources have
+  // nothing to poll — that is their design, not a failure, so it is not a note.
+  if (isStreamScoped(conn.source) || !getConnector(conn.source)?.poll) return { ok: true, refreshed: false };
+
+  if (isPaused(conn)) {
+    const when = conn.pausedUntil ? ` Retrying around ${conn.pausedUntil.toLocaleTimeString()}.` : "";
+    return {
+      ok: true,
+      refreshed: false,
+      note: `Couldn't re-read the source — syncing is paused (${conn.pausedReason ?? "provider limit"}).${when} Showing the data we already have.`,
+    };
+  }
+
+  const claim = await claimCalls(db, conn, pollOperation(conn.source, conn.config), 1, new Date(), "interactive");
+  if (!claim.allowed) {
+    return {
+      ok: true,
+      refreshed: false,
+      note: `Couldn't re-read the source — ${claim.reason.toLowerCase()}. Showing the data we already have.`,
+    };
+  }
+
+  try {
+    await runSync(db, connectionId, "incremental");
+    return { ok: true, refreshed: true };
+  } catch (e) {
+    // A provider error now reaches the user as an error, where before the Test
+    // reported zero records and no reason.
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }

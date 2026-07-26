@@ -4,6 +4,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
 import { connections, events, sourceStreams } from "@/db/schema";
 import { primeStream } from "@/lib/sync/streams";
+import { primeConnection } from "@/lib/sync/resync";
 import { claimCalls, laneLimit, pauseConnection } from "@/lib/provider-gateway/budget";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { encrypt } from "@/lib/crypto";
@@ -231,5 +232,105 @@ describe("primeStream freshness gate (Defect #1)", () => {
     const res = await primeStream(db, ORG, connId, CFG, { force: true });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("403");
+  });
+});
+
+/**
+ * The gap `primeStream` could not cover, and what it cost.
+ *
+ * `primeStreamsForTest` only primed a step whose `sourceConfig` was non-empty.
+ * Sendblue and Close have no flowFields — the account IS the resource — so their
+ * steps carry an empty config and the refresh was skipped entirely. Test then ran
+ * the flow over whatever storage held and printed "0 loaded · No records
+ * returned": identical to a genuinely empty source, with no request made and so
+ * nothing to diagnose. It also made connector fixes look inert, since changing a
+ * poll cannot change a Test that never calls it.
+ */
+describe("primeConnection — sources with no per-flow resource", () => {
+  const SB_KEY = { apiKey: "kid", apiSecret: "ksec" };
+  let sbId: string;
+
+  const message = (handle: string, minsAgo: number) => ({
+    message_handle: handle,
+    status: "DELIVERED",
+    is_outbound: true,
+    to_number: "+15551234567",
+    date_sent: new Date(Date.now() - minsAgo * 60_000).toISOString(),
+  });
+
+  async function connectSendblue(): Promise<string> {
+    const [row] = await db
+      .insert(connections)
+      .values({
+        orgId: ORG,
+        source: "sendblue",
+        name: "Sendblue",
+        status: "active",
+        authType: "secret",
+        credentialsEncrypted: encrypt(JSON.stringify(SB_KEY), Buffer.from(KEY, "base64")),
+      })
+      .returning({ id: connections.id });
+    return row.id;
+  }
+
+  function serve(messages: unknown[], status = 200) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: status >= 200 && status < 300,
+        status,
+        statusText: status === 200 ? "OK" : "Error",
+        headers: { get: () => null },
+        json: async () => ({ messages }),
+        text: async () => JSON.stringify({ messages }),
+      }) as unknown as Response),
+    );
+  }
+
+  beforeEach(async () => {
+    sbId = await connectSendblue();
+  });
+
+  it("actually calls the provider and stores what comes back", async () => {
+    serve([message("h1", 10), message("h2", 20)]);
+    const res = await primeConnection(db, ORG, sbId);
+    expect(res).toEqual({ ok: true, refreshed: true });
+
+    const rows = await db.select().from(events).where(and(eq(events.connectionId, sbId), isNull(events.deletedAt)));
+    expect(rows).toHaveLength(2);
+  });
+
+  it("reports a provider failure as an error, not as zero records", async () => {
+    // THE regression: before, this path was never reached and the user saw
+    // "0 loaded" with no indication anything had gone wrong.
+    serve([], 401);
+    const res = await primeConnection(db, ORG, sbId);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("401");
+  });
+
+  it("an account that really is empty stays zero, with no error", async () => {
+    serve([]);
+    const res = await primeConnection(db, ORG, sbId);
+    expect(res).toEqual({ ok: true, refreshed: true });
+    const rows = await db.select().from(events).where(eq(events.connectionId, sbId));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("declines to touch a stream-scoped connection — that is primeStream's job", async () => {
+    serve([message("h1", 5)]);
+    const res = await primeConnection(db, ORG, connId); // the gsheets connection
+    expect(res).toEqual({ ok: true, refreshed: false });
+  });
+
+  it("honors the same pause guard as primeStream, with the same wording", async () => {
+    await pauseConnection(db, sbId, 60_000, "provider limit");
+    serve([message("h1", 5)]);
+    const res = await primeConnection(db, ORG, sbId);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.refreshed).toBe(false);
+      expect(res.note).toContain("Couldn't re-read the source");
+    }
   });
 });
