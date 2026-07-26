@@ -1,3 +1,21 @@
+/**
+ * E.9 — FROZEN (approved). This is the SECOND compute engine: an 8-operator
+ * SQL builder that predates the flow engine's 17-operator JS one. It is kept
+ * deliberately, unchanged, for two reasons:
+ *
+ *   1. it is a working, tested oracle that de-risks the flow engine's SQL
+ *      compilation (E.4) — a second independent implementation to compare against;
+ *   2. the classic recompute-on-load dashboard path still serves existing
+ *      metrics, and removing it would change numbers users already rely on.
+ *
+ * FROZEN means: no new features, no new operators, no new call sites. Bug
+ * fixes only, and only where the flow engine agrees on the correct answer.
+ *
+ * DEPRECATION WINDOW (approved — freeze is not serve-forever): this module is
+ * deleted once (a) the compiled flow engine proves verbatim parity across the
+ * golden suite AND (b) no metric definitions remain that only this path can
+ * evaluate. Until both hold, it stays.
+ */
 import { and, or, desc, sql, type SQL } from "drizzle-orm";
 import { events } from "@/db/schema";
 import type { DB } from "@/db/types";
@@ -81,6 +99,9 @@ function baseWhere(
 ): SQL {
   const conds: SQL[] = [
     sql`${events.orgId} = ${orgId}`,
+    // Soft-deleted rows are records the source no longer has — every reader
+    // must skip them or numbers stop matching the source.
+    sql`${events.deletedAt} is null`,
     sql`${events.occurredAt} >= ${range.from}`,
     sql`${events.occurredAt} <= ${range.to}`,
   ];
@@ -198,13 +219,13 @@ export async function distinctSources(db: DB, orgId: string): Promise<string[]> 
   const rows = await db
     .selectDistinct({ source: events.source })
     .from(events)
-    .where(sql`${events.orgId} = ${orgId}`);
+    .where(sql`${events.orgId} = ${orgId} and ${events.deletedAt} is null`);
   return rows.map((r) => r.source).sort();
 }
 
 /** Distinct event types present (optionally within a source). */
 export async function distinctEventTypes(db: DB, orgId: string, source?: string | null): Promise<string[]> {
-  const conds: SQL[] = [sql`${events.orgId} = ${orgId}`];
+  const conds: SQL[] = [sql`${events.orgId} = ${orgId}`, sql`${events.deletedAt} is null`];
   if (source) conds.push(sql`${events.source} = ${source}`);
   const rows = await db
     .selectDistinct({ eventType: events.eventType })

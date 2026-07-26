@@ -1108,6 +1108,11 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
   return (
     <div className="space-y-3 text-sm">
       <SectionLabel>Result</SectionLabel>
+      {/* F.8: when the source couldn't be re-read, the Test says so plainly
+          instead of implying these numbers are freshly pulled. */}
+      {t.sourceNote && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{t.sourceNote}</p>
+      )}
       <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-base font-semibold text-neutral-900">{resultLabel(type, t)}</p>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />

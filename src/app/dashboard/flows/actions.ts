@@ -7,9 +7,10 @@ import { getDb } from "@/db/client";
 import { connections } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow } from "@/lib/flow/store";
-import { runFlow, sampleAppFields, type NodeExec } from "@/lib/flow/engine";
+import { sampleAppFields } from "@/lib/flow/engine";
 import { materializeFlow } from "@/lib/flow/materialize";
-import { parseGraph, type FlowGraph } from "@/lib/flow/types";
+import { parseGraph } from "@/lib/flow/types";
+import { createTestRun, executeAndSettleTestRun, getTestRun, type NodeTestDTO, type TestRunState } from "@/lib/flow/test-run";
 import { ensureStreamsForGraph, primeStream } from "@/lib/sync/streams";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { getConnector } from "@/connectors/registry";
@@ -61,82 +62,50 @@ export async function deleteFlowAction(id: string): Promise<{ ok: true } | { ok:
   }
 }
 
-export type NodeTestDTO = {
-  status: "ok" | "error";
-  recordsIn: number;
-  recordsOut: number;
-  sample: unknown[];
-  /** Sample of the primary input (before) — for the before/after test preview. */
-  inputSample: unknown[];
-  outputSchema: Array<{ path: string; label: string; type: string; example?: unknown; container?: boolean }>;
-  error?: string;
-  tile?: unknown;
-  /** The computed number, when the step produces a single number (Count/Calculate). */
-  value?: number;
-};
+export type { NodeTestDTO } from "@/lib/flow/test-run";
 
-/** Shape one engine result into the compact DTO the editor renders. */
-function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTestDTO {
-  if (!exec) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample, outputSchema: [], error: "This step didn't run — check its inputs are connected." };
-  if (exec.status === "error") return { status: "error", recordsIn: exec.recordsIn, recordsOut: exec.recordsOut, sample: [], inputSample, outputSchema: [], error: exec.error };
-  return {
-    status: "ok",
-    recordsIn: exec.recordsIn,
-    recordsOut: exec.recordsOut,
-    sample: exec.sample,
-    inputSample,
-    outputSchema: exec.outputSchema,
-    tile: exec.tile,
-    value: exec.shape.kind === "scalar" ? exec.shape.value : undefined,
-  };
-}
+export type StartNodeTestResult =
+  | { runId: string; result?: undefined }
+  /** Inline fallback (Inngest unavailable): the run already settled. */
+  | { runId: string; result: NodeTestDTO };
 
 /**
- * First-use sync: if any app step feeding this test declares a resource whose
- * stream has never been polled, pull its first pages now — the Zapier "test
- * pulls samples" model. Errors surface on the Test result, never thrown.
+ * D.1-full: start a Test on the high-priority lane and return a run id the
+ * editor polls.
+ *
+ * INLINE FALLBACK — decided policy: enabled in ALL environments, including
+ * production, as documented graceful degradation. If the lane can't be
+ * reached (local dev without the Inngest dev server, or an Inngest outage in
+ * production), the Test executes inline in this request and returns its
+ * settled result. That is safe — it runs the identical code path, including
+ * the force-fresh prime and the Q6 lock-await, so it cannot corrupt data or
+ * double-poll a provider — it only bypasses lane fairness and the request
+ * timeout protection, which is strictly better than telling a user their Test
+ * is unavailable. The production case is LOGGED so an Inngest outage surfaces
+ * as a visible signal instead of silently degrading everyone's editor.
  */
-async function primeStreamsForTest(orgId: string, g: FlowGraph, nodeId: string): Promise<string | null> {
+export async function startNodeTestAction(graph: unknown, nodeId: string): Promise<StartNodeTestResult> {
+  const { orgId } = await requireOrg();
   const db = getDb();
-  const incoming = new Map<string, string[]>();
-  for (const e of g.edges) {
-    if (!incoming.has(e.target)) incoming.set(e.target, []);
-    incoming.get(e.target)!.push(e.source);
+  const runId = await createTestRun(db, orgId);
+  try {
+    await inngest.send({ name: "flow/test.requested", data: { testRunId: runId, orgId, graph, nodeId, priority: 180 } });
+    return { runId };
+  } catch (e) {
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        `[test-lane-fallback] Inngest unreachable — running test inline (orgId=${orgId}, runId=${runId}): ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+    const result = await executeAndSettleTestRun(db, orgId, runId, graph, nodeId);
+    return { runId, result };
   }
-  const wanted = new Set<string>([nodeId]);
-  const stack = [nodeId];
-  while (stack.length) {
-    const cur = stack.pop()!;
-    for (const s of incoming.get(cur) ?? []) if (!wanted.has(s)) { wanted.add(s); stack.push(s); }
-  }
-  for (const node of g.nodes) {
-    if (!wanted.has(node.id) || node.type !== "app") continue;
-    const cfg = node.data.config as { connectionId?: unknown; sourceConfig?: unknown };
-    const connectionId = typeof cfg.connectionId === "string" ? cfg.connectionId : null;
-    const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
-    if (!connectionId || !hasStreamConfig(sourceConfig)) continue;
-    const r = await primeStream(db, orgId, connectionId, sourceConfig);
-    if (!r.ok) return r.error;
-  }
-  return null;
 }
 
-/** Run the engine up to a single node on real synced data and return a compact result. */
-export async function testNodeAction(graph: unknown, nodeId: string): Promise<NodeTestDTO> {
+/** Poll a Test run started by startNodeTestAction (org-scoped). */
+export async function pollNodeTestAction(runId: string): Promise<TestRunState | null> {
   const { orgId } = await requireOrg();
-  try {
-    const g = parseGraph(graph);
-    const primeError = await primeStreamsForTest(orgId, g, nodeId);
-    if (primeError) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: primeError };
-    const res = await runFlow({ db: getDb(), orgId }, g, { untilNodeId: nodeId });
-    // The "before" side of the preview: the primary input node's output sample.
-    const inNodeId = g.edges.find((e) => e.target === nodeId)?.source;
-    const inExec = inNodeId ? res.nodes.get(inNodeId) : undefined;
-    const inputSample = inExec && inExec.status === "ok" ? inExec.sample : [];
-    return execToDTO(res.nodes.get(nodeId), inputSample);
-  } catch (e) {
-    return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: e instanceof Error ? e.message : String(e) };
-  }
+  return getTestRun(getDb(), orgId, runId);
 }
 
 export type AppFieldDTO = { path: string; label: string; type: string; example?: unknown; container?: boolean };

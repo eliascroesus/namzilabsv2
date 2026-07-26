@@ -202,7 +202,7 @@ describe("Google Sheets polling", () => {
     expect(result.records[0].properties).toEqual({ name: "Alice", email: "alice@acme.com" });
   });
 
-  it("dedup cursor advances so a second poll returns no new rows", async () => {
+  it("mirror semantics: every poll re-reads the whole tab regardless of cursor", async () => {
     vi.stubGlobal(
       "fetch",
       mockFetch([
@@ -214,11 +214,32 @@ describe("Google Sheets polling", () => {
     );
     const second = await googleSheetsConnector.poll!({
       connectionId: "c1",
-      cursor: "2", // already processed 2 data rows
+      cursor: "2", // stored by a previous sweep — informational only
       credentials: { accessToken: "tok" },
       config: { spreadsheetId: "SHEET1" },
     });
-    expect(second.records).toHaveLength(0);
+    // The full current sheet comes back; the WRITER dedups/refreshes in place.
+    expect(second.records).toHaveLength(2);
     expect(second.nextCursor).toBe("2");
+  });
+
+  it("skips fully blank rows (a cleared row mirrors as deleted, not as empty data)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        [
+          "/values/",
+          { values: [["name", "email"], ["Alice", "a@b.com"], ["", "  "], ["Cara", "c@d.com"]] },
+        ],
+      ]),
+    );
+    const res = await googleSheetsConnector.poll!({
+      connectionId: "c1",
+      cursor: null,
+      credentials: { accessToken: "tok" },
+      config: { spreadsheetId: "SHEET1" },
+    });
+    // Row 3 (blank) produces nothing; row numbers of later rows are unshifted.
+    expect(res.records.map((r) => r.eventId)).toEqual(["gsheets:c1:row:2", "gsheets:c1:row:4"]);
   });
 });

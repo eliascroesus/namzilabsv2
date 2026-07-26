@@ -6,6 +6,8 @@ import { requireOrg } from "@/lib/auth";
 import { createConnection, deleteConnection, updateConnectionName, getConnection } from "@/lib/connections";
 import { catalogEntry } from "@/connectors/catalog";
 import { inngest } from "@/inngest/client";
+import { promoteToBaseCadence } from "@/lib/sync/cadence";
+import { getDb } from "@/db/client";
 
 /**
  * Connect an API-key / token based source (Calendly, Close, Instantly, Sendblue, custom
@@ -49,6 +51,8 @@ export async function syncNewAction(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "");
   const conn = await getConnection(orgId, id);
   if (!conn) throw new Error("connection not found");
+  // H.2: a user action proves intent — cancel idle backoff immediately.
+  await promoteToBaseCadence(getDb(), id).catch(() => {});
   await inngest.send({ name: "sync/connection.requested", data: { connectionId: id, mode: "incremental" } });
   redirect(`/connections/${id}`);
 }
@@ -59,6 +63,7 @@ export async function fullResyncAction(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "");
   const conn = await getConnection(orgId, id);
   if (!conn) throw new Error("connection not found");
+  await promoteToBaseCadence(getDb(), id).catch(() => {});
   await inngest.send({ name: "sync/connection.requested", data: { connectionId: id, mode: "full" } });
   redirect(`/connections/${id}`);
 }

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { getConnection, getSigningSecret, previewLatest, webhookUrlFor } from "@/lib/connections";
-import { catalogEntry } from "@/connectors/catalog";
+import { catalogEntry, syncGuarantee } from "@/connectors/catalog";
 import {
   disconnectAction,
   syncNewAction,
@@ -58,10 +58,20 @@ export default async function ConnectionPage({
           <StatusBadge status={conn.status} />
         </div>
 
-        {conn.lastError && (
-          <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {conn.lastError}
+        {/* F.3/F.6: a paused connection is never a dead end — it says WHY and
+            WHEN it resumes, and it retries itself with no human action. */}
+        {conn.pausedUntil && new Date(conn.pausedUntil).getTime() > Date.now() ? (
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <b>Paused, retrying automatically.</b>{" "}
+            {conn.pausedReason ?? "Waiting before the next attempt."} Next attempt around{" "}
+            {new Date(conn.pausedUntil).toLocaleTimeString()} — nothing is lost, syncing resumes on its own.
           </div>
+        ) : (
+          conn.lastError && (
+            <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {conn.lastError}
+            </div>
+          )
         )}
 
         <dl className="mt-6 grid grid-cols-2 gap-4 rounded-md border border-neutral-200 p-4 text-sm">
@@ -79,7 +89,21 @@ export default async function ConnectionPage({
           <Field label="Created" value={new Date(conn.createdAt).toLocaleString()} />
           <Field label="Instant webhook" value={entry?.instant ? "Yes" : "No"} />
           <Field label="Polling / backfill" value={entry?.poll ? "Yes" : "No"} />
+          <Field label="Data guarantee" value={GUARANTEE_LABEL[syncGuarantee(conn.source)]} />
         </dl>
+
+        {/* The weaker guarantee class is stated plainly, not hidden in a tooltip:
+            with no list endpoint to reconcile against, a webhook this provider
+            fails to deliver (downtime, expired subscription) is not recoverable
+            by polling. */}
+        {syncGuarantee(conn.source) === "webhook-only" && (
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <b>Webhook-only source.</b> {entry?.name ?? conn.source} offers no reliable way to re-read
+            history, so your data here is as complete as the webhooks that actually arrived. If a
+            webhook is missed while the provider or endpoint is down, that event will be absent until
+            the provider redelivers it. Sources with polling don&rsquo;t have this limitation.
+          </div>
+        )}
 
         {/* No data config lives here — every "what to pull" choice is on the flow's Get
             data step, so one connected account can feed many flows differently. */}
@@ -200,6 +224,13 @@ function PreviewTable({ rows }: { rows: CanonicalEvent[] }) {
     </div>
   );
 }
+
+/** Guarantee-class copy (docs/DATA_MODEL.md): stated on every connection. */
+const GUARANTEE_LABEL: Record<ReturnType<typeof syncGuarantee>, string> = {
+  mirror: "Mirror — always matches the source",
+  incremental: "Incremental — gaps reconciled by polling",
+  "webhook-only": "Webhook-only — no poll backstop",
+};
 
 function Field({ label, value }: { label: string; value: string }) {
   return (

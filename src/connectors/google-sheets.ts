@@ -7,10 +7,14 @@ const API = "https://sheets.googleapis.com/v4/spreadsheets";
 const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
 
 /**
- * Google Sheets. Poll-PRIMARY: Sheets has no native "new row" webhook, so we
- * page through the sheet with a row cursor (the reliable path). An optional
- * Apps Script/Drive push can POST rows to the inbound URL; those are verified
- * with an HMAC secret and normalized the same way.
+ * Google Sheets. MIRROR source: every poll re-reads the ENTIRE tab and the
+ * caller (syncStream) refreshes rows in place and soft-deletes rows the read
+ * no longer produced — a spreadsheet is a living document, not an append-only
+ * log, so edits and deletions anywhere in it must be reflected. Row identity
+ * is the sheet row number (scoped by stream), so re-sorting re-keys rows but
+ * the mirrored set always equals the sheet. An optional Apps Script/Drive push
+ * can POST rows to the inbound URL; those are verified with an HMAC secret and
+ * normalized the same way.
  *
  * config: { spreadsheetId: string, range?: string }  (range e.g. "Sheet1")
  */
@@ -41,8 +45,9 @@ export const googleSheetsConnector: Connector = {
     ];
   },
 
+  /** Full tab read every time (mirror semantics) — the cursor is informational only. */
   async poll(args: PollArgs): Promise<PollResult> {
-    return readRows(args, args.cursor ? Number(args.cursor) : 0);
+    return readRows(args);
   },
 
   async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
@@ -76,12 +81,12 @@ export const googleSheetsConnector: Connector = {
   },
 
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
-    const { records } = await readRows(args, 0);
+    const { records } = await readRows(args);
     return records.slice(-n).reverse();
   },
 };
 
-async function readRows(args: PollArgs, fromDataRow: number): Promise<PollResult> {
+async function readRows(args: PollArgs, fromDataRow = 0): Promise<PollResult> {
   const token = str(args.credentials?.["accessToken"]);
   if (!token) throw new Error("gsheets: missing access token");
   const spreadsheetId = str(args.config?.["spreadsheetId"]);
@@ -103,6 +108,10 @@ async function readRows(args: PollArgs, fromDataRow: number): Promise<PollResult
   const records: CanonicalEvent[] = [];
   for (let i = fromDataRow; i < dataRows.length; i++) {
     const cells = dataRows[i];
+    // Fully blank rows carry no data: skip them, so a row someone cleared out
+    // mirrors as deleted (its id stops being produced) rather than as an
+    // event whose every field is empty.
+    if (!cells || cells.every((c) => c == null || String(c).trim() === "")) continue;
     const obj: Record<string, unknown> = {};
     header.forEach((h, c) => (obj[h || `col${c}`] = cells[c] ?? null));
     const sheetRowNumber = i + 2; // account for header + 1-based rows

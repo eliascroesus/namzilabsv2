@@ -1,7 +1,8 @@
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import { flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
-import { runFlow, buildTile } from "./engine";
+import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
+import { runFlow, buildTile, type CompileProvenance } from "./engine";
 import { getPublishedVersion } from "./store";
 import { parseGraph, type TileSpec } from "./types";
 
@@ -16,7 +17,11 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
   const { version, graph } = published;
 
   try {
-    const { nodes, outputs } = await runFlow({ db, orgId }, graph);
+    // E.5: collect provenance for this materialization — the SQL behind every
+    // number, stored with the number itself.
+    const provenance: CompileProvenance[] = [];
+    const asOf = new Date();
+    const { nodes, outputs } = await runFlow({ db, orgId, provenance }, graph);
 
     // Tiles come from Output nodes (legacy flows) and/or endpoint metrics chosen at
     // Review & publish (new flows) — one tile per enabled metric.
@@ -40,8 +45,13 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
       await db.update(flowResults).set({ status: "error", error: message }).where(eq(flowResults.flowId, flowId));
       return { ok: false, error: message };
     }
+    const record = {
+      asOf: asOf.toISOString(),
+      engine: provenance.some((p) => p.foldedFilterNodeIds.length > 0) ? "compiled" : "js",
+      reads: provenance,
+    };
     for (const t of tiles) {
-      await upsertResult(db, orgId, flowId, version, t.nodeId, t.tile, "fresh", null);
+      await upsertResult(db, orgId, flowId, version, t.nodeId, t.tile, "fresh", null, record);
     }
     // Drop results for tiles that no longer exist in the published flow.
     const keep = tiles.map((t) => t.nodeId);
@@ -60,9 +70,24 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
  * Mark stale every published flow whose graph pulls from `source` (or the given
  * connection). Called when new data lands so the dashboard shows freshness and a
  * later recompute refreshes only what changed.
+ *
+ * G.1 — stream precision: when the caller knows WHICH streams changed
+ * (`streamHashes` non-empty), a Get-data step with a chosen resource only
+ * matches when ITS stream is among them — a change in spreadsheet A no longer
+ * recomputes flows that read only spreadsheet B. A step with no chosen
+ * resource reads the whole connection, so it matches any change there; callers
+ * without stream knowledge (webhook path, full re-syncs) pass no hashes and
+ * keep source/connection-level matching.
  */
-export async function markStaleForSource(db: DB, orgId: string, source: string, connectionId?: string | null): Promise<string[]> {
+export async function markStaleForSource(
+  db: DB,
+  orgId: string,
+  source: string,
+  connectionId?: string | null,
+  streamHashes?: string[] | null,
+): Promise<string[]> {
   const published = await db.select().from(flows).where(and(eq(flows.orgId, orgId), eq(flows.status, "published")));
+  const changedHashes = streamHashes?.length ? new Set(streamHashes) : null;
   const affected: string[] = [];
   for (const f of published) {
     if (!f.publishedVersion) continue;
@@ -75,8 +100,13 @@ export async function markStaleForSource(db: DB, orgId: string, source: string, 
     const graph = parseGraph(ver.graph);
     const uses = graph.nodes.some((n) => {
       if (n.type !== "app") return false;
-      const c = (n.data.config ?? {}) as { source?: string; connectionId?: string };
-      return c.source === source || (connectionId != null && c.connectionId === connectionId);
+      const c = (n.data.config ?? {}) as { source?: string; connectionId?: string; sourceConfig?: Record<string, unknown> };
+      const matchesOrigin = c.source === source || (connectionId != null && c.connectionId === connectionId);
+      if (!matchesOrigin) return false;
+      if (changedHashes && hasStreamConfig(c.sourceConfig ?? {})) {
+        return changedHashes.has(streamConfigHash(c.sourceConfig ?? {}));
+      }
+      return true; // whole-connection read, or caller without stream knowledge
     });
     if (uses) {
       await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.flowId, f.id));
@@ -85,6 +115,36 @@ export async function markStaleForSource(db: DB, orgId: string, source: string, 
   }
   return affected;
 }
+
+/**
+ * G.4 — the cheap freshness beacon the dashboard polls. One aggregate over the
+ * org's flow_results (a handful of rows): any recompute, staleness flip, tile
+ * add/remove or error changes the string. Clients poll this (visibility-gated,
+ * 10–15s) and refetch tiles only when it moves — refresh cost scales with
+ * data-change rate, not with viewers holding dashboards open.
+ */
+export async function resultsVersion(db: DB, orgId: string): Promise<string> {
+  const [row] = await db
+    .select({
+      tiles: sql<number>`count(*)::int`,
+      nonFresh: sql<number>`count(*) filter (where ${flowResults.status} <> 'fresh')::int`,
+      maxComputedAt: sql<string | null>`max(${flowResults.computedAt})`,
+    })
+    .from(flowResults)
+    .where(eq(flowResults.orgId, orgId));
+  const maxMs = row?.maxComputedAt ? Date.parse(String(row.maxComputedAt)) : 0;
+  return `${row?.tiles ?? 0}.${row?.nonFresh ?? 0}.${maxMs}`;
+}
+
+/**
+ * H.4 — recompute-skip. A tile whose freshly-computed value is byte-identical
+ * to the stored one does not need its `computed_at` bumped… but it DOES, and
+ * deliberately: the as-of marker is a statement about when the number was last
+ * VERIFIED against the source, not when it last changed. What H.4 actually
+ * skips is upstream: `reconcileChanged` gates staleness on real data changes,
+ * so an unchanged sweep never marks anything stale and this function finds
+ * nothing to do. The skip lives where the work originates, not here.
+ */
 
 /** Recompute every flow that currently has stale results (scheduled + on-demand). */
 export async function materializeStaleAll(db: DB): Promise<number> {
@@ -105,7 +165,9 @@ async function upsertResult(
   tile: TileSpec,
   status: string,
   error: string | null,
+  provenance?: Record<string, unknown>,
 ): Promise<void> {
+  const now = new Date();
   await db
     .insert(flowResults)
     .values({
@@ -116,10 +178,11 @@ async function upsertResult(
       tile: tile as unknown as Record<string, unknown>,
       status,
       error,
-      computedAt: new Date(),
+      provenance: provenance ?? null,
+      computedAt: now,
     })
     .onConflictDoUpdate({
       target: [flowResults.flowId, flowResults.outputNodeId],
-      set: { version, tile: tile as unknown as Record<string, unknown>, status, error, computedAt: new Date() },
+      set: { version, tile: tile as unknown as Record<string, unknown>, status, error, provenance: provenance ?? null, computedAt: now },
     });
 }

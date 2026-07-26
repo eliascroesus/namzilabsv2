@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { getReadDb } from "@/db/client";
 import { connections, deadLetter, events, flowResults, flows } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
+import { FreshnessPoller } from "@/components/freshness-poller";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
 import { listMetrics, type Metric } from "@/lib/metrics/store";
@@ -30,7 +31,7 @@ type Tile =
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const { orgId, userId, auth } = await requireOrg();
-  const db = getDb();
+  const db = getReadDb(); // read-only surface: rides the DB_DRIVER_READ soak seam (B.3)
 
   const rangeKey = one(sp.range) || "7d";
   const { range } = resolveRange(rangeKey);
@@ -47,7 +48,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     [metrics, sources, recentEvents, dlqCount, connCount] = await Promise.all([
       listMetrics(orgId),
       distinctSources(db, orgId),
-      db.select().from(events).where(eq(events.orgId, orgId)).orderBy(desc(events.receivedAt)).limit(6),
+      // Live rows only (query convention: every events read filters deleted_at,
+      // src/db/schema.ts). receivedAt ordering is intentional for an activity
+      // feed; the top-6 sort over one org's live rows is bounded and cheap.
+      db.select().from(events).where(and(eq(events.orgId, orgId), isNull(events.deletedAt))).orderBy(desc(events.receivedAt)).limit(6),
       db
         .select({ c: sql<number>`count(*)::int` })
         .from(deadLetter)
@@ -107,6 +111,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
+      {/* G.4: refresh the server-rendered tiles when the org's results move. */}
+      <FreshnessPoller />
       <main className="mx-auto max-w-5xl px-6 py-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>

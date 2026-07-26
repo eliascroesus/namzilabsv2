@@ -1,11 +1,10 @@
-import { and, eq, gte, isNull, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 import { connections, events, sourceStreams, syncState, rawEvents } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
-import { isStreamScoped } from "@/connectors/catalog";
+import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
-import { normalizeDatesDeep } from "@/lib/normalize-dates";
-import { processRawEvent } from "@/ingestion/pipeline";
+import { processRawEvent, upsertEvents } from "@/ingestion/pipeline";
 import { activeStreams, syncStream } from "@/lib/sync/streams";
 import type { CanonicalEvent, Connector, PollArgs } from "@/connectors/types";
 
@@ -15,12 +14,22 @@ export type SyncMode = "full" | "incremental";
 export type SyncResult = {
   mode: SyncMode;
   polled: boolean;
+  /** Records processed this run (insert + update + unchanged). */
   upserted: number;
+  /** New rows this run. */
+  inserted: number;
+  /** Existing rows whose content actually changed this run. */
+  updated: number;
   softDeleted: number;
   generation: number;
   orgId: string;
   source: string;
 };
+
+/** Did this run change what dashboards would show? (drives staleness) */
+export function syncChanged(r: Pick<SyncResult, "inserted" | "updated" | "softDeleted">): boolean {
+  return r.inserted + r.updated + r.softDeleted > 0;
+}
 
 /**
  * Sync a connection's data.
@@ -40,7 +49,7 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
   if (!connector?.poll) {
     // Webhook-only source: nothing to poll.
     await db.update(connections).set({ syncStatus: "live", updatedAt: new Date() }).where(eq(connections.id, connectionId));
-    return { mode, polled: false, upserted: 0, softDeleted: 0, generation: conn.syncGeneration, orgId: conn.orgId, source: conn.source };
+    return { mode, polled: false, upserted: 0, inserted: 0, updated: 0, softDeleted: 0, generation: conn.syncGeneration, orgId: conn.orgId, source: conn.source };
   }
 
   await db.update(connections).set({ syncStatus: "importing", updatedAt: new Date() }).where(eq(connections.id, connectionId));
@@ -57,7 +66,7 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
     if (mode === "full") {
       const gen = Math.max(1, (conn.syncGeneration ?? 0) + 1);
       const { records, cursor } = await pollAll(connector, base);
-      const upserted = await upsertEventsGen(db, meta, records, gen);
+      const res = await upsertEvents(db, { ...meta, generation: gen }, records);
 
       // Only NOW (after the replacement generation is in) remove poll-managed rows
       // that were not seen this run — i.e. removed upstream. Webhook rows (gen 0) are safe.
@@ -73,21 +82,21 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
         .where(eq(connections.id, conn.id));
       await upsertCursor(db, conn.id, cursor);
 
-      return { mode: "full", polled: true, upserted, softDeleted: del.length, generation: gen, orgId: conn.orgId, source: conn.source };
+      return { mode: "full", polled: true, upserted: res.total, inserted: res.inserted, updated: res.updated, softDeleted: del.length, generation: gen, orgId: conn.orgId, source: conn.source };
     }
 
     // incremental: fetch from the stored cursor, additive (no soft-delete).
     const gen = Math.max(1, conn.syncGeneration ?? 0);
     const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, conn.id)).limit(1);
     const { records, nextCursor } = await connector.poll({ ...base, cursor: state?.cursor ?? null });
-    const upserted = await upsertEventsGen(db, meta, records, gen);
+    const res = await upsertEvents(db, { ...meta, generation: gen }, records);
     await db
       .update(connections)
       .set({ syncStatus: "live", lastEventAt: new Date(), lastError: null, updatedAt: new Date() })
       .where(eq(connections.id, conn.id));
     await upsertCursor(db, conn.id, nextCursor);
 
-    return { mode: "incremental", polled: true, upserted, softDeleted: 0, generation: gen, orgId: conn.orgId, source: conn.source };
+    return { mode: "incremental", polled: true, upserted: res.total, inserted: res.inserted, updated: res.updated, softDeleted: 0, generation: gen, orgId: conn.orgId, source: conn.source };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await db.update(connections).set({ syncStatus: "error", lastError: message, updatedAt: new Date() }).where(eq(connections.id, connectionId));
@@ -108,49 +117,92 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
   const streams = (await activeStreams(db, conn.id)).filter((s) => s.status !== "disabled");
 
   if (mode === "incremental") {
+    let inserted = 0;
+    let updated = 0;
+    let softDeleted = 0;
     let upserted = 0;
     for (const stream of streams) {
       try {
         const r = await syncStream(db, conn, stream, 5);
-        upserted += r.inserted;
+        inserted += r.inserted;
+        updated += r.updated;
+        softDeleted += r.softDeleted;
+        upserted += r.inserted + r.updated + r.deduped;
       } catch {
         // Recorded on the stream row; other streams keep syncing.
       }
     }
     await db
       .update(connections)
-      .set({ syncStatus: "live", lastEventAt: upserted > 0 ? new Date() : conn.lastEventAt, lastError: null, updatedAt: new Date() })
+      .set({ syncStatus: "live", lastEventAt: inserted + updated > 0 ? new Date() : conn.lastEventAt, lastError: null, updatedAt: new Date() })
       .where(eq(connections.id, conn.id));
-    return { mode, polled: streams.length > 0, upserted, softDeleted: 0, generation: Math.max(1, conn.syncGeneration ?? 0), orgId: conn.orgId, source: conn.source };
+    return { mode, polled: streams.length > 0, upserted, inserted, updated, softDeleted, generation: Math.max(1, conn.syncGeneration ?? 0), orgId: conn.orgId, source: conn.source };
   }
 
   // Full: re-poll every stream from the beginning at the next generation, then
-  // remove poll-managed rows not seen this run (upstream-deleted or de-referenced).
+  // remove poll-managed rows not seen this run (upstream-deleted).
   const credentials = await getConnectionCredentials(db, conn);
   const gen = Math.max(1, (conn.syncGeneration ?? 0) + 1);
   let upserted = 0;
+  let inserted = 0;
+  let updated = 0;
+  const polledHashes: string[] = [];
   for (const stream of streams) {
     const base: PollArgs = { connectionId: conn.id, cursor: null, credentials, config: stream.config ?? undefined, streamHash: stream.configHash };
     const { records, cursor } = await pollAll(connector, base);
-    upserted += await upsertEventsGen(db, { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash }, records, gen);
+    const res = await upsertEvents(
+      db,
+      {
+        orgId: conn.orgId,
+        connectionId: conn.id,
+        source: conn.source,
+        streamHash: stream.configHash,
+        generation: gen,
+        preserveOccurredAt: isMirrorSource(conn.source),
+      },
+      records,
+    );
+    upserted += res.total;
+    inserted += res.inserted;
+    updated += res.updated;
+    polledHashes.push(stream.configHash);
     await db
       .update(sourceStreams)
       .set({ cursor, status: "active", lastError: null, lastPolledAt: new Date(), updatedAt: new Date() })
       .where(eq(sourceStreams.id, stream.id));
   }
 
-  const del = await db
-    .update(events)
-    .set({ deletedAt: new Date() })
-    .where(and(eq(events.connectionId, conn.id), gte(events.syncGeneration, 1), lt(events.syncGeneration, gen), isNull(events.deletedAt)))
-    .returning({ id: events.id });
+  // Soft-delete is scoped to the streams actually re-polled THIS run. A blanket
+  // connection-wide delete would tombstone rows of streams the run never read
+  // (e.g. a disabled/paused stream) — cross-stream data loss, not cleanup.
+  //
+  // The webhook exemption here is STRUCTURAL, not numeric: webhook/instant rows
+  // carry stream_hash = NULL and can never match the polled-hash scope. Rows
+  // WITH a polled stream's hash are stream-managed whatever their generation —
+  // including legacy generation-0 rows from the pre-unified writer — so a row
+  // whose sheet row disappeared before the first new-style sweep is still
+  // retired by this pass instead of lingering as a ghost.
+  const del = polledHashes.length
+    ? await db
+        .update(events)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(events.connectionId, conn.id),
+            inArray(events.streamHash, polledHashes),
+            lt(events.syncGeneration, gen),
+            isNull(events.deletedAt),
+          ),
+        )
+        .returning({ id: events.id })
+    : [];
 
   await db
     .update(connections)
     .set({ syncGeneration: gen, syncStatus: "live", historicalSyncedAt: new Date(), lastEventAt: new Date(), lastError: null, updatedAt: new Date() })
     .where(eq(connections.id, conn.id));
 
-  return { mode: "full", polled: streams.length > 0, upserted, softDeleted: del.length, generation: gen, orgId: conn.orgId, source: conn.source };
+  return { mode: "full", polled: streams.length > 0, upserted, inserted, updated, softDeleted: del.length, generation: gen, orgId: conn.orgId, source: conn.source };
 }
 
 /** Re-run normalization from the immutable raw_events (no provider calls). */
@@ -188,34 +240,6 @@ async function pollAll(connector: Connector, base: PollArgs): Promise<{ records:
     cursor = nextCursor;
   }
   return { records: [...seen.values()], cursor };
-}
-
-async function upsertEventsGen(
-  db: DB,
-  meta: { orgId: string; connectionId: string; source: string; streamHash?: string | null },
-  records: CanonicalEvent[],
-  generation: number,
-): Promise<number> {
-  let n = 0;
-  for (const ev of records) {
-    const shared = {
-      eventType: ev.eventType,
-      subject: ev.subject ?? null,
-      occurredAt: ev.occurredAt,
-      value: ev.value != null ? String(ev.value) : null,
-      currency: ev.currency ?? null,
-      properties: normalizeDatesDeep(ev.properties),
-      syncGeneration: generation,
-      deletedAt: null,
-      streamHash: meta.streamHash ?? null,
-    };
-    await db
-      .insert(events)
-      .values({ eventId: ev.eventId, orgId: meta.orgId, connectionId: meta.connectionId, source: meta.source, ...shared })
-      .onConflictDoUpdate({ target: events.eventId, set: shared });
-    n += 1;
-  }
-  return n;
 }
 
 async function upsertCursor(db: DB, connectionId: string, cursor: string | null): Promise<void> {

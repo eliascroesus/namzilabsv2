@@ -5,7 +5,28 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, useNodesState, useEdgesState, useReactFlow, type Edge } from "@xyflow/react";
 import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
-import { saveDraftAction, testNodeAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
+import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
+
+/** Poll a lane Test run until it settles (bounded; ~90s of 800ms ticks). */
+async function pollTestResult(runId: string): Promise<NodeTestDTO> {
+  const timeoutError: NodeTestDTO = {
+    status: "error",
+    recordsIn: 0,
+    recordsOut: 0,
+    sample: [],
+    inputSample: [],
+    outputSchema: [],
+    error: "The test is taking too long — the sync may still be running. Try again in a moment.",
+  };
+  for (let tick = 0; tick < 112; tick++) {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const state = await pollNodeTestAction(runId);
+    if (!state) return { ...timeoutError, error: "This test run no longer exists — try again." };
+    if (state.status === "ok" && state.result) return state.result;
+    if (state.status === "error") return { ...timeoutError, error: state.error ?? "The test run failed — try again." };
+  }
+  return timeoutError;
+}
 import {
   bridgeEdgeFor,
   buildFieldGroups,
@@ -611,7 +632,29 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const testNode = useCallback(
     async (id: string) => {
       setTestingId(id);
-      const result = await testNodeAction(toGraph(), id);
+      // D.1-full: the Test runs on the durable high-priority lane; the editor
+      // polls for its result instead of holding one long request open. The
+      // inline fallback (Inngest unavailable) returns the settled result
+      // immediately in the same shape.
+      let result: NodeTestDTO;
+      try {
+        const started = await startNodeTestAction(toGraph(), id);
+        if (started.result) {
+          result = started.result;
+        } else {
+          result = await pollTestResult(started.runId);
+        }
+      } catch (e) {
+        result = {
+          status: "error",
+          recordsIn: 0,
+          recordsOut: 0,
+          sample: [],
+          inputSample: [],
+          outputSchema: [],
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
       setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, lastTest: result, dirty: false } } : n)));
       setTestingId(null);
     },

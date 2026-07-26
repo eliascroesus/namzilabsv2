@@ -1,0 +1,122 @@
+name: Legacy row reconciliation
+
+# Manual-only. Wraps PRE_LAUNCH_CHECKLIST.md item 5 — retiring the pre-unified-
+# writer "ghost" rows on stream-scoped connections (sync_generation >= 1 with no
+# stream_hash), which no sweep can ever reach because every sweep is now
+# stream-scoped.
+#
+# mode=inspect (the default) WRITES NOTHING. It prints the per-connection
+# breakdown so you can see the blast radius before deciding.
+# mode=apply performs the soft-delete. Rows are only ever soft-deleted, so a
+# mistaken batch can be undone by clearing deleted_at.
+#
+# ORDERING (load-bearing, from item 5): run this AFTER the production deploy and
+# BEFORE any fleet backfill or reprocessConnection replay.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "inspect = report only, writes nothing | apply = perform the soft-delete"
+        type: choice
+        required: true
+        default: inspect
+        options:
+          - inspect
+          - apply
+
+permissions:
+  contents: read
+
+concurrency:
+  group: legacy-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Announce mode
+        run: |
+          if [ "${{ inputs.mode }}" = "apply" ]; then
+            echo "::warning::Running in APPLY mode — legacy ghost rows will be soft-deleted."
+          else
+            echo "Running in INSPECT mode — nothing will be written."
+          fi
+
+      - name: Run reconciliation
+        id: run
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+        run: |
+          set -uo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Secret DATABASE_MIGRATION_URL is not set on this repository."
+            exit 1
+          fi
+          log="$RUNNER_TEMP/reconcile.log"
+          if [ "${{ inputs.mode }}" = "apply" ]; then
+            pnpm tsx scripts/reconcile-legacy-rows.ts --apply 2>&1 | tee "$log"
+          else
+            pnpm tsx scripts/reconcile-legacy-rows.ts 2>&1 | tee "$log"
+          fi
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "log=$log" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          set -uo pipefail
+          log="${{ steps.run.outputs.log }}"
+          code="${{ steps.run.outputs.exit_code }}"
+          {
+            echo "## Legacy row reconciliation — mode: \`${{ inputs.mode }}\`"
+            echo ""
+            if [ -f "$log" ]; then
+              echo "<details><summary>Per-connection breakdown</summary>"
+              echo ""
+              echo '```'
+              cat "$log"
+              echo '```'
+              echo ""
+              echo "</details>"
+              echo ""
+            fi
+            case "${code:-1}" in
+              0)
+                if [ "${{ inputs.mode }}" = "apply" ]; then
+                  echo "✅ **PASS — every legacy ghost row is retired. Backfills and replays are now unblocked.**"
+                  echo ""
+                  echo "If it said \`Nothing to do\`, that is also a pass: there were no ghost rows to retire."
+                else
+                  echo "✅ **Inspection complete. Nothing was written.**"
+                  echo ""
+                  echo "Review the breakdown above. If the counts look right, re-run this workflow with"
+                  echo "**mode = apply**. If they look wildly larger than expected, stop and investigate first."
+                fi
+                ;;
+              1)
+                echo "⚠️ **Rows remain.** The script is idempotent and batched, so simply re-run it with"
+                echo "**mode = apply** — re-running or resuming an interrupted run is always safe and never"
+                echo "double-deletes. Rows are soft-deleted only, so nothing is lost."
+                ;;
+              *)
+                echo "❌ **Could not run.** The database URL is missing or unreachable — check that the"
+                echo "\`DATABASE_MIGRATION_URL\` secret is set and points at the production database."
+                ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"

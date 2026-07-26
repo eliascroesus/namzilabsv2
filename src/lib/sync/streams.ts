@@ -1,10 +1,12 @@
-import { and, eq } from "drizzle-orm";
-import { connections, sourceStreams } from "@/db/schema";
+import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { connections, events, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
-import { isStreamScoped } from "@/connectors/catalog";
+import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
+import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
+import { awaitStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
 import type { FlowGraph } from "@/lib/flow/types";
 
@@ -58,40 +60,93 @@ export async function ensureStreamsForGraph(db: DB, orgId: string, graph: FlowGr
   return { created };
 }
 
-export type StreamSyncResult = { inserted: number; deduped: number };
+export type StreamSyncResult = { inserted: number; updated: number; deduped: number; softDeleted: number };
 
 type StreamRow = typeof sourceStreams.$inferSelect;
 type ConnRow = typeof connections.$inferSelect;
 
 /**
- * Poll one stream incrementally from its stored cursor and upsert the results
- * (deduped, tagged with the stream's hash). `maxPages` bounds inline/first-run
- * syncs so a huge sheet can't blow a request timeout — the sweep finishes the
- * rest, page by page, on its schedule.
+ * Sync one stream and upsert the results (deduped, tagged with the stream's
+ * hash) at the connection's current generation.
+ *
+ * Two shapes, by the source's guarantee class (docs/DATA_MODEL.md):
+ * - MIRROR sources (Sheets): every sweep re-reads the ENTIRE resource,
+ *   refreshes rows in place (first-seen occurred_at preserved) and
+ *   soft-deletes this stream's rows that the read no longer produced — the
+ *   stored data is a faithful mirror of the current resource after every sweep.
+ * - Incremental sources (Calendar, Calendly): poll forward from the stored
+ *   cursor; `maxPages` bounds inline/first-run syncs so a huge resource can't
+ *   blow a request timeout — the sweep finishes the rest on its schedule.
  */
 export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPages = 1): Promise<StreamSyncResult> {
   const connector = getConnector(conn.source);
-  if (!connector?.poll) return { inserted: 0, deduped: 0 };
+  if (!connector?.poll) return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0 };
   const credentials = await getConnectionCredentials(db, conn);
+  const generation = Math.max(1, conn.syncGeneration ?? 0);
 
   let cursor = stream.cursor ?? null;
   let inserted = 0;
+  let updated = 0;
   let deduped = 0;
+  let softDeleted = 0;
   try {
-    for (let page = 0; page < maxPages; page++) {
+    if (isMirrorSource(conn.source)) {
+      // Full re-read, ignoring any stored cursor: the read IS the truth.
       const { records, nextCursor } = await connector.poll({
         connectionId: conn.id,
-        cursor,
+        cursor: null,
         credentials,
         config: stream.config ?? undefined,
         streamHash: stream.configHash,
       });
-      const res = await upsertEvents(db, { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash }, records);
-      inserted += res.inserted;
-      deduped += res.deduped;
-      const advanced = nextCursor != null && nextCursor !== cursor;
-      cursor = nextCursor ?? cursor;
-      if (!advanced || records.length === 0) break;
+      const res = await upsertEvents(
+        db,
+        { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation, preserveOccurredAt: true },
+        records,
+      );
+      inserted = res.inserted;
+      updated = res.updated;
+      deduped = res.deduped;
+
+      // Rows of THIS stream the read no longer produced were removed upstream
+      // (deleted, or their row blanked). Scoped strictly to the stream's hash,
+      // so webhook rows (null hash) and other streams are untouchable.
+      const present = records.map((r) => r.eventId);
+      const gone = await db
+        .update(events)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(events.connectionId, conn.id),
+            eq(events.streamHash, stream.configHash),
+            isNull(events.deletedAt),
+            ...(present.length ? [notInArray(events.eventId, present)] : []),
+          ),
+        )
+        .returning({ id: events.id });
+      softDeleted = gone.length;
+      cursor = nextCursor ?? null;
+    } else {
+      for (let page = 0; page < maxPages; page++) {
+        const { records, nextCursor } = await connector.poll({
+          connectionId: conn.id,
+          cursor,
+          credentials,
+          config: stream.config ?? undefined,
+          streamHash: stream.configHash,
+        });
+        const res = await upsertEvents(
+          db,
+          { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation },
+          records,
+        );
+        inserted += res.inserted;
+        updated += res.updated;
+        deduped += res.deduped;
+        const advanced = nextCursor != null && nextCursor !== cursor;
+        cursor = nextCursor ?? cursor;
+        if (!advanced || records.length === 0) break;
+      }
     }
     await db
       .update(sourceStreams)
@@ -105,7 +160,7 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
       .where(eq(sourceStreams.id, stream.id));
     throw e;
   }
-  return { inserted, deduped };
+  return { inserted, updated, deduped, softDeleted };
 }
 
 /** All streams of one connection that should be polled. */
@@ -116,22 +171,52 @@ export async function activeStreams(db: DB, connectionId: string): Promise<Strea
     .where(and(eq(sourceStreams.connectionId, connectionId)));
 }
 
+/** Default freshness window for a non-forced prime: skip re-polling a stream
+ * polled more recently than this. The background sweep keeps it current anyway. */
+const PRIME_MAX_AGE_MS = 60_000;
+
+export type PrimeStreamResult =
+  | { ok: true; refreshed: boolean; note?: string }
+  | { ok: false; error: string };
+
+export type PrimeStreamOptions = {
+  /**
+   * Re-poll even if the stream was polled recently. The explicit user "Test"
+   * demands the CURRENT source, so it forces a fresh read regardless of age.
+   */
+  force?: boolean;
+  /**
+   * Skip re-polling when the last poll is younger than this (ms). Ignored when
+   * `force`. Defaults to {@link PRIME_MAX_AGE_MS}.
+   */
+  maxAgeMs?: number;
+  /** Page bound for the inline first-run / refresh poll. */
+  maxPages?: number;
+};
+
 /**
- * First-use sync for a flow's freshly configured resource: make sure the stream
- * exists and, if it has never been polled, pull its first pages right now so the
- * user's explicit Test has real data to show. Returns the error message instead
- * of throwing so the Test surface can present it.
+ * First-use / on-demand sync for a flow's configured resource: make sure the
+ * stream exists and pull its pages now so the caller sees real data. Returns the
+ * error message instead of throwing so the Test surface can present it.
+ *
+ * Freshness gate (Defect #1): a stream is re-polled when the caller `force`s it
+ * (explicit Test), when it has never been polled, or when its last poll is older
+ * than `maxAgeMs`. The previous behavior skipped forever after the first poll —
+ * so once the 10-minute sweep touched a stream, every Test read stale, pre-edit
+ * data indefinitely. `force` closes that; the small age window keeps incidental
+ * primers (e.g. field listing) from re-polling on every call.
  */
 export async function primeStream(
   db: DB,
   orgId: string,
   connectionId: string,
   sourceConfig: Record<string, unknown>,
-  maxPages = 3,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+  opts: PrimeStreamOptions = {},
+): Promise<PrimeStreamResult> {
+  const { force = false, maxAgeMs = PRIME_MAX_AGE_MS, maxPages = 3 } = opts;
   const [conn] = await db.select().from(connections).where(and(eq(connections.id, connectionId), eq(connections.orgId, orgId))).limit(1);
   if (!conn) return { ok: false, error: "This step's connected account no longer exists." };
-  if (!isStreamScoped(conn.source) || !hasStreamConfig(sourceConfig)) return { ok: true };
+  if (!isStreamScoped(conn.source) || !hasStreamConfig(sourceConfig)) return { ok: true, refreshed: false };
 
   const configHash = streamConfigHash(sourceConfig);
   await db
@@ -144,11 +229,55 @@ export async function primeStream(
     .where(and(eq(sourceStreams.connectionId, connectionId), eq(sourceStreams.configHash, configHash)))
     .limit(1);
   if (!stream) return { ok: false, error: "Couldn't register this data source." };
-  if (stream.lastPolledAt != null) return { ok: true }; // already syncing on the sweep
+
+  if (!force && stream.lastPolledAt != null && Date.now() - stream.lastPolledAt.getTime() < maxAgeMs) {
+    return { ok: true, refreshed: false }; // recently polled; the sweep keeps it current
+  }
+
+  // F.3/F.6 — the connection is deferred (budget spent or breaker open).
+  // A Test must be HONEST, not broken: compute on stored data and say plainly
+  // that the source wasn't re-read, with when it resumes.
+  if (isPaused(conn)) {
+    const when = conn.pausedUntil ? ` Retrying around ${conn.pausedUntil.toLocaleTimeString()}.` : "";
+    return {
+      ok: true,
+      refreshed: false,
+      note: `Couldn't re-read the source — syncing is paused (${conn.pausedReason ?? "provider limit"}).${when} Showing the data we already have.`,
+    };
+  }
+
+  // F.8 — interactive lane: a user's Test may claim the reserved headroom that
+  // background sweeps never touch, so a busy fleet doesn't block a person.
+  const claim = await claimCalls(db, conn, "*", 1, new Date(), "interactive");
+  if (!claim.allowed) {
+    return {
+      ok: true,
+      refreshed: false,
+      note: `Couldn't re-read the source — ${claim.reason.toLowerCase()}. Showing the data we already have.`,
+    };
+  }
+
+  // Q6 (active on the pool driver): a forced Test that collides with an
+  // in-flight writer AWAITS its completion — bounded, never skipped, never an
+  // error at the user — then adopts that sync's result instead of
+  // double-polling the provider. If the wait times out (wedged holder), we
+  // proceed with our own sync; the guarded writer makes that safe.
+  if (force) {
+    const t0 = Date.now();
+    const waited = await awaitStreamWriteLock(db, `stream:${stream.id}`);
+    if (waited === "free") {
+      const [fresh] = await db.select().from(sourceStreams).where(eq(sourceStreams.id, stream.id)).limit(1);
+      if (fresh?.lastPolledAt != null && fresh.lastPolledAt.getTime() >= t0 && fresh.status !== "error") {
+        // Another sync just finished — its read IS the fresh data (refreshed:
+        // true, because the source WAS re-read; we just didn't do it ourselves).
+        return { ok: true, refreshed: true };
+      }
+    }
+  }
 
   try {
     await syncStream(db, conn, stream, maxPages);
-    return { ok: true };
+    return { ok: true, refreshed: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

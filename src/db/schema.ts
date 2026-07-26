@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -65,6 +66,33 @@ export const connections = pgTable(
     // Incremented by a full re-sync; events are tagged with the generation they were last seen in.
     syncGeneration: integer("sync_generation").notNull().default(0),
     historicalSyncedAt: timestamp("historical_synced_at", { withTimezone: true }),
+    /**
+     * F.3/F.6 — never a terminal state. When a connection is throttled
+     * (budget exhausted) or its breaker trips (consecutive failures), work is
+     * DEFERRED to `pausedUntil` and retried automatically: the sweep skips it
+     * until then, and the connection page shows a countdown, not a dead end.
+     * `consecutiveFailures` drives the probe ladder (1h → 4h → daily) and
+     * resets to 0 on any success.
+     */
+    pausedUntil: timestamp("paused_until", { withTimezone: true }),
+    /** Why it's paused, in plain language, for the connection page. */
+    pausedReason: text("paused_reason"),
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+    /**
+     * H.2 — adaptive cadence. Background work scales with CHANGE RATE, not
+     * tenant count: `next_sweep_at` is when this connection is next due, and
+     * the sweep only dispatches connections that are due. Quiet connections
+     * back off (10min → hourly → daily); any activity promotes them instantly.
+     */
+    nextSweepAt: timestamp("next_sweep_at", { withTimezone: true }),
+    /** H.1 — consecutive sweeps that found nothing; drives the backoff tier. */
+    consecutiveNoOpSweeps: integer("consecutive_no_op_sweeps").notNull().default(0),
+    /**
+     * F.5 — when the provider-side webhook subscription was last verified
+     * healthy. A live instant path makes frequent polling redundant, so the
+     * poll demotes to a slow backstop instead of racing the webhook.
+     */
+    webhookHealthyAt: timestamp("webhook_healthy_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -94,6 +122,15 @@ export const rawEvents = pgTable(
  * The canonical, source-agnostic event model. EVERY connector normalizes into
  * this shape. `eventId` is the stable dedup primary key — unique across the
  * whole table (it is namespaced with source + connection by the connector).
+ *
+ * QUERY CONVENTION (load-bearing since the B.1 index redesign): every read of
+ * this table MUST filter `deleted_at IS NULL` — soft-deleted rows are records
+ * the source no longer has, and the composite indexes are PARTIAL over live
+ * rows, so a query without the predicate silently degrades to a sequential
+ * scan at scale. The only exemptions are lookups by `event_id` (unique index)
+ * and deliberate tombstone inspection (admin/debug). Audited call sites:
+ * engine appConds, metrics baseWhere/distinct*, resync + mirror sweeps,
+ * dashboard widgets, flow editor type listing.
  */
 export const events = pgTable(
   "events",
@@ -111,6 +148,13 @@ export const events = pgTable(
     currency: text("currency"),
     properties: jsonb("properties").$type<Record<string, unknown>>().default({}).notNull(),
     rawEventId: uuid("raw_event_id"),
+    /**
+     * A.2 — normalized identity handles extracted from the record (emails
+     * lowercased, phones E.164, provider ids as-is). Additive and defaulted,
+     * so nothing depends on it yet; it is what a future person/company
+     * resolution joins on WITHOUT another schema change.
+     */
+    identifiers: jsonb("identifiers").$type<Record<string, unknown>>().default({}).notNull(),
     // Full-sync generation this row was last seen in (for versioned/safe re-sync).
     syncGeneration: integer("sync_generation").notNull().default(0),
     // Soft-delete: set when a full re-sync no longer sees a previously-synced record.
@@ -121,10 +165,55 @@ export const events = pgTable(
   },
   (t) => [
     uniqueIndex("events_event_id_uq").on(t.eventId),
+    // Only index carrying event_type (distinct-type dropdowns, type filters).
     index("events_org_type_idx").on(t.orgId, t.eventType),
-    index("events_occurred_idx").on(t.occurredAt),
-    index("events_conn_idx").on(t.connectionId),
-    index("events_conn_stream_idx").on(t.connectionId, t.streamHash),
+    // B.1 partial composites over LIVE rows — every production reader filters
+    // deleted_at IS NULL. EXPLAIN-verified in tests/indexes-explain.test.ts.
+    // The old single-purpose indexes (occurred_at), (connection_id) and
+    // (connection_id, stream_hash) were strictly dominated by these for every
+    // live query shape in the code and were dropped: redundant indexes cost
+    // every write and left the planner picking between near-identical paths.
+    //
+    // Engine Get-data reads: newest-first scan of one stream (prefix also
+    // serves whole-connection reads); (occurred_at DESC, id DESC) matches the
+    // compiled engine's future deterministic total order.
+    index("events_conn_stream_live_idx")
+      .on(t.connectionId, t.streamHash, t.occurredAt.desc(), t.id.desc())
+      .where(sql`deleted_at is null`),
+    // Classic metrics / org-wide reads: org + time-range over live rows.
+    index("events_org_live_occurred_idx").on(t.orgId, t.occurredAt).where(sql`deleted_at is null`),
+    // Full-resync sweeps: retire live rows below the new generation.
+    index("events_conn_gen_live_idx").on(t.connectionId, t.syncGeneration).where(sql`deleted_at is null`),
+  ],
+);
+
+/**
+ * A.1 — the field registry. What fields a stream's records actually carry,
+ * maintained by the WRITER instead of inferred by reading a sample at query
+ * time. Field pickers read this (one indexed lookup, no scan), and E.7 uses
+ * `approxCardinality` to warn when a dedupe key would collapse unrelated rows.
+ */
+export const streamFields = pgTable(
+  "stream_fields",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    connectionId: uuid("connection_id").notNull(),
+    /** Null for connection-scoped sources (the connection is the resource). */
+    streamHash: text("stream_hash"),
+    fieldPath: text("field_path").notNull(),
+    inferredType: text("inferred_type").notNull().default("string"),
+    /** Distinct values seen (approximate — sampled, not exact). */
+    approxCardinality: integer("approx_cardinality").notNull().default(0),
+    /** Rows seen carrying this field, for the null-rate estimate. */
+    seenCount: integer("seen_count").notNull().default(0),
+    sample: jsonb("sample").$type<Record<string, unknown>>(),
+    firstSeen: timestamp("first_seen", { withTimezone: true }).defaultNow().notNull(),
+    lastSeen: timestamp("last_seen", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("stream_fields_key_uq").on(t.connectionId, t.streamHash, t.fieldPath),
+    index("stream_fields_org_idx").on(t.orgId),
   ],
 );
 
@@ -155,6 +244,36 @@ export const sourceStreams = pgTable(
   (t) => [
     uniqueIndex("source_streams_conn_cfg_uq").on(t.connectionId, t.configHash),
     index("source_streams_org_idx").on(t.orgId),
+  ],
+);
+
+/**
+ * F.1/F.7 — provider-call accounting. One row per
+ * (connection, provider, operation, minute window): the token bucket's
+ * counter, incremented atomically via INSERT … ON CONFLICT DO UPDATE so
+ * concurrent workers can't overspend a published budget. Also the audit trail
+ * for "how much of our quota did we actually use", and the breaker's evidence.
+ */
+export const usageLedger = pgTable(
+  "usage_ledger",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    connectionId: uuid("connection_id").notNull(),
+    provider: text("provider").notNull(), // = connections.source
+    /** Catalog rateLimits key, e.g. "emails.list"; "*" = whole-provider budget. */
+    operation: text("operation").notNull().default("*"),
+    /** Start of the counting window (minute-aligned). */
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    calls: integer("calls").notNull().default(0),
+    throttled: integer("throttled").notNull().default(0),
+    errors: integer("errors").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("usage_ledger_bucket_uq").on(t.connectionId, t.operation, t.windowStart),
+    index("usage_ledger_org_idx").on(t.orgId),
+    index("usage_ledger_window_idx").on(t.windowStart),
   ],
 );
 
@@ -272,6 +391,28 @@ export const flowVersions = pgTable(
 );
 
 /**
+ * One user-initiated Test execution (D.1-full): the editor's Test button
+ * enqueues a run on the high-priority lane and polls this row for the result,
+ * so the interactive path never holds a long request open and never loses to a
+ * serverless timeout. Rows are ephemeral working state (TTL cleanup rides the
+ * delivery_log retention job when that ships).
+ */
+export const testRuns = pgTable(
+  "test_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    status: text("status").notNull().default("queued"), // queued | running | ok | error
+    /** The NodeTestDTO the editor renders, once settled. */
+    result: jsonb("result").$type<Record<string, unknown>>(),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("test_runs_org_idx").on(t.orgId), index("test_runs_created_idx").on(t.createdAt)],
+);
+
+/**
  * Materialized latest result for each Output node of a published flow. The
  * dashboard reads these (fast) instead of recomputing flows on every load; a
  * materializer refreshes them on publish, on relevant new data, on a schedule,
@@ -290,6 +431,13 @@ export const flowResults = pgTable(
     tile: jsonb("tile").$type<Record<string, unknown>>(),
     status: text("status").notNull().default("stale"), // fresh | stale | computing | error
     error: text("error"),
+    /**
+     * E.5 — provenance. HOW this number was produced: the compiled SQL and its
+     * bound parameters per Get-data node, which filters were folded, how many
+     * rows were read, and the as-of watermark. A number a customer questions
+     * can be traced to the exact query that produced it.
+     */
+    provenance: jsonb("provenance").$type<Record<string, unknown>>(),
     computedAt: timestamp("computed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
