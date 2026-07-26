@@ -326,7 +326,41 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
     expect(hintOf("meetingType")).toMatch(/Storage only/i);
   });
 
-  it("filters by meeting type on the NAME, catching every host's copy", async () => {
+  it("filters by meeting type on the type's URI, so one of two same-named types selects only itself", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        ME,
+        [
+          "/scheduled_events",
+          {
+            collection: [
+              // Two DIFFERENT types with one name — the shape that was collapsing.
+              { ...meeting("E1", "NAMZI Invite Only Creator Program"), event_type: "https://api.calendly.com/event_types/AAA" },
+              { ...meeting("E2", "NAMZI Invite Only Creator Program"), event_type: "https://api.calendly.com/event_types/BBB" },
+              { ...meeting("E3", "30 Minute Meeting"), event_type: "https://api.calendly.com/event_types/CCC" },
+            ],
+            pagination: {},
+          },
+        ],
+      ]),
+    );
+    const { records } = await calendlyConnector.poll!({
+      connectionId: "c1",
+      cursor: null,
+      credentials: { accessToken: "t" },
+      config: { scope: "organization", meetingType: "https://api.calendly.com/event_types/BBB" },
+    });
+    expect(records.map((r) => r.subject)).toEqual(["NAMZI Invite Only Creator Program"]);
+    expect(records[0].eventId).toContain("E2"); // the one that was picked, not its namesake
+  });
+
+  /**
+   * Configs saved before the value became a URI hold the type's NAME. Switching
+   * the match underneath them would return zero rows and read exactly like the
+   * sync breaking — so a name-valued config keeps matching on the name.
+   */
+  it("still honors a meeting type saved as a name, before URIs were the value", async () => {
     vi.stubGlobal(
       "fetch",
       mockFetch([
@@ -355,7 +389,12 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
     expect(records).toHaveLength(3);
   });
 
-  it("offers one entry per meeting type name, however many hosts run it", async () => {
+  /**
+   * A name is a display detail; the URI is the identity. Two types sharing a
+   * name are two types, and each must be selectable on its own — keying options
+   * by name collapsed them into one entry that pulled both.
+   */
+  it("keeps two same-named meeting types as two separate, distinguishable choices", async () => {
     vi.stubGlobal(
       "fetch",
       mockFetch([
@@ -364,25 +403,59 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
           "/event_types",
           {
             collection: [
-              { uri: "ET_IDRIS", name: "NAMZI Invite Only Creator Program" },
-              { uri: "ET_MAZHAR", name: "NAMZI Invite Only Creator Program" },
-              { uri: "ET_A", name: "30 Minute Meeting" },
+              { uri: "https://api.calendly.com/event_types/AAA", name: "NAMZI Invite Only Creator Program", profile: { name: "Idris" } },
+              { uri: "https://api.calendly.com/event_types/BBB", name: "NAMZI Invite Only Creator Program", profile: { name: "Mazhar" } },
+              { uri: "https://api.calendly.com/event_types/CCC", name: "30 Minute Meeting", profile: { name: "Idris" } },
             ],
           },
         ],
       ]),
     );
     const opts = await calendlyConnector.listOptions!("meetingType", {
-      connectionId: "c-dedupe",
+      connectionId: "c-types",
       credentials: { accessToken: "t" },
       config: { scope: "organization" },
     });
-    // One row per name — and the collapsed one SAYS it stands for two, because a
-    // single entry where the account has two reads as data going missing.
     expect(opts).toEqual([
-      { value: "30 Minute Meeting", label: "30 Minute Meeting" },
-      { value: "NAMZI Invite Only Creator Program", label: "NAMZI Invite Only Creator Program (2 types share this name)" },
+      { value: "https://api.calendly.com/event_types/CCC", label: "30 Minute Meeting" },
+      { value: "https://api.calendly.com/event_types/AAA", label: "NAMZI Invite Only Creator Program — Idris" },
+      { value: "https://api.calendly.com/event_types/BBB", label: "NAMZI Invite Only Creator Program — Mazhar" },
     ]);
+  });
+
+  /**
+   * Qualifying on the first attribute that happens to be SET can still leave two
+   * rows reading identically. The qualifier has to separate the whole group, and
+   * the URI tail — unique by construction — is the backstop that guarantees one
+   * always does.
+   */
+  it("qualifies a duplicate name until the labels are actually distinct", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        ME,
+        [
+          "/event_types",
+          {
+            collection: [
+              // Same name, SAME owner: the owner cannot separate them, duration can.
+              { uri: "https://api.calendly.com/event_types/AAA", name: "Intro", profile: { name: "Idris" }, duration: 15 },
+              { uri: "https://api.calendly.com/event_types/BBB", name: "Intro", profile: { name: "Idris" }, duration: 30 },
+              // Same name, same owner, same duration, no slug: only the URI is left.
+              { uri: "https://api.calendly.com/event_types/CCC", name: "Sync", profile: { name: "Idris" }, duration: 30 },
+              { uri: "https://api.calendly.com/event_types/DDD", name: "Sync", profile: { name: "Idris" }, duration: 30 },
+            ],
+          },
+        ],
+      ]),
+    );
+    const opts = await calendlyConnector.listOptions!("meetingType", {
+      connectionId: "c-qualify",
+      credentials: { accessToken: "t" },
+      config: { scope: "organization" },
+    });
+    expect(opts.map((o) => o.label)).toEqual(["Intro — 15 min", "Intro — 30 min", "Sync — CCC", "Sync — DDD"]);
+    expect(new Set(opts.map((o) => o.label)).size).toBe(opts.length); // never two rows reading alike
   });
 
   /**
@@ -393,8 +466,8 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
    */
   it("walks event_type pagination instead of stopping at the first page", async () => {
     const pages = new Map<string | null, { collection: Array<{ uri: string; name: string }>; pagination: { next_page_token: string | null } }>([
-      [null, { collection: [{ uri: "ET1", name: "Page one type" }], pagination: { next_page_token: "P2" } }],
-      ["P2", { collection: [{ uri: "ET2", name: "Page two type" }], pagination: { next_page_token: null } }],
+      [null, { collection: [{ uri: "https://api.calendly.com/event_types/ET1", name: "Page one type" }], pagination: { next_page_token: "P2" } }],
+      ["P2", { collection: [{ uri: "https://api.calendly.com/event_types/ET2", name: "Page two type" }], pagination: { next_page_token: null } }],
     ]);
     const seen: Array<string | null> = [];
     vi.stubGlobal(
@@ -415,7 +488,7 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
       config: { scope: "organization" },
     });
     expect(seen).toEqual([null, "P2"]); // followed the token, then stopped
-    expect(opts.map((o) => o.value)).toEqual(["Page one type", "Page two type"]);
+    expect(opts.map((o) => o.label)).toEqual(["Page one type", "Page two type"]);
   });
 
   /**

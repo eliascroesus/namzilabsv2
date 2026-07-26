@@ -119,15 +119,14 @@ export const calendlyConnector: Connector = {
     const target = await resolveTarget(token, args.connectionId, args.config);
     const params = new URLSearchParams({ ...target, count: String(Math.min(n, 100)), sort: "start_time:desc" });
     const data = await fetchJson<CalendlyList>(`${API}/scheduled_events?${params.toString()}`, { headers: authHeader(token) });
-    // Filters exactly as `poll` does, on the same config key and the same field.
-    // These drifted once — the preview kept reading `eventTypeUri` and matching
-    // `event_type` after the poll had moved on — so one config previewed one set
-    // of meetings and synced another. tests/connectors-poll.test.ts pins them
-    // together.
-    const wanted = str(args.config?.["meetingType"]);
+    // Filters exactly as `poll` does — same helper, so they cannot drift. They
+    // did once: the preview kept matching on one field after the poll had moved
+    // to another, so one config previewed one set of meetings and synced a
+    // different one. tests/connectors-poll.test.ts pins them together.
+    const matches = meetingTypeMatcher(args.config);
     const tag = streamTag(args);
     return data.collection
-      .filter((ev) => !wanted || str(ev["name"]) === wanted)
+      .filter(matches)
       .map((ev) => bookedEvent(args.connectionId, tag, ev))
       .slice(0, n);
   },
@@ -137,18 +136,19 @@ export const calendlyConnector: Connector = {
    * Groups are a paid-tier feature, so an empty list is a legitimate answer for
    * a plan that has none, not a failure.
    *
-   * `meetingType` — the account's meeting types, DEDUPED BY NAME with the name
-   * as the value. Calendly gives every host their own copy of a shared event
-   * type, so an organization running one programme across three people has three
-   * rows with identical names and different URIs; listing them raw put the same
-   * label in the dropdown three times, each selecting one person's meetings.
-   * Names collapse that to one honest choice — and because the poll filters on
-   * the name too, that one choice keeps ALL of them.
+   * `meetingType` — ONE OPTION PER MEETING TYPE, valued by URI and labelled by
+   * name. A name is a display detail, not an identity: two types can share one
+   * (the same programme set up twice, a duplicated template) and they are still
+   * two separate things a person must be able to choose between. Keying the
+   * option by name collapsed them into a single entry that pulled both, which is
+   * the opposite of what a picker is for.
    *
-   * Which is invisible unless it is said, so a collapsed entry is labelled with
-   * how many types it stands for. "2 types share this name" reads as deliberate;
-   * a single row where the account has two reads as data going missing, and
-   * that is exactly how it was reported.
+   * Same split Zapier's Calendly trigger uses — show the name, send the URI —
+   * and the poll matches on `event_type`, the URI, accordingly.
+   *
+   * Duplicate names are qualified until the labels are genuinely distinct (see
+   * {@link labelEventTypes}), so two rows reading identically is not a state the
+   * dropdown can reach.
    *
    * Both listings walk their pagination. `count=100` is a page size, not a
    * result limit: an account past 100 event types lost the rest with no error,
@@ -168,24 +168,90 @@ export const calendlyConnector: Connector = {
       // Listed in the same scope the poll will use, so nobody is offered a type
       // their chosen scope cannot return.
       const { scope } = scopeOf(args.config);
-      const types = await listAll<{ uri: string; name?: string }>(
+      const types = await listAll<CalendlyEventType>(
         token,
         "/event_types",
         scope === "user" ? { user: me.uri } : { organization: me.organization },
       );
-      const counts = new Map<string, number>();
-      for (const t of types) {
-        if (!t.name) continue;
-        counts.set(t.name, (counts.get(t.name) ?? 0) + 1);
-      }
-      return [...counts.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([name, n]) => ({ value: name, label: n > 1 ? `${name} (${n} types share this name)` : name }));
+      return labelEventTypes(types.filter((t) => Boolean(t.uri))).sort((a, b) => a.label.localeCompare(b.label));
     }
 
     return [];
   },
 };
+
+type CalendlyEventType = {
+  uri: string;
+  name?: string;
+  slug?: string;
+  duration?: number;
+  /** Absent on adhoc types; `name` here is the host or team that owns the type. */
+  profile?: { name?: string } | null;
+};
+
+/**
+ * What tells two identically-named meeting types apart, in the order a person
+ * would reach for: who owns it, how long it is, its slug, then the tail of its
+ * URI.
+ *
+ * The last one is unique by construction, so a qualified group is always
+ * genuinely distinct — there is no fallback where two rows read the same.
+ */
+const TYPE_QUALIFIERS: Array<(t: CalendlyEventType) => string | null> = [
+  (t) => t.profile?.name ?? null,
+  (t) => (typeof t.duration === "number" ? `${t.duration} min` : null),
+  (t) => t.slug ?? null,
+  (t) => t.uri.split("/").pop() ?? null,
+];
+
+/**
+ * One option per type, keyed by URI. A name shared by several types is qualified
+ * with the first attribute that separates the WHOLE group — not the first one
+ * that happens to be set, which can still leave two rows reading alike.
+ */
+function labelEventTypes(types: CalendlyEventType[]): SourceOption[] {
+  const byName = new Map<string, CalendlyEventType[]>();
+  for (const t of types) {
+    const name = t.name ?? t.slug ?? t.uri;
+    const group = byName.get(name);
+    if (group) group.push(t);
+    else byName.set(name, [t]);
+  }
+
+  const out: SourceOption[] = [];
+  for (const [name, group] of byName) {
+    if (group.length === 1) {
+      out.push({ value: group[0].uri, label: name });
+      continue;
+    }
+    const qualifier =
+      TYPE_QUALIFIERS.find((f) => {
+        const values = group.map(f);
+        return values.every((v): v is string => Boolean(v)) && new Set(values).size === group.length;
+      }) ?? TYPE_QUALIFIERS[TYPE_QUALIFIERS.length - 1];
+    for (const t of group) out.push({ value: t.uri, label: `${name} — ${qualifier(t) ?? t.uri}` });
+  }
+  return out;
+}
+
+/**
+ * Does this scheduled event belong to the meeting type the flow picked?
+ *
+ * Matched on `event_type` — the type's URI, which is its identity. Names are not:
+ * two types sharing one are two types, and matching on the name pulled both
+ * whichever was selected.
+ *
+ * A config holding a NAME rather than a URI is from before that was true, and
+ * keeps matching on the name. Switching the key underneath a saved flow would
+ * return zero rows and read exactly like the sync breaking — the failure this
+ * codebase keeps having to unpick. Re-picking the type in the step upgrades it.
+ */
+function meetingTypeMatcher(config?: Record<string, unknown> | null): (ev: Record<string, unknown>) => boolean {
+  const wanted = str(config?.["meetingType"]);
+  if (!wanted) return () => true;
+  if (wanted.includes("/event_types/")) return (ev) => str(ev["event_type"]) === wanted;
+  return (ev) => str(ev["name"]) === wanted;
+}
 
 /**
  * Every page of a Calendly list endpoint, not just the first.
@@ -257,19 +323,19 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
   //
   // `/scheduled_events` has no event_type parameter, so this cannot reduce what
   // we pull — the pages fetched are identical either way. What it does is keep
-  // the stored dataset to the one meeting type a flow is about, which is what
-  // was asked for. Matched on the type's NAME so it catches every host's copy:
-  // Calendly gives each person their own event_type row, so URI matching
-  // narrowed an organization-wide read to whoever happened to be picked.
+  // the stored dataset to the one meeting type a flow is about, matched on the
+  // type's URI so that picking one of two same-named types gets that one.
   //
   // `meeting_type`, `host_email` and the rest are still flattened onto every
   // record below, so a Filter step remains the way to slice a shared sync.
-  const wanted = str(args.config?.["meetingType"]);
+  const matches = meetingTypeMatcher(args.config);
   const tag = streamTag(args);
   const records: CanonicalEvent[] = [];
+  let typed = 0;
   for (const ev of data.collection) {
     if (!str(ev["uri"])) continue;
-    if (wanted && str(ev["name"]) !== wanted) continue;
+    if (str(ev["event_type"])) typed += 1;
+    if (!matches(ev)) continue;
     records.push(bookedEvent(args.connectionId, tag, ev));
     if (str(ev["status"]) === "canceled") records.push(canceledEvent(args.connectionId, tag, ev));
   }
@@ -279,10 +345,15 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
   // host is unreachable from CI, so what the response ACTUALLY contains is the
   // only evidence available. `returned=0` on an organization scope is the
   // signature of a token without org admin rights.
+  //
+  // `typed` is the count of returned events that actually carry an `event_type`
+  // URI. The meeting-type filter matches on that field, so `typed` well below
+  // `returned` is the one way this filter could quietly keep nothing — worth
+  // seeing in a log rather than inferring from an empty dashboard.
   if (!cur.pageToken) {
     console.log(
-      `[calendly-probe] returned=${data.collection.length} paginated=${Boolean(data.pagination?.next_page_token)} ` +
-        `scope=${Object.keys(target).join("+")} status=${status ?? "all"}`,
+      `[calendly-probe] returned=${data.collection.length} typed=${typed} kept=${records.length} ` +
+        `paginated=${Boolean(data.pagination?.next_page_token)} scope=${Object.keys(target).join("+")} status=${status ?? "all"}`,
     );
   }
 
