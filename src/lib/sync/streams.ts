@@ -6,6 +6,7 @@ import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
 import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
+import { pollOperation } from "@/lib/provider-gateway/operations";
 import { awaitStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
 import type { FlowGraph } from "@/lib/flow/types";
@@ -248,7 +249,7 @@ export async function primeStream(
 
   // F.8 — interactive lane: a user's Test may claim the reserved headroom that
   // background sweeps never touch, so a busy fleet doesn't block a person.
-  const claim = await claimCalls(db, conn, "*", 1, new Date(), "interactive");
+  const claim = await claimCalls(db, conn, pollOperation(conn.source, stream.config), 1, new Date(), "interactive");
   if (!claim.allowed) {
     return {
       ok: true,

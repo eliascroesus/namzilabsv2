@@ -55,6 +55,20 @@ export const instantlyConnector: Connector = {
   source: "instantly",
   authType: "apiKey",
 
+  /**
+   * Every endpoint this connector claims budget against. The catalog declares a
+   * published limit per key, and the budget layer enforces each separately —
+   * so this list and the catalog's `rateLimits` must agree. A declared limit
+   * with no operation emitting it is dead config; a provider-gateway test fails
+   * on that mismatch in either direction.
+   */
+  operations: ["emails.list"] as const,
+
+  /** The v2 emails list is currently the only endpoint the poll touches. */
+  operationFor(): string {
+    return "emails.list";
+  },
+
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     if (!secret) return true; // No secret configured => accept (verification optional).
     const provided = headers["x-instantly-signature"];

@@ -5,6 +5,7 @@ import { getConnector } from "@/connectors/registry";
 import { isStreamScoped } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { claimCalls, isPaused, pauseConnection, recordProviderError, recordSuccess, tripBreaker } from "@/lib/provider-gateway/budget";
+import { pollOperation } from "@/lib/provider-gateway/operations";
 import { upsertEvents } from "./pipeline";
 import { activeStreams, syncStream } from "@/lib/sync/streams";
 import { applyCadence, decideCadence } from "@/lib/sync/cadence";
@@ -166,8 +167,10 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     let failures = 0;
     const changedStreamHashes: string[] = [];
     for (const stream of streams) {
-      // F.1: each stream poll claims from the connection's per-minute budget.
-      const claim = await claimCalls(db, conn, "*");
+      // F.1: each stream poll claims from the connection's per-minute budget,
+      // against the endpoint THIS stream will actually call — two streams on one
+      // connection can hit endpoints with different published limits.
+      const claim = await claimCalls(db, conn, pollOperation(conn.source, stream.config));
       if (!claim.allowed) {
         const until = await pauseConnection(db, conn.id, claim.retryAfterMs, `${claim.reason} — resumes automatically`);
         return withCadence({
@@ -203,8 +206,9 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     return withCadence({ inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, changedStreamHashes, orgId: conn.orgId, source: conn.source });
   }
 
-  // F.1: claim before spending a provider call.
-  const claim = await claimCalls(db, conn, "*");
+  // F.1: claim before spending a provider call, against the endpoint the poll
+  // will hit (see pollOperation — "*" is correct for one-bucket providers).
+  const claim = await claimCalls(db, conn, pollOperation(conn.source, conn.config));
   if (!claim.allowed) {
     const until = await pauseConnection(db, conn.id, claim.retryAfterMs, `${claim.reason} — resumes automatically`);
     return withCadence({

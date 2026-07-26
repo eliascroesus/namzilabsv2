@@ -102,6 +102,26 @@ export interface Connector {
   normalize(rawPayload: unknown, ctx: NormalizeContext): CanonicalEvent[];
   /** Optional polling for reconciliation/backfill. */
   poll?(args: PollArgs): Promise<PollResult>;
+  /**
+   * Which provider endpoint a poll of this config will hit, as a
+   * `"resource.verb"` key matching the catalog's `rateLimits`. The budget layer
+   * claims against THIS key, so a connector that talks to several endpoints
+   * with different published limits gets each one enforced separately instead
+   * of everything sharing one bucket.
+   *
+   * Must be resolvable BEFORE the call — that is why it takes the config rather
+   * than being reported by `poll` afterwards; a budget you can only check after
+   * spending the call is not a budget.
+   *
+   * Omitting it (or returning a key the catalog does not declare) falls back to
+   * the default budget, which is the correct behavior for a connector whose
+   * provider publishes a single account-wide limit. `operations` must list
+   * every key this can return — a declared limit nothing ever claims against is
+   * dead config, and tests/provider-gateway.test.ts fails on it.
+   */
+  operationFor?(config?: Record<string, unknown>): string;
+  /** Every operation key `operationFor` can return. Checked against the catalog. */
+  operations?: readonly string[];
   /** Optional: list live choices for a dynamic flow-level field (spreadsheets, tabs, calendars…). */
   listOptions?(key: string, args: ListOptionsArgs): Promise<SourceOption[]>;
   /** Optional: latest N records for the connect-time preview. */
