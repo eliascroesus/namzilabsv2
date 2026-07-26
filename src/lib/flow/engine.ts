@@ -1,9 +1,10 @@
 import { and, desc, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { events } from "@/db/schema";
 import type { DB } from "@/db/types";
-import { eventToRecord, getField, toNumber, type FlowRecord } from "./records";
+import { eventToRecord, getField, toNumber, STANDARD_FIELDS, type FlowRecord } from "./records";
 import { planPushdown } from "./compile/pushdown";
-import { inferSchema, type FieldInfo } from "./schema-infer";
+import { inferSchema, buildFieldInfo, type FieldInfo } from "./schema-infer";
+import { listRegisteredFields } from "@/lib/schema-registry/registry";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import {
   AppConfigSchema,
@@ -210,6 +211,19 @@ function appConds(orgId: string, cfg: AppConfig): SQL[] {
  */
 export async function sampleAppFields(ctx: EngineCtx, config: unknown, limit = 100): Promise<FieldInfo[]> {
   const cfg = AppConfigSchema.parse(config ?? {});
+
+  // A.1: prefer the field registry the writer maintains. It knows the UNION of
+  // fields across everything ever synced for the stream, which a 100-row scan
+  // does not — a column that stopped being filled 200 rows ago is still a real
+  // field of the sheet, and the scan would silently drop it from every picker.
+  // It is also one indexed lookup instead of scanning rows and re-deriving the
+  // schema on every request.
+  const registered = await registeredAppFields(ctx, cfg);
+  if (registered) return registered;
+
+  // Fallback: whole-connection reads (no stream identity to key on) and streams
+  // whose registry has not been populated yet — a connection synced before A.1,
+  // or one whose first sweep has not landed. Correct, just costlier.
   const rows = await ctx.db
     .select()
     .from(events)
@@ -217,6 +231,40 @@ export async function sampleAppFields(ctx: EngineCtx, config: unknown, limit = 1
     .orderBy(desc(events.occurredAt))
     .limit(limit);
   return inferSchema(rows.map(eventToRecord));
+}
+
+/**
+ * The registry's answer for this step's stream, or null when it cannot serve
+ * the request (no connection chosen, or nothing registered yet) so the caller
+ * falls back to the scan.
+ */
+async function registeredAppFields(ctx: EngineCtx, cfg: AppConfig): Promise<FieldInfo[] | null> {
+  if (!cfg.connectionId) return null;
+  try {
+    const streamHash = hasStreamConfig(cfg.sourceConfig) ? streamConfigHash(cfg.sourceConfig) : null;
+    const fields = await listRegisteredFields(ctx.db, {
+      orgId: ctx.orgId,
+      connectionId: cfg.connectionId,
+      streamHash,
+    });
+    if (fields.length === 0) return null;
+    // Standard spine fields are the same for every event and are not recorded
+    // in the registry (it tracks `properties`), so they come from the same
+    // constant the scan path uses.
+    const out: FieldInfo[] = STANDARD_FIELDS.map((f) => buildFieldInfo(f, f, undefined));
+    for (const f of [...fields].sort((a, b) => a.fieldPath.localeCompare(b.fieldPath))) {
+      if (f.fieldPath.startsWith("__")) continue; // internal engine keys are never fields
+      // The registry stores the example wrapped (`{ value: … }`) so a jsonb
+      // column can hold a bare scalar; unwrap before inferring, or every field
+      // types as "object" and the picker shows the wrong icon for all of them.
+      const example = (f.sample as { value?: unknown } | null)?.value;
+      out.push(buildFieldInfo(`properties.${f.fieldPath}`, f.fieldPath, example));
+    }
+    return out;
+  } catch {
+    // The picker must never fail because a diagnostic table is unavailable.
+    return null;
+  }
 }
 
 async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promise<NodeExec> {

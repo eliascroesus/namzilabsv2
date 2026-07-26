@@ -100,7 +100,7 @@ export async function recordFields(db: DB, scope: RegistryScope, records: Canoni
   return seen.size;
 }
 
-export type RegisteredField = { fieldPath: string; inferredType: string; approxCardinality: number; seenCount: number };
+export type RegisteredField = { fieldPath: string; inferredType: string; approxCardinality: number; seenCount: number; sample: unknown };
 
 /** The registered fields for a scope, most-populated first. */
 export async function listRegisteredFields(db: DB, scope: RegistryScope): Promise<RegisteredField[]> {
@@ -110,6 +110,7 @@ export async function listRegisteredFields(db: DB, scope: RegistryScope): Promis
       inferredType: streamFields.inferredType,
       approxCardinality: streamFields.approxCardinality,
       seenCount: streamFields.seenCount,
+      sample: streamFields.sample,
     })
     .from(streamFields)
     .where(

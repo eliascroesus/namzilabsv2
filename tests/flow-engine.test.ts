@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createTestDb } from "./helpers/testdb";
 import { events } from "@/db/schema";
 import { runFlow, sampleAppFields } from "@/lib/flow/engine";
+import { recordFields } from "@/lib/schema-registry/registry";
 import { parseGraph } from "@/lib/flow/types";
 import type { DB } from "@/db/types";
 
@@ -214,6 +215,38 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
     expect(paths).toContain("properties.Plan");
     expect(paths).toContain("subject");
     expect(paths.every((p) => !p.startsWith("__"))).toBe(true); // engine internals hidden
+  });
+
+  it("serves the picker from the field registry, and keeps fields the sample would miss", async () => {
+    // The registry knows the UNION of everything ever synced. A 100-row sample
+    // does not: a column that stopped being filled is still a real column, and
+    // the scan silently drops it from every picker.
+    await recordFields(
+      db,
+      { orgId: ORG, connectionId: CONN, streamHash: null },
+      [
+        { eventId: "r1", eventType: "row", occurredAt: new Date(), properties: { Email: "a@b.com", Retired: "old" } },
+        { eventId: "r2", eventType: "row", occurredAt: new Date(), properties: { Email: "c@d.com" } },
+      ],
+    );
+    // Only ONE event exists, and it does not carry `Retired` at all.
+    await ev({ eventType: "row_added", subject: "z@z.com", properties: { Email: "z@z.com" } });
+
+    const fields = await sampleAppFields({ db, orgId: ORG }, { connectionId: CONN });
+    const paths = fields.map((f) => f.path);
+    expect(paths).toContain("properties.Retired"); // registry remembers it; a scan would not
+    expect(paths).toContain("properties.Email");
+    expect(paths).toContain("subject"); // spine fields still present
+    // Types are built by the same helper as the scan path, so the picker's icons
+    // don't change depending on which path served the request.
+    expect(fields.find((f) => f.path === "properties.Email")?.type).toBe("email");
+  });
+
+  it("falls back to the sample scan when the stream has nothing registered yet", async () => {
+    // A connection synced before A.1, or whose first sweep hasn't landed.
+    await ev({ eventType: "row_added", subject: "a@b.com", properties: { OnlyInEvents: "x" } });
+    const fields = await sampleAppFields({ db, orgId: ORG }, { connectionId: CONN });
+    expect(fields.map((f) => f.path)).toContain("properties.OnlyInEvents");
   });
 
   it("Calculate runs dataset aggregations directly (the merged Count node)", async () => {

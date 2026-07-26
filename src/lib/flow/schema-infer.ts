@@ -35,6 +35,20 @@ function inferType(path: string, value: unknown): FieldType {
 }
 
 /**
+ * Build one FieldInfo from a path and an example value.
+ *
+ * Shared by the sample-scan path and the field-registry path so a picker looks
+ * identical whichever produced it — same type inference (including the email
+ * and date heuristics), same container flag. If these two diverged, the same
+ * field would render with a different icon depending on whether its stream had
+ * been registered yet.
+ */
+export function buildFieldInfo(path: string, label: string, example: unknown): FieldInfo {
+  const type = inferType(path, example);
+  return { path, label, type, example, container: CONTAINER_TYPES.has(type) };
+}
+
+/**
  * Infer the output field schema of a dataset from sample records. Powers the
  * variable picker (fields + example values, labeled by node/app).
  */
@@ -52,8 +66,7 @@ export function inferSchema(records: FlowRecord[]): FieldInfo[] {
         break;
       }
     }
-    const type = inferType(path, example);
-    out.push({ path, label, type, example, container: CONTAINER_TYPES.has(type) });
+    out.push(buildFieldInfo(path, label, example));
   };
 
   for (const f of STANDARD_FIELDS) push(f, f);
