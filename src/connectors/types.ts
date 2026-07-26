@@ -55,6 +55,23 @@ export type ListOptionsArgs = {
 export type PollResult = {
   records: CanonicalEvent[];
   nextCursor: string | null;
+  /**
+   * "This read is COMPLETE for this slice of time" — the connector's declaration
+   * that `records` is the whole truth for `[from, to]`, so anything stored in
+   * that window which the read did not produce no longer exists upstream and
+   * should be retired.
+   *
+   * This is what makes a rolling-window mirror possible. A whole-resource mirror
+   * (a spreadsheet tab) can retire everything the read omitted, because the read
+   * covered everything. A rolling window cannot: a read of the last 30 days says
+   * nothing about day 31, and retiring on that basis would delete all history
+   * older than the window on every single sweep.
+   *
+   * Set it only when the read genuinely enumerates the window. Omitting it is
+   * always safe — the stream is then treated as incremental and nothing is
+   * retired.
+   */
+  mirrorScope?: { from: Date; to: Date };
 };
 
 export type RegisterWebhookArgs = {

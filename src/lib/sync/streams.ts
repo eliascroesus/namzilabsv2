@@ -1,4 +1,4 @@
-import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, notInArray } from "drizzle-orm";
 import { connections, events, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
@@ -7,7 +7,7 @@ import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
 import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
-import { awaitStreamWriteLock } from "./locks";
+import { awaitStreamWriteLock, withStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
 import type { FlowGraph } from "@/lib/flow/types";
 
@@ -67,6 +67,42 @@ type StreamRow = typeof sourceStreams.$inferSelect;
 type ConnRow = typeof connections.$inferSelect;
 
 /**
+ * Retire this stream's live rows that the read did not produce.
+ *
+ * `scope` is the window the read is complete for. With a scope, ONLY rows whose
+ * occurred_at falls inside it are eligible — that is what lets a rolling window
+ * self-correct without deleting the history behind it. Without one (a
+ * whole-resource mirror like a spreadsheet tab), the read covered everything, so
+ * everything absent is genuinely gone.
+ *
+ * Always scoped to the stream's own hash, so webhook rows (null hash) and other
+ * streams on the same connection are untouchable either way.
+ */
+async function retireAbsent(
+  db: DB,
+  conn: ConnRow,
+  stream: StreamRow,
+  records: { eventId: string }[],
+  scope?: { from: Date; to: Date },
+): Promise<number> {
+  const present = records.map((r) => r.eventId);
+  const gone = await db
+    .update(events)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(
+        eq(events.connectionId, conn.id),
+        eq(events.streamHash, stream.configHash),
+        isNull(events.deletedAt),
+        ...(scope ? [gte(events.occurredAt, scope.from), lte(events.occurredAt, scope.to)] : []),
+        ...(present.length ? [notInArray(events.eventId, present)] : []),
+      ),
+    )
+    .returning({ id: events.id });
+  return gone.length;
+}
+
+/**
  * Sync one stream and upsert the results (deduped, tagged with the stream's
  * hash) at the connection's current generation.
  *
@@ -93,57 +129,64 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
   try {
     if (isMirrorSource(conn.source)) {
       // Full re-read, ignoring any stored cursor: the read IS the truth.
-      const { records, nextCursor } = await connector.poll({
+      const { records, nextCursor, mirrorScope } = await connector.poll({
         connectionId: conn.id,
         cursor: null,
         credentials,
         config: stream.config ?? undefined,
         streamHash: stream.configHash,
       });
-      const res = await upsertEvents(
-        db,
-        { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation, preserveOccurredAt: true },
-        records,
-      );
-      inserted = res.inserted;
-      updated = res.updated;
-      deduped = res.deduped;
-
-      // Rows of THIS stream the read no longer produced were removed upstream
-      // (deleted, or their row blanked). Scoped strictly to the stream's hash,
-      // so webhook rows (null hash) and other streams are untouchable.
-      const present = records.map((r) => r.eventId);
-      const gone = await db
-        .update(events)
-        .set({ deletedAt: new Date() })
-        .where(
-          and(
-            eq(events.connectionId, conn.id),
-            eq(events.streamHash, stream.configHash),
-            isNull(events.deletedAt),
-            ...(present.length ? [notInArray(events.eventId, present)] : []),
-          ),
-        )
-        .returning({ id: events.id });
-      softDeleted = gone.length;
+      // C.1: the upsert and the retire are ONE swap. Wrapped so that on the
+      // pool driver they run in a transaction holding the stream's advisory
+      // lock — no reader can observe the window half-replaced, and a concurrent
+      // writer skips rather than interleaving. Inert on the http driver (runs
+      // the body directly), so behavior here is unchanged until DB_DRIVER=pool.
+      // Provider I/O stays OUTSIDE: the poll above already returned.
+      const swap = await withStreamWriteLock(db, `stream:${stream.id}`, async (tx) => {
+        const res = await upsertEvents(
+          tx,
+          { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation, preserveOccurredAt: true },
+          records,
+        );
+        const gone = await retireAbsent(tx, conn, stream, records, mirrorScope);
+        return { res, gone };
+      });
+      if (swap.acquired && swap.result) {
+        inserted = swap.result.res.inserted;
+        updated = swap.result.res.updated;
+        deduped = swap.result.res.deduped;
+        softDeleted = swap.result.gone;
+      }
       cursor = nextCursor ?? null;
     } else {
       for (let page = 0; page < maxPages; page++) {
-        const { records, nextCursor } = await connector.poll({
+        const { records, nextCursor, mirrorScope } = await connector.poll({
           connectionId: conn.id,
           cursor,
           credentials,
           config: stream.config ?? undefined,
           streamHash: stream.configHash,
         });
-        const res = await upsertEvents(
-          db,
-          { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation },
-          records,
-        );
-        inserted += res.inserted;
-        updated += res.updated;
-        deduped += res.deduped;
+        const swap = await withStreamWriteLock(db, `stream:${stream.id}`, async (tx) => {
+          const res = await upsertEvents(
+            tx,
+            // A window-scoped mirror restates rows in place, so its stored
+            // occurred_at must stay the day it describes, not drift to
+            // first-seen — same reason whole-resource mirrors preserve it.
+            { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation, preserveOccurredAt: mirrorScope != null },
+            records,
+          );
+          // Per-stream mirror-ness: a source that is incremental overall can
+          // still have streams that enumerate a window completely (provider
+          // analytics). The DECLARATION drives the retire, not the source.
+          const gone = mirrorScope ? await retireAbsent(tx, conn, stream, records, mirrorScope) : 0;
+          return { res, gone };
+        });
+        if (!swap.acquired || !swap.result) break; // another writer holds this stream
+        inserted += swap.result.res.inserted;
+        updated += swap.result.res.updated;
+        deduped += swap.result.res.deduped;
+        softDeleted += swap.result.gone;
         const advanced = nextCursor != null && nextCursor !== cursor;
         cursor = nextCursor ?? cursor;
         if (!advanced || records.length === 0) break;

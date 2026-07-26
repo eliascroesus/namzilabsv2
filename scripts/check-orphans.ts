@@ -35,14 +35,6 @@ const ALLOWLIST: Record<string, string> = {
   // The dialect seam exists so the compiler can target more than Postgres; its
   // methods are called through the interface, which this scan can't see.
   postgresDialect: "B.4 — consumed through the Dialect interface, not by name",
-  // C.1 write-side mutual exclusion. Found unwired BY THIS CHECK: only the Q6
-  // read-side (awaitStreamWriteLock) had a caller, so the write critical
-  // section this wraps has never run. Wired into syncStream's swap in the
-  // window-bounded-mirror increment; inert until DB_DRIVER=pool either way
-  // (it degrades to running the body directly on the http driver).
-  // REMOVE THIS ENTRY once syncStream calls it — it is a dated debt, not a
-  // permanent exemption.
-  withStreamWriteLock: "C.1 — wiring into syncStream's write swap; inert until DB_DRIVER=pool (checklist item 4)",
 };
 
 /** Framework entry points: the framework calls these, not our code. */
