@@ -89,6 +89,27 @@ export type PollResult = {
    */
   mirrorScope?: { from: Date; to: Date };
   /**
+   * "This stream covers ONLY this span — anything stored outside it is no longer
+   * mine to keep."
+   *
+   * Different from `mirrorScope`, and the difference matters. `mirrorScope` says
+   * the read is COMPLETE for the window, which licenses retiring rows INSIDE it
+   * that the read did not produce — only safe when one call returns the whole
+   * window. This says nothing about completeness: it retires rows OUTSIDE the
+   * window, which depends on the boundary alone and is therefore safe for a
+   * paginated source where each call sees a fraction of the data.
+   *
+   * It exists because a rolling window that only ever adds is not a window. Once
+   * Calendly's history window narrowed, the older import sat stranded behind the
+   * new floor with a gap in between, and the stored data matched neither the old
+   * window nor the new one.
+   *
+   * REQUIRES that the connector's `occurredAt` be on the same axis as the window
+   * it declares here. Calendly's is meeting start time, and the window filters
+   * `start_time`; if one were booking time this would tombstone real records.
+   */
+  retireOutsideWindow?: { from: Date; to: Date };
+  /**
    * "These records have no timestamp of their own — keep the first one we saw."
    *
    * A running total is not an event: it did not happen at a time. Stamping it

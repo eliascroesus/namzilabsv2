@@ -99,10 +99,9 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
   it("is stream-scoped, and scope is a per-flow field, not a connect-time one", () => {
     expect(isStreamScoped("calendly")).toBe(true);
     const entry = catalogEntry("calendly")!;
-    // Only settings Calendly can act on server-side. Meeting type is absent by
-    // design: there is no event_type parameter, so it could never change the
-    // request — it belongs in a Filter step.
-    expect(entry.flowFields?.map((f) => f.key)).toEqual(["scope", "groupUri", "status"]);
+    // Scope, group and status change the REQUEST; meeting type cannot (no
+    // event_type parameter) and is labelled storage-only in its hint.
+    expect(entry.flowFields?.map((f) => f.key)).toEqual(["scope", "groupUri", "status", "meetingType"]);
     expect((entry as { configFields?: unknown }).configFields).toBeUndefined();
     // Poll-based reconciliation, no connect-time webhook.
     expect(entry.autoWebhook).toBe(false);
@@ -120,7 +119,7 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
     expect(rows.records[0].eventId).toBe("calendly:c1:abc123:https://api.calendly.com/scheduled_events/EVT1");
   });
 
-  it("emits booked + canceled, buckets bookings by created_at, and follows pagination", async () => {
+  it("emits booked + canceled, dates both by meeting time, and follows pagination", async () => {
     const page1 = {
       collection: [
         { uri: "https://api.calendly.com/scheduled_events/EVTa", name: "Active", status: "active", start_time: "2026-03-01T10:00:00Z", created_at: "2026-02-01T08:00:00Z" },
@@ -143,11 +142,17 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
     const first = await calendlyConnector.poll!({ ...base, cursor: null });
     // Active → 1 booked; canceled → booked + canceled = 3 records.
     expect(first.records.map((r) => r.eventType).sort()).toEqual(["booked", "booked", "canceled"]);
-    // A booking is bucketed by when it was booked (created_at), not the meeting time.
-    expect(first.records.find((r) => r.eventId.endsWith("EVTa"))!.occurredAt.toISOString()).toBe("2026-02-01T08:00:00.000Z");
+    // Dated by WHEN THE MEETING IS — the same axis Calendly's window filters on,
+    // and the axis the retire depends on. Booking time lives in `booked_at`.
+    const booked = first.records.find((r) => r.eventId.endsWith("EVTa"))!;
+    expect(booked.occurredAt.toISOString()).toBe("2026-03-01T10:00:00.000Z");
+    expect((booked.properties as Record<string, unknown>).booked_at).toBe("2026-02-01T08:00:00Z");
     const canceled = first.records.find((r) => r.eventType === "canceled")!;
     expect(canceled.eventId).toContain(":canceled:");
-    expect(canceled.occurredAt.toISOString()).toBe("2026-02-15T09:00:00.000Z"); // updated_at
+    // The cancellation sits in the slot it freed, so both rows fall inside the
+    // window that fetched them — otherwise the retire would tombstone one.
+    expect(canceled.occurredAt.toISOString()).toBe("2026-03-02T10:00:00.000Z");
+    expect((canceled.properties as Record<string, unknown>).canceled_at).toBe("2026-02-15T09:00:00Z");
     expect(first.nextCursor).toContain("TOK2"); // more pages → cursor advances
 
     // Following the cursor exhausts the scan → cursor resets so the next sweep rescans.
@@ -308,17 +313,136 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
     expect(new URL(await pollUrl({ scope: "user", status: "active" })).searchParams.get("status")).toBe("active");
   });
 
-  it("offers no meeting-type setting, and lists no meeting types", async () => {
-    const entry = catalogEntry("calendly")!;
-    expect(entry.flowFields?.some((f) => f.key === "meetingType" || f.key === "eventTypeUri")).toBe(false);
-    // The listing is gone too — it backed a setting that could not change the
-    // request and could not be presented honestly (one label per host).
-    const opts = await calendlyConnector.listOptions!("meetingType", {
+  /**
+   * Meeting type is offered, and its hint has to say what it is: Calendly has no
+   * event_type parameter, so it narrows what is KEPT, never what is fetched.
+   * Scope and status are the settings that actually cut API usage.
+   */
+  it("labels each setting by whether it saves API calls or only storage", () => {
+    const fields = catalogEntry("calendly")!.flowFields ?? [];
+    const hintOf = (k: string) => fields.find((f) => f.key === k)?.hint ?? "";
+    expect(hintOf("scope")).toMatch(/Fewer API calls/i);
+    expect(hintOf("status")).toMatch(/Fewer API calls/i);
+    expect(hintOf("meetingType")).toMatch(/Storage only/i);
+  });
+
+  it("filters by meeting type on the NAME, catching every host's copy", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        ME,
+        [
+          "/scheduled_events",
+          {
+            // One programme, three hosts → three different event_type URIs.
+            collection: [
+              meeting("E1", "NAMZI Invite Only Creator Program", "idris@namzi.com"),
+              meeting("E2", "NAMZI Invite Only Creator Program", "mazhar@namzi.com"),
+              meeting("E3", "NAMZI Invite Only Creator Program", "ismail@namzi.com"),
+              meeting("E4", "Call with Tristan - Personal Calendar"),
+            ],
+            pagination: {},
+          },
+        ],
+      ]),
+    );
+    const { records } = await calendlyConnector.poll!({
       connectionId: "c1",
+      cursor: null,
+      credentials: { accessToken: "t" },
+      config: { scope: "organization", meetingType: "NAMZI Invite Only Creator Program" },
+    });
+    expect(records).toHaveLength(3);
+  });
+
+  it("offers one entry per meeting type name, however many hosts run it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        ME,
+        [
+          "/event_types",
+          {
+            collection: [
+              { uri: "ET_IDRIS", name: "NAMZI Invite Only Creator Program" },
+              { uri: "ET_MAZHAR", name: "NAMZI Invite Only Creator Program" },
+              { uri: "ET_A", name: "30 Minute Meeting" },
+            ],
+          },
+        ],
+      ]),
+    );
+    const opts = await calendlyConnector.listOptions!("meetingType", {
+      connectionId: "c-dedupe",
       credentials: { accessToken: "t" },
       config: { scope: "organization" },
     });
-    expect(opts).toEqual([]);
+    expect(opts).toEqual([
+      { value: "30 Minute Meeting", label: "30 Minute Meeting" },
+      { value: "NAMZI Invite Only Creator Program", label: "NAMZI Invite Only Creator Program" },
+    ]);
+  });
+
+  /**
+   * THE bug behind "it is still getting events from August 2025".
+   *
+   * Calendly filters `/scheduled_events` by start_time, so the window is a
+   * MEETING-time window — but `occurred_at` used to be `created_at`, the booking
+   * time. A standing meeting booked in August 2025 whose next occurrence is this
+   * week is correctly inside a 30-day window and was displayed as August 2025.
+   * Nothing was over-fetching; two axes were being read as one.
+   */
+  it("dates a meeting by when it happens, not when it was booked", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        ME,
+        [
+          "/scheduled_events",
+          {
+            collection: [
+              {
+                uri: "E1",
+                name: "Personal Call With Zack",
+                status: "active",
+                start_time: "2026-07-24T10:00:00Z", // this week
+                created_at: "2025-08-03T09:00:00Z", // booked a year ago
+              },
+            ],
+            pagination: {},
+          },
+        ],
+      ]),
+    );
+    const { records } = await calendlyConnector.poll!({
+      connectionId: "c1",
+      cursor: null,
+      credentials: { accessToken: "t" },
+      config: { scope: "user" },
+    });
+    expect(records[0].occurredAt.toISOString()).toBe("2026-07-24T10:00:00.000Z");
+    // Booking time is not lost — it is a field anyone can build a metric on.
+    expect((records[0].properties as Record<string, unknown>).booked_at).toBe("2025-08-03T09:00:00Z");
+  });
+
+  /**
+   * Stored data tracks the window rather than only growing past it. Without this
+   * the older import sat stranded behind a narrowed floor, with a gap between it
+   * and the current window — matching neither.
+   */
+  it("declares the window it covers, so rows outside it can be retired", async () => {
+    vi.stubGlobal("fetch", mockFetch([ME, ["/scheduled_events", { collection: [], pagination: {} }]]));
+    const res = await calendlyConnector.poll!({
+      connectionId: "c1",
+      cursor: null,
+      credentials: { accessToken: "t" },
+      config: { scope: "user" },
+    });
+    expect(res.retireOutsideWindow).toBeDefined();
+    const back = Math.round((Date.now() - res.retireOutsideWindow!.from.getTime()) / 86_400_000);
+    expect(back).toBe(30);
+    // Same axis as occurredAt, or the retire would tombstone real records.
+    expect(res.retireOutsideWindow!.to.getTime()).toBeGreaterThan(Date.now());
   });
 
   /**
@@ -357,7 +481,8 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
       meeting("E2", "Call with Tristan - Personal Calendar"),
       meeting("E3", "30 Minute Meeting"),
     ];
-    const config = { scope: "organization" };
+    // A config WITH a filter — the drift only showed when one was set.
+    const config = { scope: "organization", meetingType: "NAMZI Invite Only Creator Program" };
 
     vi.stubGlobal("fetch", mockFetch([ME, ["/scheduled_events", { collection, pagination: {} }]]));
     const { records } = await calendlyConnector.poll!({ connectionId: "c1", cursor: null, credentials: { accessToken: "t" }, config });
@@ -365,10 +490,9 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
     vi.stubGlobal("fetch", mockFetch([ME, ["/scheduled_events", { collection, pagination: {} }]]));
     const preview = await calendlyConnector.testFetchLatest!(10, { connectionId: "c1", cursor: null, credentials: { accessToken: "t" }, config });
 
-    // Neither filters, so both keep all three — and neither can drift from the
-    // other by reading a key the other stopped using.
+    // Same key, same field, same result — they drifted once and must not again.
     expect(records.map((r) => r.eventId)).toEqual(preview.map((r) => r.eventId));
-    expect(preview).toHaveLength(3);
+    expect(preview).toHaveLength(1);
   });
 
   it("asks who the token belongs to once per connection, not once per poll", async () => {

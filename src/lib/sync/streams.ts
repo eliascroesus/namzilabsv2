@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lte, notInArray } from "drizzle-orm";
+import { and, eq, gt, gte, isNull, lt, lte, notInArray, or } from "drizzle-orm";
 import { connections, events, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
@@ -118,6 +118,33 @@ async function retireAbsent(
 }
 
 /**
+ * Retire this stream's rows that fall OUTSIDE the window it now covers.
+ *
+ * The complement of `retireAbsent`: that one needs the read to be complete for
+ * the window (so it can judge what is missing from inside it), while this one
+ * judges only by the boundary — so it stays correct on a paginated source where
+ * any single call sees a fraction of the data.
+ *
+ * Scoped to the stream's own hash like every other retire, so webhook rows (null
+ * hash) and other streams on the same connection can never be caught by it.
+ */
+async function retireOutside(db: DB, conn: ConnRow, stream: StreamRow, window: { from: Date; to: Date }): Promise<number> {
+  const gone = await db
+    .update(events)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(
+        eq(events.connectionId, conn.id),
+        eq(events.streamHash, stream.configHash),
+        isNull(events.deletedAt),
+        or(lt(events.occurredAt, window.from), gt(events.occurredAt, window.to)),
+      ),
+    )
+    .returning({ id: events.id });
+  return gone.length;
+}
+
+/**
  * Sync one stream and upsert the results (deduped, tagged with the stream's
  * hash) at the connection's current generation.
  *
@@ -142,6 +169,7 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
   let deduped = 0;
   let softDeleted = 0;
   let incomplete = false;
+  let covered: { from: Date; to: Date } | null = null;
   try {
     if (isMirrorSource(conn.source)) {
       // Full re-read, ignoring any stored cursor: the read IS the truth.
@@ -176,13 +204,14 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
       cursor = nextCursor ?? null;
     } else {
       for (let page = 0; page < maxPages; page++) {
-        const { records, nextCursor, mirrorScope, preserveOccurredAt } = await connector.poll({
+        const { records, nextCursor, mirrorScope, preserveOccurredAt, retireOutsideWindow } = await connector.poll({
           connectionId: conn.id,
           cursor,
           credentials,
           config: stream.config ?? undefined,
           streamHash: stream.configHash,
         });
+        if (retireOutsideWindow) covered = retireOutsideWindow;
         const swap = await withStreamWriteLock(db, `stream:${stream.id}`, async (tx) => {
           const res = await upsertEvents(
             tx,
@@ -225,6 +254,20 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
         // Still more to fetch, and no budget left to fetch it: what we wrote is
         // a prefix, and the caller must be able to say so.
         if (page === maxPages - 1) incomplete = true;
+      }
+
+      // Rows this stream no longer covers, retired ONCE after the walk rather
+      // than per page. It depends only on the window's boundary, never on what
+      // a given page happened to contain — which is what makes it safe on a
+      // paginated source, where `mirrorScope` would not be.
+      //
+      // Skipped when the scan was cut short: a prefix of the window is not
+      // grounds for tombstoning anything, and the next sweep will finish and
+      // prune then.
+      const w: { from: Date; to: Date } | null = covered;
+      if (w && !incomplete) {
+        const pruned = await withStreamWriteLock(db, `stream:${stream.id}`, (tx) => retireOutside(tx, conn, stream, w));
+        if (pruned.acquired && pruned.result) softDeleted += pruned.result;
       }
     }
     await db

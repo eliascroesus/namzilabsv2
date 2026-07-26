@@ -19,12 +19,15 @@ const API = "https://api.calendly.com";
  * The past half is deliberately short. It is the ONLY real lever on how much we
  * pull: `/scheduled_events` has no event-type filter, so the number of pages is
  * decided by scope × window and nothing else. Thirty days instead of a year is a
- * twelvefold cut in pages walked every sweep, and history accumulates forward
- * from here anyway — an incremental source never retires what it already stored,
- * so shortening the window costs nothing that is already in the table.
+ * twelvefold cut in pages walked every sweep.
  *
  * The forward half stays generous: upcoming meetings are most of what a calendar
  * is asked about, and they arrive on the same pages.
+ *
+ * STORED DATA TRACKS THIS WINDOW. The poll declares it as `retireOutsideWindow`,
+ * so rows that fall outside are retired rather than left stranded — narrowing
+ * the window used to leave an older import sitting behind the new floor with a
+ * gap in between, matching neither window.
  *
  * Reaching further BACK than this is a one-time historical import, not a wider
  * sweep — see PRE_LAUNCH_CHECKLIST.md item 9a (E.8 backfill lane).
@@ -116,12 +119,17 @@ export const calendlyConnector: Connector = {
     const target = await resolveTarget(token, args.connectionId, args.config);
     const params = new URLSearchParams({ ...target, count: String(Math.min(n, 100)), sort: "start_time:desc" });
     const data = await fetchJson<CalendlyList>(`${API}/scheduled_events?${params.toString()}`, { headers: authHeader(token) });
-    // Same rule as `poll`: no filtering here either. This used to read a config
-    // key the poll had stopped using (`eventTypeUri`) and match a field the poll
-    // had stopped matching (`event_type`), so the preview and the sync could
-    // disagree about the same config.
+    // Filters exactly as `poll` does, on the same config key and the same field.
+    // These drifted once — the preview kept reading `eventTypeUri` and matching
+    // `event_type` after the poll had moved on — so one config previewed one set
+    // of meetings and synced another. tests/connectors-poll.test.ts pins them
+    // together.
+    const wanted = str(args.config?.["meetingType"]);
     const tag = streamTag(args);
-    return data.collection.map((ev) => bookedEvent(args.connectionId, tag, ev)).slice(0, n);
+    return data.collection
+      .filter((ev) => !wanted || str(ev["name"]) === wanted)
+      .map((ev) => bookedEvent(args.connectionId, tag, ev))
+      .slice(0, n);
   },
 
   /**
@@ -129,22 +137,43 @@ export const calendlyConnector: Connector = {
    * Groups are a paid-tier feature, so an empty list is a legitimate answer for
    * a plan that has none, not a failure.
    *
-   * There is no meeting-type listing any more. It backed a setting that could
-   * not change the request, and it could not even be presented honestly:
-   * Calendly gives every host their own copy of a shared event type, so an
-   * organization running one programme across three people produced the same
-   * label three times, each selecting a different person's meetings.
+   * `meetingType` — the account's meeting types, DEDUPED BY NAME with the name
+   * as the value. Calendly gives every host their own copy of a shared event
+   * type, so an organization running one programme across three people has three
+   * rows with identical names and different URIs; listing them raw put the same
+   * label in the dropdown three times, each selecting one person's meetings.
+   * Names collapse that to one honest choice.
    */
   async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
-    if (key !== "groupUri") return [];
     const token = token_(args.credentials);
-    const { organization } = await identity(token, args.connectionId);
-    const params = new URLSearchParams({ organization, count: "100" });
-    const data = await fetchJson<{ collection: Array<{ uri: string; name?: string }> }>(
-      `${API}/groups?${params.toString()}`,
-      { headers: authHeader(token) },
-    );
-    return (data.collection ?? []).map((g) => ({ value: g.uri, label: g.name ?? g.uri }));
+
+    if (key === "groupUri") {
+      const { organization } = await identity(token, args.connectionId);
+      const params = new URLSearchParams({ organization, count: "100" });
+      const data = await fetchJson<{ collection: Array<{ uri: string; name?: string }> }>(
+        `${API}/groups?${params.toString()}`,
+        { headers: authHeader(token) },
+      );
+      return (data.collection ?? []).map((g) => ({ value: g.uri, label: g.name ?? g.uri }));
+    }
+
+    if (key === "meetingType") {
+      const me = await identity(token, args.connectionId);
+      // Listed in the same scope the poll will use, so nobody is offered a type
+      // their chosen scope cannot return.
+      const { scope } = scopeOf(args.config);
+      const params = new URLSearchParams(
+        scope === "user" ? { user: me.uri, count: "100" } : { organization: me.organization, count: "100" },
+      );
+      const data = await fetchJson<{ collection: Array<{ uri: string; name?: string }> }>(
+        `${API}/event_types?${params.toString()}`,
+        { headers: authHeader(token) },
+      );
+      const names = new Set((data.collection ?? []).map((t) => t.name).filter((n): n is string => Boolean(n)));
+      return [...names].sort().map((n) => ({ value: n, label: n }));
+    }
+
+    return [];
   },
 };
 
@@ -188,21 +217,23 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
     data = await fetchJson<CalendlyList>(url(null), { headers: authHeader(token) });
   }
 
-  // NOTHING IS FILTERED HERE, and that is the design.
+  // A STORAGE filter, and labelled as one in the UI.
   //
-  // A meeting-type filter used to run at this point. It could not reduce what we
-  // pull — `/scheduled_events` has no event_type parameter, so the pages fetched
-  // are identical either way — it only reduced what we kept. That makes it
-  // strictly worse than the same filter in a flow: same API cost, less data, and
-  // one stream per meeting type instead of one stream serving every flow.
+  // `/scheduled_events` has no event_type parameter, so this cannot reduce what
+  // we pull — the pages fetched are identical either way. What it does is keep
+  // the stored dataset to the one meeting type a flow is about, which is what
+  // was asked for. Matched on the type's NAME so it catches every host's copy:
+  // Calendly gives each person their own event_type row, so URI matching
+  // narrowed an organization-wide read to whoever happened to be picked.
   //
-  // Everything a flow might narrow by is flattened into properties below
-  // (`meeting_type`, `host_email`, …) so a Filter step can do it, once, over
-  // data one sync already paid for.
+  // `meeting_type`, `host_email` and the rest are still flattened onto every
+  // record below, so a Filter step remains the way to slice a shared sync.
+  const wanted = str(args.config?.["meetingType"]);
   const tag = streamTag(args);
   const records: CanonicalEvent[] = [];
   for (const ev of data.collection) {
     if (!str(ev["uri"])) continue;
+    if (wanted && str(ev["name"]) !== wanted) continue;
     records.push(bookedEvent(args.connectionId, tag, ev));
     if (str(ev["status"]) === "canceled") records.push(canceledEvent(args.connectionId, tag, ev));
   }
@@ -221,7 +252,16 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
 
   const next = data.pagination?.next_page_token ?? null;
   const nextCursor: string | null = next ? JSON.stringify({ floor: cur.floor, ceil: cur.ceil, pageToken: next } satisfies PollCursor) : null;
-  return { records, nextCursor };
+  return {
+    records,
+    nextCursor,
+    // Stored data tracks the window rather than only growing past it. Without
+    // this, narrowing the history window left the older import stranded behind
+    // the new floor with a gap in between — data matching neither window.
+    // Safe because `occurredAt` is meeting start time, the same axis
+    // min_start_time/max_start_time filter on.
+    retireOutsideWindow: { from: new Date(cur.floor), to: new Date(cur.ceil) },
+  };
 }
 
 /** Parse the opaque cursor into a rolling window + page token; a fresh/legacy cursor
@@ -251,24 +291,42 @@ function statusOf(config?: Record<string, unknown> | null): "active" | "canceled
   return raw === "active" || raw === "canceled" ? raw : null;
 }
 
+/**
+ * A Calendly record is dated by WHEN THE MEETING IS, not when it was booked.
+ *
+ * This was `created_at`, and the mismatch is the whole reason a 30-day window
+ * appeared not to work. Calendly filters `/scheduled_events` by `start_time`, so
+ * the window is a meeting-time window — but the stored `occurred_at` was booking
+ * time. A standing meeting booked in August 2025 whose next occurrence is this
+ * week is correctly INSIDE the window and displayed as August 2025. Nothing was
+ * over-fetching; two different axes were being read as one.
+ *
+ * Meeting time is also what the user means. "The last 30 days and the upcoming
+ * ones" is a statement about when meetings happen — a future meeting has a
+ * future start and a past booking, and only this axis puts it in the future.
+ *
+ * Booking time is not lost: `booked_at` and `canceled_at` are on every record,
+ * so "meetings booked per day" is still a metric anyone can build.
+ */
 function bookedEvent(connectionId: string, tag: string, ev: Record<string, unknown>): CanonicalEvent {
-  const start = parseDate(str(ev["start_time"]));
   return {
     eventId: `calendly:${connectionId}:${tag}${str(ev["uri"])}`,
     eventType: "booked",
     subject: str(ev["name"]) ?? null,
-    occurredAt: parseDate(str(ev["created_at"])) ?? start ?? new Date(),
+    occurredAt: parseDate(str(ev["start_time"])) ?? parseDate(str(ev["created_at"])) ?? new Date(),
     properties: { ...ev, ...meetingFacts(ev) },
   };
 }
 
 function canceledEvent(connectionId: string, tag: string, ev: Record<string, unknown>): CanonicalEvent {
-  const start = parseDate(str(ev["start_time"]));
   return {
     eventId: `calendly:${connectionId}:${tag}canceled:${str(ev["uri"])}`,
     eventType: "canceled",
     subject: str(ev["name"]) ?? null,
-    occurredAt: parseDate(str(ev["updated_at"])) ?? start ?? new Date(),
+    // Same axis as the booking, deliberately: a cancellation belongs to the slot
+    // it freed up, and both rows must sit inside the window that fetched them or
+    // the retire below would tombstone one of them.
+    occurredAt: parseDate(str(ev["start_time"])) ?? parseDate(str(ev["updated_at"])) ?? new Date(),
     properties: { ...ev, ...meetingFacts(ev) },
   };
 }
@@ -298,6 +356,10 @@ function meetingFacts(ev: Record<string, unknown>): Record<string, unknown> {
     meeting_type: str(ev["name"]) ?? null,
     host_email: str(host["user_email"]) ?? null,
     host_name: str(host["user_name"]) ?? null,
+    // The other time axis, kept explicit now that `occurred_at` is meeting time:
+    // "meetings booked per day" is a different and equally real question.
+    booked_at: str(ev["created_at"]) ?? null,
+    canceled_at: str(ev["status"]) === "canceled" ? str(ev["updated_at"]) ?? null : null,
   };
 }
 

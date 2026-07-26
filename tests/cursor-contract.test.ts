@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
-import { connections, sourceStreams } from "@/db/schema";
+import { connections, events, sourceStreams } from "@/db/schema";
 import { primeStream, syncStream } from "@/lib/sync/streams";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { encrypt } from "@/lib/crypto";
@@ -218,6 +218,94 @@ describe("an empty page does not end the scan", () => {
     const [stream] = await db.select().from(sourceStreams).where(eq(sourceStreams.connectionId, connId)).limit(1);
     const done = await syncStream(db, conn, stream, 5);
     expect(done.incomplete).toBeFalsy();
+  });
+
+  /**
+   * The stranded import. Calendly's history window narrowed from a year to 30
+   * days; the older rows sat behind the new floor with a gap between them and
+   * the current window, matching neither. A rolling window that only ever adds
+   * is not a window.
+   *
+   * Safe only because `occurred_at` is meeting start time — the same axis
+   * `min_start_time`/`max_start_time` filter on. When it was booking time, this
+   * retire would have tombstoned live meetings booked long ago.
+   */
+  it("retires rows that fall outside the window it now covers", async () => {
+    const now = Date.now();
+    const inWindow = new Date(now - 5 * 86_400_000).toISOString();
+    const stranded = new Date(now - 300 * 86_400_000).toISOString(); // last year's import
+
+    // Seed a row from the old, wider window under this stream's hash.
+    await db.insert(events).values({
+      orgId: ORG,
+      connectionId: connId,
+      source: "calendly",
+      streamHash: streamConfigHash(CAL_CFG),
+      eventId: "calendly:old:stranded",
+      eventType: "booked",
+      occurredAt: new Date(stranded),
+      syncGeneration: 1,
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) {
+          return respond(200, { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+        }
+        return respond(200, {
+          collection: [{ uri: "E1", name: "Wanted", status: "active", start_time: inWindow, created_at: stranded }],
+          pagination: { next_page_token: null },
+        });
+      }),
+    );
+
+    const [conn] = await db.select().from(connections).where(eq(connections.id, connId)).limit(1);
+    const [stream] = await db.select().from(sourceStreams).where(eq(sourceStreams.connectionId, connId)).limit(1);
+    const res = await syncStream(db, conn, stream, 3);
+
+    expect(res.softDeleted).toBe(1);
+    const live = await db
+      .select()
+      .from(events)
+      .where(and(eq(events.connectionId, connId), isNull(events.deletedAt)));
+    // Only the in-window meeting survives — and it survives despite having been
+    // BOOKED 300 days ago, which is the whole point of the axis fix.
+    expect(live).toHaveLength(1);
+    expect(live[0].eventId).toContain("E1");
+  });
+
+  it("leaves everything alone when the scan was cut short", async () => {
+    // A prefix of the window is not grounds for tombstoning anything.
+    await db.insert(events).values({
+      orgId: ORG,
+      connectionId: connId,
+      source: "calendly",
+      streamHash: streamConfigHash(CAL_CFG),
+      eventId: "calendly:old:stranded",
+      eventType: "booked",
+      occurredAt: new Date(Date.now() - 300 * 86_400_000),
+      syncGeneration: 1,
+    });
+    let n = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) {
+          return respond(200, { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+        }
+        n += 1;
+        return respond(200, { collection: [], pagination: { next_page_token: `P${n}` } });
+      }),
+    );
+    const [conn] = await db.select().from(connections).where(eq(connections.id, connId)).limit(1);
+    const [stream] = await db.select().from(sourceStreams).where(eq(sourceStreams.connectionId, connId)).limit(1);
+    const res = await syncStream(db, conn, stream, 2);
+
+    expect(res.incomplete).toBe(true);
+    expect(res.softDeleted).toBe(0);
   });
 
   it("walks past pages that come back empty, and finds the data behind them", async () => {

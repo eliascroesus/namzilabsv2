@@ -115,14 +115,17 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
      * ONLY the settings Calendly can act on server-side live here.
      *
      * `/scheduled_events` accepts organization | user | group, a start-time
-     * window and a status — and nothing else. There is no event-type parameter,
-     * so a "meeting type" setting could never reduce what we pull; it only
-     * reduced what we kept, while splitting one account into a stream per type.
-     * That belongs in a Filter step, over data one sync already paid for, and
-     * the connector flattens `meeting_type` / `host_email` / `host_name` onto
-     * every record so it is a clean pick there.
+     * window and a status — and nothing else.
      *
-     * The rule this leaves: a flowField earns its place by changing the REQUEST.
+     * Scope and status change the REQUEST, so they cut API usage. Meeting type
+     * cannot: there is no event-type parameter, so the pages fetched are
+     * identical either way and it only narrows what is KEPT. Both are offered,
+     * and each hint says which it is, because the difference is otherwise
+     * invisible and it is the difference between saving quota and not.
+     *
+     * A shared sync can still be sliced per flow without a second stream:
+     * `meeting_type`, `host_email` and `host_name` are flattened onto every
+     * record for the Filter step.
      */
     flowFields: [
       {
@@ -154,6 +157,14 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
           { value: "canceled", label: "Canceled only" },
         ],
         hint: "Fewer API calls. Booked only stops recording cancellations — a meeting that gets canceled will still read as booked.",
+      },
+      {
+        key: "meetingType",
+        label: "Meeting type",
+        dynamic: true,
+        dependsOn: ["scope"],
+        placeholder: "All meeting types",
+        hint: "Storage only — Calendly cannot filter by type, so this narrows what is kept, not what is fetched. Matches every host running it.",
       },
     ],
   },

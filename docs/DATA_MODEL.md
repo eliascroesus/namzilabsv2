@@ -300,24 +300,26 @@ Both are one-line `return null` sites, which is why the ambiguity stayed
 invisible. `tests/cursor-contract.test.ts` drives the real connector through the
 real runner for each case.
 
-## A flowField earns its place by changing the REQUEST
+## Ingest filters must say they are ingest filters
 
-Connectors do not filter at ingest. A per-flow setting belongs in the Get data
-step only if the provider can act on it; anything else belongs in a Filter step.
+A per-flow setting either changes the REQUEST or it does not, and the two are
+worth different things:
 
-The reasoning is arithmetic. If a setting cannot change the request, filtering at
-ingest costs exactly as many API calls as not filtering, stores less data, and —
-because the setting is part of `streamConfigHash` — splits one account into a
-stream per value, each running its own full scan of the same pages. Same cost,
-less data, more scans. A Filter step gets the same result over data one sync
-already paid for, and one sync then serves every flow.
+- **Changes the request** (Calendly's scope, status): fewer API calls. Pure win.
+- **Cannot change the request** (Calendly's meeting type — there is no
+  `event_type` parameter): the same pages are fetched either way. It narrows what
+  is STORED, which is a real thing to want, but it buys no quota. Because the
+  setting is part of `streamConfigHash` it also gives that flow its own stream, so
+  two flows on two meeting types scan the same account twice.
 
-Where that leaves a narrowing axis the user still wants: the connector flattens
-it onto every record, so the Filter picker can offer it cleanly. Calendly grew
-`meeting_type`, `host_email` and `host_name` for exactly this reason — the first
-was only reachable as the ambiguous `name` (and again as "Subject / person"), and
-the other two were buried in `event_memberships`, an array, which a picker can
-only offer positionally.
+Both are legitimate; conflating them is not. Every hint names which it is.
+
+A flow can also slice a SHARED sync without a second stream, and connectors make
+that possible by flattening the narrowing axes onto every record. Calendly grew
+`meeting_type`, `host_email` and `host_name` for exactly this — the first was
+otherwise reachable only as the ambiguous `name` (and again as "Subject /
+person"), and the other two were buried in `event_memberships`, an array a picker
+can offer only positionally.
 
 ## Calendly: what reduces API calls, and what only reduces storage
 
@@ -329,12 +331,16 @@ with its own cursor.
 is the whole list. **There is no `event_type` parameter**, which is why meeting
 type is not a flowField.
 
-| Lever | Where | Effect |
-|---|---|---|
-| **Fetch meetings for** (me / group / whole org) | Get data step | fewer API calls |
-| **Meetings to include** (booked / canceled / both) | Get data step | fewer API calls |
-| History window | fixed in the connector | fewer API calls |
-| Meeting type, host | Filter step, on `meeting_type` / `host_email` | less computed — API cost unchanged |
+| Lever | Effect |
+|---|---|
+| **Fetch meetings for** (me / group / whole org) | fewer API calls |
+| **Meetings to include** (booked / canceled / both) | fewer API calls |
+| History window (fixed in the connector) | fewer API calls |
+| **Meeting type** | fewer rows STORED — API cost unchanged |
+| Host, and meeting type again | Filter step, on `host_email` / `meeting_type` — nothing extra fetched |
+
+Every hint in the panel says which of those two it is, because the difference is
+otherwise invisible and it is the difference between saving quota and not.
 
 **Whole organization needs an admin or owner token.** A personal access token
 from a non-admin member carries user scope only, and an organization-scoped read
@@ -342,30 +348,53 @@ from one returns an empty collection — indistinguishable from an account with 
 meetings unless you read the `[calendly-probe]` log line, which records
 `returned=` straight from the response.
 
-### The window: 30 days back, 365 forward
+### A meeting is dated by when it HAPPENS
+
+`occurred_at` is the meeting's `start_time`, not `created_at`. This matters more
+than it sounds: Calendly filters `/scheduled_events` by `start_time`, so the
+window is a meeting-time window. While `occurred_at` was booking time the two
+axes disagreed, and a standing meeting booked in August 2025 whose next
+occurrence is this week sat correctly inside a 30-day window while displaying as
+August 2025 — which read as the window not working.
+
+It is also what the phrase means. "The last 30 days and the upcoming ones" is a
+statement about when meetings happen; only this axis puts a future meeting in the
+future. Booking time is still there as `booked_at` (and `canceled_at`), so
+"meetings booked per day" remains a metric anyone can build.
+
+### The window: 30 days back, 365 forward — and stored data tracks it
 
 The past half is short because it is the only real lever on volume: with no
 event-type filter, pages walked is decided by scope × window and nothing else.
 Thirty days rather than a year is a twelvefold cut per sweep.
 
-Narrowing it is safe by construction. Calendly never declares a `mirrorScope`, so
-`syncStream` never retires its rows — shortening the window changes what is
-FETCHED, never what is already stored.
+The poll declares that window as `retireOutsideWindow`, and `syncStream` retires
+this stream's rows that fall outside it. **A rolling window that only ever adds
+is not a window** — narrowing it used to leave the older import stranded behind
+the new floor with a gap in between, matching neither the old window nor the new.
 
-**History therefore accumulates forward from the connect date.** The first sweep
-imports the preceding 30 days and every sweep after that extends the record
-forward; it never reaches further back on its own. Wanting last year's meetings
-is a **one-time historical import**, not a wider sweep — see
-PRE_LAUNCH_CHECKLIST.md item 9a (the E.8 backfill lane), which is the gate that
-has to land before any deep backfill runs.
+`retireOutsideWindow` is the complement of `mirrorScope`, and the distinction is
+what makes it safe here. `mirrorScope` asserts the read is COMPLETE for a window,
+which licenses retiring rows INSIDE it that the read did not produce — only true
+when one call returns the whole window. This asserts nothing about completeness:
+it retires rows OUTSIDE the window, which depends on the boundary alone and is
+therefore correct on a paginated source where any one call sees a fraction. It is
+skipped entirely when a scan was cut short, because a prefix of the window is not
+grounds for tombstoning anything.
 
-A window that has been narrowed leaves the older import stranded behind the new
-floor, with a gap between. **Full re-sync** on the connection page clears it:
-it bumps the generation, re-polls every stream, then soft-deletes rows carrying
-those stream hashes at an older generation that the run did not see again —
-which is exactly the rows outside the new window. The retire is scoped to the
-hashes actually polled, so webhook rows (null hash) and other streams cannot be
-touched. `scripts/stream-inventory.sql` shows the before and after.
+It requires the connector's `occurred_at` to be on the same axis as the window it
+declares. Calendly's is meeting start time and the window filters `start_time`;
+were it booking time, this retire would tombstone live meetings booked long ago.
+
+**History accumulates forward from the connect date.** The first sweep imports the
+preceding 30 days and every sweep extends the record forward; it never reaches
+further back on its own, and rows that age out of the window are retired. Wanting
+last year's meetings is a **one-time historical import**, not a wider sweep — see
+PRE_LAUNCH_CHECKLIST.md item 9a (the E.8 backfill lane), the gate that has to land
+before any deep backfill runs.
+
+`scripts/stream-inventory.sql` (read-only) shows what each stream currently
+holds, before and after.
 
 ### How a client-side filter used to report zero
 
