@@ -308,15 +308,43 @@ stream with its own cursor. The Get data step decides before anything is pulled:
 | Field | Effect |
 |---|---|
 | **Fetch meetings for** (me / group / whole org) | fewer API calls |
-| **Days of history** (default 90, was a fixed 400) | fewer API calls |
 | **Meeting type** | fewer rows stored and computed — **not** fewer calls |
 | **Meetings to include** (booked / canceled / both) | fewer API calls |
 
-The distinction in row 3 is worth stating plainly because the UI cannot show it:
+The window is fixed at **365 days back and 365 days forward**, by meeting time.
+It is not a per-flow setting: "how far back should this go" has no answer a user
+can reason about, and a year covers any quarter-over-quarter question. The window
+is captured in the cursor when a scan starts so pagination stays stable while it
+drains; a later sweep opens a fresh window around then-now.
+
+The distinction in row 2 is worth stating plainly because the UI cannot show it:
 `/scheduled_events` has **no `event_type` query parameter**. The type is a field
 on each returned event, so the connector filters after the fetch. Narrowing to
 one meeting type makes a flow's dataset smaller and its metrics sharper; it does
-not spend less of the 60/min budget. Scope and window are what do that.
+not spend less of the 60/min budget. Scope is what does that.
+
+### Two ways that client-side filter reported zero
+
+Both were found on a real account where "Just me" worked and "Whole organization"
+returned nothing, and both are now regression-tested.
+
+**A page that filters to nothing is not the end of the data.** `syncStream`'s
+walk stopped on `records.length === 0`, which is a sound signal when a connector
+returns what the provider returned — and wrong the moment it filters first. Page
+one of an org-wide read is other hosts' meetings, so the walk ended there. The
+narrower the scope the less it mattered: one person's meetings fit on page one.
+An advancing cursor is the connector saying there IS more; `maxPages` bounds the
+walk, not an empty page.
+
+**Calendly gives every host their own copy of a shared event type.** An
+organization running one programme across three people has three `event_types`
+rows with the same name and different URIs — visible in any client's picker as
+the same label two or three times. Matching a scheduled event on the event-type
+URI therefore narrowed an org-wide read to whichever host's copy happened to be
+picked. The picker now dedupes by name and the filter matches the event's `name`,
+so picking a programme means the programme. The cost is that renaming the type in
+Calendly orphans the filter — visible, and far better than a filter that is wrong
+from day one on every multi-host account.
 
 "Meeting type" is deliberately not called "event type": that name already means
 the canonical `booked` / `canceled` / `no_show` in this product, and the panel's

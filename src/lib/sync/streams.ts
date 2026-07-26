@@ -196,7 +196,16 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
         cursor = nextCursor;
         // Stop when the connector is not moving forward, or when it says the
         // scan is done (null) — the next sweep restarts it.
-        if (!advanced || nextCursor == null || records.length === 0) break;
+        //
+        // NOT when a page merely produced no records. A connector that filters
+        // client-side — Calendly narrowing to one meeting type, because its API
+        // has no event_type parameter — legitimately returns an empty page while
+        // the very next one is full. Ending the walk there reported "0 loaded"
+        // for an account with hundreds of matching meetings, and the wider the
+        // scope the likelier it was: "just me" fit on page one and worked, the
+        // whole organization did not. An advancing cursor is the connector
+        // saying there IS more; `maxPages` is what bounds the walk.
+        if (!advanced || nextCursor == null) break;
       }
     }
     await db

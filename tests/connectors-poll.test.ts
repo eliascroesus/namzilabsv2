@@ -101,7 +101,7 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
     const entry = catalogEntry("calendly")!;
     // Everything a flow can narrow BEFORE anything is pulled. Scope and days cut
     // real provider calls; meeting type cuts what gets stored.
-    expect(entry.flowFields?.map((f) => f.key)).toEqual(["scope", "groupUri", "eventTypeUri", "days", "status"]);
+    expect(entry.flowFields?.map((f) => f.key)).toEqual(["scope", "groupUri", "meetingType", "status"]);
     expect((entry as { configFields?: unknown }).configFields).toBeUndefined();
     // Poll-based reconciliation, no connect-time webhook.
     expect(entry.autoWebhook).toBe(false);
@@ -255,9 +255,9 @@ describe("Google Sheets polling", () => {
 describe("Calendly is configurable before it pulls", () => {
   const ME = ["/users/me", { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } }] as [string, unknown];
 
-  const meeting = (uri: string, eventType: string) => ({
+  const meeting = (uri: string, name: string, eventType = "ET1") => ({
     uri,
-    name: "Intro call",
+    name,
     status: "active",
     event_type: eventType,
     start_time: "2026-07-20T10:00:00Z",
@@ -289,21 +289,14 @@ describe("Calendly is configurable before it pulls", () => {
     expect(calendlyConnector.operationFor!({ scope: "organization" })).toBe("scheduled_events.list");
   });
 
-  it("bounds history by the flow's days, not a fixed 400", async () => {
-    const url = new URL(await pollUrl({ scope: "user", days: 30 }));
-    const floor = Date.parse(url.searchParams.get("min_start_time")!);
-    const daysBack = Math.round((Date.now() - floor) / 86_400_000);
-    expect(daysBack).toBe(30);
-    // Upcoming meetings are always included — that is most of what a calendar is for.
-    expect(Date.parse(url.searchParams.get("max_start_time")!)).toBeGreaterThan(Date.now());
-  });
-
-  it("defaults to 90 days and refuses an absurd window", async () => {
-    const dflt = new URL(await pollUrl({ scope: "user" }));
-    expect(Math.round((Date.now() - Date.parse(dflt.searchParams.get("min_start_time")!)) / 86_400_000)).toBe(90);
-
-    const silly = new URL(await pollUrl({ scope: "user", days: 99999 }));
-    expect(Math.round((Date.now() - Date.parse(silly.searchParams.get("min_start_time")!)) / 86_400_000)).toBe(400);
+  it("reads a fixed year either side of now", async () => {
+    const url = new URL(await pollUrl({ scope: "user" }));
+    const back = Math.round((Date.now() - Date.parse(url.searchParams.get("min_start_time")!)) / 86_400_000);
+    const fwd = Math.round((Date.parse(url.searchParams.get("max_start_time")!) - Date.now()) / 86_400_000);
+    expect(back).toBe(365);
+    // Upcoming meetings are most of what a calendar is asked about, and they
+    // arrive on the same pages — so the forward half costs nothing extra.
+    expect(fwd).toBe(365);
   });
 
   it("sends status only when the flow narrowed it — omitted, cancellations stay visible", async () => {
@@ -318,7 +311,7 @@ describe("Calendly is configurable before it pulls", () => {
    * neither can be quietly misrepresented later.
    */
   it("filters by meeting type after the fetch, never as a query parameter", async () => {
-    const url = await pollUrl({ scope: "user", eventTypeUri: "https://api.calendly.com/event_types/ET1" });
+    const url = await pollUrl({ scope: "user", meetingType: "Intro call" });
     expect(url).not.toContain("event_type=");
 
     vi.stubGlobal(
@@ -328,8 +321,10 @@ describe("Calendly is configurable before it pulls", () => {
         [
           "/scheduled_events",
           {
-            collection: [meeting("https://api.calendly.com/scheduled_events/A", "https://api.calendly.com/event_types/ET1"),
-                         meeting("https://api.calendly.com/scheduled_events/B", "https://api.calendly.com/event_types/ET2")],
+            collection: [
+              meeting("https://api.calendly.com/scheduled_events/A", "Intro call"),
+              meeting("https://api.calendly.com/scheduled_events/B", "Something else"),
+            ],
             pagination: { next_page_token: null },
           },
         ],
@@ -339,13 +334,80 @@ describe("Calendly is configurable before it pulls", () => {
       connectionId: "c1",
       cursor: null,
       credentials: { accessToken: "t" },
-      config: { scope: "user", eventTypeUri: "https://api.calendly.com/event_types/ET1" },
+      config: { scope: "user", meetingType: "Intro call" },
     });
     expect(res.records).toHaveLength(1);
     expect(res.records[0].eventId).toContain("/scheduled_events/A");
   });
 
-  it("lists real meeting types for the picker, scoped the way the poll will be", async () => {
+  /**
+   * THE whole-organization bug. Calendly gives every host their own copy of a
+   * shared event type, so an org running one programme across three people has
+   * three `event_types` rows with the same name and different URIs. Matching on
+   * URI narrowed an org-wide read to one person; matching on the name catches
+   * all of them, which is what picking the programme plainly means.
+   */
+  it("matches every host's copy of a meeting type, not just the one that was picked", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        ME,
+        [
+          "/scheduled_events",
+          {
+            collection: [
+              // Same programme name, three different hosts → three event_type URIs.
+              meeting("https://api.calendly.com/scheduled_events/A", "NAMZI Invite Only Creator Program", "ET_IDRIS"),
+              meeting("https://api.calendly.com/scheduled_events/B", "NAMZI Invite Only Creator Program", "ET_MAZHAR"),
+              meeting("https://api.calendly.com/scheduled_events/C", "NAMZI Invite Only Creator Program", "ET_ISMAIL"),
+              meeting("https://api.calendly.com/scheduled_events/D", "Call with Tristan - Personal Calendar", "ET_OTHER"),
+            ],
+            pagination: { next_page_token: null },
+          },
+        ],
+      ]),
+    );
+    const res = await calendlyConnector.poll!({
+      connectionId: "c1",
+      cursor: null,
+      credentials: { accessToken: "t" },
+      config: { scope: "organization", meetingType: "NAMZI Invite Only Creator Program" },
+    });
+    expect(res.records).toHaveLength(3);
+  });
+
+  it("offers one entry per meeting type name, however many hosts run it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        ME,
+        [
+          "/event_types",
+          {
+            collection: [
+              { uri: "ET_IDRIS", name: "NAMZI Invite Only Creator Program" },
+              { uri: "ET_MAZHAR", name: "NAMZI Invite Only Creator Program" },
+              { uri: "ET_A", name: "30 Minute Meeting" },
+              { uri: "ET_B", name: "30 Minute Meeting" },
+            ],
+          },
+        ],
+      ]),
+    );
+    const opts = await calendlyConnector.listOptions!("meetingType", {
+      connectionId: "c-dedupe",
+      credentials: { accessToken: "t" },
+      config: { scope: "organization" },
+    });
+    // Four rows in, two choices out — the dropdown used to show each name twice
+    // and picking either one quietly selected a single host.
+    expect(opts).toEqual([
+      { value: "30 Minute Meeting", label: "30 Minute Meeting" },
+      { value: "NAMZI Invite Only Creator Program", label: "NAMZI Invite Only Creator Program" },
+    ]);
+  });
+
+  it("lists meeting types scoped the way the poll will be", async () => {
     const seen: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -353,19 +415,18 @@ describe("Calendly is configurable before it pulls", () => {
         const url = String(input);
         seen.push(url);
         if (url.includes("/users/me")) return jsonResponse(ME[1]);
-        return jsonResponse({ collection: [{ uri: "ET1", name: "30 Minute Meeting" }, { uri: "ET2", name: "Old", active: false }] });
+        return jsonResponse({ collection: [{ uri: "ET1", name: "30 Minute Meeting" }] });
       }),
     );
-    const opts = await calendlyConnector.listOptions!("eventTypeUri", {
-      connectionId: "c1",
+    const opts = await calendlyConnector.listOptions!("meetingType", {
+      connectionId: "c-scoped",
       credentials: { accessToken: "t" },
       config: { scope: "organization" },
     });
+    // Scoped to the org, so the user is never offered a type their scope
+    // cannot return.
     expect(seen.some((u) => u.includes("/event_types?") && u.includes("organization=O1"))).toBe(true);
-    expect(opts).toEqual([
-      { value: "ET1", label: "30 Minute Meeting" },
-      { value: "ET2", label: "Old (inactive)" },
-    ]);
+    expect(opts).toEqual([{ value: "30 Minute Meeting", label: "30 Minute Meeting" }]);
   });
 
   it("asks who the token belongs to once per connection, not once per poll", async () => {

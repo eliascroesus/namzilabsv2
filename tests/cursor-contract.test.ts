@@ -142,6 +142,64 @@ describe("nextCursor: null means start over, not carry on", () => {
 
     expect(await storedCursor()).toBe("LIVE_TOKEN");
   });
+
+});
+
+/**
+ * A page that yields no records is not the end of the data.
+ *
+ * Calendly's API has no `event_type` parameter, so narrowing to one meeting type
+ * has to happen after the fetch — which means a page can legitimately come back
+ * full and leave nothing. The walk used to stop there, and the wider the scope
+ * the likelier it was: "just me" fits on page one and worked, the whole
+ * organization reported "0 loaded" for an account with hundreds of matching
+ * meetings.
+ *
+ * Driven through Calendly rather than Calendar because Calendar drains its
+ * pages inside a single poll; Calendly returns one page per call, which is what
+ * puts the decision in the runner's hands.
+ */
+describe("an empty page does not end the scan", () => {
+  const CAL_CFG = { scope: "user", meetingType: "Wanted" };
+
+  const ev = (uri: string, name: string) => ({
+    uri,
+    name,
+    status: "active",
+    start_time: "2026-07-20T10:00:00Z",
+    created_at: "2026-07-01T10:00:00Z",
+  });
+
+  beforeEach(async () => {
+    await db.update(connections).set({ source: "calendly" }).where(eq(connections.id, connId));
+    const configHash = streamConfigHash(CAL_CFG);
+    await db.insert(sourceStreams).values({ orgId: ORG, connectionId: connId, configHash, config: CAL_CFG, cursor: null });
+  });
+
+  it("walks past pages the meeting-type filter empties, and finds the data behind them", async () => {
+    let pages = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) {
+          return respond(200, { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+        }
+        pages += 1;
+        // Pages 1 and 2 are other hosts' meeting types — every row filtered out.
+        if (pages === 1) return respond(200, { collection: [ev("A", "Other")], pagination: { next_page_token: "P2" } });
+        if (pages === 2) return respond(200, { collection: [ev("B", "Other")], pagination: { next_page_token: "P3" } });
+        return respond(200, { collection: [ev("C", "Wanted")], pagination: { next_page_token: null } });
+      }),
+    );
+
+    const [conn] = await db.select().from(connections).where(eq(connections.id, connId)).limit(1);
+    const [stream] = await db.select().from(sourceStreams).where(eq(sourceStreams.connectionId, connId)).limit(1);
+    const res = await syncStream(db, conn, stream, 3);
+
+    expect(pages).toBe(3); // it kept going past both empty pages
+    expect(res.inserted).toBe(1); // and found the one matching meeting
+  });
 });
 
 /**

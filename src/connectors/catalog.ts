@@ -136,18 +136,12 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
         hint: "Groups are a paid Calendly feature — an empty list means this account has none.",
       },
       {
-        key: "eventTypeUri",
+        key: "meetingType",
         label: "Meeting type",
         dynamic: true,
         dependsOn: ["scope"],
         placeholder: "All meeting types",
-        hint: "Narrow to one of your Calendly meeting types. Leave blank for all.",
-      },
-      {
-        key: "days",
-        label: "Days of history",
-        placeholder: "90",
-        hint: "How far back each refresh reads. Upcoming meetings are always included.",
+        hint: "Matches every host running that meeting type — Calendly gives each person their own copy.",
       },
       {
         key: "status",

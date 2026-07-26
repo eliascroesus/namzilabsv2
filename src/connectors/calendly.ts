@@ -14,17 +14,20 @@ import { asObject, parseDate, str } from "./field-utils";
 
 const API = "https://api.calendly.com";
 /**
- * How far back a poll scan looks by meeting time, when the flow does not say.
- * Was 400 days, unconfigurable — which meant every Calendly step imported
- * thirteen months of the whole account before it could answer anything.
+ * The rolling window every Calendly stream reads, by MEETING time.
+ *
+ * Fixed rather than configurable: a per-flow "days of history" box asked the
+ * user to tune something they have no way to reason about, and every honest
+ * answer to "how far back should this go" is "far enough". A year covers any
+ * quarter-over-quarter question, and the forward half is generous because
+ * upcoming meetings are most of what a calendar is asked about and cost nothing
+ * extra — they arrive on the same pages.
+ *
+ * The window is captured in the cursor when a scan starts, so pagination stays
+ * stable while it drains; a later sweep opens a fresh window around then-now.
  */
-const DEFAULT_DAYS = 90;
-/**
- * The forward half of the window stays generous and fixed: upcoming meetings are
- * most of what a calendar is asked about, and they cost nothing extra to fetch
- * (they are the same pages).
- */
-const FUTURE_DAYS = 400;
+const PAST_DAYS = 365;
+const FUTURE_DAYS = 365;
 
 /** invitee.created -> booked, invitee.canceled -> canceled, etc. */
 const EVENT_TYPE_MAP: Record<string, string> = {
@@ -138,7 +141,7 @@ export const calendlyConnector: Connector = {
       return (data.collection ?? []).map((g) => ({ value: g.uri, label: g.name ?? g.uri }));
     }
 
-    if (key === "eventTypeUri") {
+    if (key === "meetingType") {
       const me = await identity(token, args.connectionId);
       // Scope the listing the same way the poll will be scoped, so the user is
       // never offered a meeting type their chosen scope cannot return.
@@ -146,13 +149,27 @@ export const calendlyConnector: Connector = {
       const params = new URLSearchParams(
         scope === "user" ? { user: me.uri, count: "100" } : { organization: me.organization, count: "100" },
       );
-      const data = await fetchJson<{ collection: Array<{ uri: string; name?: string; active?: boolean }> }>(
+      const data = await fetchJson<{ collection: Array<{ uri: string; name?: string }> }>(
         `${API}/event_types?${params.toString()}`,
         { headers: authHeader(token) },
       );
-      return (data.collection ?? [])
-        .map((t) => ({ value: t.uri, label: t.active === false ? `${t.name ?? t.uri} (inactive)` : t.name ?? t.uri }))
-        .filter((o) => o.value);
+      // DEDUPED BY NAME, and the name is the value.
+      //
+      // Calendly gives every host their own copy of a shared event type, so an
+      // organization running one programme across three people has three
+      // `event_types` rows with identical names and different URIs. Listing them
+      // raw put the same label in the dropdown two or three times; picking one
+      // silently narrowed to a single host, and the poll then matched almost
+      // nothing — the whole-organization scope was returning zero for exactly
+      // this reason while "just me" (one host, one copy) worked.
+      //
+      // A scheduled event carries its type's NAME in `name`, so matching on that
+      // catches every host's copy at once, which is what picking "NAMZI Invite
+      // Only Creator Program" plainly means. The cost is that renaming the type
+      // in Calendly orphans the filter — visible, and far better than a filter
+      // that is wrong from the first day on any multi-host account.
+      const names = new Set((data.collection ?? []).map((t) => t.name).filter((n): n is string => Boolean(n)));
+      return [...names].sort().map((n) => ({ value: n, label: n }));
     }
 
     return [];
@@ -179,7 +196,7 @@ type PollCursor = { floor: string; ceil: string; pageToken?: string | null };
 async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Promise<PollResult> {
   const token = token_(args.credentials);
   const target = await resolveTarget(token, args.connectionId, args.config);
-  const cur = parseCursor(rawCursor, args.config);
+  const cur = parseCursor(rawCursor);
   const status = statusOf(args.config);
   const url = (pageToken?: string | null) => {
     const p = new URLSearchParams({ ...target, count: "100", sort: "start_time:asc", min_start_time: cur.floor, max_start_time: cur.ceil });
@@ -199,7 +216,7 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
     data = await fetchJson<CalendlyList>(url(null), { headers: authHeader(token) });
   }
 
-  const wanted = str(args.config?.["eventTypeUri"]);
+  const wanted = str(args.config?.["meetingType"]);
   const tag = streamTag(args);
   const records: CanonicalEvent[] = [];
   let dropped = 0;
@@ -209,7 +226,12 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
     // is a field on each returned event, so this narrows what we STORE and what
     // flows compute over, not how many calls we make. Scope and window are what
     // reduce calls. Stated here because the difference is invisible in the UI.
-    if (wanted && str(ev["event_type"]) !== wanted) {
+    //
+    // Matched on the type's NAME (`ev.name`), not its URI: Calendly gives each
+    // host their own copy of a shared event type, so URI matching silently
+    // narrowed an organization-wide read to one person's meetings. See
+    // listOptions("meetingType").
+    if (wanted && str(ev["name"]) !== wanted) {
       dropped += 1;
       continue;
     }
@@ -234,8 +256,8 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
 }
 
 /** Parse the opaque cursor into a rolling window + page token; a fresh/legacy cursor
- *  starts a new window sized by the flow's `days`. */
-function parseCursor(raw: string | null, config?: Record<string, unknown> | null): PollCursor {
+ *  opens a new window around now. */
+function parseCursor(raw: string | null): PollCursor {
   if (raw) {
     try {
       const c = JSON.parse(raw) as Partial<PollCursor>;
@@ -248,17 +270,10 @@ function parseCursor(raw: string | null, config?: Record<string, unknown> | null
   }
   const now = Date.now();
   return {
-    floor: new Date(now - daysOf(config) * 86_400_000).toISOString(),
+    floor: new Date(now - PAST_DAYS * 86_400_000).toISOString(),
     ceil: new Date(now + FUTURE_DAYS * 86_400_000).toISOString(),
     pageToken: null,
   };
-}
-
-/** How far back this flow reads, bounded so a typo cannot ask for a decade. */
-function daysOf(config?: Record<string, unknown> | null): number {
-  const n = Number(config?.["days"]);
-  if (!Number.isFinite(n) || n <= 0) return DEFAULT_DAYS;
-  return Math.min(Math.floor(n), 400);
 }
 
 /** The `status` query param, or null for "every status" (the default). */
