@@ -68,6 +68,25 @@ export type ConnectorCatalogEntry = {
    * cursor, and events are tagged per stream. Connecting an account asks for auth only.
    */
   flowFields?: FlowConfigField[];
+  /**
+   * Field paths this source's records carry but nobody can build anything from,
+   * hidden from the variable picker.
+   *
+   * Two kinds qualify, and only these two:
+   * - **Constant on every row** — `kind` is always `"calendar#event"`, `source`
+   *   is always the connector. A condition on a constant passes every record or
+   *   none, so offering it can only mislead.
+   * - **An exact restatement of another field** — a calendar's canonical
+   *   `subject` is its `summary`, listed twice under two names.
+   *
+   * Opaque-but-unique values (`etag`, `iCalUID`) count as the first kind in
+   * practice: unique per row, meaningful to nobody, and impossible to filter on.
+   *
+   * This hides fields from the PICKER ONLY. The data is untouched and stored
+   * references still resolve, so a flow that already points at one keeps
+   * working — which is why this is a display list and not a drop at ingest.
+   */
+  hiddenFields?: readonly string[];
   /** Manual webhook setup note shown on the connection page when not auto. */
   webhookSetup?: string;
 };
@@ -85,13 +104,22 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     poll: true,
     autoWebhook: false,
     credentialFields: [{ key: "accessToken", label: "Personal Access Token", placeholder: "eyJ..." }],
-    // Whose meetings to import is chosen per flow, in the Get data step — not here.
+    // Calendly publishes 60 requests/minute (120 on Enterprise). One account-wide
+    // bucket in practice, declared per endpoint so any one can be raised alone.
+    rateLimits: {
+      "scheduled_events.list": { requestsPerMinute: 60 },
+      "event_types.list": { requestsPerMinute: 60 },
+      "groups.list": { requestsPerMinute: 60 },
+    },
+    // What to import is chosen per flow, in the Get data step — not here. Scope
+    // and window are what actually reduce provider calls; meeting type narrows
+    // what gets stored (Calendly cannot filter by it server-side).
     flowFields: [
       {
         key: "scope",
         label: "Fetch meetings for",
         required: true,
-        hint: "Whose Calendly meetings this flow pulls.",
+        hint: "Whose Calendly meetings this flow pulls. The narrower the scope, the fewer calls.",
         options: [
           { value: "user", label: "Just me" },
           { value: "organization", label: "Whole organization" },
@@ -105,6 +133,31 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
         dependsOn: ["scope"],
         showWhen: { key: "scope", equals: "group" },
         placeholder: "Choose a group…",
+        hint: "Groups are a paid Calendly feature — an empty list means this account has none.",
+      },
+      {
+        key: "eventTypeUri",
+        label: "Meeting type",
+        dynamic: true,
+        dependsOn: ["scope"],
+        placeholder: "All meeting types",
+        hint: "Narrow to one of your Calendly meeting types. Leave blank for all.",
+      },
+      {
+        key: "days",
+        label: "Days of history",
+        placeholder: "90",
+        hint: "How far back each refresh reads. Upcoming meetings are always included.",
+      },
+      {
+        key: "status",
+        label: "Meetings to include",
+        options: [
+          { value: "", label: "Booked and canceled" },
+          { value: "active", label: "Booked only" },
+          { value: "canceled", label: "Canceled only" },
+        ],
+        hint: "Booked only stops recording cancellations — a meeting that gets canceled will still read as booked.",
       },
     ],
   },
@@ -227,6 +280,20 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     autoWebhook: false,
     credentialFields: [],
     flowFields: [{ key: "calendarId", label: "Calendar", dynamic: true, placeholder: "primary" }],
+    hiddenFields: [
+      "subject", //               restates properties.summary
+      "source", //                always "gcal"
+      "properties.kind", //       always "calendar#event"
+      "properties.eventType", //  always "default" — Google's, not our canonical one
+      "properties.etag",
+      "properties.iCalUID",
+      "properties.htmlLink",
+      "properties.sequence",
+      "properties.reminders",
+    ],
+    // NOT hidden, though it sits in the same block and looks alike: `occurredAt`
+    // is the meeting's start time here, and the default date field of every
+    // Time-window step. `id` stays too — it is what dedupe debugging needs.
   },
   {
     source: "webhook",

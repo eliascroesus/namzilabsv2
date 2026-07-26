@@ -187,9 +187,16 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
         updated += swap.result.res.updated;
         deduped += swap.result.res.deduped;
         softDeleted += swap.result.gone;
-        const advanced = nextCursor != null && nextCursor !== cursor;
-        cursor = nextCursor ?? cursor;
-        if (!advanced || records.length === 0) break;
+        // `null` means START OVER (see PollResult.nextCursor) — so it is stored
+        // as null rather than folded back to the previous value. The old
+        // `?? cursor` pinned a finished scan to its final page token forever:
+        // Calendly never saw a booking after its first sweep, and one 410 made
+        // Calendar re-send a dead sync token indefinitely.
+        const advanced = nextCursor !== cursor;
+        cursor = nextCursor;
+        // Stop when the connector is not moving forward, or when it says the
+        // scan is done (null) — the next sweep restarts it.
+        if (!advanced || nextCursor == null || records.length === 0) break;
       }
     }
     await db

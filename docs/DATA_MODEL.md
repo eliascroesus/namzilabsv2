@@ -277,6 +277,76 @@ blocked by this environment's egress policy, so it has not been possible to
 confirm them from the documentation. Confirm against a live account before
 trusting Sendblue numbers.
 
+## `nextCursor: null` means START OVER
+
+The connector contract's most expensive ambiguity, now settled in
+`PollResult.nextCursor`. A connector that means *"nothing changed, keep what you
+had"* returns `args.cursor` — the value it was handed. `null` means *"begin from
+scratch next time"*.
+
+The runner used to implement the other reading (`cursor = nextCursor ?? cursor`),
+and two connectors had already assumed reset:
+
+- **Calendly** returns null when a scan reaches its last page. Folded back, the
+  cursor stayed pinned to that final page token and every later sweep re-fetched
+  the same last page — **no booking made after the first sweep was ever
+  ingested.** Consistent with a Calendly connection whose ingested event types
+  never grew past empty.
+- **Google Calendar** returns null on a 410 ("this sync token is dead"). Folded
+  back, it re-sent the dead token forever, so one expiry meant permanent 410s
+  with no recovery short of a manual full re-sync.
+
+Both are one-line `return null` sites, which is why the ambiguity stayed
+invisible. `tests/cursor-contract.test.ts` drives the real connector through the
+real runner for each case.
+
+## Calendly: what a flow narrows, and what that actually saves
+
+Calendly is stream-scoped like Instantly — each distinct config is its own
+stream with its own cursor. The Get data step decides before anything is pulled:
+
+| Field | Effect |
+|---|---|
+| **Fetch meetings for** (me / group / whole org) | fewer API calls |
+| **Days of history** (default 90, was a fixed 400) | fewer API calls |
+| **Meeting type** | fewer rows stored and computed — **not** fewer calls |
+| **Meetings to include** (booked / canceled / both) | fewer API calls |
+
+The distinction in row 3 is worth stating plainly because the UI cannot show it:
+`/scheduled_events` has **no `event_type` query parameter**. The type is a field
+on each returned event, so the connector filters after the fetch. Narrowing to
+one meeting type makes a flow's dataset smaller and its metrics sharper; it does
+not spend less of the 60/min budget. Scope and window are what do that.
+
+"Meeting type" is deliberately not called "event type": that name already means
+the canonical `booked` / `canceled` / `no_show` in this product, and the panel's
+own control for that is now labelled **Record type** so the two cannot be
+confused.
+
+`GET /users/me` is memoized per connection (5-minute TTL). It answers "who is
+this token", which never changes, and it was being called on every poll and every
+option listing — an extra provider call per stream per sweep that the budget
+layer never counted, since a claim is made per poll rather than per request.
+
+## Hiding fields that answer nothing
+
+`ConnectorCatalogEntry.hiddenFields` lists paths a source carries but nobody can
+build on. Two kinds qualify:
+
+1. **Constant on every row** — `kind` is always `"calendar#event"`, `source` is
+   always the connector. A condition on a constant passes every record or none.
+2. **An exact restatement** — a calendar's canonical `subject` *is* its
+   `summary`, listed twice under two names.
+
+Opaque-but-unique values (`etag`, `iCalUID`) are the first kind in practice.
+
+This hides them from the **picker only**. The data is untouched and stored
+references still resolve, so a flow already pointing at one keeps working.
+
+`occurredAt` is deliberately **not** hidden on Google Calendar: it is the
+meeting's start time and the default date field of every Time-window step. It
+only looked like plumbing because its label is humanised like one of ours.
+
 ## Custom Webhook: the URL is the product
 
 The catch-hook connector has no credentials — saving a connection mints an

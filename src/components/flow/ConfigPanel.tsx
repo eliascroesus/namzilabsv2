@@ -408,12 +408,18 @@ function NodeConfig({
               .map((f) => (
                 <SourceConfigField key={f.key} field={f} conn={conn} cfg={cfg} onChange={onChange} />
               ))}
-            <Field label="Which event">
+            {/* "Record type" and not "event type": this is our canonical kind
+                (booked / canceled / no_show), while a connector's own flowFields
+                may offer the PROVIDER's event type — Calendly calls its meeting
+                templates "event types". Two dropdowns reading "event" in one
+                panel are indistinguishable. The list is built from types already
+                ingested, so a source that has never synced shows only "All". */}
+            <Field label="Record type">
               <Select
                 value={typeof cfg.eventType === "string" ? (cfg.eventType as string) : "__none"}
                 width={W}
-                placeholder="Choose an event…"
-                options={[{ value: "", label: "All events" }, ...(conn?.eventTypes ?? []).map((t) => ({ value: t, label: t }))]}
+                placeholder="Choose a record type…"
+                options={[{ value: "", label: "All record types" }, ...(conn?.eventTypes ?? []).map((t) => ({ value: t, label: t }))]}
                 onChange={(v) => onChange({ eventType: v })}
               />
             </Field>

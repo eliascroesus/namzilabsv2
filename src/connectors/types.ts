@@ -54,6 +54,22 @@ export type ListOptionsArgs = {
 
 export type PollResult = {
   records: CanonicalEvent[];
+  /**
+   * Where the next poll of this stream should resume.
+   *
+   * **`null` means START OVER.** The connector has finished its scan, or the
+   * token it was handed is no longer usable, and the next poll should begin from
+   * scratch. A connector that means "nothing changed, keep what you had" must
+   * return `args.cursor` — the value it was given — not null.
+   *
+   * This has to be stated because the two readings are indistinguishable in the
+   * type and the runner used to implement the other one (`cursor = nextCursor ??
+   * cursor`). Two connectors already assumed reset and were silently broken by
+   * it: Calendly pinned itself to the last page of its first scan and never saw
+   * another booking, and Google Calendar re-sent an expired sync token forever
+   * after a single 410. Both are one-line "return null" sites, which is exactly
+   * why the ambiguity was invisible.
+   */
   nextCursor: string | null;
   /**
    * "This read is COMPLETE for this slice of time" — the connector's declaration

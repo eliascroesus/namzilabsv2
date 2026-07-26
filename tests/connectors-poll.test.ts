@@ -99,7 +99,9 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
   it("is stream-scoped, and scope is a per-flow field, not a connect-time one", () => {
     expect(isStreamScoped("calendly")).toBe(true);
     const entry = catalogEntry("calendly")!;
-    expect(entry.flowFields?.map((f) => f.key)).toEqual(["scope", "groupUri"]);
+    // Everything a flow can narrow BEFORE anything is pulled. Scope and days cut
+    // real provider calls; meeting type cuts what gets stored.
+    expect(entry.flowFields?.map((f) => f.key)).toEqual(["scope", "groupUri", "eventTypeUri", "days", "status"]);
     expect((entry as { configFields?: unknown }).configFields).toBeUndefined();
     // Poll-based reconciliation, no connect-time webhook.
     expect(entry.autoWebhook).toBe(false);
@@ -241,5 +243,149 @@ describe("Google Sheets polling", () => {
     });
     // Row 3 (blank) produces nothing; row numbers of later rows are unshifted.
     expect(res.records.map((r) => r.eventId)).toEqual(["gsheets:c1:row:2", "gsheets:c1:row:4"]);
+  });
+});
+
+/**
+ * Calendly used to pull the whole account over a fixed ±400-day window with no
+ * way to narrow it. These pin what a flow can now decide BEFORE anything is
+ * fetched — and, just as importantly, which of those decisions actually reduce
+ * provider calls versus only reducing what gets stored.
+ */
+describe("Calendly is configurable before it pulls", () => {
+  const ME = ["/users/me", { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } }] as [string, unknown];
+
+  const meeting = (uri: string, eventType: string) => ({
+    uri,
+    name: "Intro call",
+    status: "active",
+    event_type: eventType,
+    start_time: "2026-07-20T10:00:00Z",
+    created_at: "2026-07-01T10:00:00Z",
+  });
+
+  /** Capture the /scheduled_events URL a poll builds from a given config. */
+  async function pollUrl(config: Record<string, unknown>): Promise<string> {
+    let seen = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) return jsonResponse(ME[1]);
+        seen = url;
+        return jsonResponse({ collection: [], pagination: { next_page_token: null } });
+      }),
+    );
+    await calendlyConnector.poll!({ connectionId: `c-${Math.random()}`, cursor: null, credentials: { accessToken: "t" }, config });
+    return seen;
+  }
+
+  it("declares a budget for every endpoint it can call", () => {
+    const entry = catalogEntry("calendly")!;
+    for (const op of calendlyConnector.operations ?? []) {
+      expect(entry.rateLimits?.[op]?.requestsPerMinute).toBe(60);
+    }
+    // A poll only ever reads scheduled events; the rest serve the config pickers.
+    expect(calendlyConnector.operationFor!({ scope: "organization" })).toBe("scheduled_events.list");
+  });
+
+  it("bounds history by the flow's days, not a fixed 400", async () => {
+    const url = new URL(await pollUrl({ scope: "user", days: 30 }));
+    const floor = Date.parse(url.searchParams.get("min_start_time")!);
+    const daysBack = Math.round((Date.now() - floor) / 86_400_000);
+    expect(daysBack).toBe(30);
+    // Upcoming meetings are always included — that is most of what a calendar is for.
+    expect(Date.parse(url.searchParams.get("max_start_time")!)).toBeGreaterThan(Date.now());
+  });
+
+  it("defaults to 90 days and refuses an absurd window", async () => {
+    const dflt = new URL(await pollUrl({ scope: "user" }));
+    expect(Math.round((Date.now() - Date.parse(dflt.searchParams.get("min_start_time")!)) / 86_400_000)).toBe(90);
+
+    const silly = new URL(await pollUrl({ scope: "user", days: 99999 }));
+    expect(Math.round((Date.now() - Date.parse(silly.searchParams.get("min_start_time")!)) / 86_400_000)).toBe(400);
+  });
+
+  it("sends status only when the flow narrowed it — omitted, cancellations stay visible", async () => {
+    expect(new URL(await pollUrl({ scope: "user" })).searchParams.get("status")).toBeNull();
+    expect(new URL(await pollUrl({ scope: "user", status: "active" })).searchParams.get("status")).toBe("active");
+  });
+
+  /**
+   * The honest half of the feature: Calendly's /scheduled_events has no
+   * event_type parameter, so a meeting-type choice cannot reduce API calls —
+   * only what we store and what flows compute over. Both halves are pinned so
+   * neither can be quietly misrepresented later.
+   */
+  it("filters by meeting type after the fetch, never as a query parameter", async () => {
+    const url = await pollUrl({ scope: "user", eventTypeUri: "https://api.calendly.com/event_types/ET1" });
+    expect(url).not.toContain("event_type=");
+
+    vi.stubGlobal(
+      "fetch",
+      mockFetch([
+        ME,
+        [
+          "/scheduled_events",
+          {
+            collection: [meeting("https://api.calendly.com/scheduled_events/A", "https://api.calendly.com/event_types/ET1"),
+                         meeting("https://api.calendly.com/scheduled_events/B", "https://api.calendly.com/event_types/ET2")],
+            pagination: { next_page_token: null },
+          },
+        ],
+      ]),
+    );
+    const res = await calendlyConnector.poll!({
+      connectionId: "c1",
+      cursor: null,
+      credentials: { accessToken: "t" },
+      config: { scope: "user", eventTypeUri: "https://api.calendly.com/event_types/ET1" },
+    });
+    expect(res.records).toHaveLength(1);
+    expect(res.records[0].eventId).toContain("/scheduled_events/A");
+  });
+
+  it("lists real meeting types for the picker, scoped the way the poll will be", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        seen.push(url);
+        if (url.includes("/users/me")) return jsonResponse(ME[1]);
+        return jsonResponse({ collection: [{ uri: "ET1", name: "30 Minute Meeting" }, { uri: "ET2", name: "Old", active: false }] });
+      }),
+    );
+    const opts = await calendlyConnector.listOptions!("eventTypeUri", {
+      connectionId: "c1",
+      credentials: { accessToken: "t" },
+      config: { scope: "organization" },
+    });
+    expect(seen.some((u) => u.includes("/event_types?") && u.includes("organization=O1"))).toBe(true);
+    expect(opts).toEqual([
+      { value: "ET1", label: "30 Minute Meeting" },
+      { value: "ET2", label: "Old (inactive)" },
+    ]);
+  });
+
+  it("asks who the token belongs to once per connection, not once per poll", async () => {
+    let meCalls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) {
+          meCalls += 1;
+          return jsonResponse(ME[1]);
+        }
+        return jsonResponse({ collection: [], pagination: { next_page_token: null } });
+      }),
+    );
+    const args = { connectionId: "c-memo", cursor: null, credentials: { accessToken: "t" }, config: { scope: "user" } };
+    await calendlyConnector.poll!(args);
+    await calendlyConnector.poll!(args);
+    await calendlyConnector.poll!(args);
+    // Identity does not change; three sweeps used to mean three extra uncounted calls.
+    expect(meCalls).toBe(1);
   });
 });

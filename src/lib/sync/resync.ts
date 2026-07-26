@@ -264,7 +264,10 @@ async function pollAll(connector: Connector, base: PollArgs): Promise<{ records:
     const { records, nextCursor } = await connector.poll!({ ...base, cursor });
     for (const r of records) seen.set(r.eventId, r);
     if (!nextCursor || nextCursor === cursor || records.length === 0) {
-      cursor = nextCursor ?? cursor;
+      // null means START OVER (PollResult.nextCursor), so it is stored as null —
+      // the following incremental sweep then begins a fresh scan instead of
+      // resuming from a page token whose scan already completed.
+      cursor = nextCursor;
       break;
     }
     if (nextCursor === last) break;

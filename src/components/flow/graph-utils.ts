@@ -390,22 +390,25 @@ export function buildFieldGroups(opts: {
       // Filters/windows expose "Output" — whether the record continued past that step.
       // It is genuinely per-record: on a Paths flow a record that took branch B carries
       // no `__passed_<A>` stamp, so "passed step 3" distinguishes rows.
-      //
-      // A step's "Output number" (`__count_<id>`) deliberately does NOT appear here. It is
-      // a property of the DATASET, not of a record — the engine stamps the identical count
-      // on every row — so in a per-record picker it can only produce nonsense: a condition
-      // on it passes all rows or none, and summing it multiplies the count by itself. It
-      // has one real use, comparing two steps' sizes, and that has its own picker
-      // (`numberGroups` in flow-canvas.tsx, feeding Calculate's number slots), which builds
-      // the same `__count_<id>` path itself and is unaffected by this.
       const outBool: PickField = { path: `__passed_${sn.id}`, label: "Output", type: "boolean", example: true };
+      // How many records this step produced. It is a property of the DATASET, so it
+      // reads the same on every row — a per-record condition on it therefore passes
+      // all rows or none, and summing it multiplies the count by itself. It is here
+      // to be READ and referenced ("step 1 loaded 390"), and it goes last so it never
+      // competes with the step's real columns.
+      const outNum: PickField = { path: `__count_${sn.id}`, label: "Output number", type: "number", example: sn.data.lastTest.recordsOut };
       const isPassThrough = sn.type === "filter" || sn.type === "time";
+
+      // Fields this source declares as plumbing — constant on every row, or an
+      // exact restatement of another field. Hidden from the picker only; the data
+      // and any stored reference to it are untouched.
+      const hidden = new Set(catalogEntry(app ? String((app.data.config as { source?: unknown }).source ?? "") : "")?.hiddenFields ?? []);
 
       let fields: PickField[];
       if (isPassThrough) {
         // A filter/window introduces no columns of its own (they come from the source
         // step); it reads out purely as its result.
-        fields = [outBool];
+        fields = [outBool, outNum];
       } else {
         // W3b: examples come from the field's nearest App ancestor's *selected* preview
         // record, so changing the record updates values everywhere. Transform-added fields
@@ -415,6 +418,7 @@ export function buildFieldGroups(opts: {
         const custom: PickField[] = [];
         const std: PickField[] = [];
         for (const f of sn.data.lastTest.outputSchema ?? []) {
+          if (hidden.has(f.path)) continue;
           let ex = appChosen !== undefined ? resolveSampleField(appChosen, f.path) : undefined;
           if (ex === undefined) ex = upChosen !== undefined ? resolveSampleField(upChosen, f.path) : f.example;
           if (stdSet.has(f.path)) {
@@ -423,7 +427,7 @@ export function buildFieldGroups(opts: {
             custom.push({ path: f.path, label: f.label, type: f.type, example: ex, container: f.container });
           }
         }
-        fields = [...custom, ...std];
+        fields = [...custom, ...std, outNum];
       }
 
       groups.push({

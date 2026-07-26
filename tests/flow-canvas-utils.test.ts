@@ -86,8 +86,9 @@ describe("buildFieldGroups (variable picker)", () => {
   it("shows the step's own fields (no separate System group), canonical ones humanised", () => {
     const groups = buildFieldGroups({ selectedId: "f1", nodes, edges, stepNoById, titleOf });
     expect(groups[0].from).toBe("app");
-    // Custom fields first, then canonical fields that carry data. Nothing else.
-    expect(groups[0].fields.map((f) => f.path)).toEqual(["plan", "properties.seats", "subject"]);
+    // Custom fields first, then canonical fields that carry data, then the step's
+    // record count last — it is a dataset number, not one of the step's columns.
+    expect(groups[0].fields.map((f) => f.path)).toEqual(["plan", "properties.seats", "subject", "__count_app1"]);
     expect(groups[0].fields.find((f) => f.path === "subject")?.label).toBe("Subject / person");
     // No trailing System group anymore.
     expect(groups.some((g) => g.system)).toBe(false);
@@ -144,32 +145,111 @@ describe("buildFieldGroups — nearest-app example resolution + provenance", () 
     expect(groups[0].fields.find((f) => f.path === "properties.utm")?.container).toBe(true);
   });
 
-  it("a filter step exposes only its Output, not columns", () => {
+  it("a filter step exposes its Output and its count, not columns", () => {
     const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
     const filterGroup = groups.find((g) => g.stepNo === 2);
-    expect(filterGroup?.fields.map((f) => f.label)).toEqual(["Output"]);
-    expect(filterGroup?.fields.map((f) => f.path)).toEqual(["__passed_fN"]);
+    expect(filterGroup?.fields.map((f) => f.label)).toEqual(["Output", "Output number"]);
+    expect(filterGroup?.fields.map((f) => f.path)).toEqual(["__passed_fN", "__count_fN"]);
     expect(filterGroup?.fields.find((f) => f.label === "Output")?.type).toBe("boolean");
+    expect(filterGroup?.fields.find((f) => f.label === "Output number")?.example).toBe(1); // recordsOut
   });
 
-  it("a data step exposes its columns and nothing synthetic", () => {
+  it("a data step exposes its columns", () => {
     const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
     const appGroup = groups.find((g) => g.stepNo === 1);
     expect(appGroup?.fields.some((f) => f.path === "plan")).toBe(true);
   });
 
   /**
-   * The record-count scalar was offered in the per-record picker and was pure noise
-   * there: it is a property of the dataset, identical on every row, so a filter on it
-   * passes everything or nothing and an aggregate over it multiplies the count by
-   * itself. Comparing two steps' sizes is real, but that is Calculate's number slots
-   * (`numberGroups`), a different picker that mints `__count_<id>` on its own.
+   * "Output number" is how many records the step produced — the 390 on a Get data
+   * card. It is a property of the dataset, so it reads identically on every row:
+   * a per-record condition on it passes everything or nothing. It is offered to be
+   * READ, and it goes LAST so it never competes with the step's real columns.
    */
-  it("never offers a step's record count as a per-record field", () => {
+  it("offers each step's record count last, after its real fields", () => {
     const groups = buildFieldGroups({ selectedId: "aggN", nodes, edges, stepNoById, titleOf });
-    const paths = groups.flatMap((g) => g.fields.map((f) => f.path));
-    expect(paths.some((p) => p.startsWith("__count_"))).toBe(false);
-    expect(groups.flatMap((g) => g.fields).some((f) => f.label === "Output number")).toBe(false);
+    for (const g of groups) {
+      const last = g.fields[g.fields.length - 1];
+      expect(last.path).toBe(`__count_${g.stepNo === 1 ? "appN" : "fN"}`);
+      expect(last.label).toBe("Output number");
+    }
+  });
+});
+
+/**
+ * Fields a source declares as plumbing never reach the picker. Two kinds qualify:
+ * constant on every row (`kind` is always "calendar#event"), or an exact
+ * restatement of another field (a calendar's `subject` IS its `summary`). A
+ * condition on a constant passes every record or none, so offering it can only
+ * mislead. Hiding is display-only — stored references still resolve.
+ */
+describe("buildFieldGroups — connector-declared hidden fields", () => {
+  const sample = [
+    {
+      source: "gcal",
+      subject: "setting call",
+      occurredAt: "2026-07-26T14:00:00.000Z",
+      properties: { summary: "setting call", kind: "calendar#event", htmlLink: "https://…", guests_accepted: 2 },
+    },
+  ];
+  const schema = [
+    { path: "properties.summary", label: "summary", type: "text" },
+    { path: "properties.kind", label: "kind", type: "text" },
+    { path: "properties.htmlLink", label: "htmlLink", type: "text" },
+    { path: "properties.guests_accepted", label: "guests_accepted", type: "number" },
+    { path: "subject", label: "subject", type: "text" },
+    { path: "source", label: "source", type: "text" },
+    { path: "occurredAt", label: "occurredAt", type: "date" },
+  ];
+  const app = N("gc", "app", {
+    config: { source: "gcal" },
+    lastTest: { status: "ok", recordsIn: 1, recordsOut: 390, sample, inputSample: [], outputSchema: schema },
+  });
+  const after = N("f", "filter");
+  const groups = () =>
+    buildFieldGroups({
+      selectedId: "f",
+      nodes: [app, after],
+      edges: [E("gc", "f")],
+      stepNoById: new Map([["gc", 1], ["f", 2]]),
+      titleOf,
+    });
+
+  it("drops the plumbing a calendar record carries", () => {
+    const paths = groups()[0].fields.map((f) => f.path);
+    for (const gone of ["properties.kind", "properties.htmlLink", "subject", "source"]) {
+      expect(paths).not.toContain(gone);
+    }
+  });
+
+  it("keeps the fields that answer something — including Occurred at", () => {
+    const paths = groups()[0].fields.map((f) => f.path);
+    // On a calendar this IS the meeting's start time, and the default date field
+    // of every Time-window step. It only looked like plumbing because its label
+    // is humanised like one of ours.
+    expect(paths).toContain("occurredAt");
+    expect(paths).toContain("properties.summary");
+    expect(paths).toContain("properties.guests_accepted");
+  });
+
+  it("still offers the step's record count", () => {
+    const outNum = groups()[0].fields.find((f) => f.label === "Output number");
+    expect(outNum?.example).toBe(390);
+  });
+
+  it("hides nothing for a source that declares no plumbing", () => {
+    const sheets = N("gs", "app", {
+      config: { source: "gsheets" },
+      lastTest: { status: "ok", recordsIn: 1, recordsOut: 1, sample, inputSample: [], outputSchema: schema },
+    });
+    const g = buildFieldGroups({
+      selectedId: "f",
+      nodes: [sheets, after],
+      edges: [E("gs", "f")],
+      stepNoById: new Map([["gs", 1], ["f", 2]]),
+      titleOf,
+    });
+    expect(g[0].fields.map((f) => f.path)).toContain("properties.kind");
   });
 });
 
