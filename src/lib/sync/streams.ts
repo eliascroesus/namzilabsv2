@@ -405,13 +405,22 @@ const PRIME_MAX_AGE_MS = 60_000;
  * waits for all of them; everything else here is indexed queries in the
  * milliseconds.
  *
- * Two, not four. Even, because a connector that scans outward from now
- * alternates directions (Calendly: recent past / soonest upcoming), so this is
- * exactly one page from each end — which is what a preview is: the newest
- * meetings and the nearest upcoming ones. The rest of the window is the sweep's
- * job, and nobody is sitting in front of the sweep.
+ * Even, because a connector that scans outward from now alternates directions
+ * (Calendly: recent past / soonest upcoming) — an odd budget hands one end more
+ * pages than the other for no reason. Four is two from each end.
+ *
+ * The ceiling is NOT the provider's page limit, it is
+ * `INLINE_TEST_BUDGET_MS` (8s, in flows/actions.ts): a Test that overruns it is
+ * handed to the background lane, where the client polls every 800ms and the work
+ * restarts from the top. At a few hundred ms per page that cliff is somewhere
+ * around 15 pages, and crossing it makes a Test dramatically SLOWER, not more
+ * complete. Anything above ~8 wants the budget raised alongside it.
+ *
+ * Raising this also raises the real provider request rate without the ledger
+ * seeing it: `claimCalls` is claimed once per stream-sync, not per page, so a
+ * budget of N means one claim authorises N requests.
  */
-const PRIME_MAX_PAGES = 2;
+const PRIME_MAX_PAGES = 4;
 
 export type PrimeStreamResult =
   | { ok: true; refreshed: boolean; note?: string }
