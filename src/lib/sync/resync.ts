@@ -5,7 +5,7 @@ import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { processRawEvent, upsertEvents } from "@/ingestion/pipeline";
-import { activeStreams, syncStream, type PrimeStreamResult } from "@/lib/sync/streams";
+import { activeStreams, importProgressNote, syncStream, type PrimeStreamResult } from "@/lib/sync/streams";
 import { awaitConnectionSyncLock, releaseConnectionSyncLock, tryConnectionSyncLock } from "@/lib/sync/locks";
 import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
@@ -33,6 +33,18 @@ export type SyncResult = {
    * zero, so downstream staleness marking correctly stays quiet either way.
    */
   skipped?: boolean;
+  /**
+   * The source says it has more to fetch — it stopped on its own page budget,
+   * not on the end of the data.
+   *
+   * Connection-scoped sources have no page loop in the runner (`connector.poll`
+   * is called exactly once), so this is the ONLY channel by which Close or
+   * Sendblue can say "still importing". Without it a new account watched a
+   * number climb for a day with nothing to explain it.
+   */
+  incomplete?: boolean;
+  /** How far back the import has reached vs how far it is aiming, when reported. */
+  importProgress?: { reachedBack: Date; targetBack: Date };
 };
 
 /** Did this run change what dashboards would show? (drives staleness) */
@@ -117,7 +129,7 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
     // incremental: fetch from the stored cursor, additive (no soft-delete).
     const gen = Math.max(1, conn.syncGeneration ?? 0);
     const [state] = await db.select().from(syncState).where(eq(syncState.connectionId, conn.id)).limit(1);
-    const { records, nextCursor } = await connector.poll({ ...base, cursor: state?.cursor ?? null });
+    const { records, nextCursor, incomplete, importProgress } = await connector.poll({ ...base, cursor: state?.cursor ?? null });
     const res = await upsertEvents(db, { ...meta, generation: gen }, records);
     await db
       .update(connections)
@@ -125,7 +137,7 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
       .where(eq(connections.id, conn.id));
     await upsertCursor(db, conn.id, nextCursor);
 
-    return { mode: "incremental", polled: true, upserted: res.total, inserted: res.inserted, updated: res.updated, softDeleted: 0, generation: gen, orgId: conn.orgId, source: conn.source };
+    return { mode: "incremental", polled: true, upserted: res.total, inserted: res.inserted, updated: res.updated, softDeleted: 0, generation: gen, orgId: conn.orgId, source: conn.source, incomplete, importProgress };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await db.update(connections).set({ syncStatus: "error", lastError: message, updatedAt: new Date() }).where(eq(connections.id, connectionId));
@@ -153,6 +165,7 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
     let updated = 0;
     let softDeleted = 0;
     let upserted = 0;
+    let incomplete = false;
     for (const stream of streams) {
       try {
         const r = await syncStream(db, conn, stream, 5);
@@ -160,6 +173,7 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
         updated += r.updated;
         softDeleted += r.softDeleted;
         upserted += r.inserted + r.updated + r.deduped;
+        if (r.incomplete) incomplete = true;
       } catch {
         // Recorded on the stream row; other streams keep syncing.
       }
@@ -168,7 +182,7 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
       .update(connections)
       .set({ syncStatus: "live", lastEventAt: inserted + updated > 0 ? new Date() : conn.lastEventAt, lastError: null, updatedAt: new Date() })
       .where(eq(connections.id, conn.id));
-    return { mode, polled: streams.length > 0, upserted, inserted, updated, softDeleted, generation: Math.max(1, conn.syncGeneration ?? 0), orgId: conn.orgId, source: conn.source };
+    return { mode, polled: streams.length > 0, upserted, inserted, updated, softDeleted, generation: Math.max(1, conn.syncGeneration ?? 0), orgId: conn.orgId, source: conn.source, incomplete };
   }
 
   // Full: re-poll every stream from the beginning at the next generation, then
@@ -367,6 +381,11 @@ export async function primeConnection(db: DB, orgId: string, connectionId: strin
     if (res.skipped) {
       return { ok: true, refreshed: false, note: "A sync of this source is already running — showing the data we have so far." };
     }
+    // Mid-import. This is the whole reason the connection path carries
+    // `incomplete` at all: the numbers below are a floor, and saying so is the
+    // difference between "still importing" and a number that climbs for a day
+    // with no explanation.
+    if (res.incomplete) return { ok: true, refreshed: true, note: importProgressNote(res.importProgress) };
     return { ok: true, refreshed: true };
   } catch (e) {
     // A provider error now reaches the user as an error, where before the Test

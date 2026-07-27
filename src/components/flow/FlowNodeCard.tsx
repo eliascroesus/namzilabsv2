@@ -91,6 +91,14 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           ? { text: resultLabel(t, test), cls: "text-neutral-500" }
           : null;
 
+  // A second line, only when the source itself has something to say — today
+  // that is "still importing, covering N of M days". The count above it is a
+  // floor while that is true, and a card that shows the floor alone is the
+  // silent-zero shape: nothing on the canvas would indicate the number is
+  // still moving. Rendered only when there IS a note, so quiet steps keep
+  // their single line.
+  const sourceLine = status === "ready" && test?.status === "ok" ? test.sourceNote : null;
+
   return (
     <div className={`w-64 rounded-xl border bg-white shadow-sm transition-[border-color,box-shadow] duration-150 ${border}`}>
       {isCompare ? (
@@ -112,6 +120,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             {nodeTitle(t, data)}
           </span>
           {bodyLine && <span className={`block truncate text-xs ${bodyLine.cls}`}>{bodyLine.text}</span>}
+          {sourceLine && <span className="block truncate text-xs text-amber-700" title={sourceLine}>{sourceLine}</span>}
         </span>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>
         <NodeMenu id={id} data={data} />

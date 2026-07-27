@@ -221,11 +221,7 @@ export const closeConnector: Connector = {
       if (!next || data.data.length === 0) {
         // Window drained: the high-water mark advances to the newest ingested,
         // and the first-sync floor/progress are no longer meaningful.
-        return {
-          records,
-          nextCursor: serializeCloseCursor({ hw: cur.maxSeen ?? cur.hw, cont: null, maxSeen: null }),
-          covered: { from: floor, to: new Date() },
-        };
+        return { records, nextCursor: serializeCloseCursor({ hw: cur.maxSeen ?? cur.hw, cont: null, maxSeen: null }) };
       }
       cur.cont = next;
     }
@@ -239,7 +235,10 @@ export const closeConnector: Connector = {
       // not tell a finished import from one that has days left, so the editor
       // showed a climbing number with nothing to explain it.
       incomplete: true,
-      covered: { from: new Date(cur.minSeen ? Date.parse(cur.minSeen) || floor.getTime() : floor.getTime()), to: new Date() },
+      importProgress: {
+        reachedBack: new Date(cur.minSeen ? Date.parse(cur.minSeen) || floor.getTime() : floor.getTime()),
+        targetBack: floor,
+      },
     };
   },
 

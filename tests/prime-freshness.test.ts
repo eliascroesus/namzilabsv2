@@ -333,4 +333,44 @@ describe("primeConnection — sources with no per-flow resource", () => {
       expect(res.note).toContain("Couldn't re-read the source");
     }
   });
+
+  /**
+   * The day-one experience this fixes: a connection-scoped source has no page
+   * loop in the runner (`connector.poll` is called once), so Close and Sendblue
+   * could not say "still importing" no matter how much history was outstanding.
+   * A new account watched a number climb for a day with nothing to explain it.
+   */
+  it("says it is still importing, with real coverage, when the connector reports more to fetch", async () => {
+    const conn = await db.select().from(connections).where(eq(connections.id, sbId)).limit(1);
+    await db.update(connections).set({ source: "close" }).where(eq(connections.id, sbId));
+    expect(conn).toHaveLength(1);
+
+    // 260 events, newest-first: Close walks 4 pages of 50 and stops with more left.
+    const T0 = Date.now() - 20 * 86_400_000;
+    const log = Array.from({ length: 260 }, (_, i) => ({
+      id: `e${i + 1}`,
+      object_type: "activity.sms",
+      action: "created",
+      date_created: new Date(T0 + i * 60_000).toISOString(),
+    })).reverse();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const params = new URL(String(input)).searchParams;
+        const offset = params.get("_cursor") ? Number(params.get("_cursor")) : 0;
+        const page = log.slice(offset, offset + 50);
+        const body = { data: page, cursor_next: offset + page.length < log.length ? String(offset + page.length) : null };
+        return { ok: true, status: 200, statusText: "OK", headers: { get: () => null }, json: async () => body, text: async () => JSON.stringify(body) } as unknown as Response;
+      }),
+    );
+
+    const res = await primeConnection(db, ORG, sbId);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.refreshed).toBe(true);
+      expect(res.note).toContain("Still importing");
+      // Both numbers are real — the oldest row ingested against the 30-day floor.
+      expect(res.note).toMatch(/covering \d+ of 30 days/);
+    }
+  });
 });

@@ -207,10 +207,12 @@ describe("Close first-sync bound", () => {
     mockEventLog(makeLog(260));
     const first = await closeConnector.poll!(pollArgs(null));
     expect(first.incomplete).toBe(true);
-    // `covered.from` is the OLDEST record ingested so far, not the window floor —
-    // that difference is what "covering 12 of 30 days" is measuring.
+    // `reachedBack` is the OLDEST record ingested so far, `targetBack` the floor
+    // it is aiming for — that gap is what "covering 12 of 30 days" measures.
     // 260 events newest-first, 200 ingested → e260 down to e61.
-    expect(first.covered!.from.toISOString()).toBe(new Date(T0 + 61 * 1000).toISOString());
+    expect(first.importProgress!.reachedBack.toISOString()).toBe(new Date(T0 + 61 * 1000).toISOString());
+    const aimedDays = Math.round((Date.now() - first.importProgress!.targetBack.getTime()) / 86_400_000);
+    expect(aimedDays).toBe(30);
 
     const { } = mockEventLog(makeLog(260));
     const second = await closeConnector.poll!(pollArgs(first.nextCursor));

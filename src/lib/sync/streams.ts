@@ -545,6 +545,29 @@ export async function primeStream(
  * taken mid-scan is a floor, and a Test that renders "0 loaded" and "0 loaded so
  * far" identically is the silent zero this codebase keeps having to unpick.
  */
+/**
+ * The line shown while an import is still reaching BACKWARDS through history.
+ *
+ * Different question from {@link partialScanNote}, and the distinction is the
+ * point: that one names a window a source deliberately bounds itself to (a
+ * count that looks short is correct and final); this one names a floor that is
+ * still moving. Rendering them the same way would tell a user to stop waiting
+ * for numbers that are genuinely still coming — or to keep waiting for numbers
+ * that are not.
+ *
+ * Both denominator and numerator are real: the connector knows the floor it is
+ * aiming for and the oldest record it has actually ingested. Nothing is
+ * estimated, which is why this can ship without the backfill lane's
+ * bookkeeping.
+ */
+export function importProgressNote(progress?: { reachedBack: Date; targetBack: Date }, now = Date.now()): string {
+  if (!progress) return "Still importing this source — the numbers below can still grow.";
+  const day = 86_400_000;
+  const target = Math.max(1, Math.round((now - progress.targetBack.getTime()) / day));
+  const reached = Math.min(target, Math.max(0, Math.round((now - progress.reachedBack.getTime()) / day)));
+  return `Still importing — covering ${reached} of ${target} days so far, reaching further back each sync.`;
+}
+
 function partialScanNote(covered?: { from: Date; to: Date }, now = Date.now()): string {
   if (!covered) return "Still loading — the numbers below cover what has arrived so far.";
   const days = Math.max(1, Math.round((now - covered.from.getTime()) / 86_400_000));

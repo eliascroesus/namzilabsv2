@@ -259,8 +259,14 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
 
     let records: Awaited<ReturnType<typeof poll>>["records"];
     let nextCursor: string | null;
+    // A connection-scoped poll is called ONCE — the connector's own page walk is
+    // invisible to this runner — so `incomplete` is the only way Close or
+    // Sendblue can say it still has history to fetch. Without it a connection
+    // mid-import reads as idle and tiers down, which slows the very pages it is
+    // still waiting on.
+    let incomplete: boolean | undefined;
     try {
-      ({ records, nextCursor } = await poll({
+      ({ records, nextCursor, incomplete } = await poll({
         connectionId,
         cursor,
         credentials,
@@ -290,7 +296,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     // (but never erases a standing webhook-health warning).
     await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
 
-    return withCadence({ inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped, polled: true, webhook, changedStreamHashes: [], orgId: conn.orgId, source: conn.source });
+    return withCadence({ inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped, polled: true, webhook, changedStreamHashes: [], incomplete, orgId: conn.orgId, source: conn.source });
   });
 
   if (swept.acquired && swept.result) return swept.result;

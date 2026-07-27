@@ -139,15 +139,17 @@ export type PollResult = {
    */
   incomplete?: boolean;
   /**
-   * The span this scan has actually ingested SO FAR — not the span it intends
-   * to cover. Paired with `incomplete` it is what lets the editor say
-   * "covering 12 of 30 days" instead of a bare climbing number.
+   * How far back this import has REACHED, against how far it is trying to get.
+   * Paired with `incomplete` it is what lets the editor say "covering 12 of 30
+   * days" instead of showing a bare number that climbs for a day.
    *
-   * Deliberately NOT `retireOutsideWindow`, which is structurally identical and
-   * would be tempting to reuse: that one carries a retire side effect on the
-   * stream path. This field must never delete anything.
+   * Deliberately not called `covered`, and deliberately not reusing
+   * `retireOutsideWindow` — both name the window a source DECLARES, and this
+   * names what has actually landed. Confusing the two would let a note claim
+   * coverage that has not arrived yet. It also carries no side effect
+   * whatsoever: nothing retires, nothing is bounded by it.
    */
-  covered?: { from: Date; to: Date };
+  importProgress?: { reachedBack: Date; targetBack: Date };
 };
 
 export type RegisterWebhookArgs = {
