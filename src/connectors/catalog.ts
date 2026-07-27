@@ -77,6 +77,30 @@ export type ConnectorCatalogEntry = {
    * the provider-gateway token buckets (workstream F) will enforce them.
    */
   rateLimits?: Record<string, { requestsPerMinute: number }>;
+  /**
+   * A limit consumed by EVERY customer at once, because every customer's
+   * requests reach the provider under one credential of OURS.
+   *
+   * `rateLimits` is per connection, which is right when the credential belongs
+   * to the customer: Calendly's 60/min is that account's 60/min, and one
+   * customer cannot spend another's. Google is the opposite. Sheets and
+   * Calendar authorize through a single `GOOGLE_CLIENT_ID`
+   * (`src/lib/google-oauth.ts`), so the quota is charged to our Cloud project
+   * and the fleet shares one bucket. Ten connections each politely under a
+   * per-connection budget can still take the project over its limit together,
+   * and the failure mode is not one customer throttled — it is every Google
+   * connection failing at once.
+   *
+   * Keyed the same way as `rateLimits` (the operation), and claimed IN ADDITION
+   * to it: a request needs room in both buckets. Declaring none means no fleet
+   * ceiling, which is the correct answer for a per-customer credential.
+   *
+   * Deliberately NOT folded into `rateLimits`: those keys are checked both ways
+   * against the connector's `operations` (tests/budget-operations.test.ts), and
+   * a fleet limit is a property of how WE authenticate rather than an endpoint
+   * the connector names.
+   */
+  fleetLimits?: Record<string, { requestsPerMinute: number }>;
   /** Whether we auto-create the provider webhook subscription on connect. */
   autoWebhook: boolean;
   credentialFields: CredentialField[];
@@ -290,6 +314,27 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     // Full-read mirror: every sweep re-reads the whole tab, so edits and
     // deletions anywhere in the sheet are reflected, not just appended rows.
     sync: "mirror",
+    /**
+     * UNVERIFIED PLACEHOLDER — confirm before relying on it.
+     *
+     * The only Google figure this repository records is `docs/BUILD_PLAN.md`:
+     * "Sheets read quota ~100 req/100 s", which is 60/min and does not say
+     * whether it is per project or per user. Provider docs are not reachable
+     * from the build environment, so this is not settled from here.
+     *
+     * The authoritative number is in OUR Google Cloud console — APIs & Services
+     * → Quotas, for this project specifically — which beats any figure from
+     * documentation because it reflects whatever limit the project actually
+     * has. Read it off and replace this.
+     *
+     * Chosen low on purpose while it is unconfirmed. Being wrong LOW costs
+     * throughput and defers work that retries itself; being wrong HIGH is the
+     * fleet-wide failure this exists to prevent. `"*"` because the connector
+     * declares no per-operation keys, so every Sheets and Drive request shares
+     * this bucket — which also means the tighter of the two APIs governs, again
+     * erring toward denying early.
+     */
+    fleetLimits: { "*": { requestsPerMinute: 60 } },
     autoWebhook: false,
     credentialFields: [],
     // Which spreadsheet + tab is chosen inside each flow's Get data step.
@@ -305,6 +350,19 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     connect: "google",
     instant: false,
     poll: true,
+    /**
+     * UNVERIFIED PLACEHOLDER — and weaker evidence than the Sheets one, which
+     * is why it is stated separately rather than shared.
+     *
+     * This repository records NO Calendar figure at all. 60/min is here by
+     * analogy with the Sheets number, which is a guess, not a citation. The
+     * Calendar API has its own project quota — separate from Sheets and Drive,
+     * which is why this is its own bucket rather than one Google-wide one.
+     *
+     * Same place to settle it: Google Cloud console → APIs & Services → Quotas,
+     * Calendar API, this project.
+     */
+    fleetLimits: { "*": { requestsPerMinute: 60 } },
     autoWebhook: false,
     credentialFields: [],
     flowFields: [{ key: "calendarId", label: "Calendar", dynamic: true, placeholder: "primary" }],

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { connections, sourceStreams, usageLedger } from "@/db/schema";
 import { randomBytes } from "node:crypto";
@@ -11,6 +11,9 @@ const KEY = randomBytes(32).toString("base64");
 import {
   budgetFor,
   claimCalls,
+  fleetBudgetFor,
+  FLEET_CONNECTION_ID,
+  FLEET_ORG_ID,
   isPaused,
   laneLimit,
   pauseConnection,
@@ -320,6 +323,147 @@ describe("the ledger counts what was actually spent", () => {
 });
 
 /**
+ * F.1 (fleet) — a limit every customer spends at once.
+ *
+ * Per-connection budgets are right when the credential belongs to the customer:
+ * Calendly's 60/min is that account's, and one customer cannot spend another's.
+ * Google is the opposite — Sheets and Calendar authorize through one
+ * GOOGLE_CLIENT_ID, so the quota is charged to our Cloud project. Ten
+ * connections each politely under their own budget can still take the project
+ * over its limit together, and the failure is not one customer throttled but
+ * every Google connection failing at once.
+ */
+describe("F.1 (fleet) — a shared credential means a shared ceiling", () => {
+  let db: DB;
+  let close: () => Promise<void>;
+  const ORG_A = "org_fleet_a";
+  const ORG_B = "org_fleet_b";
+
+  beforeEach(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterEach(async () => {
+    await close();
+  });
+
+  const gsheets = (id: string, orgId: string) => ({ id, orgId, source: "gsheets" });
+  const fleetRow = async (source: string) => {
+    const [row] = await db
+      .select()
+      .from(usageLedger)
+      .where(and(eq(usageLedger.connectionId, FLEET_CONNECTION_ID), eq(usageLedger.provider, source)));
+    return row;
+  };
+  const ownCalls = async (connectionId: string) => {
+    const [row] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, connectionId));
+    return row?.calls ?? 0;
+  };
+
+  it("denies a SECOND connection once the project budget is spent, though its own budget is untouched", async () => {
+    const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
+    const b = gsheets(await seedConnection(db, { orgId: ORG_B, source: "gsheets" }), ORG_B);
+
+    // A spends the whole FLEET budget. Its own per-connection budget is the
+    // same size here, so this also proves the fleet bucket is what bites.
+    const fleet = fleetBudgetFor("gsheets", "*")!;
+    for (let i = 0; i < fleet; i++) {
+      expect((await claimCalls(db, a, "*", 1, NOW, "interactive")).allowed).toBe(true);
+    }
+
+    const denied = await claimCalls(db, b, "*", 1, NOW, "interactive");
+    expect(denied.allowed).toBe(false);
+    // B has spent nothing of its own — a per-connection budget alone would have
+    // waved this straight through, which is the hole this closes.
+    expect(await ownCalls(b.id)).toBe(0);
+  });
+
+  it("does not charge a blameless connection for a call the fleet refused", async () => {
+    const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
+    const b = gsheets(await seedConnection(db, { orgId: ORG_B, source: "gsheets" }), ORG_B);
+    const fleet = fleetBudgetFor("gsheets", "*")!;
+    for (let i = 0; i < fleet; i++) await claimCalls(db, a, "*", 1, NOW, "interactive");
+
+    await claimCalls(db, b, "*", 1, NOW, "interactive");
+    await claimCalls(db, b, "*", 1, NOW, "interactive");
+
+    // Both attempts unwound. Otherwise B burns its personal budget on calls it
+    // was never allowed to make, and stays denied on its OWN limit after the
+    // shared one frees up — throttled twice for one shortage.
+    expect(await ownCalls(b.id)).toBe(0);
+    const [row] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, b.id));
+    expect(row?.throttled ?? 0).toBe(0); // …and not blamed for it either
+  });
+
+  it("says whose limit it is, so a blameless customer is not sent hunting", async () => {
+    const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
+    const b = gsheets(await seedConnection(db, { orgId: ORG_B, source: "gsheets" }), ORG_B);
+    const fleet = fleetBudgetFor("gsheets", "*")!;
+    for (let i = 0; i < fleet; i++) await claimCalls(db, a, "*", 1, NOW, "interactive");
+
+    const denied = await claimCalls(db, b, "*", 1, NOW, "interactive");
+    expect(denied.allowed).toBe(false);
+    if (!denied.allowed) {
+      expect(denied.reason).toMatch(/shared/i);
+      expect(denied.reason).not.toMatch(/respecting/i); // the per-connection wording
+    }
+  });
+
+  it("leaves per-customer credentials alone — no fleet bucket, no cross-customer throttling", async () => {
+    expect(fleetBudgetFor("calendly", "scheduled_events.list")).toBeNull();
+    expect(fleetBudgetFor("close", "*")).toBeNull();
+    expect(fleetBudgetFor("instantly", "emails.list")).toBeNull();
+
+    const a = { id: await seedConnection(db, { orgId: ORG_A, source: "close" }), orgId: ORG_A, source: "close" };
+    const b = { id: await seedConnection(db, { orgId: ORG_B, source: "close" }), orgId: ORG_B, source: "close" };
+    const limit = laneLimit("close", "*", "interactive");
+    for (let i = 0; i < limit; i++) await claimCalls(db, a, "*", 1, NOW, "interactive");
+
+    // A is spent; B is untouched and must still be allowed.
+    expect((await claimCalls(db, a, "*", 1, NOW, "interactive")).allowed).toBe(false);
+    expect((await claimCalls(db, b, "*", 1, NOW, "interactive")).allowed).toBe(true);
+    expect(await fleetRow("close")).toBeUndefined(); // no sentinel row at all
+  });
+
+  /**
+   * The settle-up is the load-bearing half for Google: its connectors make most
+   * of their requests INSIDE one poll, so a fleet ceiling fed only by claims
+   * would count one request in three and permit three times what it declares.
+   */
+  it("counts settled-up requests against the fleet, not just claimed ones", async () => {
+    const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
+    await claimCalls(db, a, "*", 1, NOW, "interactive");
+    await recordExtraCalls(db, a, "*", 2, NOW); // the Drive probe + the re-stamp
+
+    expect((await fleetRow("gsheets")).calls).toBe(3);
+  });
+
+  it("books the fleet row to a sentinel that can never be a real org or connection", async () => {
+    const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
+    await claimCalls(db, a, "*", 1, NOW, "interactive");
+
+    const row = await fleetRow("gsheets");
+    expect(row.orgId).toBe(FLEET_ORG_ID);
+    expect(row.orgId).not.toBe(ORG_A);
+    expect(row.connectionId).toBe(FLEET_CONNECTION_ID);
+    expect(row.provider).toBe("gsheets"); // still legible, not an anonymous counter
+    // Any future per-org aggregate must exclude this row, or it attributes every
+    // other customer's calls to whoever it is summing.
+    expect(row.orgId.startsWith("__")).toBe(true);
+  });
+
+  it("gives interactive work headroom the background lane cannot reach", async () => {
+    const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
+    const b = gsheets(await seedConnection(db, { orgId: ORG_B, source: "gsheets" }), ORG_B);
+    const background = fleetBudgetFor("gsheets", "*")! - Math.max(1, Math.ceil(fleetBudgetFor("gsheets", "*")! * 0.25));
+
+    for (let i = 0; i < background; i++) await claimCalls(db, a, "*", 1, NOW, "background");
+
+    expect((await claimCalls(db, b, "*", 1, NOW, "background")).allowed).toBe(false);
+    expect((await claimCalls(db, b, "*", 1, NOW, "interactive")).allowed).toBe(true); // a Test still gets through
+  });
+});
+
+/**
  * The runner's per-page claim only counts the pages IT walks. A connector that
  * makes several requests inside one `poll()` was invisible to it, and on the
  * stream path nothing ever settled up — so the ledger recorded a fraction of
@@ -393,15 +537,15 @@ describe("stream-scoped spend is settled after the fact", () => {
     return led?.calls ?? 0;
   };
 
-  it("charges a changed sheet all three of its requests, not the one claimed", async () => {
+  it("charges a changed sheet both of its requests, not the one claimed", async () => {
     // A marker that will NOT match, so the probe falls through to a full read.
     const { conn, stream } = await sheetStream(JSON.stringify({ stamp: "OLD|1", skips: 0 }));
     const calls = serveSheet({ modifiedTime: "2026-07-01T00:00:00Z", version: "9" });
 
     await syncStream(db, conn, stream, 1);
 
-    expect(calls).toHaveLength(3); // Drive probe + values read + Drive re-stamp
-    expect(await ledgerCalls(conn.id)).toBe(3); // was 1, while three requests went out
+    expect(calls).toHaveLength(2); // Drive probe + values read; the probe's stamp is reused
+    expect(await ledgerCalls(conn.id)).toBe(2); // was 1, while two requests went out
   });
 
   it("charges an unchanged sheet the one probe it really made", async () => {

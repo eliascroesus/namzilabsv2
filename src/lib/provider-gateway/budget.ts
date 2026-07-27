@@ -43,6 +43,28 @@ export type ClaimResult =
   | { allowed: true; remaining: number }
   | { allowed: false; retryAfterMs: number; reason: string };
 
+/**
+ * F.1 (fleet) — the identity a provider-wide bucket is booked against.
+ *
+ * `usage_ledger.connection_id` is a NOT NULL uuid and `org_id` a NOT NULL text,
+ * so a bucket belonging to no single connection needs a stand-in for both. The
+ * nil UUID cannot collide with a generated one, and the org sentinel is
+ * obviously not an org id at a glance rather than only under inspection.
+ *
+ * ANY future aggregate over `usage_ledger` — per-org usage, billing, an admin
+ * page — MUST exclude these rows. There is no such reader today (the only
+ * statements touching the table are this file's four bucket-scoped upserts and
+ * reset-data's two whole-table ones), which is precisely why the warning is
+ * written here, where the next person to add one will be looking. A fleet row
+ * counts one provider's whole-fleet spend; summed into a real org's usage it
+ * would attribute every other customer's calls to them.
+ *
+ * The `provider` column is still filled in, so the rows read as
+ * "gsheets, fleet" rather than as an anonymous counter.
+ */
+export const FLEET_ORG_ID = "__fleet__";
+export const FLEET_CONNECTION_ID = "00000000-0000-0000-0000-000000000000";
+
 /** The per-minute call budget for one operation (published limit × share). */
 export function budgetFor(source: string, operation = "*"): number {
   const declared = catalogEntry(source)?.rateLimits?.[operation]?.requestsPerMinute;
@@ -51,11 +73,31 @@ export function budgetFor(source: string, operation = "*"): number {
 }
 
 /**
+ * The fleet-wide budget for one operation, or null when the source declares
+ * none — which is the correct answer for a per-customer credential, where one
+ * customer's spend is not another's problem.
+ *
+ * Note the absence of a DEFAULT_RPM fallback, deliberately: an undeclared fleet
+ * limit means "no shared ceiling", not "a guessed one". Inventing a fleet
+ * ceiling for a source that does not need one would throttle unrelated
+ * customers against each other for no provider-side reason.
+ */
+export function fleetBudgetFor(source: string, operation = "*"): number | null {
+  const declared = catalogEntry(source)?.fleetLimits?.[operation]?.requestsPerMinute;
+  if (declared == null) return null;
+  return Math.max(1, Math.floor(declared * BUDGET_SHARE));
+}
+
+/**
  * The ceiling a given lane may spend (F.8). Background work leaves the reserve
  * untouched; interactive work may use the whole budget.
  */
 export function laneLimit(source: string, operation = "*", lane: CallLane = "background"): number {
-  const total = budgetFor(source, operation);
+  return laneCeiling(budgetFor(source, operation), lane);
+}
+
+/** The same reserve arithmetic, over whichever budget is being applied. */
+function laneCeiling(total: number, lane: CallLane): number {
   if (lane === "interactive") return total;
   const reserve = Math.max(1, Math.ceil(total * INTERACTIVE_RESERVE_SHARE));
   return Math.max(1, total - reserve);
@@ -65,10 +107,70 @@ function windowStart(now: Date): Date {
   return new Date(Math.floor(now.getTime() / 60_000) * 60_000);
 }
 
+/** Increment one bucket and report the running total. */
+async function chargeBucket(
+  db: DB,
+  bucket: { orgId: string; connectionId: string; provider: string },
+  operation: string,
+  cost: number,
+  start: Date,
+): Promise<number> {
+  const [row] = await db
+    .insert(usageLedger)
+    .values({ ...bucket, operation, windowStart: start, calls: cost })
+    .onConflictDoUpdate({
+      target: [usageLedger.connectionId, usageLedger.operation, usageLedger.windowStart],
+      set: { calls: sql`${usageLedger.calls} + ${cost}`, updatedAt: new Date() },
+    })
+    .returning({ calls: usageLedger.calls });
+  return row?.calls ?? cost;
+}
+
 /**
- * Atomically claim `cost` calls against the (connection, operation) budget for
- * the current minute. Returns whether the caller may proceed; on denial, how
- * long until the window resets.
+ * Hand tokens back.
+ *
+ * `throttled` is a parameter rather than always incremented, and that is the
+ * whole reason this is one function instead of two. A bucket that DENIED was
+ * throttled and should say so. A bucket that allowed and is being unwound
+ * because a LATER bucket denied was not throttled — recording one there would
+ * blame a connection for a shortage that was the fleet's.
+ */
+async function releaseBucket(
+  db: DB,
+  connectionId: string,
+  operation: string,
+  cost: number,
+  start: Date,
+  throttled: boolean,
+): Promise<void> {
+  await db
+    .update(usageLedger)
+    .set({
+      calls: sql`greatest(0, ${usageLedger.calls} - ${cost})`,
+      ...(throttled ? { throttled: sql`${usageLedger.throttled} + 1` } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(usageLedger.connectionId, connectionId), eq(usageLedger.operation, operation), eq(usageLedger.windowStart, start)));
+}
+
+/**
+ * Atomically claim `cost` calls for the current minute. Returns whether the
+ * caller may proceed; on denial, how long until the window resets.
+ *
+ * TWO buckets, and a request needs room in both:
+ *
+ * 1. `(connection, operation)` — the customer's own share, always checked.
+ * 2. `(fleet, operation)` — checked only where the source declares a
+ *    `fleetLimits`, i.e. where every customer's requests reach the provider
+ *    under one credential of ours. Google is the case that exists: Sheets and
+ *    Calendar share one `GOOGLE_CLIENT_ID`, so the quota is charged to our
+ *    Cloud project and ten individually-polite connections can still take the
+ *    project down together.
+ *
+ * Extending this function rather than adding a second one is deliberate: every
+ * existing claim site gets the fleet ceiling with no site left to be missed,
+ * and there is no way to spend a provider call through a path that checked only
+ * one of the two.
  */
 export async function claimCalls(
   db: DB,
@@ -78,34 +180,49 @@ export async function claimCalls(
   now = new Date(),
   lane: CallLane = "background",
 ): Promise<ClaimResult> {
-  const limit = laneLimit(conn.source, operation, lane);
   const start = windowStart(now);
+  const retryAfterMs = Math.max(1_000, start.getTime() + 60_000 - now.getTime());
+  const providerName = catalogEntry(conn.source)?.name ?? conn.source;
 
-  const [row] = await db
-    .insert(usageLedger)
-    .values({ orgId: conn.orgId, connectionId: conn.id, provider: conn.source, operation, windowStart: start, calls: cost })
-    .onConflictDoUpdate({
-      target: [usageLedger.connectionId, usageLedger.operation, usageLedger.windowStart],
-      set: { calls: sql`${usageLedger.calls} + ${cost}`, updatedAt: new Date() },
-    })
-    .returning({ calls: usageLedger.calls });
+  const limit = laneLimit(conn.source, operation, lane);
+  const used = await chargeBucket(db, { orgId: conn.orgId, connectionId: conn.id, provider: conn.source }, operation, cost, start);
+  if (used > limit) {
+    // Over budget: give the tokens back so the counter reflects reality, and
+    // record the throttle for the ledger's audit trail.
+    await releaseBucket(db, conn.id, operation, cost, start, true);
+    return { allowed: false, retryAfterMs, reason: `Respecting ${providerName}'s rate limit` };
+  }
 
-  const used = row?.calls ?? cost;
-  if (used <= limit) return { allowed: true, remaining: Math.max(0, limit - used) };
+  const fleetTotal = fleetBudgetFor(conn.source, operation);
+  if (fleetTotal == null) return { allowed: true, remaining: Math.max(0, limit - used) };
 
-  // Over budget: give the tokens back so the counter reflects reality, and
-  // record the throttle for the ledger's audit trail.
-  await db
-    .update(usageLedger)
-    .set({ calls: sql`greatest(0, ${usageLedger.calls} - ${cost})`, throttled: sql`${usageLedger.throttled} + 1`, updatedAt: new Date() })
-    .where(and(eq(usageLedger.connectionId, conn.id), eq(usageLedger.operation, operation), eq(usageLedger.windowStart, start)));
+  const fleetLimit = laneCeiling(fleetTotal, lane);
+  const fleetUsed = await chargeBucket(
+    db,
+    { orgId: FLEET_ORG_ID, connectionId: FLEET_CONNECTION_ID, provider: conn.source },
+    operation,
+    cost,
+    start,
+  );
+  if (fleetUsed > fleetLimit) {
+    await releaseBucket(db, FLEET_CONNECTION_ID, operation, cost, start, true);
+    // Unwind the connection's own charge too. Without this a customer burns
+    // their personal budget on calls they were never allowed to make, and can
+    // end up denied on their OWN limit for the rest of the minute after the
+    // shared one frees up — throttled twice for one shortage, the second time
+    // invisibly.
+    await releaseBucket(db, conn.id, operation, cost, start, false);
+    return {
+      allowed: false,
+      retryAfterMs,
+      // Says whose limit it is. The per-connection message would tell someone
+      // who has done nothing that THEIR account is at its rate limit, and send
+      // them looking for a problem that is not on their side.
+      reason: `Waiting for the shared ${providerName} quota used by every account here`,
+    };
+  }
 
-  const retryAfterMs = start.getTime() + 60_000 - now.getTime();
-  return {
-    allowed: false,
-    retryAfterMs: Math.max(1_000, retryAfterMs),
-    reason: `Respecting ${catalogEntry(conn.source)?.name ?? conn.source}'s rate limit`,
-  };
+  return { allowed: true, remaining: Math.max(0, Math.min(limit - used, fleetLimit - fleetUsed)) };
 }
 
 /**
@@ -125,13 +242,14 @@ export async function recordExtraCalls(
 ): Promise<void> {
   if (extra <= 0) return;
   const start = windowStart(now);
-  await db
-    .insert(usageLedger)
-    .values({ orgId: conn.orgId, connectionId: conn.id, provider: conn.source, operation, windowStart: start, calls: extra })
-    .onConflictDoUpdate({
-      target: [usageLedger.connectionId, usageLedger.operation, usageLedger.windowStart],
-      set: { calls: sql`${usageLedger.calls} + ${extra}`, updatedAt: new Date() },
-    });
+  await chargeBucket(db, { orgId: conn.orgId, connectionId: conn.id, provider: conn.source }, operation, extra, start);
+  // The fleet bucket has to see these too, and this is the load-bearing half
+  // for Google: its connectors make most of their requests INSIDE one poll, so
+  // a fleet ceiling fed only by claims would count one request in three (Sheets)
+  // or one in eight (Calendar) and permit that multiple of what it declares.
+  if (fleetBudgetFor(conn.source, operation) != null) {
+    await chargeBucket(db, { orgId: FLEET_ORG_ID, connectionId: FLEET_CONNECTION_ID, provider: conn.source }, operation, extra, start);
+  }
 }
 
 /**
