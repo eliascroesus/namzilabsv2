@@ -4,7 +4,7 @@ import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
 import { isStreamScoped } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
-import { claimCalls, isPaused, pauseConnection, recordProviderError, recordSuccess, tripBreaker } from "@/lib/provider-gateway/budget";
+import { applyObservedRateLimit, claimCalls, isPaused, pauseConnection, recordExtraCalls, recordProviderError, recordSuccess, tripBreaker } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { withConnectionSyncLock } from "@/lib/sync/locks";
 import { upsertEvents } from "./pipeline";
@@ -272,8 +272,10 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     // mid-import reads as idle and tiers down, which slows the very pages it is
     // still waiting on.
     let incomplete: boolean | undefined;
+    let providerCalls: number | undefined;
+    let rateLimit: Awaited<ReturnType<typeof poll>>["rateLimit"];
     try {
-      ({ records, nextCursor, incomplete } = await poll({
+      ({ records, nextCursor, incomplete, providerCalls, rateLimit } = await poll({
         connectionId,
         cursor,
         credentials,
@@ -290,6 +292,11 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
       });
     }
 
+    // The claim above bought ONE call, but a connector that pages internally
+    // may have spent several. Settle up: the spend cannot be un-made, but the
+    // next sweep must not be authorised on a false reading.
+    await recordExtraCalls(db, conn, pollOperation(conn.source, conn.config), Math.max(0, (providerCalls ?? 1) - 1));
+
     // Connection-scoped reconciliation writes at the connection's current
     // generation (>= 1): these are poll-managed rows a future full re-sync must
     // be able to retire, not append-only webhook rows.
@@ -299,11 +306,19 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
       records,
     );
     await upsertSyncCursor(db, connectionId, nextCursor);
+    // The provider's own account of its remaining quota beats our declared
+    // guess. Exhausted means exhausted — defer rather than learn it via a 429.
+    const observedPause = await applyObservedRateLimit(db, conn, rateLimit);
     // A clean poll clears any breaker state — the connection is healthy again
     // (but never erases a standing webhook-health warning).
     await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
 
-    return withCadence({ inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped, polled: true, webhook, changedStreamHashes: [], incomplete, orgId: conn.orgId, source: conn.source });
+    return withCadence({
+      inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped,
+      polled: true, webhook, changedStreamHashes: [], incomplete,
+      ...(observedPause ? { deferredUntil: observedPause } : {}),
+      orgId: conn.orgId, source: conn.source,
+    });
   });
 
   if (swept.acquired && swept.result) return swept.result;

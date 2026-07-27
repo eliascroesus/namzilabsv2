@@ -1,3 +1,5 @@
+import type { ObservedRateLimit } from "@/lib/http-client";
+
 /**
  * The canonical event every connector produces. This is the single shape the
  * whole product (metrics, dashboard) is built on. Adding a new connector means
@@ -150,6 +152,28 @@ export type PollResult = {
    * whatsoever: nothing retires, nothing is bounded by it.
    */
   importProgress?: { reachedBack: Date; targetBack: Date };
+  /**
+   * How many provider requests this poll actually made.
+   *
+   * The runner claims budget per page for STREAM-scoped sources, where it drives
+   * the page loop itself. A connection-scoped source is called once and pages
+   * INSIDE the connector, so those requests are invisible to the runner and the
+   * ledger under-counted them by up to the connector's page budget. Reporting
+   * the real number lets the ledger settle up: it cannot un-spend a call, but it
+   * can stop the NEXT sweep from being authorised on a false reading.
+   *
+   * Omit it and the poll is counted as one request, which is correct for a
+   * connector that makes one.
+   */
+  providerCalls?: number;
+  /**
+   * What the provider said was left of ITS budget, from its own response
+   * headers — observed truth, as opposed to the figure declared in the catalog.
+   *
+   * A `remaining` of 0 defers the connection until the stated reset, which is
+   * strictly better than discovering the limit through a 429.
+   */
+  rateLimit?: ObservedRateLimit;
 };
 
 export type RegisterWebhookArgs = {

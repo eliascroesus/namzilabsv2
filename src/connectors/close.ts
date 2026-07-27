@@ -9,7 +9,7 @@ import type {
   RegisterWebhookResult,
 } from "./types";
 import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
-import { fetchJson, basicAuth, HttpError } from "@/lib/http-client";
+import { fetchJson, basicAuth, HttpError, parseRateLimit, type ObservedRateLimit } from "@/lib/http-client";
 import { asObject, parseDate, str } from "./field-utils";
 
 const API = "https://api.close.com/api/v1";
@@ -181,6 +181,11 @@ export const closeConnector: Connector = {
     const key = apiKey_(args.credentials);
     const cur = parseCloseCursor(args.cursor);
     const records: CanonicalEvent[] = [];
+    // Close publishes RFC `ratelimit` on EVERY response, so its own account of
+    // what is left is available on the way past — no extra request, and no
+    // waiting for a 429 to find out.
+    let providerCalls = 0;
+    let rateLimit: ObservedRateLimit | null = null;
 
     // The window's lower bound, decided once per walk and never recomputed.
     // A cursor from before this bound existed (`{hw:null, cont:"…"}`, an
@@ -200,12 +205,18 @@ export const closeConnector: Connector = {
 
       let data: { data: Array<Record<string, unknown>>; cursor_next?: string | null };
       try {
-        data = await fetchJson(`${API}/event/?${params.toString()}`, { headers: { authorization: basicAuth(key) } });
+        providerCalls += 1;
+        data = await fetchJson(`${API}/event/?${params.toString()}`, {
+          headers: { authorization: basicAuth(key) },
+          onResponse: (res) => {
+            rateLimit = parseRateLimit(res.headers) ?? rateLimit;
+          },
+        });
       } catch (e) {
         // A dead provider continuation (expired/invalid _cursor) must not wedge
         // the stream forever: drop it and restart the window on the next sweep.
         if (cur.cont && e instanceof HttpError && e.status === 400) {
-          return { records, nextCursor: serializeCloseCursor({ ...cur, cont: null }) };
+          return { records, nextCursor: serializeCloseCursor({ ...cur, cont: null }), providerCalls, rateLimit: rateLimit ?? undefined };
         }
         throw e;
       }
@@ -221,7 +232,12 @@ export const closeConnector: Connector = {
       if (!next || data.data.length === 0) {
         // Window drained: the high-water mark advances to the newest ingested,
         // and the first-sync floor/progress are no longer meaningful.
-        return { records, nextCursor: serializeCloseCursor({ hw: cur.maxSeen ?? cur.hw, cont: null, maxSeen: null }) };
+        return {
+          records,
+          nextCursor: serializeCloseCursor({ hw: cur.maxSeen ?? cur.hw, cont: null, maxSeen: null }),
+          providerCalls,
+          rateLimit: rateLimit ?? undefined,
+        };
       }
       cur.cont = next;
     }
@@ -231,6 +247,8 @@ export const closeConnector: Connector = {
     return {
       records,
       nextCursor: serializeCloseCursor(cur),
+      providerCalls,
+      rateLimit: rateLimit ?? undefined,
       // There IS more to fetch. Without this the connection-scoped path could
       // not tell a finished import from one that has days left, so the editor
       // showed a climbing number with nothing to explain it.

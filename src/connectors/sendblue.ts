@@ -164,8 +164,12 @@ export const sendblueConnector: Connector = {
 
     let offset = startOffset;
     let exhausted = false;
+    // Paged inside the connector, so the runner cannot claim per request — it
+    // settles the ledger from this count instead.
+    let providerCalls = 0;
     for (let page = 0; page < PAGES_PER_POLL; page++) {
       const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(offset) });
+      providerCalls += 1;
       const data = await fetchJson<{ messages?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>(
         `${API_BASE}/api/v2/messages?${params.toString()}`,
         { headers: auth },
@@ -205,13 +209,16 @@ export const sendblueConnector: Connector = {
     }
 
     // Window drained: the high-water mark advances and the continuation clears.
-    if (exhausted) return { records, nextCursor: serializeSendblueCursor({ hw: maxSeen ?? cur.hw, cont: null, maxSeen: null }) };
+    if (exhausted) {
+      return { records, nextCursor: serializeSendblueCursor({ hw: maxSeen ?? cur.hw, cont: null, maxSeen: null }), providerCalls };
+    }
 
     // Page budget spent mid-window: persist where to resume (hw UNCHANGED, so
     // the floor cannot creep up past data we have not read yet).
     return {
       records,
       nextCursor: serializeSendblueCursor({ hw: cur.hw, cont: { offset, lowWater: minSeen }, maxSeen }),
+      providerCalls,
       incomplete: true,
       importProgress: { reachedBack: new Date(minSeen ? Date.parse(minSeen) || floor : floor), targetBack: new Date(floor) },
     };

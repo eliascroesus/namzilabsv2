@@ -108,6 +108,49 @@ export async function claimCalls(
   };
 }
 
+/**
+ * Add calls the ledger did not authorise but which HAPPENED anyway — a
+ * connector that pages internally, so the runner could not claim per request.
+ *
+ * Deliberately not `claimCalls`: there is nothing to allow or deny after the
+ * fact, and `claimCalls` refunds on denial, which would erase exactly the spend
+ * we are trying to record. The point is that the NEXT claim sees the truth.
+ */
+export async function recordExtraCalls(
+  db: DB,
+  conn: { id: string; orgId: string; source: string },
+  operation = "*",
+  extra = 0,
+  now = new Date(),
+): Promise<void> {
+  if (extra <= 0) return;
+  const start = windowStart(now);
+  await db
+    .insert(usageLedger)
+    .values({ orgId: conn.orgId, connectionId: conn.id, provider: conn.source, operation, windowStart: start, calls: extra })
+    .onConflictDoUpdate({
+      target: [usageLedger.connectionId, usageLedger.operation, usageLedger.windowStart],
+      set: { calls: sql`${usageLedger.calls} + ${extra}`, updatedAt: new Date() },
+    });
+}
+
+/**
+ * F.1 (observed) — the provider's own account of its remaining quota beats our
+ * declared guess. Exhausted means exhausted; defer until it says otherwise.
+ *
+ * Returns the pause expiry when it deferred, so the caller can report it.
+ */
+export async function applyObservedRateLimit(
+  db: DB,
+  conn: { id: string; orgId: string; source: string },
+  observed: { remaining: number; resetSeconds: number | null } | null | undefined,
+  now = new Date(),
+): Promise<Date | null> {
+  if (!observed || observed.remaining > 0) return null;
+  const waitMs = Math.max(1_000, Math.min((observed.resetSeconds ?? 60) * 1000, 10 * 60_000));
+  return pauseConnection(db, conn.id, waitMs, `${catalogEntry(conn.source)?.name ?? conn.source} reports its rate limit is spent — resumes automatically`, now);
+}
+
 /** Record a provider error against the window (breaker evidence). */
 export async function recordProviderError(
   db: DB,

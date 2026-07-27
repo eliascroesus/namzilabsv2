@@ -14,6 +14,8 @@ import {
   isPaused,
   laneLimit,
   pauseConnection,
+  applyObservedRateLimit,
+  recordExtraCalls,
   recordProviderError,
   recordSuccess,
   tripBreaker,
@@ -314,5 +316,88 @@ describe("the ledger counts what was actually spent", () => {
     expect(res.incomplete).toBe(true); // the walk did not finish
     const [led] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, conn.id));
     expect(led.calls).toBe(limit); // never exceeded, which is the point
+  });
+});
+
+/**
+ * A connector that pages INSIDE itself is invisible to the runner's per-page
+ * claim, so the ledger under-counted by its whole page budget. The spend cannot
+ * be un-made after the fact; what matters is that the next claim sees the truth.
+ */
+describe("connection-scoped spend is settled after the fact", () => {
+  let db: DB;
+  let close: () => Promise<void>;
+  const ORG = "org_settle";
+
+  beforeEach(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterEach(async () => {
+    await close();
+  });
+
+  it("records calls that already happened, without allow/deny semantics", async () => {
+    const id = await seedConnection(db, { orgId: ORG, source: "close" });
+    const conn = { id, orgId: ORG, source: "close" };
+
+    await claimCalls(db, conn, "*"); // the one call the runner authorised
+    await recordExtraCalls(db, conn, "*", 3); // …the three the connector also made
+
+    const [led] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, id));
+    expect(led.calls).toBe(4);
+  });
+
+  it("does not refund an over-budget settle-up — the calls were real", async () => {
+    const id = await seedConnection(db, { orgId: ORG, source: "close" });
+    const conn = { id, orgId: ORG, source: "close" };
+    const over = laneLimit("close", "*", "background") + 50;
+
+    await recordExtraCalls(db, conn, "*", over);
+    const [led] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, id));
+    expect(led.calls).toBe(over);
+
+    // …and the next claim is correctly denied on that reading.
+    const claim = await claimCalls(db, conn, "*");
+    expect(claim.allowed).toBe(false);
+  });
+
+  it("ignores a zero or negative settle-up", async () => {
+    const id = await seedConnection(db, { orgId: ORG, source: "close" });
+    await recordExtraCalls(db, { id, orgId: ORG, source: "close" }, "*", 0);
+    expect(await db.select().from(usageLedger)).toHaveLength(0);
+  });
+});
+
+/** The provider's own account of its quota beats the figure we declared. */
+describe("observed rate limits", () => {
+  let db: DB;
+  let close: () => Promise<void>;
+  const ORG = "org_observed";
+
+  beforeEach(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterEach(async () => {
+    await close();
+  });
+
+  it("defers the connection when the provider says nothing is left", async () => {
+    const id = await seedConnection(db, { orgId: ORG, source: "close" });
+    const until = await applyObservedRateLimit(db, { id, orgId: ORG, source: "close" }, { remaining: 0, resetSeconds: 30 });
+    expect(until).not.toBeNull();
+
+    const [conn] = await db.select().from(connections).where(eq(connections.id, id));
+    expect(isPaused(conn)).toBe(true);
+    expect(conn.pausedReason).toContain("rate limit is spent");
+  });
+
+  it("does nothing while quota remains, or when the provider says nothing", async () => {
+    const id = await seedConnection(db, { orgId: ORG, source: "close" });
+    const conn = { id, orgId: ORG, source: "close" };
+    expect(await applyObservedRateLimit(db, conn, { remaining: 5, resetSeconds: 30 })).toBeNull();
+    expect(await applyObservedRateLimit(db, conn, null)).toBeNull();
+
+    const [row] = await db.select().from(connections).where(eq(connections.id, id));
+    expect(isPaused(row)).toBe(false);
   });
 });

@@ -59,7 +59,57 @@ export type FetchJsonOptions = RequestInit & {
   backoffCapMs?: number;
   /** Injectable for tests. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Called with each response BEFORE its body is read, on success and on
+   * failure alike.
+   *
+   * `fetchJson` returns parsed JSON, so response headers were unreachable and
+   * the only rate-limit signal anyone could act on was `Retry-After` — which
+   * arrives with a 429, i.e. after the limit has already been breached.
+   * Providers that publish their remaining quota on EVERY response (Close sends
+   * RFC `ratelimit`) were telling us how close we were and nothing was
+   * listening.
+   */
+  onResponse?: (res: Response) => void;
 };
+
+/**
+ * What a provider says is left of its own budget, from whichever header family
+ * it uses. Observed truth, as opposed to the figure declared in the catalog.
+ */
+export type ObservedRateLimit = { limit: number | null; remaining: number; resetSeconds: number | null };
+
+/**
+ * Parse RFC 9239-style `ratelimit: limit=…, remaining=…, reset=…` and the older
+ * `X-RateLimit-*` triple. Returns null unless `remaining` is actually present —
+ * a partial header is not evidence.
+ */
+export function parseRateLimit(headers: Headers | null | undefined): ObservedRateLimit | null {
+  if (!headers?.get) return null;
+  const num = (v: string | null): number | null => {
+    if (v == null) return null;
+    const n = Number(v.trim());
+    return Number.isFinite(n) ? n : null;
+  };
+
+  // RFC style: one header, comma-separated key=value pairs.
+  const combined = headers.get("ratelimit");
+  if (combined) {
+    const parts = Object.fromEntries(
+      combined.split(",").map((kv) => kv.split("=").map((x) => x.trim())) as Array<[string, string]>,
+    );
+    const remaining = num(parts["remaining"] ?? null);
+    if (remaining != null) return { limit: num(parts["limit"] ?? null), remaining, resetSeconds: num(parts["reset"] ?? null) };
+  }
+
+  const remaining = num(headers.get("ratelimit-remaining") ?? headers.get("x-ratelimit-remaining"));
+  if (remaining == null) return null;
+  return {
+    limit: num(headers.get("ratelimit-limit") ?? headers.get("x-ratelimit-limit")),
+    remaining,
+    resetSeconds: num(headers.get("ratelimit-reset") ?? headers.get("x-ratelimit-reset")),
+  };
+}
 
 const RETRYABLE_STATUS = new Set([500, 502, 503, 504]);
 
@@ -90,6 +140,7 @@ export async function fetchJson<T = unknown>(url: string, init?: FetchJsonOption
     backoffBaseMs = 500,
     backoffCapMs = 10_000,
     sleep = defaultSleep,
+    onResponse,
     ...requestInit
   } = init ?? {};
   const method = (requestInit.method ?? "GET").toUpperCase();
@@ -99,6 +150,9 @@ export async function fetchJson<T = unknown>(url: string, init?: FetchJsonOption
   for (let attempt = 0; ; attempt++) {
     try {
       const res = await fetchWithTimeout(url, requestInit, timeoutMs);
+      // Before the body: a failed response carries quota headers too, and those
+      // are the most valuable ones.
+      onResponse?.(res);
       if (res.ok) return (await res.json()) as T;
 
       const body = await res.text().catch(() => "");

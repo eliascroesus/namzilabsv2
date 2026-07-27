@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchJson, basicAuth, HttpError, HttpTimeoutError } from "@/lib/http-client";
+import { fetchJson, basicAuth, HttpError, HttpTimeoutError, parseRateLimit } from "@/lib/http-client";
 
 /** Build a minimal Response-like object. */
 function res(status: number, body: unknown, headers: Record<string, string> = {}) {
@@ -141,5 +141,60 @@ describe("fetchJson — timeout", () => {
 describe("basicAuth", () => {
   it("encodes username with empty password", () => {
     expect(basicAuth("key")).toBe(`Basic ${Buffer.from("key:").toString("base64")}`);
+  });
+});
+
+/**
+ * `fetchJson` returns parsed JSON, so response headers were unreachable and the
+ * only rate-limit signal anyone could act on was `Retry-After` — which arrives
+ * with a 429, i.e. after the limit has already been breached. Providers that
+ * publish remaining quota on every response were telling us how close we were
+ * and nothing was listening.
+ */
+describe("rate-limit headers", () => {
+  const h = (map: Record<string, string>): Headers =>
+    ({ get: (k: string) => map[k.toLowerCase()] ?? null }) as unknown as Headers;
+
+  it("parses the RFC single-header form", () => {
+    expect(parseRateLimit(h({ ratelimit: "limit=100, remaining=37, reset=42" }))).toEqual({
+      limit: 100,
+      remaining: 37,
+      resetSeconds: 42,
+    });
+  });
+
+  it("parses the older X-RateLimit triple", () => {
+    expect(parseRateLimit(h({ "x-ratelimit-limit": "60", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "12" }))).toEqual({
+      limit: 60,
+      remaining: 0,
+      resetSeconds: 12,
+    });
+  });
+
+  it("returns null without a remaining count — a partial header is not evidence", () => {
+    expect(parseRateLimit(h({ ratelimit: "limit=100" }))).toBeNull();
+    expect(parseRateLimit(h({}))).toBeNull();
+    expect(parseRateLimit(null)).toBeNull();
+  });
+
+  it("hands the response to onResponse before the body is read, on success AND failure", async () => {
+    const seen: Array<number> = [];
+    const res = (status: number) => ({
+      ok: status < 400,
+      status,
+      statusText: "x",
+      headers: h({ ratelimit: "remaining=5" }),
+      json: async () => ({ ok: true }),
+      text: async () => "{}",
+    }) as unknown as Response;
+
+    vi.stubGlobal("fetch", vi.fn(async () => res(200)));
+    await fetchJson("https://x.test/a", { onResponse: (r) => seen.push(r.status) });
+
+    vi.stubGlobal("fetch", vi.fn(async () => res(429)));
+    await fetchJson("https://x.test/b", { retries: 0, onResponse: (r) => seen.push(r.status), sleep: async () => {} }).catch(() => {});
+
+    // The 429 is the one whose headers matter most.
+    expect(seen).toEqual([200, 429]);
   });
 });
