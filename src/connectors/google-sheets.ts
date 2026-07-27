@@ -64,7 +64,16 @@ export const googleSheetsConnector: Connector = {
     const spreadsheetId = str(args.config?.["spreadsheetId"]);
 
     let probed: string | null = null;
+    // Requests this poll issues, so the ledger can settle up. A skip costs ONE
+    // (the Drive probe) and a real read costs two (probe + values); a first sync
+    // also costs two (no probe, but a stamp before the values read). The runner
+    // claims one per poll, so without this the ledger sees half of a real read —
+    // and Google's quota is per Cloud PROJECT, shared by every customer, so a
+    // fleet ceiling built on claims would authorise twice what it says.
+    let probeCalls = 0;
+
     if (token && spreadsheetId && marker) {
+      probeCalls = 1; // counted on attempt: a failed request still cost quota
       try {
         probed = await fetchStamp(token, spreadsheetId);
         // `modifiedTime` is the doubtful part of this contract: recalculated
@@ -73,7 +82,7 @@ export const googleSheetsConnector: Connector = {
         // FULL_READ_EVERY skips we read anyway, whatever Drive says. Cheap
         // insurance against a whole class of silently-stale sheet.
         if (probed !== "|" && probed === marker.stamp && marker.skips < FULL_READ_EVERY - 1) {
-          return { records: [], nextCursor: serializeMarker({ stamp: probed, skips: marker.skips + 1 }), unchanged: true };
+          return { records: [], nextCursor: serializeMarker({ stamp: probed, skips: marker.skips + 1 }), unchanged: true, providerCalls: probeCalls };
         }
       } catch {
         // Drive unreachable, or the token lacks the scope: fall through and read
@@ -82,7 +91,8 @@ export const googleSheetsConnector: Connector = {
     }
     // The probe already knows what version we are about to read. Handing it down
     // is both the correctness fix and one request cheaper — see readRows.
-    return readRows(args, probed);
+    const read = await readRows(args, probed);
+    return { ...read, providerCalls: (read.providerCalls ?? 0) + probeCalls };
   },
 
   async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
@@ -196,6 +206,10 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
     `${API}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`,
     { headers: { authorization: `Bearer ${token}` } },
   );
+  // The values read above, plus the stamp fetch only when the caller had no
+  // probe to hand down. Counted on attempt — a failed Drive call still reached
+  // Google.
+  const providerCalls = knownStamp ? 1 : 2;
   // Keep the previous marker when Drive was unreachable, rather than discarding
   // it: a transient blip should not also cost the NEXT sweep a full read. A
   // stale marker is safe — it only skips when it MATCHES a freshly fetched
@@ -203,7 +217,7 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
   const nextCursor = stamp && stamp !== "|" ? serializeMarker({ stamp, skips: 0 }) : args.cursor;
 
   const values = data.values ?? [];
-  if (values.length === 0) return { records: [], nextCursor };
+  if (values.length === 0) return { records: [], nextCursor, providerCalls };
 
   const header = values[0];
   const dataRows = values.slice(1);
@@ -228,7 +242,7 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
       properties: obj,
     });
   }
-  return { records, nextCursor };
+  return { records, nextCursor, providerCalls };
 }
 
 function firstEmailLike(obj: Record<string, unknown>): string | null {

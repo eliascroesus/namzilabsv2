@@ -95,7 +95,9 @@ describe("Google Calendar pagination (sync token only on the last page)", () => 
       }) as unknown as Response),
     );
     const res = await googleCalendarConnector.poll!(pollArgs("SYNC-OLD"));
-    expect(res).toEqual({ records: [], nextCursor: null });
+    // The failed request still reached Google and still cost project quota, so
+    // it is reported. `nextCursor: null` is the load-bearing part: START OVER.
+    expect(res).toEqual({ records: [], nextCursor: null, providerCalls: 1 });
   });
 
   it("keeps the old token when the page budget ends before the listing does (no token loss)", async () => {

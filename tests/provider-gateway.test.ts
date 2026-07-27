@@ -320,6 +320,185 @@ describe("the ledger counts what was actually spent", () => {
 });
 
 /**
+ * The runner's per-page claim only counts the pages IT walks. A connector that
+ * makes several requests inside one `poll()` was invisible to it, and on the
+ * stream path nothing ever settled up — so the ledger recorded a fraction of
+ * the real spend for every stream-scoped source.
+ *
+ * It matters most for Google, whose quota is per Cloud PROJECT: one OAuth
+ * client shared by every customer (`GOOGLE_CLIENT_ID`, google-oauth.ts:33), so
+ * an under-count is not one account's problem but the whole fleet's.
+ */
+describe("stream-scoped spend is settled after the fact", () => {
+  let db: DB;
+  let close: () => Promise<void>;
+  const ORG = "org_sheets_spend";
+  const SHEET = "SHEET_1";
+
+  beforeEach(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await close();
+  });
+
+  async function sheetStream(cursor: string | null) {
+    process.env.ENCRYPTION_KEY = KEY;
+    const [conn] = await db
+      .insert(connections)
+      .values({
+        orgId: ORG,
+        source: "gsheets",
+        name: "Sheets",
+        status: "active",
+        authType: "oauth2",
+        credentialsEncrypted: encrypt(JSON.stringify({ accessToken: "t" }), Buffer.from(KEY, "base64")),
+      })
+      .returning();
+    const cfg = { spreadsheetId: SHEET, range: "Tab1" };
+    const [stream] = await db
+      .insert(sourceStreams)
+      .values({ orgId: ORG, connectionId: conn.id, configHash: streamConfigHash(cfg, "gsheets"), config: cfg, cursor })
+      .returning();
+    return { conn, stream };
+  }
+
+  /** Drive reports `stamp`; the values endpoint returns one data row. */
+  function serveSheet(stamp: { modifiedTime: string; version: string }) {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        calls.push(url);
+        const body = url.startsWith("https://www.googleapis.com/drive/v3/files")
+          ? stamp
+          : { values: [["email"], ["a@example.com"]] };
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: { get: () => null },
+          json: async () => body,
+          text: async () => JSON.stringify(body),
+        } as unknown as Response;
+      }),
+    );
+    return calls;
+  }
+
+  const ledgerCalls = async (connectionId: string) => {
+    const [led] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, connectionId));
+    return led?.calls ?? 0;
+  };
+
+  it("charges a changed sheet all three of its requests, not the one claimed", async () => {
+    // A marker that will NOT match, so the probe falls through to a full read.
+    const { conn, stream } = await sheetStream(JSON.stringify({ stamp: "OLD|1", skips: 0 }));
+    const calls = serveSheet({ modifiedTime: "2026-07-01T00:00:00Z", version: "9" });
+
+    await syncStream(db, conn, stream, 1);
+
+    expect(calls).toHaveLength(3); // Drive probe + values read + Drive re-stamp
+    expect(await ledgerCalls(conn.id)).toBe(3); // was 1, while three requests went out
+  });
+
+  it("charges an unchanged sheet the one probe it really made", async () => {
+    const stamp = { modifiedTime: "2026-07-01T00:00:00Z", version: "9" };
+    const { conn, stream } = await sheetStream(JSON.stringify({ stamp: `${stamp.modifiedTime}|${stamp.version}`, skips: 0 }));
+    const calls = serveSheet(stamp);
+
+    await syncStream(db, conn, stream, 1);
+
+    expect(calls).toHaveLength(1); // the skip is real: no values read
+    expect(await ledgerCalls(conn.id)).toBe(1);
+  });
+
+  /**
+   * The skip must STAY a skip across sweeps. A skip that quietly reverted to a
+   * full read would still look correct — same rows, same tiles — and show up
+   * only as three times the quota, which is the failure this whole pass exists
+   * to make visible.
+   *
+   * (This does not pin the settle-up: a skip spends exactly the one request the
+   * claim already counted, so reporting it is a no-op arithmetically. The
+   * changed-sheet case above is what pins it.)
+   */
+  it("keeps costing one request per sweep while the sheet is unchanged", async () => {
+    const stamp = { modifiedTime: "2026-07-01T00:00:00Z", version: "9" };
+    const { conn, stream } = await sheetStream(JSON.stringify({ stamp: `${stamp.modifiedTime}|${stamp.version}`, skips: 0 }));
+    const calls = serveSheet(stamp);
+
+    await syncStream(db, conn, stream, 1);
+    await syncStream(db, conn, stream, 1);
+
+    expect(calls).toHaveLength(2); // two sweeps, two probes — not two full reads
+    expect(await ledgerCalls(conn.id)).toBe(2);
+  });
+
+  it("charges a first sync its two requests (no marker to probe against)", async () => {
+    const { conn, stream } = await sheetStream(null);
+    const calls = serveSheet({ modifiedTime: "2026-07-01T00:00:00Z", version: "9" });
+
+    await syncStream(db, conn, stream, 1);
+
+    expect(calls).toHaveLength(2); // values read + Drive stamp; nothing to compare yet
+    expect(await ledgerCalls(conn.id)).toBe(2);
+  });
+
+  /**
+   * Calendar is the worst case, and it is on the OTHER branch of syncStream.
+   * Google only reveals `nextSyncToken` on the last page, so one `poll()` drains
+   * up to MAX_PAGES = 8 requests — all of them under a single claimed page.
+   */
+  it("charges Calendar every page it drained inside one poll", async () => {
+    process.env.ENCRYPTION_KEY = KEY;
+    const [conn] = await db
+      .insert(connections)
+      .values({
+        orgId: ORG,
+        source: "gcal",
+        name: "Calendar",
+        status: "active",
+        authType: "oauth2",
+        credentialsEncrypted: encrypt(JSON.stringify({ accessToken: "t" }), Buffer.from(KEY, "base64")),
+      })
+      .returning();
+    const cfg = { calendarId: "primary" };
+    const [stream] = await db
+      .insert(sourceStreams)
+      .values({ orgId: ORG, connectionId: conn.id, configHash: streamConfigHash(cfg, "gcal"), config: cfg })
+      .returning();
+
+    // Three pages, then a sync token to end the walk.
+    let n = 0;
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        calls.push(String(input));
+        n += 1;
+        const body = n < 3 ? { items: [], nextPageToken: `P${n}` } : { items: [], nextSyncToken: "SYNC" };
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: { get: () => null },
+          json: async () => body,
+          text: async () => JSON.stringify(body),
+        } as unknown as Response;
+      }),
+    );
+
+    await syncStream(db, conn, stream, 1); // ONE runner page…
+
+    expect(calls).toHaveLength(3); // …three real Google requests
+    expect(await ledgerCalls(conn.id)).toBe(3); // was 1
+  });
+});
+
+/**
  * A connector that pages INSIDE itself is invisible to the runner's per-page
  * claim, so the ledger under-counted by its whole page budget. The spend cannot
  * be un-made after the fact; what matters is that the next claim sees the truth.

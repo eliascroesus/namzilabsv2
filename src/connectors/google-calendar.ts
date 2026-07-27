@@ -55,6 +55,21 @@ export const googleCalendarConnector: Connector = {
     const streamTag = args.streamHash ? `${args.streamHash}:` : "";
     const records: CanonicalEvent[] = [];
     let pageToken: string | null = null;
+    /**
+     * Requests actually issued, so the ledger can settle up.
+     *
+     * The runner claims ONE call per `poll()`, but this walk makes up to
+     * MAX_PAGES of them — so a claimed "page" was really up to eight requests
+     * and the ledger recorded an eighth of the truth. That gap is tolerable for
+     * a per-customer credential and is not tolerable for Google, whose quota is
+     * consumed per Cloud PROJECT: one shared client, every customer's calls in
+     * the same bucket. A fleet ceiling counting claims rather than requests
+     * would authorise eight times what it says.
+     *
+     * Counted on ATTEMPT, not on success: a request that failed still reached
+     * Google and still cost quota.
+     */
+    let providerCalls = 0;
 
     for (let page = 0; page < MAX_PAGES; page++) {
       // Page requests must repeat the original query params + pageToken.
@@ -62,13 +77,14 @@ export const googleCalendarConnector: Connector = {
       if (pageToken) pageParams.set("pageToken", pageToken);
 
       let data: { items?: Array<Record<string, unknown>>; nextPageToken?: string; nextSyncToken?: string };
+      providerCalls += 1;
       try {
         data = await fetchJson(`${API}/${encodeURIComponent(calendarId)}/events?${pageParams.toString()}`, {
           headers: { authorization: `Bearer ${token}` },
         });
       } catch (err) {
         // Expired sync token -> reset and do a full resync next time.
-        if (err instanceof HttpError && err.status === 410) return { records: [], nextCursor: null };
+        if (err instanceof HttpError && err.status === 410) return { records: [], nextCursor: null, providerCalls };
         throw err;
       }
 
@@ -82,14 +98,14 @@ export const googleCalendarConnector: Connector = {
         });
       }
 
-      if (data.nextSyncToken) return { records, nextCursor: data.nextSyncToken };
-      if (!data.nextPageToken) return { records, nextCursor: args.cursor };
+      if (data.nextSyncToken) return { records, nextCursor: data.nextSyncToken, providerCalls };
+      if (!data.nextPageToken) return { records, nextCursor: args.cursor, providerCalls };
       pageToken = data.nextPageToken;
     }
 
     // Page budget spent before the listing ended (pathological change volume):
     // keep the old token so the next sweep retries; dedup absorbs the re-reads.
-    return { records, nextCursor: args.cursor };
+    return { records, nextCursor: args.cursor, providerCalls };
   },
 
   async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {

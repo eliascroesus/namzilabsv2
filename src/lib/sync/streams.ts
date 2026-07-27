@@ -5,7 +5,7 @@ import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
-import { claimCalls, isPaused, type CallLane } from "@/lib/provider-gateway/budget";
+import { claimCalls, isPaused, recordExtraCalls, type CallLane } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { awaitStreamWriteLock, withStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
@@ -296,6 +296,29 @@ export async function syncStream(
     return false;
   };
 
+  /**
+   * A claimed page bought ONE request; the connector may have made several
+   * inside it. Settle up so the NEXT claim is authorised on the truth.
+   *
+   * The connection-scoped path has always done this (`reconcile.ts`), but the
+   * stream path never did — and it is the path every Google connection takes.
+   * Calendar walks up to 8 pages inside one `poll()` and Sheets makes up to 3
+   * requests, so the ledger was recording between an eighth and a third of the
+   * real spend. That is survivable for a per-customer API key, where the only
+   * account at risk is the one making the calls. It is not survivable for
+   * Google, whose quota is per Cloud PROJECT and therefore shared by every
+   * customer at once.
+   *
+   * Connectors that do not report `providerCalls` are counted as one, which is
+   * the pre-existing behaviour and correct for a connector that makes one call.
+   * Instantly (3 pages) and Calendly still under-report; their credentials are
+   * per-customer, so the exposure is that customer's own limit rather than a
+   * shared one, and they are left for the pass that declares their real limits.
+   */
+  const settleUp = async (providerCalls: number | undefined) => {
+    await recordExtraCalls(db, conn, operation, Math.max(0, (providerCalls ?? 1) - 1));
+  };
+
   let cursor = stream.cursor ?? null;
   let inserted = 0;
   let updated = 0;
@@ -309,13 +332,16 @@ export async function syncStream(
       // The cursor is passed as a CHANGE-DETECTION HINT, not as a resume point:
       // a mirror still re-reads the whole resource whenever it reads at all.
       // What it buys is the option not to read — see `unchanged` below.
-      const { records, nextCursor, mirrorScope, unchanged } = await connector.poll({
+      const { records, nextCursor, mirrorScope, unchanged, providerCalls } = await connector.poll({
         connectionId: conn.id,
         cursor: stream.cursor ?? null,
         credentials,
         config: stream.config ?? undefined,
         streamHash: stream.configHash,
       });
+      // Before the `unchanged` return below — a skip still spends the Drive
+      // probe, and a probe nobody counts is how a "cheap" sweep stops being one.
+      await settleUp(providerCalls);
 
       // The source says it has not changed, so nothing was fetched. Returning
       // here is load-bearing: falling through would hand an EMPTY record set to
@@ -356,13 +382,14 @@ export async function syncStream(
           incomplete = true;
           break;
         }
-        const { records, nextCursor, mirrorScope, preserveOccurredAt, retireOutsideWindow } = await connector.poll({
+        const { records, nextCursor, mirrorScope, preserveOccurredAt, retireOutsideWindow, providerCalls } = await connector.poll({
           connectionId: conn.id,
           cursor,
           credentials,
           config: stream.config ?? undefined,
           streamHash: stream.configHash,
         });
+        await settleUp(providerCalls);
         if (retireOutsideWindow) covered = retireOutsideWindow;
         const swap = await withStreamWriteLock(db, `stream:${stream.id}`, async (tx) => {
           const res = await upsertEvents(
