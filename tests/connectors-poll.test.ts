@@ -212,7 +212,10 @@ describe("Google Sheets polling", () => {
     });
 
     expect(result.records).toHaveLength(2);
-    expect(result.nextCursor).toBe("2");
+    // The cursor carries a change-detection marker now, not a row count. Drive
+    // is not served by this mock, so no marker is produced and the next poll
+    // reads unconditionally — the old behaviour, degraded to safely.
+    expect(result.nextCursor).toBeNull();
     expect(result.records[0].eventType).toBe("row_added");
     expect(result.records[0].eventId).toBe("gsheets:c1:row:2");
     expect(result.records[0].subject).toBe("alice@acme.com");
@@ -231,13 +234,14 @@ describe("Google Sheets polling", () => {
     );
     const second = await googleSheetsConnector.poll!({
       connectionId: "c1",
-      cursor: "2", // stored by a previous sweep — informational only
+      cursor: "2", // a legacy row-count cursor from before the marker existed
       credentials: { accessToken: "tok" },
       config: { spreadsheetId: "SHEET1" },
     });
     // The full current sheet comes back; the WRITER dedups/refreshes in place.
+    // An unrecognised cursor is not a marker, so nothing is skipped.
     expect(second.records).toHaveLength(2);
-    expect(second.nextCursor).toBe("2");
+    expect(second.unchanged).toBeFalsy();
   });
 
   it("skips fully blank rows (a cleared row mirrors as deleted, not as empty data)", async () => {

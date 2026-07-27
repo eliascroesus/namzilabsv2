@@ -306,14 +306,28 @@ export async function syncStream(
   try {
     if (isMirrorSource(conn.source)) {
       if (!(await claimPage())) return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0, incomplete: true, deferred };
-      // Full re-read, ignoring any stored cursor: the read IS the truth.
-      const { records, nextCursor, mirrorScope } = await connector.poll({
+      // The cursor is passed as a CHANGE-DETECTION HINT, not as a resume point:
+      // a mirror still re-reads the whole resource whenever it reads at all.
+      // What it buys is the option not to read — see `unchanged` below.
+      const { records, nextCursor, mirrorScope, unchanged } = await connector.poll({
         connectionId: conn.id,
-        cursor: null,
+        cursor: stream.cursor ?? null,
         credentials,
         config: stream.config ?? undefined,
         streamHash: stream.configHash,
       });
+
+      // The source says it has not changed, so nothing was fetched. Returning
+      // here is load-bearing: falling through would hand an EMPTY record set to
+      // `retireAbsent`, which for a whole-resource mirror means "every row was
+      // deleted upstream" and would tombstone the entire sheet.
+      if (unchanged) {
+        await db
+          .update(sourceStreams)
+          .set({ cursor: nextCursor ?? cursor, status: "active", lastError: null, lastPolledAt: new Date(), updatedAt: new Date() })
+          .where(eq(sourceStreams.id, stream.id));
+        return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0 };
+      }
       // C.1: the upsert and the retire are ONE swap. Wrapped so that on the
       // pool driver they run in a transaction holding the stream's advisory
       // lock — no reader can observe the window half-replaced, and a concurrent

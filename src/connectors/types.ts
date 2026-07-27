@@ -174,6 +174,18 @@ export type PollResult = {
    * strictly better than discovering the limit through a 429.
    */
   rateLimit?: ObservedRateLimit;
+  /**
+   * "The resource has not changed since the marker you gave me, so I did not
+   * read it." `records` is empty because nothing was FETCHED — not because the
+   * resource is empty.
+   *
+   * MIRROR SOURCES MUST SET THIS WHEN THEY SKIP, and the runner must honour it,
+   * because the two look identical and the consequence is not: a mirror's empty
+   * read means "every row was deleted upstream" and `retireAbsent` would
+   * tombstone the entire sheet. This flag is the difference between an
+   * efficient sweep and a data-loss event.
+   */
+  unchanged?: boolean;
 };
 
 export type RegisterWebhookArgs = {

@@ -45,8 +45,44 @@ export const googleSheetsConnector: Connector = {
     ];
   },
 
-  /** Full tab read every time (mirror semantics) — the cursor is informational only. */
+  /**
+   * Mirror semantics: whenever this reads, it reads the WHOLE tab. What changed
+   * is that it first asks Drive whether the file has been touched at all.
+   *
+   * Every sweep used to transfer the entire tab and run a full upsert + retire
+   * pass whether or not a cell had moved — one API call, but the whole payload
+   * and the whole write, every ten minutes, forever. `files.get` returns
+   * `modifiedTime` in a few hundred bytes.
+   *
+   * No re-consent: `drive.readonly` is already in the gsheets grant
+   * (`src/lib/google-oauth.ts`) and this connector already calls the Drive API
+   * with the same token for the spreadsheet picker.
+   */
   async poll(args: PollArgs): Promise<PollResult> {
+    const marker = parseMarker(args.cursor);
+    const token = str(args.credentials?.["accessToken"]);
+    const spreadsheetId = str(args.config?.["spreadsheetId"]);
+
+    if (token && spreadsheetId && marker) {
+      try {
+        const meta = await fetchJson<{ modifiedTime?: string; version?: string }>(
+          `${DRIVE_API}/${encodeURIComponent(spreadsheetId)}?fields=modifiedTime,version`,
+          { headers: { authorization: `Bearer ${token}` } },
+        );
+        const stamp = `${meta.modifiedTime ?? ""}|${meta.version ?? ""}`;
+        // `modifiedTime` is the doubtful part of this contract: recalculated
+        // formulas (IMPORTRANGE, NOW, anything volatile) can change what a cell
+        // READS without the file being edited. So the skip is bounded — every
+        // FULL_READ_EVERY skips we read anyway, whatever Drive says. Cheap
+        // insurance against a whole class of silently-stale sheet.
+        if (stamp !== "|" && stamp === marker.stamp && marker.skips < FULL_READ_EVERY - 1) {
+          return { records: [], nextCursor: serializeMarker({ stamp, skips: marker.skips + 1 }), unchanged: true };
+        }
+      } catch {
+        // Drive unreachable, or the token lacks the scope: fall through and read
+        // the tab. Degrading to the old behaviour is always safe.
+      }
+    }
     return readRows(args);
   },
 
@@ -86,6 +122,29 @@ export const googleSheetsConnector: Connector = {
   },
 };
 
+/**
+ * How many consecutive "unchanged" answers we accept before reading anyway.
+ * Six is roughly an hour at base cadence.
+ */
+const FULL_READ_EVERY = 6;
+
+/** The change-detection marker carried in the stream cursor. */
+type SheetMarker = { stamp: string; skips: number };
+
+function parseMarker(cursor: string | null): SheetMarker | null {
+  if (!cursor || !cursor.startsWith("{")) return null;
+  try {
+    const p = JSON.parse(cursor) as Partial<SheetMarker>;
+    return typeof p.stamp === "string" ? { stamp: p.stamp, skips: typeof p.skips === "number" ? p.skips : 0 } : null;
+  } catch {
+    return null;
+  }
+}
+
+function serializeMarker(m: SheetMarker): string {
+  return JSON.stringify(m);
+}
+
 async function readRows(args: PollArgs, fromDataRow = 0): Promise<PollResult> {
   const token = str(args.credentials?.["accessToken"]);
   if (!token) throw new Error("gsheets: missing access token");
@@ -97,8 +156,27 @@ async function readRows(args: PollArgs, fromDataRow = 0): Promise<PollResult> {
     `${API}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`,
     { headers: { authorization: `Bearer ${token}` } },
   );
+  // Stamp the read with the file's current version, so the next sweep has
+  // something to compare against. Best-effort: without it the next poll simply
+  // reads the tab, which is the old behaviour.
+  let stamp = "";
+  try {
+    const meta = await fetchJson<{ modifiedTime?: string; version?: string }>(
+      `${DRIVE_API}/${encodeURIComponent(spreadsheetId)}?fields=modifiedTime,version`,
+      { headers: { authorization: `Bearer ${token}` } },
+    );
+    stamp = `${meta.modifiedTime ?? ""}|${meta.version ?? ""}`;
+  } catch {
+    // Leave the marker unset.
+  }
+  // Keep the previous marker when Drive was unreachable, rather than discarding
+  // it: a transient blip should not also cost the NEXT sweep a full read. A
+  // stale marker is safe — it only skips when it MATCHES a freshly fetched
+  // stamp, and we just failed to fetch one.
+  const nextCursor = stamp && stamp !== "|" ? serializeMarker({ stamp, skips: 0 }) : args.cursor;
+
   const values = data.values ?? [];
-  if (values.length === 0) return { records: [], nextCursor: "0" };
+  if (values.length === 0) return { records: [], nextCursor };
 
   const header = values[0];
   const dataRows = values.slice(1);
@@ -123,7 +201,7 @@ async function readRows(args: PollArgs, fromDataRow = 0): Promise<PollResult> {
       properties: obj,
     });
   }
-  return { records, nextCursor: String(dataRows.length) };
+  return { records, nextCursor };
 }
 
 function firstEmailLike(obj: Record<string, unknown>): string | null {
