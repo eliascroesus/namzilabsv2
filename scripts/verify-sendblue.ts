@@ -9,6 +9,8 @@
  *   S3. messages carry `message_handle` — the dedup key the poll relies on
  *   S4. `limit`/`offset` are honored
  *   S5. GET /api/account/webhooks returns a webhook list (empty is fine)
+ *   S6. (informational) does the messages list accept a date bound? If it does,
+ *       the poll's offset continuation can be simplified to a date window.
  *
  * None of these could be confirmed from the build environment (docs are
  * bot-walled and the repo had no pre-existing Sendblue send path to compare
@@ -102,6 +104,36 @@ async function main() {
       const overlap = second.some((m) => first.has(String(m["message_handle"])));
       check("S4 offset walks to new messages (no overlap)", !overlap, `page 2 had ${second.length}`);
     }
+  }
+
+  // S6 — is there a DATE parameter? Informational, never a failure.
+  //
+  // The poll resumes an interrupted walk by OFFSET, because `limit`/`offset`
+  // are the only paging controls we could confirm. That works (offsets on a
+  // newest-first list drift in the safe direction), but a server-side date
+  // bound would be strictly better: it would make Sendblue's cursor identical
+  // to Close's and stop us fetching pages we then discard client-side. The
+  // docs host is unreachable from CI, so this asks the API directly.
+  if (messages.length > 0) {
+    const probe = ["from_date", "start_date", "created_after", "since", "after"];
+    const accepted: string[] = [];
+    for (const name of probe) {
+      const iso = new Date(Date.now() - 86_400_000).toISOString();
+      try {
+        const page = listOf(await getJson<MessagePage>(`${base}/api/v2/messages?limit=50&${name}=${encodeURIComponent(iso)}`), "messages");
+        const all = listOf(await getJson<MessagePage>(`${base}/api/v2/messages?limit=50`), "messages");
+        // Accepted AND acted on: a narrower result is the only proof. A param
+        // that is silently ignored returns the same page and proves nothing.
+        if (page.length < all.length) accepted.push(name);
+      } catch {
+        // 400/422 means "no such parameter" — exactly what we are testing for.
+      }
+    }
+    console.log(
+      accepted.length > 0
+        ? `  [i] S6 date filter supported: ${accepted.join(", ")} — sendblue.ts can drop the offset continuation for a date window`
+        : "  [i] S6 no date filter found — the offset continuation in sendblue.ts is required, keep it",
+    );
   }
 
   const hooks = listOf(await getJson<WebhookPage>(`${base}/api/account/webhooks`), "webhooks");

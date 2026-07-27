@@ -29,6 +29,55 @@ const PAGE_LIMIT = 100;
 /** Re-read cushion below the high-water mark; message_handle dedup absorbs it. */
 const OVERLAP_MS = 5 * 60_000;
 
+/**
+ * Poll cursor. Serialized as the plain high-water date string when no walk is
+ * in flight (back-compat with every cursor stored to date), or as JSON mid-walk
+ * — the same scheme Close and Instantly use.
+ *
+ * - `hw`      — newest fully-ingested message time from the LAST completed
+ *               window; the floor (with overlap) of the current one. It advances
+ *               ONLY when the window drains, which is the whole fix: advancing
+ *               it early is what stranded everything below the newest 300.
+ * - `cont`    — where to resume. This endpoint has no page token, only
+ *               `limit`/`offset`, so the continuation is an OFFSET plus the
+ *               oldest message time ingested so far (`lowWater`).
+ * - `maxSeen` — newest time seen during the current walk; becomes `hw` on drain.
+ *
+ * **Why an offset is safe to resume from.** The list is newest-first, so
+ * messages arriving between sweeps push older ones to HIGHER offsets: a stored
+ * offset can only re-read, never skip, and `message_handle` dedup makes a
+ * re-read free. Deletions shift the other way, so the resume starts one page
+ * above the stored offset and discards anything at or newer than `lowWater` —
+ * bounded re-read, no gap, no dependence on the provider holding offsets still.
+ */
+type SendblueCursor = {
+  hw: string | null;
+  cont: { offset: number; lowWater: string | null } | null;
+  maxSeen: string | null;
+};
+
+function parseSendblueCursor(cursor: string | null): SendblueCursor {
+  if (!cursor) return { hw: null, cont: null, maxSeen: null };
+  if (cursor.startsWith("{")) {
+    try {
+      const p = JSON.parse(cursor) as Partial<SendblueCursor>;
+      const cont =
+        p.cont && typeof p.cont.offset === "number"
+          ? { offset: p.cont.offset, lowWater: typeof p.cont.lowWater === "string" ? p.cont.lowWater : null }
+          : null;
+      return { hw: p.hw ?? null, cont, maxSeen: p.maxSeen ?? null };
+    } catch {
+      return { hw: null, cont: null, maxSeen: null };
+    }
+  }
+  return { hw: cursor, cont: null, maxSeen: null };
+}
+
+function serializeSendblueCursor(c: SendblueCursor): string | null {
+  if (c.cont) return JSON.stringify(c);
+  return c.maxSeen ?? c.hw;
+}
+
 /** Candidate headers Sendblue may place the configured signing secret in. */
 const SECRET_HEADERS = [
   "sendblue-signing-secret",
@@ -64,14 +113,29 @@ export const sendblueConnector: Connector = {
   },
 
   /**
-   * Reconciliation backstop: page the message history newest-first (offset
-   * pagination) down to the stored high-water mark minus a 5-minute overlap.
-   * Offsets shift as new messages arrive, but the overlap + message_handle
-   * dedup absorb the drift; the mark advances to the newest message seen.
+   * Reconciliation backstop: page the message history newest-first down to the
+   * stored high-water mark minus a 5-minute overlap.
+   *
+   * THE BUG THIS FIXES. The old poll walked three pages and then returned the
+   * NEWEST timestamp it had seen as the next cursor. The next sweep's floor
+   * became that mark — so on any account with more than 300 messages above the
+   * floor (a burst, a backlog, a sweep that was throttled), everything between
+   * the 300th and the old floor was **never requested by anything again.** Not
+   * an error, not a zero, not a slow sync: the rows were simply absent and
+   * nothing said so. It is the same defect already fixed in Close ("Defect #2")
+   * and in Instantly's raw-email walk; Sendblue had grown the multi-page walk
+   * but not the continuation, which raised the threshold from 100 to 300
+   * instead of removing it. `tests/stranding-contract.test.ts` pins it for all
+   * three.
+   *
+   * The cursor is now the same `{hw, cont, maxSeen}` shape Close uses, with the
+   * continuation carrying an OFFSET because this endpoint has no page token —
+   * see {@link SendblueCursor} for why an offset is safe to resume from.
    */
   async poll(args: PollArgs): Promise<PollResult> {
     const auth = authHeaders(args.credentials);
-    const hw = args.cursor ? Date.parse(args.cursor) || 0 : null;
+    const cur = parseSendblueCursor(args.cursor);
+    const hw = cur.hw ? Date.parse(cur.hw) || 0 : null;
     // A FIRST sweep has no high-water mark, and this endpoint pages by offset
     // over the whole account — so without a floor it walks all history on
     // connect. Bound it: the first sweep imports a recent window, and the
@@ -79,29 +143,72 @@ export const sendblueConnector: Connector = {
     // backfill lane; see the deferred triggers in the plan.)
     const floor = hw != null ? hw - OVERLAP_MS : Date.now() - FIRST_SYNC_DAYS * 86_400_000;
     const records: CanonicalEvent[] = [];
-    let maxSeen: string | null = args.cursor ?? null;
+    // Seeded from the stored mark so a sweep that ingests nothing returns what
+    // it was given rather than null — null means START OVER (PollResult).
+    let maxSeen: string | null = cur.maxSeen ?? cur.hw;
+    let minSeen: string | null = cur.cont?.lowWater ?? null;
 
+    // Resume one page ABOVE where we stopped. New messages push older ones to
+    // higher offsets, so a stored offset can only ever re-read (harmless —
+    // message_handle dedups) and never skip; the extra page covers deletions,
+    // which shift the other way. Items at or above `lowWater` were already
+    // ingested on a previous sweep and are dropped without a second thought.
+    const startOffset = cur.cont ? Math.max(0, cur.cont.offset - PAGE_LIMIT) : 0;
+    const lowWaterMs = cur.cont?.lowWater ? Date.parse(cur.cont.lowWater) || null : null;
+
+    let offset = startOffset;
+    let exhausted = false;
     for (let page = 0; page < PAGES_PER_POLL; page++) {
-      const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(page * PAGE_LIMIT) });
+      const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(offset) });
       const data = await fetchJson<{ messages?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>(
         `${API_BASE}/api/v2/messages?${params.toString()}`,
         { headers: auth },
       );
       const messages = Array.isArray(data) ? data : (data.messages ?? []);
-      if (messages.length === 0) break;
+      if (messages.length === 0) {
+        exhausted = true;
+        break;
+      }
 
-      let pageAllBelowFloor = true;
+      let pageAllBelowFloor = messages.length > 0;
       for (const msg of messages) {
         const ts = messageDate(msg);
-        const t = ts ? Date.parse(ts) || 0 : 0;
-        if (floor == null || t >= floor) pageAllBelowFloor = false;
-        if (floor != null && t < floor) continue;
+        // A message with none of the four date fields used to parse as t=0,
+        // fall below every floor, and be dropped SILENTLY AND FOREVER. Undated
+        // is not the same as ancient: keep it, and let it sit outside the
+        // window bookkeeping.
+        if (!ts) {
+          records.push(toCanonical(msg, args.connectionId));
+          pageAllBelowFloor = false;
+          continue;
+        }
+        const t = Date.parse(ts) || 0;
+        if (t >= floor) pageAllBelowFloor = false;
+        if (t < floor) continue;
+        // Already ingested on an earlier sweep of this same walk.
+        if (lowWaterMs != null && t >= lowWaterMs) continue;
         records.push(toCanonical(msg, args.connectionId));
-        if (ts && (maxSeen == null || (Date.parse(ts) || 0) > (Date.parse(maxSeen) || 0))) maxSeen = ts;
+        if (maxSeen == null || t > (Date.parse(maxSeen) || 0)) maxSeen = ts;
+        if (minSeen == null || t < (Date.parse(minSeen) || 0)) minSeen = ts;
       }
-      if (pageAllBelowFloor || messages.length < PAGE_LIMIT) break;
+      offset += messages.length;
+      if (pageAllBelowFloor || messages.length < PAGE_LIMIT) {
+        exhausted = true;
+        break;
+      }
     }
-    return { records, nextCursor: maxSeen };
+
+    // Window drained: the high-water mark advances and the continuation clears.
+    if (exhausted) return { records, nextCursor: serializeSendblueCursor({ hw: maxSeen ?? cur.hw, cont: null, maxSeen: null }) };
+
+    // Page budget spent mid-window: persist where to resume (hw UNCHANGED, so
+    // the floor cannot creep up past data we have not read yet).
+    return {
+      records,
+      nextCursor: serializeSendblueCursor({ hw: cur.hw, cont: { offset, lowWater: minSeen }, maxSeen }),
+      incomplete: true,
+      importProgress: { reachedBack: new Date(minSeen ? Date.parse(minSeen) || floor : floor), targetBack: new Date(floor) },
+    };
   },
 
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
