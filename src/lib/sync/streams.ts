@@ -5,7 +5,7 @@ import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
-import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
+import { claimCalls, isPaused, type CallLane } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { awaitStreamWriteLock, withStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
@@ -178,6 +178,13 @@ export type StreamSyncResult = {
    * Calendly source reads the last 30 days plus everything upcoming BY DESIGN.
    */
   covered?: { from: Date; to: Date };
+  /**
+   * The walk stopped because the provider budget ran out mid-page, not because
+   * the data did. Distinct from `incomplete`, which only says "more to fetch":
+   * this says WHY, and carries when it resumes, so the caller can pause the
+   * connection or tell the user rather than reporting a short count as final.
+   */
+  deferred?: { reason: string; retryAfterMs: number };
 };
 
 type StreamRow = typeof sourceStreams.$inferSelect;
@@ -259,11 +266,35 @@ async function retireOutside(db: DB, conn: ConnRow, stream: StreamRow, window: {
  *   cursor; `maxPages` bounds inline/first-run syncs so a huge resource can't
  *   blow a request timeout — the sweep finishes the rest on its schedule.
  */
-export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPages = 1): Promise<StreamSyncResult> {
+export async function syncStream(
+  db: DB,
+  conn: ConnRow,
+  stream: StreamRow,
+  maxPages = 1,
+  lane: CallLane = "background",
+): Promise<StreamSyncResult> {
   const connector = getConnector(conn.source);
   if (!connector?.poll) return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0 };
   const credentials = await getConnectionCredentials(db, conn);
   const generation = Math.max(1, conn.syncGeneration ?? 0);
+  const operation = pollOperation(conn.source, stream.config);
+  let deferred: StreamSyncResult["deferred"];
+
+  /**
+   * F.1 — one claim per PROVIDER REQUEST, not per sync.
+   *
+   * The claim used to be taken once by the caller and then authorise the whole
+   * page walk, so a budget of N permitted up to N × maxPages real requests: the
+   * ledger read 20% while the connection was several times over the provider's
+   * published limit. Claiming here is the only place that knows how many pages
+   * are actually being walked.
+   */
+  const claimPage = async (): Promise<boolean> => {
+    const claim = await claimCalls(db, conn, operation, 1, new Date(), lane);
+    if (claim.allowed) return true;
+    deferred = { reason: claim.reason, retryAfterMs: claim.retryAfterMs };
+    return false;
+  };
 
   let cursor = stream.cursor ?? null;
   let inserted = 0;
@@ -274,6 +305,7 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
   let covered: { from: Date; to: Date } | null = null;
   try {
     if (isMirrorSource(conn.source)) {
+      if (!(await claimPage())) return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0, incomplete: true, deferred };
       // Full re-read, ignoring any stored cursor: the read IS the truth.
       const { records, nextCursor, mirrorScope } = await connector.poll({
         connectionId: conn.id,
@@ -306,6 +338,10 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
       cursor = nextCursor ?? null;
     } else {
       for (let page = 0; page < maxPages; page++) {
+        if (!(await claimPage())) {
+          incomplete = true;
+          break;
+        }
         const { records, nextCursor, mirrorScope, preserveOccurredAt, retireOutsideWindow } = await connector.poll({
           connectionId: conn.id,
           cursor,
@@ -384,7 +420,7 @@ export async function syncStream(db: DB, conn: ConnRow, stream: StreamRow, maxPa
       .where(eq(sourceStreams.id, stream.id));
     throw e;
   }
-  return { inserted, updated, deduped, softDeleted, incomplete, covered: covered ?? undefined };
+  return { inserted, updated, deduped, softDeleted, incomplete, covered: covered ?? undefined, deferred };
 }
 
 /** All streams of one connection that should be polled. */
@@ -493,17 +529,6 @@ export async function primeStream(
     };
   }
 
-  // F.8 — interactive lane: a user's Test may claim the reserved headroom that
-  // background sweeps never touch, so a busy fleet doesn't block a person.
-  const claim = await claimCalls(db, conn, pollOperation(conn.source, stream.config), 1, new Date(), "interactive");
-  if (!claim.allowed) {
-    return {
-      ok: true,
-      refreshed: false,
-      note: `Couldn't re-read the source — ${claim.reason.toLowerCase()}. Showing the data we already have.`,
-    };
-  }
-
   // Q6 (active on the pool driver): a forced Test that collides with an
   // in-flight writer AWAITS its completion — bounded, never skipped, never an
   // error at the user — then adopts that sync's result instead of
@@ -523,7 +548,25 @@ export async function primeStream(
   }
 
   try {
-    const res = await syncStream(db, conn, stream, maxPages);
+    // F.8 — the interactive lane may claim the reserved headroom background
+    // sweeps never touch, so a busy fleet doesn't block a person clicking Test.
+    // Claimed per page inside syncStream, which is the only place that knows
+    // how many pages this walk will actually take.
+    const res = await syncStream(db, conn, stream, maxPages, "interactive");
+    if (res.deferred) {
+      // Which sentence is true depends on whether ANY page got through. Denied
+      // on page one, nothing was re-read; denied on page three, a partial
+      // refresh did happen and claiming otherwise would be the same dishonesty
+      // this note exists to prevent.
+      const readSomething = res.inserted + res.updated + res.deduped > 0;
+      return {
+        ok: true,
+        refreshed: readSomething,
+        note: readSomething
+          ? `Couldn't finish re-reading the source — ${res.deferred.reason.toLowerCase()}. Showing what arrived before it stopped.`
+          : `Couldn't re-read the source — ${res.deferred.reason.toLowerCase()}. Showing the data we already have.`,
+      };
+    }
     if (res.incomplete) return { ok: true, refreshed: true, note: partialScanNote(res.covered) };
     return { ok: true, refreshed: true };
   } catch (e) {

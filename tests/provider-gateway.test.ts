@@ -1,7 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
-import { connections, usageLedger } from "@/db/schema";
+import { connections, sourceStreams, usageLedger } from "@/db/schema";
+import { randomBytes } from "node:crypto";
+import { encrypt } from "@/lib/crypto";
+import { syncStream } from "@/lib/sync/streams";
+import { streamConfigHash } from "@/lib/sync/stream-hash";
+
+const KEY = randomBytes(32).toString("base64");
 import {
   budgetFor,
   claimCalls,
@@ -216,5 +222,97 @@ describe("F.7 — the ledger is the audit trail", () => {
     expect(row.errors).toBe(1);
     expect(row.provider).toBe("instantly");
     expect(row.windowStart.toISOString()).toBe("2026-07-01T12:00:00.000Z"); // minute-aligned
+  });
+});
+
+/**
+ * F.1 — one claim per PROVIDER REQUEST, not per sync.
+ *
+ * The claim was taken once by the caller and then authorised the whole page
+ * walk, so a budget of N permitted up to N x maxPages real requests: the ledger
+ * reported 20% utilisation while the connection was several times over the
+ * provider's published limit. That is the number the whole budget layer exists
+ * to keep honest.
+ */
+describe("the ledger counts what was actually spent", () => {
+  let db: DB;
+  let close: () => Promise<void>;
+  const ORG = "org_perpage";
+
+  beforeEach(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await close();
+  });
+
+  async function calendlyStream(): Promise<{ conn: typeof connections.$inferSelect; stream: typeof sourceStreams.$inferSelect }> {
+    process.env.ENCRYPTION_KEY = KEY;
+    const [conn] = await db
+      .insert(connections)
+      .values({
+        orgId: ORG,
+        source: "calendly",
+        name: "Calendly",
+        status: "active",
+        authType: "oauth2",
+        credentialsEncrypted: encrypt(JSON.stringify({ accessToken: "t" }), Buffer.from(KEY, "base64")),
+      })
+      .returning();
+    const cfg = { scope: "user" };
+    const [stream] = await db
+      .insert(sourceStreams)
+      .values({ orgId: ORG, connectionId: conn.id, configHash: streamConfigHash(cfg, "calendly"), config: cfg })
+      .returning();
+    return { conn, stream };
+  }
+
+  /** Calendly returns one page per poll, so the runner's loop is what walks. */
+  function serveEndlessPages() {
+    let n = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        const body = url.includes("/users/me")
+          ? { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } }
+          : { collection: [], pagination: { next_page_token: `P${++n}` } };
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: { get: () => null },
+          json: async () => body,
+          text: async () => JSON.stringify(body),
+        } as unknown as Response;
+      }),
+    );
+  }
+
+  it("charges one call per page walked, not one per sync", async () => {
+    const { conn, stream } = await calendlyStream();
+    serveEndlessPages();
+
+    await syncStream(db, conn, stream, 4);
+
+    const [led] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, conn.id));
+    expect(led.calls).toBe(4); // was 1, while four requests went out
+  });
+
+  it("stops the walk when the budget runs out mid-page, and says why", async () => {
+    const { conn, stream } = await calendlyStream();
+    serveEndlessPages();
+    // Spend the background lane down to its last token.
+    const limit = laneLimit("calendly", "scheduled_events.list", "background");
+    await claimCalls(db, conn, "scheduled_events.list", limit - 1);
+
+    const res = await syncStream(db, conn, stream, 10);
+
+    expect(res.deferred).toBeDefined();
+    expect(res.deferred!.retryAfterMs).toBeGreaterThan(0);
+    expect(res.incomplete).toBe(true); // the walk did not finish
+    const [led] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, conn.id));
+    expect(led.calls).toBe(limit); // never exceeded, which is the point
   });
 });

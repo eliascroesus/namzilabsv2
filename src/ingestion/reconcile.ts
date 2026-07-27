@@ -189,20 +189,27 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     let incomplete = false;
     const changedStreamHashes: string[] = [];
     for (const stream of streams) {
-      // F.1: each stream poll claims from the connection's per-minute budget,
-      // against the endpoint THIS stream will actually call — two streams on one
-      // connection can hit endpoints with different published limits.
-      const claim = await claimCalls(db, conn, pollOperation(conn.source, stream.config));
-      if (!claim.allowed) {
-        const until = await pauseConnection(db, conn.id, claim.retryAfterMs, `${claim.reason} — resumes automatically`);
-        return withCadence({
-          inserted, updated, softDeleted, deduped,
-          polled: true, webhook, changedStreamHashes,
-          deferredUntil: until, orgId: conn.orgId, source: conn.source,
-        });
-      }
       try {
+        // F.1: the budget is claimed per PROVIDER REQUEST inside syncStream —
+        // it is the only place that knows how many pages a walk actually took.
+        // Claiming once out here authorised the whole walk, so a budget of N
+        // permitted N × maxPages real calls against the provider's limit.
         const r = await syncStream(db, conn, stream, 5);
+        if (r.deferred) {
+          const until = await pauseConnection(db, conn.id, r.deferred.retryAfterMs, `${r.deferred.reason} — resumes automatically`);
+          // Rows already written this sweep still count; the walk resumes from
+          // its stored cursor next time, so nothing is lost.
+          inserted += r.inserted;
+          updated += r.updated;
+          softDeleted += r.softDeleted;
+          deduped += r.deduped;
+          if (r.inserted + r.updated + r.softDeleted > 0) changedStreamHashes.push(stream.configHash);
+          return withCadence({
+            inserted, updated, softDeleted, deduped,
+            polled: true, webhook, changedStreamHashes,
+            deferredUntil: until, orgId: conn.orgId, source: conn.source,
+          });
+        }
         inserted += r.inserted;
         updated += r.updated;
         softDeleted += r.softDeleted;
