@@ -93,7 +93,12 @@ export const instantlyConnector: Connector = {
   },
 
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
-    if (!secret) return true; // No secret configured => accept (verification optional).
+    // Fails CLOSED, for the same reason as Sendblue: injected rows land at
+    // generation 0 and are unreachable by every sweep. Currently unreachable
+    // anyway — the route 202-ignores stream-scoped sources before verifying —
+    // but a fail-open default one routing change away from being live is not a
+    // default worth keeping.
+    if (!secret) return false;
     const provided = headers["x-instantly-signature"];
     if (!provided) return false;
     const normalized = provided.startsWith("sha256=") ? provided.slice("sha256=".length) : provided;

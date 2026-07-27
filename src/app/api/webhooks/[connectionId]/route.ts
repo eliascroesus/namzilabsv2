@@ -55,16 +55,28 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
   const rawBody = await req.text();
   const headers = headersToObject(req.headers);
 
+  // "No secret configured" and "a secret exists but we cannot read it" are
+  // different states, and collapsing them was the whole exposure: a decrypt
+  // failure (rotated ENCRYPTION_KEY, corrupted ciphertext) silently produced
+  // `secret = null`, which the fail-open connectors read as "unauthenticated is
+  // fine". Rows written that way land at generation 0 with a null stream_hash,
+  // which every soft-delete site skips by construction — so they are permanent.
+  //
+  // A configured-but-unreadable secret now fails CLOSED for every connector,
+  // including the deliberately-open catch-hook: an endpoint the operator chose
+  // to protect must not swing open because a key rotation went wrong.
   let secret: string | null = null;
   if (conn.signingSecretEncrypted) {
     try {
       secret = decrypt(conn.signingSecretEncrypted, getEncryptionKey());
     } catch {
-      secret = null;
+      console.error(`[webhook] signing secret unreadable for connection ${conn.id} — rejecting until it is re-set`);
+      return NextResponse.json({ error: "signing secret unreadable" }, { status: 401 });
     }
   }
 
-  if (!connector.verifySignature({ rawBody, headers, secret })) {
+  const verified = connector.verifySignature({ rawBody, headers, secret });
+  if (!verified) {
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
@@ -81,7 +93,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
     source: conn.source,
     headers,
     payload,
-    signatureValid: true,
+    // What actually happened, not a constant. This was hardcoded `true`, so the
+    // provenance trail asserted every stored payload had been verified —
+    // including the ones accepted because no secret was configured at all.
+    signatureValid: secret != null,
   });
 
   // orgId rides along for the processor's per-tenant concurrency cap (C.3).

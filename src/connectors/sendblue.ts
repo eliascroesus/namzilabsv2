@@ -100,7 +100,13 @@ export const sendblueConnector: Connector = {
   authType: "secret",
 
   verifySignature({ headers, secret }: VerifyArgs): boolean {
-    if (!secret) return true; // No secret configured => accept.
+    // Fails CLOSED. This connector is reachable at the inbound route (unlike
+    // gsheets/instantly, which the stream-scoped bail answers first), and rows
+    // it writes land at generation 0 — the append-only class no sweep can ever
+    // retire. An unauthenticated POST would therefore be permanent.
+    // `createConnection` mints a secret for every `instant` source, so an
+    // absent one means something went wrong, not that verification is optional.
+    if (!secret) return false;
     for (const h of SECRET_HEADERS) {
       const value = headers[h];
       if (value && safeEqual(value, secret)) return true;
