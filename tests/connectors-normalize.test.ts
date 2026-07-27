@@ -60,14 +60,35 @@ describe("Instantly normalize", () => {
 });
 
 describe("Sendblue normalize", () => {
-  it("maps outbound DELIVERED -> sms_delivered", () => {
+  /**
+   * ONE row per message. The status used to be part of the id, so a
+   * QUEUED → SENT → DELIVERED lifecycle stored three rows via webhooks and one
+   * via the poll — the row count depended on how the data arrived rather than
+   * on what was true.
+   */
+  it("keys an outbound message on its handle alone, with the stage as a property", () => {
     const [ev] = sendblueConnector.normalize(
       { status: "DELIVERED", message_handle: "h1", to_number: "+15550001111", date_sent: "2026-01-04T00:00:00Z" },
       ctx,
     );
-    expect(ev.eventType).toBe("sms_delivered");
-    expect(ev.eventId).toBe("sendblue:c1:sms_delivered:h1");
+    expect(ev.eventType).toBe("sms_outbound");
+    expect(ev.eventId).toBe("sendblue:c1:h1");
     expect(ev.subject).toBe("+15550001111");
+    expect(ev.properties!.delivery_stage).toBe("delivered");
+    expect(ev.properties!.message_status).toBe("DELIVERED");
+  });
+
+  it("advances through the lifecycle as ONE row, not three", () => {
+    const stages = ["QUEUED", "SENT", "DELIVERED"].map(
+      (status) =>
+        sendblueConnector.normalize(
+          { status, message_handle: "h9", to_number: "+15550001111", date_sent: "2026-01-04T00:00:00Z" },
+          ctx,
+        )[0],
+    );
+    // One id across all three → the upsert updates in place.
+    expect(new Set(stages.map((e) => e.eventId)).size).toBe(1);
+    expect(stages.map((e) => e.properties!.delivery_stage)).toEqual(["queued", "sent", "delivered"]);
   });
   it("maps inbound (no status) -> sms_received", () => {
     const [ev] = sendblueConnector.normalize(

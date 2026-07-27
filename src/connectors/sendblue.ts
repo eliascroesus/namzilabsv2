@@ -261,29 +261,59 @@ function messageDate(msg: Record<string, unknown>): string | null {
   return str(msg["date_sent"]) ?? str(msg["date_received"]) ?? str(msg["date_updated"]) ?? str(msg["created_at"]) ?? null;
 }
 
-/** Shared by the webhook path and the poll: both speak the message shape. */
+/**
+ * Shared by the webhook path and the poll: both speak the message shape.
+ *
+ * ONE ROW PER MESSAGE, keyed on `message_handle` alone.
+ *
+ * The id used to embed the status-derived event type. Sendblue's lifecycle is
+ * QUEUED → SENT → DELIVERED and each stage fires its own webhook, so the same
+ * message produced up to THREE rows via webhooks and exactly one via the poll —
+ * whichever status happened to be live when the poll ran. The row count
+ * depended on how the data arrived rather than on what was true, and "messages
+ * sent" counted a single text up to three times.
+ *
+ * Calendly's booked + canceled pair is the deliberate opposite and stays as it
+ * is: those are two different facts about two different moments, and every path
+ * produces both. A status transition is one fact changing, which is an UPDATE —
+ * and `upsertEvents` already handles that correctly, ratcheting the generation
+ * and clearing any tombstone.
+ *
+ * `status` and the per-stage timestamps live in `properties`, so "delivered
+ * count" is a Filter away and nothing is lost by collapsing the rows.
+ */
 function toCanonical(body: Record<string, unknown>, connectionId: string): CanonicalEvent {
   const status = (str(body["status"]) ?? "").toUpperCase();
   // Inbound "receive" payloads carry no outbound status; outbound status
   // payloads always include a `status`.
   const isInbound = body["is_outbound"] === false || (status === "" && str(body["date_received"]) !== null);
-  const eventType = statusToType(status, isInbound);
   // Sendblue docs: dedupe on message_handle.
   const naturalId = str(body["message_handle"]) ?? str(body["handle"]) ?? str(body["message_id"]) ?? undefined;
-  const eventId = naturalId
-    ? `sendblue:${connectionId}:${eventType}:${naturalId}`
-    : hashId(`sendblue:${connectionId}`, body);
+  const eventId = naturalId ? `sendblue:${connectionId}:${naturalId}` : hashId(`sendblue:${connectionId}`, body);
   const subject =
     str(body["to_number"]) ?? str(body["from_number"]) ?? str(body["number"]) ?? str(body["phone"]) ?? null;
   const occurredAt = parseDate(messageDate(body)) ?? new Date();
-  return { eventId, eventType, subject, occurredAt, properties: body };
+  return {
+    eventId,
+    // Stable for the life of the message: which DIRECTION it went. The stage it
+    // has reached is a property, because it changes.
+    eventType: isInbound ? "sms_received" : "sms_outbound",
+    subject,
+    occurredAt,
+    properties: { ...body, message_status: status || null, delivery_stage: deliveryStage(status, isInbound) },
+  };
 }
 
-function statusToType(status: string, inbound: boolean): string {
-  if (inbound) return "sms_received";
-  if (status === "DELIVERED") return "sms_delivered";
-  if (status === "SENT") return "sms_sent";
-  if (status === "QUEUED") return "sms_queued";
-  if (status === "ERROR") return "sms_error";
-  return "sms_sent";
+/**
+ * The lifecycle stage as a plain word, so a Filter step can ask for it without
+ * knowing Sendblue's uppercase vocabulary. Kept alongside the raw `status`
+ * rather than replacing it.
+ */
+function deliveryStage(status: string, inbound: boolean): string {
+  if (inbound) return "received";
+  if (status === "DELIVERED") return "delivered";
+  if (status === "SENT") return "sent";
+  if (status === "QUEUED") return "queued";
+  if (status === "ERROR") return "error";
+  return "sent";
 }

@@ -185,10 +185,9 @@ describe("Sendblue messages poll + webhook health", () => {
     });
     expect(seenHeaders[0]["sb-api-key-id"]).toBe("kid");
     expect(seenHeaders[0]["sb-api-secret-key"]).toBe("ksec");
-    expect(res.records.map((r) => r.eventId)).toEqual([
-      "sendblue:c1:sms_delivered:h2",
-      "sendblue:c1:sms_sent:h1",
-    ]);
+    // Keyed on the handle alone — the status is a property, so a message that
+    // moves QUEUED → SENT → DELIVERED stays one row.
+    expect(res.records.map((r) => r.eventId)).toEqual(["sendblue:c1:h2", "sendblue:c1:h1"]);
     expect(res.nextCursor).toBe(T(30)); // newest seen
   });
 
