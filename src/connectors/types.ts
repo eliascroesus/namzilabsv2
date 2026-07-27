@@ -123,6 +123,31 @@ export type PollResult = {
    * describing its own day — so they need not set it.
    */
   preserveOccurredAt?: boolean;
+  /**
+   * "I stopped because I ran out of page budget, not because the source ran out
+   * of data." There is more to fetch and the next poll will fetch it.
+   *
+   * The runner infers this for stream-scoped sources from its own page loop
+   * (`syncStream`), but CONNECTION-scoped sources have no such loop — the
+   * runner calls `poll` exactly once and the connector's internal walk is
+   * invisible to it. Close and Sendblue both knew they were mid-import and had
+   * no way to say so, which is why a new account watched a number climb for a
+   * day with nothing to explain it.
+   *
+   * Feeds two things: the cadence (a connection with work outstanding must not
+   * be demoted as idle) and the Test's note.
+   */
+  incomplete?: boolean;
+  /**
+   * The span this scan has actually ingested SO FAR — not the span it intends
+   * to cover. Paired with `incomplete` it is what lets the editor say
+   * "covering 12 of 30 days" instead of a bare climbing number.
+   *
+   * Deliberately NOT `retireOutsideWindow`, which is structurally identical and
+   * would be tempting to reuse: that one carries a retire side effect on the
+   * stream path. This field must never delete anything.
+   */
+  covered?: { from: Date; to: Date };
 };
 
 export type RegisterWebhookArgs = {

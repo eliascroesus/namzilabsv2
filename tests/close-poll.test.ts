@@ -150,3 +150,70 @@ describe("Close Event Log poll (Defect #2)", () => {
     expect(calls[0].get("_limit")).toBe("5");
   });
 });
+
+/**
+ * A first sync used to send NO `date_created__gte` at all — and because `hw`
+ * only advances once a window drains, "the first window" was the entire
+ * workspace event log. A mature account walked it 200 records per sweep,
+ * indefinitely, and since every sweep inserted rows the cadence ladder never
+ * demoted it: it just ran for days while the editor showed a climbing number
+ * with nothing to explain it.
+ */
+describe("Close first-sync bound", () => {
+  const DAY = 86_400_000;
+
+  it("bounds a fresh sync to 30 days instead of the whole event log", async () => {
+    const { calls } = mockEventLog(makeLog(10));
+    await closeConnector.poll!(pollArgs(null));
+    const gte = calls[0].get("date_created__gte");
+    expect(gte).not.toBeNull();
+    const back = Math.round((Date.now() - Date.parse(gte!)) / DAY);
+    expect(back).toBe(30);
+  });
+
+  it("pins that floor for the life of the walk, so depth does not depend on how long it takes", async () => {
+    mockEventLog(makeLog(260));
+    const first = await closeConnector.poll!(pollArgs(null));
+    const { calls } = mockEventLog(makeLog(260));
+    await closeConnector.poll!(pollArgs(first.nextCursor));
+    // Recomputing `now - 30d` each sweep would creep the boundary forward while
+    // the walk pages BACKWARDS — the deeper the account, the shallower it lands.
+    const floorOf = (c: URLSearchParams) => c.get("date_created__gte");
+    expect(JSON.parse(first.nextCursor!).floor).toBe(floorOf(calls[0]));
+  });
+
+  it("drops the floor once the window drains — from then on the high-water mark governs", async () => {
+    mockEventLog(makeLog(200));
+    const drained = await closeConnector.poll!(pollArgs(null));
+    expect(drained.nextCursor!.startsWith("{")).toBe(false); // plain hw string
+    // …and the next sweep's bound is hw - overlap, not the 30-day floor.
+    const { calls } = mockEventLog(makeLog(200));
+    await closeConnector.poll!(pollArgs(drained.nextCursor));
+    const back = Math.round((Date.now() - Date.parse(calls[0].get("date_created__gte")!)) / DAY);
+    expect(back).toBeGreaterThan(20); // the fixture's hw is ~26 days old, not 30
+    expect(back).toBeLessThan(30);
+  });
+
+  it("bounds an unbounded walk that was already in flight", async () => {
+    // A cursor stored before the floor existed: mid-walk, no hw, no floor.
+    const legacy = JSON.stringify({ hw: null, cont: "200", maxSeen: null });
+    const { calls } = mockEventLog(makeLog(400));
+    await closeConnector.poll!(pollArgs(legacy));
+    const back = Math.round((Date.now() - Date.parse(calls[0].get("date_created__gte")!)) / DAY);
+    expect(back).toBe(30); // that walk had no end; it has one now
+  });
+
+  it("says it is mid-import, and how far back it has reached", async () => {
+    mockEventLog(makeLog(260));
+    const first = await closeConnector.poll!(pollArgs(null));
+    expect(first.incomplete).toBe(true);
+    // `covered.from` is the OLDEST record ingested so far, not the window floor —
+    // that difference is what "covering 12 of 30 days" is measuring.
+    // 260 events newest-first, 200 ingested → e260 down to e61.
+    expect(first.covered!.from.toISOString()).toBe(new Date(T0 + 61 * 1000).toISOString());
+
+    const { } = mockEventLog(makeLog(260));
+    const second = await closeConnector.poll!(pollArgs(first.nextCursor));
+    expect(second.incomplete).toBeUndefined(); // drained
+  });
+});

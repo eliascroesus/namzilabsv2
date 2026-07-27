@@ -24,6 +24,23 @@ const PAGES_PER_POLL = 4;
  * event_id dedup makes the wider overlap free.
  */
 const OVERLAP_MS = 5 * 60_000;
+/**
+ * How far back a FIRST sync reaches.
+ *
+ * Without this the first poll sent no `date_created__gte` at all — and because
+ * `hw` only advances once a window drains, "the first window" was the entire
+ * workspace event log. A mature account walked it 200 records at a time,
+ * forever, and since every sweep inserted rows the cadence ladder never
+ * demoted it: it simply ran for days. Close is the highest-volume connector
+ * here and a mature workspace is the likeliest day-one account, so the
+ * unbounded case was the default case.
+ *
+ * Thirty days matches Sendblue (`FIRST_SYNC_DAYS` there) and is a floor on the
+ * first REQUEST, not a statement about how much history we will ever hold.
+ * Reaching further back is a one-time historical import — see
+ * PRE_LAUNCH_CHECKLIST.md item 9a (the E.8 backfill lane).
+ */
+const FIRST_SYNC_DAYS = 30;
 
 /**
  * Poll cursor for the Close Event Log. Serialized as the plain high-water
@@ -34,15 +51,37 @@ const OVERLAP_MS = 5 * 60_000;
  * - `cont`    — the provider's `cursor_next`, resuming a partially-walked window.
  * - `maxSeen` — newest `date_created` seen so far in the current walk; becomes
  *               the new `hw` only once the window is fully drained.
+ * - `floor`   — the first sync's lower bound, PINNED when the walk starts.
+ *               Recomputing `now - FIRST_SYNC_DAYS` each sweep would creep the
+ *               boundary forward while the walk pages backwards, so the depth
+ *               reached would depend on how long the walk took. Only meaningful
+ *               before `hw` exists; after that `hw - overlap` governs and this
+ *               is dropped.
+ * - `minSeen` — oldest `date_created` ingested in the current walk. Carries no
+ *               sync semantics at all: it is how far back the import has got,
+ *               so the editor can say "covering 12 of 30 days" instead of
+ *               showing a number that climbs for a day with no explanation.
  */
-type CloseCursor = { hw: string | null; cont: string | null; maxSeen: string | null };
+type CloseCursor = {
+  hw: string | null;
+  cont: string | null;
+  maxSeen: string | null;
+  floor?: string | null;
+  minSeen?: string | null;
+};
 
 function parseCloseCursor(cursor: string | null): CloseCursor {
   if (!cursor) return { hw: null, cont: null, maxSeen: null };
   if (cursor.startsWith("{")) {
     try {
       const parsed = JSON.parse(cursor) as Partial<CloseCursor>;
-      return { hw: parsed.hw ?? null, cont: parsed.cont ?? null, maxSeen: parsed.maxSeen ?? null };
+      return {
+        hw: parsed.hw ?? null,
+        cont: parsed.cont ?? null,
+        maxSeen: parsed.maxSeen ?? null,
+        floor: parsed.floor ?? null,
+        minSeen: parsed.minSeen ?? null,
+      };
     } catch {
       return { hw: null, cont: null, maxSeen: null };
     }
@@ -53,6 +92,15 @@ function parseCloseCursor(cursor: string | null): CloseCursor {
 function serializeCloseCursor(c: CloseCursor): string | null {
   if (c.cont) return JSON.stringify(c);
   return c.maxSeen ?? c.hw;
+}
+
+/** Earlier of two provider date strings (by parsed time; unparseable loses). */
+function earlierDate(a: string | null, b: string | null): string | null {
+  const ta = a ? Date.parse(a) || null : null;
+  const tb = b ? Date.parse(b) || null : null;
+  if (ta == null) return b;
+  if (tb == null) return a;
+  return tb < ta ? b : a;
 }
 
 /** Later of two provider date strings (by parsed time; unparseable loses). */
@@ -134,12 +182,20 @@ export const closeConnector: Connector = {
     const cur = parseCloseCursor(args.cursor);
     const records: CanonicalEvent[] = [];
 
+    // The window's lower bound, decided once per walk and never recomputed.
+    // A cursor from before this bound existed (`{hw:null, cont:"…"}`, an
+    // unbounded walk already in flight) picks one up here, which stops it —
+    // deliberately: that walk had no end.
+    const floor = cur.hw
+      ? new Date((Date.parse(cur.hw) || 0) - OVERLAP_MS)
+      : new Date(cur.floor ? Date.parse(cur.floor) || 0 : Date.now() - FIRST_SYNC_DAYS * 86_400_000);
+    if (!cur.hw) cur.floor = floor.toISOString();
+
     for (let page = 0; page < PAGES_PER_POLL; page++) {
       const params = new URLSearchParams({ _limit: String(EVENT_LOG_LIMIT) });
-      if (cur.hw) {
-        const overlapFloor = new Date((Date.parse(cur.hw) || 0) - OVERLAP_MS);
-        params.set("date_created__gte", overlapFloor.toISOString());
-      }
+      // Sent on EVERY request now. Omitted on a first sync, this asked for the
+      // whole workspace event log and got exactly that.
+      params.set("date_created__gte", floor.toISOString());
       if (cur.cont) params.set("_cursor", cur.cont);
 
       let data: { data: Array<Record<string, unknown>>; cursor_next?: string | null };
@@ -156,20 +212,35 @@ export const closeConnector: Connector = {
 
       for (const event of data.data) {
         records.push(mapEvent(event, args.connectionId));
-        cur.maxSeen = laterDate(cur.maxSeen, str(event["date_created"]) ?? null);
+        const at = str(event["date_created"]) ?? null;
+        cur.maxSeen = laterDate(cur.maxSeen, at);
+        cur.minSeen = earlierDate(cur.minSeen ?? null, at);
       }
 
       const next = data.cursor_next ?? null;
       if (!next || data.data.length === 0) {
-        // Window drained: the high-water mark advances to the newest ingested.
-        return { records, nextCursor: serializeCloseCursor({ hw: cur.maxSeen ?? cur.hw, cont: null, maxSeen: null }) };
+        // Window drained: the high-water mark advances to the newest ingested,
+        // and the first-sync floor/progress are no longer meaningful.
+        return {
+          records,
+          nextCursor: serializeCloseCursor({ hw: cur.maxSeen ?? cur.hw, cont: null, maxSeen: null }),
+          covered: { from: floor, to: new Date() },
+        };
       }
       cur.cont = next;
     }
 
     // Page budget spent mid-window: persist the continuation (hw unchanged) so
     // the next sweep resumes exactly where this one stopped.
-    return { records, nextCursor: serializeCloseCursor(cur) };
+    return {
+      records,
+      nextCursor: serializeCloseCursor(cur),
+      // There IS more to fetch. Without this the connection-scoped path could
+      // not tell a finished import from one that has days left, so the editor
+      // showed a climbing number with nothing to explain it.
+      incomplete: true,
+      covered: { from: new Date(cur.minSeen ? Date.parse(cur.minSeen) || floor.getTime() : floor.getTime()), to: new Date() },
+    };
   },
 
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
