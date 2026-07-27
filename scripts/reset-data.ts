@@ -15,12 +15,42 @@
  * Organizations, users and memberships are never touched at any level.
  */
 import { getDb } from "@/db/client";
-import { orphanedFlowCount, resetData, unsyncedConnectionCount, type ResetLevel } from "@/lib/reset-data";
+import {
+  orphanedFlowCount,
+  resetData,
+  unsyncedConnectionCount,
+  type ReRegisterPlanEntry,
+  type ResetLevel,
+} from "@/lib/reset-data";
 
 function arg(name: string): string | undefined {
   return process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
 }
 const has = (name: string) => process.argv.includes(`--${name}`);
+
+/**
+ * The streams the reset will re-create, named so a human can check them against
+ * the flows they expect to keep syncing. A bare count cannot be checked; this
+ * can.
+ */
+function printReRegisterPlan(plan: ReRegisterPlanEntry[], heading: string) {
+  console.log(`${heading} (${plan.length}):`);
+  if (plan.length === 0) {
+    console.log("  (none)");
+  }
+  plan.forEach((entry, i) => {
+    console.log(`  ${(i + 1).toString().padStart(2)}. ${entry.source} — ${entry.connectionName}`);
+    console.log(`      resource: ${JSON.stringify(entry.config)}`);
+    console.log(`      used by:  ${entry.flows.join(", ")}`);
+  });
+  console.log("");
+  console.log("  Only stream-scoped sources appear here — Calendly, Google Sheets, Google");
+  console.log("  Calendar and Instantly. Close, Sendblue and catch-hook connections sync at");
+  console.log("  the CONNECTION level, have no stream row, and are restored by the re-arm");
+  console.log("  above instead. A flow that reads only those will never be listed, and that");
+  console.log("  is correct rather than a miss.");
+  console.log("");
+}
 
 async function main() {
   const raw = arg("level") ?? "data";
@@ -65,11 +95,12 @@ async function main() {
       console.log("    name are untouched. `sync_generation` is deliberately LEFT CLIMBING — resetting");
       console.log("    it while any event row survived would strand those rows above the current");
       console.log("    generation, where nothing can update or retire them.");
-      console.log("  • Re-registers source_streams from each flow's saved graph. Without this,");
+      console.log(`  • Re-registers ${r.streamsReRegistered} source_stream(s) from each flow's saved graph. Without this,`);
       console.log("    stream-scoped connections (Calendly, Sheets, Calendar, Instantly) would stay");
       console.log("    dark until a human opened every flow, because only a flow save or a Test");
       console.log("    creates a stream row.");
       console.log("");
+      printReRegisterPlan(r.reRegisterPlan, "STREAMS THAT WILL BE RE-REGISTERED");
     }
     console.log("EXPECT AFTER APPLYING:");
     console.log("  • Dashboard tiles empty until the next sweep syncs data and recompute runs.");
@@ -83,6 +114,13 @@ async function main() {
   }
 
   console.log(`Re-armed ${r.connectionsRearmed} connection(s); re-registered ${r.streamsReRegistered} stream(s).`);
+  if (level === "data") printReRegisterPlan(r.reRegisterPlan, "STREAMS RE-REGISTERED");
+  if (r.streamsReRegistered !== r.reRegisterPlan.length) {
+    console.log(
+      `NOTE: ${r.reRegisterPlan.length - r.streamsReRegistered} of these already existed, so only ` +
+        `${r.streamsReRegistered} row(s) were created. That is what a resumed run looks like — the end state is the same.`,
+    );
+  }
   const orphans = await orphanedFlowCount(db);
   const unsynced = await unsyncedConnectionCount(db);
   if (orphans > 0) console.log(`WARNING: ${orphans} flow(s) reference a connection that no longer exists — re-point their Get data step.`);

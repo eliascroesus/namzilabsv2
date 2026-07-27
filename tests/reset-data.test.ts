@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
-import { connections, events, flowResults, flows, metrics, rawEvents, sourceStreams, syncState } from "@/db/schema";
+import { connections, events, flowResults, flowVersions, flows, metrics, rawEvents, sourceStreams, syncState } from "@/db/schema";
 import { resetData } from "@/lib/reset-data";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import type { DB } from "@/db/types";
@@ -77,7 +77,70 @@ describe("reset-data — inspect", () => {
     expect(r.dryRun).toBe(true);
     expect(r.tables.find((t) => t.table === "events")!.rows).toBe(1);
     expect((await db.select().from(events)).length).toBe(1); // still there
-    expect(r.streamsReRegistered).toBe(0);
+  });
+
+  /**
+   * The re-register LIST, not just its count — it is the only part of the report
+   * a human can actually check against the flows they expect to keep syncing,
+   * and it must be available BEFORE anything is written.
+   */
+  it("names the streams it would re-register, and writes nothing to do it", async () => {
+    const r = await resetData(db);
+    expect(r.streamsReRegistered).toBe(1);
+    expect(r.reRegisterPlan).toHaveLength(1);
+    expect(r.reRegisterPlan[0]).toMatchObject({
+      connectionId: connId,
+      source: "gsheets",
+      configHash: streamConfigHash(CFG, "gsheets"),
+      flows: ["F"],
+    });
+    expect(r.reRegisterPlan[0].config).toMatchObject(CFG);
+    // Still exactly the one row seeded — the plan did not create anything.
+    expect((await db.select().from(sourceStreams))).toHaveLength(1);
+  });
+
+  /** What inspect promises is what apply performs. */
+  it("plans the same streams it goes on to create", async () => {
+    const planned = (await resetData(db)).reRegisterPlan;
+    const applied = await resetData(db, { apply: true });
+    expect(applied.reRegisterPlan.map((e) => e.configHash)).toEqual(planned.map((e) => e.configHash));
+    expect(applied.streamsReRegistered).toBe(planned.length);
+  });
+
+  /**
+   * A published flow keeps running against the graph it was published with. If
+   * the reset only restored draft streams, editing a step and leaving the flow
+   * published would silently stop the LIVE version syncing after a wipe.
+   */
+  it("covers the published version's streams, not just the draft's", async () => {
+    const oldCfg = { spreadsheetId: "SHEET_A", range: "Archive" };
+    const published = {
+      nodes: [{ id: "a1", type: "app", data: { config: { connectionId: connId, source: "gsheets", sourceConfig: oldCfg } } }],
+      edges: [],
+    };
+    await db.insert(flowVersions).values({ flowId, orgId: ORG, version: 3, graph: published });
+    await db.update(flows).set({ publishedVersion: 3, status: "published" }).where(eq(flows.id, flowId));
+
+    const hashes = (await resetData(db)).reRegisterPlan.map((e) => e.configHash).sort();
+    expect(hashes).toEqual([streamConfigHash(CFG, "gsheets"), streamConfigHash(oldCfg, "gsheets")].sort());
+  });
+
+  /**
+   * Connection-scoped sources have no stream row at all — they are restored by
+   * the re-arm. Listing one would send a human hunting for a stream that never
+   * existed; omitting it is correct, so assert the omission.
+   */
+  it("omits connection-scoped sources from the plan", async () => {
+    const closeId = await seedConnection(db, { orgId: ORG, source: "close" });
+    const graph = {
+      nodes: [{ id: "c1", type: "app", data: { config: { connectionId: closeId, source: "close", sourceConfig: {} } } }],
+      edges: [],
+    };
+    await db.insert(flows).values({ orgId: ORG, name: "CloseFlow", draftGraph: graph });
+
+    const plan = (await resetData(db)).reRegisterPlan;
+    expect(plan.every((e) => e.source !== "close")).toBe(true);
+    expect(plan).toHaveLength(1);
   });
 });
 

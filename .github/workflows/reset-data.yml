@@ -1,0 +1,201 @@
+name: Reset data
+
+# Manual-only. Wipes synced and computed data so the product can be exercised
+# from a clean state, without anyone running a destructive command from a
+# laptop. RUN_ORDER.md is the step-by-step for a real run.
+#
+# TAKE A NEON BRANCH SNAPSHOT BEFORE mode=apply. These are HARD deletes, not the
+# soft-delete path the sync machinery uses — there is no `deleted_at` to clear
+# afterwards and nothing here is undoable from inside the app.
+#
+# mode=inspect (the default) WRITES NOTHING: it counts every table and prints
+# the streams that would be re-registered. mode=apply runs inspect FIRST and
+# prints it, then performs the deletion — so the log always contains the
+# before-picture, whichever mode was chosen.
+#
+# level=data  keeps connections (credentials + config), metrics, flows and flow
+#             versions. The app stays usable and simply has no data yet.
+# level=all   additionally deletes connections, metrics, flows and flow
+#             versions. Organizations, users and memberships survive at BOTH
+#             levels; there is no level that deletes an account.
+#
+# The confirm input must be typed to match the level, so a mis-click on the
+# level dropdown cannot delete anything.
+on:
+  workflow_dispatch:
+    inputs:
+      level:
+        description: "data = derived data only (keeps connections + flows) | all = also deletes connections, metrics and flows"
+        type: choice
+        required: true
+        default: data
+        options:
+          - data
+          - all
+      mode:
+        description: "inspect = report only, writes nothing | apply = delete"
+        type: choice
+        required: true
+        default: inspect
+        options:
+          - inspect
+          - apply
+      confirm:
+        description: "Only for mode=apply. Type the level again, exactly (data or all). Leave blank for inspect."
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reset-data
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Fail before touching the database, not after. The script enforces this
+      # too; checking here means a mistyped confirm costs a few seconds rather
+      # than a full install plus a connection to production.
+      # Inputs go through the environment rather than `${{ }}` inside the script,
+      # so a free-text `confirm` is compared as a string and can never be
+      # interpolated into the shell.
+      - name: Check the confirmation
+        env:
+          MODE: ${{ inputs.mode }}
+          LEVEL: ${{ inputs.level }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -uo pipefail
+          if [ "$MODE" != "apply" ]; then
+            echo "Running in INSPECT mode — nothing will be written."
+            exit 0
+          fi
+          if [ "$CONFIRM" != "$LEVEL" ]; then
+            echo "::error::confirm must be typed exactly as the level. Got confirm='$CONFIRM' for level='$LEVEL'. Nothing was run."
+            exit 1
+          fi
+          echo "::warning::Running in APPLY mode at level '$LEVEL' — rows will be HARD DELETED. Make sure a Neon branch snapshot exists."
+
+      # Always run inspect, in both modes, so the log records what was there
+      # before anything was deleted. A failure here also stops apply from
+      # running against a database we could not read.
+      - name: Inspect (writes nothing)
+        id: inspect
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+          LEVEL: ${{ inputs.level }}
+        run: |
+          set -uo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Secret DATABASE_MIGRATION_URL is not set on this repository."
+            exit 1
+          fi
+          log="$RUNNER_TEMP/inspect.log"
+          pnpm tsx scripts/reset-data.ts --level="$LEVEL" 2>&1 | tee "$log"
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "log=$log" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Apply
+        id: apply
+        if: ${{ inputs.mode == 'apply' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+          LEVEL: ${{ inputs.level }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -uo pipefail
+          log="$RUNNER_TEMP/apply.log"
+          pnpm tsx scripts/reset-data.ts --level="$LEVEL" --apply --confirm="$CONFIRM" 2>&1 | tee "$log"
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "log=$log" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          set -uo pipefail
+          inspect_log="${{ steps.inspect.outputs.log }}"
+          apply_log="${{ steps.apply.outputs.log }}"
+          inspect_code="${{ steps.inspect.outputs.exit_code }}"
+          apply_code="${{ steps.apply.outputs.exit_code }}"
+          {
+            echo "## Reset data — level: \`${{ inputs.level }}\`, mode: \`${{ inputs.mode }}\`"
+            echo ""
+            if [ -f "$inspect_log" ]; then
+              echo "<details open><summary>Inspect — what was there, and what would be re-registered</summary>"
+              echo ""
+              echo '```'
+              cat "$inspect_log"
+              echo '```'
+              echo ""
+              echo "</details>"
+              echo ""
+            fi
+            if [ -f "$apply_log" ]; then
+              echo "<details open><summary>Apply — what was deleted</summary>"
+              echo ""
+              echo '```'
+              cat "$apply_log"
+              echo '```'
+              echo ""
+              echo "</details>"
+              echo ""
+            fi
+
+            if [ "${{ inputs.mode }}" != "apply" ]; then
+              case "${inspect_code:-1}" in
+                0)
+                  echo "✅ **Inspection complete. Nothing was written.**"
+                  echo ""
+                  echo "Read the table counts and the re-register list above. Check the list against the"
+                  echo "flows you expect to keep syncing — see \`RUN_ORDER.md\` step 4 for what a good and a"
+                  echo "bad reading look like. When it matches, re-run this workflow with **mode = apply**"
+                  echo "and **confirm** typed as \`${{ inputs.level }}\`."
+                  ;;
+                *)
+                  echo "❌ **Could not inspect.** The database URL is missing or unreachable — check that"
+                  echo "the \`DATABASE_MIGRATION_URL\` secret is set and points at the production database."
+                  echo "Nothing was written."
+                  ;;
+              esac
+            else
+              case "${apply_code:-1}" in
+                0)
+                  echo "✅ **Applied.** Rows are gone, connections are re-armed and streams re-registered."
+                  echo ""
+                  echo "Now run the verification checks in \`RUN_ORDER.md\` step 6. Dashboard tiles stay"
+                  echo "empty until the next sweep syncs data and recompute runs — that is expected, not a"
+                  echo "failure."
+                  ;;
+                "")
+                  echo "❌ **Apply never ran.** The confirmation did not match the level, or the inspect"
+                  echo "step could not reach the database. Nothing was deleted."
+                  ;;
+                *)
+                  echo "⚠️ **Apply did not finish.** The script is batched and idempotent, so re-running it"
+                  echo "with the same inputs resumes safely and never double-deletes. Re-run it; if it fails"
+                  echo "the same way twice, restore the Neon branch snapshot rather than continuing."
+                  ;;
+              esac
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
