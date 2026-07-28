@@ -288,6 +288,98 @@ describe("gsheets: an unchanged tab is skipped, not read as empty", () => {
     expect(await live()).toBe(2);
   });
 
+  /**
+   * The values read and the Drive stamp are two separate requests, so there is
+   * a gap between them, and an edit can land in it.
+   *
+   * Stamping AFTER the read stores the contents from before that edit under the
+   * version from after it. The next probe then MATCHES, skips, and the edit is
+   * invisible until the sixth-skip rule forces a read — up to an hour of silent
+   * staleness on a source whose whole contract is that it mirrors the sheet.
+   *
+   * Stamping from BEFORE the read cannot do that: the same race stores
+   * post-edit contents under a pre-edit stamp, so the next probe mismatches and
+   * re-reads. The failure direction has to be "re-read", never "skip".
+   */
+  it("picks up a sheet edited DURING the read on the very next sweep", async () => {
+    const resp = (body: unknown) =>
+      ({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: { get: () => null },
+        json: async () => body,
+        text: async () => JSON.stringify(body),
+      }) as unknown as Response;
+
+    // Sweep 1 — ordinary read, primes a marker.
+    serve("2026-07-01T00:00:00Z");
+    await syncStream(db, await conn(), stream);
+    let primed = (await db.select().from(sourceStreams).where(eq(sourceStreams.id, stream.id)))[0];
+
+    // Sweep 2 — Drive reports a change, so a full read happens; the user edits
+    // the sheet while the values request is in flight.
+    let modified = "2026-07-02T00:00:00Z";
+    let rows = [["name"], ["Alice"], ["Bob"]];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        if (String(input).includes("/drive/v3/files")) return resp({ modifiedTime: modified, version: "1" });
+        const snapshot = { values: rows }; // what this request returns…
+        modified = "2026-07-03T00:00:00Z"; // …and the edit landing right after it
+        rows = [["name"], ["Alice"], ["Bob"], ["Carol"]];
+        return resp(snapshot);
+      }),
+    );
+    await syncStream(db, await conn(), primed);
+    expect(await live()).toBe(2); // the read legitimately captured the pre-edit tab
+
+    // Sweep 3 — Carol MUST arrive. Under a post-read stamp the marker already
+    // reads 07-03, the probe matches it, and she never does.
+    primed = (await db.select().from(sourceStreams).where(eq(sourceStreams.id, stream.id)))[0];
+    let valueReads = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        if (String(input).includes("/drive/v3/files")) return resp({ modifiedTime: modified, version: "1" });
+        valueReads += 1;
+        return resp({ values: rows });
+      }),
+    );
+    await syncStream(db, await conn(), primed);
+
+    expect(valueReads).toBe(1); // not skipped
+    expect(await live()).toBe(3); // Carol
+  });
+
+  it("spends two requests on a changed sheet, not three", async () => {
+    serve("2026-07-01T00:00:00Z");
+    await syncStream(db, await conn(), stream);
+
+    const primed = (await db.select().from(sourceStreams).where(eq(sourceStreams.id, stream.id)))[0];
+    const calls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        calls.push(String(input));
+        const body = String(input).includes("/drive/v3/files") ? { modifiedTime: "2026-07-02T00:00:00Z", version: "1" } : SHEET;
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: { get: () => null },
+          json: async () => body,
+          text: async () => JSON.stringify(body),
+        } as unknown as Response;
+      }),
+    );
+    await syncStream(db, await conn(), primed);
+
+    // The probe already knew the version, so there is nothing to re-fetch.
+    expect(calls.filter((u) => u.includes("/drive/v3/files"))).toHaveLength(1);
+    expect(calls).toHaveLength(2);
+  });
+
   it("reads again the moment Drive reports a change", async () => {
     serve("2026-07-01T00:00:00Z");
     await syncStream(db, await conn(), stream);

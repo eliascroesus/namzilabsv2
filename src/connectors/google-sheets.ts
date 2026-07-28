@@ -63,27 +63,26 @@ export const googleSheetsConnector: Connector = {
     const token = str(args.credentials?.["accessToken"]);
     const spreadsheetId = str(args.config?.["spreadsheetId"]);
 
+    let probed: string | null = null;
     if (token && spreadsheetId && marker) {
       try {
-        const meta = await fetchJson<{ modifiedTime?: string; version?: string }>(
-          `${DRIVE_API}/${encodeURIComponent(spreadsheetId)}?fields=modifiedTime,version`,
-          { headers: { authorization: `Bearer ${token}` } },
-        );
-        const stamp = `${meta.modifiedTime ?? ""}|${meta.version ?? ""}`;
+        probed = await fetchStamp(token, spreadsheetId);
         // `modifiedTime` is the doubtful part of this contract: recalculated
         // formulas (IMPORTRANGE, NOW, anything volatile) can change what a cell
         // READS without the file being edited. So the skip is bounded — every
         // FULL_READ_EVERY skips we read anyway, whatever Drive says. Cheap
         // insurance against a whole class of silently-stale sheet.
-        if (stamp !== "|" && stamp === marker.stamp && marker.skips < FULL_READ_EVERY - 1) {
-          return { records: [], nextCursor: serializeMarker({ stamp, skips: marker.skips + 1 }), unchanged: true };
+        if (probed !== "|" && probed === marker.stamp && marker.skips < FULL_READ_EVERY - 1) {
+          return { records: [], nextCursor: serializeMarker({ stamp: probed, skips: marker.skips + 1 }), unchanged: true };
         }
       } catch {
         // Drive unreachable, or the token lacks the scope: fall through and read
         // the tab. Degrading to the old behaviour is always safe.
       }
     }
-    return readRows(args);
+    // The probe already knows what version we are about to read. Handing it down
+    // is both the correctness fix and one request cheaper — see readRows.
+    return readRows(args, probed);
   },
 
   async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
@@ -145,30 +144,58 @@ function serializeMarker(m: SheetMarker): string {
   return JSON.stringify(m);
 }
 
-async function readRows(args: PollArgs, fromDataRow = 0): Promise<PollResult> {
+/** The file's current `modifiedTime|version`, as one comparable string. */
+async function fetchStamp(token: string, spreadsheetId: string): Promise<string> {
+  const meta = await fetchJson<{ modifiedTime?: string; version?: string }>(
+    `${DRIVE_API}/${encodeURIComponent(spreadsheetId)}?fields=modifiedTime,version`,
+    { headers: { authorization: `Bearer ${token}` } },
+  );
+  return `${meta.modifiedTime ?? ""}|${meta.version ?? ""}`;
+}
+
+/**
+ * `knownStamp` is the version observed BEFORE the values read — from the
+ * caller's probe when there was one.
+ *
+ * THE ORDER IS THE WHOLE POINT. Stamping AFTER the read, as this did, stores
+ * the contents from before an edit under the version from after it: the values
+ * call and the Drive call are two separate requests, and an edit landing in the
+ * gap is captured by the second but not the first. The next poll's probe then
+ * MATCHES the stored stamp, skips, and the edit stays invisible until
+ * FULL_READ_EVERY forces a read — up to an hour of silent staleness on a source
+ * whose entire contract is that it mirrors the sheet.
+ *
+ * Stamping from before the read cannot do that. An edit in the gap now stores
+ * post-edit contents under a PRE-edit stamp, so the next probe mismatches and
+ * re-reads: one redundant read instead of a wrong answer nobody can see. When
+ * a race is unavoidable, the survivable direction is the one that re-reads.
+ *
+ * Cheaper too, incidentally: a changed poll is the probe plus the values read,
+ * where it used to be the probe, the values read, and a second Drive call.
+ */
+async function readRows(args: PollArgs, knownStamp: string | null = null, fromDataRow = 0): Promise<PollResult> {
   const token = str(args.credentials?.["accessToken"]);
   if (!token) throw new Error("gsheets: missing access token");
   const spreadsheetId = str(args.config?.["spreadsheetId"]);
   if (!spreadsheetId) throw new Error("gsheets: missing spreadsheetId in config");
   const range = str(args.config?.["range"]) ?? "Sheet1";
 
+  // Best-effort: without a stamp the next poll simply reads the tab, which is
+  // the old behaviour. Fetched here, before the read, when the caller had no
+  // probe to hand down — a first sync, or a probe that failed.
+  let stamp = knownStamp ?? "";
+  if (!stamp) {
+    try {
+      stamp = await fetchStamp(token, spreadsheetId);
+    } catch {
+      // Leave the marker unset.
+    }
+  }
+
   const data = await fetchJson<{ values?: string[][] }>(
     `${API}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`,
     { headers: { authorization: `Bearer ${token}` } },
   );
-  // Stamp the read with the file's current version, so the next sweep has
-  // something to compare against. Best-effort: without it the next poll simply
-  // reads the tab, which is the old behaviour.
-  let stamp = "";
-  try {
-    const meta = await fetchJson<{ modifiedTime?: string; version?: string }>(
-      `${DRIVE_API}/${encodeURIComponent(spreadsheetId)}?fields=modifiedTime,version`,
-      { headers: { authorization: `Bearer ${token}` } },
-    );
-    stamp = `${meta.modifiedTime ?? ""}|${meta.version ?? ""}`;
-  } catch {
-    // Leave the marker unset.
-  }
   // Keep the previous marker when Drive was unreachable, rather than discarding
   // it: a transient blip should not also cost the NEXT sweep a full read. A
   // stale marker is safe — it only skips when it MATCHES a freshly fetched
