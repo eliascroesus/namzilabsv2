@@ -153,3 +153,61 @@ WHERE table_schema = 'public'
 > that branch is rebased onto main its migration must be regenerated as 0016 —
 > two different 0015s in one journal is a state drizzle cannot resolve. The SQL
 > itself is unaffected; only the file name and journal entry change.
+
+---
+
+## 0016 — `connection_archive` (batch 5 — NOT on main, do not apply yet)
+
+**Belongs to the retention purge on the `batch5/retention-purge` branch, which is
+not merged. Do not apply this until that branch ships.** It is written down here
+so the block exists when it does.
+
+Originally numbered 0015; renumbered after main took 0015 for
+`source_streams.window_floor`. Two migrations sharing an index is a state
+drizzle cannot resolve, and the SQL is unaffected by the rename.
+
+One new table, nothing altered. It records what a purged connection HELD —
+counts, a date range, the resources it read — so that "unrecoverable" does not
+also mean "unexplainable". Someone who reconnects at day 45 and sees a shorter
+history than they remember can otherwise not tell whether their data was
+deleted, never imported, or still arriving.
+
+```sql
+CREATE TABLE IF NOT EXISTS "connection_archive" (
+  "id"                 uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "org_id"             text NOT NULL,
+  "connection_id"      uuid NOT NULL,
+  "source"             text NOT NULL,
+  "name"               text NOT NULL,
+  "config"             jsonb DEFAULT '{}'::jsonb NOT NULL,
+  "stream_hashes"      jsonb DEFAULT '[]'::jsonb NOT NULL,
+  "event_count"        integer DEFAULT 0 NOT NULL,
+  "raw_event_count"    integer DEFAULT 0 NOT NULL,
+  "oldest_occurred_at" timestamp with time zone,
+  "newest_occurred_at" timestamp with time zone,
+  "disabled_at"        timestamp with time zone,
+  "purged_at"          timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "connection_archive_conn_uq"
+  ON "connection_archive" USING btree ("connection_id");
+
+CREATE INDEX IF NOT EXISTS "connection_archive_org_idx"
+  ON "connection_archive" USING btree ("org_id");
+```
+
+The unique index is not decoration: the purge writes the archive before deleting
+anything and must be safe to resume after an interruption without writing a
+second row.
+
+Verify:
+
+```sql
+SELECT
+  (SELECT count(*) FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='connection_archive')      AS table_present,
+  (SELECT count(*) FROM pg_indexes
+    WHERE schemaname='public' AND indexname='connection_archive_conn_uq') AS unique_idx;
+```
+
+Both should be 1.

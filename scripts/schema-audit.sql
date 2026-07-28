@@ -21,11 +21,24 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (17 tables, 161 columns).
+-- QUERY 1 — tables and columns (18 tables, 174 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
   VALUES
+    ('connection_archive', 'id'),
+    ('connection_archive', 'org_id'),
+    ('connection_archive', 'connection_id'),
+    ('connection_archive', 'source'),
+    ('connection_archive', 'name'),
+    ('connection_archive', 'config'),
+    ('connection_archive', 'stream_hashes'),
+    ('connection_archive', 'event_count'),
+    ('connection_archive', 'raw_event_count'),
+    ('connection_archive', 'oldest_occurred_at'),
+    ('connection_archive', 'newest_occurred_at'),
+    ('connection_archive', 'disabled_at'),
+    ('connection_archive', 'purged_at'),
     ('connections', 'id'),
     ('connections', 'org_id'),
     ('connections', 'source'),
@@ -211,12 +224,14 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (29 expected).
+-- QUERY 2 (optional) — indexes (31 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, idx) AS (
   VALUES
+    ('connection_archive', 'connection_archive_conn_uq'),
+    ('connection_archive', 'connection_archive_org_idx'),
     ('connections', 'connections_org_idx'),
     ('connections', 'connections_status_idx'),
     ('dead_letter', 'dead_letter_conn_idx'),
