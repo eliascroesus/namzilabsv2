@@ -19,6 +19,7 @@ import {
   pauseConnection,
   applyObservedRateLimit,
   recordExtraCalls,
+  recordObservedLimit,
   recordProviderError,
   recordSuccess,
   tripBreaker,
@@ -722,5 +723,66 @@ describe("observed rate limits", () => {
 
     const [row] = await db.select().from(connections).where(eq(connections.id, id));
     expect(isPaused(row)).toBe(false);
+  });
+});
+
+/**
+ * 5b's evidence. The catalog governs close, sendblue, gsheets and gcal with a
+ * DEFAULT_RPM of 60 that no provider ever published. Close states its real
+ * limit on every response, and the runner parsed that number and dropped it.
+ */
+describe("F.1 (observed) — keep what the provider said its ceiling was", () => {
+  let db: DB;
+  let close: () => Promise<void>;
+  const ORG = "org_observed";
+
+  beforeEach(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterEach(async () => {
+    await close();
+  });
+
+  const conn = async () => ({ id: await seedConnection(db, { orgId: ORG, source: "close" }), orgId: ORG, source: "close" });
+  const row = async (id: string) => (await db.select().from(usageLedger).where(eq(usageLedger.connectionId, id)))[0];
+
+  it("records the stated limit alongside the calls actually spent", async () => {
+    const c = await conn();
+    await claimCalls(db, c, "*", 1, NOW);
+    await recordObservedLimit(db, c, "*", { limit: 120, remaining: 118, resetSeconds: 30 }, NOW);
+
+    const r = await row(c.id);
+    expect(r.observedLimit).toBe(120);
+    expect(r.calls).toBe(1); // the claim is untouched by the observation
+  });
+
+  it("leaves the window NULL when the provider sent no limit", async () => {
+    const c = await conn();
+    await claimCalls(db, c, "*", 1, NOW);
+    // `remaining` present but no `limit` — the shape most providers send.
+    await recordObservedLimit(db, c, "*", { limit: null, remaining: 5, resetSeconds: 10 }, NOW);
+    await recordObservedLimit(db, c, "*", null, NOW);
+
+    // NULL, not 0. A window with no observation is not a window with a limit of
+    // zero, and anything averaging these later must be able to tell them apart.
+    expect((await row(c.id)).observedLimit).toBeNull();
+  });
+
+  it("records without an existing claim row, and does not invent calls", async () => {
+    const c = await conn();
+    await recordObservedLimit(db, c, "*", { limit: 40, remaining: 39, resetSeconds: 60 }, NOW);
+
+    const r = await row(c.id);
+    expect(r.observedLimit).toBe(40);
+    expect(r.calls).toBe(0);
+  });
+
+  it("changes nothing about whether work is allowed", async () => {
+    const c = await conn();
+    // A stated limit far below our own budget must not start denying claims:
+    // this observes, it does not enforce. Acting on one header is how a
+    // transient value becomes a permanent throttle.
+    await recordObservedLimit(db, c, "*", { limit: 1, remaining: 0, resetSeconds: 60 }, NOW);
+    expect((await claimCalls(db, c, "*", 1, NOW)).allowed).toBe(true);
   });
 });

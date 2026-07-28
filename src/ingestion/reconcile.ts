@@ -4,7 +4,7 @@ import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
 import { isStreamScoped } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
-import { applyObservedRateLimit, claimCalls, isPaused, pauseConnection, recordExtraCalls, recordProviderError, recordSuccess, tripBreaker } from "@/lib/provider-gateway/budget";
+import { applyObservedRateLimit, claimCalls, isPaused, pauseConnection, recordExtraCalls, recordObservedLimit, recordProviderError, recordSuccess, tripBreaker } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { withConnectionSyncLock } from "@/lib/sync/locks";
 import { upsertEvents } from "./pipeline";
@@ -306,6 +306,12 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
       records,
     );
     await upsertSyncCursor(db, connectionId, nextCursor);
+    // Keep what the provider said its ceiling WAS. It was parsed on the way past
+    // and thrown away, and it is the only evidence this system has about a real
+    // provider budget — four of seven sources currently run on a DEFAULT_RPM
+    // nobody published. Recorded, never acted on: a catalog limit should come
+    // from a day of these, not from one header.
+    await recordObservedLimit(db, conn, pollOperation(conn.source, conn.config), rateLimit);
     // The provider's own account of its remaining quota beats our declared
     // guess. Exhausted means exhausted — defer rather than learn it via a 429.
     const observedPause = await applyObservedRateLimit(db, conn, rateLimit);

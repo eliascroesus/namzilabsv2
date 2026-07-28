@@ -150,3 +150,51 @@ describe("pollOperation resolution", () => {
     expect(pollOperation("nope-not-a-source")).toBe("*");
   });
 });
+
+/**
+ * The observation has to survive the SWEEP, not just the unit call.
+ *
+ * This is the same shape of gap that created the problem: `parseRateLimit` read
+ * the provider's stated limit correctly, carried it across the connector seam
+ * correctly, and then the runner dropped it — every piece working, nothing
+ * joining them. So this drives the real reconcile path and reads the ledger.
+ */
+const fakeClose: Connector = {
+  source: "close",
+  authType: "apiKey",
+  verifySignature: () => true,
+  normalize: () => [],
+  poll: async () => ({
+    records: [],
+    nextCursor: null,
+    rateLimit: { limit: 240, remaining: 239, resetSeconds: 12 },
+  }),
+};
+
+describe("what the provider says about its own limit reaches the ledger", () => {
+  afterEach(async () => {
+    registerConnector((await import("@/connectors/close")).closeConnector);
+  });
+
+  it("stores the stated limit from a real sweep", async () => {
+    registerConnector(fakeClose);
+    const connectionId = await seedConnection(db, { source: "close" });
+
+    await reconcileConnection(db, connectionId);
+
+    const rows = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, connectionId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].observedLimit).toBe(240);
+    expect(rows[0].provider).toBe("close");
+  });
+
+  it("leaves it null for a source that states nothing", async () => {
+    registerConnector({ ...fakeClose, poll: async () => ({ records: [], nextCursor: null }) });
+    const connectionId = await seedConnection(db, { source: "close" });
+
+    await reconcileConnection(db, connectionId);
+
+    const rows = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, connectionId));
+    expect(rows[0].observedLimit).toBeNull();
+  });
+});

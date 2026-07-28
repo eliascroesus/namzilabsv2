@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (17 tables, 158 columns).
+-- QUERY 1 — tables and columns (17 tables, 159 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -180,6 +180,7 @@ WITH expected (tbl, col) AS (
     ('usage_ledger', 'calls'),
     ('usage_ledger', 'throttled'),
     ('usage_ledger', 'errors'),
+    ('usage_ledger', 'observed_limit'),
     ('usage_ledger', 'updated_at'),
     ('users', 'id'),
     ('users', 'email'),

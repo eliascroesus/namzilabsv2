@@ -92,6 +92,13 @@
       "when": 1785080839822,
       "tag": "0012_connection_sync_lease",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1785261958577,
+      "tag": "0013_abandoned_moonstone",
+      "breakpoints": true
     }
   ]
 }

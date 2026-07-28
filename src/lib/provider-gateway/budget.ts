@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { connections, usageLedger } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { catalogEntry } from "@/connectors/catalog";
+import type { ObservedRateLimit } from "@/lib/http-client";
 
 /**
  * Workstream F (proactive) — provider-call governance.
@@ -250,6 +251,49 @@ export async function recordExtraCalls(
   if (fleetBudgetFor(conn.source, operation) != null) {
     await chargeBucket(db, { orgId: FLEET_ORG_ID, connectionId: FLEET_CONNECTION_ID, provider: conn.source }, operation, extra, start);
   }
+}
+
+/**
+ * Keep what the provider said its ceiling WAS, so a real number can eventually
+ * replace a guessed one.
+ *
+ * `parseRateLimit` has always read `limit`, `remaining` and `reset`; the runner
+ * acted on `remaining` and dropped `limit`. That discarded value is the only
+ * evidence this system has ever had about a real provider budget. Four of the
+ * seven sources are governed by a `DEFAULT_RPM` of 60 that no provider ever
+ * stated — and Close, the highest-volume one, reports its true limit on every
+ * response.
+ *
+ * Recording rather than acting: nothing changes behaviour on the strength of
+ * one header. A day of these accumulating is what makes the catalog declaration
+ * an observation instead of another guess.
+ *
+ * Writes only when the provider actually sent a limit, so a window with no
+ * observation stays NULL rather than becoming a zero somebody later averages.
+ */
+export async function recordObservedLimit(
+  db: DB,
+  conn: { id: string; orgId: string; source: string },
+  operation = "*",
+  observed: ObservedRateLimit | null | undefined,
+  now = new Date(),
+): Promise<void> {
+  if (observed?.limit == null || !Number.isFinite(observed.limit)) return;
+  const start = windowStart(now);
+  await db
+    .insert(usageLedger)
+    .values({
+      orgId: conn.orgId,
+      connectionId: conn.id,
+      provider: conn.source,
+      operation,
+      windowStart: start,
+      observedLimit: observed.limit,
+    })
+    .onConflictDoUpdate({
+      target: [usageLedger.connectionId, usageLedger.operation, usageLedger.windowStart],
+      set: { observedLimit: observed.limit, updatedAt: new Date() },
+    });
 }
 
 /**

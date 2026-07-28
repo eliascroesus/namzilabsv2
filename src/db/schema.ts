@@ -268,6 +268,22 @@ export const usageLedger = pgTable(
     calls: integer("calls").notNull().default(0),
     throttled: integer("throttled").notNull().default(0),
     errors: integer("errors").notNull().default(0),
+    /**
+     * F.1 (observed) — the ceiling the PROVIDER said it had, from its own
+     * response headers, as opposed to the figure guessed in the catalog.
+     *
+     * Recorded because it was already being parsed and thrown away.
+     * `parseRateLimit` reads `limit`, `remaining` and `reset`; the runner acted
+     * on `remaining` (defer when spent) and dropped `limit` on the floor — which
+     * is the one number needed to declare a real budget. Four of seven sources
+     * are currently governed by a DEFAULT_RPM of 60 that no provider ever
+     * stated, and Close is the one that reports its true limit on every single
+     * response.
+     *
+     * Nullable forever: most providers send no such header, and a window with no
+     * observation is not a window with a limit of zero.
+     */
+    observedLimit: integer("observed_limit"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
