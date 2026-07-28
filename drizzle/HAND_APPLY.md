@@ -153,3 +153,76 @@ WHERE table_schema = 'public'
 > that branch is rebased onto main its migration must be regenerated as 0016 —
 > two different 0015s in one journal is a state drizzle cannot resolve. The SQL
 > itself is unaffected; only the file name and journal entry change.
+
+---
+
+## 0017 — `backfill_jobs` (batch 6 — apply BEFORE the lane's code lands)
+
+**This is the first commit of the backfill batch and nothing reads the table
+yet. That is deliberate.** 0013, 0014 and 0015 all shipped to main alongside
+code that read them, which is the 0012 failure repeated — so this migration goes
+in on its own, ahead of its readers, and the code that depends on it does not
+land until this is applied.
+
+Numbered 0017, not 0016: the unmerged `batch5/retention-purge` branch holds 0016
+(`connection_archive`). Applying 0017 before 0016 exists is fine — they are
+independent, both purely additive, and neither references the other.
+
+One new table, nothing altered.
+
+Why a table rather than columns on `source_streams`: a stream can be deepened
+more than once (30 days, then 90, then a year), and each attempt has its own
+target, outcome and reason for stopping. Columns would overwrite the record of
+the previous attempt, which is exactly the missing bookkeeping that makes an
+interrupted import unresumable.
+
+```sql
+CREATE TABLE IF NOT EXISTS "backfill_jobs" (
+  "id"               uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "org_id"           text NOT NULL,
+  "connection_id"    uuid NOT NULL,
+  "stream_id"        uuid NOT NULL,
+  "stream_hash"      text NOT NULL,
+  "status"           text DEFAULT 'queued' NOT NULL,
+  "target_floor"     timestamp with time zone NOT NULL,
+  "reached_floor"    timestamp with time zone,
+  "checkpoint"       text,
+  "rows_imported"    integer DEFAULT 0 NOT NULL,
+  "row_ceiling"      integer NOT NULL,
+  "detail"           text,
+  "attempts"         integer DEFAULT 0 NOT NULL,
+  "last_progress_at" timestamp with time zone,
+  "started_at"       timestamp with time zone,
+  "finished_at"      timestamp with time zone,
+  "created_at"       timestamp with time zone DEFAULT now() NOT NULL,
+  "updated_at"       timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "backfill_jobs_stream_target_uq"
+  ON "backfill_jobs" USING btree ("stream_id", "target_floor");
+
+CREATE INDEX IF NOT EXISTS "backfill_jobs_status_progress_idx"
+  ON "backfill_jobs" USING btree ("status", "last_progress_at");
+
+CREATE INDEX IF NOT EXISTS "backfill_jobs_org_idx"
+  ON "backfill_jobs" USING btree ("org_id");
+```
+
+The unique index is load-bearing, not tidiness: it is how "never re-import"
+(6.1) is enforced. Asking for a depth this stream already has finds the existing
+job rather than starting a second one, so a second flow on a backfilled stream
+costs zero provider calls and only a DEEPER floor is new work.
+
+Verify:
+
+```sql
+SELECT
+  (SELECT count(*) FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='backfill_jobs')                AS table_present,
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='backfill_jobs')                AS columns_should_be_18,
+  (SELECT count(*) FROM pg_indexes
+    WHERE schemaname='public' AND indexname='backfill_jobs_stream_target_uq')  AS unique_idx;
+```
+
+Expect 1, 18, 1.

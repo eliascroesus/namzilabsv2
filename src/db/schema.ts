@@ -219,6 +219,92 @@ export const events = pgTable(
 );
 
 /**
+ * E.8 / Phase 6 — one unit of historical import for one stream.
+ *
+ * A row per PIECE OF WORK, not a set of columns on `source_streams`, because a
+ * stream can be deepened more than once (30 days, then 90, then a year) and each
+ * attempt has its own target, its own outcome and its own reason for stopping.
+ * Columns on the stream would overwrite the record of the previous one, which is
+ * exactly the bookkeeping whose absence makes an interrupted import
+ * unresumable — the failure mode checklist 9a is written about.
+ *
+ * THE CHECKPOINT IS THE POINT. `reached_floor` and `checkpoint` are what let a
+ * job resume rather than restart: work already committed stays committed, and
+ * the next attempt picks up where the last one stopped. A backfill without them
+ * is a long-running job that loses everything to any interruption.
+ *
+ * HOW THIS RELATES TO `source_streams.window_floor` (6.2), which is the part
+ * that is easy to get wrong: the stream's window is extended to this job's
+ * `target_floor` when the job STARTS, not as it progresses. Mid-import, rows
+ * land older than the stream's declared window, and the next ordinary sweep
+ * declares `retireOutsideWindow` from that window and tombstones them — the 6.2
+ * retire trap, re-appearing while the import is still running. Over-declaring
+ * retires LESS, which is the safe direction; a job that ends partial narrows the
+ * window back to `reached_floor`, where by definition nothing lies outside.
+ */
+export const backfillJobs = pgTable(
+  "backfill_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    connectionId: uuid("connection_id").notNull(),
+    /** `source_streams.id`. Backfill state belongs to the stream, never the flow (6.1). */
+    streamId: uuid("stream_id").notNull(),
+    /** Denormalized so a job is legible without a join, and survives the stream row. */
+    streamHash: text("stream_hash").notNull(),
+    /**
+     * queued | running | complete | partial | failed
+     *
+     * `partial` is a TERMINAL success, and having it is the difference between
+     * an honest lane and one that retries forever: the provider had less
+     * history than asked for, or the row ceiling was reached. The job is done
+     * and did not get everything, which is a fact to display rather than an
+     * error to keep retrying.
+     */
+    status: text("status").notNull().default("queued"),
+    /** How far back this job is trying to reach. */
+    targetFloor: timestamp("target_floor", { withTimezone: true }).notNull(),
+    /** How far back it HAS reached. The checkpoint's depth; null until the first lands. */
+    reachedFloor: timestamp("reached_floor", { withTimezone: true }),
+    /** The connector cursor at `reached_floor` — resume, never restart. */
+    checkpoint: text("checkpoint"),
+    rowsImported: integer("rows_imported").notNull().default(0),
+    /**
+     * 6.3's ceiling, stored PER JOB rather than read from config at display
+     * time, so changing the policy later cannot retroactively alter what a
+     * finished job means.
+     */
+    rowCeiling: integer("row_ceiling").notNull(),
+    /** Why a terminal state is terminal, in language a user can read. */
+    detail: text("detail"),
+    attempts: integer("attempts").notNull().default(0),
+    /**
+     * When the checkpoint last MOVED — not when the row was last written.
+     * 10(b) scans for a job that is `running` and has not progressed, which is
+     * indistinguishable from a healthy one by `updated_at` alone.
+     */
+    lastProgressAt: timestamp("last_progress_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    /**
+     * 6.1, enforced in the database rather than in a check somewhere: asking for
+     * a depth this stream is already importing or has already imported finds the
+     * existing job instead of starting a second one. A second flow on a
+     * backfilled stream therefore costs zero provider calls, and only a request
+     * for a DEEPER floor is new work.
+     */
+    uniqueIndex("backfill_jobs_stream_target_uq").on(t.streamId, t.targetFloor),
+    /** The lane's own work query, and 10(b)'s stuck-job scan, share this shape. */
+    index("backfill_jobs_status_progress_idx").on(t.status, t.lastProgressAt),
+    index("backfill_jobs_org_idx").on(t.orgId),
+  ],
+);
+
+/**
  * A.1 — the field registry. What fields a stream's records actually carry,
  * maintained by the WRITER instead of inferred by reading a sample at query
  * time. Field pickers read this (one indexed lookup, no scan), and E.7 uses

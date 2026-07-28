@@ -21,11 +21,29 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (17 tables, 161 columns).
+-- QUERY 1 — tables and columns (18 tables, 179 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
   VALUES
+    ('backfill_jobs', 'id'),
+    ('backfill_jobs', 'org_id'),
+    ('backfill_jobs', 'connection_id'),
+    ('backfill_jobs', 'stream_id'),
+    ('backfill_jobs', 'stream_hash'),
+    ('backfill_jobs', 'status'),
+    ('backfill_jobs', 'target_floor'),
+    ('backfill_jobs', 'reached_floor'),
+    ('backfill_jobs', 'checkpoint'),
+    ('backfill_jobs', 'rows_imported'),
+    ('backfill_jobs', 'row_ceiling'),
+    ('backfill_jobs', 'detail'),
+    ('backfill_jobs', 'attempts'),
+    ('backfill_jobs', 'last_progress_at'),
+    ('backfill_jobs', 'started_at'),
+    ('backfill_jobs', 'finished_at'),
+    ('backfill_jobs', 'created_at'),
+    ('backfill_jobs', 'updated_at'),
     ('connections', 'id'),
     ('connections', 'org_id'),
     ('connections', 'source'),
@@ -211,12 +229,15 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (29 expected).
+-- QUERY 2 (optional) — indexes (32 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, idx) AS (
   VALUES
+    ('backfill_jobs', 'backfill_jobs_stream_target_uq'),
+    ('backfill_jobs', 'backfill_jobs_status_progress_idx'),
+    ('backfill_jobs', 'backfill_jobs_org_idx'),
     ('connections', 'connections_org_idx'),
     ('connections', 'connections_status_idx'),
     ('dead_letter', 'dead_letter_conn_idx'),
