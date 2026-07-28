@@ -1,0 +1,110 @@
+name: Schema drift check
+
+# Does the production database actually have the tables and columns the
+# deployed code references?
+#
+# READ-ONLY. Three SELECTs over the system catalog. No writes, no DDL, no
+# migrations — this reports, it never repairs.
+#
+# WHY THIS EXISTS. The test suite builds a fresh Postgres and applies every
+# migration on each run, so it proves the code matches the MIGRATION FILES.
+# Production is a database those migrations were applied to BY HAND, which is a
+# different object. Migration 0012 (sync_state.sync_lock_until,
+# sync_state.sync_lock_token) was never applied: withConnectionSyncLock runs on
+# every sync entry point, so the sweep, the Test button and manual re-sync were
+# all throwing in production while 600+ tests stayed green. It was found by
+# accident, by an unrelated script tripping over the column.
+#
+# RUN IT BY HAND straight after applying a migration in the Neon SQL editor —
+# that is the moment this project creates drift, and the moment to confirm it
+# did not. The daily schedule is the backstop, so the worst case is a day rather
+# than "until something else happens to trip over it".
+on:
+  workflow_dispatch:
+  schedule:
+    # 06:20 UTC daily. Off the hour, so it does not queue behind everything else
+    # the world schedules at :00.
+    - cron: "20 6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: schema-drift
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check for drift
+        id: run
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+        run: |
+          set -uo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::Secret DATABASE_MIGRATION_URL is not set on this repository."
+            exit 2
+          fi
+          log="$RUNNER_TEMP/drift.log"
+          pnpm tsx scripts/check-schema-drift.ts 2>&1 | tee "$log"
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          echo "log=$log" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          set -uo pipefail
+          log="${{ steps.run.outputs.log }}"
+          code="${{ steps.run.outputs.exit_code }}"
+          {
+            echo "## Schema drift — code vs. the production database"
+            echo ""
+            if [ -f "$log" ]; then
+              echo '```'
+              cat "$log"
+              echo '```'
+              echo ""
+            fi
+            case "${code:-2}" in
+              0)
+                echo "✅ **No drift.** Every table and column the deployed code references exists."
+                echo ""
+                echo "Any warnings above (type, nullability, missing index) are real differences from"
+                echo "what the code declares, but none of them break a query."
+                ;;
+              1)
+                echo "🚨 **DRIFT — deployed code is referencing schema the database does not have.**"
+                echo ""
+                echo "This is not a warning about the future. Every code path touching what is listed"
+                echo "above is throwing in production right now, and the test suite cannot see it,"
+                echo "because tests build their database from the migration files rather than looking"
+                echo "at this one."
+                echo ""
+                echo "Fix: find the migration in \`drizzle/\` that adds the missing table or column and"
+                echo "apply it. Then re-run this workflow — it writes nothing, so re-running is free."
+                ;;
+              *)
+                echo "❌ **Could not check.** The database URL is missing or unreachable — confirm the"
+                echo "\`DATABASE_MIGRATION_URL\` secret is set and points at production."
+                echo ""
+                echo "Treat this as unknown, not as a pass. Nothing was verified."
+                ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
