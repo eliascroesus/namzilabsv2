@@ -119,3 +119,37 @@ SELECT
 ```
 
 All three counts should be 1, and the last 0.
+
+---
+
+## 0015 — `source_streams.window_floor`
+
+How far back a single stream is supposed to reach, when that is further than
+the connector's default. Additive and nullable; NULL means "the default", which
+is what every stream says until something deliberately deepens it.
+
+It exists because one value has to drive both the request bound and the window
+the connector DECLARES. Split them and a deepened import is soft-deleted by the
+very next completed sweep: Calendly declares `{now-30d, now+90d}` and the runner
+prunes outside it, so 90 days of fetched history would be tombstoned by its own
+declaration.
+
+```sql
+ALTER TABLE "source_streams" ADD COLUMN IF NOT EXISTS "window_floor" timestamp with time zone;
+```
+
+Verify:
+
+```sql
+SELECT count(*) AS should_be_1
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'source_streams'
+  AND column_name = 'window_floor';
+```
+
+> **Numbering note.** The unmerged `batch5/retention-purge` branch also carries a
+> migration numbered 0015 (`connection_archive`), created before this one. When
+> that branch is rebased onto main its migration must be regenerated as 0016 —
+> two different 0015s in one journal is a state drizzle cannot resolve. The SQL
+> itself is unaffected; only the file name and journal entry change.

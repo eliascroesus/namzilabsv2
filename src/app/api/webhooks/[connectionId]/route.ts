@@ -46,11 +46,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
   const connector = getConnector(conn.source);
   if (!connector) return NextResponse.json({ error: "no connector for source" }, { status: 400 });
 
-  // Stream-scoped sources (Calendly, Sheets…) are poll-driven: a connection-level
-  // webhook can't be attributed to a specific flow's stream, so it's acked and ignored.
-  // (Real-time per-stream webhooks — with the stream in the URL — are a later addition.)
-  if (isStreamScoped(conn.source)) return NextResponse.json({ ok: true, ignored: "stream-scoped" }, { status: 202 });
-
   // Read the exact raw bytes BEFORE parsing — HMAC must be computed over these.
   const rawBody = await req.text();
   const headers = headersToObject(req.headers);
@@ -78,6 +73,38 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
   const verified = connector.verifySignature({ rawBody, headers, secret });
   if (!verified) {
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
+  }
+
+  /**
+   * 4b — a stream-scoped source's webhook is a DOORBELL, not a delivery.
+   *
+   * It used to be 202-ignored before verification even ran. The reason was
+   * sound: a connection-level payload carries no stream identity, so there is
+   * nothing to attribute the records to. What was wrong was throwing the signal
+   * away with the payload — an authenticated Calendly POST proves something on
+   * this connection changed, which is worth acting on even when its contents
+   * are not.
+   *
+   * So: sweep, do not ingest. The poll reads with correct stream attribution;
+   * this only decides WHEN.
+   *
+   * Ingesting would be actively harmful rather than merely useless. Records
+   * written from here land at generation 0 with a null `stream_hash`, and every
+   * one of the seven soft-delete sites skips that class by construction — so
+   * they would be permanent, unreachable duplicates of rows the poll writes
+   * properly. That is why nothing is stored and `ingest/raw.received` is not
+   * sent: the only safe thing to do with this payload is to notice it arrived.
+   */
+  if (isStreamScoped(conn.source)) {
+    await promoteToBaseCadence(db, conn.id).catch(() => {});
+    await inngest.send({
+      name: "ingest/reconcile.requested",
+      // No jitter: a doorbell is one connection reacting to one event, not the
+      // cron's herd. The spread exists to de-synchronize a fan-out, and adding
+      // it here would only delay the thing the user just did.
+      data: { connectionId: conn.id, orgId: conn.orgId, priority: 0, jitterMs: 0 },
+    });
+    return NextResponse.json({ ok: true, swept: "connection" }, { status: 202 });
   }
 
   let payload: unknown;

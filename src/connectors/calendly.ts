@@ -250,7 +250,7 @@ type PollCursor = {
 async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Promise<PollResult> {
   const token = token_(args.credentials);
   const target = await resolveTarget(token, args.connectionId, args.config);
-  const cur = parseCursor(rawCursor);
+  const cur = parseCursor(rawCursor, args.windowFloor ?? null);
   const status = statusOf(args.config);
 
   // Whichever side is due, unless it is finished — then the other one. Both
@@ -336,9 +336,21 @@ function drained(cur: PollCursor, side: Side): boolean {
   return side in cur && cur[side] === null;
 }
 
-/** Parse the opaque cursor into a scan state; a fresh/legacy cursor opens a new
- *  window around now. */
-function parseCursor(raw: string | null): PollCursor {
+/**
+ * Parse the opaque cursor into a scan state; a fresh/legacy cursor opens a new
+ * window around now.
+ *
+ * `windowFloor` is the stream's own reach when it has one — a backfill that
+ * deepened it past the default. It feeds the SAME value into the request bound
+ * and into the `retireOutsideWindow` this poll declares, which is the property
+ * 6.2 exists for: were the two derived separately, a deepened import would be
+ * fetched and then immediately tombstoned by its own declaration.
+ *
+ * Only ever widens. A floor NEWER than the default would narrow the window and
+ * silently retire history the stream is supposed to hold, so a nonsensical
+ * value degrades to the default rather than destroying anything.
+ */
+function parseCursor(raw: string | null, windowFloor: Date | null = null): PollCursor {
   if (raw) {
     try {
       const c = JSON.parse(raw) as Partial<PollCursor>;
@@ -359,8 +371,11 @@ function parseCursor(raw: string | null): PollCursor {
     }
   }
   const now = Date.now();
+  const defaultFloor = now - PAST_DAYS * 86_400_000;
+  const requested = windowFloor?.getTime();
+  const floor = requested != null && Number.isFinite(requested) ? Math.min(requested, defaultFloor) : defaultFloor;
   return {
-    floor: new Date(now - PAST_DAYS * 86_400_000).toISOString(),
+    floor: new Date(floor).toISOString(),
     ceil: new Date(now + FUTURE_DAYS * 86_400_000).toISOString(),
     pivot: new Date(now).toISOString(),
     // Recent past first: "the latest records" is the question a preview answers,

@@ -266,6 +266,25 @@ export const sourceStreams = pgTable(
     configHash: text("config_hash").notNull(),
     config: jsonb("config").$type<Record<string, unknown>>().default({}).notNull(),
     cursor: text("cursor"),
+    /**
+     * 6.2 — how far back THIS stream is supposed to reach, when that is further
+     * than the connector's own default.
+     *
+     * The stream owns its window because one value has to drive both the
+     * request bound and the `retireOutsideWindow` the connector declares. Split
+     * them and they disagree: a backfill importing 90 days of past meetings is
+     * soft-deleted by the very next completed sweep, because Calendly declares
+     * `{now-30d, now+90d}` and `syncStream` prunes outside it.
+     *
+     * The rejected alternative was marking backfilled rows exempt from the
+     * retire. That creates a second class of row and makes the declared window
+     * untrue — the stream would claim to cover 30 days while holding 90, and
+     * every later reader would have to know which rows to believe.
+     *
+     * NULL means "the connector's default", which is the right answer for every
+     * stream nobody has deepened.
+     */
+    windowFloor: timestamp("window_floor", { withTimezone: true }),
     status: text("status").notNull().default("active"), // active | error | disabled
     lastPolledAt: timestamp("last_polled_at", { withTimezone: true }),
     lastError: text("last_error"),

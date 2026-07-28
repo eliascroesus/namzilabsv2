@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (17 tables, 160 columns).
+-- QUERY 1 — tables and columns (17 tables, 161 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -139,6 +139,7 @@ WITH expected (tbl, col) AS (
     ('source_streams', 'config_hash'),
     ('source_streams', 'config'),
     ('source_streams', 'cursor'),
+    ('source_streams', 'window_floor'),
     ('source_streams', 'status'),
     ('source_streams', 'last_polled_at'),
     ('source_streams', 'last_error'),

@@ -42,6 +42,19 @@ export type PollArgs = {
    * embed it in eventId so two spreadsheets' row 5 stay distinct.
    */
   streamHash?: string | null;
+  /**
+   * How far back this stream must reach, overriding the connector's default.
+   *
+   * A connector that honours it MUST use the same value for the request bound
+   * AND for the `retireOutsideWindow` it declares. That is the whole point:
+   * split them and a deepened import is retired by the next sweep, because the
+   * declared window still describes the default. One value, both purposes, so
+   * they cannot disagree.
+   *
+   * Null means "your default", which is what every stream says until something
+   * deliberately deepens it.
+   */
+  windowFloor?: Date | null;
 };
 
 /** One choice for a dynamic flow-level field (e.g. a spreadsheet, a tab). */

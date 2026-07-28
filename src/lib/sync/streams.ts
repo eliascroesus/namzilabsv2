@@ -338,6 +338,7 @@ export async function syncStream(
         credentials,
         config: stream.config ?? undefined,
         streamHash: stream.configHash,
+        windowFloor: stream.windowFloor ?? null,
       });
       // Before the `unchanged` return below — a skip still spends the Drive
       // probe, and a probe nobody counts is how a "cheap" sweep stops being one.
@@ -388,6 +389,10 @@ export async function syncStream(
           credentials,
           config: stream.config ?? undefined,
           streamHash: stream.configHash,
+          // 6.2: the STREAM owns how far back it reaches. The connector uses
+          // this for the request bound and for the window it declares, so a
+          // deepened import cannot be retired by its own declaration.
+          windowFloor: stream.windowFloor ?? null,
         });
         await settleUp(providerCalls);
         if (retireOutsideWindow) covered = retireOutsideWindow;

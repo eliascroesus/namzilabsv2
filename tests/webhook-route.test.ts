@@ -28,7 +28,14 @@ let db: DB;
 let close: () => Promise<void>;
 
 vi.mock("@/db/client", () => ({ getDb: () => db }));
-vi.mock("@/inngest/client", () => ({ inngest: { send: async () => {} } }));
+const sent: Array<{ name: string; data: Record<string, unknown> }> = [];
+vi.mock("@/inngest/client", () => ({
+  inngest: {
+    send: async (e: { name: string; data: Record<string, unknown> }) => {
+      sent.push(e);
+    },
+  },
+}));
 
 const { POST } = await import("@/app/api/webhooks/[connectionId]/route");
 
@@ -58,6 +65,7 @@ beforeAll(() => {
 });
 
 beforeEach(async () => {
+  sent.length = 0;
   ({ db, close } = await createTestDb());
 });
 
@@ -133,5 +141,77 @@ describe("inbound webhook authentication", () => {
     // connection now" primitive for anyone who knows the URL.
     expect(after.nextSweepAt?.getTime()).toBe(far.getTime());
     expect(after.consecutiveNoOpSweeps).toBe(40);
+  });
+});
+
+/**
+ * 4b — a stream-scoped source's webhook is a DOORBELL.
+ *
+ * It was 202-ignored before verification even ran, on sound reasoning: a
+ * connection-level payload carries no stream identity, so its records cannot be
+ * attributed. What was wrong was discarding the SIGNAL along with the payload —
+ * an authenticated POST proves this connection changed, and that is worth
+ * acting on even when its contents are not usable.
+ */
+describe("a stream-scoped webhook rings the bell without delivering anything", () => {
+  const sign = (secret: string, body: unknown) => {
+    // Calendly's scheme: HMAC over `${t}.${rawBody}`.
+    const raw = JSON.stringify(body);
+    const t = "1700000000";
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createHmac } = require("node:crypto") as typeof import("node:crypto");
+    const v1 = createHmac("sha256", secret).update(`${t}.${raw}`).digest("hex");
+    return { "calendly-webhook-signature": `t=${t},v1=${v1}` };
+  };
+
+  it("sweeps the connection on an authenticated payload", async () => {
+    const id = await seed({ source: "calendly", secret: "cal_secret" });
+    const body = { event: "invitee.created" };
+
+    const res = await post(id, body, sign("cal_secret", body));
+
+    expect(res.status).toBe(202);
+    const swept = sent.filter((e) => e.name === "ingest/reconcile.requested");
+    expect(swept).toHaveLength(1);
+    expect(swept[0].data).toMatchObject({ connectionId: id, jitterMs: 0 });
+  });
+
+  /**
+   * THE constraint. Records written from here land at generation 0 with a null
+   * `stream_hash`, and every one of the seven soft-delete sites skips that
+   * class by construction — so they would be permanent, unreachable duplicates
+   * of the rows the poll writes properly.
+   */
+  it("stores nothing and never enqueues ingestion", async () => {
+    const id = await seed({ source: "calendly", secret: "cal_secret" });
+    const body = { event: "invitee.created" };
+
+    await post(id, body, sign("cal_secret", body));
+
+    expect(await db.select().from(rawEvents).where(eq(rawEvents.connectionId, id))).toHaveLength(0);
+    expect(sent.filter((e) => e.name === "ingest/raw.received")).toHaveLength(0);
+  });
+
+  /**
+   * The doorbell is only worth anything if it is authenticated. Anyone who can
+   * POST to the URL could otherwise force a sweep on demand — a free way to
+   * spend someone else's provider budget.
+   */
+  it("does not sweep on an unsigned payload", async () => {
+    const id = await seed({ source: "calendly", secret: "cal_secret" });
+
+    const res = await post(id, { event: "invitee.created" });
+
+    expect(res.status).toBe(401);
+    expect(sent.filter((e) => e.name === "ingest/reconcile.requested")).toHaveLength(0);
+  });
+
+  it("does not sweep when the secret cannot be read", async () => {
+    const id = await seed({ source: "calendly", secretCiphertext: "not-decryptable" });
+
+    const res = await post(id, { event: "invitee.created" });
+
+    expect(res.status).toBe(401);
+    expect(sent).toHaveLength(0);
   });
 });

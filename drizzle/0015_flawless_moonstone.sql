@@ -1,0 +1,1 @@
+ALTER TABLE "source_streams" ADD COLUMN "window_floor" timestamp with time zone;
