@@ -219,6 +219,55 @@ export const events = pgTable(
 );
 
 /**
+ * What a purged connection HELD, after its data is gone.
+ *
+ * Phase 2 hard-deletes a disconnected connection's events at thirty days. That
+ * is unrecoverable by design — but "unrecoverable" should not also mean
+ * "unexplainable". Without this row, a user who reconnects at day 45 and sees
+ * a shorter history than they remember has no way to tell whether their data
+ * was deleted, never imported, or is still arriving.
+ *
+ * A summary, deliberately, and not a compressed copy: counts, a date range, the
+ * resources it read. It answers "what was here and when did it go" and cannot
+ * answer anything a per-row query could, which is the honest bargain — keeping
+ * a partial copy would make every count in the product ambiguous about whether
+ * archived rows are in it.
+ *
+ * Deliberately NOT the alternative that was considered: nulling `properties`
+ * off retained rows. A row whose custom fields have been emptied reads as a
+ * real row with empty values, so every filter over it silently changes answer —
+ * and it would make something other than `upsertEvents` a writer of event
+ * content.
+ */
+export const connectionArchive = pgTable(
+  "connection_archive",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    /** The id the connection HAD. Not a foreign key: the row it named is gone. */
+    connectionId: uuid("connection_id").notNull(),
+    source: text("source").notNull(),
+    name: text("name").notNull(),
+    /** Its resource config, and the stream hashes it synced under. */
+    config: jsonb("config").$type<Record<string, unknown>>().default({}).notNull(),
+    streamHashes: jsonb("stream_hashes").$type<string[]>().default([]).notNull(),
+    eventCount: integer("event_count").notNull().default(0),
+    rawEventCount: integer("raw_event_count").notNull().default(0),
+    oldestOccurredAt: timestamp("oldest_occurred_at", { withTimezone: true }),
+    newestOccurredAt: timestamp("newest_occurred_at", { withTimezone: true }),
+    /** When the user disconnected it — the clock the purge ran on. */
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
+    purgedAt: timestamp("purged_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    // One archive row per connection: the purge writes it before deleting, and
+    // must be safe to resume after an interruption without writing a second.
+    uniqueIndex("connection_archive_conn_uq").on(t.connectionId),
+    index("connection_archive_org_idx").on(t.orgId),
+  ],
+);
+
+/**
  * A.1 — the field registry. What fields a stream's records actually carry,
  * maintained by the WRITER instead of inferred by reading a sample at query
  * time. Field pickers read this (one indexed lookup, no scan), and E.7 uses

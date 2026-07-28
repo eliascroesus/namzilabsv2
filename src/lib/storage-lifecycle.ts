@@ -24,33 +24,54 @@ const DELETE_BATCH = 5_000;
 
 export type RetentionResult = { deliveryLog: number; testRuns: number };
 
+/**
+ * Wall-clock ceiling for one run, replacing the old one-batch-and-stop.
+ *
+ * A single 5,000-row batch per table per night is not a retention policy on a
+ * table that accumulates faster than that: it falls behind by the difference,
+ * every night, forever, and says nothing while doing it. Draining under a time
+ * budget is bounded in the dimension that actually matters (how long the nightly
+ * job may hold resources) rather than in rows, and stays safe to interrupt
+ * because each batch commits on its own.
+ */
+const DEFAULT_BUDGET_MS = 15_000;
+
 export async function pruneOperationalTables(
   db: DB,
-  opts: { deliveryLogDays?: number; testRunDays?: number; now?: Date } = {},
+  opts: { deliveryLogDays?: number; testRunDays?: number; now?: Date; budgetMs?: number } = {},
 ): Promise<RetentionResult> {
   const now = opts.now ?? new Date();
   const deliveryCutoff = new Date(now.getTime() - (opts.deliveryLogDays ?? 30) * DAY_MS);
   const testCutoff = new Date(now.getTime() - (opts.testRunDays ?? 30) * DAY_MS);
+  // Real elapsed time, not the injected `now` — `now` fixes the cutoffs for the
+  // whole run and must not move while it drains.
+  const end = Date.now() + (opts.budgetMs ?? DEFAULT_BUDGET_MS);
 
-  const oldDelivery = await db
-    .select({ id: deliveryLog.id })
-    .from(deliveryLog)
-    .where(lt(deliveryLog.createdAt, deliveryCutoff))
-    .limit(DELETE_BATCH);
-  if (oldDelivery.length > 0) {
-    await db.delete(deliveryLog).where(inArray(deliveryLog.id, oldDelivery.map((r) => r.id)));
-  }
+  const drain = async (
+    select: (limit: number) => Promise<Array<{ id: string }>>,
+    remove: (ids: string[]) => Promise<void>,
+  ): Promise<number> => {
+    let removed = 0;
+    while (Date.now() < end) {
+      const batch = await select(DELETE_BATCH);
+      if (batch.length === 0) break;
+      await remove(batch.map((r) => r.id));
+      removed += batch.length;
+      if (batch.length < DELETE_BATCH) break;
+    }
+    return removed;
+  };
 
-  const oldRuns = await db
-    .select({ id: testRuns.id })
-    .from(testRuns)
-    .where(lt(testRuns.createdAt, testCutoff))
-    .limit(DELETE_BATCH);
-  if (oldRuns.length > 0) {
-    await db.delete(testRuns).where(inArray(testRuns.id, oldRuns.map((r) => r.id)));
-  }
+  const deliveryLogRemoved = await drain(
+    (limit) => db.select({ id: deliveryLog.id }).from(deliveryLog).where(lt(deliveryLog.createdAt, deliveryCutoff)).limit(limit),
+    async (ids) => void (await db.delete(deliveryLog).where(inArray(deliveryLog.id, ids))),
+  );
+  const testRunsRemoved = await drain(
+    (limit) => db.select({ id: testRuns.id }).from(testRuns).where(lt(testRuns.createdAt, testCutoff)).limit(limit),
+    async (ids) => void (await db.delete(testRuns).where(inArray(testRuns.id, ids))),
+  );
 
-  return { deliveryLog: oldDelivery.length, testRuns: oldRuns.length };
+  return { deliveryLog: deliveryLogRemoved, testRuns: testRunsRemoved };
 }
 
 /**
