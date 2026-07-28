@@ -63,3 +63,59 @@ WHERE table_schema = 'public'
 
 After about a day of traffic, `scripts/observed-limits.sql` reports what the
 providers actually said.
+
+---
+
+## 0014 — `connections.disabled_at`, plus two indexes retention needs
+
+Three additive changes; none rewrites existing data.
+
+`connections.disabled_at` is what makes disconnect reversible. Disconnecting
+used to hard-delete the row, and because every connector namespaces its
+`eventId` with the connection UUID, re-adding the account imported a SECOND
+complete copy of the dataset rather than restoring the first. Keeping the row
+keeps the UUID, so reconnecting is free.
+
+The two indexes are for the retention pass that follows. Every existing index on
+`events` involving `deleted_at` is `WHERE deleted_at IS NULL` — which is exactly
+the set a purge does NOT want — so finding tombstones older than a cutoff had no
+supporting index at all and meant a sequential scan of the largest table here.
+
+```sql
+ALTER TABLE "connections" ADD COLUMN IF NOT EXISTS "disabled_at" timestamp with time zone;
+
+CREATE INDEX IF NOT EXISTS "events_deleted_idx"
+  ON "events" USING btree ("deleted_at")
+  WHERE deleted_at is not null;
+
+CREATE INDEX IF NOT EXISTS "raw_events_conn_received_idx"
+  ON "raw_events" USING btree ("connection_id", "received_at");
+```
+
+Both `CREATE INDEX` statements take a write lock on their table for the duration.
+On a large `events` table use `CREATE INDEX CONCURRENTLY` instead — it cannot run
+inside a transaction block, so run it on its own, and re-check with the verify
+query below because a concurrent build can fail and leave an INVALID index
+behind:
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "events_deleted_idx"
+  ON "events" USING btree ("deleted_at")
+  WHERE deleted_at is not null;
+```
+
+Verify:
+
+```sql
+SELECT
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='connections' AND column_name='disabled_at')  AS disabled_at_col,
+  (SELECT count(*) FROM pg_indexes
+    WHERE schemaname='public' AND indexname='events_deleted_idx')                            AS events_idx,
+  (SELECT count(*) FROM pg_indexes
+    WHERE schemaname='public' AND indexname='raw_events_conn_received_idx')                  AS raw_events_idx,
+  (SELECT count(*) FROM pg_index WHERE NOT indisvalid
+     AND indexrelid::regclass::text IN ('events_deleted_idx','raw_events_conn_received_idx')) AS invalid_should_be_0;
+```
+
+All three counts should be 1, and the last 0.

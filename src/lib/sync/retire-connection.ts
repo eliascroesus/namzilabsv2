@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { events } from "@/db/schema";
 import type { DB } from "@/db/types";
 
@@ -72,4 +72,46 @@ export async function retireConnectionEvents(db: DB, orgId: string, connectionId
     if (batch.length < BATCH) break;
   }
   return retired;
+}
+
+/**
+ * Un-tombstone a reconnected connection's events. The exact inverse of
+ * `retireConnectionEvents`, and it lives beside it so the two cannot drift.
+ *
+ * This is what makes reconnecting free. The rows were never destroyed and the
+ * connection UUID never changed, so every `eventId` still matches what the
+ * connector would produce today — clearing `deleted_at` restores the dataset in
+ * place, with no provider call and no second copy.
+ *
+ * Matches only rows that are actually dead, which keeps it idempotent, and
+ * scoped to the org for the same reason the retire is.
+ *
+ * The honest limit: this restores what is still THERE. Once a purge has
+ * hard-deleted rows (Phase 2 half B, at thirty days), there is nothing to
+ * restore and reconnecting re-imports from the provider instead — which is why
+ * the disconnect confirmation has to state that date.
+ */
+export async function restoreConnectionEvents(db: DB, orgId: string, connectionId: string): Promise<number> {
+  let restored = 0;
+  for (;;) {
+    const batch = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.orgId, orgId), eq(events.connectionId, connectionId), isNotNull(events.deletedAt)))
+      .limit(BATCH);
+    if (batch.length === 0) break;
+    const done = await db
+      .update(events)
+      .set({ deletedAt: null })
+      .where(
+        inArray(
+          events.id,
+          batch.map((r) => r.id),
+        ),
+      )
+      .returning({ id: events.id });
+    restored += done.length;
+    if (batch.length < BATCH) break;
+  }
+  return restored;
 }

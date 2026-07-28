@@ -1,13 +1,13 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { connections, sourceStreams } from "@/db/schema";
 import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
 import { getConnector } from "@/connectors/registry";
 import { catalogEntry } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
-import { retireConnectionEvents } from "@/lib/sync/retire-connection";
+import { restoreConnectionEvents, retireConnectionEvents } from "@/lib/sync/retire-connection";
 import { inngest } from "@/inngest/client";
 import type { CanonicalEvent } from "@/connectors/types";
 
@@ -128,27 +128,105 @@ export async function updateConnectionName(orgId: string, id: string, name: stri
 }
 
 /**
- * Remove a connection the user no longer wants, and take its data out of
- * circulation with it.
+ * Take a connection the user no longer wants out of circulation — WITHOUT
+ * destroying it.
  *
- * Order is deliberate: retire the events FIRST. `events.connection_id` has no
- * foreign key, so if the connection row went first and this then failed, the
- * rows would be orphaned — live, still counted org-wide by classic metrics, and
- * with no connection left in the UI to retry the removal from. Retiring first
- * means a failure leaves the connection in place and the operation simply
- * re-runnable.
+ * This used to hard-delete the connection row and its streams. That made
+ * reconnecting impossible to do well rather than merely inconvenient: every
+ * connector namespaces its `eventId` with the connection UUID
+ * (`calendly.ts`, `close.ts`, `google-sheets.ts`, …), so a delete-and-re-add
+ * imports a SECOND complete copy of the dataset under new ids, with the old
+ * copy tombstoned beside it. Matching the provider account afterwards cannot
+ * merge them; it can only tell you there are two.
  *
- * Events are SOFT-deleted (see retireConnectionEvents); the connection row and
- * its streams are removed outright, since their cursors and credentials are
- * meaningless once the integration is gone.
+ * Keeping the row keeps the UUID, and that is the whole trick. `status` already
+ * supported `disabled` and was already honoured by the webhook route and the
+ * sweep — nothing ever wrote it. So disconnecting sets it, and reconnecting is
+ * `status = active` plus clearing the tombstones, with no provider call and no
+ * re-import.
+ *
+ * Order is still deliberate: retire the events FIRST. `events.connection_id`
+ * has no foreign key, so a failure after the connection was already gone would
+ * strand live rows that classic org-wide metrics still count, with nothing left
+ * in the UI to retry from. Retiring first means a failure is simply re-runnable.
+ *
+ * Streams are disabled rather than deleted, for the same reason as the row: a
+ * stream carries the resource a flow declared, and re-deriving it on reconnect
+ * would mean re-reading every flow graph. The sweep already filters on
+ * `status`, so a disabled stream costs nothing.
  */
-export async function deleteConnection(orgId: string, id: string): Promise<{ retiredEvents: number }> {
+export async function disableConnection(orgId: string, id: string): Promise<{ retiredEvents: number }> {
   const db = getDb();
   const retiredEvents = await retireConnectionEvents(db, orgId, id);
-  await db.delete(connections).where(and(eq(connections.id, id), eq(connections.orgId, orgId)));
-  // A connection's synced streams die with it (their cursors are meaningless without auth).
-  await db.delete(sourceStreams).where(and(eq(sourceStreams.connectionId, id), eq(sourceStreams.orgId, orgId)));
+  const now = new Date();
+  await db
+    .update(connections)
+    .set({
+      status: "disabled",
+      // Stamped only on the way IN to disabled, never refreshed, because it is
+      // the clock a later purge runs on: re-stamping it on a second disconnect
+      // of an already-disabled connection would reset the retention window.
+      disabledAt: now,
+      // A disabled connection is not paused, breaker-tripped or mid-import.
+      // Leaving that state behind would make the connection page describe a
+      // retry that is never going to happen.
+      pausedUntil: null,
+      pausedReason: null,
+      nextSweepAt: null,
+      updatedAt: now,
+    })
+    .where(and(eq(connections.id, id), eq(connections.orgId, orgId), ne(connections.status, "disabled")));
+  await db
+    .update(sourceStreams)
+    .set({ status: "disabled", updatedAt: now })
+    .where(and(eq(sourceStreams.connectionId, id), eq(sourceStreams.orgId, orgId)));
   return { retiredEvents };
+}
+
+/**
+ * Put a disconnected integration back, exactly as it was.
+ *
+ * Free, because nothing was destroyed: the connection UUID survived, so every
+ * event this connection ever wrote still carries ids that match what its
+ * connector would produce today. Clearing the tombstones restores them in
+ * place. No provider call, no backfill, no duplicate dataset.
+ *
+ * Credentials are NOT touched. A user reconnecting because a token expired
+ * still has to re-authorise, and that path already exists; this is about the
+ * data, and about not making them choose between keeping their history and
+ * fixing their auth.
+ */
+export async function reconnectConnection(orgId: string, id: string): Promise<{ restoredEvents: number }> {
+  const db = getDb();
+  const now = new Date();
+  const rows = await db
+    .update(connections)
+    .set({
+      status: "active",
+      disabledAt: null,
+      // Re-armed the same way a reset re-arms: a connection that has been
+      // sitting disabled must sweep on the next tick rather than inherit a
+      // stale schedule.
+      syncStatus: "synced",
+      lastError: null,
+      consecutiveFailures: 0,
+      consecutiveNoOpSweeps: 0,
+      nextSweepAt: null,
+      updatedAt: now,
+    })
+    .where(and(eq(connections.id, id), eq(connections.orgId, orgId), eq(connections.status, "disabled")))
+    .returning({ id: connections.id });
+  // Nothing was disabled — either it is already active or it is not ours. Say
+  // nothing happened rather than un-tombstoning rows on a connection whose
+  // disconnect is still in progress.
+  if (rows.length === 0) return { restoredEvents: 0 };
+
+  await db
+    .update(sourceStreams)
+    .set({ status: "active", updatedAt: now })
+    .where(and(eq(sourceStreams.connectionId, id), eq(sourceStreams.orgId, orgId), eq(sourceStreams.status, "disabled")));
+  const restoredEvents = await restoreConnectionEvents(db, orgId, id);
+  return { restoredEvents };
 }
 
 /** Decrypt the connection's signing secret for display (manual webhook setup). */

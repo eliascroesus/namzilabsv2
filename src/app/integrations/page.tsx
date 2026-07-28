@@ -10,7 +10,11 @@ export const dynamic = "force-dynamic";
 export default async function IntegrationsPage() {
   const { orgId, userId, auth } = await requireOrg();
   const connected = await listConnections(orgId).catch(() => []);
+  // Disconnected connections still exist (their rows and data survive so they
+  // can be reconnected), but they are not CONNECTED — counting them would tell
+  // someone a source is live when nothing is syncing from it.
   const countBySource = connected.reduce<Record<string, number>>((acc, c) => {
+    if (c.status === "disabled") return acc;
     acc[c.source] = (acc[c.source] ?? 0) + 1;
     return acc;
   }, {});

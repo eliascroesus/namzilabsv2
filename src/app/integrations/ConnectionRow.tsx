@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CopyField } from "@/components/copy-field";
-import { renameConnectionAction, disconnectAction } from "./actions";
+import { renameConnectionAction, disconnectAction, reconnectAction } from "./actions";
 
 /**
  * One row in "Your connections": links to the connection page, with an inline
@@ -58,12 +58,42 @@ export function ConnectionRow({
     router.refresh();
   };
 
+  // A disconnected connection is not gone — its row, its streams and its
+  // (tombstoned) events all survive. Showing it with a Reconnect button is what
+  // stops someone re-adding the account instead, which imports a second copy of
+  // the whole dataset rather than restoring this one.
+  if (status === "disabled") {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <span className="min-w-0 text-sm text-neutral-500">
+          <span className="font-medium text-neutral-700">{name}</span>
+          <span className="ml-2 rounded bg-neutral-100 px-1.5 py-0.5 text-xs">Disconnected</span>
+          <span className="ml-2">Not syncing. Its records are hidden from dashboards and flows.</span>
+        </span>
+        <form action={reconnectAction} className="shrink-0">
+          <input type="hidden" name="id" value={id} />
+          <button
+            type="submit"
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50"
+          >
+            Reconnect
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   if (confirming) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 bg-red-50/60 px-4 py-3">
         <p className="min-w-0 text-sm text-neutral-700">
-          Remove <span className="font-medium">{name}</span>? Its synced records stop appearing in dashboards
-          and flows, and it stops syncing. Any flow reading from it will have no data.
+          Disconnect <span className="font-medium">{name}</span>? Its synced records stop appearing in
+          dashboards and flows, and it stops syncing. Any flow reading from it will have no data.
+          {/* The disconnect is reversible and the user has to be told so, or
+              they will do the destructive thing instead: add the account again,
+              which imports a second copy of everything rather than restoring
+              this one. */}{" "}
+          <span className="font-medium">You can reconnect it later and your data comes back.</span>
         </p>
         <div className="flex shrink-0 items-center gap-2">
           <button
@@ -79,7 +109,7 @@ export function ConnectionRow({
               type="submit"
               className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
             >
-              Remove
+              Disconnect
             </button>
           </form>
         </div>
@@ -143,8 +173,8 @@ export function ConnectionRow({
           type="button"
           onClick={() => setConfirming(true)}
           className="rounded p-1 text-neutral-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 focus:opacity-100 focus-visible:outline focus-visible:outline-2 group-hover:opacity-100"
-          title={`Remove ${name}`}
-          aria-label={`Remove ${name}`}
+          title={`Disconnect ${name}`}
+          aria-label={`Disconnect ${name}`}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
             <path d="M2.5 4h11M6.5 4V2.8h3V4M4 4l.6 9.2h6.8L12 4M6.6 6.5v4.3M9.4 6.5v4.3" />

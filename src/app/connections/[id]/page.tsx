@@ -7,6 +7,7 @@ import { CopyField } from "@/components/copy-field";
 import { catalogEntry, syncGuarantee } from "@/connectors/catalog";
 import {
   disconnectAction,
+  reconnectAction,
   syncNewAction,
   fullResyncAction,
   reprocessAction,
@@ -182,15 +183,36 @@ export default async function ConnectionPage({
         </section>
 
         <div className="mt-8 flex items-center justify-end gap-4">
-          <p className="text-right text-xs text-neutral-500">
-            Stops syncing and takes this connection&rsquo;s records out of your dashboards and flows.
-          </p>
-          <form action={disconnectAction}>
-            <input type="hidden" name="id" value={conn.id} />
-            <button className="shrink-0 rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
-              Disconnect
-            </button>
-          </form>
+          {conn.status === "disabled" ? (
+            <>
+              <p className="text-right text-xs text-neutral-500">
+                Disconnected. Its records are hidden, not deleted &mdash; reconnecting brings them back with no
+                re-import.
+              </p>
+              <form action={reconnectAction}>
+                <input type="hidden" name="id" value={conn.id} />
+                <button className="shrink-0 rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
+                  Reconnect
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <p className="text-right text-xs text-neutral-500">
+                Stops syncing and hides this connection&rsquo;s records from dashboards and flows.
+                {/* Reversibility is the whole point of keeping the row, and the
+                    user has to know it, or they will re-add the account and get
+                    a second copy of everything instead of this one back. */}{" "}
+                You can reconnect it later and the data returns.
+              </p>
+              <form action={disconnectAction}>
+                <input type="hidden" name="id" value={conn.id} />
+                <button className="shrink-0 rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
+                  Disconnect
+                </button>
+              </form>
+            </>
+          )}
         </div>
       </main>
     </>

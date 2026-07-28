@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (17 tables, 159 columns).
+-- QUERY 1 — tables and columns (17 tables, 160 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -46,6 +46,7 @@ WITH expected (tbl, col) AS (
     ('connections', 'next_sweep_at'),
     ('connections', 'consecutive_no_op_sweeps'),
     ('connections', 'webhook_healthy_at'),
+    ('connections', 'disabled_at'),
     ('connections', 'created_at'),
     ('connections', 'updated_at'),
     ('dead_letter', 'id'),
@@ -209,7 +210,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (27 expected).
+-- QUERY 2 (optional) — indexes (29 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -225,6 +226,7 @@ WITH expected (tbl, idx) AS (
     ('events', 'events_conn_stream_live_idx'),
     ('events', 'events_org_live_occurred_idx'),
     ('events', 'events_conn_gen_live_idx'),
+    ('events', 'events_deleted_idx'),
     ('flow_results', 'flow_results_flow_output_uq'),
     ('flow_results', 'flow_results_org_idx'),
     ('flow_versions', 'flow_versions_flow_version_uq'),
@@ -233,6 +235,7 @@ WITH expected (tbl, idx) AS (
     ('memberships', 'memberships_org_user_uq'),
     ('metrics', 'metrics_org_idx'),
     ('raw_events', 'raw_events_conn_idx'),
+    ('raw_events', 'raw_events_conn_received_idx'),
     ('source_streams', 'source_streams_conn_cfg_uq'),
     ('source_streams', 'source_streams_org_idx'),
     ('stream_fields', 'stream_fields_key_uq'),

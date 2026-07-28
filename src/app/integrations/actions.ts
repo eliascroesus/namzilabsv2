@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireOrg } from "@/lib/auth";
-import { createConnection, deleteConnection, updateConnectionName, getConnection } from "@/lib/connections";
+import { createConnection, disableConnection, reconnectConnection, updateConnectionName, getConnection } from "@/lib/connections";
 import { catalogEntry } from "@/connectors/catalog";
 import { inngest } from "@/inngest/client";
 import { promoteToBaseCadence } from "@/lib/sync/cadence";
@@ -81,6 +81,18 @@ export async function reprocessAction(formData: FormData): Promise<void> {
 export async function disconnectAction(formData: FormData): Promise<void> {
   const { orgId } = await requireOrg();
   const id = String(formData.get("id") ?? "");
-  await deleteConnection(orgId, id);
+  await disableConnection(orgId, id);
+  redirect("/integrations");
+}
+
+/**
+ * Put a disconnected integration back. Costs nothing and calls no provider: the
+ * connection row survived the disconnect, so its events still match the ids its
+ * connector produces and are restored in place.
+ */
+export async function reconnectAction(formData: FormData): Promise<void> {
+  const { orgId } = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  await reconnectConnection(orgId, id);
   redirect("/integrations");
 }

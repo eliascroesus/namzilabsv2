@@ -93,6 +93,25 @@ export const connections = pgTable(
      * poll demotes to a slow backstop instead of racing the webhook.
      */
     webhookHealthyAt: timestamp("webhook_healthy_at", { withTimezone: true }),
+    /**
+     * When the user disconnected this integration.
+     *
+     * Disconnecting used to hard-delete the row, which made reconnecting
+     * impossible to do WELL: every connector namespaces its eventId with the
+     * connection UUID, so a delete-and-re-add produced a second complete copy of
+     * the dataset under new ids, with the old copy tombstoned beside it. No
+     * amount of matching on the provider account could undo that — the two
+     * copies are genuinely different rows.
+     *
+     * Keeping the row keeps the UUID, and keeping the UUID makes reconnecting
+     * free: flip `status` back to active, clear this, clear `deleted_at` on its
+     * events. Nothing is re-fetched and nothing is duplicated.
+     *
+     * It is also the clock the purge runs on. Nothing may be hard-deleted on the
+     * strength of `status` alone — a connection disabled a minute ago and one
+     * disabled two months ago look identical without this.
+     */
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -115,7 +134,12 @@ export const rawEvents = pgTable(
     signatureValid: boolean("signature_valid").default(false).notNull(),
     receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("raw_events_conn_idx").on(t.connectionId)],
+  (t) => [
+    index("raw_events_conn_idx").on(t.connectionId),
+    // The purge's access path: "this connection's raw payloads, older than X".
+    // Without it that is a sequential scan of the largest table in the schema.
+    index("raw_events_conn_received_idx").on(t.connectionId, t.receivedAt),
+  ],
 );
 
 /**
@@ -184,6 +208,13 @@ export const events = pgTable(
     index("events_org_live_occurred_idx").on(t.orgId, t.occurredAt).where(sql`deleted_at is null`),
     // Full-resync sweeps: retire live rows below the new generation.
     index("events_conn_gen_live_idx").on(t.connectionId, t.syncGeneration).where(sql`deleted_at is null`),
+    // The one index over DEAD rows, and the reason it has to exist separately:
+    // every index above is `WHERE deleted_at IS NULL`, which is precisely the
+    // set a purge does NOT want. Finding tombstones older than a cutoff had no
+    // supporting index at all, so any retention pass was a sequential scan of
+    // the biggest table in the schema — which is why Phase 2 was unrunnable at
+    // scale before this.
+    index("events_deleted_idx").on(t.deletedAt).where(sql`deleted_at is not null`),
   ],
 );
 
