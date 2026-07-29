@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { refreshFlowAction } from "@/app/dashboard/flows/actions";
+import type { ImportCoverage } from "@/connectors/types";
 
 type Tile = {
   name?: string;
@@ -26,7 +27,7 @@ export type FlowResultRow = {
    * backwards through history. Joined at render time, never stored on the row,
    * so every flow on one importing stream says the same thing.
    */
-  importing?: { reachedBack: Date; targetBack: Date };
+  importing?: ImportCoverage;
 };
 
 function fmt(value: number | undefined, t: Tile): string {
@@ -173,19 +174,18 @@ function GroupBars({ groups, tile }: { groups: Array<{ label: string; value: num
  * The bar is clamped to the target so a stream that reached further than asked
  * cannot render past its own end.
  */
-function ImportProgress({ importing }: { importing: { reachedBack: Date; targetBack: Date } }) {
+function ImportProgress({ importing }: { importing: ImportCoverage }) {
   const day = 86_400_000;
-  const now = Date.now();
-  const target = Math.max(1, Math.round((now - new Date(importing.targetBack).getTime()) / day));
-  const reached = Math.min(target, Math.max(0, Math.round((now - new Date(importing.reachedBack).getTime()) / day)));
-  const pct = Math.min(100, Math.max(0, Math.round((reached / target) * 100)));
+  const target = Math.max(1, Math.round(importing.targetMs / day));
+  const covered = Math.min(target, Math.max(0, Math.round(importing.coveredMs / day)));
+  const pct = Math.min(100, Math.max(0, Math.round((covered / target) * 100)));
   return (
     <div className="mt-3">
       <div className="h-1 w-full overflow-hidden rounded-full bg-amber-100">
         <div className="h-full rounded-full bg-amber-400 transition-[width]" style={{ width: `${pct}%` }} />
       </div>
       <p className="mt-1.5 text-xs text-amber-700">
-        Still importing — covering {reached} of {target} days. This number can still grow.
+        Still importing — covering {covered} of {target} days. This number can still grow.
       </p>
     </div>
   );

@@ -6,6 +6,7 @@ import { connections, events, sourceStreams } from "@/db/schema";
 import { primeStream } from "@/lib/sync/streams";
 import { primeConnection } from "@/lib/sync/resync";
 import { claimCalls, laneLimit, pauseConnection } from "@/lib/provider-gateway/budget";
+import { pollOperation } from "@/lib/provider-gateway/operations";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { encrypt } from "@/lib/crypto";
 import type { DB } from "@/db/types";
@@ -191,10 +192,15 @@ describe("primeStream freshness gate (Defect #1)", () => {
   });
 
   it("F.8: an exhausted budget yields the same honesty (note, not failure); a healthy claim refreshes", async () => {
-    // Spend the whole interactive budget for this connection's minute window.
-    const total = laneLimit("gsheets", "*", "interactive");
+    // Spend the whole interactive budget for this connection's minute window —
+    // against the operation a Sheets poll actually claims. Not `"*"`: this
+    // project's quota is per API, so Sheets (60/min per user) and Drive
+    // (12,000/min) are separate buckets and draining a wildcard one would drain
+    // nothing the sweep ever asks for.
+    const op = pollOperation("gsheets");
+    const total = laneLimit("gsheets", op, "interactive");
     for (let i = 0; i < total; i++) {
-      await claimCalls(db, { id: connId, orgId: ORG, source: "gsheets" }, "*", 1, new Date(), "interactive");
+      await claimCalls(db, { id: connId, orgId: ORG, source: "gsheets" }, op, 1, new Date(), "interactive");
     }
     SHEET.push(["Bob", "bob@acme.com"]);
 
@@ -345,21 +351,28 @@ describe("primeConnection — sources with no per-flow resource", () => {
     await db.update(connections).set({ source: "close" }).where(eq(connections.id, sbId));
     expect(conn).toHaveLength(1);
 
-    // 260 events, newest-first: Close walks 4 pages of 50 and stops with more left.
+    // 260 events an hour apart, newest-first: Close walks 4 pages of 50 and
+    // stops with more left. Spaced by the HOUR so the coverage it reports is a
+    // real number of days rather than a rounding artefact of a 4-hour fixture.
     const T0 = Date.now() - 20 * 86_400_000;
     const log = Array.from({ length: 260 }, (_, i) => ({
       id: `e${i + 1}`,
       object_type: "activity.sms",
       action: "created",
-      date_created: new Date(T0 + i * 60_000).toISOString(),
+      date_created: new Date(T0 + i * 3_600_000).toISOString(),
     })).reverse();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
         const params = new URL(String(input)).searchParams;
+        // Honors date_created__gte, so the connector's window rungs behave as
+        // they do live — a mock that ignored the bound would keep the whole walk
+        // on the opening rung and never exercise the step out to the target.
+        const gte = params.get("date_created__gte");
+        const rows = gte ? log.filter((e) => Date.parse(e.date_created) >= Date.parse(gte)) : log;
         const offset = params.get("_cursor") ? Number(params.get("_cursor")) : 0;
-        const page = log.slice(offset, offset + 50);
-        const body = { data: page, cursor_next: offset + page.length < log.length ? String(offset + page.length) : null };
+        const page = rows.slice(offset, offset + 50);
+        const body = { data: page, cursor_next: offset + page.length < rows.length ? String(offset + page.length) : null };
         return { ok: true, status: 200, statusText: "OK", headers: { get: () => null }, json: async () => body, text: async () => JSON.stringify(body) } as unknown as Response;
       }),
     );
@@ -369,8 +382,10 @@ describe("primeConnection — sources with no per-flow resource", () => {
     if (res.ok) {
       expect(res.refreshed).toBe(true);
       expect(res.note).toContain("Still importing");
-      // Both numbers are real — the oldest row ingested against the 30-day floor.
-      expect(res.note).toMatch(/covering \d+ of 30 days/);
+      // Both numbers are real — the SPAN ingested against the 30-day window.
+      // 200 of 260 hourly events ≈ 8 days, and pinning the numerator is what
+      // stops this passing on "covering 0 of 30 days".
+      expect(res.note).toMatch(/covering 8 of 30 days/);
     }
   });
 });

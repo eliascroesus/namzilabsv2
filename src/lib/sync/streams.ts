@@ -5,7 +5,7 @@ import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
-import { claimCalls, isPaused, recordExtraCalls, type CallLane } from "@/lib/provider-gateway/budget";
+import { claimCalls, isPaused, settlePollCalls, type CallLane } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { awaitStreamWriteLock, withStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
@@ -341,9 +341,13 @@ export async function syncStream(
    * Instantly (3 pages) and Calendly still under-report; their credentials are
    * per-customer, so the exposure is that customer's own limit rather than a
    * shared one, and they are left for the pass that declares their real limits.
+   *
+   * `extraCalls` re-attributes the part of that spend which went to a DIFFERENT
+   * endpoint — Sheets' Drive probe against Sheets' own tab read, whose project
+   * quotas are 40× apart — so the tighter bucket does not govern both.
    */
-  const settleUp = async (providerCalls: number | undefined) => {
-    await recordExtraCalls(db, conn, operation, Math.max(0, (providerCalls ?? 1) - 1));
+  const settleUp = async (res: { providerCalls?: number; extraCalls?: Record<string, number> }) => {
+    await settlePollCalls(db, conn, operation, res);
   };
 
   let cursor = stream.cursor ?? null;
@@ -359,7 +363,7 @@ export async function syncStream(
       // The cursor is passed as a CHANGE-DETECTION HINT, not as a resume point:
       // a mirror still re-reads the whole resource whenever it reads at all.
       // What it buys is the option not to read — see `unchanged` below.
-      const { records, nextCursor, mirrorScope, unchanged, providerCalls } = await connector.poll({
+      const mirrorRes = await connector.poll({
         connectionId: conn.id,
         cursor: stream.cursor ?? null,
         credentials,
@@ -367,9 +371,10 @@ export async function syncStream(
         streamHash: stream.configHash,
         windowFloor: stream.windowFloor ?? null,
       });
+      const { records, nextCursor, mirrorScope, unchanged } = mirrorRes;
       // Before the `unchanged` return below — a skip still spends the Drive
       // probe, and a probe nobody counts is how a "cheap" sweep stops being one.
-      await settleUp(providerCalls);
+      await settleUp(mirrorRes);
 
       // The source says it has not changed, so nothing was fetched. Returning
       // here is load-bearing: falling through would hand an EMPTY record set to
@@ -410,7 +415,7 @@ export async function syncStream(
           incomplete = true;
           break;
         }
-        const { records, nextCursor, mirrorScope, preserveOccurredAt, retireOutsideWindow, providerCalls } = await connector.poll({
+        const pageRes = await connector.poll({
           connectionId: conn.id,
           cursor,
           credentials,
@@ -421,7 +426,8 @@ export async function syncStream(
           // deepened import cannot be retired by its own declaration.
           windowFloor: stream.windowFloor ?? null,
         });
-        await settleUp(providerCalls);
+        const { records, nextCursor, mirrorScope, preserveOccurredAt, retireOutsideWindow } = pageRes;
+        await settleUp(pageRes);
         if (retireOutsideWindow) covered = retireOutsideWindow;
         const swap = await withStreamWriteLock(db, `stream:${stream.id}`, async (tx) => {
           const res = await upsertEvents(
@@ -677,17 +683,22 @@ export async function primeStream(
  * for numbers that are genuinely still coming — or to keep waiting for numbers
  * that are not.
  *
- * Both denominator and numerator are real: the connector knows the floor it is
- * aiming for and the oldest record it has actually ingested. Nothing is
- * estimated, which is why this can ship without the backfill lane's
- * bookkeeping.
+ * Both denominator and numerator are real: the connector knows the window it is
+ * aiming at and the span it has actually ingested. Nothing is estimated, which
+ * is why this can ship without the backfill lane's bookkeeping.
+ *
+ * The sentence carries no DIRECTION, and that is deliberate. It used to end
+ * "reaching further back each sync", which is only true of a newest-first
+ * source; Close's Event Log runs oldest-first and fills forward. "Widening"
+ * is true of both, and a note that describes the wrong motion is the same
+ * class of wrong as a number that describes the wrong quantity.
  */
-export function importProgressNote(progress?: { reachedBack: Date; targetBack: Date }, now = Date.now()): string {
+export function importProgressNote(progress?: { coveredMs: number; targetMs: number }): string {
   if (!progress) return "Still importing this source — the numbers below can still grow.";
   const day = 86_400_000;
-  const target = Math.max(1, Math.round((now - progress.targetBack.getTime()) / day));
-  const reached = Math.min(target, Math.max(0, Math.round((now - progress.reachedBack.getTime()) / day)));
-  return `Still importing — covering ${reached} of ${target} days so far, reaching further back each sync.`;
+  const target = Math.max(1, Math.round(progress.targetMs / day));
+  const covered = Math.min(target, Math.max(0, Math.round(progress.coveredMs / day)));
+  return `Still importing — covering ${covered} of ${target} days so far, widening each sync.`;
 }
 
 function partialScanNote(covered?: { from: Date; to: Date }, now = Date.now()): string {

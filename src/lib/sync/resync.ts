@@ -9,7 +9,7 @@ import { activeStreams, importProgressNote, syncStream, type PrimeStreamResult }
 import { awaitConnectionSyncLock, releaseConnectionSyncLock, tryConnectionSyncLock } from "@/lib/sync/locks";
 import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
-import type { CanonicalEvent, Connector, PollArgs } from "@/connectors/types";
+import type { CanonicalEvent, Connector, PollArgs, ImportCoverage } from "@/connectors/types";
 
 const PAGE_CAP = 200;
 
@@ -44,7 +44,7 @@ export type SyncResult = {
    */
   incomplete?: boolean;
   /** How far back the import has reached vs how far it is aiming, when reported. */
-  importProgress?: { reachedBack: Date; targetBack: Date };
+  importProgress?: ImportCoverage;
 };
 
 /** Did this run change what dashboards would show? (drives staleness) */

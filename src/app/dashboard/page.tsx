@@ -18,6 +18,7 @@ import {
   type FunnelResult,
 } from "@/lib/metrics/compute";
 import { resolveRange, RANGE_OPTIONS } from "@/lib/metrics/range";
+import type { ImportCoverage } from "@/connectors/types";
 
 export const dynamic = "force-dynamic";
 
@@ -135,10 +136,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     flowTiles = rows.map((r) => {
       const mine = streamRefsOfProvenance(r.provenance)
         .map((ref) => progress.get(`${ref.connectionId}:${ref.configHash}`))
-        .filter((p): p is { reachedBack: Date; targetBack: Date } => p != null);
+        .filter((p): p is ImportCoverage => p != null);
       // A flow reading two streams shows the one with furthest still to go —
       // the number is only as settled as its least-settled input.
-      const importing = mine.sort((a, b) => a.targetBack.getTime() - b.targetBack.getTime())[0];
+      const importing = mine.sort((a, b) => b.targetMs - b.coveredMs - (a.targetMs - a.coveredMs))[0];
       return { ...r, importing };
     });
   } catch {

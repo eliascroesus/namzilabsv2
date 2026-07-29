@@ -323,9 +323,17 @@ it does today.
 ## 1. Close — Event Log pagination contract
 
 **Why:** the Close connector's burst-safe pagination is built on the documented
-API shape (`data[]` + `cursor_next` via `_cursor`, newest-first, `_limit` cap
-50, `date_created__gte`), pinned in tests but never confirmed against the live
-API — the docs site is bot-walled from the build environment.
+API shape (`data[]` + `cursor_next` via `_cursor`, `_limit` cap 50,
+`date_created__gte`), pinned in tests but never confirmed against the live API —
+the docs site is bot-walled from the build environment.
+
+**Already run once, and it found two things.** The Event Log is **oldest-first**,
+not newest-first as every fixture assumed; and the `_limit` cap probe asked for
+100, got HTTP 400 instead of a clamp, and aborted the script before C4 (cursor
+integrity) and C5 (the 30-day first-sync bound) ever ran. Both are fixed: the
+connector no longer assumes an ordering anywhere, and no single check can abort
+the run. **C4 and C5 have still never passed against the live API** — that is
+what this item is now for.
 
 **Key:** Close → Settings → Developer → API Keys → any key of the workspace you
 connect (read access is enough; the script only performs GETs).
@@ -352,6 +360,17 @@ connector as-is: the pagination assumptions in `src/connectors/close.ts` and
 `tests/close-poll.test.ts` must be updated to whatever the live API actually
 does (the failing check tells you which assumption broke), then re-run until
 green.
+
+**Also read the `[INFO]` findings**, which cannot fail the run and are worth
+acting on:
+
+- **C2 observed ordering.** Nothing depends on a direction any more, but a change
+  here is worth knowing.
+- **C6 `date_created__lte`.** If Close accepts an upper bound, a first sync can
+  walk the window in exclusive recent-first SEGMENTS with no re-reads, which is
+  strictly better than the two-rung ladder in `close.ts` (`FIRST_RUNG_DAYS`).
+- **C7 `_order_by`.** If it works, `testFetchLatest` becomes one request instead
+  of a bounded search.
 
 ---
 

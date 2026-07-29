@@ -67,6 +67,15 @@ export type ListOptionsArgs = {
   config?: Record<string, unknown>;
 };
 
+/**
+ * How much of a window an import actually holds, as two SPANS.
+ *
+ * One shape for both producers — a connector mid-walk and the backfill lane —
+ * so a tile, a Test note and a dashboard cannot each measure progress its own
+ * way. See `PollResult.importProgress` for why spans and not instants.
+ */
+export type ImportCoverage = { coveredMs: number; targetMs: number };
+
 export type PollResult = {
   records: CanonicalEvent[];
   /**
@@ -154,9 +163,26 @@ export type PollResult = {
    */
   incomplete?: boolean;
   /**
-   * How far back this import has REACHED, against how far it is trying to get.
-   * Paired with `incomplete` it is what lets the editor say "covering 12 of 30
-   * days" instead of showing a bare number that climbs for a day.
+   * How much of the window this import has actually ingested, against how much
+   * it is trying to. Paired with `incomplete` it is what lets the editor say
+   * "covering 12 of 30 days" instead of showing a bare number that climbs for a
+   * day.
+   *
+   * TWO SPANS, NOT TWO INSTANTS — and that is the whole design.
+   *
+   * This was `{reachedBack, targetBack}`: the oldest record ingested so far,
+   * against the floor being aimed at. That measures progress ONLY if the walk
+   * runs newest-first, and Close's live verification reported its Event Log as
+   * OLDEST-first. On such a log the first page lands at the floor, so
+   * `reachedBack` equals `targetBack` immediately and the note claimed full
+   * coverage of the window while holding a fraction of its events — a number
+   * announcing itself as finished while still climbing, which is the exact
+   * failure the note was added to prevent.
+   *
+   * A span cannot do that. `coveredMs` is (newest ingested − oldest ingested):
+   * it starts near zero and grows toward `targetMs` whichever end the walk
+   * started from, so no consumer has to know, or guess, which way a provider
+   * orders its results.
    *
    * Deliberately not called `covered`, and deliberately not reusing
    * `retireOutsideWindow` — both name the window a source DECLARES, and this
@@ -164,7 +190,7 @@ export type PollResult = {
    * coverage that has not arrived yet. It also carries no side effect
    * whatsoever: nothing retires, nothing is bounded by it.
    */
-  importProgress?: { reachedBack: Date; targetBack: Date };
+  importProgress?: ImportCoverage;
   /**
    * How many provider requests this poll actually made.
    *
@@ -179,6 +205,22 @@ export type PollResult = {
    * connector that makes one.
    */
   providerCalls?: number;
+  /**
+   * How many of `providerCalls` went to a DIFFERENT operation than the one the
+   * runner claimed against, keyed by operation.
+   *
+   * One poll does not always mean one endpoint. Sheets reads a tab through the
+   * Sheets API and asks Drive whether the file changed at all — two APIs, with
+   * quotas 40× apart (300/min per project versus 12,000). Counted as one
+   * operation, the tighter of the two has to govern both, so a Drive probe that
+   * costs Google almost nothing gets throttled at the Sheets ceiling for no
+   * provider-side reason.
+   *
+   * The runner subtracts these from the primary operation's spend rather than
+   * adding them on, so the total charged still equals `providerCalls` — an
+   * attribution, not an extra charge.
+   */
+  extraCalls?: Record<string, number>;
   /**
    * What the provider said was left of ITS budget, from its own response
    * headers — observed truth, as opposed to the figure declared in the catalog.

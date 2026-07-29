@@ -73,11 +73,11 @@ describe("Phase 8 — a tile whose history is still arriving says so", () => {
     await startJob(db, job.id, NOW);
     await checkpointJob(db, job.id, { checkpoint: "c1", oldestSeen: back(12), rowsImported: 100 }, NOW);
 
-    const progress = await importProgressByStreamRef(db, [{ connectionId: connId, configHash: HASH }]);
+    const progress = await importProgressByStreamRef(db, [{ connectionId: connId, configHash: HASH }], NOW);
 
     const p = progress.get(`${connId}:${HASH}`)!;
-    expect(p.reachedBack.getTime()).toBe(back(12).getTime());
-    expect(p.targetBack.getTime()).toBe(back(90).getTime());
+    expect(p.coveredMs).toBe(12 * 86_400_000);
+    expect(p.targetMs).toBe(90 * 86_400_000);
   });
 
   /**
@@ -95,11 +95,11 @@ describe("Phase 8 — a tile whose history is still arriving says so", () => {
 
     const rows = await db.select().from(flowResults).where(eq(flowResults.orgId, ORG));
     const refs = rows.flatMap((r) => (r.provenance as { streams: Array<{ connectionId: string; configHash: string }> }).streams);
-    const progress = await importProgressByStreamRef(db, refs);
+    const progress = await importProgressByStreamRef(db, refs, NOW);
 
     const answers = rows.map((r) => {
       const s = (r.provenance as { streams: Array<{ connectionId: string; configHash: string }> }).streams[0];
-      return progress.get(`${s.connectionId}:${s.configHash}`)!.reachedBack.getTime();
+      return progress.get(`${s.connectionId}:${s.configHash}`)!.coveredMs;
     });
     expect(answers).toHaveLength(2);
     expect(new Set(answers).size).toBe(1);
@@ -139,11 +139,11 @@ describe("Phase 8 — a tile whose history is still arriving says so", () => {
     await startJob(db, theirs.job.id, NOW);
 
     // A flow that reads only the FIRST stream asks only for that key.
-    const progress = await importProgressByStreamRef(db, [{ connectionId: connId, configHash: HASH }]);
+    const progress = await importProgressByStreamRef(db, [{ connectionId: connId, configHash: HASH }], NOW);
 
     expect(progress.size).toBe(1);
     expect(progress.has(`${connId}:${HASH}`)).toBe(true);
-    expect(progress.get(`${connId}:${HASH}`)!.targetBack.getTime()).toBe(back(90).getTime());
+    expect(progress.get(`${connId}:${HASH}`)!.targetMs).toBe(90 * 86_400_000);
   });
 
   it("costs one query for an empty dashboard, and asks nothing with no refs", async () => {

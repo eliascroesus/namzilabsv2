@@ -447,28 +447,30 @@ describe("progress belongs to the stream", () => {
     await startJob(db, job.id, NOW);
     await checkpointJob(db, job.id, { checkpoint: "c1", oldestSeen: back(12), rowsImported: 40 }, NOW);
 
-    const progress = await streamImportProgress(db, stream.id);
+    const progress = await streamImportProgress(db, stream.id, NOW);
     expect(progress).not.toBeNull();
     // Keyed on the stream, so two dashboards reading it cannot disagree about
-    // whether the numbers are still growing.
-    expect(progress!.reachedBack.getTime()).toBe(back(12).getTime());
-    expect(progress!.targetBack.getTime()).toBe(back(90).getTime());
+    // whether the numbers are still growing. Two SPANS, not two instants — see
+    // PollResult.importProgress.
+    expect(progress!.coveredMs).toBe(12 * 86_400_000);
+    expect(progress!.targetMs).toBe(90 * 86_400_000);
   });
 
   it("says nothing once the import is done", async () => {
     const { job } = await ask(90);
     await finishJob(db, job.id, { status: "complete" }, NOW);
     // A note about an import that ended weeks ago is noise.
-    expect(await streamImportProgress(db, stream.id)).toBeNull();
+    expect(await streamImportProgress(db, stream.id, NOW)).toBeNull();
   });
 
   it("does not imply progress before the first slice lands", async () => {
     const { job } = await ask(90);
     await startJob(db, job.id, NOW);
 
-    const progress = await streamImportProgress(db, stream.id);
+    const progress = await streamImportProgress(db, stream.id, NOW);
     // "covering 0 of 90 days", not a number that looks like something happened.
-    expect(progress!.reachedBack.getTime()).toBeGreaterThan(back(1).getTime());
+    expect(progress!.coveredMs).toBe(0);
+    expect(progress!.targetMs).toBe(90 * 86_400_000);
   });
 });
 

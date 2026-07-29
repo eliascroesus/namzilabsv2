@@ -11,7 +11,7 @@ import type {
 import { safeEqual } from "@/lib/signatures";
 import { hashId } from "@/lib/ids";
 import { fetchJson } from "@/lib/http-client";
-import { asObject, parseDate, str } from "./field-utils";
+import { asObject, parseDate, spanCovered, str } from "./field-utils";
 
 /**
  * Sendblue API host. Their API lives on the .co domain (the .com is marketing).
@@ -220,7 +220,12 @@ export const sendblueConnector: Connector = {
       nextCursor: serializeSendblueCursor({ hw: cur.hw, cont: { offset, lowWater: minSeen }, maxSeen }),
       providerCalls,
       incomplete: true,
-      importProgress: { reachedBack: new Date(minSeen ? Date.parse(minSeen) || floor : floor), targetBack: new Date(floor) },
+      // The SPAN ingested, not the depth reached — see PollResult.importProgress.
+      // This connector's whole envelope is unverified, newest-first ordering
+      // included (the offset walk only needs it to be *stable*), so a progress
+      // number that depended on the direction would be a guess dressed as a
+      // measurement. `maxSeen - minSeen` is neither.
+      importProgress: spanCovered(minSeen, maxSeen, floor),
     };
   },
 

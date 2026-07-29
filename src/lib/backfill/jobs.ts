@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, isNotNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { backfillJobs, connections, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
+import type { ImportCoverage } from "@/connectors/types";
 
 /**
  * E.8 / Phase 6 — the bookkeeping half of the backfill lane.
@@ -320,10 +321,7 @@ export async function runnableJobsByProvider(
  * Returns null when nothing is importing, which is the common case and must
  * stay silent: a note on a stream that finished weeks ago is noise.
  */
-export async function streamImportProgress(
-  db: DB,
-  streamId: string,
-): Promise<{ reachedBack: Date; targetBack: Date } | null> {
+export async function streamImportProgress(db: DB, streamId: string, now = new Date()): Promise<ImportCoverage | null> {
   const [job] = await db
     .select()
     .from(backfillJobs)
@@ -331,12 +329,33 @@ export async function streamImportProgress(
     .orderBy(asc(backfillJobs.targetFloor))
     .limit(1);
   if (!job) return null;
+  return coverageOf(job.reachedFloor, job.targetFloor, now.getTime());
+}
+
+/**
+ * How much of its target window a job holds, in the same two-span shape
+ * connectors report (`PollResult.importProgress`).
+ *
+ * THE ONE PLACE THIS LANE ASSUMES A DIRECTION, stated here rather than spread
+ * across the readers. `reached_floor` is the oldest record a slice has imported,
+ * so `now - reached_floor` is the covered span only while the walk runs
+ * newest-first and fills backwards from now.
+ *
+ * That holds for every provider the lane runs against today. It does NOT hold
+ * for an oldest-first log like Close's Event Log, where slice one lands on the
+ * target floor and this would read as complete immediately — the same defect
+ * `spanCovered` removed from the connectors. Fixing it properly needs the
+ * newest record a slice saw, which is a `newest_seen` column on `backfill_jobs`
+ * and therefore a migration; until then this is a known bound on the lane, and
+ * Close has never been connected so nothing depends on it yet.
+ */
+function coverageOf(reachedFloor: Date | null, targetFloor: Date, now: number): ImportCoverage {
   return {
     // Before the first slice lands there is nothing behind us yet, so the
-    // reached depth is "now" — which renders as "covering 0 of 90 days" rather
+    // covered span is zero — which renders as "covering 0 of 90 days" rather
     // than as a number that looks like progress nobody made.
-    reachedBack: job.reachedFloor ?? new Date(),
-    targetBack: job.targetFloor,
+    coveredMs: reachedFloor ? Math.max(0, now - reachedFloor.getTime()) : 0,
+    targetMs: Math.max(0, now - targetFloor.getTime()),
   };
 }
 
@@ -355,8 +374,9 @@ export async function streamImportProgress(
 export async function importProgressByStreamRef(
   db: DB,
   refs: Array<{ connectionId: string; configHash: string }>,
-): Promise<Map<string, { reachedBack: Date; targetBack: Date }>> {
-  const out = new Map<string, { reachedBack: Date; targetBack: Date }>();
+  now = new Date(),
+): Promise<Map<string, ImportCoverage>> {
+  const out = new Map<string, ImportCoverage>();
   if (refs.length === 0) return out;
 
   const rows = await db
@@ -386,7 +406,7 @@ export async function importProgressByStreamRef(
     // here, or one backfilling stream would label every stream on its
     // connection.
     if (!wanted.has(key) || out.has(key)) continue;
-    out.set(key, { reachedBack: row.reachedFloor ?? new Date(), targetBack: row.targetFloor });
+    out.set(key, coverageOf(row.reachedFloor, row.targetFloor, now.getTime()));
   }
   return out;
 }
