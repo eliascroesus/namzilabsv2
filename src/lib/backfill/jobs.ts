@@ -341,6 +341,57 @@ export async function streamImportProgress(
 }
 
 /**
+ * Import progress for a batch of streams named the way a FLOW knows them —
+ * `(connectionId, configHash)` — rather than by stream UUID.
+ *
+ * Read at RENDER time, never snapshotted onto the result row, and that is the
+ * requirement rather than a preference: `materializeFlow` writes each flow's
+ * tiles in its own call, so two flows on one backfilling stream materialized
+ * minutes apart would bake in different numbers and disagree about the same
+ * import. Joining here means the state has exactly one home.
+ *
+ * One query for the whole dashboard. Empty in, empty out.
+ */
+export async function importProgressByStreamRef(
+  db: DB,
+  refs: Array<{ connectionId: string; configHash: string }>,
+): Promise<Map<string, { reachedBack: Date; targetBack: Date }>> {
+  const out = new Map<string, { reachedBack: Date; targetBack: Date }>();
+  if (refs.length === 0) return out;
+
+  const rows = await db
+    .select({
+      connectionId: sourceStreams.connectionId,
+      configHash: sourceStreams.configHash,
+      reachedFloor: backfillJobs.reachedFloor,
+      targetFloor: backfillJobs.targetFloor,
+    })
+    .from(backfillJobs)
+    .innerJoin(sourceStreams, eq(sourceStreams.id, backfillJobs.streamId))
+    .where(
+      and(
+        inArray(backfillJobs.status, ["queued", "running"]),
+        inArray(
+          sourceStreams.connectionId,
+          refs.map((r) => r.connectionId),
+        ),
+      ),
+    )
+    .orderBy(asc(backfillJobs.targetFloor));
+
+  const wanted = new Set(refs.map((r) => `${r.connectionId}:${r.configHash}`));
+  for (const row of rows) {
+    const key = `${row.connectionId}:${row.configHash}`;
+    // The connection filter is the indexable half; the hash has to be checked
+    // here, or one backfilling stream would label every stream on its
+    // connection.
+    if (!wanted.has(key) || out.has(key)) continue;
+    out.set(key, { reachedBack: row.reachedFloor ?? new Date(), targetBack: row.targetFloor });
+  }
+  return out;
+}
+
+/**
  * 10(b) — jobs that claim to be running and are not moving.
  *
  * `lastProgressAt` rather than `updatedAt`, because any write touches the

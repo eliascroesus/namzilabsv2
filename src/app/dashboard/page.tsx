@@ -7,6 +7,7 @@ import { AppHeader } from "@/components/app-header";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
+import { importProgressByStreamRef } from "@/lib/backfill/jobs";
 import { listMetrics, type Metric } from "@/lib/metrics/store";
 import { parseDefinition } from "@/lib/metrics/types";
 import {
@@ -27,6 +28,24 @@ type Tile =
   | { metric: Metric; kind: "aggregate"; result: AggregateResult; error?: undefined }
   | { metric: Metric; kind: "funnel"; result: FunnelResult; error?: undefined }
   | { metric: Metric; kind: "error"; error: string };
+
+/**
+ * The stream keys `materializeFlow` recorded alongside a result.
+ *
+ * Defensive because `provenance` is untyped jsonb written by an older code
+ * path for every row that predates this: a result materialized before the
+ * mapping existed simply has no streams, and must read as "nothing importing"
+ * rather than throw the dashboard.
+ */
+function streamRefsOfProvenance(provenance: unknown): Array<{ connectionId: string; configHash: string }> {
+  const streams = (provenance as { streams?: unknown } | null)?.streams;
+  if (!Array.isArray(streams)) return [];
+  return streams.filter(
+    (s): s is { connectionId: string; configHash: string } =>
+      typeof (s as { connectionId?: unknown })?.connectionId === "string" &&
+      typeof (s as { configHash?: unknown })?.configHash === "string",
+  );
+}
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -84,18 +103,44 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // Published-flow tiles come from stored (materialized) results — no live recompute.
   let flowTiles: FlowResultRow[] = [];
   try {
-    flowTiles = await db
+    const rows = await db
       .select({
         flowId: flowResults.flowId,
         outputNodeId: flowResults.outputNodeId,
         tile: flowResults.tile,
         status: flowResults.status,
         computedAt: flowResults.computedAt,
+        // Which streams this number was computed from, recorded at materialize
+        // time. Needed to answer "is any of it still importing".
+        provenance: flowResults.provenance,
       })
       .from(flowResults)
       // Only render results for flows that are still published (guards orphans).
       .innerJoin(flows, eq(flows.id, flowResults.flowId))
       .where(and(eq(flowResults.orgId, orgId), eq(flows.status, "published")));
+
+    /**
+     * Phase 8 — import state is joined HERE, at read time, and deliberately not
+     * baked into the stored tile.
+     *
+     * `materializeFlow` writes each flow's tiles in its own call, so a stored
+     * note would freeze whatever the import had reached at that moment and two
+     * flows on one backfilling stream would show different numbers for the same
+     * import. Reading live gives the state exactly one home.
+     *
+     * One query for the whole dashboard, not one per tile.
+     */
+    const refs = rows.flatMap((r) => streamRefsOfProvenance(r.provenance));
+    const progress = await importProgressByStreamRef(db, refs);
+    flowTiles = rows.map((r) => {
+      const mine = streamRefsOfProvenance(r.provenance)
+        .map((ref) => progress.get(`${ref.connectionId}:${ref.configHash}`))
+        .filter((p): p is { reachedBack: Date; targetBack: Date } => p != null);
+      // A flow reading two streams shows the one with furthest still to go —
+      // the number is only as settled as its least-settled input.
+      const importing = mine.sort((a, b) => a.targetBack.getTime() - b.targetBack.getTime())[0];
+      return { ...r, importing };
+    });
   } catch {
     // flow_results may not exist before migration 0002 is applied; ignore.
   }

@@ -21,6 +21,12 @@ export type FlowResultRow = {
   tile: unknown;
   status: string;
   computedAt: Date | null;
+  /**
+   * Phase 8 — set when a stream this number was computed from is still reaching
+   * backwards through history. Joined at render time, never stored on the row,
+   * so every flow on one importing stream says the same thing.
+   */
+  importing?: { reachedBack: Date; targetBack: Date };
 };
 
 function fmt(value: number | undefined, t: Tile): string {
@@ -73,6 +79,13 @@ export function FlowTile({ row }: { row: FlowResultRow }) {
           {t.target != null && <TargetBar value={t.value ?? 0} target={t.target} tile={t} />}
         </>
       )}
+
+      {/* Phase 8 — a number computed over an import that is still running is
+          accurate and INCOMPLETE, and "Data as of <now>" says only the first
+          half. This says the second: a freshly computed tile can cover twelve
+          days of a ninety-day window, and without this the timestamp actively
+          misleads. */}
+      {row.importing && <ImportProgress importing={row.importing} />}
 
       {/* The honesty marker (G.3): every materialized number says WHEN it was
           true. A stale tile's timestamp shows exactly how far behind it is. */}
@@ -145,6 +158,35 @@ function GroupBars({ groups, tile }: { groups: Array<{ label: string; value: num
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * "Still importing — covering 12 of 90 days."
+ *
+ * Days rather than a percentage of records, for the reason the plan gives: the
+ * denominator of a record count is how many exist in the window, which is
+ * unknowable until the import finishes. Days covered is a number we actually
+ * have.
+ *
+ * The bar is clamped to the target so a stream that reached further than asked
+ * cannot render past its own end.
+ */
+function ImportProgress({ importing }: { importing: { reachedBack: Date; targetBack: Date } }) {
+  const day = 86_400_000;
+  const now = Date.now();
+  const target = Math.max(1, Math.round((now - new Date(importing.targetBack).getTime()) / day));
+  const reached = Math.min(target, Math.max(0, Math.round((now - new Date(importing.reachedBack).getTime()) / day)));
+  const pct = Math.min(100, Math.max(0, Math.round((reached / target) * 100)));
+  return (
+    <div className="mt-3">
+      <div className="h-1 w-full overflow-hidden rounded-full bg-amber-100">
+        <div className="h-full rounded-full bg-amber-400 transition-[width]" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="mt-1.5 text-xs text-amber-700">
+        Still importing — covering {reached} of {target} days. This number can still grow.
+      </p>
     </div>
   );
 }

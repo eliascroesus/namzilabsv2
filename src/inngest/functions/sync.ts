@@ -225,11 +225,59 @@ export const runBackfill = inngest.createFunction(
     // value to JSON, so a job object would arrive with its timestamps turned
     // into strings, and every date comparison in the slice would then compare a
     // string to a Date. Re-reading is also more correct: the row may have moved.
-    const jobId = String((event.data as { jobId: string }).jobId);
-    const outcome = await step.run("run-slice", async () => {
+    const { jobId, provider } = event.data as { jobId: string; provider: string };
+    const slice = await step.run("run-slice", async () => {
       const job = await getJob(db, jobId);
-      return job ? await runBackfillSlice(db, job) : { kind: "finished" as const, status: "failed" as const };
+      if (!job) return { outcome: { kind: "finished" as const, status: "failed" as const }, ref: null };
+      const outcome = await runBackfillSlice(db, job);
+      // Strings only across the boundary, for the same reason as above.
+      return { outcome, ref: { orgId: job.orgId, connectionId: job.connectionId, streamHash: job.streamHash } };
     });
+    const { outcome, ref } = slice;
+    if (!ref) return { jobId, outcome };
+
+    /**
+     * Phase 7 — recompute at CHECKPOINT boundaries, not per record.
+     *
+     * Marking stale and stopping there is the batching: staleness is idempotent,
+     * so however many slices land between two runs of the ten-minute
+     * `materializeStale` cron, they collapse into one recompute. Emitting
+     * `flow/recompute.requested` per checkpoint instead would NOT coalesce —
+     * its debounce window is ten seconds and slices are five minutes apart, so
+     * every slice would drag the whole stale set through a full pass.
+     *
+     * `syncConnection` already works exactly this way: mark, and let the cron
+     * recompute.
+     */
+    if (outcome.kind === "progressed" && outcome.rows > 0) {
+      await step.run("mark-stale-at-checkpoint", () =>
+        markStaleForSource(db, ref.orgId, provider, ref.connectionId, [ref.streamHash]),
+      );
+    }
+
+    /**
+     * On completion, ONE authoritative full recompute — and it must not be a
+     * `markStaleForSource` that a concurrent cron pass has already cleared.
+     *
+     * `materializeFlow` reruns the published graph from scratch against stored
+     * data and never consults the stale flag, so the final number is computed
+     * once over everything the import landed rather than accumulated from the
+     * partial passes along the way.
+     *
+     * `failed` is excluded: a failed job imported nothing authoritative, and its
+     * checkpoint recomputes already covered whatever did land.
+     */
+    if (outcome.kind === "finished" && outcome.status !== "failed") {
+      const flowIds = await step.run("collect-affected-flows", () =>
+        markStaleForSource(db, ref.orgId, provider, ref.connectionId, [ref.streamHash]),
+      );
+      if (flowIds.length > 0) {
+        await step.sendEvent(
+          "authoritative-recompute",
+          flowIds.map((flowId) => ({ name: "flow/materialize.requested" as const, data: { orgId: ref.orgId, flowId } })),
+        );
+      }
+    }
     return { jobId, outcome };
   },
 );

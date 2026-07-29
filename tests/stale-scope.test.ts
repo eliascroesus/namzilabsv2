@@ -103,6 +103,10 @@ describe("G.4 — results-version beacon", () => {
     await publishFlow("reads B", CFG_B);
     const v4 = await resultsVersion(db, ORG);
     expect(v4).not.toBe(v3);
-    expect(await resultsVersion(db, "org_other")).toBe("0.0.0");
+    // Five components since Phase 8: tiles, non-fresh, last computed, plus the
+    // running-import count and how far back the deepest one has reached. An
+    // import advancing changes no flow_results column, so without those last
+    // two an open dashboard would never refresh its "still importing" label.
+    expect(await resultsVersion(db, "org_other")).toBe("0.0.0.0.0");
   });
 });

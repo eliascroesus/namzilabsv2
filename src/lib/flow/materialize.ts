@@ -1,10 +1,11 @@
-import { and, eq, notInArray, sql } from "drizzle-orm";
-import { flowResults, flows, flowVersions } from "@/db/schema";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { backfillJobs, connections, flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import { runFlow, buildTile, type CompileProvenance } from "./engine";
 import { getPublishedVersion } from "./store";
 import { parseGraph, type TileSpec } from "./types";
+import { streamRefsOfGraph } from "@/lib/sync/streams";
 
 /**
  * Compute the published version's Output results and store them in flow_results
@@ -45,10 +46,35 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
       await db.update(flowResults).set({ status: "error", error: message }).where(eq(flowResults.flowId, flowId));
       return { ok: false, error: message };
     }
+    /**
+     * Which STREAMS this result was computed from.
+     *
+     * Recorded here because this is the one moment the published graph is
+     * already in hand — deriving it at dashboard render would mean loading a
+     * whole `flow_versions` row per tile per page load, which is exactly the
+     * cost materialized results exist to avoid.
+     *
+     * It is a MAPPING and not a snapshot of import state: the state itself is
+     * read live against these keys, so several flows on one backfilling stream
+     * cannot drift apart between their materializations.
+     *
+     * Stored inside the existing `provenance` jsonb, so this needs no schema
+     * change and no migration.
+     */
+    const conns = await db
+      .select({ id: connections.id, source: connections.source })
+      .from(connections)
+      .where(eq(connections.orgId, orgId));
+    const streams = streamRefsOfGraph(graph, (id) => conns.find((c) => c.id === id)?.source).map((r) => ({
+      connectionId: r.connectionId,
+      configHash: r.configHash,
+    }));
+
     const record = {
       asOf: asOf.toISOString(),
       engine: provenance.some((p) => p.foldedFilterNodeIds.length > 0) ? "compiled" : "js",
       reads: provenance,
+      streams,
     };
     for (const t of tiles) {
       await upsertResult(db, orgId, flowId, version, t.nodeId, t.tile, "fresh", null, record);
@@ -137,7 +163,27 @@ export async function resultsVersion(db: DB, orgId: string): Promise<string> {
     .from(flowResults)
     .where(eq(flowResults.orgId, orgId));
   const maxMs = row?.maxComputedAt ? Date.parse(String(row.maxComputedAt)) : 0;
-  return `${row?.tiles ?? 0}.${row?.nonFresh ?? 0}.${maxMs}`;
+  /**
+   * Import progress has to be part of this string, or the label it drives never
+   * updates on an open dashboard.
+   *
+   * An import deepening from 12 days to 30 changes no `flow_results` column —
+   * same tiles, same status, same `computed_at` — so the ETag would not move
+   * and the poller would not refresh. The tile would sit on "covering 12 of 90"
+   * until some unrelated recompute happened to bump it.
+   *
+   * `maxReached` is what actually advances as history lands; the count catches
+   * an import starting or finishing.
+   */
+  const [bf] = await db
+    .select({
+      running: sql<number>`count(*)::int`,
+      maxReached: sql<string | null>`max(${backfillJobs.reachedFloor})`,
+    })
+    .from(backfillJobs)
+    .where(and(eq(backfillJobs.orgId, orgId), inArray(backfillJobs.status, ["queued", "running"])));
+  const reachedMs = bf?.maxReached ? Date.parse(String(bf.maxReached)) : 0;
+  return `${row?.tiles ?? 0}.${row?.nonFresh ?? 0}.${maxMs}.${bf?.running ?? 0}.${reachedMs}`;
 }
 
 /**
