@@ -12,6 +12,8 @@ import {
   budgetFor,
   claimCalls,
   fleetBudgetFor,
+  fleetLaneLimit,
+  type CallLane,
   FLEET_CONNECTION_ID,
   FLEET_ORG_ID,
   isPaused,
@@ -348,6 +350,14 @@ describe("F.1 (fleet) — a shared credential means a shared ceiling", () => {
   });
 
   const gsheets = (id: string, orgId: string) => ({ id, orgId, source: "gsheets" });
+  /**
+   * The operation a Sheets poll is claimed against. Not `"*"`: this project's
+   * quota is per API, so the catalog declares Sheets (300/min) and Drive
+   * (12,000/min) separately and `fleetBudgetFor` has NO wildcard fallback — a
+   * wildcard here would silently mean "no fleet ceiling", which is the failure
+   * the suite below exists to catch.
+   */
+  const SHEETS_OP = "sheets.values.get";
   const fleetRow = async (source: string) => {
     const [row] = await db
       .select()
@@ -360,18 +370,37 @@ describe("F.1 (fleet) — a shared credential means a shared ceiling", () => {
     return row?.calls ?? 0;
   };
 
-  it("denies a SECOND connection once the project budget is spent, though its own budget is untouched", async () => {
-    const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
+  /**
+   * Spend the whole fleet ceiling, spread across as many customers as it takes.
+   *
+   * It takes several, and that is the point of the real numbers: this project
+   * gets 300 Sheets reads a minute while each user's grant gets 60, so ONE
+   * connection cannot exhaust the project — five polite ones together can. That
+   * is precisely the failure a per-connection budget alone cannot see, and it is
+   * why these tests could not stay written around a single spender.
+   */
+  const exhaustFleet = async (lane: CallLane = "interactive") => {
+    const fleet = fleetLaneLimit("gsheets", SHEETS_OP, lane)!;
+    const perConn = laneLimit("gsheets", SHEETS_OP, lane);
+    let spent = 0;
+    for (let n = 0; spent < fleet; n++) {
+      const c = gsheets(await seedConnection(db, { orgId: `org_spender_${n}`, source: "gsheets" }), `org_spender_${n}`);
+      for (let i = 0; i < perConn && spent < fleet; i++) {
+        expect((await claimCalls(db, c, SHEETS_OP, 1, NOW, lane)).allowed).toBe(true);
+        spent += 1;
+      }
+    }
+    return spent;
+  };
+
+  it("denies a FRESH connection once the project budget is spent, though its own budget is untouched", async () => {
     const b = gsheets(await seedConnection(db, { orgId: ORG_B, source: "gsheets" }), ORG_B);
 
-    // A spends the whole FLEET budget. Its own per-connection budget is the
-    // same size here, so this also proves the fleet bucket is what bites.
-    const fleet = fleetBudgetFor("gsheets", "*")!;
-    for (let i = 0; i < fleet; i++) {
-      expect((await claimCalls(db, a, "*", 1, NOW, "interactive")).allowed).toBe(true);
-    }
+    // Several customers, each strictly inside its own 60/min grant, together
+    // reaching the project's 300 — the shape one connection could never make.
+    await exhaustFleet();
 
-    const denied = await claimCalls(db, b, "*", 1, NOW, "interactive");
+    const denied = await claimCalls(db, b, SHEETS_OP, 1, NOW, "interactive");
     expect(denied.allowed).toBe(false);
     // B has spent nothing of its own — a per-connection budget alone would have
     // waved this straight through, which is the hole this closes.
@@ -379,13 +408,11 @@ describe("F.1 (fleet) — a shared credential means a shared ceiling", () => {
   });
 
   it("does not charge a blameless connection for a call the fleet refused", async () => {
-    const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
     const b = gsheets(await seedConnection(db, { orgId: ORG_B, source: "gsheets" }), ORG_B);
-    const fleet = fleetBudgetFor("gsheets", "*")!;
-    for (let i = 0; i < fleet; i++) await claimCalls(db, a, "*", 1, NOW, "interactive");
+    await exhaustFleet();
 
-    await claimCalls(db, b, "*", 1, NOW, "interactive");
-    await claimCalls(db, b, "*", 1, NOW, "interactive");
+    await claimCalls(db, b, SHEETS_OP, 1, NOW, "interactive");
+    await claimCalls(db, b, SHEETS_OP, 1, NOW, "interactive");
 
     // Both attempts unwound. Otherwise B burns its personal budget on calls it
     // was never allowed to make, and stays denied on its OWN limit after the
@@ -396,12 +423,10 @@ describe("F.1 (fleet) — a shared credential means a shared ceiling", () => {
   });
 
   it("says whose limit it is, so a blameless customer is not sent hunting", async () => {
-    const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
     const b = gsheets(await seedConnection(db, { orgId: ORG_B, source: "gsheets" }), ORG_B);
-    const fleet = fleetBudgetFor("gsheets", "*")!;
-    for (let i = 0; i < fleet; i++) await claimCalls(db, a, "*", 1, NOW, "interactive");
+    await exhaustFleet();
 
-    const denied = await claimCalls(db, b, "*", 1, NOW, "interactive");
+    const denied = await claimCalls(db, b, SHEETS_OP, 1, NOW, "interactive");
     expect(denied.allowed).toBe(false);
     if (!denied.allowed) {
       expect(denied.reason).toMatch(/shared/i);
@@ -417,6 +442,7 @@ describe("F.1 (fleet) — a shared credential means a shared ceiling", () => {
     const a = { id: await seedConnection(db, { orgId: ORG_A, source: "close" }), orgId: ORG_A, source: "close" };
     const b = { id: await seedConnection(db, { orgId: ORG_B, source: "close" }), orgId: ORG_B, source: "close" };
     const limit = laneLimit("close", "*", "interactive");
+    // Close publishes one account-wide limit, so `"*"` is its real bucket here.
     for (let i = 0; i < limit; i++) await claimCalls(db, a, "*", 1, NOW, "interactive");
 
     // A is spent; B is untouched and must still be allowed.
@@ -432,15 +458,30 @@ describe("F.1 (fleet) — a shared credential means a shared ceiling", () => {
    */
   it("counts settled-up requests against the fleet, not just claimed ones", async () => {
     const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
-    await claimCalls(db, a, "*", 1, NOW, "interactive");
-    await recordExtraCalls(db, a, "*", 2, NOW); // the Drive probe + the re-stamp
+    await claimCalls(db, a, SHEETS_OP, 1, NOW, "interactive");
+    await recordExtraCalls(db, a, SHEETS_OP, 2, NOW); // the Drive probe + the re-stamp
 
     expect((await fleetRow("gsheets")).calls).toBe(3);
   });
 
+  /**
+   * The behavioural half of the split: a spent Sheets bucket must not take the
+   * Drive probe down with it. Sharing one bucket did exactly that, and it is
+   * self-defeating — the probe is how a sweep decides it does NOT need a Sheets
+   * read, so the first thing a Sheets shortage would block is the mechanism for
+   * consuming less Sheets quota.
+   */
+  it("an exhausted Sheets bucket still lets the probe that saves Sheets calls through", async () => {
+    const c = gsheets(await seedConnection(db, { orgId: ORG_B, source: "gsheets" }), ORG_B);
+    await exhaustFleet();
+
+    expect((await claimCalls(db, c, SHEETS_OP, 1, NOW, "interactive")).allowed).toBe(false);
+    expect((await claimCalls(db, c, "drive.files.get", 1, NOW, "interactive")).allowed).toBe(true);
+  });
+
   it("books the fleet row to a sentinel that can never be a real org or connection", async () => {
     const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
-    await claimCalls(db, a, "*", 1, NOW, "interactive");
+    await claimCalls(db, a, SHEETS_OP, 1, NOW, "interactive");
 
     const row = await fleetRow("gsheets");
     expect(row.orgId).toBe(FLEET_ORG_ID);
@@ -453,14 +494,13 @@ describe("F.1 (fleet) — a shared credential means a shared ceiling", () => {
   });
 
   it("gives interactive work headroom the background lane cannot reach", async () => {
-    const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
     const b = gsheets(await seedConnection(db, { orgId: ORG_B, source: "gsheets" }), ORG_B);
-    const background = fleetBudgetFor("gsheets", "*")! - Math.max(1, Math.ceil(fleetBudgetFor("gsheets", "*")! * 0.25));
+    // Spent to the BACKGROUND ceiling of the fleet bucket, which stops short of
+    // the reserve — so the shared quota is out for sweeps and not for people.
+    await exhaustFleet("background");
 
-    for (let i = 0; i < background; i++) await claimCalls(db, a, "*", 1, NOW, "background");
-
-    expect((await claimCalls(db, b, "*", 1, NOW, "background")).allowed).toBe(false);
-    expect((await claimCalls(db, b, "*", 1, NOW, "interactive")).allowed).toBe(true); // a Test still gets through
+    expect((await claimCalls(db, b, SHEETS_OP, 1, NOW, "background")).allowed).toBe(false);
+    expect((await claimCalls(db, b, SHEETS_OP, 1, NOW, "interactive")).allowed).toBe(true); // a Test still gets through
   });
 });
 
@@ -533,9 +573,17 @@ describe("stream-scoped spend is settled after the fact", () => {
     return calls;
   }
 
+  /** Total calls charged across every operation, and per operation. */
   const ledgerCalls = async (connectionId: string) => {
-    const [led] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, connectionId));
-    return led?.calls ?? 0;
+    const rows = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, connectionId));
+    return rows.reduce((n, r) => n + r.calls, 0);
+  };
+  const ledgerFor = async (connectionId: string, operation: string) => {
+    const rows = await db
+      .select()
+      .from(usageLedger)
+      .where(and(eq(usageLedger.connectionId, connectionId), eq(usageLedger.operation, operation)));
+    return rows.reduce((n, r) => n + r.calls, 0);
   };
 
   it("charges a changed sheet both of its requests, not the one claimed", async () => {
@@ -547,6 +595,11 @@ describe("stream-scoped spend is settled after the fact", () => {
 
     expect(calls).toHaveLength(2); // Drive probe + values read; the probe's stamp is reused
     expect(await ledgerCalls(conn.id)).toBe(2); // was 1, while two requests went out
+    // …and each request against ITS OWN API's budget. This project gets 300
+    // Sheets reads a minute and 12,000 Drive requests; one bucket would make the
+    // Sheets number ration the Drive probe too.
+    expect(await ledgerFor(conn.id, "sheets.values.get")).toBe(1);
+    expect(await ledgerFor(conn.id, "drive.files.get")).toBe(1);
   });
 
   it("charges an unchanged sheet the one probe it really made", async () => {
@@ -558,6 +611,12 @@ describe("stream-scoped spend is settled after the fact", () => {
 
     expect(calls).toHaveLength(1); // the skip is real: no values read
     expect(await ledgerCalls(conn.id)).toBe(1);
+    // The saving lands where it was made. The claim reserved a Sheets read up
+    // front; the poll only probed Drive, so the reservation is handed back —
+    // otherwise a skip costs the tight bucket exactly what a read does and the
+    // change detection is invisible to the thing rationing the quota.
+    expect(await ledgerFor(conn.id, "sheets.values.get")).toBe(0);
+    expect(await ledgerFor(conn.id, "drive.files.get")).toBe(1);
   });
 
   /**

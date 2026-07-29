@@ -315,26 +315,33 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     // deletions anywhere in the sheet are reflected, not just appended rows.
     sync: "mirror",
     /**
-     * UNVERIFIED PLACEHOLDER — confirm before relying on it.
+     * READ OFF THIS PROJECT'S Google Cloud console (APIs & Services → Quotas),
+     * which beats any documented figure because it is the limit the project
+     * actually has. Sheets read: 300/min per project, 60/min per user.
      *
-     * The only Google figure this repository records is `docs/BUILD_PLAN.md`:
-     * "Sheets read quota ~100 req/100 s", which is 60/min and does not say
-     * whether it is per project or per user. Provider docs are not reachable
-     * from the build environment, so this is not settled from here.
+     * The per-user number is the per-connection one: a user's OAuth grant is
+     * what a connection holds. The per-project number is the fleet's, because
+     * every customer authorises through one `GOOGLE_CLIENT_ID`.
      *
-     * The authoritative number is in OUR Google Cloud console — APIs & Services
-     * → Quotas, for this project specifically — which beats any figure from
-     * documentation because it reflects whatever limit the project actually
-     * has. Read it off and replace this.
+     * TWO BUCKETS, NOT ONE, and Sheets is the reason. Drive gets 12,000/min
+     * where Sheets gets 300 — a factor of 40 — and one shared bucket would make
+     * the Sheets figure govern both. That is not merely conservative, it is
+     * self-defeating: the Drive call is the `modifiedTime` probe whose entire
+     * purpose is to avoid Sheets reads, so rationing it at the Sheets rate
+     * spends the saving it was added to make. `PollResult.extraCalls` is how one
+     * poll's spend gets attributed across the two.
      *
-     * Chosen low on purpose while it is unconfirmed. Being wrong LOW costs
-     * throughput and defers work that retries itself; being wrong HIGH is the
-     * fleet-wide failure this exists to prevent. `"*"` because the connector
-     * declares no per-operation keys, so every Sheets and Drive request shares
-     * this bucket — which also means the tighter of the two APIs governs, again
-     * erring toward denying early.
+     * Sheets is the only tight Google limit here, which is also why the polling
+     * probe is worth having and why Drive push notifications are not urgent.
      */
-    fleetLimits: { "*": { requestsPerMinute: 60 } },
+    fleetLimits: {
+      "sheets.values.get": { requestsPerMinute: 300 },
+      "drive.files.get": { requestsPerMinute: 12_000 },
+    },
+    rateLimits: {
+      "sheets.values.get": { requestsPerMinute: 60 },
+      "drive.files.get": { requestsPerMinute: 12_000 },
+    },
     autoWebhook: false,
     credentialFields: [],
     // Which spreadsheet + tab is chosen inside each flow's Get data step.
@@ -351,18 +358,19 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     instant: false,
     poll: true,
     /**
-     * UNVERIFIED PLACEHOLDER — and weaker evidence than the Sheets one, which
-     * is why it is stated separately rather than shared.
+     * READ OFF THIS PROJECT'S Google Cloud console, same as Sheets: Calendar
+     * gets 10,000/min per project and 600/min per user. Its own quota, separate
+     * from Sheets and Drive, which is why it is its own bucket and not a shared
+     * Google-wide one.
      *
-     * This repository records NO Calendar figure at all. 60/min is here by
-     * analogy with the Sheets number, which is a guess, not a citation. The
-     * Calendar API has its own project quota — separate from Sheets and Drive,
-     * which is why this is its own bucket rather than one Google-wide one.
-     *
-     * Same place to settle it: Google Cloud console → APIs & Services → Quotas,
-     * Calendar API, this project.
+     * Generous enough that this ceiling will not be what stops a Calendar sweep —
+     * declared anyway, because an undeclared fleet limit is not a large one, it
+     * is NO limit (`fleetBudgetFor` returns null), and 8 pages per poll across a
+     * whole fleet is exactly the shape that needs a number rather than an
+     * absence.
      */
-    fleetLimits: { "*": { requestsPerMinute: 60 } },
+    fleetLimits: { "events.list": { requestsPerMinute: 10_000 } },
+    rateLimits: { "events.list": { requestsPerMinute: 600 } },
     autoWebhook: false,
     credentialFields: [],
     flowFields: [{ key: "calendarId", label: "Calendar", dynamic: true, placeholder: "primary" }],

@@ -4,7 +4,7 @@ import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
-import { claimCalls, recordExtraCalls } from "@/lib/provider-gateway/budget";
+import { claimCalls, settlePollCalls } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { withConnectionSyncLock } from "@/lib/sync/locks";
 import { checkpointJob, finishJob, startJob, type BackfillJob } from "./jobs";
@@ -87,7 +87,7 @@ export async function runBackfillSlice(db: DB, job: BackfillJob, now = new Date(
         // declares, so the rows this writes cannot be retired by the next sweep.
         windowFloor: started.targetFloor,
       });
-      await recordExtraCalls(db, conn, operation, Math.max(0, (res.providerCalls ?? 1) - 1));
+      await settlePollCalls(db, conn, operation, res);
 
       if (res.records.length > 0) {
         const wrote = await upsertEvents(

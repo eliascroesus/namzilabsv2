@@ -4,7 +4,7 @@ import { createTestDb, seedConnection } from "./helpers/testdb";
 import { reconcileConnection } from "@/ingestion/reconcile";
 import { registerConnector, getConnector } from "@/connectors/registry";
 import { pollOperation } from "@/lib/provider-gateway/operations";
-import { budgetFor } from "@/lib/provider-gateway/budget";
+import { budgetFor, fleetBudgetFor, fleetLaneLimit, laneLimit } from "@/lib/provider-gateway/budget";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { usageLedger, sourceStreams } from "@/db/schema";
 import type { Connector } from "@/connectors/types";
@@ -120,6 +120,41 @@ describe("declared limits and claimed operations cannot drift apart", () => {
     }
   });
 
+  /**
+   * The same dead-config check in the FLEET direction, and it guards a sharper
+   * failure than its per-connection twin.
+   *
+   * `fleetBudgetFor` has no `DEFAULT_RPM` fallback on purpose — an undeclared
+   * fleet limit means "no shared ceiling", not "a guessed one". So a fleet limit
+   * keyed on an operation the connector never emits does not degrade to a
+   * conservative number: the ceiling silently ceases to exist, and the failure
+   * it was protecting against is every Google connection failing at once. This
+   * exact drift was one rename away when Sheets gained its second bucket.
+   */
+  it("every fleet limit is keyed on an operation its connector actually emits", () => {
+    for (const entry of CONNECTOR_CATALOG.filter((e) => e.fleetLimits)) {
+      const connector = getConnector(entry.source);
+      const emits = new Set<string>(connector?.operations ?? ["*"]);
+      for (const key of Object.keys(entry.fleetLimits!)) {
+        expect(
+          emits.has(key),
+          `${entry.source} declares fleetLimits["${key}"] but its connector never emits that operation — ` +
+            `fleetBudgetFor returns null for keys nobody claims, so the shared ceiling is not conservative, it is ABSENT.`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("what a poll resolves to has a fleet ceiling wherever the credential is shared", () => {
+    for (const entry of CONNECTOR_CATALOG.filter((e) => e.fleetLimits)) {
+      expect(
+        fleetBudgetFor(entry.source, pollOperation(entry.source)),
+        `${entry.source} declares a fleet ceiling, but its polls resolve to an operation with none — ` +
+          `every customer's requests would reach the provider under one credential with nothing counting the total.`,
+      ).not.toBeNull();
+    }
+  });
+
   it("a source that declares limits never resolves to the wildcard bucket", () => {
     for (const entry of declaring) {
       expect(
@@ -131,11 +166,54 @@ describe("declared limits and claimed operations cannot drift apart", () => {
   });
 });
 
+/**
+ * The NUMBERS, read off this project's Google Cloud console (APIs & Services →
+ * Quotas) rather than from documentation, because the console reports the limit
+ * the project actually has.
+ *
+ * Pinned because the split is only worth having while the two figures differ.
+ * Re-tightening Drive to the Sheets number would leave every behavioural test
+ * passing — the buckets would still be separate, still charged separately, still
+ * refunded correctly — and would silently undo the point: the Drive probe exists
+ * to AVOID Sheets reads, so rationing it at the Sheets rate spends the saving.
+ */
+describe("Google's per-API quotas, as declared", () => {
+  const SHEETS = "sheets.values.get";
+  const DRIVE = "drive.files.get";
+
+  it("declares the per-project (fleet) and per-user (connection) figures separately", () => {
+    // Sheets read: 300/min per project, 60/min per user. × the 70% share.
+    expect(fleetBudgetFor("gsheets", SHEETS)).toBe(Math.floor(300 * 0.7));
+    expect(budgetFor("gsheets", SHEETS)).toBe(Math.floor(60 * 0.7));
+    // Drive: 12,000/min for both.
+    expect(fleetBudgetFor("gsheets", DRIVE)).toBe(Math.floor(12_000 * 0.7));
+    expect(budgetFor("gsheets", DRIVE)).toBe(Math.floor(12_000 * 0.7));
+    // Calendar: 10,000/min per project, 600/min per user.
+    expect(fleetBudgetFor("gcal", "events.list")).toBe(Math.floor(10_000 * 0.7));
+    expect(budgetFor("gcal", "events.list")).toBe(Math.floor(600 * 0.7));
+  });
+
+  it("leaves ONE connection more Drive headroom than the whole fleet has Sheets", () => {
+    // The decisive comparison, and the one a re-tightening breaks. Sheets is the
+    // only tight Google limit here; a Drive probe must never be the thing that
+    // runs out, or the change detection cannot do its job.
+    expect(laneLimit("gsheets", DRIVE, "background")).toBeGreaterThan(fleetLaneLimit("gsheets", SHEETS, "interactive")!);
+  });
+});
+
 describe("pollOperation resolution", () => {
   it("falls back to the shared bucket for connectors with one account-wide limit", () => {
     // Correct, not a gap: the provider publishes a single limit.
     expect(pollOperation("close")).toBe("*");
-    expect(pollOperation("gsheets")).toBe("*");
+    expect(pollOperation("sendblue")).toBe("*");
+  });
+
+  it("names the endpoint where the provider budgets per API", () => {
+    // Google does not have "a Google quota": this Cloud project gets 300 Sheets
+    // reads a minute, 12,000 Drive requests and 10,000 Calendar requests, each
+    // its own bucket. A wildcard would make the tightest of them govern the rest.
+    expect(pollOperation("gsheets")).toBe("sheets.values.get");
+    expect(pollOperation("gcal")).toBe("events.list");
   });
 
   it("is resolved from config, so per-stream endpoints get separate budgets", () => {

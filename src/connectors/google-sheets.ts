@@ -7,6 +7,21 @@ const API = "https://sheets.googleapis.com/v4/spreadsheets";
 const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
 
 /**
+ * The two endpoints one poll uses, and they are budgeted SEPARATELY because
+ * Google budgets them separately: this Cloud project gets 300 Sheets reads a
+ * minute and 12,000 Drive requests. Sharing one bucket means the Sheets number
+ * governs the Drive probe, which is backwards — the probe exists to AVOID Sheets
+ * reads, so rationing it at the Sheets rate throws away the saving.
+ *
+ * `operationFor` returns the Sheets one: it is what a poll is claimed against up
+ * front, and it is the tighter of the two, so pre-authorising against it is the
+ * conservative choice. The probe's own spend is attributed afterwards through
+ * `PollResult.extraCalls`.
+ */
+const SHEETS_OP = "sheets.values.get";
+const DRIVE_OP = "drive.files.get";
+
+/**
  * Google Sheets. MIRROR source: every poll re-reads the ENTIRE tab and the
  * caller (syncStream) refreshes rows in place and soft-deletes rows the read
  * no longer produced — a spreadsheet is a living document, not an append-only
@@ -21,6 +36,8 @@ const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
 export const googleSheetsConnector: Connector = {
   source: "gsheets",
   authType: "oauth2",
+  operations: [SHEETS_OP, DRIVE_OP] as const,
+  operationFor: () => SHEETS_OP,
 
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     if (!secret) return true;
@@ -82,7 +99,17 @@ export const googleSheetsConnector: Connector = {
         // FULL_READ_EVERY skips we read anyway, whatever Drive says. Cheap
         // insurance against a whole class of silently-stale sheet.
         if (probed !== "|" && probed === marker.stamp && marker.skips < FULL_READ_EVERY - 1) {
-          return { records: [], nextCursor: serializeMarker({ stamp: probed, skips: marker.skips + 1 }), unchanged: true, providerCalls: probeCalls };
+          return {
+            records: [],
+            nextCursor: serializeMarker({ stamp: probed, skips: marker.skips + 1 }),
+            unchanged: true,
+            providerCalls: probeCalls,
+            // A skip spends Drive quota and no Sheets quota. The one Sheets call
+            // the runner claimed up front stands as a reservation it did not use
+            // — over-counting the tighter bucket by one, which defers earlier and
+            // is the safe direction to be wrong in.
+            extraCalls: { [DRIVE_OP]: probeCalls },
+          };
         }
       } catch {
         // Drive unreachable, or the token lacks the scope: fall through and read
@@ -92,7 +119,11 @@ export const googleSheetsConnector: Connector = {
     // The probe already knows what version we are about to read. Handing it down
     // is both the correctness fix and one request cheaper — see readRows.
     const read = await readRows(args, probed);
-    return { ...read, providerCalls: (read.providerCalls ?? 0) + probeCalls };
+    return {
+      ...read,
+      providerCalls: (read.providerCalls ?? 0) + probeCalls,
+      extraCalls: { [DRIVE_OP]: (read.extraCalls?.[DRIVE_OP] ?? 0) + probeCalls },
+    };
   },
 
   async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
@@ -210,6 +241,9 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
   // probe to hand down. Counted on attempt — a failed Drive call still reached
   // Google.
   const providerCalls = knownStamp ? 1 : 2;
+  // …and the stamp fetch is a DRIVE request, not a Sheets one. Attributed rather
+  // than added on, so the total charged still equals `providerCalls`.
+  const extraCalls = knownStamp ? undefined : { [DRIVE_OP]: 1 };
   // Keep the previous marker when Drive was unreachable, rather than discarding
   // it: a transient blip should not also cost the NEXT sweep a full read. A
   // stale marker is safe — it only skips when it MATCHES a freshly fetched
@@ -217,7 +251,7 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
   const nextCursor = stamp && stamp !== "|" ? serializeMarker({ stamp, skips: 0 }) : args.cursor;
 
   const values = data.values ?? [];
-  if (values.length === 0) return { records: [], nextCursor, providerCalls };
+  if (values.length === 0) return { records: [], nextCursor, providerCalls, extraCalls };
 
   const header = values[0];
   const dataRows = values.slice(1);
@@ -242,7 +276,7 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
       properties: obj,
     });
   }
-  return { records, nextCursor, providerCalls };
+  return { records, nextCursor, providerCalls, extraCalls };
 }
 
 function firstEmailLike(obj: Record<string, unknown>): string | null {

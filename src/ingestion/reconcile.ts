@@ -4,7 +4,7 @@ import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
 import { isStreamScoped } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
-import { applyObservedRateLimit, claimCalls, isPaused, pauseConnection, recordExtraCalls, recordObservedLimit, recordProviderError, recordSuccess, tripBreaker } from "@/lib/provider-gateway/budget";
+import { applyObservedRateLimit, claimCalls, isPaused, pauseConnection, recordObservedLimit, recordProviderError, recordSuccess, settlePollCalls, tripBreaker } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { withConnectionSyncLock } from "@/lib/sync/locks";
 import { upsertEvents } from "./pipeline";
@@ -273,9 +273,10 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     // still waiting on.
     let incomplete: boolean | undefined;
     let providerCalls: number | undefined;
+    let extraCalls: Record<string, number> | undefined;
     let rateLimit: Awaited<ReturnType<typeof poll>>["rateLimit"];
     try {
-      ({ records, nextCursor, incomplete, providerCalls, rateLimit } = await poll({
+      ({ records, nextCursor, incomplete, providerCalls, extraCalls, rateLimit } = await poll({
         connectionId,
         cursor,
         credentials,
@@ -295,7 +296,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     // The claim above bought ONE call, but a connector that pages internally
     // may have spent several. Settle up: the spend cannot be un-made, but the
     // next sweep must not be authorised on a false reading.
-    await recordExtraCalls(db, conn, pollOperation(conn.source, conn.config), Math.max(0, (providerCalls ?? 1) - 1));
+    await settlePollCalls(db, conn, pollOperation(conn.source, conn.config), { providerCalls, extraCalls });
 
     // Connection-scoped reconciliation writes at the connection's current
     // generation (>= 1): these are poll-managed rows a future full re-sync must

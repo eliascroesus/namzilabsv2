@@ -109,6 +109,20 @@ export function laneLimit(source: string, operation = "*", lane: CallLane = "bac
 }
 
 /**
+ * The same lane ceiling applied to the FLEET bucket, or null where the source
+ * declares none.
+ *
+ * The counterpart to `laneLimit`, and worth naming rather than leaving inline:
+ * the two ceilings are different numbers on Google (60/min per user against
+ * 300/min per project), so "what may this lane spend" has two answers and code
+ * that reaches for one must be able to say which.
+ */
+export function fleetLaneLimit(source: string, operation = "*", lane: CallLane = "background"): number | null {
+  const total = fleetBudgetFor(source, operation);
+  return total == null ? null : laneCeiling(total, lane);
+}
+
+/**
  * The share of the SWEEP's ceiling a historical import may spend (6.4's "≤50%").
  *
  * Applied to the background ceiling rather than to the whole budget, which is
@@ -221,10 +235,9 @@ export async function claimCalls(
     return { allowed: false, retryAfterMs, reason: `Respecting ${providerName}'s rate limit` };
   }
 
-  const fleetTotal = fleetBudgetFor(conn.source, operation);
-  if (fleetTotal == null) return { allowed: true, remaining: Math.max(0, limit - used) };
+  const fleetLimit = fleetLaneLimit(conn.source, operation, lane);
+  if (fleetLimit == null) return { allowed: true, remaining: Math.max(0, limit - used) };
 
-  const fleetLimit = laneCeiling(fleetTotal, lane);
   const fleetUsed = await chargeBucket(
     db,
     { orgId: FLEET_ORG_ID, connectionId: FLEET_CONNECTION_ID, provider: conn.source },
@@ -277,6 +290,66 @@ export async function recordExtraCalls(
   // or one in eight (Calendar) and permit that multiple of what it declares.
   if (fleetBudgetFor(conn.source, operation) != null) {
     await chargeBucket(db, { orgId: FLEET_ORG_ID, connectionId: FLEET_CONNECTION_ID, provider: conn.source }, operation, extra, start);
+  }
+}
+
+/**
+ * Settle one poll's real spend across the operations it actually used.
+ *
+ * `claimed` calls were already charged to `operation` before the poll ran. The
+ * poll may then have made more requests than that, and some of them may have
+ * gone somewhere else entirely — `extraCalls` names those. They are SUBTRACTED
+ * from the primary operation rather than added on, so the total charged always
+ * equals `providerCalls`: this redistributes a poll's spend, it does not inflate
+ * it.
+ *
+ * The reason it exists is Sheets. One poll asks Drive whether the file changed
+ * and then reads the tab through the Sheets API — 12,000/min per project against
+ * 300/min. Charging both to one bucket means the tighter number governs the
+ * cheap request too, so a probe designed to SAVE quota would be rationed as if
+ * it spent the expensive kind.
+ */
+export async function settlePollCalls(
+  db: DB,
+  conn: { id: string; orgId: string; source: string },
+  operation: string,
+  result: { providerCalls?: number; extraCalls?: Record<string, number> },
+  claimed = 1,
+  now = new Date(),
+): Promise<void> {
+  const extra = result.extraCalls ?? {};
+  let attributed = 0;
+  for (const [op, n] of Object.entries(extra)) {
+    if (!(n > 0) || op === operation) continue;
+    attributed += n;
+    await recordExtraCalls(db, conn, op, n, now);
+  }
+  // Connectors that report nothing are counted as one request, which is the
+  // pre-existing behaviour and correct for a connector that makes one.
+  const delta = (result.providerCalls ?? 1) - claimed - attributed;
+  if (delta > 0) {
+    await recordExtraCalls(db, conn, operation, delta, now);
+    return;
+  }
+  if (delta === 0) return;
+
+  /**
+   * The claim RESERVED calls this poll did not make, so hand them back.
+   *
+   * An unchanged sheet is the case: one Sheets read is claimed up front, then
+   * only Drive is asked whether anything changed. Leaving the reservation
+   * charged would bill the 300/min bucket for the read the probe exists to
+   * AVOID — a skip would cost the same as a read, and the whole change-detection
+   * saving would be invisible to the thing that rations the quota.
+   *
+   * `throttled: false`: nothing was denied, a reservation simply went unused,
+   * and marking a throttle here would put a shortage in the audit trail that
+   * never happened.
+   */
+  const start = windowStart(now);
+  await releaseBucket(db, conn.id, operation, -delta, start, false);
+  if (fleetBudgetFor(conn.source, operation) != null) {
+    await releaseBucket(db, FLEET_CONNECTION_ID, operation, -delta, start, false);
   }
 }
 

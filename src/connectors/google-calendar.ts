@@ -2,6 +2,14 @@ import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs,
 import { fetchJson, HttpError } from "@/lib/http-client";
 import { parseDate, str } from "./field-utils";
 
+/**
+ * The one endpoint this connector polls. Named rather than `"*"` so the
+ * catalog's declared limits and what the runner claims against cannot drift —
+ * `tests/budget-operations.test.ts` checks that correspondence both ways, and a
+ * wildcard key would satisfy neither direction.
+ */
+const CALENDAR_OP = "events.list";
+
 const API = "https://www.googleapis.com/calendar/v3/calendars";
 
 /** Pages walked per poll; Google only reveals nextSyncToken on the LAST page. */
@@ -17,6 +25,8 @@ const MAX_PAGES = 8; // 8 × 250 = 2000 changes per sweep
 export const googleCalendarConnector: Connector = {
   source: "gcal",
   authType: "oauth2",
+  operations: [CALENDAR_OP] as const,
+  operationFor: () => CALENDAR_OP,
 
   // Calendar is poll-only in v1; push channels are a later addition.
   verifySignature(_args: VerifyArgs): boolean {
