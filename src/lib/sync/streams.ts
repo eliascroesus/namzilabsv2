@@ -10,6 +10,7 @@ import { pollOperation } from "@/lib/provider-gateway/operations";
 import { awaitStreamWriteLock, withStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
+import { streamImportProgress } from "@/lib/backfill/jobs";
 
 /**
  * Streams are the unit of sync for connectors whose resource is chosen per flow
@@ -614,6 +615,12 @@ export async function primeStream(
       };
     }
     if (res.incomplete) return { ok: true, refreshed: true, note: partialScanNote(res.covered) };
+    // Phase 6 — a historical import may still be reaching backwards through
+    // this stream even though THIS read finished. The state belongs to the
+    // stream rather than to a flow, so every flow reading it says the same
+    // thing: a number that is still growing has to say so, in one voice.
+    const importing = await streamImportProgress(db, stream.id);
+    if (importing) return { ok: true, refreshed: true, note: importProgressNote(importing) };
     return { ok: true, refreshed: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

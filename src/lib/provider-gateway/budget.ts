@@ -37,8 +37,19 @@ const PROBE_LADDER_MS = [60 * 60_000, 4 * 60 * 60_000, 24 * 60 * 60_000];
  */
 const INTERACTIVE_RESERVE_SHARE = 0.25;
 
-/** Who is asking. Interactive callers may dip into the reserved headroom. */
-export type CallLane = "background" | "interactive";
+/**
+ * Who is asking, in strict priority order.
+ *
+ * `interactive` — a person is waiting. May use the whole budget, including the
+ *   reserve that exists for exactly this.
+ * `background`  — the ten-minute sweep. Stops at `budget - reserve`.
+ * `backfill`    — historical import. Gets a slice of what is left AFTER the
+ *   sweep's ceiling, so it is strictly the lowest priority and structurally
+ *   cannot reach the interactive reserve: its limit is derived from the
+ *   background ceiling, which already excludes it. A months-long import must
+ *   never be the reason someone's Test is slow.
+ */
+export type CallLane = "background" | "interactive" | "backfill";
 
 export type ClaimResult =
   | { allowed: true; remaining: number }
@@ -97,11 +108,27 @@ export function laneLimit(source: string, operation = "*", lane: CallLane = "bac
   return laneCeiling(budgetFor(source, operation), lane);
 }
 
+/**
+ * The share of the SWEEP's ceiling a historical import may spend (6.4's "≤50%").
+ *
+ * Applied to the background ceiling rather than to the whole budget, which is
+ * what makes the ordering structural instead of arithmetic: backfill can only
+ * ever spend a fraction of what live sync is already limited to, so no choice
+ * of share can let it reach the interactive reserve.
+ */
+const BACKFILL_SHARE = 0.5;
+
 /** The same reserve arithmetic, over whichever budget is being applied. */
 function laneCeiling(total: number, lane: CallLane): number {
   if (lane === "interactive") return total;
   const reserve = Math.max(1, Math.ceil(total * INTERACTIVE_RESERVE_SHARE));
-  return Math.max(1, total - reserve);
+  const background = Math.max(1, total - reserve);
+  if (lane === "background") return background;
+  // Deliberately NOT floored at 1. When the budget is so tight that live sync
+  // has room for a single call, the honest answer is that a backfill does not
+  // run this minute — it defers and retries, which is what the lane is built to
+  // do. Flooring it at 1 would let an import take the only call there was.
+  return Math.floor(background * BACKFILL_SHARE);
 }
 
 function windowStart(now: Date): Date {

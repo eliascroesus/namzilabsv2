@@ -7,6 +7,8 @@ import { createConnection, disableConnection, reconnectConnection, updateConnect
 import { catalogEntry } from "@/connectors/catalog";
 import { inngest } from "@/inngest/client";
 import { promoteToBaseCadence } from "@/lib/sync/cadence";
+import { activeStreams } from "@/lib/sync/streams";
+import { defaultTargetFloor, requestBackfill } from "@/lib/backfill/jobs";
 import { getDb } from "@/db/client";
 
 /**
@@ -65,6 +67,34 @@ export async function fullResyncAction(formData: FormData): Promise<void> {
   if (!conn) throw new Error("connection not found");
   await promoteToBaseCadence(getDb(), id).catch(() => {});
   await inngest.send({ name: "sync/connection.requested", data: { connectionId: id, mode: "full" } });
+  redirect(`/connections/${id}`);
+}
+
+/**
+ * Ask for more history on every stream this connection feeds.
+ *
+ * User-initiated on purpose, and this is a decision rather than an omission.
+ * Checklist 9a's triggers for an automatic backfill — a Records-class stream
+ * shipping, or a large-history account onboarding — have not happened, and
+ * starting a months-long import on everyone's behalf would spend provider
+ * budget nobody asked to spend. So the lane exists, is bounded, and runs when
+ * somebody wants it.
+ *
+ * Idempotent by construction: `requestBackfill` is keyed on
+ * (stream, target depth), so pressing this twice finds the existing jobs rather
+ * than starting a second set. Only asking for a DEEPER window is new work.
+ */
+export async function importHistoryAction(formData: FormData): Promise<void> {
+  const { orgId } = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  const conn = await getConnection(orgId, id);
+  if (!conn) throw new Error("connection not found");
+  const db = getDb();
+  const target = defaultTargetFloor();
+  for (const stream of await activeStreams(db, id)) {
+    if (stream.status === "disabled") continue;
+    await requestBackfill(db, { id: stream.id, orgId, connectionId: id, configHash: stream.configHash }, conn.source, target);
+  }
   redirect(`/connections/${id}`);
 }
 

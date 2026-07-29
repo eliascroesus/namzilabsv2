@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { reconcileAll, reconcileOne } from "@/inngest/functions/reconcile";
 import { processEvent } from "@/inngest/functions/process-event";
 import { runFlowTest } from "@/inngest/functions/test-run";
-import { syncConnection, recomputeStaleFlows, materializeStale } from "@/inngest/functions/sync";
+import { syncConnection, recomputeStaleFlows, materializeStale, runBackfill } from "@/inngest/functions/sync";
 
 /**
  * The queue-layer SAFETY behavior lives in Inngest function CONFIGURATION:
@@ -71,5 +71,26 @@ describe("Inngest safety configuration is pinned", () => {
     expect(o.retries).toBe(0); // retries would make the editor spinner lie
     expect(o.concurrency).toEqual([{ limit: 6 }, { key: "event.data.orgId", limit: 2 }]);
     expect(o.priority).toEqual({ run: "event.data.priority ?? 180" });
+  });
+
+  /**
+   * E.8 — the backfill lane must be the lowest-priority thing in the system.
+   *
+   * Pinned here rather than trusted, because dropping any one of these fields
+   * compiles and ships a regression that is invisible until a customer's Test
+   * is slow while a months-long import runs. The budget ceiling is enforced
+   * separately in `claimCalls`, so the ordering survives even if this
+   * configuration is later changed — but that is a backstop, not a reason to
+   * leave the configuration unpinned.
+   */
+  it("runBackfill: lowest priority, one at a time, one slice per invocation", () => {
+    const o = opts(runBackfill);
+    expect(o.id).toBe("run-backfill");
+    // Below the sweep's 0 and far below the Test's 180.
+    expect(o.priority).toEqual({ run: "-600" });
+    // A backfill is allowed to take days, so there is nothing to gain from
+    // running several and a fleet's worth of provider spend to lose.
+    expect(o.concurrency).toEqual({ limit: 1 });
+    expect(o.triggers).toEqual([{ cron: "*/5 * * * *" }]);
   });
 });

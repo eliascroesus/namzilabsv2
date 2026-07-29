@@ -4,6 +4,18 @@ import { getDb } from "@/db/client";
 import { runSync, reprocessConnection, syncChanged } from "@/lib/sync/resync";
 import { markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
+import { getJob, nextRunnableJob, stalledJobs } from "@/lib/backfill/jobs";
+
+/**
+ * How long a `running` backfill may go without moving before it is reported.
+ *
+ * The lane ticks every five minutes, so six hours is roughly seventy missed
+ * opportunities to progress — comfortably past a deferral streak on a busy
+ * provider, and far short of letting a genuinely wedged import sit unnoticed
+ * for a day.
+ */
+const STALLED_BACKFILL_MS = 6 * 3_600_000;
+import { runBackfillSlice } from "@/lib/backfill/run";
 import { rawEvents } from "@/db/schema";
 
 /** Sync a connection (full backfill/re-sync or incremental). */
@@ -116,6 +128,73 @@ export const pruneStorage = inngest.createFunction(
     // non-zero backlog that persists night after night means pruning is not
     // keeping up with ingest — visible here before it becomes a disk problem.
     const backlog = await step.run("measure-retention-backlog", () => retentionBacklog(getDb()));
-    return { settledTestRuns: settled, ...retained, backlog };
+    /**
+     * 10(b) — an internal invariant scan, no provider calls.
+     *
+     * A backfill job that says `running` and has not moved its checkpoint is
+     * invisible by every other measure: it is retried on schedule, it writes
+     * rows on every attempt, and `updated_at` advances each time. Only
+     * `last_progress_at` can tell it from a healthy one.
+     *
+     * Reported rather than written onto the connection's `lastError`, which is
+     * the wrong field twice over: it means "the provider failed", and any
+     * successful poll clears it — so a flag put there would be wiped by the
+     * next sweep and the signal lost.
+     */
+    const stalled = await step.run("scan-stalled-backfills", async () =>
+      (await stalledJobs(getDb(), STALLED_BACKFILL_MS)).map((j) => ({
+        jobId: j.id,
+        streamId: j.streamId,
+        rowsImported: j.rowsImported,
+        lastProgressAt: j.lastProgressAt,
+      })),
+    );
+    return { settledTestRuns: settled, ...retained, backlog, stalledBackfills: stalled };
+  },
+);
+
+/**
+ * E.8 / Phase 6 — the backfill lane.
+ *
+ * Its own function rather than work folded into the sweep, for three reasons
+ * that all reduce to the same one: a historical import must never be able to
+ * degrade live sync.
+ *
+ *  - **Lowest priority.** The sweep runs at 0 and a Test at 180; this runs
+ *    below both, so a queue under pressure drains interactive work first.
+ *  - **Global concurrency of 1.** A backfill is throughput-insensitive by
+ *    nature — it is allowed to take days — so there is nothing to gain from
+ *    running several and a great deal to lose: N imports would multiply the
+ *    provider spend of the lowest-priority work in the system.
+ *  - **One slice per invocation.** Every unit is durable, so an interruption
+ *    costs a slice rather than an import, which is the whole point of
+ *    checkpointing.
+ *
+ * The budget ceiling is enforced a layer down, in `claimCalls`, where it is
+ * derived from the SWEEP's ceiling — so the ordering holds even if this
+ * function's own configuration is later changed.
+ */
+export const runBackfill = inngest.createFunction(
+  {
+    id: "run-backfill",
+    retries: 2,
+    concurrency: { limit: 1 },
+    priority: { run: "-600" },
+    triggers: [{ cron: "*/5 * * * *" }],
+  },
+  async ({ step }) => {
+    const db = getDb();
+    // Only the ID crosses the step boundary. Inngest serializes a step's return
+    // value to JSON, so a job object would arrive at the next step with its
+    // timestamps turned into strings — and every date comparison in the slice
+    // would then compare a string to a Date and quietly do the wrong thing.
+    // Re-reading is also more correct: the row may have moved on.
+    const jobId = await step.run("next-runnable-job", async () => (await nextRunnableJob(db))?.id ?? null);
+    if (!jobId) return { ran: false };
+    const outcome = await step.run("run-slice", async () => {
+      const job = await getJob(db, jobId);
+      return job ? await runBackfillSlice(db, job) : { kind: "finished" as const, status: "failed" as const };
+    });
+    return { ran: true, jobId, outcome };
   },
 );

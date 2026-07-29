@@ -7,6 +7,7 @@ import { CopyField } from "@/components/copy-field";
 import { catalogEntry, syncGuarantee } from "@/connectors/catalog";
 import {
   disconnectAction,
+  importHistoryAction,
   reconnectAction,
   syncNewAction,
   fullResyncAction,
@@ -178,6 +179,14 @@ export default async function ConnectionPage({
                 label="Reprocess"
                 hint="Re-run normalization from stored raw events. No provider calls."
               />
+              {entry?.poll && entry?.flowFields && entry.flowFields.length > 0 && (
+                <SyncControl
+                  action={importHistoryAction}
+                  id={conn.id}
+                  label="Import more history"
+                  hint="Reach further back, a slice at a time, in the background. Runs below normal syncing so nothing else slows down; asking twice does nothing."
+                />
+              )}
             </div>
           </div>
         </section>
