@@ -10,7 +10,7 @@ import { pollOperation } from "@/lib/provider-gateway/operations";
 import { awaitStreamWriteLock, withStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
-import { streamImportProgress } from "@/lib/backfill/jobs";
+import { defaultTargetFloor, requestBackfill, streamImportProgress } from "@/lib/backfill/jobs";
 
 /**
  * Streams are the unit of sync for connectors whose resource is chosen per flow
@@ -51,13 +51,39 @@ export async function ensureStreamsForGraph(db: DB, orgId: string, graph: FlowGr
   const refs = streamRefsOfGraph(graph, sourceOf);
   let created = 0;
   for (const ref of refs) {
-    if (!conns.some((c) => c.id === ref.connectionId)) continue; // stale/foreign connection id
+    const source = conns.find((c) => c.id === ref.connectionId)?.source;
+    if (!source) continue; // stale/foreign connection id
     const rows = await db
       .insert(sourceStreams)
       .values({ orgId, connectionId: ref.connectionId, configHash: ref.configHash, config: ref.config })
       .onConflictDoNothing({ target: [sourceStreams.connectionId, sourceStreams.configHash] })
       .returning({ id: sourceStreams.id });
     created += rows.length;
+    /**
+     * A genuinely NEW stream imports its default history on its own.
+     *
+     * Leaving this to a button meant almost nobody got it: a customer's metrics
+     * would sit on whatever the ordinary sweep had happened to accumulate since
+     * they connected, with nothing saying the number was short. This is the case
+     * the progress display was built for — it only makes sense if the import it
+     * describes actually starts.
+     *
+     * Safe to run on every save because `requestBackfill` compares DEPTH: a
+     * stream that already has a job reaching this far back gets nothing new, so
+     * only a genuinely new stream costs anything.
+     *
+     * Mirrors are skipped, and not as an optimisation. A mirror re-reads its
+     * whole resource on every poll; it has no lookback to deepen, so a
+     * "historical import" of one is a job that can never mean anything.
+     */
+    if (rows.length > 0 && !isMirrorSource(source)) {
+      await requestBackfill(
+        db,
+        { id: rows[0].id, orgId, connectionId: ref.connectionId, configHash: ref.configHash },
+        source,
+        defaultTargetFloor(),
+      );
+    }
     // A referenced stream is by definition not an orphan: undo any earlier
     // prune, so editing a step back to a previous resource resumes its sync
     // instead of leaving it permanently disabled.

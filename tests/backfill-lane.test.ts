@@ -8,8 +8,10 @@ import { registerConnector } from "@/connectors/registry";
 import { laneLimit, claimCalls } from "@/lib/provider-gateway/budget";
 import {
   checkpointJob,
+  defaultTargetFloor,
+  quantizeFloor,
+  runnableJobsByProvider,
   finishJob,
-  nextRunnableJob,
   requestBackfill,
   rowCeilingFor,
   startJob,
@@ -108,6 +110,7 @@ afterEach(async () => {
 const ask = (days = 90) =>
   requestBackfill(db, { id: stream.id, orgId: ORG, connectionId: connId, configHash: "hash-a" }, "close", back(days));
 const reload = async (id: string) => (await db.select().from(backfillJobs).where(eq(backfillJobs.id, id)))[0];
+const streamId = () => stream.id;
 const streamRow = async () => (await db.select().from(sourceStreams).where(eq(sourceStreams.id, stream.id)))[0];
 
 describe("6.1 — never re-import", () => {
@@ -128,6 +131,65 @@ describe("6.1 — never re-import", () => {
     const deeper = await ask(365);
     expect(deeper.created).toBe(true);
     expect(await db.select().from(backfillJobs)).toHaveLength(2);
+  });
+});
+
+describe("6.1 — dedup is by DEPTH, not by timestamp", () => {
+  /**
+   * The rule is DEPTH, not timestamp equality, and the difference is the whole
+   * feature once the request became automatic.
+   *
+   * `defaultTargetFloor()` is "now minus 90 days", so it is a different instant
+   * on every call. Keyed on equality, two requests a second apart produce two
+   * different targets and dedup never fires — every flow save would have queued
+   * another import of the same history. The original test missed it by reusing
+   * one computed value for both calls.
+   */
+  it("dedupes repeated default requests made at different moments", async () => {
+    const stream = { id: streamId(), orgId: ORG, connectionId: connId, configHash: "hash-a" };
+    const first = await requestBackfill(db, stream, "close", defaultTargetFloor(new Date("2026-07-01T09:15:00Z")));
+    const second = await requestBackfill(db, stream, "close", defaultTargetFloor(new Date("2026-07-01T23:59:59Z")));
+    const nextDay = await requestBackfill(db, stream, "close", defaultTargetFloor(new Date("2026-07-02T04:00:00Z")));
+
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    // A day later the floor moves by a day and is genuinely shallower than what
+    // is already covered, so it is still not new work.
+    expect(nextDay.created).toBe(false);
+    expect(await db.select().from(backfillJobs)).toHaveLength(1);
+  });
+
+  it("counts an existing DEEPER job as covering a shallower request", async () => {
+    await ask(365);
+    const shallower = await ask(90);
+
+    // We already hold a year; ninety days costs nothing.
+    expect(shallower.created).toBe(false);
+    expect(await db.select().from(backfillJobs)).toHaveLength(1);
+  });
+
+  it("retries a failed job in place, keeping its checkpoint", async () => {
+    const { job } = await ask(90);
+    await checkpointJob(db, job.id, { checkpoint: "c9", oldestSeen: back(35), rowsImported: 400 }, NOW);
+    await finishJob(db, job.id, { status: "failed", detail: "boom" }, NOW);
+
+    const retried = await ask(90);
+
+    // A failure is the one terminal state worth retrying; treating it as
+    // coverage would mean a stream that errored once could never import again.
+    expect(retried.created).toBe(true);
+    expect(retried.job.id).toBe(job.id); // the same unit of work, not a second row
+    expect(await db.select().from(backfillJobs)).toHaveLength(1);
+    // And it RESUMES: re-fetching the 400 rows that already landed would defeat
+    // the point of checkpointing at all.
+    expect(retried.job.checkpoint).toBe("c9");
+    expect(retried.job.reachedFloor!.getTime()).toBe(back(35).getTime());
+    expect(retried.job.status).toBe("queued");
+  });
+
+  it("snaps targets to a day, so the unique index can actually catch a race", async () => {
+    const q = quantizeFloor(new Date("2026-07-01T13:47:21.123Z"));
+    expect(q.toISOString()).toBe("2026-07-01T00:00:00.000Z");
   });
 });
 
@@ -326,7 +388,7 @@ describe("running a slice", () => {
     expect(out.kind).toBe("deferred");
     // Still runnable, and its checkpoint is intact — a denial costs time only.
     expect((await reload(job.id)).status).toBe("running");
-    expect(await nextRunnableJob(db, NOW)).not.toBeNull();
+    expect(await runnableJobsByProvider(db, 1, NOW)).toHaveLength(1);
   });
 
   it("ends cleanly when the connection was disconnected", async () => {
@@ -358,7 +420,7 @@ describe("what the lane will not pick up", () => {
   it("skips a disconnected connection's jobs", async () => {
     await ask(90);
     await db.update(connections).set({ status: "disabled" }).where(eq(connections.id, connId));
-    expect(await nextRunnableJob(db, NOW)).toBeNull();
+    expect(await runnableJobsByProvider(db, 1, NOW)).toHaveLength(0);
   });
 
   it("skips a connection that is deferred", async () => {
@@ -369,13 +431,13 @@ describe("what the lane will not pick up", () => {
       .where(eq(connections.id, connId));
     // A pause exists to protect the budget; a backfill running through it would
     // spend exactly what the pause is holding back.
-    expect(await nextRunnableJob(db, NOW)).toBeNull();
+    expect(await runnableJobsByProvider(db, 1, NOW)).toHaveLength(0);
   });
 
   it("skips a finished job", async () => {
     const { job } = await ask(90);
     await finishJob(db, job.id, { status: "complete" }, NOW);
-    expect(await nextRunnableJob(db, NOW)).toBeNull();
+    expect(await runnableJobsByProvider(db, 1, NOW)).toHaveLength(0);
   });
 });
 
@@ -422,5 +484,112 @@ describe("6.3 — the depth policy", () => {
   it("freezes the ceiling onto the job, so a policy change cannot rewrite history", async () => {
     const { job } = await ask(90);
     expect(job.rowCeiling).toBe(rowCeilingFor("close"));
+  });
+});
+
+/**
+ * The lane is worth nothing if it only runs when somebody finds a button.
+ * Leaving it manual meant most customers' metrics sat on whatever the ordinary
+ * sweep had accumulated, with nothing saying the number was short — and the
+ * progress display was built for exactly the import that never started.
+ */
+describe("a genuinely new stream imports its history automatically", () => {
+  const graphFor = (cfg: Record<string, unknown>, source: string) => ({
+    nodes: [{ id: "a1", type: "app", data: { config: { connectionId: connId, source, sourceConfig: cfg } } }],
+    edges: [],
+  });
+
+  it("queues a default-depth job when the stream is created", async () => {
+    const { ensureStreamsForGraph } = await import("@/lib/sync/streams");
+    const { parseGraph } = await import("@/lib/flow/types");
+    await db.update(connections).set({ source: "calendly" }).where(eq(connections.id, connId));
+
+    const res = await ensureStreamsForGraph(db, ORG, parseGraph(graphFor({ scope: "user" }, "calendly")));
+
+    expect(res.created).toBe(1);
+    const jobs = await db.select().from(backfillJobs);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].targetFloor.getTime()).toBe(defaultTargetFloor().getTime());
+  });
+
+  /**
+   * Saving a flow is not a request for more history. Without depth-based dedup
+   * every save would queue another import of the same window.
+   */
+  it("queues nothing more on a re-save of the same stream", async () => {
+    const { ensureStreamsForGraph } = await import("@/lib/sync/streams");
+    const { parseGraph } = await import("@/lib/flow/types");
+    await db.update(connections).set({ source: "calendly" }).where(eq(connections.id, connId));
+    const graph = parseGraph(graphFor({ scope: "user" }, "calendly"));
+
+    await ensureStreamsForGraph(db, ORG, graph);
+    await ensureStreamsForGraph(db, ORG, graph);
+    await ensureStreamsForGraph(db, ORG, graph);
+
+    expect(await db.select().from(backfillJobs)).toHaveLength(1);
+  });
+
+  /**
+   * A mirror re-reads its whole resource on every poll. It has no lookback to
+   * deepen, so a "historical import" of one is a job that can never mean
+   * anything — and would sit in the queue forever looking like work.
+   */
+  it("does not queue one for a mirror source", async () => {
+    const { ensureStreamsForGraph } = await import("@/lib/sync/streams");
+    const { parseGraph } = await import("@/lib/flow/types");
+    await db.update(connections).set({ source: "gsheets" }).where(eq(connections.id, connId));
+
+    const res = await ensureStreamsForGraph(db, ORG, parseGraph(graphFor({ spreadsheetId: "S1", range: "T" }, "gsheets")));
+
+    expect(res.created).toBe(1);
+    expect(await db.select().from(backfillJobs)).toHaveLength(0);
+  });
+});
+
+/**
+ * Automatic triggering is what makes this cap necessary. A day's signups queue
+ * several imports at once, and a per-connection lease cannot bound them because
+ * those are different connections — several concurrent historical walks against
+ * one API, from the lowest-priority work in the system.
+ */
+describe("the fleet cap is per provider, not per connection", () => {
+  async function jobOn(source: string, hash: string) {
+    const id = await seedConnection(db, { orgId: ORG, source });
+    const [s] = await db
+      .insert(sourceStreams)
+      .values({ orgId: ORG, connectionId: id, configHash: hash, config: {} })
+      .returning();
+    await requestBackfill(db, { id: s.id, orgId: ORG, connectionId: id, configHash: hash }, source, back(90));
+    return id;
+  }
+
+  it("dispatches at most one job per provider, however many are queued", async () => {
+    // Three separate Close connections — three leases, one API.
+    await jobOn("close", "c1");
+    await jobOn("close", "c2");
+    await jobOn("close", "c3");
+    await jobOn("calendly", "k1");
+
+    const due = await runnableJobsByProvider(db, 4, NOW);
+
+    expect(due).toHaveLength(2);
+    expect(due.map((d) => d.provider).sort()).toEqual(["calendly", "close"]);
+  });
+
+  it("honours the overall limit as well", async () => {
+    await jobOn("close", "c1");
+    await jobOn("calendly", "k1");
+    await jobOn("gcal", "g1");
+
+    expect(await runnableJobsByProvider(db, 2, NOW)).toHaveLength(2);
+  });
+
+  it("still skips disconnected and deferred connections", async () => {
+    const closeId = await jobOn("close", "c1");
+    await db.update(connections).set({ status: "disabled" }).where(eq(connections.id, closeId));
+    await jobOn("calendly", "k1");
+
+    const due = await runnableJobsByProvider(db, 4, NOW);
+    expect(due.map((d) => d.provider)).toEqual(["calendly"]);
   });
 });

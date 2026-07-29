@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import { runSync, reprocessConnection, syncChanged } from "@/lib/sync/resync";
 import { markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
-import { getJob, nextRunnableJob, stalledJobs } from "@/lib/backfill/jobs";
+import { getJob, runnableJobsByProvider, stalledJobs } from "@/lib/backfill/jobs";
 
 /**
  * How long a `running` backfill may go without moving before it is reported.
@@ -15,6 +15,15 @@ import { getJob, nextRunnableJob, stalledJobs } from "@/lib/backfill/jobs";
  * for a day.
  */
 const STALLED_BACKFILL_MS = 6 * 3_600_000;
+
+/**
+ * How many providers may have a slice in flight from one dispatch tick.
+ *
+ * Bounds the FLEET, which per-connection limits cannot: a dozen accounts on one
+ * API are a dozen different connections and a dozen different leases. Four
+ * providers at once, one slice each.
+ */
+const BACKFILL_PROVIDERS_PER_TICK = 4;
 import { runBackfillSlice } from "@/lib/backfill/run";
 import { rawEvents } from "@/db/schema";
 
@@ -154,47 +163,73 @@ export const pruneStorage = inngest.createFunction(
 );
 
 /**
- * E.8 / Phase 6 — the backfill lane.
+ * E.8 / Phase 6 — the backfill lane, dispatcher half.
  *
- * Its own function rather than work folded into the sweep, for three reasons
- * that all reduce to the same one: a historical import must never be able to
- * degrade live sync.
+ * Split into dispatcher + worker for one reason: a cron function has no event
+ * data, so it cannot express a PER-PROVIDER concurrency key. Automatic
+ * triggering makes that the cap that matters — a day's signups can queue a
+ * dozen imports at once, and the per-connection lease does not help because
+ * those are different connections. Several concurrent historical walks against
+ * one API, from the lowest-priority work in the system, is exactly the shape
+ * that gets an account limited.
  *
- *  - **Lowest priority.** The sweep runs at 0 and a Test at 180; this runs
- *    below both, so a queue under pressure drains interactive work first.
- *  - **Global concurrency of 1.** A backfill is throughput-insensitive by
- *    nature — it is allowed to take days — so there is nothing to gain from
- *    running several and a great deal to lose: N imports would multiply the
- *    provider spend of the lowest-priority work in the system.
- *  - **One slice per invocation.** Every unit is durable, so an interruption
- *    costs a slice rather than an import, which is the whole point of
- *    checkpointing.
+ * So this emits at most one job PER PROVIDER per tick, and the worker keys its
+ * concurrency on the provider as well. Both, because this bounds what is
+ * dispatched and that bounds what runs — a retry or a redelivery can put work
+ * in flight this never emitted.
+ */
+export const backfillDispatch = inngest.createFunction(
+  { id: "backfill-dispatch", retries: 2, concurrency: { limit: 1 }, triggers: [{ cron: "*/5 * * * *" }] },
+  async ({ step }) => {
+    const db = getDb();
+    const due = await step.run("pick-runnable-jobs", async () =>
+      (await runnableJobsByProvider(db, BACKFILL_PROVIDERS_PER_TICK)).map((r) => ({
+        jobId: r.job.id,
+        orgId: r.job.orgId,
+        provider: r.provider,
+      })),
+    );
+    if (due.length === 0) return { dispatched: 0 };
+    await step.sendEvent(
+      "dispatch-backfill-slices",
+      due.map((d) => ({ name: "backfill/slice.requested" as const, data: d })),
+    );
+    return { dispatched: due.length };
+  },
+);
+
+/**
+ * The worker. One slice per invocation, so every unit is durable and an
+ * interruption costs a slice rather than an import.
  *
- * The budget ceiling is enforced a layer down, in `claimCalls`, where it is
- * derived from the SWEEP's ceiling — so the ordering holds even if this
- * function's own configuration is later changed.
+ * Priority -600 against the sweep's 0 and a Test's 180. The budget ceiling is
+ * enforced a layer down in `claimCalls`, where it is derived from the SWEEP's
+ * ceiling — so the ordering holds even if this configuration is later changed.
  */
 export const runBackfill = inngest.createFunction(
   {
     id: "run-backfill",
     retries: 2,
-    concurrency: { limit: 1 },
+    // Global cap, then the one that automatic triggering actually needs: never
+    // two historical walks against the same provider at once.
+    concurrency: [{ limit: 4 }, { key: "event.data.provider", limit: 1 }],
+    // A job already in flight must not be started again by a redelivery: it
+    // would double the provider spend and interleave two walks over one stream.
+    singleton: { key: "event.data.jobId", mode: "skip" },
     priority: { run: "-600" },
-    triggers: [{ cron: "*/5 * * * *" }],
+    triggers: [{ event: "backfill/slice.requested" }],
   },
-  async ({ step }) => {
+  async ({ event, step }) => {
     const db = getDb();
     // Only the ID crosses the step boundary. Inngest serializes a step's return
-    // value to JSON, so a job object would arrive at the next step with its
-    // timestamps turned into strings — and every date comparison in the slice
-    // would then compare a string to a Date and quietly do the wrong thing.
-    // Re-reading is also more correct: the row may have moved on.
-    const jobId = await step.run("next-runnable-job", async () => (await nextRunnableJob(db))?.id ?? null);
-    if (!jobId) return { ran: false };
+    // value to JSON, so a job object would arrive with its timestamps turned
+    // into strings, and every date comparison in the slice would then compare a
+    // string to a Date. Re-reading is also more correct: the row may have moved.
+    const jobId = String((event.data as { jobId: string }).jobId);
     const outcome = await step.run("run-slice", async () => {
       const job = await getJob(db, jobId);
       return job ? await runBackfillSlice(db, job) : { kind: "finished" as const, status: "failed" as const };
     });
-    return { ran: true, jobId, outcome };
+    return { jobId, outcome };
   },
 );

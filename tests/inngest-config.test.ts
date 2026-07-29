@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { reconcileAll, reconcileOne } from "@/inngest/functions/reconcile";
 import { processEvent } from "@/inngest/functions/process-event";
 import { runFlowTest } from "@/inngest/functions/test-run";
-import { syncConnection, recomputeStaleFlows, materializeStale, runBackfill } from "@/inngest/functions/sync";
+import { syncConnection, recomputeStaleFlows, materializeStale, runBackfill, backfillDispatch } from "@/inngest/functions/sync";
 
 /**
  * The queue-layer SAFETY behavior lives in Inngest function CONFIGURATION:
@@ -83,14 +83,23 @@ describe("Inngest safety configuration is pinned", () => {
    * configuration is later changed — but that is a backstop, not a reason to
    * leave the configuration unpinned.
    */
-  it("runBackfill: lowest priority, one at a time, one slice per invocation", () => {
+  it("backfillDispatch: single-flight cron, emits at most one job per provider", () => {
+    const o = opts(backfillDispatch);
+    expect(o.id).toBe("backfill-dispatch");
+    expect(o.concurrency).toEqual({ limit: 1 });
+    expect(o.triggers).toEqual([{ cron: "*/5 * * * *" }]);
+  });
+
+  it("runBackfill: lowest priority, capped per PROVIDER, one slice per job", () => {
     const o = opts(runBackfill);
     expect(o.id).toBe("run-backfill");
     // Below the sweep's 0 and far below the Test's 180.
     expect(o.priority).toEqual({ run: "-600" });
-    // A backfill is allowed to take days, so there is nothing to gain from
-    // running several and a fleet's worth of provider spend to lose.
-    expect(o.concurrency).toEqual({ limit: 1 });
-    expect(o.triggers).toEqual([{ cron: "*/5 * * * *" }]);
+    // The cap automatic triggering needs. A per-connection limit cannot bound a
+    // day's signups against one API — those are different connections.
+    expect(o.concurrency).toEqual([{ limit: 4 }, { key: "event.data.provider", limit: 1 }]);
+    // A redelivery must not start a second walk over the same stream.
+    expect(o.singleton).toEqual({ key: "event.data.jobId", mode: "skip" });
+    expect(o.triggers).toEqual([{ event: "backfill/slice.requested" }]);
   });
 });

@@ -7,6 +7,7 @@ import { Inngest } from "inngest";
  *                                   priority?: number, jitterMs?: number }
  *   flow/data.changed          -> { orgId, source, connectionId?, streamHashes? } | { rawEventId }
  *   flow/recompute.requested   -> { orgId: string }
+ *   backfill/slice.requested   -> { jobId: string, orgId: string, provider: string }
  * Lanes (C.5): within reconcile-one-connection, `priority` is seconds of queue
  * boost — sweep runs send 0; interactive senders (the future Test lane) send
  * high values. Backfill gets its own low-priority function when E.8 lands.

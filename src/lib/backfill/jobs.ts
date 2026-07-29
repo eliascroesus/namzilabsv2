@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { backfillJobs, connections, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
 
@@ -49,13 +49,37 @@ export type BackfillStatus = "queued" | "running" | (typeof TERMINAL_STATUSES)[n
 export type BackfillJob = typeof backfillJobs.$inferSelect;
 
 /**
+ * Snap a target to UTC midnight.
+ *
+ * Without this, "90 days back" is a different instant on every call, so two
+ * requests a second apart produce two different targets and the unique index
+ * never matches. Harmless while a human had to click a button; fatal the moment
+ * the request became automatic, because every flow save would have started
+ * another import of the same history.
+ *
+ * A day is the right grain: nobody means "90 days and 14 seconds", and a
+ * date-shaped floor is legible in the table and in a log.
+ */
+export function quantizeFloor(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+/**
  * Ask for a stream to be imported back to `targetFloor`.
  *
- * 6.1, "never re-import", is enforced by the unique index on
- * `(stream_id, target_floor)` rather than by a check here: a request for a depth
- * this stream already has finds the existing row and returns it. So a second
- * flow reading a backfilled stream costs zero provider calls, and only a request
- * for a DEEPER floor is new work.
+ * 6.1, "never re-import", is a DEPTH comparison and not a timestamp match. Any
+ * existing job that already reaches at least this far back satisfies the
+ * request — including one that reached further — so a second flow on a
+ * backfilled stream costs zero provider calls and only a genuinely DEEPER
+ * window is new work.
+ *
+ * The unique index on `(stream_id, target_floor)` is still there and still
+ * load-bearing, but as a race backstop rather than as the rule: two concurrent
+ * requests for the same quantized day cannot both insert.
+ *
+ * `failed` jobs are deliberately not counted as satisfying a request. A failure
+ * is the one terminal state worth retrying, and treating it as coverage would
+ * mean a stream that errored once could never be imported again.
  *
  * Returns the job and whether this call created it, because the caller's next
  * move differs: a new job needs dispatching, an existing one does not.
@@ -66,6 +90,38 @@ export async function requestBackfill(
   source: string,
   targetFloor: Date,
 ): Promise<{ job: BackfillJob; created: boolean }> {
+  const target = quantizeFloor(targetFloor);
+
+  // Already as deep, or deeper? Then there is nothing to do. `lte` because
+  // deeper means FURTHER BACK, which is a smaller timestamp.
+  const [covering] = await db
+    .select()
+    .from(backfillJobs)
+    .where(
+      and(
+        eq(backfillJobs.streamId, stream.id),
+        lte(backfillJobs.targetFloor, target),
+        inArray(backfillJobs.status, ["queued", "running", "complete", "partial"]),
+      ),
+    )
+    .orderBy(asc(backfillJobs.targetFloor))
+    .limit(1);
+  if (covering) return { job: covering, created: false };
+
+  // A FAILED job at exactly this depth is retried in place rather than joined by
+  // a second row. The unique index would refuse the insert anyway, but that is
+  // not why: it is the same unit of work, and reviving it keeps the checkpoint,
+  // so the retry RESUMES where the failure stopped instead of re-fetching
+  // everything that already landed.
+  const revived = await db
+    .update(backfillJobs)
+    .set({ status: "queued", detail: null, finishedAt: null, updatedAt: new Date() })
+    .where(
+      and(eq(backfillJobs.streamId, stream.id), eq(backfillJobs.targetFloor, target), eq(backfillJobs.status, "failed")),
+    )
+    .returning();
+  if (revived[0]) return { job: revived[0], created: true };
+
   const rows = await db
     .insert(backfillJobs)
     .values({
@@ -73,17 +129,18 @@ export async function requestBackfill(
       connectionId: stream.connectionId,
       streamId: stream.id,
       streamHash: stream.configHash,
-      targetFloor,
+      targetFloor: target,
       rowCeiling: rowCeilingFor(source),
     })
     .onConflictDoNothing({ target: [backfillJobs.streamId, backfillJobs.targetFloor] })
     .returning();
   if (rows[0]) return { job: rows[0], created: true };
 
+  // Lost the race against a concurrent identical request; its row is the answer.
   const [existing] = await db
     .select()
     .from(backfillJobs)
-    .where(and(eq(backfillJobs.streamId, stream.id), eq(backfillJobs.targetFloor, targetFloor)))
+    .where(and(eq(backfillJobs.streamId, stream.id), eq(backfillJobs.targetFloor, target)))
     .limit(1);
   return { job: existing, created: false };
 }
@@ -94,9 +151,9 @@ export async function getJob(db: DB, id: string): Promise<BackfillJob | null> {
   return row ?? null;
 }
 
-/** The default depth, as a date. */
+/** The default depth, snapped to a day so repeated requests are identical. */
 export function defaultTargetFloor(now = new Date()): Date {
-  return new Date(now.getTime() - DEFAULT_TARGET_DAYS * DAY_MS);
+  return quantizeFloor(new Date(now.getTime() - DEFAULT_TARGET_DAYS * DAY_MS));
 }
 
 /**
@@ -205,16 +262,32 @@ export async function finishJob(
 }
 
 /**
- * The next job worth running, oldest first.
+ * Up to `limit` runnable jobs, AT MOST ONE PER PROVIDER, oldest first.
  *
  * Skips connections that are disabled or deferred: a backfill against a
  * disconnected integration is work nobody asked for against credentials nobody
- * authorised any more, and one against a paused connection would spend the
- * budget the pause exists to protect.
+ * authorised any more, and one against a paused connection would spend exactly
+ * the budget the pause exists to protect.
+ *
+ * One per provider is the point, not a detail of the query. Automatic
+ * triggering means a day's signups can queue a dozen imports at once, and
+ * without this the dispatcher would happily fan them all out against the same
+ * API — several concurrent historical walks, from the lowest-priority work in
+ * the system, at exactly the moment a provider is least inclined to be
+ * forgiving. The per-connection lease does not help: those are different
+ * connections.
+ *
+ * The worker enforces it again through its own concurrency key. Both, because
+ * this one bounds what is DISPATCHED and that one bounds what RUNS, and a retry
+ * or a redelivery can put work in flight this never emitted.
  */
-export async function nextRunnableJob(db: DB, now = new Date()): Promise<BackfillJob | null> {
+export async function runnableJobsByProvider(
+  db: DB,
+  limit: number,
+  now = new Date(),
+): Promise<Array<{ job: BackfillJob; provider: string }>> {
   const rows = await db
-    .select({ job: backfillJobs })
+    .select({ job: backfillJobs, provider: connections.source })
     .from(backfillJobs)
     .innerJoin(connections, eq(connections.id, backfillJobs.connectionId))
     .where(
@@ -224,9 +297,17 @@ export async function nextRunnableJob(db: DB, now = new Date()): Promise<Backfil
         or(sql`${connections.pausedUntil} is null`, lt(connections.pausedUntil, now)),
       ),
     )
-    .orderBy(asc(backfillJobs.createdAt))
-    .limit(1);
-  return rows[0]?.job ?? null;
+    .orderBy(asc(backfillJobs.createdAt));
+
+  const picked: Array<{ job: BackfillJob; provider: string }> = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (seen.has(row.provider)) continue;
+    seen.add(row.provider);
+    picked.push(row);
+    if (picked.length >= limit) break;
+  }
+  return picked;
 }
 
 /**
