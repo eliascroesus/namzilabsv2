@@ -226,3 +226,85 @@ SELECT
 ```
 
 Expect 1, 18, 1.
+
+---
+
+## 0018 — `source_streams.date_field`, `restamp_requested_at`, `date_field_state` (batch 7 — apply BEFORE the connector change lands)
+
+Which column of a spreadsheet holds a row's event time, whether a restamp of
+existing rows is owed, and what the last read actually did with that column.
+
+All three additive and nullable. Applying this to the database changes no
+behaviour: nothing reads the columns, and every existing row reads NULL.
+
+**But this commit is NOT inert in the other direction, and that is worth knowing
+generally.** A drizzle column declaration is not a passive annotation:
+`db.select().from(sourceStreams)` does not emit `SELECT *`, it expands to an
+explicit column list built from `schema.ts`. So the moment these columns are
+declared, four pre-existing queries start NAMING them — `activeStreams`
+(the sweep's work list), `primeStream` (the Test button, twice) and the backfill
+lane's stream load — even though no code reads the values. Deployed against a
+database without the columns, all four throw `column "date_field" does not
+exist`: the sweep, the Test button and the backfill lane, all down at once.
+
+Which is the 0013/0014/0015 outage exactly. So the ordering is a hard
+constraint, not a preference:
+
+> **Apply this SQL BEFORE `batch7/sheet-date-column` reaches main.** Verified by
+> building a PGlite database at production's current schema and running the real
+> query shape against it — it throws.
+
+This also means a migration-only commit cannot be made safe merely by having
+nothing read the new columns. Only keeping it off the deploy branch does that.
+
+**Why it exists.** The Sheets poll stamps `occurred_at` with `new Date()` — the
+import moment — and `preserveOccurredAt` then freezes it there. Every time-based
+metric over a sheet has been measuring when the data was imported. The sheet's
+real date was in a column the whole time, and `src/lib/normalize-dates.ts` was
+already parsing exactly those shapes into `properties` and never into
+`occurred_at`.
+
+**Why per stream.** `occurred_at` is a fact about a ROW, and a stream's rows are
+shared by every flow reading it. Per-flow config would let two flows disagree
+about when one row happened, with the last sweep to read a graph silently
+restamping the other's numbers; putting the column in the config HASH instead
+would fork the stream and re-import its history. Two tabs of one workbook are
+two streams and get independent columns, which is correct.
+
+**Why `restamp_requested_at` is a timestamp and not a flag.** A restamp that
+never fires is otherwise indistinguishable from one that already completed. The
+known way for it to never fire is the `modifiedTime` skip — a settled sheet is
+not re-read at all.
+
+**What the restamp does, corrected.** Rows with no date in the chosen column are
+stamped from `events.received_at`, not left to `preserveOccurredAt`. Preserve
+keeps whatever is STORED, which after any earlier restamp is the PREVIOUS
+column's date rather than first-seen — and clearing the picker back to "first
+seen" would otherwise change nothing at all, making it a one-way door.
+`received_at` survives every upsert and full re-sync untouched, so it is the
+first-seen that can actually be recovered. See the comment on `restamp_requested_at`
+in `src/db/schema.ts`.
+
+```sql
+ALTER TABLE "source_streams" ADD COLUMN IF NOT EXISTS "date_field" text;
+ALTER TABLE "source_streams" ADD COLUMN IF NOT EXISTS "restamp_requested_at" timestamp with time zone;
+ALTER TABLE "source_streams" ADD COLUMN IF NOT EXISTS "date_field_state" jsonb;
+```
+
+Verify:
+
+```sql
+SELECT count(*) AS should_be_3
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'source_streams'
+  AND column_name IN ('date_field', 'restamp_requested_at', 'date_field_state');
+```
+
+No backfill and no default. Every existing stream reads NULL, which means
+"first-seen" — exactly what those rows already are. Nothing is rewritten by
+applying this.
+
+> **Numbering note.** 0016 remains reserved by the unmerged
+> `batch5/retention-purge` branch (`connection_archive`). This is 0018 rather
+> than 0016 so the two cannot collide in one journal.

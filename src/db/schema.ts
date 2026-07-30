@@ -371,6 +371,106 @@ export const sourceStreams = pgTable(
      * stream nobody has deepened.
      */
     windowFloor: timestamp("window_floor", { withTimezone: true }),
+    /**
+     * Which column of this resource holds a row's event time.
+     *
+     * A spreadsheet row has no timestamp of its own, so the Sheets connector
+     * stamped `occurred_at` with `new Date()` — the import moment — and
+     * `preserveOccurredAt` then froze it there. Every time-based metric over a
+     * sheet was measuring when the data was imported. The sheet's real date was
+     * sitting in a column all along, and `normalize-dates.ts` (built to read
+     * exactly these shapes, "7/21/2026 14:23:45" among them) was already parsing
+     * it into `properties` and never into `occurred_at`.
+     *
+     * PER STREAM, not per flow, and that is load-bearing rather than tidy.
+     * `occurred_at` is a fact about a ROW, and a stream's rows are shared by
+     * every flow reading it — two flows cannot hold different opinions about
+     * when something happened. Per-node config would let the last sweep to read
+     * a graph silently restamp another flow's numbers; putting it in the config
+     * HASH instead would fork the stream and re-import the history (6.1). A
+     * stream column is neither. Two tabs of one workbook are two streams and get
+     * independent columns, which is right — "Bookings" may date from `Date`
+     * while "Refunds" dates from `Processed at`.
+     *
+     * Deliberately NOT a `FlowConfigField.readFilter`, which was the obvious
+     * home and would have been a silent no-op: `normalizeStreamConfig` STRIPS
+     * readFilter keys before the config is stored, so the value would never
+     * reach `poll()`. A read filter is also a WHERE clause over rows; this
+     * changes how a row is stamped, not which rows are read.
+     *
+     * NULL means first-seen, which stays honest as long as the UI says that is
+     * what it is.
+     */
+    dateField: text("date_field"),
+    /**
+     * Set when `date_field` changes; cleared by the sweep that acts on it.
+     *
+     * `preserveOccurredAt` pins `occurred_at` on conflict, so choosing a column
+     * fixes NEW rows and leaves every existing one stamped with its import time
+     * — and a full re-sync does not help, because it still upserts on `event_id`
+     * and the pin still wins. The person who notices the problem and corrects it
+     * is exactly the person the correction would silently fail for.
+     *
+     * So the restamp is one sweep that does not pin. Not an
+     * `UPDATE events SET occurred_at`: that would make something other than
+     * `upsertEvents` a writer of event content, and the pin is right for every
+     * normal write — it is the CALLER that changes for one sweep, not the writer.
+     *
+     * THREE batches, not two, and the difference is not cosmetic. "Keep
+     * first-seen" and "pass `preserveOccurredAt`" are the same thing only on the
+     * FIRST restamp: preserve keeps whatever is STORED, so after one restamp a
+     * row with no date in the newly-chosen column would keep the PREVIOUS
+     * column's value — a column the user has explicitly abandoned — while the UI
+     * reported it as having kept its import time. Reverting the picker to NULL
+     * would be worse still: every row lands in the preserve batch, so nothing
+     * changes and "first seen" becomes a one-way door.
+     *
+     * `events.received_at` is the recoverable first-seen. It defaults to now on
+     * insert and appears in neither the insert list nor the `onConflictDoUpdate`
+     * set (`pipeline.ts`), so no upsert or full re-sync has ever moved it, and
+     * for every row written before this feature it sits within milliseconds of
+     * the `new Date()` that stamped `occurred_at`. So:
+     *   parsed              -> occurred_at = the column's date   (no pin)
+     *   no date, column set -> occurred_at = received_at         (no pin)
+     *   picker cleared      -> occurred_at = received_at         (no pin)
+     * The caller must SELECT `received_at` for the stream's existing event ids
+     * before building those batches, because `upsertEvents` only ever takes
+     * `occurred_at` from the incoming record and a connector has no db handle.
+     * That belongs in `syncStream`, not in the connector.
+     *
+     * A TIMESTAMP rather than a boolean, for the same reason `backfill_jobs`
+     * carries `last_progress_at`: a restamp that never fires is otherwise
+     * indistinguishable from one that already did. The known way for it to never
+     * fire is Phase 3's `modifiedTime` skip — a settled sheet is not re-read, so
+     * the restamp sweep must force a read past it.
+     */
+    restampRequestedAt: timestamp("restamp_requested_at", { withTimezone: true }),
+    /**
+     * What the last read actually did with `date_field`, as OBSERVATION rather
+     * than configuration — which is why it is a separate column from the two
+     * above rather than folded in with them. Those are inputs, written by the
+     * picker; this is an output, written by the sweep.
+     *
+     * `{ column, presentInHeader, dated, undated, at }`.
+     *
+     * `presentInHeader` is the named condition. Without it a renamed column
+     * reads as "500 of 500 rows kept import time" — visible, but indistinguishable
+     * from a sheet whose dates are all malformed, and the two need different
+     * fixes. Not derivable from `stream_fields`: that registry is sampled and
+     * approximate by its own declaration, so a column present in the sheet could
+     * lag there for benign reasons and raise a false alarm.
+     *
+     * jsonb because the counts and the condition are read together, by the same
+     * UI, and a scalar per number would mean a migration every time the display
+     * wants one more.
+     */
+    dateFieldState: jsonb("date_field_state").$type<{
+      column: string;
+      presentInHeader: boolean;
+      dated: number;
+      undated: number;
+      at: string;
+    }>(),
     status: text("status").notNull().default("active"), // active | error | disabled
     lastPolledAt: timestamp("last_polled_at", { withTimezone: true }),
     lastError: text("last_error"),
