@@ -135,6 +135,26 @@ export const googleSheetsConnector: Connector = {
       });
       return (data.files ?? []).map((f) => ({ value: f.id, label: f.name }));
     }
+    /**
+     * The header row, offered as the date-column picker's options.
+     *
+     * One extra Sheets read at config time, on the interactive path where every
+     * other `listOptions` call already lives. Reading the first row only — A1:Z1
+     * — because the picker needs column NAMES, not the tab.
+     */
+    if (key === "dateField") {
+      const spreadsheetId = str(args.config?.["spreadsheetId"]);
+      const range = str(args.config?.["range"]) ?? "Sheet1";
+      if (!spreadsheetId) return [];
+      const data = await fetchJson<{ values?: string[][] }>(
+        `${API}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(`${range}!A1:Z1`)}`,
+        { headers: { authorization: `Bearer ${token}` } },
+      );
+      return (data.values?.[0] ?? [])
+        .map((h) => String(h ?? "").trim())
+        .filter((h) => h !== "")
+        .map((h) => ({ value: h, label: h }));
+    }
     if (key === "range") {
       const spreadsheetId = str(args.config?.["spreadsheetId"]);
       if (!spreadsheetId) return [];

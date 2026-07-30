@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { catalogEntry, type FlowConfigField } from "@/connectors/catalog";
-import { listAppFieldsAction, listSourceOptionsAction, type AppFieldDTO } from "@/app/dashboard/flows/actions";
+import { listAppFieldsAction, listSourceOptionsAction, streamDateColumnAction, type AppFieldDTO } from "@/app/dashboard/flows/actions";
+import { suggestDateColumn } from "@/lib/sync/date-column";
+import type { SourceOption } from "@/connectors/types";
 import {
   AGGREGATIONS,
   TIME_UNITS,
@@ -408,6 +410,10 @@ function NodeConfig({
               .map((f) => (
                 <SourceConfigField key={f.key} field={f} conn={conn} cfg={cfg} onChange={onChange} />
               ))}
+            {/* A sheet row has no timestamp of its own, so which column holds one
+                is a question only the user can answer — and the answer belongs to
+                the STREAM, because its rows are shared by every flow reading it. */}
+            {conn.source === "gsheets" && <DateColumnField conn={conn} cfg={cfg} />}
             {/* "Record type" and not "event type": this is our canonical kind
                 (booked / canceled / no_show), while a connector's own flowFields
                 may offer the PROVIDER's event type — Calendly calls its meeting
@@ -873,6 +879,86 @@ function CategoryEditor({ cfg, groups, onChange }: { cfg: Record<string, unknown
  * instead of flashing the raw id while the option list re-fetches.
  */
 const sourceLabelCache = new Map<string, string>();
+
+/**
+ * Which column holds a row's event time.
+ *
+ * NOT part of `sourceConfig`, and that is the whole design. `occurred_at` is a
+ * fact about a ROW; a stream's rows are shared by every flow reading the same
+ * tab, so this cannot be a per-flow opinion. Stored on the stream, written
+ * through its own action, and the copy below says what is actually happening —
+ * first-seen is a defensible answer, first-seen presented as the event time is
+ * not.
+ */
+function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, unknown> }) {
+  const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
+  const ready = typeof sourceConfig.spreadsheetId === "string" && sourceConfig.spreadsheetId !== "";
+  const [value, setValue] = useState<string | null>(null);
+  const [note, setNote] = useState<string>("");
+  const [columns, setColumns] = useState<SourceOption[]>([]);
+  const [busy, setBusy] = useState(false);
+  const signature = JSON.stringify(sourceConfig);
+
+  useEffect(() => {
+    if (!ready) return;
+    let live = true;
+    void (async () => {
+      const [settings, opts] = await Promise.all([
+        streamDateColumnAction(conn.id, sourceConfig),
+        listSourceOptionsAction(conn.id, "dateField", sourceConfig),
+      ]);
+      if (!live) return;
+      const headers = opts.ok ? opts.options : [];
+      setColumns(headers);
+      if (settings.ok) {
+        setValue(settings.dateField);
+        setNote(settings.note);
+        // PRE-SELECT only, and only when nothing is chosen yet: the suggestion
+        // fills a visible picker the user can change. It is never saved on their
+        // behalf — a wrong guess that announces itself is fine, a wrong guess
+        // that hides is the defect this exists to remove.
+        if (!settings.dateField) setValue(suggestDateColumn(headers.map((h) => h.value)));
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [conn.id, ready, signature]);
+
+  if (!ready) return null;
+
+  const save = async (next: string) => {
+    setBusy(true);
+    const res = await streamDateColumnAction(conn.id, sourceConfig, next);
+    if (res.ok) {
+      setValue(res.dateField);
+      setNote(res.note);
+    }
+    setBusy(false);
+  };
+
+  const suggested = suggestDateColumn(columns.map((c) => c.value));
+  const unsaved = value != null && value === suggested && note.startsWith("No date column selected");
+
+  return (
+    <Field label="Date column">
+      <Select
+        value={value ?? ""}
+        width={W}
+        disabled={busy}
+        placeholder="Use import time"
+        options={[{ value: "", label: "Use import time (no date column)" }, ...columns]}
+        onChange={(v) => void save(v)}
+      />
+      <p className="mt-1.5 text-xs text-gray-500">
+        Which column holds the date each row happened on. Applies to every flow reading this sheet.
+      </p>
+      <p className="mt-1 text-xs text-gray-600">
+        {unsaved ? `Suggested: "${suggested}" — choose it to apply. Nothing is set yet.` : note}
+      </p>
+    </Field>
+  );
+}
 
 function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigField; conn: ConnMeta; cfg: Record<string, unknown>; onChange: (p: Record<string, unknown>) => void }) {
   const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;

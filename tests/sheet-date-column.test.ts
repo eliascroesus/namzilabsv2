@@ -6,6 +6,7 @@ import { connections, events, sourceStreams } from "@/db/schema";
 import { reconcileConnection } from "@/ingestion/reconcile";
 import { streamConfigHash, normalizeStreamConfig } from "@/lib/sync/stream-hash";
 import { googleSheetsConnector } from "@/connectors/google-sheets";
+import { dateColumnNote, dateColumnSettings, setDateColumn, suggestDateColumn, type DateColumnSettings } from "@/lib/sync/date-column";
 import { encrypt } from "@/lib/crypto";
 import type { DB } from "@/db/types";
 
@@ -232,5 +233,75 @@ describe("existing rows are not restamped by choosing a column", () => {
 describe("the dead webhook path is deleted, not repointed", () => {
   it("declares no normalize at all", () => {
     expect(googleSheetsConnector.normalize).toBeUndefined();
+  });
+});
+
+/**
+ * The copy, and the suggestion. Both are pure, and both carry the honesty rule:
+ * first-seen is a defensible answer, first-seen presented as the event time is
+ * not — so the unset case is a sentence, never silence.
+ */
+describe("what the user is told", () => {
+  const note = (dateField: string | null, state: DateColumnSettings["state"] = null) => dateColumnNote({ dateField, state });
+  const at = new Date().toISOString();
+
+  it("names import time when no column is chosen, rather than saying nothing", () => {
+    expect(note(null)).toContain("No date column selected");
+    expect(note(null)).toContain("first imported");
+  });
+
+  it("does not claim a column works before a read has happened under it", () => {
+    // Chosen a moment ago; the sweep has not run. Saying "timing uses X" here
+    // would be a promise, not a report.
+    expect(note("Booked on")).toBe('Timing will use "Booked on" from the next read.');
+    // Same when the state still describes the PREVIOUS column.
+    expect(note("Closed on", { column: "Booked on", presentInHeader: true, dated: 5, undated: 0, at })).toContain("from the next read");
+  });
+
+  it("separates a renamed column from a column of unusable values", () => {
+    const renamed = note("Date", { column: "Date", presentInHeader: false, dated: 0, undated: 500, at });
+    const unusable = note("Date", { column: "Date", presentInHeader: true, dated: 0, undated: 500, at });
+    expect(renamed).toContain('no longer in this sheet');
+    expect(unusable).toContain("No row has a usable date");
+    // Both end at import time, and the numbers alone cannot tell them apart —
+    // which is the entire reason `presentInHeader` is recorded.
+    expect(renamed).not.toBe(unusable);
+  });
+
+  it("reports the partial case with both numbers", () => {
+    expect(note("Date", { column: "Date", presentInHeader: true, dated: 412, undated: 88, at })).toBe(
+      'Timing uses "Date" — 88 of 500 rows have no usable date there and fall back to when they were first imported.',
+    );
+  });
+
+  it("says the plain thing when every row is dated", () => {
+    expect(note("Date", { column: "Date", presentInHeader: true, dated: 500, undated: 0, at })).toBe('Timing uses "Date".');
+  });
+
+  it("suggests a date-like header and never guesses at random", () => {
+    expect(suggestDateColumn(["Name", "Submitted at", "Source"])).toBe("Submitted at");
+    expect(suggestDateColumn(["Name", "Created", "Updated"])).toBe("Created"); // first wins
+    expect(suggestDateColumn(["Name", "Source", "Amount"])).toBeNull();
+    expect(suggestDateColumn([])).toBeNull();
+  });
+});
+
+describe("the picker writes to the stream, not to a flow", () => {
+  it("is org-scoped, and reports whether anything changed", async () => {
+    expect(await setDateColumn(db, ORG, connId, HASH, "Booked on")).toEqual({ changed: true });
+    // Re-picking the same column is not a change — an unchanged pick must not
+    // look like a reason to re-read a settled sheet.
+    expect(await setDateColumn(db, ORG, connId, HASH, "Booked on")).toEqual({ changed: false });
+    expect(await setDateColumn(db, ORG, connId, HASH, null)).toEqual({ changed: true });
+
+    // Another org naming this stream exactly gets nothing.
+    expect(await setDateColumn(db, "org_other", connId, HASH, "Booked on")).toEqual({ changed: false });
+    expect((await dateColumnSettings(db, ORG, connId, HASH))!.dateField).toBeNull();
+  });
+
+  it("treats an empty pick as clearing, not as a column named empty string", async () => {
+    await setDateColumn(db, ORG, connId, HASH, "Booked on");
+    await setDateColumn(db, ORG, connId, HASH, "   ");
+    expect((await dateColumnSettings(db, ORG, connId, HASH))!.dateField).toBeNull();
   });
 });

@@ -6,6 +6,8 @@ import { eq, and } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { connections } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
+import { streamConfigHash } from "@/lib/sync/stream-hash";
+import { dateColumnNote, dateColumnSettings, setDateColumn } from "@/lib/sync/date-column";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow } from "@/lib/flow/store";
 import { sampleAppFields } from "@/lib/flow/engine";
 import { materializeFlow } from "@/lib/flow/materialize";
@@ -187,6 +189,40 @@ export async function listSourceOptionsAction(
     const credentials = await getConnectionCredentials(db, conn);
     const options = await connector.listOptions(key, { connectionId, credentials, config });
     return { ok: true, options };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Read and write the STREAM's date column from the Get data node.
+ *
+ * The picker is rendered on the node because that is where the user is looking,
+ * but it is a property of the stream: `occurred_at` is a fact about a ROW, and a
+ * stream's rows are shared by every flow reading it. Two flows on one tab cannot
+ * hold different opinions about when something happened, so this deliberately
+ * does not go through the node's `sourceConfig` — which would either let the last
+ * save win silently, or, if it entered the config hash, fork the stream and
+ * re-import its history.
+ */
+export async function streamDateColumnAction(
+  connectionId: string,
+  sourceConfig: Record<string, unknown>,
+  column?: string | null,
+): Promise<{ ok: true; dateField: string | null; note: string } | { ok: false; error: string }> {
+  const { orgId } = await requireOrg();
+  try {
+    const db = getDb();
+    const [conn] = await db
+      .select()
+      .from(connections)
+      .where(and(eq(connections.id, connectionId), eq(connections.orgId, orgId)))
+      .limit(1);
+    if (!conn) return { ok: false, error: "Connection not found." };
+    const configHash = streamConfigHash(sourceConfig, conn.source);
+    if (column !== undefined) await setDateColumn(db, orgId, connectionId, configHash, column);
+    const settings = await dateColumnSettings(db, orgId, connectionId, configHash);
+    return { ok: true, dateField: settings?.dateField ?? null, note: dateColumnNote(settings) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
