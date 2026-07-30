@@ -34,6 +34,22 @@ never look at the real one.
    column that does not exist yet is exactly the 0012 failure, just in the other
    order.
 
+   Note what "referencing" covers, because it is wider than it sounds:
+   **declaring a column in `src/db/schema.ts` is enough, with nothing reading
+   it.** `db.select().from(table)` does not emit `SELECT *` — drizzle expands it
+   to an explicit column list built from the schema, so every existing full-row
+   select on that table starts naming the new column the moment it is declared.
+   Demonstrated for 0018 by building a PGlite database at production's schema and
+   running the real query shape: it throws `column "date_field" does not exist`.
+
+   This does not change the rule or the order, and a migration commit still
+   carries its `schema.ts` declaration — it has to, because
+   `scripts/schema-audit.sql` and the drift check both derive "what production
+   should have" from `schema.ts`, so splitting them would make step 2 report a
+   clean screen of `ok` whether or not the paste landed. That is the 0012 silent
+   skip, rebuilt. It only means step 3 is load-bearing for EVERY migration
+   commit, not just ones whose code reads the new columns.
+
 ---
 
 ## 0013 — `usage_ledger.observed_limit`
@@ -234,28 +250,15 @@ Expect 1, 18, 1.
 Which column of a spreadsheet holds a row's event time, whether a restamp of
 existing rows is owed, and what the last read actually did with that column.
 
-All three additive and nullable. Applying this to the database changes no
-behaviour: nothing reads the columns, and every existing row reads NULL.
+All three additive and nullable, and nothing reads them: this follows the same
+shape as 0017 (`fb60f52`, "the backfill lane's schema, alone and ahead of its
+readers"). Applying it changes no behaviour — every existing row reads NULL.
 
-**But this commit is NOT inert in the other direction, and that is worth knowing
-generally.** A drizzle column declaration is not a passive annotation:
-`db.select().from(sourceStreams)` does not emit `SELECT *`, it expands to an
-explicit column list built from `schema.ts`. So the moment these columns are
-declared, four pre-existing queries start NAMING them — `activeStreams`
-(the sweep's work list), `primeStream` (the Test button, twice) and the backfill
-lane's stream load — even though no code reads the values. Deployed against a
-database without the columns, all four throw `column "date_field" does not
-exist`: the sweep, the Test button and the backfill lane, all down at once.
-
-Which is the 0013/0014/0015 outage exactly. So the ordering is a hard
-constraint, not a preference:
-
-> **Apply this SQL BEFORE `batch7/sheet-date-column` reaches main.** Verified by
-> building a PGlite database at production's current schema and running the real
-> query shape against it — it throws.
-
-This also means a migration-only commit cannot be made safe merely by having
-nothing read the new columns. Only keeping it off the deploy branch does that.
+Step 3 above applies with its usual force, and concretely here: the declaration
+alone makes `activeStreams` (the sweep's work list), `primeStream` (the Test
+button, twice) and the backfill lane's stream load all NAME these columns. Paste
+this before `batch7/sheet-date-column` reaches main and there is nothing to think
+about; deploy first and those three throw together.
 
 **Why it exists.** The Sheets poll stamps `occurred_at` with `new Date()` — the
 import moment — and `preserveOccurredAt` then freezes it there. Every time-based
