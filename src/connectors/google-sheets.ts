@@ -92,7 +92,13 @@ export const googleSheetsConnector: Connector = {
         // READS without the file being edited. So the skip is bounded — every
         // FULL_READ_EVERY skips we read anyway, whatever Drive says. Cheap
         // insurance against a whole class of silently-stale sheet.
-        if (probed !== "|" && probed === marker.stamp && marker.skips < FULL_READ_EVERY - 1) {
+        // `restamp` overrides all of it. The sheet has NOT changed — that is
+        // precisely the case where a restamp is needed and would never fire,
+        // because what changed is which column we read the date from. A settled
+        // sheet is the normal state, so without this the correction the user
+        // just asked for would wait up to FULL_READ_EVERY sweeps, or forever if
+        // they keep it settled.
+        if (!args.restamp && probed !== "|" && probed === marker.stamp && marker.skips < FULL_READ_EVERY - 1) {
           return {
             records: [],
             nextCursor: serializeMarker({ stamp: probed, skips: marker.skips + 1 }),
@@ -286,7 +292,10 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
   const dateColumn = dateField ? header.findIndex((h) => h === dateField) : -1;
   const presentInHeader = dateColumn >= 0;
   let dated = 0;
-  let undated = 0;
+  // The ids, not only the count, because the restamp has to move exactly these
+  // rows to their first-seen time and the runner cannot tell them apart from the
+  // outside: a parsed date and a synthesized fallback both arrive as a Date.
+  const undatedEventIds = new Set<string>();
 
   const records: CanonicalEvent[] = [];
   for (let i = fromDataRow; i < dataRows.length; i++) {
@@ -317,6 +326,7 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
      * under-parse is counted and shown, where an over-parse silently invents
      * dates.
      */
+    const eventId = `gsheets:${args.connectionId}:${streamTag}row:${sheetRowNumber}`;
     let occurredAt = new Date();
     if (dateField) {
       const canonical = presentInHeader ? normalizeDateValue(cells[dateColumn], dateField) : null;
@@ -325,12 +335,12 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
         occurredAt = new Date(parsed);
         dated += 1;
       } else {
-        undated += 1;
+        undatedEventIds.add(eventId);
       }
     }
 
     records.push({
-      eventId: `gsheets:${args.connectionId}:${streamTag}row:${sheetRowNumber}`,
+      eventId,
       eventType: "row_added",
       subject: firstEmailLike(obj),
       occurredAt,
@@ -342,7 +352,8 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
     nextCursor,
     providerCalls,
     extraCalls,
-    dateFieldState: dateField ? { column: dateField, presentInHeader, dated, undated } : undefined,
+    dateFieldState: dateField ? { column: dateField, presentInHeader, dated, undated: undatedEventIds.size } : undefined,
+    undatedEventIds: dateField ? undatedEventIds : undefined,
   };
 }
 

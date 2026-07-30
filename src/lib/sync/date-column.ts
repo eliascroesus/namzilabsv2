@@ -14,7 +14,16 @@ import { isDateHintedName } from "@/lib/normalize-dates";
  */
 
 export type DateFieldState = NonNullable<typeof sourceStreams.$inferSelect.dateFieldState>;
-export type DateColumnSettings = { dateField: string | null; state: DateFieldState | null };
+export type DateColumnSettings = {
+  dateField: string | null;
+  state: DateFieldState | null;
+  /**
+   * A column change is waiting for the sweep that will restamp the rows already
+   * stored. Optional because the note reads the same without it — one sentence
+   * gains a clause, nothing else branches.
+   */
+  restampPending?: boolean;
+};
 
 /**
  * Which column to PRE-SELECT, from the sheet's header row.
@@ -41,13 +50,17 @@ export async function dateColumnSettings(
   configHash: string,
 ): Promise<DateColumnSettings | null> {
   const [row] = await db
-    .select({ dateField: sourceStreams.dateField, state: sourceStreams.dateFieldState })
+    .select({
+      dateField: sourceStreams.dateField,
+      state: sourceStreams.dateFieldState,
+      restampRequestedAt: sourceStreams.restampRequestedAt,
+    })
     .from(sourceStreams)
     .where(
       and(eq(sourceStreams.orgId, orgId), eq(sourceStreams.connectionId, connectionId), eq(sourceStreams.configHash, configHash)),
     )
     .limit(1);
-  return row ? { dateField: row.dateField, state: row.state } : null;
+  return row ? { dateField: row.dateField, state: row.state, restampPending: row.restampRequestedAt != null } : null;
 }
 
 /**
@@ -77,9 +90,16 @@ export async function setDateColumn(
   // whether this org owns the stream at all. Answering that from the read above
   // instead would leave this predicate unreachable — defence that cannot be
   // tested, and that quietly stops existing the day someone simplifies the read.
+  // A real change asks for a restamp, in the same statement that makes the
+  // change. `preserveOccurredAt` pins `occurred_at` on conflict, so without this
+  // the pick only ever fixes rows that arrive LATER — and the person who notices
+  // that every sheet metric is measuring import time is exactly the person the
+  // correction would silently fail for. A timestamp rather than a flag, because
+  // the sweep clears it by COMPARING: a second change made while this one is
+  // being acted on must not be swallowed by the clear.
   const rows = await db
     .update(sourceStreams)
-    .set({ dateField: next, updatedAt: new Date() })
+    .set({ dateField: next, restampRequestedAt: new Date(), updatedAt: new Date() })
     .where(
       and(eq(sourceStreams.orgId, orgId), eq(sourceStreams.connectionId, connectionId), eq(sourceStreams.configHash, configHash)),
     )
@@ -101,14 +121,25 @@ export async function setDateColumn(
 export function dateColumnNote(settings: DateColumnSettings | null): string {
   const dateField = settings?.dateField ?? null;
   const state = settings?.state ?? null;
-  if (!dateField) return "No date column selected — timing uses when each row was first imported.";
+  // Rows already stored still hold whatever the PREVIOUS setting gave them, and
+  // the sweep that fixes them has not run. Saying so is the same rule as the
+  // rest of this function: the gap between what was chosen and what is stored is
+  // exactly the interval a user would otherwise mistake for a broken picker.
+  const pending = settings?.restampPending === true;
+  if (!dateField) {
+    return pending
+      ? "No date column selected — from the next read, timing goes back to when each row was first imported."
+      : "No date column selected — timing uses when each row was first imported.";
+  }
 
   if (state && state.column === dateField && !state.presentInHeader) {
     return `The column "${dateField}" is no longer in this sheet — timing has fallen back to when each row was first imported.`;
   }
   if (!state || state.column !== dateField) {
     // Chosen, but no read has happened under it yet. Do not imply it worked.
-    return `Timing will use "${dateField}" from the next read.`;
+    return pending
+      ? `Timing will use "${dateField}" from the next read, including rows already imported.`
+      : `Timing will use "${dateField}" from the next read.`;
   }
   if (state.dated === 0) {
     return `No row has a usable date in "${dateField}" — timing uses when each row was first imported.`;

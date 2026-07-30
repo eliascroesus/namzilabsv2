@@ -1,6 +1,7 @@
 import { and, eq, gt, gte, isNull, lt, lte, notInArray, or } from "drizzle-orm";
 import { connections, events, flows, flowVersions, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
+import type { CanonicalEvent } from "@/connectors/types";
 import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
@@ -281,6 +282,68 @@ async function retireOutside(db: DB, conn: ConnRow, stream: StreamRow, window: {
 }
 
 /**
+ * When each of this stream's stored rows was FIRST SEEN, by event id.
+ *
+ * `events.received_at` defaults to now on insert and appears in neither the
+ * insert list nor the `onConflictDoUpdate` set (`pipeline.ts`), so no upsert and
+ * no full re-sync has ever moved it. That makes it the recoverable first-seen —
+ * and for every sheet row written before the date column existed it sits within
+ * milliseconds of the `new Date()` that stamped `occurred_at`, so restamping a
+ * row back to it returns the value it already had.
+ *
+ * TOMBSTONES INCLUDED, deliberately. A row deleted from the sheet and re-added
+ * is resurrected by this same upsert, and its first-seen is still the day it was
+ * first seen. Filtering them out would hand it `new Date()` instead — inventing
+ * a fresher origin than the row has.
+ *
+ * The whole stream in one query rather than an `IN` list of the read's ids: a
+ * mirror re-reads its entire resource, so the two sets are the same set, and
+ * this runs only on a restamp.
+ */
+async function firstSeenByEventId(db: DB, connectionId: string, streamHash: string): Promise<Map<string, Date>> {
+  const rows = await db
+    .select({ eventId: events.eventId, receivedAt: events.receivedAt })
+    .from(events)
+    .where(and(eq(events.connectionId, connectionId), eq(events.streamHash, streamHash)));
+  return new Map(rows.map((r) => [r.eventId, r.receivedAt]));
+}
+
+/**
+ * The restamp: what `occurred_at` should be for each record of the ONE sweep
+ * that follows a change to the stream's date column.
+ *
+ * THREE cases, and the third is why "just pass `preserveOccurredAt`" is not the
+ * answer. Preserve keeps whatever is STORED, which is only equivalent to
+ * "first-seen" on the very first restamp — after one, a row with no date in the
+ * newly-chosen column would keep the PREVIOUS column's value, a column the user
+ * has explicitly abandoned, while the UI reported it as having kept its import
+ * time. Clearing the picker is worse still: every row would land in the preserve
+ * batch, nothing would change, and "first seen" would become a one-way door.
+ *
+ *   parsed under the current column -> the column's date (already stamped)
+ *   no usable date, column set      -> received_at
+ *   no column at all                -> received_at
+ *
+ * The last two are one expression because they are one answer, not because they
+ * are one case: they arrive differently and a reader has to be able to see both.
+ *
+ * A record with no `received_at` is one this read is INSERTING, so it has no
+ * first-seen yet — the connector's own stamp becomes it, milliseconds later.
+ */
+function restampRecords(
+  records: CanonicalEvent[],
+  dateField: string | null,
+  undatedEventIds: Set<string> | undefined,
+  firstSeen: Map<string, Date>,
+): CanonicalEvent[] {
+  return records.map((r) => {
+    if (dateField != null && !undatedEventIds?.has(r.eventId)) return r;
+    const seen = firstSeen.get(r.eventId);
+    return seen ? { ...r, occurredAt: seen } : r;
+  });
+}
+
+/**
  * Sync one stream and upsert the results (deduped, tagged with the stream's
  * hash) at the connection's current generation.
  *
@@ -362,6 +425,13 @@ export async function syncStream(
   let incomplete = false;
   let covered: { from: Date; to: Date } | null = null;
   let dateFieldState: StreamRow["dateFieldState"] | undefined;
+  /**
+   * The date column changed and every stored row is about to be restamped from
+   * this read. Captured as the VALUE, not a boolean, because it is cleared by
+   * comparison — see the end of this function.
+   */
+  const restampRequestedAt = stream.restampRequestedAt ?? null;
+  let restampWrote = false;
   try {
     if (isMirrorSource(conn.source)) {
       const claimedAt = await claimPage();
@@ -380,6 +450,11 @@ export async function syncStream(
         // reason it owns its window: the rows are shared by every flow reading
         // it, so this cannot be a per-flow opinion.
         dateField: stream.dateField ?? null,
+        // A settled sheet is not re-read (Phase 3's `modifiedTime` probe), and a
+        // settled sheet is the normal state — so the restamp has to ask for the
+        // read that would otherwise be skipped. Nothing about the SHEET changed;
+        // what changed is which column we read the date from.
+        restamp: restampRequestedAt != null,
       });
       const { records, nextCursor, mirrorScope, unchanged } = mirrorRes;
       // Before the `unchanged` return below — a skip still spends the Drive
@@ -397,6 +472,22 @@ export async function syncStream(
           .where(eq(sourceStreams.id, stream.id));
         return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0 };
       }
+      /**
+       * The restamp is the CALLER doing something different for one sweep, not
+       * the writer changing. `preserveOccurredAt` is right for every normal
+       * mirror write — a re-read tab must not shift its rows' event times — and
+       * an `UPDATE events SET occurred_at` would make something other than
+       * `upsertEvents` a writer of event content. So this sweep hands the writer
+       * the values it wants and asks it not to pin them.
+       */
+      const toWrite = restampRequestedAt
+        ? restampRecords(
+            records,
+            stream.dateField ?? null,
+            mirrorRes.undatedEventIds,
+            await firstSeenByEventId(db, conn.id, stream.configHash),
+          )
+        : records;
       // C.1: the upsert and the retire are ONE swap. Wrapped so that on the
       // pool driver they run in a transaction holding the stream's advisory
       // lock — no reader can observe the window half-replaced, and a concurrent
@@ -406,10 +497,17 @@ export async function syncStream(
       const swap = await withStreamWriteLock(db, `stream:${stream.id}`, async (tx) => {
         const res = await upsertEvents(
           tx,
-          { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation, preserveOccurredAt: true },
-          records,
+          {
+            orgId: conn.orgId,
+            connectionId: conn.id,
+            source: conn.source,
+            streamHash: stream.configHash,
+            generation,
+            preserveOccurredAt: restampRequestedAt == null,
+          },
+          toWrite,
         );
-        const gone = await retireAbsent(tx, conn, stream, records, mirrorScope);
+        const gone = await retireAbsent(tx, conn, stream, toWrite, mirrorScope);
         return { res, gone };
       });
       if (swap.acquired && swap.result) {
@@ -417,6 +515,11 @@ export async function syncStream(
         updated = swap.result.res.updated;
         deduped = swap.result.res.deduped;
         softDeleted = swap.result.gone;
+        // The restamp counts as DONE only here, on the branch where the write
+        // actually ran. Zero rows written is fine — an empty tab has nothing to
+        // restamp — but zero rows written because another writer held the lock
+        // is not, and the two are indistinguishable from the counts alone.
+        restampWrote = true;
       }
       cursor = nextCursor ?? null;
       /**
@@ -525,6 +628,27 @@ export async function syncStream(
         ...(dateFieldState !== undefined ? { dateFieldState } : {}),
       })
       .where(eq(sourceStreams.id, stream.id));
+    /**
+     * Clear the restamp marker LAST, in its own statement, and only against the
+     * exact value this sweep acted on.
+     *
+     * Last, because anything that dies before the rows are written must leave
+     * the request standing — a marker cleared ahead of the write is a correction
+     * the user asked for, was told had been queued, and that silently never
+     * happens. Re-running it costs one extra read and recomputes the same
+     * values, so the surviving direction is the harmless one.
+     *
+     * Compare-and-clear, because the user can pick a THIRD column while this
+     * sweep is mid-flight. That write stamps a newer time; an unconditional
+     * clear would swallow it and leave the stream showing a column it never
+     * restamped to.
+     */
+    if (restampRequestedAt && restampWrote) {
+      await db
+        .update(sourceStreams)
+        .set({ restampRequestedAt: null })
+        .where(and(eq(sourceStreams.id, stream.id), eq(sourceStreams.restampRequestedAt, restampRequestedAt)));
+    }
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await db

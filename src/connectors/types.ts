@@ -72,6 +72,21 @@ export type PollArgs = {
    * timestamps is the provider's, and for a sheet is first-seen.
    */
   dateField?: string | null;
+  /**
+   * "Read even if you believe nothing changed."
+   *
+   * Set for the one sweep that follows a change to {@link dateField}, because
+   * every stored row is about to be restamped FROM this read — so a connector
+   * that answers "unchanged" hands back an empty record set and the restamp
+   * silently does nothing. The known way for that to happen is Sheets' Drive
+   * `modifiedTime` probe: the sheet genuinely has not changed, which is exactly
+   * why it must still be read. What changed is our reading of it.
+   *
+   * A connector with no such short-circuit can ignore this; it only ever asks
+   * for the read that would otherwise have been skipped, never for a different
+   * one.
+   */
+  restamp?: boolean;
 };
 
 /** One choice for a dynamic flow-level field (e.g. a spreadsheet, a tab). */
@@ -220,6 +235,27 @@ export type PollResult = {
    * decides when a row was written.
    */
   dateFieldState?: { column: string; presentInHeader: boolean; dated: number; undated: number };
+  /**
+   * WHICH records the read could not date — the ids behind
+   * `dateFieldState.undated`, not just the count.
+   *
+   * Needed only by the restamp, and it cannot be derived anywhere else. A row
+   * with no usable date must fall back to `events.received_at`, which lives in
+   * the database the connector has no handle on; the runner has the handle but
+   * cannot tell a date the connector PARSED from the fallback it SYNTHESIZED —
+   * both arrive as a `Date` on `occurredAt`. Guessing (say, "anything stamped
+   * within a second of now") would be the silent-wrong-answer class this whole
+   * feature exists to remove, so the connector says it outright.
+   *
+   * A Set because every use is a membership test over the same read's records.
+   *
+   * Omitting it means "I dated everything I was asked to" — the safe default for
+   * a source whose records carry real timestamps, since the runner then leaves
+   * the connector's own `occurredAt` alone. It is NOT the way to say "no column
+   * is set": the runner already knows that from the stream, and treats every row
+   * as undated in that case.
+   */
+  undatedEventIds?: Set<string>;
   /**
    * How many provider requests this poll actually made.
    *
