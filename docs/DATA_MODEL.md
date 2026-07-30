@@ -37,9 +37,24 @@ It is a chunked multi-row upsert (~500 rows/statement) with guarded conflict sem
 
 Field rules on update:
 - `occurred_at` follows the source **unless** the write sets `preserveOccurredAt` — then the
-  first-seen time is pinned. Used by (a) mirror sources, whose read-time timestamps are synthetic,
-  and (b) the webhook pipeline, so redelivery of a payload with no timestamp can't drift the time.
+  stored time is pinned. Used by (a) the webhook pipeline, so redelivery of a payload with no
+  timestamp can't drift the time, and (b) mirror sources, which re-read the whole resource every
+  sweep and must not shift the event time of a row they are merely restating.
   Consequence: reprocessing raw events never shifts `occurred_at` of existing rows.
+
+  **This rule used to justify itself in a circle.** It read "mirror sources, whose read-time
+  timestamps are synthetic" — but they were synthetic only because the connector had stamped
+  `new Date()`, and the pin was what made that permanent. Sheets was the live case: a spreadsheet
+  row has no timestamp of its own, so `occurred_at` became the import moment, the pin froze it,
+  and every time-based metric over a sheet was measuring when the data was imported. The pin was
+  never the bug — reading the wrong value was — but the pin is why the wrong value could not be
+  corrected, including by a full re-sync, which still upserts on `event_id` with the pin in force.
+
+  The fix is a real value plus one exit: `source_streams.date_field` names the column that holds
+  a row's event time, and `source_streams.restamp_requested_at` marks the single sweep that writes
+  without the pin. `events.received_at` is the recoverable first-seen for rows with no usable date
+  — it is in neither the insert list nor the conflict-update set, so nothing has ever moved it.
+  See `src/lib/sync/streams.ts` (`restampRecords`) for the three cases.
 - `raw_event_id` keeps its first value (provenance of the original ingest).
 - `properties` are date-normalized (`normalizeDatesDeep`) before compare/write, so byte-noise in
   date formats never counts as a change.
@@ -75,7 +90,7 @@ Declared in `src/connectors/catalog.ts` (`sync` field; UI copy states the class)
 
 | Class | Meaning | Connectors |
 |---|---|---|
-| **mirror** | Every sweep re-reads the ENTIRE resource, refreshes rows in place and soft-deletes rows no longer present. Stored live rows ≡ source after every sweep. Row identity = sheet row number (per stream); blank rows mirror as deleted; `occurred_at` = first-seen. | Google Sheets |
+| **mirror** | Every sweep re-reads the ENTIRE resource, refreshes rows in place and soft-deletes rows no longer present. Stored live rows ≡ source after every sweep. Row identity = sheet row number (per stream); blank rows mirror as deleted; `occurred_at` = the stream's nominated date column, else first-seen (see below). | Google Sheets |
 | **derived-mirror** | Numbers **computed by the provider**, re-read on a schedule and refreshed in place. Faithful to what the provider reports — including restatements of recent periods, which are normal, not edits. Reads declare a `mirrorScope` (the span they enumerate completely), so a row that disappears from inside the window is retired while history behind it is untouched. | Instantly (campaign analytics) |
 | **incremental** | Cursor-forward polling with an overlap window; nothing is stranded (windows are drained to their end, deeper windows resume next sweep). Edits older than the overlap surface on a full re-sync. | Close (5-min overlap, continuation cursor), Google Calendar (sync token, ±window bound on first sync), Calendly, Sendblue (30-day first-sweep bound), Instantly raw-emails streams |
 | **webhook-only** | No list endpoint to reconcile against: data is as complete as the webhooks that arrived. Weakest class; the connection UI must say so. | Custom webhook |
@@ -94,6 +109,43 @@ answer*, which differs in four ways worth stating plainly:
 4. **Their definitions govern.** A provider's "sent" need not equal a count of
    our `email_sent` events. **A flow that mixes provider totals with raw
    records can double-count**; prefer one or the other per number.
+
+### Sheets: which column is the event time
+
+A spreadsheet row has no timestamp of its own, so the stream names one:
+`source_streams.date_field`. NULL means first-seen, which is a defensible
+answer — the UI's job is to say which of the two is in force, never to let
+first-seen pass as the event time. `date_field_state`
+(`{column, presentInHeader, dated, undated, at}`) records what the last read
+actually did, and `presentInHeader` exists because a renamed column and a column
+of malformed values both produce "every row undated" while needing opposite
+fixes.
+
+Four things about it that are easy to get wrong:
+
+- **It is not `TimeConfigSchema.dateField`, and the names are unrelated.** The
+  flow-level one (`TimeConfigSchema`, `FilterDateRangeSchema`, default
+  `"occurredAt"`) picks which field of an ALREADY-STORED record a Time or Filter
+  step windows on — a per-flow reading choice with no ingest effect. The stream
+  one decides what `occurred_at` IS, once, at write time, for every flow. Set
+  both and they compose: the flow can window on `occurredAt` (now the sheet's
+  date) or on some raw property instead.
+- **A published tile has no such choice.** `src/lib/metrics/compute.ts` ranges
+  and buckets on `events.occurred_at` and nothing else. So for a dashboard
+  number, the stream's column IS the time axis — there is no second lever
+  downstream to correct it with.
+- **`normalize-dates.ts` is the single date parser.** `normalizeDateValue` reads
+  the column, and the HEADER NAME is passed as the field name so its gate on
+  purely-numeric values still applies: a column of epoch seconds parses when it
+  is called "Created" and does not when it is called "Ref". Nominating a column
+  says WHICH column holds the date, not that its values may be read more loosely
+  than anywhere else.
+- **A window-scoped retire judges on this axis.** `retireAbsent` with a
+  `mirrorScope` only considers rows whose `occurred_at` falls inside the window
+  (`streams.ts`). Sheets is unaffected — a whole-resource mirror declares no
+  scope — but any future source that BOTH declares a `mirrorScope` and honours
+  `dateField` would be retiring by a boundary the user chose, so the two must be
+  designed together or the window silently stops meaning what it says.
 
 ### Instantly: stated assumptions
 

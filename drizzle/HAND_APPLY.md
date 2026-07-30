@@ -311,3 +311,18 @@ applying this.
 > **Numbering note.** 0016 remains reserved by the unmerged
 > `batch5/retention-purge` branch (`connection_archive`). This is 0018 rather
 > than 0016 so the two cannot collide in one journal.
+>
+> **And renumbering that branch is not enough.** Drizzle's snapshots are a
+> CHAIN: each `drizzle/meta/NNNN_snapshot.json` records `prevId` and the full
+> schema as of that point. `batch5`'s snapshot forks from 0015 — it was written
+> before 0017 and 0018 existed — so its picture of `source_streams` has neither
+> `backfill_jobs` nor `date_field`. Renaming the file to 0019 would leave a
+> journal whose 0019 claims a predecessor that is not 0018, and the next
+> `db:generate` on main would then diff against a schema missing three columns
+> and try to add them a second time. At merge time, regenerate: rebase the
+> branch, delete its migration and snapshot, and re-run `pnpm db:generate` so
+> the SQL is emitted against the real head. The SQL itself will come out the
+> same — `connection_archive` is a new table that touches nothing else — but
+> the chain will be intact, which is the part the tooling actually reads.
+> Main's own 0017 has the same shape and is already correct only because it was
+> generated after 0015 was merged.

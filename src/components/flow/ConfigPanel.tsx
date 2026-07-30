@@ -913,11 +913,6 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
       if (settings.ok) {
         setValue(settings.dateField);
         setNote(settings.note);
-        // PRE-SELECT only, and only when nothing is chosen yet: the suggestion
-        // fills a visible picker the user can change. It is never saved on their
-        // behalf — a wrong guess that announces itself is fine, a wrong guess
-        // that hides is the defect this exists to remove.
-        if (!settings.dateField) setValue(suggestDateColumn(headers.map((h) => h.value)));
       }
     })();
     return () => {
@@ -937,8 +932,21 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
     setBusy(false);
   };
 
-  const suggested = suggestDateColumn(columns.map((c) => c.value));
-  const unsaved = value != null && value === suggested && note.startsWith("No date column selected");
+  /**
+   * The suggestion sits BESIDE the control, never inside it.
+   *
+   * It used to pre-fill the picker, which made the control display a column
+   * while the stream had none — and a user who deliberately chose "use import
+   * time" reopened the panel to find the setting they had rejected sitting in
+   * the box, with a line underneath explaining that it was not really there. A
+   * control that has to be annotated to be believed is the wrong control.
+   *
+   * So it re-offers for as long as no column is chosen, and cannot be mistaken
+   * for state while doing it. That answers "does auto-detect nag forever?" with
+   * "yes, in one short line that is true" — the alternative, remembering that
+   * the picker has been used once, needs a column this batch is not adding.
+   */
+  const suggested = value == null ? suggestDateColumn(columns.map((c) => c.value)) : null;
 
   return (
     <Field label="Date column">
@@ -953,9 +961,8 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
       <p className="mt-1.5 text-xs text-gray-500">
         Which column holds the date each row happened on. Applies to every flow reading this sheet.
       </p>
-      <p className="mt-1 text-xs text-gray-600">
-        {unsaved ? `Suggested: "${suggested}" — choose it to apply. Nothing is set yet.` : note}
-      </p>
+      <p className="mt-1 text-xs text-gray-600">{note}</p>
+      {suggested && <p className="mt-1 text-xs text-gray-600">Suggested: &quot;{suggested}&quot; — choose it above to apply.</p>}
     </Field>
   );
 }
