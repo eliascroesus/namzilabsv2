@@ -107,6 +107,6 @@ describe("G.4 — results-version beacon", () => {
     // running-import count and how far back the deepest one has reached. An
     // import advancing changes no flow_results column, so without those last
     // two an open dashboard would never refresh its "still importing" label.
-    expect(await resultsVersion(db, "org_other")).toBe("0.0.0.0.0");
+    expect(await resultsVersion(db, "org_other")).toBe("0.0.0.0.0.0");
   });
 });

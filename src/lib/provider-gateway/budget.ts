@@ -308,6 +308,13 @@ export async function recordExtraCalls(
  * 300/min. Charging both to one bucket means the tighter number governs the
  * cheap request too, so a probe designed to SAVE quota would be rationed as if
  * it spent the expensive kind.
+ *
+ * `now` MUST be the instant the claim was charged at, not the instant the poll
+ * finished. Buckets are keyed by minute window, and a poll straddles one often:
+ * claim at :59.8, settle at :00.2. A refund computed from the settle time then
+ * releases a call from the NEXT window — and on the fleet bucket that window is
+ * shared, so it would erase a different customer's real spend and hand the fleet
+ * a call of headroom nobody gave back. Every caller passes its claim instant.
  */
 export async function settlePollCalls(
   db: DB,

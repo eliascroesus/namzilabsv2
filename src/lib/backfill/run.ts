@@ -68,7 +68,10 @@ export async function runBackfillSlice(db: DB, job: BackfillJob, now = new Date(
     for (let page = 0; page < PAGES_PER_SLICE; page++) {
       // The lowest lane there is. Its ceiling is derived from the SWEEP's, so a
       // long import structurally cannot reach the reserve a person's Test uses.
-      const claim = await claimCalls(db, conn, operation, 1, new Date(), "backfill");
+      // One instant for the claim and its settle-up, so a slice that straddles a
+      // minute boundary cannot refund out of the next window (settlePollCalls).
+      const claimedAt = new Date();
+      const claim = await claimCalls(db, conn, operation, 1, claimedAt, "backfill");
       if (!claim.allowed) {
         // Defer, never drop: the checkpoint already written is exactly where the
         // next attempt resumes, so a denial costs nothing but time.
@@ -87,7 +90,7 @@ export async function runBackfillSlice(db: DB, job: BackfillJob, now = new Date(
         // declares, so the rows this writes cannot be retired by the next sweep.
         windowFloor: started.targetFloor,
       });
-      await settlePollCalls(db, conn, operation, res);
+      await settlePollCalls(db, conn, operation, res, 1, claimedAt);
 
       if (res.records.length > 0) {
         const wrote = await upsertEvents(

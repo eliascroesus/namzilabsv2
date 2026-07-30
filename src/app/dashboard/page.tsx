@@ -131,17 +131,28 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
      *
      * One query for the whole dashboard, not one per tile.
      */
-    const refs = rows.flatMap((r) => streamRefsOfProvenance(r.provenance));
-    const progress = await importProgressByStreamRef(db, refs);
-    flowTiles = rows.map((r) => {
-      const mine = streamRefsOfProvenance(r.provenance)
-        .map((ref) => progress.get(`${ref.connectionId}:${ref.configHash}`))
-        .filter((p): p is ImportCoverage => p != null);
-      // A flow reading two streams shows the one with furthest still to go —
-      // the number is only as settled as its least-settled input.
-      const importing = mine.sort((a, b) => b.targetMs - b.coveredMs - (a.targetMs - a.coveredMs))[0];
-      return { ...r, importing };
-    });
+    // The TILES land first, and the import badge is decorated on afterwards.
+    //
+    // Assigning them only after the progress join meant a failure in that join
+    // fell to the catch below with `flowTiles` still empty — so every published
+    // number vanished from the dashboard and nothing said why. An import badge is
+    // an annotation on a number; it must not be able to take the number with it.
+    flowTiles = rows.map((r) => ({ ...r }));
+    try {
+      const refs = rows.flatMap((r) => streamRefsOfProvenance(r.provenance));
+      const progress = await importProgressByStreamRef(db, orgId, refs);
+      flowTiles = rows.map((r) => {
+        const mine = streamRefsOfProvenance(r.provenance)
+          .map((ref) => progress.get(`${ref.connectionId}:${ref.configHash}`))
+          .filter((p): p is ImportCoverage => p != null);
+        // A flow reading two streams shows the one with furthest still to go —
+        // the number is only as settled as its least-settled input.
+        const importing = mine.sort((a, b) => b.targetMs - b.coveredMs - (a.targetMs - a.coveredMs))[0];
+        return { ...r, importing };
+      });
+    } catch {
+      // No badge rather than no dashboard.
+    }
   } catch {
     // flow_results may not exist before migration 0002 is applied; ignore.
   }

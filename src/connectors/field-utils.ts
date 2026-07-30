@@ -64,14 +64,10 @@ export function spanCovered(
 
 /**
  * How much time two provider date strings span, or 0 if either is missing or
- * unparseable — which is what "nothing ingested yet" should read as.
- *
- * Separate from {@link spanCovered} because a walk that covers its window in
- * more than one pass needs the numerator on its own: Close opens a first sync on
- * a shallow rung and steps out to the full target, so it banks the largest span
- * any rung reached rather than reporting one against a target directly.
+ * unparseable — which is what "nothing ingested yet" should read as, never as
+ * complete.
  */
-export function spanBetween(oldest: string | null, newest: string | null): number {
+function spanBetween(oldest: string | null, newest: string | null): number {
   const lo = oldest ? Date.parse(oldest) || 0 : 0;
   const hi = newest ? Date.parse(newest) || 0 : 0;
   return lo > 0 && hi > lo ? hi - lo : 0;

@@ -249,7 +249,10 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   const swept = await withConnectionSyncLock(db, connectionId, async (): Promise<ReconcileResult> => {
     // F.1: claim before spending a provider call, against the endpoint the poll
     // will hit (see pollOperation — "*" is correct for one-bucket providers).
-    const claim = await claimCalls(db, conn, pollOperation(conn.source, conn.config));
+    // One instant for the claim and its settle-up below — a poll that straddles a
+    // minute boundary must not settle into the next window (settlePollCalls).
+    const claimedAt = new Date();
+    const claim = await claimCalls(db, conn, pollOperation(conn.source, conn.config), 1, claimedAt);
     if (!claim.allowed) {
       const until = await pauseConnection(db, conn.id, claim.retryAfterMs, `${claim.reason} — resumes automatically`);
       return withCadence({
@@ -296,7 +299,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     // The claim above bought ONE call, but a connector that pages internally
     // may have spent several. Settle up: the spend cannot be un-made, but the
     // next sweep must not be authorised on a false reading.
-    await settlePollCalls(db, conn, pollOperation(conn.source, conn.config), { providerCalls, extraCalls });
+    await settlePollCalls(db, conn, pollOperation(conn.source, conn.config), { providerCalls, extraCalls }, 1, claimedAt);
 
     // Connection-scoped reconciliation writes at the connection's current
     // generation (>= 1): these are poll-managed rows a future full re-sync must

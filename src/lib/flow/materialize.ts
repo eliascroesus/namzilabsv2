@@ -172,18 +172,27 @@ export async function resultsVersion(db: DB, orgId: string): Promise<string> {
    * and the poller would not refresh. The tile would sit on "covering 12 of 90"
    * until some unrelated recompute happened to bump it.
    *
-   * `maxReached` is what actually advances as history lands; the count catches
-   * an import starting or finishing.
+   * BOTH ends of the reached range, because `reached_floor` moves BACKWARDS as an
+   * import deepens. With two running jobs, `max` is pinned by whichever is
+   * shallowest — so a deep import could reach further back every slice while this
+   * aggregate never moved, and the label it exists to refresh would freeze on an
+   * open dashboard. `min` tracks the deepening; `max` still catches a shallow job
+   * advancing. The count catches an import starting or finishing.
+   *
+   * This is a CHANGE DETECTOR, not a displayed depth: any component moving is
+   * enough, and none of these numbers is shown to anyone.
    */
   const [bf] = await db
     .select({
       running: sql<number>`count(*)::int`,
       maxReached: sql<string | null>`max(${backfillJobs.reachedFloor})`,
+      minReached: sql<string | null>`min(${backfillJobs.reachedFloor})`,
     })
     .from(backfillJobs)
     .where(and(eq(backfillJobs.orgId, orgId), inArray(backfillJobs.status, ["queued", "running"])));
   const reachedMs = bf?.maxReached ? Date.parse(String(bf.maxReached)) : 0;
-  return `${row?.tiles ?? 0}.${row?.nonFresh ?? 0}.${maxMs}.${bf?.running ?? 0}.${reachedMs}`;
+  const deepestMs = bf?.minReached ? Date.parse(String(bf.minReached)) : 0;
+  return `${row?.tiles ?? 0}.${row?.nonFresh ?? 0}.${maxMs}.${bf?.running ?? 0}.${reachedMs}.${deepestMs}`;
 }
 
 /**

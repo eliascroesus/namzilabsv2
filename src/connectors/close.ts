@@ -10,7 +10,7 @@ import type {
 } from "./types";
 import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
 import { fetchJson, basicAuth, HttpError, parseRateLimit, type ObservedRateLimit } from "@/lib/http-client";
-import { asObject, parseDate, spanBetween, str } from "./field-utils";
+import { asObject, parseDate, spanCovered, str } from "./field-utils";
 
 const API = "https://api.close.com/api/v1";
 
@@ -88,25 +88,24 @@ const FIRST_RUNG_DAYS = 1;
  *               is dropped.
  * - `covLo`/`covHi`
  *               — oldest and newest `date_created` ingested by the walk of the
- *               CURRENT rung. Within one rung the walk pages monotonically, so
- *               everything between them is held: their difference is a real span,
- *               with no direction in it. The span grows from whichever end the
- *               provider orders from, so an oldest-first log and a newest-first
- *               one both read correctly.
- * - `covMs`   — the largest span any rung has reached, which is what
- *               "covering 12 of 30 days" reports.
+ *               TARGET window, which is what "covering 12 of 30 days" reports.
+ *               The walk pages monotonically through that window, so everything
+ *               between the two marks is held and their difference is a real
+ *               span. It carries no direction: the span grows from whichever end
+ *               the provider orders from, so an oldest-first log and a
+ *               newest-first one both read correctly.
  *
  *               Deliberately NOT derived from `maxSeen`. That mark spans
- *               everything ingested, rungs included, so on an oldest-first log it
- *               would reach from the 30-day floor to an hour ago after ONE page —
- *               announcing full coverage while holding a fraction of the events,
- *               which is the overstatement this whole shape exists to prevent.
- *               And deliberately a MAXIMUM across rungs rather than the current
- *               rung alone: the deep walk starts over from zero, so reporting only
- *               its span would make the number fall back after the shallow rung
- *               had genuinely covered a day. It understates the union of the two
- *               (the last day is held and not added on), and understating is the
- *               only direction that cannot mislead.
+ *               everything ingested, the opening peek included, so on an
+ *               oldest-first log it would reach from the 30-day floor to an hour
+ *               ago after ONE page — announcing full coverage while holding a
+ *               fraction of the events, which is the overstatement this whole
+ *               shape exists to prevent.
+ *
+ *               The peek's own span is therefore not counted, and the step-out
+ *               below is the single place these marks are cleared. So the last day
+ *               is held and not added on: an understatement of up to a day, which
+ *               is the only direction that cannot mislead.
  */
 type CloseCursor = {
   hw: string | null;
@@ -115,7 +114,6 @@ type CloseCursor = {
   floor?: string | null;
   covLo?: string | null;
   covHi?: string | null;
-  covMs?: number | null;
 };
 
 function parseCloseCursor(cursor: string | null): CloseCursor {
@@ -130,7 +128,6 @@ function parseCloseCursor(cursor: string | null): CloseCursor {
         floor: parsed.floor ?? null,
         covLo: parsed.covLo ?? null,
         covHi: parsed.covHi ?? null,
-        covMs: typeof parsed.covMs === "number" ? parsed.covMs : null,
       };
     } catch {
       return { hw: null, cont: null, maxSeen: null };
@@ -164,12 +161,7 @@ function serializeCloseCursor(c: CloseCursor): string | null {
  * newest-first log — see PollResult.importProgress.
  */
 function coverage(c: CloseCursor, target: Date): { coveredMs: number; targetMs: number } {
-  return { coveredMs: Math.max(0, c.covMs ?? 0), targetMs: Math.max(0, Date.now() - target.getTime()) };
-}
-
-/** Fold this rung's ingested span into the best any rung has reached. */
-function bankCoverage(c: CloseCursor): void {
-  c.covMs = Math.max(c.covMs ?? 0, spanBetween(c.covLo ?? null, c.covHi ?? null));
+  return spanCovered(c.covLo ?? null, c.covHi ?? null, target.getTime());
 }
 
 /** Earlier of two provider date strings (by parsed time; unparseable loses). */
@@ -287,7 +279,15 @@ export const closeConnector: Connector = {
     const firstSyncFloor = Date.now() - FIRST_SYNC_DAYS * 86_400_000;
     const hwMs = cur.hw ? Date.parse(cur.hw) : NaN;
     const floorMs = cur.floor ? Date.parse(cur.floor) : NaN;
-    const target = Number.isFinite(hwMs)
+    // A corrupt mark is DISCARDED, not merely ignored. Leaving it in place kept
+    // `cur.hw` truthy, and three separate decisions read that field rather than
+    // the parsed value: the floor pin below, the peek gate, and serialization. So
+    // the walk would use a 30-day fallback target while never pinning it — and an
+    // unpinned fallback recomputes `now - 30d` every sweep, sliding the boundary
+    // forward while the walk pages through it. The depth reached would then depend
+    // on how long the walk took, which is the exact drift `floor` exists to stop.
+    if (!Number.isFinite(hwMs)) cur.hw = null;
+    const target = cur.hw
       ? new Date(hwMs - OVERLAP_MS)
       : new Date(Number.isFinite(floorMs) ? floorMs : firstSyncFloor);
     if (!cur.hw) cur.floor = target.toISOString();
@@ -305,6 +305,7 @@ export const closeConnector: Connector = {
      */
     const peeking = !cur.hw && !cur.cont;
     let bound = peeking ? new Date(Math.max(target.getTime(), Date.now() - FIRST_RUNG_DAYS * 86_400_000)) : target;
+
 
     let pages = 0;
     while (pages < PAGES_PER_POLL) {
@@ -332,6 +333,17 @@ export const closeConnector: Connector = {
             nextCursor: serializeCloseCursor({ ...cur, cont: null }),
             providerCalls,
             rateLimit: rateLimit ?? undefined,
+            // The window is going to be re-walked from its bound next sweep, so
+            // there IS outstanding work. Saying nothing here let a connection
+            // mid-import read as idle for that sweep, which tiers its cadence
+            // down — slowing the very pages it is waiting on — and told a Test
+            // the import had finished when it had not.
+            incomplete: true,
+            // Only for a genuine first sync. In steady state the window is the
+            // five-minute overlap, and "covering 0 of 1 days" reads as alarming
+            // nonsense about a routine retry; the note falls back to its
+            // no-numbers form, which is true of both.
+            importProgress: cur.hw ? undefined : coverage(cur, target),
           };
         }
         throw e;
@@ -352,7 +364,6 @@ export const closeConnector: Connector = {
         cur.covLo = earlierDate(cur.covLo ?? null, at);
         cur.covHi = laterDate(cur.covHi ?? null, at);
       }
-      bankCoverage(cur);
 
       const next = data.cursor_next ?? null;
       if (bound.getTime() > target.getTime()) {
@@ -367,8 +378,18 @@ export const closeConnector: Connector = {
         // actual window by a page.
         bound = target;
         cur.cont = null;
-        // The target walk measures its own span from scratch; what the peek
-        // reached is already banked and cannot be lost.
+        /**
+         * THE ONLY PLACE the coverage marks are cleared, and the invariant that
+         * makes them mean anything: every return path below reports the span of
+         * the TARGET walk, because this is the one bound whose marks do not
+         * survive to a return.
+         *
+         * Without it the peek's newest record (an hour old) pairs with the target
+         * bound's oldest (the 30-day floor) and the reported span becomes the
+         * whole window after a single page — while the days in between are not
+         * held at all. That is the overstatement `covLo` exists to prevent,
+         * arriving by a different route than `maxSeen`.
+         */
         cur.covLo = null;
         cur.covHi = null;
         continue;

@@ -177,8 +177,13 @@ function GroupBars({ groups, tile }: { groups: Array<{ label: string; value: num
 function ImportProgress({ importing }: { importing: ImportCoverage }) {
   const day = 86_400_000;
   const target = Math.max(1, Math.round(importing.targetMs / day));
-  const covered = Math.min(target, Math.max(0, Math.round(importing.coveredMs / day)));
-  const pct = Math.min(100, Math.max(0, Math.round((covered / target) * 100)));
+  // Floored, like the Test note: rounding the numerator renders a 100%-full bar
+  // captioned "still importing", which is a contradiction the user has to
+  // resolve, and they resolve it by believing the bar.
+  const covered = Math.min(target, Math.max(0, Math.floor(importing.coveredMs / day)));
+  // The bar itself is capped below full for the same reason — an import that is
+  // still running has not finished, whatever the rounding says.
+  const pct = Math.min(99, Math.max(0, Math.round((covered / target) * 100)));
   return (
     <div className="mt-3">
       <div className="h-1 w-full overflow-hidden rounded-full bg-amber-100">

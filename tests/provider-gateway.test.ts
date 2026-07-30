@@ -13,6 +13,7 @@ import {
   claimCalls,
   fleetBudgetFor,
   fleetLaneLimit,
+  settlePollCalls,
   type CallLane,
   FLEET_CONNECTION_ID,
   FLEET_ORG_ID,
@@ -477,6 +478,48 @@ describe("F.1 (fleet) — a shared credential means a shared ceiling", () => {
 
     expect((await claimCalls(db, c, SHEETS_OP, 1, NOW, "interactive")).allowed).toBe(false);
     expect((await claimCalls(db, c, "drive.files.get", 1, NOW, "interactive")).allowed).toBe(true);
+  });
+
+  /**
+   * A poll straddles a minute boundary often: claim at :59.8, settle at :00.2.
+   *
+   * The settle-up — and especially the REFUND of an unused reservation — must be
+   * booked against the window the claim was charged to. Computed from the settle
+   * time instead, a refund releases a call from the NEXT window, and on the fleet
+   * bucket that window is shared: it erases a different customer's real spend and
+   * hands the fleet headroom nobody gave back.
+   */
+  it("settles into the window the claim was charged to, not the one it finished in", async () => {
+    const a = gsheets(await seedConnection(db, { orgId: ORG_A, source: "gsheets" }), ORG_A);
+    const b = gsheets(await seedConnection(db, { orgId: ORG_B, source: "gsheets" }), ORG_B);
+    const claimAt = new Date("2026-07-01T00:00:59.800Z");
+    const settleAt = new Date("2026-07-01T00:01:00.200Z");
+
+    // A claims a Sheets read in the :00 window, and its poll only probes Drive.
+    await claimCalls(db, a, SHEETS_OP, 1, claimAt, "interactive");
+    // B legitimately spends in the :01 window.
+    await claimCalls(db, b, SHEETS_OP, 1, settleAt, "interactive");
+
+    await settlePollCalls(db, a, SHEETS_OP, { providerCalls: 1, extraCalls: { "drive.files.get": 1 } }, 1, claimAt);
+
+    const fleetIn = async (w: Date) => {
+      const [row] = await db
+        .select()
+        .from(usageLedger)
+        .where(
+          and(
+            eq(usageLedger.connectionId, FLEET_CONNECTION_ID),
+            eq(usageLedger.operation, SHEETS_OP),
+            eq(usageLedger.windowStart, new Date(Math.floor(w.getTime() / 60_000) * 60_000)),
+          ),
+        );
+      return row?.calls ?? 0;
+    };
+
+    // A's reservation came back out of ITS OWN window…
+    expect(await fleetIn(claimAt)).toBe(0);
+    // …and B's real spend in the next window is untouched.
+    expect(await fleetIn(settleAt)).toBe(1);
   });
 
   it("books the fleet row to a sentinel that can never be a real org or connection", async () => {

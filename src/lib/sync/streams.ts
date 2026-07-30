@@ -316,11 +316,15 @@ export async function syncStream(
    * published limit. Claiming here is the only place that knows how many pages
    * are actually being walked.
    */
-  const claimPage = async (): Promise<boolean> => {
-    const claim = await claimCalls(db, conn, operation, 1, new Date(), lane);
-    if (claim.allowed) return true;
+  const claimPage = async (): Promise<Date | null> => {
+    // Returned, not discarded: the settle-up has to be booked against the window
+    // this claim was charged to. A poll that straddles a minute boundary would
+    // otherwise refund out of the next window — see settlePollCalls.
+    const at = new Date();
+    const claim = await claimCalls(db, conn, operation, 1, at, lane);
+    if (claim.allowed) return at;
     deferred = { reason: claim.reason, retryAfterMs: claim.retryAfterMs };
-    return false;
+    return null;
   };
 
   /**
@@ -346,8 +350,8 @@ export async function syncStream(
    * endpoint — Sheets' Drive probe against Sheets' own tab read, whose project
    * quotas are 40× apart — so the tighter bucket does not govern both.
    */
-  const settleUp = async (res: { providerCalls?: number; extraCalls?: Record<string, number> }) => {
-    await settlePollCalls(db, conn, operation, res);
+  const settleUp = async (res: { providerCalls?: number; extraCalls?: Record<string, number> }, at: Date) => {
+    await settlePollCalls(db, conn, operation, res, 1, at);
   };
 
   let cursor = stream.cursor ?? null;
@@ -359,7 +363,8 @@ export async function syncStream(
   let covered: { from: Date; to: Date } | null = null;
   try {
     if (isMirrorSource(conn.source)) {
-      if (!(await claimPage())) return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0, incomplete: true, deferred };
+      const claimedAt = await claimPage();
+      if (!claimedAt) return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0, incomplete: true, deferred };
       // The cursor is passed as a CHANGE-DETECTION HINT, not as a resume point:
       // a mirror still re-reads the whole resource whenever it reads at all.
       // What it buys is the option not to read — see `unchanged` below.
@@ -374,7 +379,7 @@ export async function syncStream(
       const { records, nextCursor, mirrorScope, unchanged } = mirrorRes;
       // Before the `unchanged` return below — a skip still spends the Drive
       // probe, and a probe nobody counts is how a "cheap" sweep stops being one.
-      await settleUp(mirrorRes);
+      await settleUp(mirrorRes, claimedAt);
 
       // The source says it has not changed, so nothing was fetched. Returning
       // here is load-bearing: falling through would hand an EMPTY record set to
@@ -411,7 +416,8 @@ export async function syncStream(
       cursor = nextCursor ?? null;
     } else {
       for (let page = 0; page < maxPages; page++) {
-        if (!(await claimPage())) {
+        const claimedAt = await claimPage();
+        if (!claimedAt) {
           incomplete = true;
           break;
         }
@@ -427,7 +433,7 @@ export async function syncStream(
           windowFloor: stream.windowFloor ?? null,
         });
         const { records, nextCursor, mirrorScope, preserveOccurredAt, retireOutsideWindow } = pageRes;
-        await settleUp(pageRes);
+        await settleUp(pageRes, claimedAt);
         if (retireOutsideWindow) covered = retireOutsideWindow;
         const swap = await withStreamWriteLock(db, `stream:${stream.id}`, async (tx) => {
           const res = await upsertEvents(
@@ -697,7 +703,12 @@ export function importProgressNote(progress?: { coveredMs: number; targetMs: num
   if (!progress) return "Still importing this source — the numbers below can still grow.";
   const day = 86_400_000;
   const target = Math.max(1, Math.round(progress.targetMs / day));
-  const covered = Math.min(target, Math.max(0, Math.round(progress.coveredMs / day)));
+  // FLOORED, not rounded. Rounding the numerator turns anything within twelve
+  // hours of the target into "covering 30 of 30 days" — a sentence that says the
+  // import is finished, attached to a note whose entire job is to say it is not.
+  // The denominator rounds because it names a policy (30 days, 90 days) rather
+  // than a measurement, and a flooring numerator can then only understate.
+  const covered = Math.min(target, Math.max(0, Math.floor(progress.coveredMs / day)));
   return `Still importing — covering ${covered} of ${target} days so far, widening each sync.`;
 }
 

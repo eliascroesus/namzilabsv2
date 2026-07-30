@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { closeConnector } from "@/connectors/close";
 import type { CanonicalEvent } from "@/connectors/types";
 
@@ -61,8 +61,28 @@ function ids(records: CanonicalEvent[]): string[] {
   return records.map((r) => r.eventId.split(":").pop()!).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
 }
 
+/**
+ * THE CLOCK IS PINNED TO THE FIXTURES' ERA, for the whole file.
+ *
+ * `makeLog` builds its timeline from a hard-coded `T0`, and the connector bounds
+ * every request to the last `FIRST_SYNC_DAYS` — so with a real clock these
+ * fixtures age out of the window the code asks for, and the suite starts failing
+ * on a DATE, for a reason that has nothing to do with the behaviour under test.
+ * That is not hypothetical: T0 is 2026-07-01 and the bound is 30 days.
+ *
+ * Only `Date` is faked. Timers, promises and the fetch stubs are untouched, and
+ * nothing here talks to a database.
+ */
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  // Far enough past T0 that every fixture record is in the past, close enough
+  // that all of them sit inside the connector's own first-sync window.
+  vi.setSystemTime(new Date(T0 + 5 * 60_000));
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("Close Event Log poll (Defect #2)", () => {
@@ -194,15 +214,23 @@ describe("Close first-sync bound", () => {
   });
 
   it("drops the floor once the window drains — from then on the high-water mark governs", async () => {
+    const OVERLAP_MS = 5 * 60_000; // mirrors close.ts
     mockEventLog(makeLog(200));
     const drained = await closeConnector.poll!(pollArgs(null));
     expect(drained.nextCursor!.startsWith("{")).toBe(false); // plain hw string
-    // …and the next sweep's bound is hw - overlap, not the 30-day floor.
+
+    // The next sweep's bound is derived from the MARK, exactly — not from the
+    // 30-day floor, and not from a shallow peek either. Pinned as an identity
+    // rather than as a day count: a range check passes for a bound computed any
+    // number of wrong ways, and quietly depends on how old the fixture is.
     const { calls } = mockEventLog(makeLog(200));
     await closeConnector.poll!(pollArgs(drained.nextCursor));
-    const back = Math.round((Date.now() - Date.parse(calls[0].get("date_created__gte")!)) / DAY);
-    expect(back).toBeGreaterThan(20); // the fixture's hw is ~26 days old, not 30
-    expect(back).toBeLessThan(30);
+    expect(Date.parse(calls[0].get("date_created__gte")!)).toBe(Date.parse(drained.nextCursor!) - OVERLAP_MS);
+    // …and an incremental sweep does not re-peek: ONE window for the whole walk,
+    // not a shallow bound followed by a deeper one. (It does re-read the fixture,
+    // which is the 5-minute overlap working as designed — event_id dedup absorbs
+    // it.)
+    expect(new Set(calls.map((c) => c.get("date_created__gte"))).size).toBe(1);
   });
 
   it("bounds an unbounded walk that was already in flight", async () => {
@@ -308,31 +336,78 @@ describe("Close on an oldest-first Event Log", () => {
   });
 
   /**
-   * Coverage must never FALL. It is measured per rung, and the deep walk starts
-   * its own span from scratch — so reporting the current rung alone would show a
-   * day of progress and then take it away, which reads as the import going
-   * backwards.
+   * Coverage must never FALL, and must never JUMP to a span the walk does not
+   * hold. Both directions are pinned here because both were wrong.
+   *
+   * The falling case: coverage is measured per bound and the target walk starts
+   * its own span from scratch, so reporting the current bound alone would show
+   * progress and then take it away — the import reading as if it went backwards.
+   * `bankCoverage`'s running maximum is what prevents it.
+   *
+   * The jumping case is worse and was a live defect: a peek that RE-ARMS. An
+   * expired continuation clears `cont` partway through a first sync, so the next
+   * sweep peeks again — and if it inherits the previous bound's `covLo` (the
+   * 30-day floor) while its own records push `covHi` to an hour ago, it banks the
+   * whole window as covered. Permanently, because the bank is a maximum. The tile
+   * then reads "covering 30 of 30 days" for the rest of a multi-day import while
+   * two thirds of the events are missing.
    */
-  it("never reports less coverage than a previous rung already reached", async () => {
-    // A busy last day: 400 events in 24h, so the opening rung needs more pages
-    // than one poll has and the deep walk has not started yet.
-    const busy = spreadLog(400, 1);
-    mockEventLog(busy);
+  it("never reports coverage that falls, and never a span it does not hold", async () => {
+    const spread = spreadLog(600, 30); // ~72-minute spacing, 20 events in the last day
+    mockEventLog(spread);
     const first = await closeConnector.poll!(pollArgs(null));
-    const rungCovered = first.importProgress!.coveredMs;
-    expect(rungCovered).toBeGreaterThan(0); // not a frozen zero while it works
+    const firstCovered = first.importProgress!.coveredMs;
+    // The target walk holds the oldest 200 of 600 — about a third of 30 days.
+    expect(Math.round(firstCovered / DAY)).toBe(10);
 
-    // Drain the rung, then step to the 30-day target, whose own span restarts.
-    let cursor = first.nextCursor;
-    let covered = rungCovered;
-    for (let sweep = 0; sweep < 3; sweep++) {
-      mockEventLog(busy);
-      const res = await closeConnector.poll!(pollArgs(cursor));
-      if (!res.importProgress) break;
-      expect(res.importProgress.coveredMs).toBeGreaterThanOrEqual(covered);
-      covered = res.importProgress.coveredMs;
-      cursor = res.nextCursor;
-    }
+    // The continuation dies, which clears `cont` and leaves no high-water mark…
+    const body = { error: "invalid cursor" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 400,
+        statusText: "Bad Request",
+        headers: { get: () => null },
+        json: async () => body,
+        text: async () => JSON.stringify(body),
+      }) as unknown as Response),
+    );
+    const died = await closeConnector.poll!(pollArgs(first.nextCursor));
+    // …and that sweep must still say it has work outstanding, or the cadence
+    // ladder demotes a connection that is mid-import.
+    expect(died.incomplete).toBe(true);
+
+    // …so the NEXT sweep peeks again. This is the sweep that used to lie.
+    mockEventLog(spread);
+    const repeeked = await closeConnector.poll!(pollArgs(died.nextCursor));
+    const covered = repeeked.importProgress!.coveredMs;
+    expect(covered).toBeGreaterThanOrEqual(firstCovered); // never falls…
+    // …and never claims the window. The re-peek holds the oldest 200 plus the
+    // last day, with about twenty days missing in between.
+    expect(Math.round(covered / DAY)).toBeLessThan(20);
+    expect(Math.round(repeeked.importProgress!.targetMs / DAY)).toBe(30);
+  });
+
+  /**
+   * The coverage marks describe the TARGET walk and nothing else, so what is
+   * stored between sweeps must never mix the peek's dates with the target's.
+   *
+   * A stored cursor is the thing a later sweep reasons from, so the invariant has
+   * to hold in the cursor and not merely in one poll's return value.
+   */
+  it("stores coverage marks that describe the target walk, never the peek", async () => {
+    mockEventLog(spreadLog(600, 30));
+    const res = await closeConnector.poll!(pollArgs(null));
+    const stored = JSON.parse(res.nextCursor!);
+
+    // The newest record ingested is an hour old (the peek got it) and IS the
+    // high-water mark — but the coverage marks stop at the target walk's edge,
+    // roughly twenty days back.
+    expect(Date.now() - Date.parse(stored.maxSeen)).toBeLessThan(2 * 60 * 60_000);
+    expect(Math.round((Date.now() - Date.parse(stored.covHi)) / DAY)).toBeGreaterThan(15);
+    // …and the span between the marks is the ten days actually walked.
+    expect(Math.round((Date.parse(stored.covHi) - Date.parse(stored.covLo)) / DAY)).toBe(10);
   });
 
   /**
@@ -446,10 +521,21 @@ describe("Close bounds itself even from a corrupt cursor", () => {
     expect(backOf(calls[0])).toBe(30);
   });
 
-  it("treats an unparseable high-water mark as a fresh 30-day window", async () => {
-    const { calls } = mockEventLog(makeLog(10));
-    await closeConnector.poll!(pollArgs("garbage-not-a-date"));
-    expect(backOf(calls[0])).toBeLessThanOrEqual(30);
-    expect(backOf(calls[0])).toBeGreaterThan(0);
+  it("discards an unparseable high-water mark and pins a fresh 30-day floor", async () => {
+    // 260 events, so the target walk does NOT drain and the cursor stays in its
+    // JSON form — the drained form is a bare date and carries no floor to check.
+    const { calls } = mockEventLog(makeLog(260));
+    const res = await closeConnector.poll!(pollArgs("garbage-not-a-date"));
+
+    // Treated as a FRESH first sync: the peek, then the full target.
+    expect(backOf(calls[0])).toBe(1);
+    expect(backOf(calls[1])).toBe(30);
+    // And the floor is PINNED. Keeping the corrupt mark left `cur.hw` truthy, so
+    // the pin was skipped and the fallback recomputed `now - 30d` every sweep —
+    // the window sliding forward while the walk paged through it, making the
+    // depth reached depend on how long it took.
+    const stored = JSON.parse(res.nextCursor!);
+    expect(stored.hw).toBeNull();
+    expect(stored.floor).toBe(calls[1].get("date_created__gte"));
   });
 });

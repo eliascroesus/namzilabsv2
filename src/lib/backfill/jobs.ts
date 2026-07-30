@@ -370,9 +370,16 @@ function coverageOf(reachedFloor: Date | null, targetFloor: Date, now: number): 
  * import. Joining here means the state has exactly one home.
  *
  * One query for the whole dashboard. Empty in, empty out.
+ *
+ * Scoped by `orgId` like every sibling read here, and not merely for symmetry:
+ * the connection ids come from `flow_results.provenance`, which is graph content
+ * rather than a validated foreign key, so a graph naming another tenant's
+ * connection would otherwise read that tenant's import state. The hash check
+ * below narrows it further; neither is a substitute for the org predicate.
  */
 export async function importProgressByStreamRef(
   db: DB,
+  orgId: string,
   refs: Array<{ connectionId: string; configHash: string }>,
   now = new Date(),
 ): Promise<Map<string, ImportCoverage>> {
@@ -390,6 +397,7 @@ export async function importProgressByStreamRef(
     .innerJoin(sourceStreams, eq(sourceStreams.id, backfillJobs.streamId))
     .where(
       and(
+        eq(backfillJobs.orgId, orgId),
         inArray(backfillJobs.status, ["queued", "running"]),
         inArray(
           sourceStreams.connectionId,
