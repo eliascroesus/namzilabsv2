@@ -8,7 +8,7 @@ const ctx = { connectionId: "c1" };
 
 describe("Calendly normalize", () => {
   it("maps invitee.created -> booked with scheduled-event id", () => {
-    const [ev] = calendlyConnector.normalize(
+    const [ev] = calendlyConnector.normalize!(
       {
         event: "invitee.created",
         created_at: "2026-01-01T10:00:00Z",
@@ -26,14 +26,14 @@ describe("Calendly normalize", () => {
     expect(ev.occurredAt.toISOString()).toBe("2026-01-05T15:00:00.000Z");
   });
   it("maps invitee.canceled -> canceled", () => {
-    const [ev] = calendlyConnector.normalize({ event: "invitee.canceled", payload: { uri: "x" } }, ctx);
+    const [ev] = calendlyConnector.normalize!({ event: "invitee.canceled", payload: { uri: "x" } }, ctx);
     expect(ev.eventType).toBe("canceled");
   });
 });
 
 describe("Close normalize", () => {
   it("maps activity.sms/created -> sms_sent", () => {
-    const [ev] = closeConnector.normalize(
+    const [ev] = closeConnector.normalize!(
       { event: { id: "ev1", object_type: "activity.sms", action: "created", date_created: "2026-01-02T00:00:00Z", data: { to: "+15551234567" } } },
       ctx,
     );
@@ -42,14 +42,14 @@ describe("Close normalize", () => {
     expect(ev.subject).toBe("+15551234567");
   });
   it("passes through unmapped object.action", () => {
-    const [ev] = closeConnector.normalize({ event: { id: "e2", object_type: "note", action: "created" } }, ctx);
+    const [ev] = closeConnector.normalize!({ event: { id: "e2", object_type: "note", action: "created" } }, ctx);
     expect(ev.eventType).toBe("note.created");
   });
 });
 
 describe("Instantly normalize", () => {
   it("maps reply_received -> reply keyed by email_id", () => {
-    const [ev] = instantlyConnector.normalize(
+    const [ev] = instantlyConnector.normalize!(
       { event_type: "reply_received", email_id: "em1", lead_email: "p@acme.com", timestamp: "2026-01-03T00:00:00Z" },
       ctx,
     );
@@ -67,7 +67,7 @@ describe("Sendblue normalize", () => {
    * on what was true.
    */
   it("keys an outbound message on its handle alone, with the stage as a property", () => {
-    const [ev] = sendblueConnector.normalize(
+    const [ev] = sendblueConnector.normalize!(
       { status: "DELIVERED", message_handle: "h1", to_number: "+15550001111", date_sent: "2026-01-04T00:00:00Z" },
       ctx,
     );
@@ -81,7 +81,7 @@ describe("Sendblue normalize", () => {
   it("advances through the lifecycle as ONE row, not three", () => {
     const stages = ["QUEUED", "SENT", "DELIVERED"].map(
       (status) =>
-        sendblueConnector.normalize(
+        sendblueConnector.normalize!(
           { status, message_handle: "h9", to_number: "+15550001111", date_sent: "2026-01-04T00:00:00Z" },
           ctx,
         )[0],
@@ -91,7 +91,7 @@ describe("Sendblue normalize", () => {
     expect(stages.map((e) => e.properties!.delivery_stage)).toEqual(["queued", "sent", "delivered"]);
   });
   it("maps inbound (no status) -> sms_received", () => {
-    const [ev] = sendblueConnector.normalize(
+    const [ev] = sendblueConnector.normalize!(
       { message_handle: "h2", from_number: "+15559998888", date_received: "2026-01-04T00:00:00Z" },
       ctx,
     );

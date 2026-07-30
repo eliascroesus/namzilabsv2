@@ -55,6 +55,23 @@ export type PollArgs = {
    * deliberately deepens it.
    */
   windowFloor?: Date | null;
+  /**
+   * Which field of the source's own payload holds a record's event time, when
+   * the source has no timestamp of its own and the user has nominated one.
+   *
+   * A spreadsheet row is the case: it has no inherent event time, so the Sheets
+   * connector stamped `occurred_at` with `new Date()` — the import moment — and
+   * every time-based metric over a sheet measured when the data was imported.
+   * The real date was in a column all along.
+   *
+   * PER STREAM, like `windowFloor`, and for a related reason: `occurred_at` is a
+   * fact about a ROW, and a stream's rows are shared by every flow reading it.
+   * Two flows cannot hold different opinions about when something happened.
+   *
+   * NULL means the connector's own answer, which for a source with real
+   * timestamps is the provider's, and for a sheet is first-seen.
+   */
+  dateField?: string | null;
 };
 
 /** One choice for a dynamic flow-level field (e.g. a spreadsheet, a tab). */
@@ -192,6 +209,18 @@ export type PollResult = {
    */
   importProgress?: ImportCoverage;
   /**
+   * What this read actually did with `PollArgs.dateField`.
+   *
+   * Reported rather than inferred, because the two ways it can go wrong need
+   * different fixes and are indistinguishable from the outside. A renamed column
+   * and a column full of malformed dates both produce "every row undated"; only
+   * the connector, which has the header row in hand, can say which happened.
+   *
+   * `at` is added by the runner — the connector does not own the clock that
+   * decides when a row was written.
+   */
+  dateFieldState?: { column: string; presentInHeader: boolean; dated: number; undated: number };
+  /**
    * How many provider requests this poll actually made.
    *
    * The runner claims budget per page for STREAM-scoped sources, where it drives
@@ -284,8 +313,21 @@ export interface Connector {
   authType: "apiKey" | "oauth2" | "secret" | "none";
   /** Return true iff the inbound request is authentic (or no verification configured). */
   verifySignature(args: VerifyArgs): boolean;
-  /** Map a raw webhook payload into zero or more canonical events. */
-  normalize(rawPayload: unknown, ctx: NormalizeContext): CanonicalEvent[];
+  /**
+   * Map a raw webhook payload into zero or more canonical events.
+   *
+   * OPTIONAL, because for a stream-scoped source there is no inbound path to
+   * map: the webhook route answers `isStreamScoped` before verification or
+   * storage, rings the connection's doorbell and returns. Google Sheets carried
+   * a `normalize` for months that nothing could reach, guessing a hard-coded
+   * `row["timestamp"]` while the poll path stamped `new Date()` — two different
+   * wrong answers for one source, and the unreachable one is why the divergence
+   * was never contradicted by anything.
+   *
+   * Omit it when the source has no reachable inbound path. If one is ever built,
+   * it gets built against the same `dateField` the poll uses.
+   */
+  normalize?(rawPayload: unknown, ctx: NormalizeContext): CanonicalEvent[];
   /** Optional polling for reconciliation/backfill. */
   poll?(args: PollArgs): Promise<PollResult>;
   /**

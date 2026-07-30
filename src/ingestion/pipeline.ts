@@ -161,6 +161,11 @@ export async function processRawEvent(db: DB, rawEventId: string): Promise<Proce
   const connector = getConnector(raw.source);
   if (!connector) throw new Error(`no connector registered for source "${raw.source}"`);
 
+  // A source with no reachable inbound path declares no `normalize` (see the
+  // Connector contract). Nothing can be stored for it, so there is nothing to
+  // reprocess — and reaching here at all would mean the webhook route's
+  // stream-scoped bail had been removed.
+  if (!connector.normalize) return { inserted: 0, updated: 0, deduped: 0, total: 0 };
   const canonical = connector.normalize(raw.payload, {
     connectionId: raw.connectionId,
     headers: raw.headers,

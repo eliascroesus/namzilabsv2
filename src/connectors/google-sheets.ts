@@ -1,7 +1,8 @@
 import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs, PollResult, ListOptionsArgs, SourceOption } from "./types";
 import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
 import { fetchJson } from "@/lib/http-client";
-import { asObject, parseDate, str } from "./field-utils";
+import { str } from "./field-utils";
+import { normalizeDateValue } from "@/lib/normalize-dates";
 
 const API = "https://sheets.googleapis.com/v4/spreadsheets";
 const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
@@ -47,20 +48,13 @@ export const googleSheetsConnector: Connector = {
     return safeEqual(normalized, hmacSha256Hex(secret, rawBody));
   },
 
-  normalize(rawPayload: unknown, ctx: NormalizeContext): CanonicalEvent[] {
-    // Apps Script push path: a single row object.
-    const row = asObject(rawPayload);
-    const rowNumber = str(row["row"]) ?? str(row["rowNumber"]) ?? String(Date.now());
-    return [
-      {
-        eventId: `gsheets:${ctx.connectionId}:row:${rowNumber}`,
-        eventType: "row_added",
-        subject: str(row["email"]) ?? null,
-        occurredAt: parseDate(str(row["timestamp"])) ?? new Date(),
-        properties: row,
-      },
-    ];
-  },
+  // NO `normalize`. This source is stream-scoped, so the webhook route answers
+  // `isStreamScoped` and rings the connection's doorbell before verification or
+  // storage — nothing ever reached the Apps Script push path. What lived here
+  // guessed a hard-coded `row["timestamp"]` while the poll below stamped
+  // `new Date()`: two different wrong answers for one source, and because this
+  // one was unreachable nothing could ever contradict it. If the push path is
+  // built, it reads `PollArgs.dateField` like the poll does.
 
   /**
    * Mirror semantics: whenever this reads, it reads the WHOLE tab. What changed
@@ -258,6 +252,22 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
   // Row numbers repeat across spreadsheets/tabs, so the stream identity is part of
   // the dedup key — two streams' "row 5" must never collide.
   const streamTag = args.streamHash ? `${args.streamHash}:` : "";
+
+  /**
+   * The nominated date column, resolved against the header row THIS read saw.
+   *
+   * `presentInHeader` is the named condition for a column that was renamed or
+   * removed. Without it that case is indistinguishable from a column full of
+   * malformed dates — both make every row undated — and the two need different
+   * fixes: one is "rename it back or re-pick", the other is "the dates are not
+   * dates". Only this function has the header row to tell them apart.
+   */
+  const dateField = args.dateField ?? null;
+  const dateColumn = dateField ? header.findIndex((h) => h === dateField) : -1;
+  const presentInHeader = dateColumn >= 0;
+  let dated = 0;
+  let undated = 0;
+
   const records: CanonicalEvent[] = [];
   for (let i = fromDataRow; i < dataRows.length; i++) {
     const cells = dataRows[i];
@@ -268,15 +278,52 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
     const obj: Record<string, unknown> = {};
     header.forEach((h, c) => (obj[h || `col${c}`] = cells[c] ?? null));
     const sheetRowNumber = i + 2; // account for header + 1-based rows
+
+    /**
+     * First-seen unless the nominated column yields a date.
+     *
+     * `new Date()` on its own was the defect: a spreadsheet row has no timestamp
+     * of its own, so `occurred_at` became the import moment and every time-based
+     * metric over a sheet measured when the data was imported.
+     *
+     * Parsed by `normalizeDateValue`, which was built for exactly these shapes —
+     * its own docstring names "7/21/2026 14:23:45" as the sheet case — and has
+     * been canonicalizing them into `properties` since day one, and into
+     * `occurred_at` never. The HEADER NAME is passed as the field name, so its
+     * gate on purely-numeric values still applies: a column of epoch seconds
+     * parses when it is called "Created" and does not when it is called "Ref".
+     * Nominating a column is a choice about WHICH column, not a licence to
+     * reinterpret values the detector would refuse anywhere else — and an
+     * under-parse is counted and shown, where an over-parse silently invents
+     * dates.
+     */
+    let occurredAt = new Date();
+    if (dateField) {
+      const canonical = presentInHeader ? normalizeDateValue(cells[dateColumn], dateField) : null;
+      const parsed = canonical ? Date.parse(canonical) : NaN;
+      if (Number.isFinite(parsed)) {
+        occurredAt = new Date(parsed);
+        dated += 1;
+      } else {
+        undated += 1;
+      }
+    }
+
     records.push({
       eventId: `gsheets:${args.connectionId}:${streamTag}row:${sheetRowNumber}`,
       eventType: "row_added",
       subject: firstEmailLike(obj),
-      occurredAt: new Date(),
+      occurredAt,
       properties: obj,
     });
   }
-  return { records, nextCursor, providerCalls, extraCalls };
+  return {
+    records,
+    nextCursor,
+    providerCalls,
+    extraCalls,
+    dateFieldState: dateField ? { column: dateField, presentInHeader, dated, undated } : undefined,
+  };
 }
 
 function firstEmailLike(obj: Record<string, unknown>): string | null {

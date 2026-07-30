@@ -361,6 +361,7 @@ export async function syncStream(
   let softDeleted = 0;
   let incomplete = false;
   let covered: { from: Date; to: Date } | null = null;
+  let dateFieldState: StreamRow["dateFieldState"] | undefined;
   try {
     if (isMirrorSource(conn.source)) {
       const claimedAt = await claimPage();
@@ -375,6 +376,10 @@ export async function syncStream(
         config: stream.config ?? undefined,
         streamHash: stream.configHash,
         windowFloor: stream.windowFloor ?? null,
+        // The stream owns which column holds a row's event time, for the same
+        // reason it owns its window: the rows are shared by every flow reading
+        // it, so this cannot be a per-flow opinion.
+        dateField: stream.dateField ?? null,
       });
       const { records, nextCursor, mirrorScope, unchanged } = mirrorRes;
       // Before the `unchanged` return below — a skip still spends the Drive
@@ -414,6 +419,18 @@ export async function syncStream(
         softDeleted = swap.result.gone;
       }
       cursor = nextCursor ?? null;
+      /**
+       * What this read did with the nominated date column, recorded for the node
+       * and the connection page.
+       *
+       * Written only where a read actually happened — the `unchanged` return
+       * above leaves the previous state standing, which is correct: it describes
+       * the last read, and a skipped sweep did not read anything.
+       *
+       * Set to NULL when the connector reports nothing, so clearing the picker
+       * clears the state rather than leaving a stale column name on screen.
+       */
+      dateFieldState = mirrorRes.dateFieldState ? { ...mirrorRes.dateFieldState, at: new Date().toISOString() } : null;
     } else {
       for (let page = 0; page < maxPages; page++) {
         const claimedAt = await claimPage();
@@ -431,6 +448,7 @@ export async function syncStream(
           // this for the request bound and for the window it declares, so a
           // deepened import cannot be retired by its own declaration.
           windowFloor: stream.windowFloor ?? null,
+          dateField: stream.dateField ?? null,
         });
         const { records, nextCursor, mirrorScope, preserveOccurredAt, retireOutsideWindow } = pageRes;
         await settleUp(pageRes, claimedAt);
@@ -495,7 +513,17 @@ export async function syncStream(
     }
     await db
       .update(sourceStreams)
-      .set({ cursor, status: "active", lastError: null, lastPolledAt: new Date(), updatedAt: new Date() })
+      .set({
+        cursor,
+        status: "active",
+        lastError: null,
+        lastPolledAt: new Date(),
+        updatedAt: new Date(),
+        // `undefined` leaves the column alone — a source that reports nothing
+        // about a date column must not clear another source's state — while an
+        // explicit null is how clearing the picker clears what is on screen.
+        ...(dateFieldState !== undefined ? { dateFieldState } : {}),
+      })
       .where(eq(sourceStreams.id, stream.id));
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

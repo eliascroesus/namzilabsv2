@@ -193,7 +193,7 @@ describe("Sendblue messages poll + webhook health", () => {
 
   it("poll and webhook produce the SAME event id for the same message state (reconciliation dedups)", async () => {
     const payload = msg("h9", 5);
-    const [fromWebhook] = sendblueConnector.normalize(payload, { connectionId: "c1" });
+    const [fromWebhook] = sendblueConnector.normalize!(payload, { connectionId: "c1" });
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ messages: [payload] })));
     const { records } = await sendblueConnector.poll!({ connectionId: "c1", cursor: null, credentials: { apiKey: "a", apiSecret: "b" } });
     expect(records[0].eventId).toBe(fromWebhook.eventId);
