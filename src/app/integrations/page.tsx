@@ -1,6 +1,6 @@
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
-import { listConnections, webhookUrlFor } from "@/lib/connections";
+import { connectionRecordCounts, listConnections, webhookUrlFor } from "@/lib/connections";
 import { CONNECTOR_CATALOG, catalogEntry, type ConnectorCatalogEntry } from "@/connectors/catalog";
 import { ConnectionRow } from "./ConnectionRow";
 import { connectApiKeyAction } from "./actions";
@@ -11,6 +11,9 @@ export const dynamic = "force-dynamic";
 export default async function IntegrationsPage() {
   const { orgId, userId, auth } = await requireOrg();
   const connected = await listConnections(orgId).catch(() => []);
+  // Best-effort: a failed count must not take down the page, and the delete
+  // warning falls back to naming no number rather than naming a wrong one.
+  const records = await connectionRecordCounts(orgId).catch(() => ({}) as Record<string, number>);
   // Disconnected connections still exist (their rows and data survive so they
   // can be reconnected), but they are not CONNECTED — counting them would tell
   // someone a source is live when nothing is syncing from it.
@@ -52,6 +55,7 @@ export default async function IntegrationsPage() {
                   // Only the catch-hook has this question: every other source
                   // reads a documented timestamp field of its own.
                   eventTimeNote={c.source === "webhook" ? eventTimeNote(readEventTime(c.config)) : undefined}
+                  records={records[c.id]}
                 />
               ))}
             </div>

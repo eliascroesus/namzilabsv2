@@ -8,6 +8,11 @@ import { getConnector } from "@/connectors/registry";
 import { catalogEntry } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { restoreConnectionEvents, retireConnectionEvents } from "@/lib/sync/retire-connection";
+import {
+  deleteConnectionData,
+  recordCountsByConnection,
+  type DeleteConnectionResult,
+} from "@/lib/sync/delete-connection";
 import { inngest } from "@/inngest/client";
 import type { CanonicalEvent } from "@/connectors/types";
 
@@ -227,6 +232,27 @@ export async function reconnectConnection(orgId: string, id: string): Promise<{ 
     .where(and(eq(sourceStreams.connectionId, id), eq(sourceStreams.orgId, orgId), eq(sourceStreams.status, "disabled")));
   const restoredEvents = await restoreConnectionEvents(db, orgId, id);
   return { restoredEvents };
+}
+
+/**
+ * Remove a connection and everything synced from it. Irreversible.
+ *
+ * The logic lives in `@/lib/sync/delete-connection` and takes `db`, so it can be
+ * tested directly — same split as `retire-connection.ts`, and for the same
+ * reason: this is the last function in the codebase that should be asserted
+ * indirectly.
+ */
+export async function deleteConnectionPermanently(
+  orgId: string,
+  id: string,
+  confirmName: string,
+): Promise<DeleteConnectionResult> {
+  return deleteConnectionData(getDb(), orgId, id, confirmName);
+}
+
+/** Live records per connection, for the Integrations list's delete warning. */
+export async function connectionRecordCounts(orgId: string): Promise<Record<string, number>> {
+  return recordCountsByConnection(getDb(), orgId);
 }
 
 /** Decrypt the connection's signing secret for display (manual webhook setup). */

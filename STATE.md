@@ -1,7 +1,8 @@
 # Where this project actually is
 
-Plain English, for coming back to this cold. Written 2026-07-31 against
-`main @ 12a40a1`.
+Plain English, for coming back to this cold. Written 2026-07-31. No commit hash
+here on purpose — one written down is wrong by the next commit, and a stale hash
+reads as more precise than the date it replaces.
 
 Three other documents go deeper and this one does not repeat them:
 `docs/DATA_MODEL.md` (what each connector guarantees and why),
@@ -75,8 +76,11 @@ connection with a healthy webhook widens to the 60-minute backstop.
   genuinely new non-mirror stream.
 - **Retention (half)** — `delivery_log` and `test_runs` pruned at 30 days,
   nightly, 5,000 rows per table per run.
-- **Disconnect is reversible** — disconnecting disables rather than deletes; the
-  Integrations page offers Reconnect.
+- **Two ways to remove an integration** — *Disconnect* (power icon) stops syncing,
+  keeps everything and can be reversed from the Integrations page. *Delete
+  permanently* (trash icon) removes the connection and every row belonging to it
+  across ten tables, and asks you to type the connection's name first. The typed
+  name is enforced by the delete itself, not just the browser.
 - **Health checks** — nightly invariant scan (streams that stopped being polled,
   connections failing on a streak, wedged backfills, unresolved dead letters,
   empty mirrors) and a per-sweep mirror row-count check.
@@ -189,7 +193,7 @@ grep for `-drift\|-scan\|-probe` covers every "look at this" signal.
 ## Verification bar
 
 `pnpm typecheck && pnpm test && pnpm build && pnpm check:orphans`, all green,
-before anything ships. Currently **814 tests / 66 files**. Behavioural changes
+before anything ships. Currently **831 tests / 68 files**. Behavioural changes
 are sabotage-verified: break the thing, confirm its own test fails and no other.
 `check:orphans` fails the build on an exported function no production code
 calls — a feature only its own tests call is not shipped.

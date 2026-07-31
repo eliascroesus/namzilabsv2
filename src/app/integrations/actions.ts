@@ -3,7 +3,14 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireOrg } from "@/lib/auth";
-import { createConnection, disableConnection, reconnectConnection, updateConnectionName, getConnection } from "@/lib/connections";
+import {
+  createConnection,
+  deleteConnectionPermanently,
+  disableConnection,
+  reconnectConnection,
+  updateConnectionName,
+  getConnection,
+} from "@/lib/connections";
 import { catalogEntry } from "@/connectors/catalog";
 import { inngest } from "@/inngest/client";
 import { promoteToBaseCadence } from "@/lib/sync/cadence";
@@ -135,6 +142,28 @@ export async function disconnectAction(formData: FormData): Promise<void> {
   const { orgId } = await requireOrg();
   const id = String(formData.get("id") ?? "");
   await disableConnection(orgId, id);
+  redirect("/integrations");
+}
+
+/**
+ * Remove a connection and everything synced from it. Irreversible.
+ *
+ * Deliberately a SEPARATE action from `disconnectAction` rather than a flag on
+ * it. They are two different promises to the user — one is "hide this, I can put
+ * it back", the other is "destroy this" — and a boolean parameter is how those
+ * two end up sharing a confirm dialog and then sharing a mistake.
+ *
+ * The typed name is checked on the SERVER as well as in the browser. Client-side
+ * confirmation is a courtesy, not a control: this endpoint is reachable without
+ * the page, and the row it destroys cannot be restored from anywhere.
+ */
+export async function deleteConnectionAction(formData: FormData): Promise<void> {
+  const { orgId } = await requireOrg();
+  const id = String(formData.get("id") ?? "");
+  const typed = String(formData.get("confirmName") ?? "").trim();
+  // The name is checked by the delete itself, not here — it is part of that
+  // contract, so no caller can skip it by forgetting to.
+  await deleteConnectionPermanently(orgId, id, typed);
   redirect("/integrations");
 }
 

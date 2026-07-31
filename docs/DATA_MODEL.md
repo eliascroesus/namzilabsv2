@@ -763,6 +763,59 @@ change. To populate them across existing history, run **Full re-sync** on the
 connection (`/connections/[id]`), which clears the cursor and re-lists the
 bounded window.
 
+## Removing an integration: two different promises
+
+**Disconnect** hides it and can be undone. `disableConnection` sets
+`status = 'disabled'`, stamps `disabled_at`, tombstones the events and keeps
+everything — the row, its UUID, its streams. Reconnecting is `status = 'active'`
+plus clearing the tombstones: no provider call, no re-import.
+
+**Delete permanently** destroys it. `deleteConnectionData`
+(`src/lib/sync/delete-connection.ts`) removes the connection and every row
+anywhere that belongs to it.
+
+Both exist because collapsing them is what the product did before. "Remove"
+hard-deleted the row, and since every connector namespaces its `eventId` with
+the connection UUID, re-adding the same account imported a SECOND complete copy
+rather than restoring the first.
+
+**Nothing cascades.** There is not one foreign key to `connections` in this
+schema, so the delete names ten tables by hand:
+
+| | |
+|---|---|
+| batched (can be large) | `events`, `raw_events`, `delivery_log` |
+| one statement each | `source_streams`, `sync_state`, `usage_ledger`, `dead_letter`, `stream_fields`, `backfill_jobs` |
+| last | `connections` |
+
+The old `deleteConnection` named two of them and left seven tables of orphans —
+rows no UI could reach and no later pass looked for. The list is written out
+rather than derived because a table added later is a table that leaks, and a
+reader adding one sees the comment.
+
+**Order is for partial failure.** There is no transaction on the http driver, so
+this can die halfway. It marks the connection `disabled` FIRST — the webhook
+route 403s a disabled connection and the sweep skips it, so nothing new arrives
+into a table being emptied — then tells the dashboards, then deletes the
+children, then the connection row LAST. A crash leaves a disabled connection
+with some data gone: visible, re-runnable, syncing nothing. Deleting the row
+first would strand every child row instead.
+
+**The dashboards are told before the data goes.** A published flow holds a
+STORED result with a number in it and nothing recomputes on its own, so
+`markStaleForSource` runs while the graph still resolves. Without it the tile
+keeps reporting a count of records that no longer exist.
+
+**Two guards, both tested.** The caller must pass the connection's name back —
+part of the contract, not a courtesy in the browser, because the server action
+is reachable without the page. And the fleet-budget sentinel row
+(`usage_ledger` at the nil UUID under `__fleet__`) is refused outright: losing
+it is not one customer's data but every customer's shared provider ceiling.
+
+A flow whose graph still references a deleted connection does not crash —
+`appSource` returns null and the step renders empty, and `appConds` filters on a
+connection id that matches nothing. Zero, not an error.
+
 ## Watching for absence, not just for failure
 
 Everything else here asks "did this piece of work succeed?". Nothing was asking
