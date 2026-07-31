@@ -6,7 +6,14 @@ import { connections, events, sourceStreams } from "@/db/schema";
 import { reconcileConnection } from "@/ingestion/reconcile";
 import { streamConfigHash, normalizeStreamConfig } from "@/lib/sync/stream-hash";
 import { googleSheetsConnector } from "@/connectors/google-sheets";
-import { dateColumnNote, dateColumnSettings, setDateColumn, suggestDateColumn, type DateColumnSettings } from "@/lib/sync/date-column";
+import { detectDateColumn } from "@/lib/normalize-dates";
+import {
+  dateColumnChoice,
+  dateColumnNote,
+  dateColumnSettings,
+  setDateColumn,
+  type DateColumnSettings,
+} from "@/lib/sync/date-column";
 import { encrypt } from "@/lib/crypto";
 import type { DB } from "@/db/types";
 
@@ -21,8 +28,10 @@ import type { DB } from "@/db/types";
  * names "7/21/2026 14:23:45" as the sheet case) and had been canonicalizing them
  * into `properties` and into `occurred_at` never.
  *
- * The column is nominated PER STREAM, because `occurred_at` is a fact about a
- * ROW and a stream's rows are shared by every flow reading it.
+ * The column is PER STREAM, because `occurred_at` is a fact about a ROW and a
+ * stream's rows are shared by every flow reading it. And it is DETECTED by
+ * default, because a sheet with an obvious date column sitting on import time
+ * until somebody notices is the same defect one layer up.
  */
 
 /**
@@ -129,13 +138,23 @@ afterEach(async () => {
 const sweep = () => reconcileConnection(db, connId);
 
 /**
- * The REAL path, not a raw column write — because setting the column and asking
- * for the restamp are one act, and a test that only did the first would be
- * testing a state the product cannot produce.
+ * The three answers, through the REAL path — setting the column and asking for
+ * the restamp are one act, and a test that only did the first would be testing a
+ * state the product cannot produce.
  */
-const setColumn = (column: string | null) => setDateColumn(db, ORG, connId, HASH, column);
+const pick = (column: string) => setDateColumn(db, ORG, connId, HASH, { kind: "column", column });
+const useImportTime = () => setDateColumn(db, ORG, connId, HASH, { kind: "none" });
+const useAuto = () => setDateColumn(db, ORG, connId, HASH, { kind: "auto" });
 
 const streamRow = async () => (await db.select().from(sourceStreams).where(eq(sourceStreams.configHash, HASH)))[0];
+
+/** A sheet with nothing a detector could use, for the import-time baseline. */
+const NO_DATES = [
+  ["Name", "Source", "Notes"],
+  ["Ana", "ig", "warm"],
+  ["Ben", "fb", "cold"],
+  ["Cal", "ig", "warm"],
+];
 
 /**
  * Age the rows already stored, and return the moment they were "first seen".
@@ -149,7 +168,7 @@ const streamRow = async () => (await db.select().from(sourceStreams).where(eq(so
 async function ageRows(days = 10): Promise<Date> {
   const at = new Date(Date.now() - days * 86_400_000);
   // occurred_at moves with it: these rows were stamped with their import moment,
-  // which is what a sheet imported before any column was chosen actually holds.
+  // which is what a sheet imported before any column was in force actually holds.
   await db.update(events).set({ receivedAt: at, occurredAt: at }).where(eq(events.connectionId, connId));
   return at;
 }
@@ -167,26 +186,251 @@ async function stored(): Promise<Array<{ name: unknown; occurredAt: Date }>> {
 
 const state = async () => (await streamRow()).dateFieldState;
 
-describe("no column nominated — first-seen, and the state says nothing", () => {
-  it("stamps the import moment, which is what NULL means", async () => {
+/**
+ * DETECTION, as a pure function. Name proposes, values decide — the second gate
+ * is the one that matters, because "Start", "Closed" and "Notes on" all read as
+ * date-like and none of them has to hold a date.
+ */
+describe("finding the date column", () => {
+  const rows = (...vals: string[]) => vals.map((v) => ["x", v]);
+
+  it("takes a date-hinted column whose values are actually dates", () => {
+    expect(detectDateColumn(["Name", "Booked on"], rows("7/21/2026", "2026-07-22"))).toEqual({
+      column: "Booked on",
+      candidates: ["Booked on"],
+    });
+  });
+
+  it("refuses a date-hinted column that holds text", () => {
+    // "Closed" passes the name test and holds yes/no. This is the case a
+    // header-only guess got wrong, and it would have dated every row from it.
+    expect(detectDateColumn(["Name", "Closed"], rows("yes", "no", "yes"))).toEqual({ column: null, candidates: [] });
+  });
+
+  it("tolerates a minority of unparseable values, and no more", () => {
+    expect(detectDateColumn(["Name", "Date"], rows("2026-07-01", "2026-07-02", "tbc")).column).toBe("Date");
+    expect(detectDateColumn(["Name", "Date"], rows("2026-07-01", "tbc", "tbc")).column).toBeNull();
+  });
+
+  it("ignores blanks rather than counting them against a column", () => {
+    expect(detectDateColumn(["Name", "Date"], rows("2026-07-01", "", "  ", "2026-07-02")).column).toBe("Date");
+    // …but a column with no values at all is not the date column.
+    expect(detectDateColumn(["Name", "Date"], rows("", "  ")).column).toBeNull();
+  });
+
+  it("never picks a column whose NAME is not date-like, whatever it holds", () => {
+    expect(detectDateColumn(["Name", "Ref"], rows("2026-07-01", "2026-07-02")).candidates).toEqual([]);
+  });
+
+  /**
+   * THE AMBIGUOUS CASE. Two real answers, and picking either is a coin toss the
+   * user cannot see — so nothing is used and both names come back as the
+   * question.
+   */
+  it("returns every qualifying column and chooses none when there are several", () => {
+    const d = detectDateColumn(["Name", "Booked on", "Closed on"], [["x", "2026-07-01", "2026-08-01"]]);
+    expect(d).toEqual({ column: null, candidates: ["Booked on", "Closed on"] });
+  });
+
+  it("says nothing about a sheet with headers and no rows", () => {
+    expect(detectDateColumn(["Name", "Booked on"], [])).toEqual({ column: null, candidates: [] });
+  });
+});
+
+/**
+ * THE DEFAULT. Nobody has answered the question for this stream, so the read
+ * answers it — and says that it did.
+ */
+describe("a sheet dates itself, without being asked", () => {
+  it("uses the one column that holds real dates", async () => {
+    await sweep();
+
+    expect((await stored()).map((r) => r.occurredAt.toISOString())).toEqual([
+      "2026-07-21T14:23:45.000Z",
+      "2026-07-22T00:00:00.000Z",
+      "2026-01-05T00:00:00.000Z",
+    ]);
+    expect(await state()).toMatchObject({ column: "Booked on", source: "detected", dated: 3, undated: 0 });
+    // The stream is still unanswered — a detection is not a choice.
+    expect((await streamRow()).dateFieldLocked).toBe(false);
+    expect((await streamRow()).dateField).toBeNull();
+  });
+
+  it("says the column was detected, and never silently", async () => {
+    await sweep();
+    const note = dateColumnNote(await dateColumnSettings(db, ORG, connId, HASH));
+    expect(note).toBe('Dating rows from "Booked on" (detected).');
+  });
+
+  it("falls back to first-seen, with the label, when nothing qualifies", async () => {
+    SHEET = NO_DATES;
     const before = Date.now();
     await sweep();
 
-    const rows = await stored();
-    expect(rows).toHaveLength(3);
-    // Every row lands within the sweep, not on the dates in the sheet.
-    for (const r of rows) {
-      expect(r.occurredAt.getTime()).toBeGreaterThanOrEqual(before);
-      expect(r.occurredAt.getTime()).toBeLessThanOrEqual(Date.now());
-    }
-    // Nothing to report about a column nobody chose.
+    for (const r of await stored()) expect(r.occurredAt.getTime()).toBeGreaterThanOrEqual(before);
+    // Recorded, not left absent: "we looked and found nothing" and "we have never
+    // looked" are different states, and only one of them still owes a read.
+    expect(await state()).toMatchObject({ column: null, source: "detected", dated: 0 });
+    expect(dateColumnNote(await dateColumnSettings(db, ORG, connId, HASH))).toBe(
+      "No column in this sheet holds usable dates — timing uses when each row was first imported.",
+    );
+  });
+
+  /**
+   * The only case where choosing is anybody's job. Two columns hold real dates,
+   * so nothing is used and both names are put in the question.
+   */
+  it("asks, by name, when more than one column qualifies", async () => {
+    SHEET = [
+      ["Name", "Booked on", "Closed on"],
+      ["Ana", "7/21/2026", "8/01/2026"],
+      ["Ben", "2026-07-22", "2026-08-02"],
+    ];
+    const before = Date.now();
+    await sweep();
+
+    for (const r of await stored()) expect(r.occurredAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(await state()).toMatchObject({ column: null, candidates: ["Booked on", "Closed on"] });
+    expect(dateColumnNote(await dateColumnSettings(db, ORG, connId, HASH))).toBe(
+      'More than one column could be the date — "Booked on" and "Closed on". Choose one; until then timing uses when each row was first imported.',
+    );
+  });
+
+  /**
+   * A stream that has been importing for weeks and then gains a detection — the
+   * shape every existing sheet takes the first time this ships. Nothing about
+   * the mechanism differs from a pick, and neither does the outcome.
+   */
+  it("restamps the rows already stored when a detection appears", async () => {
+    SHEET = NO_DATES;
+    await sweep();
+    const firstSeen = await ageRows();
+
+    // A date column is added to the sheet.
+    SHEET = [
+      ["Name", "Source", "Notes", "Booked on"],
+      ["Ana", "ig", "warm", "7/21/2026 14:23:45"],
+      ["Ben", "fb", "cold", "2026-07-22"],
+      ["Cal", "ig", "warm", "Jan 5, 2026"],
+    ];
+    MODIFIED = "2026-02-02T00:00:00.000Z";
+    await sweep();
+
+    expect((await stored()).map((r) => r.occurredAt.toISOString())).toEqual([
+      "2026-07-21T14:23:45.000Z",
+      "2026-07-22T00:00:00.000Z",
+      "2026-01-05T00:00:00.000Z",
+    ]);
+    // …and it was the DETECTION that did it, not a pending request from a picker
+    // nobody touched.
+    expect((await streamRow()).restampRequestedAt).toBeNull();
+    expect(firstSeen.getTime()).toBeLessThan(Date.now());
+  });
+
+  /**
+   * THE STREAM THAT ALREADY EXISTS — every sheet in production the first time
+   * this ships: rows imported, a change marker stored, and nobody ever asked
+   * about a date column.
+   *
+   * Phase 3 skips reading a settled sheet, and a settled sheet is the normal
+   * state, so without a forced read that stream would keep its import-time
+   * stamps until somebody happened to edit the tab. A fresh stream does not
+   * prove this — it has no marker yet, so its first sweep reads for an unrelated
+   * reason.
+   */
+  it("forces one read on a settled sheet that has been syncing all along", async () => {
+    await useImportTime();
+    await sweep(); // rows at import time, and a marker matching MODIFIED
+    const settled = valuesReads;
+    expect((await streamRow()).cursor).toContain(MODIFIED);
+
+    // …and now it is a stream nobody has answered for, which is what the 0019
+    // backfill leaves behind for every sheet without an explicit pick.
+    await db.update(sourceStreams).set({ dateFieldLocked: false, dateFieldState: null }).where(eq(sourceStreams.configHash, HASH));
+    await sweep();
+
+    expect(valuesReads).toBe(settled + 1); // read, on a file Drive called settled
+    expect((await stored())[0].occurredAt.toISOString()).toBe("2026-07-21T14:23:45.000Z");
+  });
+
+  it("stops forcing that read once the answer is recorded", async () => {
+    await sweep();
+    const afterFirst = valuesReads;
+    expect(await state()).not.toBeNull();
+
+    await sweep();
+    await sweep();
+
+    expect(valuesReads).toBe(afterFirst); // the skip resumes
+  });
+
+  it("keeps owing that read when the write did not run", async () => {
+    lock.contended = true;
+    await sweep();
+    // Nothing was written, so nothing was learned — recording the detection here
+    // would tell the next sweep it had already been applied to rows it never
+    // touched, and the restamp it implies would be lost.
     expect(await state()).toBeNull();
+
+    lock.contended = false;
+    await sweep();
+    expect(await state()).toMatchObject({ column: "Booked on", source: "detected" });
+    expect((await stored())[0].occurredAt.toISOString()).toBe("2026-07-21T14:23:45.000Z");
+  });
+});
+
+describe("the picker overrides the detection", () => {
+  it("uses the chosen column even when another one would be detected", async () => {
+    SHEET = [
+      ["Name", "Booked on", "Closed on"],
+      ["Ana", "7/21/2026", "8/01/2026"],
+    ];
+    await pick("Closed on");
+    await sweep();
+
+    expect((await stored())[0].occurredAt.toISOString()).toBe("2026-08-01T00:00:00.000Z");
+    expect(await state()).toMatchObject({ column: "Closed on", source: "user" });
+  });
+
+  /**
+   * "Use import time" is an ANSWER, not the absence of one. Without that
+   * distinction the detector overrules it on the next sweep and there is no way
+   * to say no.
+   */
+  it("stops detecting when the answer is import time", async () => {
+    const before = Date.now();
+    await useImportTime();
+    await sweep();
+
+    for (const r of await stored()) expect(r.occurredAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(await state()).toBeNull();
+    expect(dateColumnNote(await dateColumnSettings(db, ORG, connId, HASH))).toBe(
+      "No date column selected — timing uses when each row was first imported.",
+    );
+
+    // …and it stays that way. A second sweep does not quietly re-detect.
+    MODIFIED = "2026-02-02T00:00:00.000Z";
+    await sweep();
+    expect(await state()).toBeNull();
+  });
+
+  /** An override with no way back is a one-way door. */
+  it("hands the question back when auto is chosen again", async () => {
+    await useImportTime();
+    await sweep();
+    expect(await state()).toBeNull();
+
+    await useAuto();
+    await sweep();
+
+    expect(await state()).toMatchObject({ column: "Booked on", source: "detected" });
+    expect((await stored())[0].occurredAt.toISOString()).toBe("2026-07-21T14:23:45.000Z");
   });
 });
 
 describe("a nominated column becomes the row's event time", () => {
   it("reads the sheet's own dates, in the shapes sheets actually write", async () => {
-    await setColumn("Booked on");
+    await pick("Booked on");
     await sweep();
 
     expect((await stored()).map((r) => r.occurredAt.toISOString())).toEqual([
@@ -194,13 +438,20 @@ describe("a nominated column becomes the row's event time", () => {
       "2026-07-22T00:00:00.000Z", // "2026-07-22"
       "2026-01-05T00:00:00.000Z", // "Jan 5, 2026"
     ]);
-    expect(await state()).toEqual({ column: "Booked on", presentInHeader: true, dated: 3, undated: 0, at: expect.any(String) });
+    expect(await state()).toEqual({
+      column: "Booked on",
+      source: "user",
+      presentInHeader: true,
+      dated: 3,
+      undated: 0,
+      at: expect.any(String),
+    });
   });
 
   it("counts the rows it could not date, and leaves them at first-seen", async () => {
     SHEET[2][1] = ""; // Ben's date is blank
     SHEET[3][1] = "whenever"; // Cal's is not a date
-    await setColumn("Booked on");
+    await pick("Booked on");
     const before = Date.now();
     await sweep();
 
@@ -219,7 +470,7 @@ describe("a nominated column becomes the row's event time", () => {
    * fixes. Only the connector, holding the header row, can tell them apart.
    */
   it("says the column is gone, rather than just reporting nothing parsed", async () => {
-    await setColumn("Booked on");
+    await pick("Booked on");
     await sweep();
     expect(await state()).toMatchObject({ presentInHeader: true, dated: 3 });
 
@@ -228,17 +479,6 @@ describe("a nominated column becomes the row's event time", () => {
     await sweep();
 
     expect(await state()).toMatchObject({ column: "Booked on", presentInHeader: false, dated: 0, undated: 3 });
-  });
-
-  it("clears what is on screen when the picker is cleared", async () => {
-    await setColumn("Booked on");
-    await sweep();
-    expect(await state()).not.toBeNull();
-
-    await setColumn(null);
-    await sweep();
-
-    expect(await state()).toBeNull();
   });
 
   /**
@@ -269,22 +509,27 @@ describe("a nominated column becomes the row's event time", () => {
 /**
  * THE RESTAMP.
  *
- * `preserveOccurredAt` pins `occurred_at` on conflict, so choosing a column
- * fixes rows that arrive LATER and leaves every existing one stamped with its
- * import time — and a full re-sync does not help, because it still upserts on
- * `event_id` and the pin still wins. The person who notices that every sheet
- * metric is measuring import time is exactly the person the correction would
- * silently fail for.
+ * `preserveOccurredAt` pins `occurred_at` on conflict, so an answer fixes rows
+ * that arrive LATER and leaves every existing one stamped with its import time —
+ * and a full re-sync does not help, because it still upserts on `event_id` and
+ * the pin still wins. The person who notices that every sheet metric is measuring
+ * import time is exactly the person the correction would silently fail for.
  *
- * So a column change asks for one sweep that does not pin.
+ * So a change of answer asks for one sweep that does not pin.
  */
 describe("changing the column restamps the rows already stored", () => {
+  /** Rows in the database, stamped with their import moment. */
+  const importedWithoutDates = async () => {
+    await useImportTime();
+    await sweep();
+  };
+
   it("moves existing rows onto the sheet's own dates", async () => {
     const before = Date.now();
-    await sweep(); // imported with no column: three rows stamped 'now'
+    await importedWithoutDates();
     for (const r of await stored()) expect(r.occurredAt.getTime()).toBeGreaterThanOrEqual(before);
 
-    await setColumn("Booked on");
+    await pick("Booked on");
     await sweep();
 
     expect((await stored()).map((r) => r.occurredAt.toISOString())).toEqual([
@@ -300,7 +545,7 @@ describe("changing the column restamps the rows already stored", () => {
    * event times of rows it is merely restating.
    */
   it("goes back to pinning once the restamp is done", async () => {
-    await setColumn("Booked on");
+    await pick("Booked on");
     await sweep();
     expect((await streamRow()).restampRequestedAt).toBeNull();
 
@@ -320,12 +565,12 @@ describe("changing the column restamps the rows already stored", () => {
    * the date from.
    */
   it("forces a read even though Drive says the file has not changed", async () => {
-    await sweep(); // first read stores the change marker
+    await importedWithoutDates();
     const afterFirst = valuesReads;
     await sweep(); // …and this one skips, on an unchanged modifiedTime
     expect(valuesReads).toBe(afterFirst);
 
-    await setColumn("Booked on");
+    await pick("Booked on");
     await sweep();
 
     expect(valuesReads).toBe(afterFirst + 1); // read, on a file Drive called settled
@@ -345,17 +590,19 @@ describe("changing the column restamps the rows already stored", () => {
       ["Ana", "7/21/2026 14:23:45", "8/01/2026"],
       ["Ben", "2026-07-22", ""], // dated under the FIRST column, not the second
     ];
+    // Two columns qualify, so the detector declines and the rows land on import
+    // time — the ambiguous case, doing its job as this test's starting point.
     await sweep();
     const firstSeen = await ageRows();
 
-    await setColumn("Booked on");
+    await pick("Booked on");
     await sweep();
     expect((await stored()).map((r) => r.occurredAt.toISOString())).toEqual([
       "2026-07-21T14:23:45.000Z",
       "2026-07-22T00:00:00.000Z",
     ]);
 
-    await setColumn("Closed on");
+    await pick("Closed on");
     await sweep();
 
     const after = await stored();
@@ -368,19 +615,19 @@ describe("changing the column restamps the rows already stored", () => {
   });
 
   /**
-   * Reverting the picker is the same door in the other direction. Under a plain
-   * preserve every row would keep the old column's date and nothing would move,
-   * making "use import time" a setting the user can leave but never return to.
+   * Reverting to import time is the same door in the other direction. Under a
+   * plain preserve every row would keep the old column's date and nothing would
+   * move, making it a setting the user can leave but never return to.
    */
-  it("returns every row to first-seen when the picker is cleared", async () => {
+  it("returns every row to first-seen when import time is chosen", async () => {
     await sweep();
     const firstSeen = await ageRows();
 
-    await setColumn("Booked on");
+    await pick("Booked on");
     await sweep();
     expect((await stored())[0].occurredAt.toISOString()).toBe("2026-07-21T14:23:45.000Z");
 
-    await setColumn(null);
+    await useImportTime();
     await sweep();
 
     for (const r of await stored()) expect(r.occurredAt.toISOString()).toBe(firstSeen.toISOString());
@@ -395,10 +642,10 @@ describe("changing the column restamps the rows already stored", () => {
    * values, so the surviving direction is the harmless one.
    */
   it("keeps the request standing when the sweep writes nothing", async () => {
-    await sweep();
+    await importedWithoutDates();
     const imported = (await stored()).map((r) => r.occurredAt.getTime());
 
-    await setColumn("Booked on");
+    await pick("Booked on");
     failValues = true;
     await sweep(); // the tab read blows up partway through the restamp
 
@@ -424,10 +671,10 @@ describe("changing the column restamps the rows already stored", () => {
    * is why the marker follows whether the write RAN rather than what it wrote.
    */
   it("keeps the request standing when another writer holds the stream", async () => {
-    await sweep();
+    await importedWithoutDates();
     const firstSeen = await ageRows();
 
-    await setColumn("Booked on");
+    await pick("Booked on");
     lock.contended = true;
     await sweep(); // reads, then stands down at the swap
 
@@ -446,7 +693,7 @@ describe("changing the column restamps the rows already stored", () => {
    * on every sweep forever — the cost Phase 3 exists to remove.
    */
   it("stops forcing reads once the restamp has happened", async () => {
-    await setColumn("Booked on");
+    await pick("Booked on");
     await sweep();
     const afterRestamp = valuesReads;
 
@@ -472,31 +719,87 @@ describe("the dead webhook path is deleted, not repointed", () => {
 });
 
 /**
- * The copy, and the suggestion. Both are pure, and both carry the honesty rule:
- * first-seen is a defensible answer, first-seen presented as the event time is
- * not — so the unset case is a sentence, never silence.
+ * The copy. Pure, and carrying the honesty rule: first-seen is a defensible
+ * answer, first-seen presented as the event time is not — so every state is a
+ * sentence, never silence. And a DETECTED column says it was detected, which is
+ * the price of using a guess rather than merely offering one.
  */
 describe("what the user is told", () => {
-  const note = (dateField: string | null, state: DateColumnSettings["state"] = null) => dateColumnNote({ dateField, state });
+  const note = (dateField: string | null, state: DateColumnSettings["state"] = null) =>
+    dateColumnNote({ dateField, locked: true, state });
   const at = new Date().toISOString();
+  const userState = (over: Partial<NonNullable<DateColumnSettings["state"]>>) => ({
+    column: "Date",
+    source: "user" as const,
+    presentInHeader: true,
+    dated: 0,
+    undated: 0,
+    at,
+    ...over,
+  });
 
   it("names import time when no column is chosen, rather than saying nothing", () => {
     expect(note(null)).toContain("No date column selected");
     expect(note(null)).toContain("first imported");
   });
 
+  it("marks a detected column as detected", () => {
+    const detected = dateColumnNote({
+      dateField: null,
+      locked: false,
+      state: { column: "Submitted at", source: "detected", presentInHeader: true, dated: 40, undated: 0, at },
+    });
+    expect(detected).toBe('Dating rows from "Submitted at" (detected).');
+  });
+
+  it("carries the undated count into the detected sentence too", () => {
+    const detected = dateColumnNote({
+      dateField: null,
+      locked: false,
+      state: { column: "Submitted at", source: "detected", presentInHeader: true, dated: 30, undated: 10, at },
+    });
+    expect(detected).toBe(
+      'Dating rows from "Submitted at" (detected) — 10 of 40 rows have no usable date there and fall back to when they were first imported.',
+    );
+  });
+
+  it("asks the ambiguous question by name", () => {
+    const asking = dateColumnNote({
+      dateField: null,
+      locked: false,
+      state: { column: null, source: "detected", presentInHeader: false, dated: 0, undated: 3, candidates: ["A", "B", "C"], at },
+    });
+    expect(asking).toBe(
+      'More than one column could be the date — "A", "B" and "C". Choose one; until then timing uses when each row was first imported.',
+    );
+  });
+
+  it("separates 'nothing to detect' from 'no read yet'", () => {
+    const blank = { dateField: null, locked: false } as const;
+    expect(dateColumnNote({ ...blank, state: null })).toBe(
+      "Timing uses when each row was first imported, until a read finds a date column.",
+    );
+    expect(
+      dateColumnNote({ ...blank, state: { column: null, source: "detected", presentInHeader: false, dated: 0, undated: 9, at } }),
+    ).toBe("No column in this sheet holds usable dates — timing uses when each row was first imported.");
+  });
+
+  it("reads a state written before detection existed as a user's pick", () => {
+    // No `source` — the shape shipped one migration ago, when only the picker
+    // could write one.
+    const old = { column: "Date", presentInHeader: true, dated: 5, undated: 0, at };
+    expect(dateColumnNote({ dateField: "Date", locked: true, state: old })).toBe('Timing uses "Date".');
+  });
+
   it("does not claim a column works before a read has happened under it", () => {
-    // Chosen a moment ago; the sweep has not run. Saying "timing uses X" here
-    // would be a promise, not a report.
     expect(note("Booked on")).toBe('Timing will use "Booked on" from the next read.');
-    // Same when the state still describes the PREVIOUS column.
-    expect(note("Closed on", { column: "Booked on", presentInHeader: true, dated: 5, undated: 0, at })).toContain("from the next read");
+    expect(note("Closed on", userState({ column: "Booked on", dated: 5 }))).toContain("from the next read");
   });
 
   it("separates a renamed column from a column of unusable values", () => {
-    const renamed = note("Date", { column: "Date", presentInHeader: false, dated: 0, undated: 500, at });
-    const unusable = note("Date", { column: "Date", presentInHeader: true, dated: 0, undated: 500, at });
-    expect(renamed).toContain('no longer in this sheet');
+    const renamed = note("Date", userState({ presentInHeader: false, undated: 500 }));
+    const unusable = note("Date", userState({ undated: 500 }));
+    expect(renamed).toContain("no longer in this sheet");
     expect(unusable).toContain("No row has a usable date");
     // Both end at import time, and the numbers alone cannot tell them apart —
     // which is the entire reason `presentInHeader` is recorded.
@@ -504,7 +807,7 @@ describe("what the user is told", () => {
   });
 
   it("reports the partial case with both numbers", () => {
-    expect(note("Date", { column: "Date", presentInHeader: true, dated: 412, undated: 88, at })).toBe(
+    expect(note("Date", userState({ dated: 412, undated: 88 }))).toBe(
       'Timing uses "Date" — 88 of 500 rows have no usable date there and fall back to when they were first imported.',
     );
   });
@@ -515,7 +818,7 @@ describe("what the user is told", () => {
    * rows, and see the old times. Both ends of the change say so.
    */
   it("promises the rows already imported, while the restamp is pending", () => {
-    const pending = (dateField: string | null) => dateColumnNote({ dateField, state: null, restampPending: true });
+    const pending = (dateField: string | null) => dateColumnNote({ dateField, locked: true, state: null, restampPending: true });
     expect(pending("Booked on")).toBe('Timing will use "Booked on" from the next read, including rows already imported.');
     expect(pending(null)).toBe("No date column selected — from the next read, timing goes back to when each row was first imported.");
     // Once the sweep has run there is nothing pending, and nothing to promise.
@@ -523,33 +826,47 @@ describe("what the user is told", () => {
   });
 
   it("says the plain thing when every row is dated", () => {
-    expect(note("Date", { column: "Date", presentInHeader: true, dated: 500, undated: 0, at })).toBe('Timing uses "Date".');
-  });
-
-  it("suggests a date-like header and never guesses at random", () => {
-    expect(suggestDateColumn(["Name", "Submitted at", "Source"])).toBe("Submitted at");
-    expect(suggestDateColumn(["Name", "Created", "Updated"])).toBe("Created"); // first wins
-    expect(suggestDateColumn(["Name", "Source", "Amount"])).toBeNull();
-    expect(suggestDateColumn([])).toBeNull();
+    expect(note("Date", userState({ dated: 500 }))).toBe('Timing uses "Date".');
   });
 });
 
 describe("the picker writes to the stream, not to a flow", () => {
+  const set = (choice: Parameters<typeof setDateColumn>[4], org = ORG) => setDateColumn(db, org, connId, HASH, choice);
+
   it("is org-scoped, and reports whether anything changed", async () => {
-    expect(await setDateColumn(db, ORG, connId, HASH, "Booked on")).toEqual({ changed: true });
-    // Re-picking the same column is not a change — an unchanged pick must not
+    expect(await set({ kind: "column", column: "Booked on" })).toEqual({ changed: true });
+    // Re-picking the same answer is not a change — an unchanged pick must not
     // look like a reason to re-read a settled sheet.
-    expect(await setDateColumn(db, ORG, connId, HASH, "Booked on")).toEqual({ changed: false });
-    expect(await setDateColumn(db, ORG, connId, HASH, null)).toEqual({ changed: true });
+    expect(await set({ kind: "column", column: "Booked on" })).toEqual({ changed: false });
+    expect(await set({ kind: "none" })).toEqual({ changed: true });
+    expect(await set({ kind: "none" })).toEqual({ changed: false });
 
     // Another org naming this stream exactly gets nothing.
-    expect(await setDateColumn(db, "org_other", connId, HASH, "Booked on")).toEqual({ changed: false });
+    expect(await set({ kind: "column", column: "Booked on" }, "org_other")).toEqual({ changed: false });
     expect((await dateColumnSettings(db, ORG, connId, HASH))!.dateField).toBeNull();
   });
 
-  it("treats an empty pick as clearing, not as a column named empty string", async () => {
-    await setDateColumn(db, ORG, connId, HASH, "Booked on");
-    await setDateColumn(db, ORG, connId, HASH, "   ");
-    expect((await dateColumnSettings(db, ORG, connId, HASH))!.dateField).toBeNull();
+  /**
+   * The two NULL states are different answers, and the write has to see that.
+   * Treating them as one is the defect: "stop looking" would read as "nobody has
+   * answered" and the detector would overrule it on the next sweep.
+   */
+  it("tells 'use import time' apart from 'detect for me'", async () => {
+    expect(await set({ kind: "none" })).toEqual({ changed: true });
+    expect(await set({ kind: "auto" })).toEqual({ changed: true });
+    expect(await set({ kind: "auto" })).toEqual({ changed: false });
+
+    const settings = (await dateColumnSettings(db, ORG, connId, HASH))!;
+    expect(settings.dateField).toBeNull();
+    expect(settings.locked).toBe(false);
+    expect(dateColumnChoice(settings)).toEqual({ kind: "auto" });
+  });
+
+  it("treats an empty pick as import time, not as a column named empty string", async () => {
+    await set({ kind: "column", column: "Booked on" });
+    await set({ kind: "column", column: "   " });
+    const settings = (await dateColumnSettings(db, ORG, connId, HASH))!;
+    expect(settings.dateField).toBeNull();
+    expect(dateColumnChoice(settings)).toEqual({ kind: "none" });
   });
 });

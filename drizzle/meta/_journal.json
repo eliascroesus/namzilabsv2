@@ -127,6 +127,13 @@
       "when": 1785441312611,
       "tag": "0018_sheet_date_column",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785459962390,
+      "tag": "0019_sheet_date_autodetect",
+      "breakpoints": true
     }
   ]
 }

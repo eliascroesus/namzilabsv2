@@ -432,6 +432,23 @@ export async function syncStream(
    */
   const restampRequestedAt = stream.restampRequestedAt ?? null;
   let restampWrote = false;
+  /**
+   * Nobody has answered the date-column question for this stream, so the read
+   * answers it. FALSE once the picker has spoken — including when it said "use
+   * import time", which is an answer and not an absence.
+   */
+  const detectDateField = !stream.dateFieldLocked;
+  /**
+   * The read that establishes a detection cannot be skipped, and Phase 3's
+   * `modifiedTime` probe would skip it: a settled sheet is the normal state, so
+   * a stream that has never had this question answered would keep its import-time
+   * stamps until somebody edited the tab.
+   *
+   * Bounded to exactly that case. Once a read has recorded what it found —
+   * INCLUDING finding nothing, which is why the connector reports a state with a
+   * null column rather than no state — this is false again and the skip resumes.
+   */
+  const owesDetection = detectDateField && stream.dateFieldState == null;
   try {
     if (isMirrorSource(conn.source)) {
       const claimedAt = await claimPage();
@@ -450,11 +467,13 @@ export async function syncStream(
         // reason it owns its window: the rows are shared by every flow reading
         // it, so this cannot be a per-flow opinion.
         dateField: stream.dateField ?? null,
+        detectDateField,
         // A settled sheet is not re-read (Phase 3's `modifiedTime` probe), and a
-        // settled sheet is the normal state — so the restamp has to ask for the
-        // read that would otherwise be skipped. Nothing about the SHEET changed;
-        // what changed is which column we read the date from.
-        restamp: restampRequestedAt != null,
+        // settled sheet is the normal state — so both of these have to ask for
+        // the read that would otherwise be skipped. Nothing about the SHEET
+        // changed; what changed is which column we read the date from, or that
+        // nobody has ever looked for one.
+        restamp: restampRequestedAt != null || owesDetection,
       });
       const { records, nextCursor, mirrorScope, unchanged } = mirrorRes;
       // Before the `unchanged` return below — a skip still spends the Drive
@@ -473,6 +492,20 @@ export async function syncStream(
         return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0 };
       }
       /**
+       * The column this read actually dated from — chosen or detected — against
+       * the one the last read used.
+       *
+       * A DETECTION IS A CHANGE, exactly like a pick. A stream that gains one
+       * has every stored row still stamped with its import moment, and leaving
+       * those behind would make auto-detect fix new rows while silently
+       * disagreeing with the old ones inside the same number. The comparison is
+       * against `date_field_state`, not `date_field`, because the detected
+       * column is deliberately stored nowhere else.
+       */
+      const usedColumn = mirrorRes.dateFieldState?.column ?? null;
+      const columnChanged = usedColumn !== (stream.dateFieldState?.column ?? null);
+      const restamping = restampRequestedAt != null || columnChanged;
+      /**
        * The restamp is the CALLER doing something different for one sweep, not
        * the writer changing. `preserveOccurredAt` is right for every normal
        * mirror write — a re-read tab must not shift its rows' event times — and
@@ -480,10 +513,10 @@ export async function syncStream(
        * `upsertEvents` a writer of event content. So this sweep hands the writer
        * the values it wants and asks it not to pin them.
        */
-      const toWrite = restampRequestedAt
+      const toWrite = restamping
         ? restampRecords(
             records,
-            stream.dateField ?? null,
+            usedColumn,
             mirrorRes.undatedEventIds,
             await firstSeenByEventId(db, conn.id, stream.configHash),
           )
@@ -503,7 +536,7 @@ export async function syncStream(
             source: conn.source,
             streamHash: stream.configHash,
             generation,
-            preserveOccurredAt: restampRequestedAt == null,
+            preserveOccurredAt: !restamping,
           },
           toWrite,
         );
@@ -520,20 +553,28 @@ export async function syncStream(
         // restamp — but zero rows written because another writer held the lock
         // is not, and the two are indistinguishable from the counts alone.
         restampWrote = true;
+        /**
+         * What this read did about the date column, recorded for the node and
+         * the connection page — and, in the same breath, the record of which
+         * column the stored rows are now dated from.
+         *
+         * INSIDE this branch for that second reason. Persisting it after a
+         * contended swap would tell the next sweep that the detected column had
+         * already been applied to rows it never touched, and the restamp that
+         * detection implies would be lost silently. It also leaves
+         * `owesDetection` true, so the forced read happens again rather than
+         * being spent on nothing.
+         *
+         * Never written by the `unchanged` return above either: that describes
+         * the last read, and a skipped sweep did not read anything.
+         *
+         * NULL when the connector reports nothing at all — an explicit "use
+         * import time" — so the picker's choice clears the state rather than
+         * leaving a stale column name on screen.
+         */
+        dateFieldState = mirrorRes.dateFieldState ? { ...mirrorRes.dateFieldState, at: new Date().toISOString() } : null;
       }
       cursor = nextCursor ?? null;
-      /**
-       * What this read did with the nominated date column, recorded for the node
-       * and the connection page.
-       *
-       * Written only where a read actually happened — the `unchanged` return
-       * above leaves the previous state standing, which is correct: it describes
-       * the last read, and a skipped sweep did not read anything.
-       *
-       * Set to NULL when the connector reports nothing, so clearing the picker
-       * clears the state rather than leaving a stale column name on screen.
-       */
-      dateFieldState = mirrorRes.dateFieldState ? { ...mirrorRes.dateFieldState, at: new Date().toISOString() } : null;
     } else {
       for (let page = 0; page < maxPages; page++) {
         const claimedAt = await claimPage();

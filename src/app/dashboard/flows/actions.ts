@@ -7,7 +7,7 @@ import { getDb } from "@/db/client";
 import { connections } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
-import { dateColumnNote, dateColumnSettings, setDateColumn } from "@/lib/sync/date-column";
+import { dateColumnChoice, dateColumnNote, dateColumnSettings, setDateColumn, type DateColumnChoice } from "@/lib/sync/date-column";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow } from "@/lib/flow/store";
 import { sampleAppFields } from "@/lib/flow/engine";
 import { materializeFlow } from "@/lib/flow/materialize";
@@ -208,8 +208,8 @@ export async function listSourceOptionsAction(
 export async function streamDateColumnAction(
   connectionId: string,
   sourceConfig: Record<string, unknown>,
-  column?: string | null,
-): Promise<{ ok: true; dateField: string | null; note: string } | { ok: false; error: string }> {
+  choice?: DateColumnChoice,
+): Promise<{ ok: true; choice: DateColumnChoice; note: string } | { ok: false; error: string }> {
   const { orgId } = await requireOrg();
   try {
     const db = getDb();
@@ -220,9 +220,9 @@ export async function streamDateColumnAction(
       .limit(1);
     if (!conn) return { ok: false, error: "Connection not found." };
     const configHash = streamConfigHash(sourceConfig, conn.source);
-    if (column !== undefined) await setDateColumn(db, orgId, connectionId, configHash, column);
+    if (choice) await setDateColumn(db, orgId, connectionId, configHash, choice);
     const settings = await dateColumnSettings(db, orgId, connectionId, configHash);
-    return { ok: true, dateField: settings?.dateField ?? null, note: dateColumnNote(settings) };
+    return { ok: true, choice: dateColumnChoice(settings), note: dateColumnNote(settings) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
