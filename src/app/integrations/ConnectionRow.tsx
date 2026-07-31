@@ -30,6 +30,7 @@ export function ConnectionRow({
   status,
   webhookUrl,
   webhookSetup,
+  eventTimeNote,
 }: {
   id: string;
   name: string;
@@ -37,6 +38,16 @@ export function ConnectionRow({
   status: string;
   webhookUrl?: string;
   webhookSetup?: string;
+  /**
+   * What this connection is dating its events FROM — the payload key it found,
+   * or delivery time, said out loud.
+   *
+   * Delivery time is a defensible answer for a payload that carries no
+   * timestamp; delivery time presented AS the event time is not, and it was
+   * presented as nothing at all. This is the surface that makes the difference
+   * visible, and without it the detection is the silent half of a fix.
+   */
+  eventTimeNote?: string;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -185,6 +196,7 @@ export function ConnectionRow({
       {showHook && webhookUrl && (
         <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-3">
           {webhookSetup && <p className="mb-2 text-xs text-neutral-600">{webhookSetup}</p>}
+          {eventTimeNote && <p className="mb-2 text-xs text-neutral-600">{eventTimeNote}</p>}
           <CopyField
             label="POST events to this URL"
             value={webhookUrl}

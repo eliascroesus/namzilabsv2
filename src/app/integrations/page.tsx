@@ -4,6 +4,7 @@ import { listConnections, webhookUrlFor } from "@/lib/connections";
 import { CONNECTOR_CATALOG, catalogEntry, type ConnectorCatalogEntry } from "@/connectors/catalog";
 import { ConnectionRow } from "./ConnectionRow";
 import { connectApiKeyAction } from "./actions";
+import { eventTimeNote, readEventTime } from "@/lib/webhooks/event-time";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,9 @@ export default async function IntegrationsPage() {
                   // was saved and then led nowhere.
                   webhookUrl={catalogEntry(c.source)?.instant ? webhookUrlFor(c.id) : undefined}
                   webhookSetup={catalogEntry(c.source)?.webhookSetup}
+                  // Only the catch-hook has this question: every other source
+                  // reads a documented timestamp field of its own.
+                  eventTimeNote={c.source === "webhook" ? eventTimeNote(readEventTime(c.config)) : undefined}
                 />
               ))}
             </div>

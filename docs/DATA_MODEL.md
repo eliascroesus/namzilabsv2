@@ -176,42 +176,108 @@ Four more things that are easy to get wrong:
   `dateField` would be retiring by a boundary the user chose, so the two must be
   designed together or the window silently stops meaning what it says.
 
-### The custom webhook has the same gap, and no place to put the fix
+### The custom webhook: which payload key is the event time
 
-Asked directly, and the answer is yes — with one difference that matters and one
-that does not.
+Same problem as a sheet row — arbitrary JSON, nothing guaranteed to say when the
+thing happened — and `catch-hook.ts` answered it with seven fixed keys and a
+fallback to DELIVERY time, pinned forever by `preserveOccurredAt`, with nothing
+anywhere saying which of the two a connection was on.
 
-`catch-hook.ts` does **not** stamp `new Date()` blindly the way Sheets did. It
-looks for a timestamp in seven fixed keys — `occurred_at`, `occurredAt`,
-`timestamp`, `created_at`, `createdAt`, `time`, `date` — and only falls back to
-now when none is present or parseable (`catch-hook.ts:65-67`). `processRawEvent`
-then passes `preserveOccurredAt: true` (`pipeline.ts:179`), so that fallback is
-pinned at first sight exactly as a sheet's was.
+**The state lives in `connections.config.eventTime`, not in a column.** That is
+a checked fact: the field is jsonb, `NOT NULL`, defaulted `{}`, and has exactly
+three writers — `createConnection` seeds it, the Google OAuth callback sets `{}`,
+and one patch adds `externalId` by spreading. It is read only as
+`PollArgs.config` and by `pollOperation`, and the `webhook` connector has
+neither, so nothing consumes it for a catch-hook connection. It is never
+rendered and never round-tripped through a form.
 
-So the failure is the same shape, narrower and quieter:
+The whole design rests on every writer spreading, so
+`tests/webhook-event-time.test.ts` pins it twice — once behaviourally and once
+by scanning the source for a wholesale `set({ config: … })`. One such write
+would drop the setting silently, and the only symptom would be a connection
+quietly reverting to delivery time.
 
-- A payload keyed `booked_on`, `submitted_at` or `event_date` — all perfectly
-  ordinary — gets **delivery time**, permanently, and nothing anywhere says so.
-  There is no `date_field`, no `date_field_state`, no picker and no note.
-- It parses with a bare `new Date(value)` (`field-utils.ts:22`), not
-  `normalizeDateValue`. `"21/07/2026"` is Invalid Date, so is a numeric epoch as
-  a string, and there is no field-name gate. The sheet path and the webhook path
-  therefore disagree about what a date is, on the same JSON.
-- Every other connector ends in `parseDate(...) ?? new Date()` too, but for
-  Calendly/Close/Instantly/Sendblue/Calendar the key it reads is the provider's
-  own documented field, so the fallback is an edge case rather than a routine
-  outcome. Only catch-hook takes arbitrary JSON with no schema, which is what
-  makes it the one that behaves like a sheet.
+Shape: `{ key, locked, state, restampRequestedAt, restampedAt }` — the same four
+concepts and the same words as `source_streams`' `date_field`,
+`date_field_locked`, `date_field_state`, `restamp_requested_at`.
 
-**Why it is not fixed here.** `webhook` is connection-scoped: `isStreamScoped`
-is false, so there is no `source_streams` row, and the whole mechanism above —
-the setting, the lock, the observation, the restamp marker — hangs off one.
-Widening the key list to `isDateHintedName` + `normalizeDateValue` is a strict
-improvement and needs no schema, but the half that makes it safe ("say which key
-it used, and let the user override") has nowhere to live until that decision is
-made. Doing the silent half alone would change how existing connections date
-their events with nothing on screen to explain it — the exact trade this feature
-rejected for sheets.
+**Three tiers, not one list.** Webhook keys are conventional in a way sheet
+column names are not, so ties are broken by meaning rather than handed to the
+user:
+
+| tier | keys | why |
+|---|---|---|
+| event | `occurred_at`, `timestamp`, `time`, `date`, `event_date`, `booked_on` | when the thing happened |
+| creation | `created_at`, `date_created` | when the record was made — a good proxy |
+| mutation | `updated_at`, `modified_at` | when the record last changed — a bad proxy |
+
+A lower tier never beats a higher one. A mutation key IS returned when it is the
+only candidate — refusing it would strand such a payload on delivery time
+forever — but it is flagged and the note says so out loud, because it is the one
+answer that moves under you: a record edited today re-dates an event from March.
+Ties inside a tier go to the user, exactly as for a sheet. One level of nesting
+is scanned (`data.created_at`), ranked by the leaf name.
+
+**Coverage is measured over the whole restampable range, not the sample.** A
+provider that changed their webhook format leaves the chosen key in recent
+payloads only, so a detection over the last 200 deliveries reports "200 of 200
+dated" while a restamp would silently drop everything older to delivery time.
+`state.coverage` counts key-presence across every stored payload and records the
+oldest one that has it.
+
+**The restamp is a reprocess.** `reprocessConnection`'s machinery already walks
+`raw_events` and re-runs `processRawEvent`; the restamp is that with
+`preserveOccurredAt: false`. Better than the sheet's equivalent, because the
+evidence survived — a spreadsheet row's past is gone and has to be reconstructed
+from `events.received_at`, where here the original JSON is still on disk and the
+value is re-derived exactly. Payloads the key cannot date land on the delivery
+moment, which the caller supplies as `NormalizeContext.fallbackOccurredAt`
+(`new Date()` is only the delivery moment on the first pass — a reprocess would
+otherwise stamp the reprocess).
+
+**⚠ IT DEPENDS ON `raw_events` SURVIVING.** Nothing prunes them for an active
+connection today, and batch 5 is the first code that deletes them at all — at
+day 30, and only for connections DISABLED that long. That boundary is
+load-bearing: **if retention ever reaches active connections, webhook
+restamping dies with it** and the event-time answer becomes a one-way door,
+correct for everything that arrives afterwards and permanently wrong for
+everything before. Anyone widening that policy has to decide what replaces this
+first. (The sheet path has no such coupling — a mirror re-reads its whole
+resource, so its restamp needs nothing but the next sweep.)
+
+**The rollout is gated, and the gate covers everything.** With
+`WEBHOOK_EVENT_TIME_LIVE` unset, the nightly scan records what each connection
+WOULD pick and the connector dates new events byte-for-byte as it always did —
+frozen key order, frozen parser. Dating new events better while old ones keep
+their old answer would put two meanings inside one metric with nothing on screen
+to say so; uniformly wrong beats incoherent. `scripts/webhook-event-time.sql` is
+where you look before flipping it.
+
+The first run after the gate opens restamps EVERY catch-hook connection, not
+only the ones whose key changed — because the parser changed too, so "same key"
+does not mean "same answer". `config.eventTime.restampedAt` records that it
+happened; after that, only a change of key restamps.
+
+### The other connectors keep `parseDate`, and that is deliberate
+
+Every connector ends in `parseDate(...) ?? new Date()`, but for
+Calendly/Close/Instantly/Sendblue/Calendar the key it reads is the provider's
+own documented field — always ISO — so the fallback is an edge case rather than
+a routine outcome. Only the catch-hook takes arbitrary JSON with no schema,
+which is why it is the one that behaved like a sheet and the one that moved to
+`normalizeDateValue`.
+
+The two parsers genuinely disagree, and the full list of input classes where
+they do is tabulated above `parseDate` in `src/connectors/field-utils.ts` —
+measured, not recalled, and pinned by a test so it cannot go stale. Three
+groups: shapes they agree on, shapes only `normalizeDateValue` reads
+(`"21/07/2026"`, `"20260722"`, epoch strings), and shapes bare `new Date`
+accepts that it should not. That last group is why unifying them is a decision
+rather than a tidy-up — `new Date("2026-02-30")` does not fail, it returns March
+2nd, so a provider that ever emits one is currently believed.
+
+Unify when someone is willing to re-verify the five connectors against that
+table. Until then the split is deliberate and the table is the boundary.
 
 ### Instantly: stated assumptions
 

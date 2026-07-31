@@ -24,7 +24,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const T = (mins: number) => new Date(Date.parse("2026-07-01T12:00:00Z") + mins * 60_000).toISOString();
+/**
+ * THE FIXTURES ARE ANCHORED TO THE RUN, not to a date.
+ *
+ * This used to read `Date.parse("2026-07-01T12:00:00Z")`, and the connectors
+ * bound their first sync to the last 30 days — so the fixtures aged out of the
+ * window the code asks for and the suite began failing on a DATE, exactly 30
+ * days later, for a reason with nothing to do with the behaviour under test. It
+ * cost a verification pass to rule out as a real regression.
+ *
+ * A base captured once at module load keeps every relative offset stable within
+ * a run while never drifting out of any window. Faking the clock would work too
+ * and is what `tests/close-poll.test.ts` does — but that file touches no
+ * database, and here a faked JS `Date` would disagree with PGlite's own `now()`
+ * inside the sync lease.
+ */
+const BASE = Date.now();
+const T = (mins: number) => new Date(BASE + mins * 60_000).toISOString();
 
 const CFG = (over: Record<string, unknown> = {}) => ({ campaignId: "camp-1", ...over });
 
