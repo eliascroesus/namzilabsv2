@@ -310,7 +310,7 @@ function toCanonical(body: Record<string, unknown>, connectionId: string): Canon
   const eventId = naturalId ? `sendblue:${connectionId}:${naturalId}` : hashId(`sendblue:${connectionId}`, body);
   const subject =
     str(body["to_number"]) ?? str(body["from_number"]) ?? str(body["number"]) ?? str(body["phone"]) ?? null;
-  const occurredAt = parseDate(messageDate(body)) ?? new Date();
+  const occurredAt = parseDate(messageDate(body), "date_sent") ?? new Date();
   return {
     eventId,
     // Stable for the life of the message: which DIRECTION it went. The stage it

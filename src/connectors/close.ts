@@ -256,7 +256,7 @@ export const closeConnector: Connector = {
           str(data["to"]) ??
           str(data["phone"]) ??
           null,
-        occurredAt: parseDate(str(event["date_created"])) ?? new Date(),
+        occurredAt: parseDate(str(event["date_created"]), "date_created") ?? new Date(),
         properties: event,
       },
     ];
@@ -570,7 +570,7 @@ function mapEvent(event: Record<string, unknown>, connectionId: string): Canonic
     eventId: `close:${connectionId}:${str(event["id"])}`,
     eventType: canonicalType(objectType, action),
     subject: null,
-    occurredAt: parseDate(str(event["date_created"])) ?? new Date(),
+    occurredAt: parseDate(str(event["date_created"]), "date_created") ?? new Date(),
     properties: event,
   };
 }

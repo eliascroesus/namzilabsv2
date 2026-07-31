@@ -258,6 +258,22 @@ only the ones whose key changed — because the parser changed too, so "same key
 does not mean "same answer". `config.eventTime.restampedAt` records that it
 happened; after that, only a change of key restamps.
 
+**The picker is on the connection page**, under Inbound webhook, and it exists
+because a detector that can be wrong needs a fix a person can reach — the
+alternative was editing the database, which is not a fix. Three answers, the same
+shape as the sheet's: detect automatically, use delivery time, or a named key.
+Its options are every key the last scan found to hold real dates, ranked —
+wider than what the detector chose, because the ranking exists so nobody has to
+think about `updated_at` and the list exists so somebody who has thought about it
+can still say yes.
+
+A pick records the answer and a restamp marker; the nightly pass does the work.
+A reprocess of a busy connection is not something to run inside a click, and
+while the gate is shut it must not run at all — so a pick made today is honoured
+the first night after the gate opens. The marker is cleared by comparison, after
+the reprocess returns, so a second pick mid-run survives and an interrupted run
+leaves the request standing.
+
 ### The other connectors keep `parseDate`, and that is deliberate
 
 Every connector ends in `parseDate(...) ?? new Date()`, but for
@@ -277,7 +293,31 @@ rather than a tidy-up — `new Date("2026-02-30")` does not fail, it returns Mar
 2nd, so a provider that ever emits one is currently believed.
 
 Unify when someone is willing to re-verify the five connectors against that
-table. Until then the split is deliberate and the table is the boundary.
+table. Until then the split is deliberate, the table is the boundary — and the
+question of whether any provider has ever actually SENT one of those shapes is
+now answered with evidence instead of a guess.
+
+`parseDate` checks every value against both parsers and logs the disagreements
+as `[parse-drift]`. Its own answer is what gets used, always: not one stored
+timestamp changes. Three kinds:
+
+| kind | meaning |
+|---|---|
+| `loose-accept` | `new Date` read it, the strict parser refused. **The one that matters** — "2026-02-30" becomes March 2nd, "2026" becomes January 1st. None of them fail; all of them lie. |
+| `divergent` | both read it, different instants. Should be impossible; if it fires, the table is wrong. |
+| `strict-only` | the strict parser read what `new Date` refused. A gain not being taken — real data currently landing on `new Date()`. |
+
+**What silence proves, and what it does not.** A period with no `[parse-drift]`
+lines means no value PARSED in that period disagreed. It does not cover a
+provider that went quiet, and it cannot be totalled from here — these run in
+ephemeral invocations with no shared process to hold a count. "Confirmed for the
+traffic we saw" is the honest reading; "confirmed" is not.
+
+The field name is passed at every call site so the strict parser's numeric gate
+applies as it does everywhere else. Without it, every epoch-second string a
+provider sends would report as a disagreement that exists only because the
+comparison was set up wrong — a test scans the five connectors for a call that
+forgot it.
 
 ### Instantly: stated assumptions
 

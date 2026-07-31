@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
@@ -9,11 +9,13 @@ import { catchHookConnector } from "@/connectors/catch-hook";
 import { processRawEvent } from "@/ingestion/pipeline";
 import {
   detectEventTime,
+  eventTimeChoice,
   eventTimeNote,
   patchEventTime,
   readEventTime,
   restampWebhookEvents,
   scanWebhookEventTime,
+  setEventTime,
 } from "@/lib/webhooks/event-time";
 // The note is rendered on the Integrations row — the surface that makes
 // "delivery time" visible instead of merely true.
@@ -79,7 +81,7 @@ describe("ranking the keys", () => {
 
   it("prefers an event time over a creation time", () => {
     const d = detectDateKey(many({ occurred_at: "2026-07-21T10:00:00Z", created_at: "2026-07-22T10:00:00Z" }));
-    expect(d).toEqual({ key: "occurred_at", tier: "event", candidates: ["occurred_at"] });
+    expect(d).toEqual({ key: "occurred_at", tier: "event", candidates: ["occurred_at"], qualified: ["occurred_at", "created_at"] });
   });
 
   it("prefers a creation time over a mutation time, always", () => {
@@ -95,7 +97,7 @@ describe("ranking the keys", () => {
    */
   it("returns a mutation key flagged as one, rather than refusing or hiding it", () => {
     const d = detectDateKey(many({ updated_at: "2026-07-22T10:00:00Z", name: "Ana" }));
-    expect(d).toEqual({ key: "updated_at", tier: "mutation", candidates: ["updated_at"] });
+    expect(d).toEqual({ key: "updated_at", tier: "mutation", candidates: ["updated_at"], qualified: ["updated_at"] });
     expect(eventTimeNote({ state: { ...state(), key: "updated_at", tier: "mutation" } })).toContain("record-CHANGE time");
   });
 
@@ -112,15 +114,20 @@ describe("ranking the keys", () => {
 
   it("looks one level down, and ranks the leaf name", () => {
     const d = detectDateKey(many({ id: "x", data: { created_at: "2026-07-21T10:00:00Z", updated_at: "2026-07-22T10:00:00Z" } }));
-    expect(d).toEqual({ key: "data.created_at", tier: "creation", candidates: ["data.created_at"] });
+    expect(d).toEqual({
+      key: "data.created_at",
+      tier: "creation",
+      candidates: ["data.created_at"],
+      qualified: ["data.created_at", "data.updated_at"],
+    });
   });
 
   it("still refuses a date-hinted key that holds text", () => {
-    expect(detectDateKey(many({ created_at: "pending", name: "Ana" }))).toEqual({ key: null, tier: null, candidates: [] });
+    expect(detectDateKey(many({ created_at: "pending", name: "Ana" }))).toEqual({ key: null, tier: null, candidates: [], qualified: [] });
   });
 
   it("says nothing about a connection with no payloads", () => {
-    expect(detectDateKey([])).toEqual({ key: null, tier: null, candidates: [] });
+    expect(detectDateKey([])).toEqual({ key: null, tier: null, candidates: [], qualified: [] });
   });
 });
 
@@ -462,3 +469,178 @@ function state() {
     at: new Date().toISOString(),
   };
 }
+
+/**
+ * THE PICKER'S HALF. A detector that can be wrong needs a fix a person can
+ * reach, or the honesty of the note is a better-worded dead end — which is
+ * exactly what it was until this landed: the ambiguous case was answered by
+ * editing the database.
+ */
+describe("answering the question by hand", () => {
+  it("tells the three answers apart, since two of them store no key", async () => {
+    expect(await setEventTime(db, ORG, connId, { kind: "key", key: "booked_on" })).toEqual({ changed: true });
+    expect(eventTimeChoice(await config())).toEqual({ kind: "key", key: "booked_on" });
+
+    expect(await setEventTime(db, ORG, connId, { kind: "none" })).toEqual({ changed: true });
+    expect(eventTimeChoice(await config())).toEqual({ kind: "none" });
+
+    expect(await setEventTime(db, ORG, connId, { kind: "auto" })).toEqual({ changed: true });
+    expect(eventTimeChoice(await config())).toEqual({ kind: "auto" });
+  });
+
+  it("is a no-op when the answer is unchanged — a restamp is a full reprocess", async () => {
+    await setEventTime(db, ORG, connId, { kind: "key", key: "booked_on" });
+    expect(await setEventTime(db, ORG, connId, { kind: "key", key: "booked_on" })).toEqual({ changed: false });
+  });
+
+  it("is org-scoped", async () => {
+    expect(await setEventTime(db, "org_other", connId, { kind: "key", key: "booked_on" })).toEqual({ changed: false });
+    expect((await config()).key).toBeUndefined();
+  });
+
+  it("beats the detector, and the detector stops re-deciding", async () => {
+    live();
+    const delivered = new Date(Date.now() - 30 * DAY);
+    // The detector ranks `created_at` (creation) above `updated_at` (mutation),
+    // which is the whole point of the tiers. A human who knows this provider
+    // only touches records when the thing happens can still say otherwise.
+    await processRawEvent(
+      db,
+      (await deliver({ id: "a", created_at: "2026-07-22T00:00:00Z", updated_at: "2026-01-05T00:00:00Z" }, delivered)).id,
+    );
+
+    await setEventTime(db, ORG, connId, { kind: "key", key: "updated_at" });
+    await scanWebhookEventTime(db);
+
+    expect((await config()).state).toMatchObject({ key: "created_at" }); // still observed
+    expect(await storedTimes()).toEqual(["2026-01-05T00:00:00.000Z"]); // the human wins
+  });
+
+  /**
+   * The pick is recorded while the gate is shut and acted on when it opens.
+   * Anything else would either restamp inside a click or lose the answer.
+   */
+  it("holds a pick made before the gate opened, and honours it after", async () => {
+    const delivered = new Date(Date.now() - 30 * DAY);
+    await processRawEvent(db, (await deliver({ id: "a", booked_on: "2026-01-05" }, delivered)).id);
+
+    await setEventTime(db, ORG, connId, { kind: "key", key: "booked_on" });
+    await scanWebhookEventTime(db);
+    expect(await storedTimes()).toEqual([delivered.toISOString()]); // recorded, not acted on
+    expect((await config()).restampRequestedAt).toEqual(expect.any(String));
+
+    live();
+    await scanWebhookEventTime(db);
+
+    expect(await storedTimes()).toEqual(["2026-01-05T00:00:00.000Z"]);
+    expect((await config()).restampRequestedAt).toBeUndefined(); // cleared, once done
+  });
+
+  it("offers every key that holds real dates, not only the one it chose", async () => {
+    for (let i = 0; i < 4; i++) {
+      await deliver({ id: `a${i}`, created_at: "2026-07-21T10:00:00Z", updated_at: "2026-07-22T10:00:00Z", name: "Ana" });
+    }
+    const state = await detectEventTime(db, connId);
+    expect(state!.key).toBe("created_at");
+    // …including the mutation key, because a user who has thought about it can
+    // still say yes. The ranking is what stops the detector choosing it.
+    expect(state!.options).toEqual(["created_at", "updated_at"]);
+  });
+});
+
+/**
+ * THE OBSERVATION, on the five connectors that keep `parseDate`.
+ *
+ * Their behaviour is unchanged and stays unchanged — a provider's documented ISO
+ * field is not worth re-verifying five ways for a shape nobody has sent. But
+ * "nobody has sent one" was an assumption, and it is the class of assumption
+ * that has been wrong four times here. So every value they parse is checked
+ * against the strict parser too and the disagreements are logged, using
+ * `parseDate`'s answer regardless.
+ */
+describe("watching for a provider that sends something the table warns about", () => {
+  const drift = () => {
+    const lines: string[] = [];
+    vi.spyOn(console, "warn").mockImplementation((m: unknown) => void lines.push(String(m)));
+    return lines;
+  };
+  afterEach(() => vi.restoreAllMocks());
+
+  it("says nothing at all for documented ISO, which is the everyday case", () => {
+    const lines = drift();
+    for (const v of ["2026-07-22T10:30:00Z", "2026-07-22T10:30:00+02:00", "2026-07-22 10:30:00", "2026-07-22"]) {
+      parseDate(v, "date_created");
+    }
+    expect(lines).toEqual([]);
+  });
+
+  /** The one that matters: it does not fail, it returns March 2nd. */
+  it("flags a rolled-over impossible date, and still returns what it always did", () => {
+    const lines = drift();
+    const got = parseDate("2026-02-30", "date_created");
+    expect(got?.toISOString()).toBe("2026-03-02T00:00:00.000Z"); // behaviour unchanged
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("[parse-drift] kind=loose-accept");
+    expect(lines[0]).toContain('field=date_created');
+    expect(lines[0]).toContain('"2026-02-30"');
+  });
+
+  it("flags the other loose-accept shapes the table records", () => {
+    for (const v of ["2026", "2026-07", "1799-01-01"]) {
+      const lines = drift();
+      parseDate(v, "date_created");
+      expect(lines[0], v).toContain("kind=loose-accept");
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("flags a value only the strict parser reads — data currently landing on now()", () => {
+    const lines = drift();
+    expect(parseDate("21/07/2026", "date_created")).toBeNull(); // behaviour unchanged
+    expect(lines[0]).toContain("kind=strict-only");
+  });
+
+  /**
+   * The field name is passed at every call site for this reason: without it the
+   * strict parser's numeric gate stays shut, and every epoch-second string a
+   * provider sends would report as a disagreement that exists only because the
+   * comparison was set up wrong.
+   */
+  it("does not manufacture a disagreement out of a closed numeric gate", () => {
+    const lines = drift();
+    parseDate("1750000000", "date_created"); // hinted: both have an opinion
+    expect(lines[0]).toContain("kind=strict-only");
+    vi.restoreAllMocks();
+
+    const unnamed = drift();
+    parseDate("1750000000", "ref"); // not hinted: neither reads it, no disagreement
+    expect(unnamed).toEqual([]);
+  });
+
+  it("is wired into every connector that parses a provider timestamp", () => {
+    // A call site that forgot the name would report gate-closed noise forever,
+    // which is the failure that makes an observation useless.
+    const sources = ["calendly", "close", "instantly", "sendblue", "google-calendar"];
+    for (const name of sources) {
+      const src = readFileSync(`src/connectors/${name}.ts`, "utf8");
+      let at = src.indexOf("parseDate(");
+      let calls = 0;
+      while (at !== -1) {
+        // Balance the parens: the arguments themselves contain calls, so a
+        // regex stops at the wrong bracket and passes a broken call site.
+        let depth = 0;
+        let end = at + "parseDate".length;
+        do {
+          if (src[end] === "(") depth += 1;
+          else if (src[end] === ")") depth -= 1;
+          end += 1;
+        } while (depth > 0 && end < src.length);
+        const args = src.slice(at + "parseDate(".length, end - 1);
+        expect(args, `${name}: parseDate call without a field name`).toMatch(/,\s*"[^"]+"$/);
+        calls += 1;
+        at = src.indexOf("parseDate(", end);
+      }
+      expect(calls, `${name}: no parseDate call found — has it been renamed?`).toBeGreaterThan(0);
+    }
+  });
+});

@@ -1,3 +1,5 @@
+import { normalizeDateValue } from "@/lib/normalize-dates";
+
 /** Return the first value among `keys` that is a non-empty string. */
 export function firstString(obj: Record<string, unknown>, keys: string[]): string | null {
   for (const k of keys) {
@@ -81,10 +83,67 @@ export function firstNumber(obj: Record<string, unknown>, keys: string[]): numbe
  * Unify when someone is willing to re-verify the five connectors against that
  * table; until then the split is deliberate and this comment is the boundary.
  */
-export function parseDate(value: string | null): Date | null {
+export function parseDate(value: string | null, field = ""): Date | null {
   if (!value) return null;
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
+  const parsed = Number.isNaN(d.getTime()) ? null : d;
+  observeParse(value, field, parsed);
+  return parsed;
+}
+
+/**
+ * "Documented ISO in practice" is an ASSUMPTION. This turns it into evidence.
+ *
+ * The table above says where the two parsers differ; it does not say whether any
+ * provider has ever actually sent one of those shapes. That question decides
+ * whether unifying them is worth the risk, and until now the only way to answer
+ * it was to guess — which is the class of guess that has already been wrong four
+ * times in this codebase.
+ *
+ * So every value a provider sends is checked against BOTH, and the
+ * disagreements are logged. `parseDate`'s answer is what gets used, always:
+ * nothing here changes a single stored timestamp.
+ *
+ *   loose-accept    `new Date` read it and the strict parser refused. THE ONE
+ *                   THAT MATTERS. "2026-02-30" becomes March 2nd, "2026"
+ *                   becomes January 1st, "1799-01-01" is outside any range this
+ *                   product means. None of them fail; all of them lie.
+ *   divergent       both read it and got different instants. Should be
+ *                   impossible; if it ever fires, the table is wrong.
+ *   strict-only     the strict parser read what `new Date` refused
+ *                   ("21/07/2026", epoch strings). A gain not being taken — real
+ *                   data currently landing on `new Date()` instead.
+ *
+ * WHAT SILENCE PROVES, stated honestly because a log line that never appears
+ * looks identical to code that never ran: a period with no `[parse-drift]` lines
+ * means no value PARSED in that period disagreed. It does not cover a provider
+ * that went quiet, and it cannot be counted from here — these run in ephemeral
+ * invocations with no shared process to hold a total. Reading it as "confirmed
+ * for the traffic we saw" is right; reading it as "confirmed" is not.
+ *
+ * The field name is passed so the strict parser's numeric gate applies the same
+ * way it does at every other call site: without it, every epoch-second string a
+ * provider sends would report as a disagreement that only exists because the
+ * comparison was set up wrong.
+ */
+function observeParse(value: string, field: string, loose: Date | null): void {
+  const strict = normalizeDateValue(value, field);
+  const strictMs = strict ? Date.parse(strict) : NaN;
+  const kind = !Number.isFinite(strictMs)
+    ? loose
+      ? "loose-accept"
+      : null
+    : loose
+      ? loose.getTime() === strictMs
+        ? null
+        : "divergent"
+      : "strict-only";
+  if (!kind) return;
+  // Same prefix shape as `[mirror-drift]` and `[invariant-scan]`, so one grep
+  // covers every "look at this" signal.
+  console.warn(
+    `[parse-drift] kind=${kind} field=${field || "?"} value=${JSON.stringify(value)} loose=${loose?.toISOString() ?? "null"} strict=${strict ?? "null"}`,
+  );
 }
 
 /** A non-empty string, or null. The standard defensive read for provider payloads. */

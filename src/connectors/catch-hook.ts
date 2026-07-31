@@ -116,8 +116,11 @@ function valueAt(obj: Record<string, unknown>, path: string): unknown {
  *
  * Deleted with the rollout gate.
  */
+/** The seven, in their original order. Frozen; see `legacyDate`. */
+const LEGACY_KEYS = ["occurred_at", "occurredAt", "timestamp", "created_at", "createdAt", "time", "date"];
+
 function legacyDate(obj: Record<string, unknown>, ctx: NormalizeContext): Date {
-  const found = parseDate(firstString(obj, ["occurred_at", "occurredAt", "timestamp", "created_at", "createdAt", "time", "date"]));
+  const found = parseDate(firstString(obj, LEGACY_KEYS), "occurred_at");
   return found ?? ctx.fallbackOccurredAt ?? new Date();
 }
 

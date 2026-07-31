@@ -54,6 +54,15 @@ export type EventTimeState = {
   coverage: { withKey: number; total: number; oldestWithKey: string | null };
   /** Several keys tied inside the winning tier: the names are the question. */
   candidates?: string[];
+  /**
+   * Every key that holds real dates, ranked — what the PICKER offers.
+   *
+   * Wider than `candidates` on purpose. The ranking exists so nobody has to
+   * think about `updated_at`; this list exists so somebody who HAS thought about
+   * it can still choose it. A user overruling the ranking is a decision; the
+   * detector making the same choice quietly is not.
+   */
+  options?: string[];
   at: string;
 };
 
@@ -86,6 +95,51 @@ export type EventTimeConfig = {
    */
   restampedAt?: string;
 };
+
+/**
+ * What the picker can say. Three answers, not two — `auto` and `none` both leave
+ * `key` null and mean opposite things: find one for me, versus stop looking.
+ */
+export type EventTimeChoice = { kind: "auto" } | { kind: "none" } | { kind: "key"; key: string };
+
+/** The stored setting as the three-way answer the picker speaks in. */
+export function eventTimeChoice(cfg: EventTimeConfig): EventTimeChoice {
+  if (!cfg.locked) return { kind: "auto" };
+  return cfg.key ? { kind: "key", key: cfg.key } : { kind: "none" };
+}
+
+/**
+ * Answer the event-time question for this CONNECTION.
+ *
+ * Org-scoped like every write here. Returns whether anything changed, because an
+ * unchanged answer must not look like a reason to restamp a settled connection —
+ * and a restamp is a full reprocess of every stored payload.
+ *
+ * The marker is set here and acted on by the scan, rather than restamping
+ * inline: a reprocess of a busy connection is not something to do inside a
+ * click, and while the rollout gate is shut it must not happen at all. The
+ * answer is recorded either way, so flipping the gate honours what was chosen
+ * in the meantime.
+ */
+export async function setEventTime(
+  db: DB,
+  orgId: string,
+  connectionId: string,
+  choice: EventTimeChoice,
+): Promise<{ changed: boolean }> {
+  const key = choice.kind === "key" && choice.key.trim() !== "" ? choice.key : null;
+  const locked = choice.kind !== "auto";
+  const [conn] = await db
+    .select({ config: connections.config })
+    .from(connections)
+    .where(and(eq(connections.id, connectionId), eq(connections.orgId, orgId)))
+    .limit(1);
+  if (!conn) return { changed: false };
+  const current = readEventTime(conn.config);
+  if ((current.key ?? null) === key && (current.locked ?? false) === locked) return { changed: false };
+  await patchEventTime(db, connectionId, { key, locked, restampRequestedAt: new Date().toISOString() }, orgId);
+  return { changed: true };
+}
 
 /** How many recent payloads a detection samples. */
 const SAMPLE = 200;
@@ -195,6 +249,7 @@ export async function detectEventTime(db: DB, connectionId: string, now = new Da
     undated,
     coverage: key ? await keyCoverage(db, connectionId, key) : { withKey: 0, total: 0, oldestWithKey: null },
     ...(detection.candidates.length > 1 ? { candidates: detection.candidates } : {}),
+    options: detection.qualified,
     at: now.toISOString(),
   };
 }
@@ -378,10 +433,33 @@ export async function scanWebhookEventTime(
        * mean "the answer did not change". After that, only a change of key.
        */
       const firstTime = cfg.restampedAt == null;
-      if (firstTime || after !== (cfg.state?.key ?? null)) {
+      // …and a THIRD: somebody answered the question by hand. The picker records
+      // the answer and leaves the work here, because a reprocess of a busy
+      // connection is not something to do inside a click — and while the gate
+      // was shut it could not happen at all, so this is where a pick made last
+      // week finally lands.
+      const requested = cfg.restampRequestedAt ?? null;
+      if (firstTime || requested != null || after !== (cfg.state?.key ?? null)) {
         const res = await restampWebhookEvents(db, conn.id, after);
         row.restamped = res.processed;
         await patchEventTime(db, conn.id, { restampedAt: now.toISOString() });
+        /**
+         * Cleared by COMPARISON, and only after the reprocess returned. A pick
+         * made while this run was walking the payloads carries a newer stamp and
+         * must survive; a run that dies partway must leave the request standing,
+         * because re-running it re-derives the same instants and losing it
+         * silently is the failure that matters.
+         */
+        if (requested != null) {
+          const [fresh] = await db
+            .select({ config: connections.config })
+            .from(connections)
+            .where(eq(connections.id, conn.id))
+            .limit(1);
+          if (readEventTime(fresh?.config).restampRequestedAt === requested) {
+            await patchEventTime(db, conn.id, { restampRequestedAt: undefined });
+          }
+        }
       }
     }
     out.push(row);

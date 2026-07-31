@@ -95,7 +95,7 @@ export const calendlyConnector: Connector = {
       ? `calendly:${ctx.connectionId}:${naturalId}`
       : `calendly:${ctx.connectionId}:${str(body["created_at"]) ?? Date.now()}`;
     const occurredAt =
-      parseDate(str(scheduled["start_time"])) ?? parseDate(str(body["created_at"])) ?? new Date();
+      parseDate(str(scheduled["start_time"]), "start_time") ?? parseDate(str(body["created_at"]), "created_at") ?? new Date();
     return [
       {
         eventId,
@@ -412,7 +412,7 @@ function bookedEvent(connectionId: string, tag: string, ev: Record<string, unkno
     eventId: `calendly:${connectionId}:${tag}${str(ev["uri"])}`,
     eventType: "booked",
     subject: str(ev["name"]) ?? null,
-    occurredAt: parseDate(str(ev["start_time"])) ?? parseDate(str(ev["created_at"])) ?? new Date(),
+    occurredAt: parseDate(str(ev["start_time"]), "start_time") ?? parseDate(str(ev["created_at"]), "created_at") ?? new Date(),
     properties: { ...ev, ...meetingFacts(ev) },
   };
 }
@@ -425,7 +425,7 @@ function canceledEvent(connectionId: string, tag: string, ev: Record<string, unk
     // Same axis as the booking, deliberately: a cancellation belongs to the slot
     // it freed up, and both rows must sit inside the window that fetched them or
     // the retire below would tombstone one of them.
-    occurredAt: parseDate(str(ev["start_time"])) ?? parseDate(str(ev["updated_at"])) ?? new Date(),
+    occurredAt: parseDate(str(ev["start_time"]), "start_time") ?? parseDate(str(ev["updated_at"]), "updated_at") ?? new Date(),
     properties: { ...ev, ...meetingFacts(ev) },
   };
 }

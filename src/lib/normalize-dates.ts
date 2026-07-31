@@ -398,6 +398,16 @@ export type DateKeyDetection = {
   tier: EventTimeTier | null;
   /** Every key that qualified IN THE WINNING TIER — the names, when it is a tie. */
   candidates: string[];
+  /**
+   * Every key that qualified, in every tier, ranked.
+   *
+   * What a PICKER offers, as opposed to what the detector chose. The two differ
+   * on purpose: the ranking exists so nobody has to think about `updated_at`,
+   * and the list exists so somebody who has thought about it can still say yes.
+   * A user overruling the ranking is a decision; the detector making the same
+   * choice silently is not.
+   */
+  qualified: string[];
 };
 
 /** Flatten one payload to `path -> value`, one level of nesting deep. */
@@ -438,12 +448,15 @@ export function detectDateKey(payloads: readonly unknown[]): DateKeyDetection {
   }
   const qualified = [...byKey.entries()].filter(([path, values]) => qualifiesAsDateField(path.split(".").pop() ?? path, values));
 
+  const ranked = (["event", "creation", "mutation", "other"] as const).flatMap((tier) =>
+    qualified.filter(([path]) => tierOf(path) === tier).map(([path]) => path),
+  );
   // Highest tier that has anything, then ties inside it. "other" last, so a
   // conventional name always beats an invented one.
   for (const tier of ["event", "creation", "mutation", "other"] as const) {
     const inTier = qualified.filter(([path]) => tierOf(path) === tier).map(([path]) => path);
     if (inTier.length === 0) continue;
-    return { key: inTier.length === 1 ? inTier[0] : null, tier, candidates: inTier };
+    return { key: inTier.length === 1 ? inTier[0] : null, tier, candidates: inTier, qualified: ranked };
   }
-  return { key: null, tier: null, candidates: [] };
+  return { key: null, tier: null, candidates: [], qualified: [] };
 }

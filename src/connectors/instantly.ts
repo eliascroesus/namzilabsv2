@@ -117,7 +117,7 @@ export const instantlyConnector: Connector = {
         eventId,
         eventType: EVENT_TYPE_MAP[eventType] ?? eventType,
         subject: str(body["lead_email"]) ?? null,
-        occurredAt: parseDate(str(body["timestamp"]) ?? str(body["timestamp_created"])) ?? new Date(),
+        occurredAt: parseDate(str(body["timestamp"]) ?? str(body["timestamp_created"]), "timestamp") ?? new Date(),
         properties: body,
       },
     ];
@@ -234,7 +234,7 @@ async function pollDailyAnalytics(args: PollArgs): Promise<PollResult> {
   const records: CanonicalEvent[] = [];
   for (const row of rows) {
     const date = str(row["date"]) ?? str(row["day"]);
-    const at = date ? parseDate(date) : null;
+    const at = date ? parseDate(date, "date") : null;
     if (!at) continue;
     records.push({
       eventId: `instantly:${args.connectionId}:${campaignId}:daily:${ymd(at)}`,
@@ -268,7 +268,7 @@ async function pollCampaignTotals(args: PollArgs): Promise<PollResult> {
         // creation date when the API supplies one; otherwise first-seen, which
         // preserveOccurredAt below pins so it neither shows 1970 nor marches
         // forward on every sweep.
-        occurredAt: parseDate(str(row["created_at"]) ?? str(row["campaign_created_at"])) ?? new Date(),
+        occurredAt: parseDate(str(row["created_at"]) ?? str(row["campaign_created_at"]), "created_at") ?? new Date(),
         properties: { ...row, campaign_id: campaignId },
       },
     ],
@@ -339,7 +339,7 @@ function mapEmail(email: Record<string, unknown>, connectionId: string): Canonic
     eventId: `instantly:${connectionId}:email:${str(email["id"])}`,
     eventType,
     subject: (ueType === 2 ? str(email["from_address_email"]) : to?.split(",")[0]?.trim()) ?? null,
-    occurredAt: parseDate(str(email["timestamp_created"]) ?? str(email["timestamp_email"])) ?? new Date(),
+    occurredAt: parseDate(str(email["timestamp_created"]) ?? str(email["timestamp_email"]), "timestamp_created") ?? new Date(),
     properties: email,
   };
 }

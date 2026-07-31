@@ -14,6 +14,8 @@ import {
   reprocessAction,
 } from "@/app/integrations/actions";
 import type { CanonicalEvent } from "@/connectors/types";
+import { eventTimeChoice, eventTimeNote, readEventTime } from "@/lib/webhooks/event-time";
+import { EventTimePicker } from "./EventTimePicker";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +36,7 @@ export default async function ConnectionPage({
   const entry = catalogEntry(conn.source);
   const signingSecret = getSigningSecret(conn);
   const webhookUrl = webhookUrlFor(conn.id);
+  const eventTime = readEventTime(conn.config);
 
   // "Preview latest records" — the connect-time trust builder.
   let previewRows: CanonicalEvent[] | null = null;
@@ -127,6 +130,18 @@ export default async function ConnectionPage({
             {entry.webhookSetup && <p className="mb-2 text-sm text-neutral-600">{entry.webhookSetup}</p>}
             <CopyField label="URL" value={webhookUrl} isUrl />
             {signingSecret && <CopyField label="Signing secret" value={signingSecret} />}
+            {/* Only the catch-hook has this question. Every other source reads a
+                documented timestamp field of its own, so there is nothing to
+                choose and nothing to be wrong about. */}
+            {conn.source === "webhook" && (
+              <EventTimePicker
+                connectionId={conn.id}
+                choice={eventTimeChoice(eventTime)}
+                note={eventTimeNote(eventTime)}
+                options={eventTime.state?.options ?? []}
+                pending={eventTime.restampRequestedAt != null}
+              />
+            )}
           </section>
         )}
 

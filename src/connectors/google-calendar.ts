@@ -139,7 +139,7 @@ function eventStart(ev: Record<string, unknown>): Date | null {
   const start = ev["start"];
   if (start && typeof start === "object") {
     const s = start as Record<string, unknown>;
-    return parseDate(str(s["dateTime"]) ?? str(s["date"]));
+    return parseDate(str(s["dateTime"]) ?? str(s["date"]), "dateTime");
   }
   return null;
 }

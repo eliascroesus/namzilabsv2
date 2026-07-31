@@ -10,6 +10,7 @@ import { promoteToBaseCadence } from "@/lib/sync/cadence";
 import { activeStreams } from "@/lib/sync/streams";
 import { defaultTargetFloor, requestBackfill } from "@/lib/backfill/jobs";
 import { getDb } from "@/db/client";
+import { setEventTime, type EventTimeChoice } from "@/lib/webhooks/event-time";
 
 /**
  * Connect an API-key / token based source (Calendly, Close, Instantly, Sendblue, custom
@@ -106,6 +107,28 @@ export async function reprocessAction(formData: FormData): Promise<void> {
   if (!conn) throw new Error("connection not found");
   await inngest.send({ name: "sync/reprocess.requested", data: { orgId, connectionId: id } });
   redirect(`/connections/${id}`);
+}
+
+/**
+ * Answer the event-time question for a catch-hook connection.
+ *
+ * Records the answer and nothing else. The restamp of everything already stored
+ * is the nightly pass's job — a reprocess of a busy connection is not something
+ * to run inside a click, and while the rollout gate is shut it must not run at
+ * all. The answer is stored either way, so opening the gate honours what was
+ * chosen in the meantime.
+ */
+export async function setEventTimeAction(
+  connectionId: string,
+  choice: EventTimeChoice,
+): Promise<{ ok: true; changed: boolean } | { ok: false; error: string }> {
+  const { orgId } = await requireOrg();
+  try {
+    const res = await setEventTime(getDb(), orgId, connectionId, choice);
+    return { ok: true, changed: res.changed };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export async function disconnectAction(formData: FormData): Promise<void> {
