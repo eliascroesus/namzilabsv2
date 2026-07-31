@@ -326,3 +326,60 @@ applying this.
 > the chain will be intact, which is the part the tooling actually reads.
 > Main's own 0017 has the same shape and is already correct only because it was
 > generated after 0015 was merged.
+
+---
+
+## 0019 — `source_streams.date_field_locked` (batch 8 — apply BEFORE the auto-detect code lands)
+
+**One boolean, and a backfill that is not optional.** Nothing reads the column
+yet; the detector, the runner change and the picker's "Detect automatically"
+land after this SQL is applied. Same ordering rule as 0017 and 0018, and the
+same reason: `db.select().from(sourceStreams)` expands to an explicit column
+list from `schema.ts`, so declaring the column makes `activeStreams`,
+`primeStream` and the backfill lane's stream load NAME it. Deployed before the
+SQL is applied, all of them throw together.
+
+**Why a column and not a sentinel.** `date_field` is nullable and NULL means "no
+column", but there are two ways to be there and they need opposite treatment: a
+stream nobody has touched should be dated from whatever column can be detected,
+and a stream whose owner deliberately chose "use import time" must be left
+alone. Encoding the second as an empty string works and reads as a bug to
+whoever finds it next; one boolean says what it means.
+
+**The detection itself is stored nowhere.** It is recomputed from the header row
+and the values on every read, so `date_field` keeps exactly one meaning — the
+user's answer — and the sweep never writes to a column the picker owns. What a
+read actually used goes in `date_field_state`, which already means "what
+happened", and whose shape gains `source` and `candidates` — jsonb, so no DDL.
+
+```sql
+ALTER TABLE "source_streams" ADD COLUMN IF NOT EXISTS "date_field_locked" boolean DEFAULT false NOT NULL;
+UPDATE "source_streams" SET "date_field_locked" = true WHERE "date_field" IS NOT NULL;
+```
+
+**Run both.** The default of `false` is right for a stream nobody has answered
+for, and wrong for one where somebody already picked a column — without the
+UPDATE, every existing explicit choice becomes re-decidable by the detector on
+the next sweep, and a stream whose owner picked "Submitted at" over an equally
+date-like "Created" would silently flip. The UPDATE is idempotent and safe to
+re-run.
+
+Verify:
+
+```sql
+SELECT count(*) AS should_be_1
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'source_streams'
+  AND column_name = 'date_field_locked';
+
+-- and that the backfill ran: every stream with a column is locked.
+SELECT count(*) AS should_be_0
+FROM source_streams
+WHERE date_field IS NOT NULL AND date_field_locked = false;
+```
+
+> **Numbering note.** 0016 is still reserved by the unmerged
+> `batch5/retention-purge` branch, and the snapshot-chain warning under 0018
+> applies to this migration too — batch5 now forks three migrations behind main,
+> not two.

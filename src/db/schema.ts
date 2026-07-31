@@ -403,6 +403,32 @@ export const sourceStreams = pgTable(
      */
     dateField: text("date_field"),
     /**
+     * Whether a HUMAN has answered the date-column question for this stream.
+     *
+     * `date_field` alone cannot say. NULL means "no column", and the two ways to
+     * arrive at NULL need opposite treatment: a stream nobody has touched should
+     * be dated automatically, and a stream whose owner deliberately chose "use
+     * import time" must be left alone. Collapsing them is what made a sheet with
+     * an obvious date column sit on import time until somebody noticed — broken
+     * by default, which is the same defect one layer up from the one `date_field`
+     * was added to fix.
+     *
+     * So: FALSE (the default) lets the sweep date rows from whatever column it
+     * can detect, and TRUE means the picker has spoken — column or no column —
+     * and detection stays out of it. The picker sets it; "Detect automatically"
+     * clears it back, because an override with no way back is a one-way door.
+     *
+     * The DETECTION IS NOT STORED HERE, or anywhere. It is recomputed from the
+     * header row and the values on every read, so `date_field` keeps exactly one
+     * meaning — the user's answer — and the sweep never writes to a column the
+     * picker owns. What the read actually used lands in `date_field_state`,
+     * which is where "what happened" already lives.
+     *
+     * Backfilled TRUE for every stream that already had a `date_field` when this
+     * column was added: those were explicit picks and must not be re-decided.
+     */
+    dateFieldLocked: boolean("date_field_locked").notNull().default(false),
+    /**
      * Set when `date_field` changes; cleared by the sweep that acts on it.
      *
      * `preserveOccurredAt` pins `occurred_at` on conflict, so choosing a column
@@ -446,29 +472,46 @@ export const sourceStreams = pgTable(
      */
     restampRequestedAt: timestamp("restamp_requested_at", { withTimezone: true }),
     /**
-     * What the last read actually did with `date_field`, as OBSERVATION rather
-     * than configuration — which is why it is a separate column from the two
-     * above rather than folded in with them. Those are inputs, written by the
-     * picker; this is an output, written by the sweep.
+     * What the last read actually did about a row's event time, as OBSERVATION
+     * rather than configuration — which is why it is a separate column from the
+     * settings above rather than folded in with them. Those are inputs, written
+     * by the picker; this is an output, written by the sweep.
      *
-     * `{ column, presentInHeader, dated, undated, at }`.
+     * `{ column, source, presentInHeader, dated, undated, candidates?, at }`.
      *
-     * `presentInHeader` is the named condition. Without it a renamed column
-     * reads as "500 of 500 rows kept import time" — visible, but indistinguishable
-     * from a sheet whose dates are all malformed, and the two need different
-     * fixes. Not derivable from `stream_fields`: that registry is sampled and
-     * approximate by its own declaration, so a column present in the sheet could
-     * lag there for benign reasons and raise a false alarm.
+     * `column` is NULL when the read dated nothing — no column chosen and none
+     * detected, or several detected and therefore none used. Recorded rather
+     * than left absent, because "we looked and found nothing" and "we have never
+     * looked" are different states and only one of them should force a read of a
+     * settled sheet.
      *
-     * jsonb because the counts and the condition are read together, by the same
+     * `source` says who decided, so the UI can mark a detected column as
+     * detected. A row written before this field existed has none; read it as
+     * "user", which is what it was — nothing detected anything back then.
+     *
+     * `candidates` is the ambiguous case: several columns qualified, so none was
+     * used and the user has to choose. It carries the names so the question can
+     * be asked properly instead of as "pick a date column".
+     *
+     * `presentInHeader` is the named condition for a chosen column that has gone
+     * missing. Without it a renamed column reads as "500 of 500 rows kept import
+     * time" — visible, but indistinguishable from a sheet whose dates are all
+     * malformed, and the two need different fixes. Not derivable from
+     * `stream_fields`: that registry is sampled and approximate by its own
+     * declaration, so a column present in the sheet could lag there for benign
+     * reasons and raise a false alarm.
+     *
+     * jsonb because the counts and the conditions are read together, by the same
      * UI, and a scalar per number would mean a migration every time the display
-     * wants one more.
+     * wants one more — this shape has already grown twice without one.
      */
     dateFieldState: jsonb("date_field_state").$type<{
-      column: string;
+      column: string | null;
+      source?: "user" | "detected";
       presentInHeader: boolean;
       dated: number;
       undated: number;
+      candidates?: string[];
       at: string;
     }>(),
     status: text("status").notNull().default("active"), // active | error | disabled
