@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, isNull, lt, lte, notInArray, or } from "drizzle-orm";
+import { and, eq, gt, gte, isNull, lt, lte, notInArray, or, sql } from "drizzle-orm";
 import { connections, events, flows, flowVersions, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
 import type { CanonicalEvent } from "@/connectors/types";
@@ -213,6 +213,20 @@ export type StreamSyncResult = {
    * connection or tell the user rather than reporting a short count as final.
    */
   deferred?: { reason: string; retryAfterMs: number };
+  /**
+   * 10(c) — the mirror guarantee, checked against what is stored.
+   *
+   * Present only when they DISAGREE. A mirror's contract is "stored live rows ≡
+   * the source after every sweep", so a read that produced N distinct records
+   * and left anything other than N live rows behind has broken it.
+   *
+   * This is the one provider count worth taking, and the only reason it is worth
+   * taking is that it costs nothing: for a whole-resource mirror the read IS the
+   * count, so the number is already in hand. Everywhere else a count means a
+   * full pagination — the opposite of what the rate-limit work was for — which
+   * is why Calendly and Close get no equivalent.
+   */
+  mirrorDrift?: { read: number; stored: number };
 };
 
 type StreamRow = typeof sourceStreams.$inferSelect;
@@ -425,6 +439,7 @@ export async function syncStream(
   let incomplete = false;
   let covered: { from: Date; to: Date } | null = null;
   let dateFieldState: StreamRow["dateFieldState"] | undefined;
+  let mirrorDrift: StreamSyncResult["mirrorDrift"];
   /**
    * The date column changed and every stored row is about to be restamped from
    * this read. Captured as the VALUE, not a boolean, because it is cleared by
@@ -573,6 +588,37 @@ export async function syncStream(
          * leaving a stale column name on screen.
          */
         dateFieldState = mirrorRes.dateFieldState ? { ...mirrorRes.dateFieldState, at: new Date().toISOString() } : null;
+        /**
+         * 10(c) — the mirror's own guarantee, checked.
+         *
+         * "Stored live rows ≡ the source after every sweep" is the strongest
+         * claim any class here makes and the only one nothing was verifying.
+         * Both halves of it — the upsert and the retire — have been wrong
+         * before, and when they are the rows still look right one at a time:
+         * the failure is a COUNT, which no per-row assertion can see.
+         *
+         * Free, and that is why it is here rather than in the nightly scan. A
+         * whole-resource mirror has just read its entire resource, so the
+         * denominator is already in hand; the only cost is one indexed count on
+         * the stream's own hash. For every other class a count means a full
+         * pagination, which is the expense the rate-limit work exists to avoid —
+         * so Calendly and Close get no equivalent, deliberately.
+         *
+         * Reported, never corrected. A sweep that "fixed" a discrepancy it does
+         * not understand would destroy the evidence of the bug that caused it.
+         */
+        const read = new Set(toWrite.map((r) => r.eventId)).size;
+        const [live] = await db
+          .select({ c: sql<number>`count(*)::int` })
+          .from(events)
+          .where(
+            and(eq(events.connectionId, conn.id), eq(events.streamHash, stream.configHash), isNull(events.deletedAt)),
+          );
+        const stored = live?.c ?? 0;
+        if (stored !== read) {
+          mirrorDrift = { read, stored };
+          console.warn(`[mirror-drift] stream=${stream.id} source=${conn.source} read=${read} stored=${stored}`);
+        }
       }
       cursor = nextCursor ?? null;
     } else {
@@ -698,7 +744,7 @@ export async function syncStream(
       .where(eq(sourceStreams.id, stream.id));
     throw e;
   }
-  return { inserted, updated, deduped, softDeleted, incomplete, covered: covered ?? undefined, deferred };
+  return { inserted, updated, deduped, softDeleted, incomplete, covered: covered ?? undefined, deferred, mirrorDrift };
 }
 
 /** All streams of one connection that should be polled. */

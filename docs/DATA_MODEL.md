@@ -657,6 +657,58 @@ change. To populate them across existing history, run **Full re-sync** on the
 connection (`/connections/[id]`), which clears the cursor and re-lists the
 bounded window.
 
+## Watching for absence, not just for failure
+
+Everything else here asks "did this piece of work succeed?". Nothing was asking
+"is any work reaching the question?" — which is the shape of the worst outage
+this project has had: migration 0012 was skipped, `withConnectionSyncLock` threw
+on every sync entry point for weeks, and the test suite stayed green throughout
+because it builds its own database and never looks at the real one.
+
+Three layers, and they are deliberately different kinds of thing:
+
+**At CI — the stranding contract** (`tests/stranding-contract.test.ts`). Each
+`poll()` is driven through a synthetic burst larger than `pages × pageSize` and
+every record must stay reachable across successive polls. Deterministic, free,
+and it is where the "cursor jumped past unread data" class is caught — Sendblue
+lost data that way for months while every count looked plausible.
+
+**Nightly — the invariant scan** (`src/lib/health/invariants.ts`, run from
+`prune-storage`). Reads only, no provider calls. Streams an active connection
+has stopped polling; connections failing on the breaker's own streak counter;
+backfills that report `running` and have not moved their checkpoint; dead-letter
+rows nobody resolved; mirrors that have been read and hold nothing. Each is
+"something that should be moving has stopped", and none of them writes an error
+anywhere on its own — a stream that is never polled has nothing to report,
+because nothing ran.
+
+Findings are RETURNED from the run and logged as `[invariant-scan]`; they are
+deliberately not written to `connections.last_error`, which means "the provider
+failed" and is cleared by the next successful poll.
+
+**One check from the original plan is missing, and it is not an oversight.**
+"Connections whose cursor has not advanced while records keep arriving" cannot
+be answered from stored state: `sync_state.cursor` holds only the current value
+and is rewritten every poll, so there is no way to see that it stood still, and
+inferring it from stored `occurred_at` would flag every account that had a quiet
+month. It needs a column. The CI contract above catches the same class.
+
+**Per sweep — the mirror count** (10c). A mirror's guarantee is "stored live
+rows ≡ the source after every sweep", which is the strongest claim any class
+here makes and had nothing verifying it. Both halves — the upsert and the
+retire — have been wrong before, and when they are, every row still looks right
+individually: the failure is a count.
+
+Taken only where it is free. A whole-resource mirror has just read its entire
+resource, so the denominator is already in hand and the only cost is one indexed
+count. For every other class a "count" means a full pagination — the exact
+expense the rate-limit work exists to remove — so Calendly and Close get no
+equivalent, and Instantly's analytics stream needs none because the sweep
+already re-reads the whole window. A mismatch is reported as `[mirror-drift]`
+and on `StreamSyncResult.mirrorDrift`, never corrected: a sweep that quietly
+fixed a discrepancy it does not understand would destroy the evidence of the bug
+that caused it.
+
 ## Freshness rules
 
 - The user's explicit **Test always forces a fresh read** of its streams (`primeStream` with

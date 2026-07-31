@@ -4,6 +4,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
 import { connections, events, sourceStreams } from "@/db/schema";
 import { reconcileConnection } from "@/ingestion/reconcile";
+import { syncStream } from "@/lib/sync/streams";
 import { streamConfigHash, normalizeStreamConfig } from "@/lib/sync/stream-hash";
 import { googleSheetsConnector } from "@/connectors/google-sheets";
 import { detectDateColumn } from "@/lib/normalize-dates";
@@ -701,6 +702,72 @@ describe("changing the column restamps the rows already stored", () => {
 
     expect(valuesReads).toBe(afterRestamp);
     expect((await streamRow()).restampRequestedAt).toBeNull();
+  });
+});
+
+/**
+ * 10(c) — THE MIRROR'S OWN GUARANTEE, CHECKED.
+ *
+ * "Stored live rows ≡ the source after every sweep" is the strongest claim any
+ * guarantee class here makes, and nothing was verifying it. Both halves — the
+ * upsert and the retire — have been wrong before, and when they are the rows
+ * still look right one at a time: the failure is a COUNT, which no per-row
+ * assertion can see.
+ *
+ * Free to take, which is why it is here and not in the nightly scan: a
+ * whole-resource mirror has just read its whole resource, so the number is
+ * already in hand. Everywhere else a count means a full pagination.
+ */
+describe("the stored row count against what the read produced", () => {
+  const sync = async () => {
+    const [conn] = await db.select().from(connections).where(eq(connections.id, connId));
+    return syncStream(db, conn, await streamRow());
+  };
+
+  it("says nothing when the mirror is faithful", async () => {
+    const res = await sync();
+    expect(res.mirrorDrift).toBeUndefined();
+    expect(await stored()).toHaveLength(3);
+  });
+
+  /**
+   * A row the read DID produce that is still tombstoned afterwards.
+   *
+   * Reached through a real rule rather than a broken one: `upsertEvents` refuses
+   * to resurrect a tombstone from a LOWER generation than the stored row's, so a
+   * row sitting above the connection's own generation is inert — the sweep
+   * writes it, the write is a no-op, and the row stays deleted while the sheet
+   * plainly still has it. Every count is off by one and no row looks wrong.
+   */
+  it("reports a row the read produced that is still not stored", async () => {
+    await sweep();
+    const [victim] = await db.select().from(events).where(eq(events.connectionId, connId)).limit(1);
+    await db
+      .update(events)
+      .set({ deletedAt: new Date(), syncGeneration: 99 })
+      .where(eq(events.id, victim.id));
+    MODIFIED = "2026-02-02T00:00:00.000Z";
+
+    const res = await sync();
+
+    expect(res.mirrorDrift).toEqual({ read: 3, stored: 2 });
+    expect(await stored()).toHaveLength(2);
+  });
+
+  it("does not count another stream's rows, or another connection's", async () => {
+    const other = streamConfigHash({ spreadsheetId: "DATES", range: "Other" }, "gsheets");
+    await db.insert(events).values({
+      eventId: `gsheets:${connId}:${other}:row:2`,
+      orgId: ORG,
+      connectionId: connId,
+      source: "gsheets",
+      eventType: "row_added",
+      occurredAt: new Date(),
+      streamHash: other,
+      properties: {},
+    });
+
+    expect((await sync()).mirrorDrift).toBeUndefined();
   });
 });
 

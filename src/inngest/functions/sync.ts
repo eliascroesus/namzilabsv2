@@ -4,17 +4,8 @@ import { getDb } from "@/db/client";
 import { runSync, reprocessConnection, syncChanged } from "@/lib/sync/resync";
 import { markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
-import { getJob, runnableJobsByProvider, stalledJobs } from "@/lib/backfill/jobs";
-
-/**
- * How long a `running` backfill may go without moving before it is reported.
- *
- * The lane ticks every five minutes, so six hours is roughly seventy missed
- * opportunities to progress — comfortably past a deferral streak on a busy
- * provider, and far short of letting a genuinely wedged import sit unnoticed
- * for a day.
- */
-const STALLED_BACKFILL_MS = 6 * 3_600_000;
+import { getJob, runnableJobsByProvider } from "@/lib/backfill/jobs";
+import { scanInvariants } from "@/lib/health/invariants";
 
 /**
  * How many providers may have a slice in flight from one dispatch tick.
@@ -138,27 +129,29 @@ export const pruneStorage = inngest.createFunction(
     // keeping up with ingest — visible here before it becomes a disk problem.
     const backlog = await step.run("measure-retention-backlog", () => retentionBacklog(getDb()));
     /**
-     * 10(b) — an internal invariant scan, no provider calls.
+     * 10(b) — the internal invariant scan. Reads only, no provider calls.
      *
-     * A backfill job that says `running` and has not moved its checkpoint is
-     * invisible by every other measure: it is retried on schedule, it writes
-     * rows on every attempt, and `updated_at` advances each time. Only
-     * `last_progress_at` can tell it from a healthy one.
+     * Every check is of the shape "something that should be moving has
+     * stopped", which is the class nothing else here can see: a stream that is
+     * never polled writes no error, a wedged backfill still reports `running`,
+     * and a connection whose failures are retried forever looks busy. That is
+     * the 0012 failure — weeks of a sync entry point throwing while every test
+     * stayed green, because nothing asked whether work was reaching the code
+     * that could fail.
      *
      * Reported rather than written onto the connection's `lastError`, which is
      * the wrong field twice over: it means "the provider failed", and any
      * successful poll clears it — so a flag put there would be wiped by the
      * next sweep and the signal lost.
      */
-    const stalled = await step.run("scan-stalled-backfills", async () =>
-      (await stalledJobs(getDb(), STALLED_BACKFILL_MS)).map((j) => ({
-        jobId: j.id,
-        streamId: j.streamId,
-        rowsImported: j.rowsImported,
-        lastProgressAt: j.lastProgressAt,
-      })),
-    );
-    return { settledTestRuns: settled, ...retained, backlog, stalledBackfills: stalled };
+    const invariants = await step.run("scan-invariants", () => scanInvariants(getDb()));
+    if (invariants.anyFindings) {
+      // The run's return value is structured and durable; this line is what a
+      // log search finds. Same shape as `[instantly-probe]` and
+      // `[mirror-drift]`, so one grep covers every "look at this" signal.
+      console.warn(`[invariant-scan] ${JSON.stringify(invariants)}`);
+    }
+    return { settledTestRuns: settled, ...retained, backlog, invariants };
   },
 );
 
