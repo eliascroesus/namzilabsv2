@@ -6,6 +6,7 @@ import { markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize"
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
 import { getJob, runnableJobsByProvider } from "@/lib/backfill/jobs";
 import { scanInvariants } from "@/lib/health/invariants";
+import { scanWebhookEventTime } from "@/lib/webhooks/event-time";
 
 /**
  * How many providers may have a slice in flight from one dispatch tick.
@@ -129,6 +130,21 @@ export const pruneStorage = inngest.createFunction(
     // keeping up with ingest — visible here before it becomes a disk problem.
     const backlog = await step.run("measure-retention-backlog", () => retentionBacklog(getDb()));
     /**
+     * The webhook event-time scan: for every catch-hook connection, work out
+     * which payload key holds the event time and record it.
+     *
+     * OBSERVATION ONLY while `WEBHOOK_EVENT_TIME_LIVE` is unset, which is the
+     * rollout gate and the whole reason this is a separate step. Detecting a
+     * better key and using it for new events without restamping the old ones
+     * would date one metric two different ways — uniformly wrong beats
+     * incoherent — so the gate flips both halves at once, and until it does,
+     * `scripts/webhook-event-time.sql` says what each connection would pick.
+     *
+     * Reads only: a sample of stored payloads and one aggregate. No provider
+     * calls, because the payloads are already ours.
+     */
+    const eventTime = await step.run("detect-webhook-event-time", () => scanWebhookEventTime(getDb()));
+    /**
      * 10(b) — the internal invariant scan. Reads only, no provider calls.
      *
      * Every check is of the shape "something that should be moving has
@@ -151,7 +167,7 @@ export const pruneStorage = inngest.createFunction(
       // `[mirror-drift]`, so one grep covers every "look at this" signal.
       console.warn(`[invariant-scan] ${JSON.stringify(invariants)}`);
     }
-    return { settledTestRuns: settled, ...retained, backlog, invariants };
+    return { settledTestRuns: settled, ...retained, backlog, invariants, webhookEventTime: eventTime };
   },
 );
 

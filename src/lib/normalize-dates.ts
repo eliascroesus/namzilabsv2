@@ -315,27 +315,135 @@ export type DateColumnDetection = {
  * subject is cosmetic and a wrong date moves every number on the dashboard,
  * which is why this one validates and that one does not.
  */
+/**
+ * Does this named field hold dates? The two gates, shared by every caller.
+ *
+ * Exported so a sheet column and a webhook key are judged by ONE rule. They
+ * differ in how the values are gathered and in how ties are broken; they must
+ * not differ in what counts as a date, because that is the disagreement that
+ * makes a number depend on which door the data came through.
+ */
+export function qualifiesAsDateField(name: string, values: Iterable<unknown>): boolean {
+  if (name.trim() === "" || !isDateHintedName(name)) return false;
+  let seen = 0;
+  let parsed = 0;
+  for (const value of values) {
+    if (value == null || String(value).trim() === "") continue;
+    seen += 1;
+    if (normalizeDateValue(value, name) != null) parsed += 1;
+    if (seen >= DETECT_SAMPLE) break;
+  }
+  // No values at all is not a qualification: an empty field is not the date
+  // field, and a source with names and no rows has nothing to detect from.
+  return seen > 0 && parsed / seen > DETECT_THRESHOLD;
+}
+
 export function detectDateColumn(
   headers: readonly unknown[],
   rows: readonly (readonly unknown[])[],
 ): DateColumnDetection {
-  const candidates: string[] = [];
   const sample = rows.slice(0, DETECT_ROWS);
-  headers.forEach((raw, index) => {
-    const header = String(raw ?? "").trim();
-    if (header === "" || !isDateHintedName(header)) return;
-    let seen = 0;
-    let parsed = 0;
-    for (const row of sample) {
-      const cell = row?.[index];
-      if (cell == null || String(cell).trim() === "") continue;
-      seen += 1;
-      if (normalizeDateValue(cell, header) != null) parsed += 1;
-      if (seen >= DETECT_SAMPLE) break;
-    }
-    // No values at all is not a qualification: an empty column is not the date
-    // column, and a sheet with headers and no rows has nothing to detect from.
-    if (seen > 0 && parsed / seen > DETECT_THRESHOLD) candidates.push(header);
-  });
+  const candidates = headers
+    .map((raw, index) => ({ name: String(raw ?? "").trim(), index }))
+    .filter(({ name, index }) => qualifiesAsDateField(name, sample.map((row) => row?.[index])))
+    .map(({ name }) => name);
   return { column: candidates.length === 1 ? candidates[0] : null, candidates };
+}
+
+/**
+ * WHICH KEY OF AN ARBITRARY JSON PAYLOAD HOLDS THE EVENT TIME.
+ *
+ * Same two gates as a sheet column — a date-hinted name, and values that
+ * actually parse — and a different tie-break, for a reason that is about the
+ * data rather than about convenience.
+ *
+ * A sheet's column names are invented by whoever made the sheet, so "Booked on"
+ * and "Closed on" are equally plausible and choosing between them is the user's
+ * job. A webhook payload's keys are CONVENTIONAL: `occurred_at` means the thing
+ * happened then, and `updated_at` means a record was touched then. Those are not
+ * equally good answers to "when did this happen", and treating them as a tie
+ * would leave every ordinary payload permanently ambiguous — auto-detect that
+ * never fires is the broken-by-default state with extra steps.
+ *
+ * THREE TIERS, and the middle one is why a flat list will not do. `updated_at`
+ * parses cleanly and reads as date-hinted, so on a flat list it wins as often as
+ * anything else — and it is the one key guaranteed to move under you, because a
+ * record edited today would re-date an event from March.
+ *
+ *   1 EVENT     when the thing happened
+ *   2 CREATION  when the record was made — a good proxy
+ *   3 MUTATION  when the record last changed — a bad proxy, and never a silent one
+ *
+ * A lower tier NEVER beats a higher one, whatever the payload contains. Within a
+ * tier, ties are the user's to break, exactly as they are for a sheet.
+ *
+ * A MUTATION KEY IS RETURNED BUT FLAGGED. Refusing it outright would leave a
+ * payload that genuinely only carries `updated_at` on delivery time forever with
+ * no way forward; using it quietly would put a moving timestamp behind a number
+ * nobody was told about. So it comes back with `tier: "mutation"`, and the
+ * caller's job is to say so out loud.
+ */
+export const EVENT_TIME_TIERS = {
+  event: ["occurred_at", "occurredat", "timestamp", "time", "date", "event_date", "eventdate", "booked_on", "bookedon"],
+  creation: ["created_at", "createdat", "created", "date_created", "datecreated"],
+  mutation: ["updated_at", "updatedat", "modified_at", "modifiedat", "updated", "modified"],
+} as const;
+
+export type EventTimeTier = keyof typeof EVENT_TIME_TIERS | "other";
+
+export type DateKeyDetection = {
+  /** The key to date events from, or null when the tier's candidates tie. */
+  key: string | null;
+  /** Which tier it came from. "mutation" is the one a caller must announce. */
+  tier: EventTimeTier | null;
+  /** Every key that qualified IN THE WINNING TIER — the names, when it is a tie. */
+  candidates: string[];
+};
+
+/** Flatten one payload to `path -> value`, one level of nesting deep. */
+function flatten(payload: unknown): Map<string, unknown> {
+  const out = new Map<string, unknown>();
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return out;
+  for (const [k, v] of Object.entries(payload as Record<string, unknown>)) {
+    if (k.startsWith("__")) continue; // internal engine stamps, never source data
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      // ONE level. Provider payloads routinely wrap in `data`/`event`/`payload`,
+      // and the real timestamp lives inside; deeper than that is a tree walk
+      // whose candidate set grows faster than anyone can choose from.
+      for (const [k2, v2] of Object.entries(v as Record<string, unknown>)) out.set(`${k}.${k2}`, v2);
+    } else {
+      out.set(k, v);
+    }
+  }
+  return out;
+}
+
+/** The tier a key belongs to, by its LAST path segment (`data.created_at` is creation). */
+function tierOf(path: string): EventTimeTier {
+  const leaf = (path.split(".").pop() ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  for (const tier of ["event", "creation", "mutation"] as const) {
+    if ((EVENT_TIME_TIERS[tier] as readonly string[]).some((n) => n.replace(/[^a-z0-9]/g, "") === leaf)) return tier;
+  }
+  return "other";
+}
+
+export function detectDateKey(payloads: readonly unknown[]): DateKeyDetection {
+  const byKey = new Map<string, unknown[]>();
+  for (const payload of payloads.slice(0, DETECT_ROWS)) {
+    for (const [path, value] of flatten(payload)) {
+      const bucket = byKey.get(path);
+      if (bucket) bucket.push(value);
+      else byKey.set(path, [value]);
+    }
+  }
+  const qualified = [...byKey.entries()].filter(([path, values]) => qualifiesAsDateField(path.split(".").pop() ?? path, values));
+
+  // Highest tier that has anything, then ties inside it. "other" last, so a
+  // conventional name always beats an invented one.
+  for (const tier of ["event", "creation", "mutation", "other"] as const) {
+    const inTier = qualified.filter(([path]) => tierOf(path) === tier).map(([path]) => path);
+    if (inTier.length === 0) continue;
+    return { key: inTier.length === 1 ? inTier[0] : null, tier, candidates: inTier };
+  }
+  return { key: null, tier: null, candidates: [] };
 }

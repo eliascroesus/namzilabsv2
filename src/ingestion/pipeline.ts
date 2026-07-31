@@ -6,6 +6,7 @@ import { getConnector } from "@/connectors/registry";
 import { normalizeDatesDeep } from "@/lib/normalize-dates";
 import { extractIdentifiers } from "@/lib/identity/normalize";
 import { recordFields } from "@/lib/schema-registry/registry";
+import { effectiveEventTimeKey, eventTimeLive, readEventTime } from "@/lib/webhooks/event-time";
 
 export type ProcessResult = {
   /** Rows that did not exist before. */
@@ -149,12 +150,26 @@ export async function upsertEvents(db: DB, meta: EventMeta, canonical: Canonical
   return { inserted, updated, deduped: canonical.length - inserted - updated, total: canonical.length };
 }
 
+export type ProcessOptions = {
+  /**
+   * The resolved event-time answer for a schema-less source, from
+   * `connections.config.eventTime` — the only thing that knows, since a
+   * connector has no db handle. Absent means the frozen pre-feature behaviour.
+   */
+  eventTime?: { key: string | null };
+  /**
+   * Re-derive `occurred_at` from the stored payload instead of keeping what is
+   * already stored. The single pass that follows a change to `dateKey`.
+   */
+  restamp?: boolean;
+};
+
 /**
  * Process a single raw event: normalize via its connector, upsert (deduped)
  * into the canonical events table, and record a success in the delivery log.
  * Throws on failure so the durable layer (Inngest) retries with backoff.
  */
-export async function processRawEvent(db: DB, rawEventId: string): Promise<ProcessResult> {
+export async function processRawEvent(db: DB, rawEventId: string, opts: ProcessOptions = {}): Promise<ProcessResult> {
   const [raw] = await db.select().from(rawEvents).where(eq(rawEvents.id, rawEventId)).limit(1);
   if (!raw) throw new Error(`raw event ${rawEventId} not found`);
 
@@ -166,17 +181,60 @@ export async function processRawEvent(db: DB, rawEventId: string): Promise<Proce
   // reprocess — and reaching here at all would mean the webhook route's
   // stream-scoped bail had been removed.
   if (!connector.normalize) return { inserted: 0, updated: 0, deduped: 0, total: 0 };
+  /**
+   * The nominated event-time key, from the connection the caller did not name.
+   *
+   * Resolved here rather than passed in from the route, so a redelivery and a
+   * reprocess use the CURRENT answer rather than whatever was true when the
+   * payload first arrived — a stale key would restamp half a connection to the
+   * setting it just moved away from.
+   *
+   * Skipped entirely while the rollout gate is off, which is also the whole
+   * cost story: zero extra queries until somebody flips it, one indexed
+   * primary-key lookup per event afterwards.
+   */
+  const eventTime =
+    opts.eventTime !== undefined
+      ? opts.eventTime
+      : eventTimeLive()
+        ? {
+            key: effectiveEventTimeKey(
+              readEventTime(
+                (await db.select({ config: connections.config }).from(connections).where(eq(connections.id, raw.connectionId)).limit(1))[0]
+                  ?.config,
+              ),
+            ),
+          }
+        : undefined;
   const canonical = connector.normalize(raw.payload, {
     connectionId: raw.connectionId,
     headers: raw.headers,
+    eventTime,
+    fallbackOccurredAt: raw.receivedAt,
   });
 
-  // preserveOccurredAt: connectors fall back to "now" when a payload carries no
-  // timestamp, so re-processing the same raw event would drift occurred_at on
-  // every redelivery. First write wins; genuine changes still update the row.
+  /**
+   * preserveOccurredAt: connectors fall back to "now" when a payload carries no
+   * timestamp, so re-processing the same raw event would drift occurred_at on
+   * every redelivery. First write wins; genuine changes still update the row.
+   *
+   * `restamp` is the one caller that turns it off, for the one pass that follows
+   * a change to which key holds the event time. Unlike the sheet's restamp this
+   * one needs no `received_at` lookup for the rows it CAN date: the original
+   * payload is still here, so the value is re-derived exactly rather than
+   * reconstructed. A payload the key cannot date still lands on `new Date()` —
+   * which for a row being re-processed is wrong, so the caller passes
+   * `preserveOccurredAt` back on for those. See `restampWebhookEvents`.
+   */
   const result = await upsertEvents(
     db,
-    { orgId: raw.orgId, connectionId: raw.connectionId, source: raw.source, rawEventId: raw.id, preserveOccurredAt: true },
+    {
+      orgId: raw.orgId,
+      connectionId: raw.connectionId,
+      source: raw.source,
+      rawEventId: raw.id,
+      preserveOccurredAt: !opts.restamp,
+    },
     canonical,
   );
 

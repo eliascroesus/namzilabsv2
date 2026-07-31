@@ -27,6 +27,33 @@ export type VerifyArgs = {
 export type NormalizeContext = {
   connectionId: string;
   headers?: Record<string, string>;
+  /**
+   * How to date this payload, for a source whose JSON has no schema.
+   * `PollArgs.dateField`'s twin — same question, the other door.
+   *
+   * ABSENT means the pre-feature behaviour, and that is not a default so much as
+   * a freeze. Dating new events better while old ones keep their old answer puts
+   * two meanings inside one metric with nothing on screen to say so — worse than
+   * being uniformly wrong. So the whole change, parser included, sits behind
+   * this field, and the caller only supplies it once it is also going to restamp
+   * what is already stored.
+   *
+   * PRESENT means the resolved answer: `key` is the payload key to date from
+   * (one level of nesting is addressable — `data.created_at` — because provider
+   * payloads routinely wrap), or null when nothing was resolved, in which case
+   * the delivery moment is the answer and is stated as such.
+   */
+  eventTime?: { key: string | null };
+  /**
+   * What `occurred_at` should be when the payload carries no usable timestamp.
+   *
+   * The delivery moment, supplied by the caller because the CONNECTOR does not
+   * know it — `new Date()` is only the delivery moment on the first pass, and a
+   * redelivery or a reprocess stamps whenever that happened to run. Harmless
+   * while `preserveOccurredAt` pins the first write; wrong the moment anything
+   * re-derives, which is exactly what a restamp does.
+   */
+  fallbackOccurredAt?: Date;
 };
 
 export type PollArgs = {
