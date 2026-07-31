@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { catalogEntry, type FlowConfigField } from "@/connectors/catalog";
 import { listAppFieldsAction, listSourceOptionsAction, streamDateColumnAction, type AppFieldDTO } from "@/app/dashboard/flows/actions";
-import { suggestDateColumn } from "@/lib/sync/date-column";
+import type { DateColumnChoice } from "@/lib/sync/date-column";
 import type { SourceOption } from "@/connectors/types";
 import {
   AGGREGATIONS,
@@ -893,7 +893,7 @@ const sourceLabelCache = new Map<string, string>();
 function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, unknown> }) {
   const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
   const ready = typeof sourceConfig.spreadsheetId === "string" && sourceConfig.spreadsheetId !== "";
-  const [value, setValue] = useState<string | null>(null);
+  const [choice, setChoice] = useState<DateColumnChoice>({ kind: "auto" });
   const [note, setNote] = useState<string>("");
   const [columns, setColumns] = useState<SourceOption[]>([]);
   const [busy, setBusy] = useState(false);
@@ -908,10 +908,9 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
         listSourceOptionsAction(conn.id, "dateField", sourceConfig),
       ]);
       if (!live) return;
-      const headers = opts.ok ? opts.options : [];
-      setColumns(headers);
+      setColumns(opts.ok ? opts.options : []);
       if (settings.ok) {
-        setValue(settings.dateField);
+        setChoice(settings.choice);
         setNote(settings.note);
       }
     })();
@@ -922,47 +921,51 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
 
   if (!ready) return null;
 
-  const save = async (next: string) => {
+  const save = async (next: DateColumnChoice) => {
     setBusy(true);
     const res = await streamDateColumnAction(conn.id, sourceConfig, next);
     if (res.ok) {
-      setValue(res.dateField);
+      setChoice(res.choice);
       setNote(res.note);
     }
     setBusy(false);
   };
 
   /**
-   * The suggestion sits BESIDE the control, never inside it.
+   * THREE answers, and "Detect automatically" is the default rather than a
+   * feature. A sheet with an obvious date column sitting on import time until
+   * somebody notices is broken by default, so the default has to be the fix.
    *
-   * It used to pre-fill the picker, which made the control display a column
-   * while the stream had none — and a user who deliberately chose "use import
-   * time" reopened the panel to find the setting they had rejected sitting in
-   * the box, with a line underneath explaining that it was not really there. A
-   * control that has to be annotated to be believed is the wrong control.
+   * "Use import time" is a real answer, not the absence of one — picking it
+   * stops the detector for good. And auto stays selectable, because an override
+   * with no way back is a one-way door: a user who tries a column has to be able
+   * to hand the question back.
    *
-   * So it re-offers for as long as no column is chosen, and cannot be mistaken
-   * for state while doing it. That answers "does auto-detect nag forever?" with
-   * "yes, in one short line that is true" — the alternative, remembering that
-   * the picker has been used once, needs a column this batch is not adding.
+   * What the detector actually decided is in `note`, never in this control. The
+   * control shows what was ANSWERED; a guess displayed as a selection is
+   * indistinguishable from a choice the user made.
    */
-  const suggested = value == null ? suggestDateColumn(columns.map((c) => c.value)) : null;
+  const value = choice.kind === "column" ? choice.column : choice.kind === "none" ? "__none" : "__auto";
+  const pick = (v: string) =>
+    void save(v === "__auto" ? { kind: "auto" } : v === "__none" ? { kind: "none" } : { kind: "column", column: v });
 
   return (
     <Field label="Date column">
       <Select
-        value={value ?? ""}
+        value={value}
         width={W}
         disabled={busy}
-        placeholder="Use import time"
-        options={[{ value: "", label: "Use import time (no date column)" }, ...columns]}
-        onChange={(v) => void save(v)}
+        options={[
+          { value: "__auto", label: "Detect automatically", hint: "Use a column that holds real dates, if exactly one does." },
+          { value: "__none", label: "Use import time (no date column)" },
+          ...columns,
+        ]}
+        onChange={pick}
       />
       <p className="mt-1.5 text-xs text-gray-500">
         Which column holds the date each row happened on. Applies to every flow reading this sheet.
       </p>
       <p className="mt-1 text-xs text-gray-600">{note}</p>
-      {suggested && <p className="mt-1 text-xs text-gray-600">Suggested: &quot;{suggested}&quot; — choose it above to apply.</p>}
     </Field>
   );
 }

@@ -2,7 +2,7 @@ import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs,
 import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
 import { fetchJson } from "@/lib/http-client";
 import { str } from "./field-utils";
-import { normalizeDateValue } from "@/lib/normalize-dates";
+import { detectDateColumn, normalizeDateValue } from "@/lib/normalize-dates";
 
 const API = "https://sheets.googleapis.com/v4/spreadsheets";
 const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
@@ -280,15 +280,26 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
   const streamTag = args.streamHash ? `${args.streamHash}:` : "";
 
   /**
-   * The nominated date column, resolved against the header row THIS read saw.
+   * The date column: the one the user nominated, or — when nobody has answered
+   * the question for this stream — the one this read can detect.
    *
-   * `presentInHeader` is the named condition for a column that was renamed or
-   * removed. Without it that case is indistinguishable from a column full of
-   * malformed dates — both make every row undated — and the two need different
-   * fixes: one is "rename it back or re-pick", the other is "the dates are not
-   * dates". Only this function has the header row to tell them apart.
+   * DETECTION IS RECOMPUTED, never remembered. `date_field` means the user's
+   * answer and nothing else, so the sweep never writes to a column the picker
+   * owns and a sheet that gains or loses a date column is followed rather than
+   * pinned to whatever was true the first time it was read.
+   *
+   * `presentInHeader` is the named condition for a CHOSEN column that was
+   * renamed or removed. Without it that case is indistinguishable from a column
+   * full of malformed dates — both make every row undated — and the two need
+   * different fixes: one is "rename it back or re-pick", the other is "the dates
+   * are not dates". Only this function has the header row to tell them apart. A
+   * detected column is present by construction, which is why the flag says
+   * nothing interesting there.
    */
-  const dateField = args.dateField ?? null;
+  const chosen = args.dateField ?? null;
+  const detection = chosen == null && args.detectDateField ? detectDateColumn(header, dataRows) : null;
+  const dateField = chosen ?? detection?.column ?? null;
+  const source: "user" | "detected" = detection ? "detected" : "user";
   const dateColumn = dateField ? header.findIndex((h) => h === dateField) : -1;
   const presentInHeader = dateColumn >= 0;
   let dated = 0;
@@ -352,7 +363,22 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
     nextCursor,
     providerCalls,
     extraCalls,
-    dateFieldState: dateField ? { column: dateField, presentInHeader, dated, undated: undatedEventIds.size } : undefined,
+    // Reported whenever anything was ASKED — a chosen column, or a detection
+    // that ran — including when the answer is "nothing dated these rows".
+    // Omitting it there would leave "we looked and found nothing" reading as
+    // "we never looked", and the runner uses exactly that difference to decide
+    // whether a settled sheet still owes a read.
+    dateFieldState:
+      chosen != null || detection != null
+        ? {
+            column: dateField,
+            source,
+            presentInHeader,
+            dated,
+            undated: undatedEventIds.size,
+            ...(detection && detection.candidates.length > 1 ? { candidates: detection.candidates } : {}),
+          }
+        : undefined,
     undatedEventIds: dateField ? undatedEventIds : undefined,
   };
 }

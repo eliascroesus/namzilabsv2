@@ -51,8 +51,8 @@ Field rules on update:
   corrected, including by a full re-sync, which still upserts on `event_id` with the pin in force.
 
   The fix is a real value plus one exit: `source_streams.date_field` names the column that holds
-  a row's event time, and `source_streams.restamp_requested_at` marks the single sweep that writes
-  without the pin. `events.received_at` is the recoverable first-seen for rows with no usable date
+  a row's event time (or `date_field_locked = false` — the default — lets each read detect one),
+  and `source_streams.restamp_requested_at` marks the single sweep that writes without the pin. `events.received_at` is the recoverable first-seen for rows with no usable date
   — it is in neither the insert list nor the conflict-update set, so nothing has ever moved it.
   See `src/lib/sync/streams.ts` (`restampRecords`) for the three cases.
 - `raw_event_id` keeps its first value (provenance of the original ingest).
@@ -90,7 +90,7 @@ Declared in `src/connectors/catalog.ts` (`sync` field; UI copy states the class)
 
 | Class | Meaning | Connectors |
 |---|---|---|
-| **mirror** | Every sweep re-reads the ENTIRE resource, refreshes rows in place and soft-deletes rows no longer present. Stored live rows ≡ source after every sweep. Row identity = sheet row number (per stream); blank rows mirror as deleted; `occurred_at` = the stream's nominated date column, else first-seen (see below). | Google Sheets |
+| **mirror** | Every sweep re-reads the ENTIRE resource, refreshes rows in place and soft-deletes rows no longer present. Stored live rows ≡ source after every sweep. Row identity = sheet row number (per stream); blank rows mirror as deleted; `occurred_at` = the stream's date column — chosen or detected — else first-seen (see below). | Google Sheets |
 | **derived-mirror** | Numbers **computed by the provider**, re-read on a schedule and refreshed in place. Faithful to what the provider reports — including restatements of recent periods, which are normal, not edits. Reads declare a `mirrorScope` (the span they enumerate completely), so a row that disappears from inside the window is retired while history behind it is untouched. | Instantly (campaign analytics) |
 | **incremental** | Cursor-forward polling with an overlap window; nothing is stranded (windows are drained to their end, deeper windows resume next sweep). Edits older than the overlap surface on a full re-sync. | Close (5-min overlap, continuation cursor), Google Calendar (sync token, ±window bound on first sync), Calendly, Sendblue (30-day first-sweep bound), Instantly raw-emails streams |
 | **webhook-only** | No list endpoint to reconcile against: data is as complete as the webhooks that arrived. Weakest class; the connection UI must say so. | Custom webhook |
@@ -112,16 +112,45 @@ answer*, which differs in four ways worth stating plainly:
 
 ### Sheets: which column is the event time
 
-A spreadsheet row has no timestamp of its own, so the stream names one:
-`source_streams.date_field`. NULL means first-seen, which is a defensible
-answer — the UI's job is to say which of the two is in force, never to let
-first-seen pass as the event time. `date_field_state`
-(`{column, presentInHeader, dated, undated, at}`) records what the last read
-actually did, and `presentInHeader` exists because a renamed column and a column
-of malformed values both produce "every row undated" while needing opposite
-fixes.
+A spreadsheet row has no timestamp of its own, so the stream decides where one
+comes from. **Detected by default**, because a sheet with an obvious date column
+sitting on import time until somebody notices is broken by default — the same
+defect one layer up from the one this feature exists to fix.
 
-Four things about it that are easy to get wrong:
+Three states, and `date_field` alone cannot express them, which is why
+`date_field_locked` exists:
+
+| `date_field` | `locked` | Meaning |
+|---|---|---|
+| NULL | false | Nobody has answered. Every read looks for a column. **The default.** |
+| NULL | true | The user chose "use import time". Detection stays out of it. |
+| `'X'` | true | The user chose `X`. |
+
+**Detection is stored nowhere.** It is recomputed from the header row and the
+values on every read, so `date_field` keeps exactly one meaning — the user's
+answer — and the sweep never writes to a column the picker owns. What a read
+actually used goes in `date_field_state`
+(`{column, source, presentInHeader, dated, undated, candidates?, at}`), which
+already means "what happened".
+
+**Two gates, and the second is the one that matters.** A date-hinted NAME is not
+evidence: "Start", "Closed" and "Notes on" all read as date-like, and a column
+called "Closed" may hold yes/no. So a column qualifies only when a majority of
+its non-empty sampled values actually parse. Name proposes, values decide
+(`detectDateColumn`, `src/lib/normalize-dates.ts`).
+
+**Several qualifying columns is not a tie to break.** A sheet with "Booked on"
+and "Closed on" has two real answers and picking either is a coin toss the user
+cannot see, so nothing is used and both names go into the question. That is the
+only case where choosing is anybody's job.
+
+**A detection announces itself** — *Dating rows from "Booked on" (detected)* —
+because a guess nobody can see is not fixable. And a detection restamps existing
+rows exactly like a pick does: a stream that gains one would otherwise date new
+rows from the column while old rows kept their import time, disagreeing with
+themselves inside the same number.
+
+Four more things that are easy to get wrong:
 
 - **It is not `TimeConfigSchema.dateField`, and the names are unrelated.** The
   flow-level one (`TimeConfigSchema`, `FilterDateRangeSchema`, default
@@ -146,6 +175,43 @@ Four things about it that are easy to get wrong:
   scope — but any future source that BOTH declares a `mirrorScope` and honours
   `dateField` would be retiring by a boundary the user chose, so the two must be
   designed together or the window silently stops meaning what it says.
+
+### The custom webhook has the same gap, and no place to put the fix
+
+Asked directly, and the answer is yes — with one difference that matters and one
+that does not.
+
+`catch-hook.ts` does **not** stamp `new Date()` blindly the way Sheets did. It
+looks for a timestamp in seven fixed keys — `occurred_at`, `occurredAt`,
+`timestamp`, `created_at`, `createdAt`, `time`, `date` — and only falls back to
+now when none is present or parseable (`catch-hook.ts:65-67`). `processRawEvent`
+then passes `preserveOccurredAt: true` (`pipeline.ts:179`), so that fallback is
+pinned at first sight exactly as a sheet's was.
+
+So the failure is the same shape, narrower and quieter:
+
+- A payload keyed `booked_on`, `submitted_at` or `event_date` — all perfectly
+  ordinary — gets **delivery time**, permanently, and nothing anywhere says so.
+  There is no `date_field`, no `date_field_state`, no picker and no note.
+- It parses with a bare `new Date(value)` (`field-utils.ts:22`), not
+  `normalizeDateValue`. `"21/07/2026"` is Invalid Date, so is a numeric epoch as
+  a string, and there is no field-name gate. The sheet path and the webhook path
+  therefore disagree about what a date is, on the same JSON.
+- Every other connector ends in `parseDate(...) ?? new Date()` too, but for
+  Calendly/Close/Instantly/Sendblue/Calendar the key it reads is the provider's
+  own documented field, so the fallback is an edge case rather than a routine
+  outcome. Only catch-hook takes arbitrary JSON with no schema, which is what
+  makes it the one that behaves like a sheet.
+
+**Why it is not fixed here.** `webhook` is connection-scoped: `isStreamScoped`
+is false, so there is no `source_streams` row, and the whole mechanism above —
+the setting, the lock, the observation, the restamp marker — hangs off one.
+Widening the key list to `isDateHintedName` + `normalizeDateValue` is a strict
+improvement and needs no schema, but the half that makes it safe ("say which key
+it used, and let the user override") has nowhere to live until that decision is
+made. Doing the silent half alone would change how existing connections date
+their events with nothing on screen to explain it — the exact trade this feature
+rejected for sheets.
 
 ### Instantly: stated assumptions
 

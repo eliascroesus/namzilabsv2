@@ -69,9 +69,25 @@ export type PollArgs = {
    * Two flows cannot hold different opinions about when something happened.
    *
    * NULL means the connector's own answer, which for a source with real
-   * timestamps is the provider's, and for a sheet is first-seen.
+   * timestamps is the provider's, and for a sheet is first-seen — unless
+   * {@link detectDateField} is set, in which case the connector finds one.
    */
   dateField?: string | null;
+  /**
+   * "Nobody has answered the date question for this stream — find the column
+   * yourself."
+   *
+   * Set when the picker has never been used. It is the DEFAULT state, and that
+   * is the point: a sheet with an obvious date column dating its rows from the
+   * import moment until somebody notices is broken by default, and the fix has
+   * to be the default too. A connector must still report what it decided
+   * (`dateFieldState.source`), because a guess nobody can see is worse than
+   * none.
+   *
+   * Ignored when {@link dateField} is set — an explicit column is an answer, and
+   * detection must not second-guess it.
+   */
+  detectDateField?: boolean;
   /**
    * "Read even if you believe nothing changed."
    *
@@ -224,17 +240,31 @@ export type PollResult = {
    */
   importProgress?: ImportCoverage;
   /**
-   * What this read actually did with `PollArgs.dateField`.
+   * What this read actually did about a row's event time.
    *
-   * Reported rather than inferred, because the two ways it can go wrong need
+   * Reported rather than inferred, because the ways it can go differ need
    * different fixes and are indistinguishable from the outside. A renamed column
    * and a column full of malformed dates both produce "every row undated"; only
-   * the connector, which has the header row in hand, can say which happened.
+   * the connector, which has the header row in hand, can say which happened. And
+   * a DETECTED column has to announce itself — a guess the user cannot see is
+   * the failure this whole feature exists to remove.
+   *
+   * `column` is null when nothing dated the rows: no column chosen, none
+   * detected, or several detected and therefore none used (`candidates`). Say it
+   * rather than omitting the field, so "we looked and found nothing" stays
+   * distinguishable from "we never looked".
    *
    * `at` is added by the runner — the connector does not own the clock that
    * decides when a row was written.
    */
-  dateFieldState?: { column: string; presentInHeader: boolean; dated: number; undated: number };
+  dateFieldState?: {
+    column: string | null;
+    source: "user" | "detected";
+    presentInHeader: boolean;
+    dated: number;
+    undated: number;
+    candidates?: string[];
+  };
   /**
    * WHICH records the read could not date — the ids behind
    * `dateFieldState.undated`, not just the count.

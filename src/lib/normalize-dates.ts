@@ -270,3 +270,72 @@ export function normalizeDatesDeep(props: Record<string, unknown> | null | undef
   if (props == null) return {};
   return walkObject(props, 0);
 }
+
+/**
+ * Rows read for detection. Deep enough that a column left blank at the top of a
+ * sheet still gets judged on real values, bounded so a 50,000-row tab does not
+ * pay for the answer on every sweep.
+ */
+const DETECT_ROWS = 200;
+/** Values per column actually parsed. The verdict does not get better after this. */
+const DETECT_SAMPLE = 50;
+/** Share of a column's non-empty sampled values that must parse for it to qualify. */
+const DETECT_THRESHOLD = 0.5;
+
+export type DateColumnDetection = {
+  /** The one column to date rows from, or null when there is not exactly one. */
+  column: string | null;
+  /** Every column that qualified. Length > 1 is the ambiguous case, and the names are the question. */
+  candidates: string[];
+};
+
+/**
+ * Which column of a table-shaped source holds a row's event time.
+ *
+ * TWO GATES, and the second is the one that matters. A date-hinted NAME is not
+ * evidence — "Start", "Closed", "Notes on" all pass `isDateHintedName` and a
+ * column called "Closed" may hold "yes"/"no". So a column qualifies only if its
+ * actual values parse: name proposes, values decide. That is also why this is
+ * not the header-only guess it replaces, which could have nominated a column of
+ * free text and dated every row from it.
+ *
+ * A MAJORITY of non-empty sampled values, not all of them and not one. All of
+ * them makes a single typo disqualify the right column; one of them lets a
+ * stray "2026 revision" in a notes column qualify the wrong one. Rows that do
+ * not parse are still counted and shown by the caller, so an under-parse is
+ * visible where an over-parse silently invents dates.
+ *
+ * SEVERAL QUALIFYING COLUMNS IS NOT A TIE TO BREAK. A sheet with "Booked on"
+ * and "Closed on" has two real answers and picking either is a coin toss the
+ * user cannot see — so nothing is used and both names are returned for the
+ * question. This is the only case where choosing should be anybody's job.
+ *
+ * Symmetric with `firstEmailLike` in the Sheets connector, which has always
+ * scanned the same header row to find a subject. The difference is that a wrong
+ * subject is cosmetic and a wrong date moves every number on the dashboard,
+ * which is why this one validates and that one does not.
+ */
+export function detectDateColumn(
+  headers: readonly unknown[],
+  rows: readonly (readonly unknown[])[],
+): DateColumnDetection {
+  const candidates: string[] = [];
+  const sample = rows.slice(0, DETECT_ROWS);
+  headers.forEach((raw, index) => {
+    const header = String(raw ?? "").trim();
+    if (header === "" || !isDateHintedName(header)) return;
+    let seen = 0;
+    let parsed = 0;
+    for (const row of sample) {
+      const cell = row?.[index];
+      if (cell == null || String(cell).trim() === "") continue;
+      seen += 1;
+      if (normalizeDateValue(cell, header) != null) parsed += 1;
+      if (seen >= DETECT_SAMPLE) break;
+    }
+    // No values at all is not a qualification: an empty column is not the date
+    // column, and a sheet with headers and no rows has nothing to detect from.
+    if (seen > 0 && parsed / seen > DETECT_THRESHOLD) candidates.push(header);
+  });
+  return { column: candidates.length === 1 ? candidates[0] : null, candidates };
+}

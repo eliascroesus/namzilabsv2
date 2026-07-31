@@ -571,7 +571,17 @@ describe("stream-scoped spend is settled after the fact", () => {
     await close();
   });
 
-  async function sheetStream(cursor: string | null) {
+  /**
+   * `answered` is the date-column question, and it defaults to yes because
+   * these tests are about QUOTA.
+   *
+   * A stream nobody has answered for owes exactly one forced read — the sheet is
+   * settled, which is precisely when a detection would otherwise never happen —
+   * so leaving it unanswered would make every skip assertion below fail for a
+   * reason that has nothing to do with the ledger. The cost of that one read is
+   * pinned in its own test at the end.
+   */
+  async function sheetStream(cursor: string | null, answered = true) {
     process.env.ENCRYPTION_KEY = KEY;
     const [conn] = await db
       .insert(connections)
@@ -587,7 +597,14 @@ describe("stream-scoped spend is settled after the fact", () => {
     const cfg = { spreadsheetId: SHEET, range: "Tab1" };
     const [stream] = await db
       .insert(sourceStreams)
-      .values({ orgId: ORG, connectionId: conn.id, configHash: streamConfigHash(cfg, "gsheets"), config: cfg, cursor })
+      .values({
+        orgId: ORG,
+        connectionId: conn.id,
+        configHash: streamConfigHash(cfg, "gsheets"),
+        config: cfg,
+        cursor,
+        dateFieldLocked: answered,
+      })
       .returning();
     return { conn, stream };
   }
@@ -682,6 +699,30 @@ describe("stream-scoped spend is settled after the fact", () => {
 
     expect(calls).toHaveLength(2); // two sweeps, two probes — not two full reads
     expect(await ledgerCalls(conn.id)).toBe(2);
+  });
+
+  /**
+   * The one deliberate exception to the skip, and its price.
+   *
+   * A stream nobody has answered the date-column question for has to be read
+   * once even though Drive says the file is settled — a settled sheet is the
+   * normal state, so the detection would otherwise wait for an edit that may
+   * never come. It costs one extra Sheets read, ONCE: the read records what it
+   * found, and the sweep after it skips like any other.
+   */
+  it("spends one forced read on a stream whose date column has never been decided", async () => {
+    const stamp = { modifiedTime: "2026-07-01T00:00:00Z", version: "9" };
+    const { conn, stream } = await sheetStream(JSON.stringify({ stamp: `${stamp.modifiedTime}|${stamp.version}`, skips: 0 }), false);
+    const calls = serveSheet(stamp);
+
+    await syncStream(db, conn, stream, 1);
+    expect(await ledgerFor(conn.id, "sheets.values.get")).toBe(1); // read, not skipped
+
+    const [after] = await db.select().from(sourceStreams).where(eq(sourceStreams.id, stream.id));
+    expect(after.dateFieldState).not.toBeNull(); // …and the answer is recorded
+
+    await syncStream(db, conn, after, 1);
+    expect(calls.filter((u) => u.includes("/values/"))).toHaveLength(1); // the skip resumes
   });
 
   it("charges a first sync its two requests (no marker to probe against)", async () => {
