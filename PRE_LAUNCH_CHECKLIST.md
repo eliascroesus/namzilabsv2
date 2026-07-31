@@ -327,13 +327,24 @@ API shape (`data[]` + `cursor_next` via `_cursor`, `_limit` cap 50,
 `date_created__gte`), pinned in tests but never confirmed against the live API —
 the docs site is bot-walled from the build environment.
 
-**Already run once, and it found two things.** The Event Log is **oldest-first**,
-not newest-first as every fixture assumed; and the `_limit` cap probe asked for
-100, got HTTP 400 instead of a clamp, and aborted the script before C4 (cursor
-integrity) and C5 (the 30-day first-sync bound) ever ran. Both are fixed: the
-connector no longer assumes an ordering anywhere, and no single check can abort
-the run. **C4 and C5 have still never passed against the live API** — that is
-what this item is now for.
+**Already run twice, and the first run's headline finding was wrong.** It
+reported the Event Log as **oldest-first**; it is newest-first, as the docs say
+and as the re-run confirms. The check compared `Date.parse(a) >= Date.parse(b)`
+and one event's `date_created` did not parse, so every comparison against NaN
+came back false and a correctly ordered log read as unordered. The script now
+prints raw evidence — the actual timestamps, the breaking pairs — instead of a
+verdict, which is the change that made the difference visible.
+
+The first run's other finding was real: the `_limit` cap probe asked for 100, got
+HTTP 400 instead of a clamp, and aborted the script before C4 (cursor integrity)
+and C5 (the 30-day first-sync bound) ever ran. Fixed — no single check can abort
+the run. **C4 and C5 have still never passed against the live API**; that is what
+this item is now for.
+
+The connector was rewritten to assume no ordering while the wrong finding stood,
+and it was NOT reverted. Direction-free progress and previews are correct
+whichever way a provider sorts, the provider is free to change it, and the
+rewrite carried two unrelated defects out with it.
 
 **Key:** Close → Settings → Developer → API Keys → any key of the workspace you
 connect (read access is enough; the script only performs GETs).

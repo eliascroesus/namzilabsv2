@@ -341,13 +341,15 @@ export async function streamImportProgress(db: DB, streamId: string, now = new D
  * so `now - reached_floor` is the covered span only while the walk runs
  * newest-first and fills backwards from now.
  *
- * That holds for every provider the lane runs against today. It does NOT hold
- * for an oldest-first log like Close's Event Log, where slice one lands on the
- * target floor and this would read as complete immediately — the same defect
- * `spanCovered` removed from the connectors. Fixing it properly needs the
- * newest record a slice saw, which is a `newest_seen` column on `backfill_jobs`
- * and therefore a migration; until then this is a known bound on the lane, and
- * Close has never been connected so nothing depends on it yet.
+ * That holds for every provider the lane runs against today, Close's Event Log
+ * included — it is newest-first, as its documentation says and as
+ * `scripts/verify-close-pagination.ts` confirms. It would NOT hold for an
+ * oldest-first log, where slice one lands on the target floor and this reads as
+ * complete immediately: the same defect `spanCovered` removed from the
+ * connectors, which is why they no longer assume a direction and this still
+ * does. Fixing it properly needs the newest record a slice saw, which is a
+ * `newest_seen` column on `backfill_jobs` and therefore a migration; until then
+ * it is a known bound on the lane, and nothing here depends on it yet.
  */
 function coverageOf(reachedFloor: Date | null, targetFloor: Date, now: number): ImportCoverage {
   return {

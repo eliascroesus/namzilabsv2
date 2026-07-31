@@ -220,12 +220,18 @@ export type PollResult = {
    *
    * This was `{reachedBack, targetBack}`: the oldest record ingested so far,
    * against the floor being aimed at. That measures progress ONLY if the walk
-   * runs newest-first, and Close's live verification reported its Event Log as
-   * OLDEST-first. On such a log the first page lands at the floor, so
-   * `reachedBack` equals `targetBack` immediately and the note claimed full
+   * runs newest-first. On an oldest-first log the first page lands at the floor,
+   * so `reachedBack` equals `targetBack` immediately and the note claims full
    * coverage of the window while holding a fraction of its events — a number
    * announcing itself as finished while still climbing, which is the exact
    * failure the note was added to prevent.
+   *
+   * No provider here is actually ordered that way — Close's Event Log is
+   * newest-first, and a verification run that said otherwise turned out to be a
+   * bug in the check (`close.ts`, above `FIRST_RUNG_DAYS`). The shape stayed
+   * anyway: this is a CONTRACT every connector implements, the ordering is the
+   * provider's to change, and a number that is right only by coincidence is one
+   * nobody can check.
    *
    * A span cannot do that. `coveredMs` is (newest ingested − oldest ingested):
    * it starts near zero and grows toward `targetMs` whichever end the walk

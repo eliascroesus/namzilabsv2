@@ -887,10 +887,11 @@ export async function primeStream(
  * is why this can ship without the backfill lane's bookkeeping.
  *
  * The sentence carries no DIRECTION, and that is deliberate. It used to end
- * "reaching further back each sync", which is only true of a newest-first
- * source; Close's Event Log runs oldest-first and fills forward. "Widening"
- * is true of both, and a note that describes the wrong motion is the same
- * class of wrong as a number that describes the wrong quantity.
+ * "reaching further back each sync", which is only true of a source that walks
+ * newest-first. Every source here does today — but this string is rendered for
+ * all of them and a provider's ordering is the provider's to change, so
+ * "widening" is true either way. A note that describes the wrong motion is the
+ * same class of wrong as a number that describes the wrong quantity.
  */
 export function importProgressNote(progress?: { coveredMs: number; targetMs: number }): string {
   if (!progress) return "Still importing this source — the numbers below can still grow.";

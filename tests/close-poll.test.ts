@@ -195,7 +195,7 @@ describe("Close first-sync bound", () => {
     // Every request is bounded — unbounded was "the whole workspace event log".
     for (const c of calls) expect(c.get("date_created__gte")).not.toBeNull();
     // The OPENING request is the shallow rung, so the first thing an editor
-    // shows is recent even on an oldest-first log (see FIRST_RUNG_DAYS)...
+    // shows is recent whichever end the provider sorts from (see FIRST_RUNG_DAYS)...
     expect(backOf(0)).toBe(1);
     // ...and the target is still 30 days, reached in the same poll once the rung
     // drains, so a shallow rung never costs a whole sweep.
@@ -247,8 +247,9 @@ describe("Close first-sync bound", () => {
     const first = await closeConnector.poll!(pollArgs(null));
     expect(first.incomplete).toBe(true);
     // 260 events one second apart, 200 ingested → e260 down to e61, a span of
-    // 199 seconds. Two spans and not two instants, because "the oldest record
-    // reached, versus the floor" only measures progress on a newest-first log.
+    // 199 seconds. Two spans and not two instants: "the oldest record reached,
+    // versus the floor" measures progress only on a newest-first log, and a
+    // number that is right by coincidence is one nobody can check.
     expect(first.importProgress!.coveredMs).toBe(199 * 1000);
     expect(Math.round(first.importProgress!.targetMs / DAY)).toBe(30);
 
@@ -259,16 +260,24 @@ describe("Close first-sync bound", () => {
 });
 
 /**
- * OLDEST-FIRST. `scripts/verify-close-pagination.ts` run against the live API
- * reports the Event Log ordered oldest-first, contradicting the shape every
- * fixture above is built from.
+ * THE OTHER ORDERING — a hypothetical, and deliberately still tested.
  *
- * The walk itself is safe either way: it ingests every event on every page and
- * stops only on cursor exhaustion. What was not safe was everything that read
- * MEANING out of a partial walk — how much has been imported, and which records
- * a preview shows. Both assumed the first page was the newest one.
+ * Close's Event Log is newest-first, which is what every fixture above is built
+ * from. This block was written when a run of
+ * `scripts/verify-close-pagination.ts` reported oldest-first; that finding was a
+ * bug in the script (`Date.parse` of one unparseable `date_created` made every
+ * ordering comparison false), not a fact about the provider, and the script now
+ * emits raw evidence instead of verdicts.
+ *
+ * The block stays, renamed to say what it actually is. The walk itself is safe
+ * either way — it ingests every event on every page and stops only on cursor
+ * exhaustion — but everything that reads MEANING out of a partial walk was
+ * written assuming the first page is the newest one, and those assumptions are
+ * invisible in a fixture that satisfies them. This is the only place the other
+ * direction is exercised at all, so deleting it would leave the direction-free
+ * claims in `covLo` and `testFetchLatest` asserted and unverified.
  */
-describe("Close on an oldest-first Event Log", () => {
+describe("Close if the Event Log ran oldest-first", () => {
   const DAY = 86_400_000;
   const HOUR = 3_600_000;
 
@@ -304,10 +313,11 @@ describe("Close on an oldest-first Event Log", () => {
   });
 
   /**
-   * THE defect. Progress was "the oldest record ingested, versus the floor" —
-   * and on an oldest-first log the first page LANDS on the floor. So a first
-   * sweep holding 200 of 600 events reported covering the whole 30 days: a
-   * number announcing itself as finished while still climbing.
+   * THE failure the span shape exists to prevent. Progress was "the oldest
+   * record ingested, versus the floor" — and on an oldest-first log the first
+   * page LANDS on the floor. A first sweep holding 200 of 600 events would
+   * report covering the whole 30 days: a number announcing itself as finished
+   * while still climbing.
    */
   it("does not claim the whole window from a first page that starts at the floor", async () => {
     mockEventLog(spreadLog(600, 30));
@@ -452,8 +462,8 @@ describe("Close on an oldest-first Event Log", () => {
   });
 
   it("answers in one request when the page IS newest-first", async () => {
-    // The fast path has to stay fast: a descending page proves itself, so there
-    // is nothing to search for.
+    // Close's real ordering, and therefore the path that actually runs. A
+    // descending page proves itself, so there is nothing to search for.
     const newestFirst = [...spreadLog(200, 1)].reverse();
     const { calls } = mockEventLog(newestFirst);
     const latest = await closeConnector.testFetchLatest!(3, pollArgs(null));

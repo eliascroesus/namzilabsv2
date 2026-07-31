@@ -43,18 +43,43 @@ const OVERLAP_MS = 5 * 60_000;
 const FIRST_SYNC_DAYS = 30;
 
 /**
+ * THE ORDERING, settled — because this file was briefly rewritten around the
+ * wrong answer and the wrong answer is the kind that comes back.
+ *
+ * Close's Event Log is **NEWEST-first**, as its documentation says. An earlier
+ * run of `scripts/verify-close-pagination.ts` reported OLDEST-first and that
+ * finding was a bug in the script, not a fact about the provider: the check
+ * compared `Date.parse(a) >= Date.parse(b)` and one event's `date_created` did
+ * not parse, so every comparison against NaN was false and a correctly ordered
+ * log read as unordered. The script now emits raw evidence instead of verdicts,
+ * and re-run it agrees with the documentation.
+ *
+ * NOTHING BELOW WAS REVERTED, and that is deliberate. What the false finding
+ * produced was code that assumes no ordering at all, which is strictly more
+ * robust than code that assumes the right one — and it carried two real defects
+ * out with it (a 1970 cursor fallback and a first-sync serialization bug) that
+ * had nothing to do with direction. So the shapes stay; only the claims about
+ * why change. Everything here is written to be correct on a log ordered either
+ * way, and is exercised both ways in `tests/close-poll.test.ts`.
+ */
+
+/**
  * The first RUNG of a first sync's window: how recent the opening request is.
  *
- * `scripts/verify-close-pagination.ts` run against the live API reports the
- * Event Log as OLDEST-first. One request bounded at `now - 30d` therefore
- * returns the oldest events in the window and pages forward, so the first thing
- * a new Close user saw in the editor was their oldest 200 events from a month
- * ago — technically ingested, useless for building a metric, and it stayed that
- * way for as many sweeps as the walk took.
+ * One request bounded at `now - 30d` returns whichever end of that window the
+ * provider sorts from. On a newest-first log that is fine; on an oldest-first
+ * one the first thing a new Close user sees in the editor is their oldest 200
+ * events from a month ago — technically ingested, useless for building a metric,
+ * and it stays that way for as many sweeps as the walk takes.
  *
  * So a first sync opens with ONE request bounded to the last day, then steps out
- * to the full target and walks that. The rung is a request bound, not a depth
- * policy: the target is still `FIRST_SYNC_DAYS` and the walk still gets there.
+ * to the full target and walks that. Costing one request to be right either way
+ * is the trade this file makes everywhere; with the ordering now settled as
+ * newest-first the rung is insurance rather than a fix, and insurance priced at
+ * one request against a preview that shows month-old data is worth keeping.
+ *
+ * The rung is a request bound, not a depth policy: the target is still
+ * `FIRST_SYNC_DAYS` and the walk still gets there.
  *
  * ONE request, deliberately, and this is the part that took a correction. Letting
  * the rung page to exhaustion re-read everything it had covered once the walk
@@ -92,15 +117,16 @@ const FIRST_RUNG_DAYS = 1;
  *               The walk pages monotonically through that window, so everything
  *               between the two marks is held and their difference is a real
  *               span. It carries no direction: the span grows from whichever end
- *               the provider orders from, so an oldest-first log and a
- *               newest-first one both read correctly.
+ *               the provider orders from, so a newest-first log (which Close's
+ *               is) and an oldest-first one both read correctly.
  *
  *               Deliberately NOT derived from `maxSeen`. That mark spans
- *               everything ingested, the opening peek included, so on an
- *               oldest-first log it would reach from the 30-day floor to an hour
- *               ago after ONE page — announcing full coverage while holding a
- *               fraction of the events, which is the overstatement this whole
- *               shape exists to prevent.
+ *               everything ingested, the opening peek included, so it reaches
+ *               from the 30-day floor to an hour ago after the peek plus ONE
+ *               page — announcing full coverage while holding a fraction of the
+ *               events, which is the overstatement this whole shape exists to
+ *               prevent. True on either ordering: the peek alone is enough to
+ *               stretch it.
  *
  *               The peek's own span is therefore not counted, and the step-out
  *               below is the single place these marks are cleared. So the last day
@@ -157,8 +183,9 @@ function serializeCloseCursor(c: CloseCursor): string | null {
  * The span actually ingested, against the span being aimed at.
  *
  * Derived from what LANDED (oldest to newest ingested) rather than from where
- * the walk happens to have got to, because those are only the same thing on a
- * newest-first log — see PollResult.importProgress.
+ * the walk happens to have got to. Those coincide on a newest-first log, which
+ * this one is — but a progress number that is only correct because of how the
+ * provider sorts is a number nobody can check. See PollResult.importProgress.
  */
 function coverage(c: CloseCursor, target: Date): { coveredMs: number; targetMs: number } {
   return spanCovered(c.covLo ?? null, c.covHi ?? null, target.getTime());
@@ -247,13 +274,15 @@ export const closeConnector: Connector = {
    * - `hw` only advances once the window is FULLY ingested, and the overlap
    *   re-reads boundary ties (event_id dedup makes that a no-op).
    *
-   * NOTHING HERE ASSUMES AN ORDERING. This is the correction: the walk was
-   * written against a documented newest-first log, and live verification
-   * (`scripts/verify-close-pagination.ts`) reports it oldest-first. Ingesting
-   * every record on every page and stopping only on cursor exhaustion was
-   * already direction-agnostic, so no data was ever at risk — but everything
-   * that read MEANING out of a partial walk was not. See `covLo` for progress
-   * and `testFetchLatest` for the preview.
+   * NOTHING HERE ASSUMES AN ORDERING, and it stays that way now that the
+   * ordering is settled as newest-first (see the note above `FIRST_RUNG_DAYS`).
+   * Ingesting every record on every page and stopping only on cursor exhaustion
+   * never depended on direction, so no data was ever at risk either way — but
+   * everything that reads MEANING out of a partial walk did, and those are the
+   * parts worth keeping direction-free: a number that is right only because the
+   * provider sorts a particular way is a number nobody can check, and the
+   * provider is free to change it. See `covLo` for progress and
+   * `testFetchLatest` for the preview.
    */
   async poll(args: PollArgs): Promise<PollResult> {
     const key = apiKey_(args.credentials);
@@ -427,11 +456,12 @@ export const closeConnector: Connector = {
   /**
    * The newest `n` events — PROVEN newest, not assumed newest.
    *
-   * This used to be one unbounded request for the first page, on the assumption
-   * that the Event Log is newest-first. Live verification says it is
-   * OLDEST-first, which made a function named `testFetchLatest` return the
-   * oldest events in the workspace — the connect-time preview, the first thing
-   * anyone sees, showing whatever happened when the account was created.
+   * This used to be one unbounded request for the first page, on the ASSUMPTION
+   * that the Event Log is newest-first. It is (see the note above
+   * `FIRST_RUNG_DAYS`) — but a function named `testFetchLatest` that returns the
+   * oldest events in the workspace whenever that assumption stops holding is the
+   * connect-time preview, the first thing anyone sees, and there is nothing in
+   * the response that would have made the mistake visible.
    *
    * There is no `_order_by` to lean on (C7 probes for one) and no
    * `date_created__lte`, so the newest page cannot be requested directly. What
@@ -443,8 +473,10 @@ export const closeConnector: Connector = {
    *
    * So: bound at a day, and adjust. A window held whole with too few events
    * reaches further back; a window that needs paging narrows toward now until it
-   * fits — unless the page came back newest-first, in which case page one
-   * already holds the answer and one request was enough.
+   * fits — unless the page is demonstrably newest-first, in which case page one
+   * already holds the answer and one request was enough. On Close's live
+   * ordering that early exit is the usual path, so the search costs one request
+   * in practice and the narrowing is what makes it safe if that ever changes.
    *
    * Every attempt accumulates, and the newest are taken at the end from
    * everything seen. That makes the fallback safe rather than arbitrary: if the

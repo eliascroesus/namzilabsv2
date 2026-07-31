@@ -42,9 +42,11 @@ export function asObject(v: unknown): Record<string, unknown> {
  * Shared by every connector that walks history, because the mistake it prevents
  * is one any of them can make. Progress used to be reported as "the oldest
  * record reached, versus the floor" — which measures nothing unless the walk
- * runs newest-first. Close's Event Log runs OLDEST-first, so its first page
- * landed on the floor and the note claimed the whole window while holding a
- * handful of events.
+ * runs newest-first, and says "100%" on the first page of one that does not.
+ * Close's Event Log does run newest-first, so that framing happened to be right
+ * there; a progress number whose correctness depends on how a provider chose to
+ * sort is one nobody can check and the provider can invalidate without telling
+ * anyone.
  *
  * Between the oldest and newest thing actually ingested there is no direction to
  * get wrong: the span starts near zero and grows toward the target from
