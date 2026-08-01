@@ -74,10 +74,14 @@ const CASES: Case[] = [
         "fetch",
         vi.fn(async (input: string | URL | Request) => {
           const p = new URL(String(input)).searchParams;
-          const gte = p.get("date_created__gte");
+          // `date_updated` is the field this endpoint filters on. The mock
+          // honours that and nothing else, so a connector that goes back to
+          // sending `date_created__gte` — a parameter Close accepts and
+          // discards — reads as unbounded here, exactly as it would live.
+          const gte = p.get("date_updated__gte");
           const rows = newestFirst
             .filter((r) => !gte || Date.parse(r.at) >= Date.parse(gte))
-            .map((r) => ({ id: r.id, object_type: "activity.sms", action: "created", date_created: r.at }));
+            .map((r) => ({ id: r.id, object_type: "activity.sms", action: "created", date_created: r.at, date_updated: r.at }));
           const offset = p.get("_cursor") ? Number(p.get("_cursor")) : 0;
           const page = rows.slice(offset, offset + Number(p.get("_limit") ?? 50));
           return respond({ data: page, cursor_next: offset + page.length < rows.length ? String(offset + page.length) : null });

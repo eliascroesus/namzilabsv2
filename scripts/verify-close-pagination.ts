@@ -117,9 +117,9 @@ async function section<T>(label: string, fn: () => Promise<T>): Promise<T | null
  * null when the value does not parse, and callers must handle that rather than
  * compare against NaN, which is what silently inverted C2.
  */
-function evs(p: EventPage): Ev[] {
+function evs(p: EventPage, field: "date_created" | "date_updated" = "date_created"): Ev[] {
   return p.data.map((e) => {
-    const v = e["date_created"];
+    const v = e[field];
     const raw = v == null ? null : typeof v === "string" ? v : `${JSON.stringify(v)} (not a string: ${typeof v})`;
     const parsed = typeof v === "string" ? Date.parse(v) : NaN;
     return { id: String(e["id"] ?? "(no id)"), raw, ms: Number.isFinite(parsed) ? parsed : null };
@@ -185,11 +185,41 @@ async function main() {
     );
     for (const e of [...absent, ...unparseable]) console.log(`           ${showEv(e)}`);
 
+    /**
+     * ORDERING, ON BOTH FIELDS — because asking about one is how this was wrong.
+     *
+     * The docs say events are ordered latest-first by `date_updated`. Every
+     * check here used to measure `date_created`, which the provider has never
+     * claimed to sort on, and a check aimed at the wrong field cannot fail
+     * usefully no matter how carefully it is written. Consolidation (an old
+     * record keeps its `date_created` and takes a new `date_updated`) means the
+     * two do not even move together, so the comparison is the evidence.
+     */
+    const updList = evs(page, "date_updated");
+    const updOrder = orderOf(updList).order;
+    note(
+      "C2 WHICH FIELD is the log sorted by",
+      `by date_updated: ${updOrder}   |   by date_created: ${orderOf(list).order}` +
+        (updOrder === "newest-first" ? "  [matches the documented contract]" : "  [DOES NOT match the documented contract]"),
+    );
+    check(
+      "C2 page 1 is ordered latest-first by date_updated, as documented",
+      updOrder === "newest-first" || updOrder === "too-few-dates" || updOrder === "all-timestamps-equal",
+      `${updOrder} over ${dated(updList).length} dated events`,
+    );
+    const missingUpd = updList.filter((e) => e.raw === null);
+    check(
+      "C9 every event carries date_updated (the cursor field)",
+      missingUpd.length === 0,
+      `${missingUpd.length} of ${updList.length} events have no date_updated — each one cannot advance the watermark`,
+    );
+
     const { order, descBreaks, ascBreaks } = orderOf(list);
     check(
-      "C2 page 1 is consistently ordered by date_created",
+      "C2b page 1 is consistently ordered by date_created",
       order !== "MIXED",
-      `${order} (${dated(list).length} dated events; ${descBreaks.length} descending breaks, ${ascBreaks.length} ascending breaks)`,
+      `${order} (${dated(list).length} dated events; ${descBreaks.length} descending breaks, ${ascBreaks.length} ascending breaks)` +
+        `  [informational: the connector does not rely on this field being sorted]`,
     );
     if (order === "MIXED") {
       console.log("         adjacent pairs that break BOTH directions:");
@@ -210,6 +240,112 @@ async function main() {
       note("page 1 parsed span", `${iso(lo)} .. ${iso(hi)}  (${((hi - lo) / 3_600_000).toFixed(2)} hours)`);
     }
     return { page, list, order };
+  });
+
+  /**
+   * ════════════════════════════════════════════════════════════════════════
+   * SECTION 0 — THE MERGE GATE.
+   *
+   * Everything else in this script is evidence. This is a decision: the bound
+   * `src/connectors/close.ts` sends must be shown to DO something before that
+   * connector reaches main.
+   *
+   * The connector spent its whole life sending `date_created__gte`, which this
+   * endpoint does not accept and therefore discarded — so every request was
+   * unbounded while looking bounded. Close's own 30-day retention hid it. No
+   * amount of reading either the code or the docs would have settled it; only
+   * comparing a bounded response against an unbounded control does, because an
+   * ignored parameter and an honoured one are otherwise indistinguishable.
+   * ════════════════════════════════════════════════════════════════════════
+   */
+  head("SECTION 0 — DOES THE BOUND THE CONNECTOR SENDS ACTUALLY BOUND?");
+  await section("date_updated__gte control", async () => {
+    const unbounded = await get({ _limit: String(MAX_LIMIT) });
+    const ub = evs(unbounded, "date_updated");
+    const ok = dated(ub);
+    if (ok.length < 2) {
+      skip("C0 date_updated__gte bounds the window", `page 1 has ${ok.length} events with a parseable date_updated`);
+      return;
+    }
+    const lo = Math.min(...ok.map((e) => e.ms!));
+    const hi = Math.max(...ok.map((e) => e.ms!));
+    if (lo === hi) {
+      skip("C0 date_updated__gte bounds the window", "every dated event on page 1 shares one date_updated");
+      return;
+    }
+    // Strictly inside page 1's span, spelled exactly the way close.ts spells it.
+    const boundMs = lo + Math.floor((hi - lo) / 2);
+    const value = new Date(boundMs).toISOString();
+    console.log(`         bound sent (verbatim, same spelling close.ts uses): ${value}`);
+    console.log(`         unbounded page 1 date_updated span: ${iso(lo)} .. ${iso(hi)}`);
+
+    const bounded = await get({ _limit: String(MAX_LIMIT), date_updated__gte: value });
+    const bl = evs(bounded, "date_updated");
+    const ubIds = new Set(ub.map((e) => e.id));
+    const bIds = new Set(bl.map((e) => e.id));
+    const identical = ubIds.size === bIds.size && [...ubIds].every((id) => bIds.has(id));
+
+    // THE CONTROL, and the one line that decides whether this merges.
+    check(
+      "C0 the bound CHANGES the response (i.e. the parameter is not being ignored)",
+      !identical,
+      identical
+        ? `IDENTICAL id sets (${ubIds.size} events) — date_updated__gte was IGNORED. ` +
+          `DO NOT MERGE: the connector would be unbounded again, exactly as it was with date_created__gte.`
+        : `different: unbounded ${ubIds.size} ids, bounded ${bIds.size} ids, ` +
+          `${[...ubIds].filter((id) => !bIds.has(id)).length} dropped by the bound`,
+    );
+
+    const below = bl.filter((e) => e.ms != null && e.ms < boundMs);
+    check(
+      "C0b nothing below the bound comes back",
+      below.length === 0,
+      `${below.length} of ${bl.length} returned events have date_updated below ${value}`,
+    );
+    for (const e of below.slice(0, 20)) {
+      console.log(`           ${showEv(e)}   ${((e.ms! - boundMs) / 1000).toFixed(3)}s below the bound`);
+    }
+
+    // The negative control: the parameter we USED to send must be shown to do
+    // nothing, or the story about what went wrong is itself unverified.
+    const old = await get({ _limit: String(MAX_LIMIT), date_created__gte: value });
+    const oIds = new Set(evs(old).map((e) => e.id));
+    const oldIgnored = oIds.size === ubIds.size && [...oIds].every((id) => ubIds.has(id));
+    note(
+      "C0c the OLD parameter, for the record",
+      oldIgnored
+        ? `date_created__gte returned the same ${oIds.size} ids as no bound at all — confirmed discarded, which is the bug`
+        : `date_created__gte CHANGED the response (${oIds.size} vs ${ubIds.size} ids) — unexpected; re-read before concluding anything`,
+    );
+  });
+
+  /**
+   * SECTION 0b — where the docs and the API disagree, and neither wins by default.
+   *
+   * The documentation states this endpoint does not support `_limit`. The live
+   * API honours `_limit=50` and rejects 51 naming `max_limit=50`, which is not
+   * something an ignored parameter can do. `date_created__gte` was wrong because
+   * we trusted our code over the docs; `_limit` would be wrong the other way.
+   * Both are settled here by asking the API.
+   */
+  head("SECTION 0b — _limit: the docs say unsupported, the API says otherwise");
+  await section("_limit contradiction", async () => {
+    const at50 = await attempt({ _limit: "50" });
+    const over = await attempt({ _limit: String(MAX_LIMIT + 1) });
+    note(
+      "C10 _limit=51 (one past the cap)",
+      over.ok
+        ? `ACCEPTED, returned ${over.page.data.length} events — no cap enforced at this value`
+        : `REJECTED HTTP ${over.status}: ${over.body}`,
+    );
+    check(
+      "C10 _limit is honoured despite the docs saying it is unsupported",
+      at50.ok && at50.page.data.length <= MAX_LIMIT && !over.ok,
+      at50.ok
+        ? `_limit=50 returned ${at50.page.data.length}; _limit=51 ${over.ok ? "was ACCEPTED" : `was rejected (${over.status})`}. ` +
+          `A rejection naming a maximum is proof the parameter is read.`
+        : `_limit=50 itself failed: HTTP ${at50.status} ${at50.body}`,
+    );
   });
 
   // ══════════════════════════════════════════════════════════ the limit cap
@@ -485,6 +621,69 @@ async function main() {
       "C6 date_created__lte",
       `sent ${value} -> ${rows.length} events, ${above.length} ABOVE the bound` +
         (above.length === 0 ? "  [honoured: an exclusive window segment is expressible]" : "  [ignored]"),
+    );
+  });
+
+  /**
+   * PHASE 9's ONLY REAL QUESTION, and it is not "is object_type supported".
+   *
+   * The docs say `date_updated` "can optionally be used with any allowed filter
+   * combination", followed by a restricted list of supported combinations. If
+   * `object_type` cannot be combined with `date_updated__gte`, then narrowing by
+   * type costs the incremental bound — we would be trading a bounded window for
+   * a filtered unbounded one, which is a bad trade at any filtering ratio.
+   *
+   * So each filter is probed ALONE and then IN COMBINATION, and the combination
+   * is the answer. Reported, never acted on: Phase 9 is on hold until a human
+   * has read this output.
+   */
+  head("SECTION 7 — Phase 9: which filters combine with the incremental bound?");
+  await section("filter combinations", async () => {
+    const base = await get({ _limit: String(MAX_LIMIT) });
+    const baseIds = new Set(evs(base).map((e) => e.id));
+    const withDate = dated(evs(base, "date_updated"));
+    const boundValue =
+      withDate.length >= 2
+        ? new Date(
+            Math.min(...withDate.map((e) => e.ms!)) +
+              Math.floor((Math.max(...withDate.map((e) => e.ms!)) - Math.min(...withDate.map((e) => e.ms!))) / 2),
+          ).toISOString()
+        : null;
+    // Types the connector actually maps (canonicalType in close.ts) — probing a
+    // type we do not consume would answer a question nobody asked.
+    const combos: Array<[string, Record<string, string>]> = [
+      ["object_type alone", { object_type: "activity.sms" }],
+      ["action alone", { action: "created" }],
+      ["object_type + action", { object_type: "activity.sms", action: "created" }],
+    ];
+    if (boundValue) {
+      combos.push(
+        ["object_type + date_updated__gte  <-- THE ONE THAT DECIDES PHASE 9", { object_type: "activity.sms", date_updated__gte: boundValue }],
+        ["object_type + action + date_updated__gte", { object_type: "activity.sms", action: "created", date_updated__gte: boundValue }],
+      );
+    }
+    for (const [label, params] of combos) {
+      const res = await attempt({ _limit: String(MAX_LIMIT), ...params });
+      if (!res.ok) {
+        note(`  ${label}`, `REJECTED HTTP ${res.status}: ${res.body}   [combination NOT supported]`);
+        continue;
+      }
+      const rows = evs(res.page);
+      const rIds = new Set(rows.map((e) => e.id));
+      const unchanged = rIds.size === baseIds.size && [...rIds].every((id) => baseIds.has(id));
+      // Accepted-and-ignored is the failure mode this whole exercise is about,
+      // so an unchanged response is reported as loudly as a rejection.
+      note(
+        `  ${label}`,
+        `accepted, ${rows.length} events` +
+          (unchanged
+            ? "   [SAME IDS AS NO FILTER — accepted and IGNORED, which is the date_created__gte failure again]"
+            : "   [response differs from unfiltered: the filter did something]"),
+      );
+    }
+    note(
+      "  Phase 9 verdict",
+      "if `object_type + date_updated__gte` is rejected or ignored, filtering by type costs the incremental bound — do not build it",
     );
   });
 

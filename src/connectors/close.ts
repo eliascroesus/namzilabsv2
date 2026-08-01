@@ -14,96 +14,104 @@ import { asObject, parseDate, spanCovered, str } from "./field-utils";
 
 const API = "https://api.close.com/api/v1";
 
-/** Event Log page size (the endpoint's documented maximum). */
+/**
+ * Event Log page size — and the one place where the docs and the live API
+ * DISAGREE.
+ *
+ * The documentation says this endpoint does not support `_limit` at all. The
+ * live API honours `_limit=50` and rejects `_limit=51` with an error naming
+ * `max_limit=50`, which is not the behaviour of a parameter being ignored: an
+ * ignored parameter cannot reject a value. So the endpoint processes it and the
+ * docs are wrong.
+ *
+ * Kept at 50 on the strength of the OBSERVATION, not the documentation, and
+ * written down here because it is the counter-example to the rule the rest of
+ * this file now follows. `date_created__gte` was wrong because we trusted code
+ * over docs; `_limit` would be wrong if we trusted docs over the API. Neither
+ * source is authoritative alone, which is why the check in
+ * `scripts/verify-close-pagination.ts` compares them rather than picking one.
+ */
 const EVENT_LOG_LIMIT = 50;
 /** Pages walked per poll() call; deeper windows resume next sweep via the stored continuation. */
 const PAGES_PER_POLL = 4;
 /**
- * Re-read cushion below the high-water mark. Close's Events API docs recommend
- * re-scanning the latest five minutes because events can surface out of order;
- * event_id dedup makes the wider overlap free.
+ * Re-read cushion below the high-water mark.
+ *
+ * This is a CITED VENDOR RECOMMENDATION, not a number we picked. Close's Events
+ * API documentation explicitly recommends re-scanning the latest five minutes of
+ * events to avoid missing recent ones during pagination. We arrived at five
+ * minutes independently and the agreement is worth recording: it means the
+ * cushion is sized to the provider's own statement about its ordering
+ * guarantees rather than to our guess about them. `event_id` dedup makes the
+ * re-read free.
  */
 const OVERLAP_MS = 5 * 60_000;
 /**
  * How far back a FIRST sync reaches.
  *
- * Without this the first poll sent no `date_created__gte` at all — and because
- * `hw` only advances once a window drains, "the first window" was the entire
- * workspace event log. A mature account walked it 200 records at a time,
- * forever, and since every sweep inserted rows the cadence ladder never
- * demoted it: it simply ran for days. Close is the highest-volume connector
- * here and a mature workspace is the likeliest day-one account, so the
- * unbounded case was the default case.
+ * THIS BOUND HAS NEVER ONCE BEEN APPLIED, until now, and the reason is worth
+ * keeping: it was sent as `date_created__gte`, and this endpoint filters on
+ * `date_updated`. Close drops unknown query parameters silently, so every
+ * request the connector has ever issued was unbounded — and the long comment
+ * that used to sit here explained in detail why a parameter the server was
+ * discarding was load-bearing.
  *
- * Thirty days matches Sendblue (`FIRST_SYNC_DAYS` there) and is a floor on the
- * first REQUEST, not a statement about how much history we will ever hold.
- * Reaching further back is a one-time historical import — see
- * PRE_LAUNCH_CHECKLIST.md item 9a (the E.8 backfill lane).
+ * Nothing was lost by that, and the reason for THAT is luck rather than design:
+ * Close's Event Log only retains 30 days ("up to 30 days back in history"), so
+ * the provider's own retention has been doing the bounding all along, at exactly
+ * the depth we intended. The two numbers agreeing is what kept an unbounded walk
+ * from looking like one.
+ *
+ * So the value stays at 30 and its STATUS changes. It is now belt-and-braces
+ * over a limit the API enforces itself, not the thing standing between a mature
+ * workspace and a walk that runs for days. Reaching further back than the
+ * retention window is not possible from this endpoint at any depth setting.
  */
 const FIRST_SYNC_DAYS = 30;
 
 /**
- * THE ORDERING, settled — because this file was briefly rewritten around the
- * wrong answer and the wrong answer is the kind that comes back.
+ * THE ORDERING, and THE AXIS — which is the half that was wrong.
  *
- * Close's Event Log is **NEWEST-first**, as its documentation says. An earlier
- * run of `scripts/verify-close-pagination.ts` reported OLDEST-first and that
- * finding was a bug in the script, not a fact about the provider: the check
- * compared `Date.parse(a) >= Date.parse(b)` and one event's `date_created` did
- * not parse, so every comparison against NaN was false and a correctly ordered
- * log read as unordered. The script now emits raw evidence instead of verdicts,
- * and re-run it agrees with the documentation.
+ * Close's Event Log is latest-first, and the documentation is explicit about
+ * what "latest" means: *"Events are always ordered by date (latest first), i.e.
+ * the `date_updated` field."* The direction was never in doubt. The FIELD was,
+ * silently: everything here used to check ordering on `date_created`, which the
+ * provider has never claimed to sort by, and a check asking about the wrong
+ * field cannot fail usefully no matter how carefully it is written.
  *
- * NOTHING BELOW WAS REVERTED, and that is deliberate. What the false finding
- * produced was code that assumes no ordering at all, which is strictly more
- * robust than code that assumes the right one — and it carried two real defects
- * out with it (a 1970 cursor fallback and a first-sync serialization bug) that
- * had nothing to do with direction. So the shapes stay; only the claims about
- * why change. Everything here is written to be correct on a log ordered either
- * way, and is exercised both ways in `tests/close-poll.test.ts`.
+ * That mattered because of EVENT CONSOLIDATION. Several updates to one object
+ * merge into a single event which KEEPS its original `date_created` and takes a
+ * new `date_updated` — documented and intentional. So on a consolidated log the
+ * two fields do not even move together, and a `date_created` ordering check on a
+ * `date_updated`-sorted list is measuring noise.
+ *
+ * An earlier run of `scripts/verify-close-pagination.ts` also reported
+ * OLDEST-first, and that was a third thing wrong again: a single unparseable
+ * value made every `Date.parse(a) >= Date.parse(b)` comparison false. Three
+ * separate errors, all about the same list, none of which the output could
+ * distinguish — which is why that script now prints raw evidence rather than
+ * verdicts, and why the connector below still ingests every record on every page
+ * and stops only on cursor exhaustion. Nothing about the DATA depends on the
+ * ordering being what the docs say; only the preview does, and that is now a
+ * cited claim rather than an assumption.
  */
-
-/**
- * The first RUNG of a first sync's window: how recent the opening request is.
- *
- * One request bounded at `now - 30d` returns whichever end of that window the
- * provider sorts from. On a newest-first log that is fine; on an oldest-first
- * one the first thing a new Close user sees in the editor is their oldest 200
- * events from a month ago — technically ingested, useless for building a metric,
- * and it stays that way for as many sweeps as the walk takes.
- *
- * So a first sync opens with ONE request bounded to the last day, then steps out
- * to the full target and walks that. Costing one request to be right either way
- * is the trade this file makes everywhere; with the ordering now settled as
- * newest-first the rung is insurance rather than a fix, and insurance priced at
- * one request against a preview that shows month-old data is worth keeping.
- *
- * The rung is a request bound, not a depth policy: the target is still
- * `FIRST_SYNC_DAYS` and the walk still gets there.
- *
- * ONE request, deliberately, and this is the part that took a correction. Letting
- * the rung page to exhaustion re-read everything it had covered once the walk
- * stepped out, and on an account whose whole history fits inside a day that is
- * the entire dataset read twice plus an extra sweep before the window settles.
- * A single peek costs exactly one request per first sync, cannot delay the real
- * walk by more than that, and still puts recent records in front of the user
- * immediately.
- *
- * A rung is only needed at all because Close has no `date_created__lte` to bound
- * the other end — with one, a first sync could walk exclusive recent-first
- * segments and none of this would be necessary. C6 in
- * `scripts/verify-close-pagination.ts` probes for exactly that.
- */
-const FIRST_RUNG_DAYS = 1;
 
 /**
  * Poll cursor for the Close Event Log. Serialized as the plain high-water
  * date string when no page walk is in flight (back-compat with cursors stored
  * by the old single-page poll), or as JSON mid-walk:
- * - `hw`      — newest fully-ingested `date_created` from the LAST completed
+ * TWO FIELDS, TWO JOBS, and mixing them is the defect this shape now prevents.
+ * `date_updated` is when Close last touched a record — the axis the endpoint
+ * FILTERS and SORTS on, so it is the only correct axis for a watermark: a
+ * watermark on any other field is not a frontier of the thing being filtered,
+ * and consolidation (a record created weeks ago, edited today) is exactly the
+ * case that separates them. `date_created` is when the thing HAPPENED, which is
+ * what `occurred_at` means and what a person reading a date wants.
+ *
+ * - `hw`      — newest fully-ingested `date_updated` from the LAST completed
  *               window; the lower bound (with overlap) of the current window.
  * - `cont`    — the provider's `cursor_next`, resuming a partially-walked window.
- * - `maxSeen` — newest `date_created` seen so far in the current walk; becomes
+ * - `maxSeen` — newest `date_updated` seen so far in the current walk; becomes
  *               the new `hw` only once the window is fully drained.
  * - `floor`   — the first sync's lower bound, PINNED when the walk starts.
  *               Recomputing `now - FIRST_SYNC_DAYS` each sweep would creep the
@@ -112,26 +120,23 @@ const FIRST_RUNG_DAYS = 1;
  *               before `hw` exists; after that `hw - overlap` governs and this
  *               is dropped.
  * - `covLo`/`covHi`
- *               — oldest and newest `date_created` ingested by the walk of the
- *               TARGET window, which is what "covering 12 of 30 days" reports.
- *               The walk pages monotonically through that window, so everything
- *               between the two marks is held and their difference is a real
- *               span. It carries no direction: the span grows from whichever end
- *               the provider orders from, so a newest-first log (which Close's
- *               is) and an oldest-first one both read correctly.
+ *               — oldest and newest **`date_created`** ingested by this walk,
+ *               which is what "covering 12 of 30 days" reports.
  *
- *               Deliberately NOT derived from `maxSeen`. That mark spans
- *               everything ingested, the opening peek included, so it reaches
- *               from the 30-day floor to an hour ago after the peek plus ONE
- *               page — announcing full coverage while holding a fraction of the
- *               events, which is the overstatement this whole shape exists to
- *               prevent. True on either ordering: the peek alone is enough to
- *               stretch it.
+ *               ON THE OTHER AXIS FROM `hw`, deliberately, and this is the whole
+ *               reason both marks exist. "Covering 12 of 30 days" is read as *how
+ *               much of my history do I have* — a question about when things
+ *               happened. Measured on `date_updated` the same sentence would mean
+ *               *how much of the change stream have I walked*, and on a workspace
+ *               where old records get edited the two answers diverge in both
+ *               directions: a two-day span of edits can carry a year of history,
+ *               and a month of edits can carry almost none. One number, two
+ *               meanings, and nothing on screen to say which — the failure this
+ *               connector keeps producing in new forms.
  *
- *               The peek's own span is therefore not counted, and the step-out
- *               below is the single place these marks are cleared. So the last day
- *               is held and not added on: an understatement of up to a day, which
- *               is the only direction that cannot mislead.
+ *               Deliberately NOT derived from `maxSeen`, which tracks
+ *               `date_updated` and therefore cannot answer a history question at
+ *               all.
  */
 type CloseCursor = {
   hw: string | null;
@@ -183,12 +188,27 @@ function serializeCloseCursor(c: CloseCursor): string | null {
  * The span actually ingested, against the span being aimed at.
  *
  * Derived from what LANDED (oldest to newest ingested) rather than from where
- * the walk happens to have got to. Those coincide on a newest-first log, which
+ * the walk happens to have got to. Those coincide on a latest-first log, which
  * this one is — but a progress number that is only correct because of how the
  * provider sorts is a number nobody can check. See PollResult.importProgress.
+ *
+ * CLAMPED AT THE FLOOR, and this is a consequence of measuring coverage on
+ * `date_created` while bounding the request on `date_updated`. Consolidation
+ * means a record inside the 30-day CHANGE window can have been created a year
+ * ago, so the raw `covLo..covHi` span can be far wider than the window we are
+ * reporting progress against — and "covering 365 of 30 days" is not a sentence
+ * that survives being read. Records older than the floor are genuine extra
+ * history rather than an error, so they are kept and simply do not count toward
+ * a fraction they would make nonsense of.
  */
 function coverage(c: CloseCursor, target: Date): { coveredMs: number; targetMs: number } {
-  return spanCovered(c.covLo ?? null, c.covHi ?? null, target.getTime());
+  const floorMs = target.getTime();
+  const loMs = c.covLo ? Date.parse(c.covLo) || 0 : 0;
+  // Only the part of the ingested span that lies inside the window being
+  // reported on. `spanCovered` still does the measuring, so the "nothing
+  // ingested yet reads as 0, never as complete" rule stays in one place.
+  const lo = loMs > 0 && loMs < floorMs ? new Date(floorMs).toISOString() : (c.covLo ?? null);
+  return spanCovered(lo, c.covHi ?? null, floorMs);
 }
 
 /** Earlier of two provider date strings (by parsed time; unparseable loses). */
@@ -267,28 +287,36 @@ export const closeConnector: Connector = {
    * its end (Defect #2). The old single-page poll jumped the cursor to the
    * newest record it saw, stranding everything older in a burst > one page —
    * those rows were never queried by anything again. Now:
-   * - the window `date_created >= hw - overlap` is paged via the provider's
+   * - the window `date_updated >= hw - overlap` is paged via the provider's
    *   `cursor_next` until drained (up to PAGES_PER_POLL pages per call);
    * - a deeper window persists its continuation in the cursor and resumes on
    *   the next sweep — nothing is skipped, the sweep just takes another pass;
    * - `hw` only advances once the window is FULLY ingested, and the overlap
    *   re-reads boundary ties (event_id dedup makes that a no-op).
    *
-   * NOTHING HERE ASSUMES AN ORDERING, and it stays that way now that the
-   * ordering is settled as newest-first (see the note above `FIRST_RUNG_DAYS`).
-   * Ingesting every record on every page and stopping only on cursor exhaustion
-   * never depended on direction, so no data was ever at risk either way — but
-   * everything that reads MEANING out of a partial walk did, and those are the
-   * parts worth keeping direction-free: a number that is right only because the
-   * provider sorts a particular way is a number nobody can check, and the
-   * provider is free to change it. See `covLo` for progress and
-   * `testFetchLatest` for the preview.
+   * THE WINDOW IS ON `date_updated`, which is the field this endpoint actually
+   * filters on. It used to be sent as `date_created__gte` — a parameter Close
+   * does not accept and therefore silently discarded, so the "window" was the
+   * whole retained log every time. Beyond the wasted reads, the pairing was
+   * incoherent in a way that would have started losing records the moment the
+   * name was corrected on its own: a watermark taken from `date_created` is not
+   * a frontier of `date_updated`, so a record created long ago and edited
+   * recently sits on the wrong side of it. Both halves had to move together.
+   *
+   * NOTHING HERE ASSUMES AN ORDERING. Ingesting every record on every page and
+   * stopping only on cursor exhaustion never depended on direction, so no data
+   * was ever at risk either way — but everything that reads MEANING out of a
+   * partial walk did, and those are the parts worth keeping direction-free: a
+   * number that is right only because the provider sorts a particular way is a
+   * number nobody can check. See `covLo` for progress and `testFetchLatest` for
+   * the preview, which is the one place the cited ordering is relied on.
    */
   async poll(args: PollArgs): Promise<PollResult> {
     const key = apiKey_(args.credentials);
     const cur = parseCloseCursor(args.cursor);
-    // Keyed by eventId: see the ingest loop — the peek and the target walk can
-    // cover the same records inside one poll.
+    // Keyed by eventId. The overlap re-reads boundary ties within one poll, and
+    // handing the runner duplicates would make every count downstream of this
+    // poll wrong about its own work even though `upsertEvents` dedups them.
     const records = new Map<string, CanonicalEvent>();
     // Close publishes RFC `ratelimit` on EVERY response, so its own account of
     // what is left is available on the way past — no extra request, and no
@@ -309,12 +337,12 @@ export const closeConnector: Connector = {
     const hwMs = cur.hw ? Date.parse(cur.hw) : NaN;
     const floorMs = cur.floor ? Date.parse(cur.floor) : NaN;
     // A corrupt mark is DISCARDED, not merely ignored. Leaving it in place kept
-    // `cur.hw` truthy, and three separate decisions read that field rather than
-    // the parsed value: the floor pin below, the peek gate, and serialization. So
-    // the walk would use a 30-day fallback target while never pinning it — and an
-    // unpinned fallback recomputes `now - 30d` every sweep, sliding the boundary
-    // forward while the walk pages through it. The depth reached would then depend
-    // on how long the walk took, which is the exact drift `floor` exists to stop.
+    // `cur.hw` truthy, and two separate decisions read that field rather than the
+    // parsed value: the floor pin below, and serialization. So the walk would use
+    // a 30-day fallback target while never pinning it — and an unpinned fallback
+    // recomputes `now - 30d` every sweep, sliding the boundary forward while the
+    // walk pages through it. The depth reached would then depend on how long the
+    // walk took, which is the exact drift `floor` exists to stop.
     if (!Number.isFinite(hwMs)) cur.hw = null;
     const target = cur.hw
       ? new Date(hwMs - OVERLAP_MS)
@@ -322,26 +350,30 @@ export const closeConnector: Connector = {
     if (!cur.hw) cur.floor = target.toISOString();
 
     /**
-     * What is actually REQUESTED. A FRESH first sync opens one request shallower
-     * than the target (see FIRST_RUNG_DAYS); everything else asks for the target
-     * directly.
+     * ONE bound for the whole walk, and a resumed walk keeps the one it started
+     * with — a provider cursor is only valid for the query that produced it, so
+     * re-issuing a stored continuation under a different bound would be a
+     * different walk wearing the same cursor.
      *
-     * The `cur.cont` case is why the peek is gated on being fresh, and it is
-     * load-bearing rather than defensive: a provider cursor is only valid for the
-     * query that produced it, so re-issuing a stored continuation under a
-     * different `date_created__gte` would be a different walk wearing the same
-     * cursor. A resumed walk therefore keeps the bound it started with.
+     * There used to be a second, shallower opening request here (`FIRST_RUNG_DAYS`)
+     * so that a first sync put recent records in front of the user regardless of
+     * which end the provider sorted from. It is gone for two reasons, and the
+     * first is the embarrassing one: the two requests differed ONLY in the date
+     * parameter, and that parameter was being discarded — so the peek and the
+     * request it was hedging against were byte-identical, and a first sync issued
+     * the same query twice and re-read page 1. The second is that the hedge is no
+     * longer needed: the ordering is documented as latest-first by `date_updated`,
+     * so page 1 IS the recent end.
      */
-    const peeking = !cur.hw && !cur.cont;
-    let bound = peeking ? new Date(Math.max(target.getTime(), Date.now() - FIRST_RUNG_DAYS * 86_400_000)) : target;
-
+    const bound = target;
 
     let pages = 0;
     while (pages < PAGES_PER_POLL) {
       const params = new URLSearchParams({ _limit: String(EVENT_LOG_LIMIT) });
-      // Sent on EVERY request now. Omitted on a first sync, this asked for the
-      // whole workspace event log and got exactly that.
-      params.set("date_created__gte", bound.toISOString());
+      // THE FIELD THIS ENDPOINT ACTUALLY FILTERS ON. Sent as `date_created__gte`
+      // for the life of this connector until now, which Close accepts and
+      // discards — an unbounded request every time, wearing a bound.
+      params.set("date_updated__gte", bound.toISOString());
       if (cur.cont) params.set("_cursor", cur.cont);
 
       let data: { data: Array<Record<string, unknown>>; cursor_next?: string | null };
@@ -378,51 +410,33 @@ export const closeConnector: Connector = {
         throw e;
       }
 
-      // The high-water mark counts EVERYTHING ingested, because it becomes the
-      // next window's floor and must not sit below data already held. Coverage
-      // is measured per bound — see CloseCursor.covLo.
+      /**
+       * TWO MARKS, TWO AXES, in one pass — see {@link CloseCursor}.
+       *
+       * `maxSeen` tracks `date_updated` because it becomes the next window's
+       * floor and that window is filtered on `date_updated`; a floor taken from
+       * any other field is not a frontier of the thing being filtered, and would
+       * put a record created long ago and edited recently on the wrong side of
+       * it. `covLo`/`covHi` track `date_created` because they are reported to a
+       * person as "covering N of 30 days", which is a question about when things
+       * happened.
+       *
+       * A record missing either field contributes to neither mark rather than
+       * to both — `laterDate`/`earlierDate` already drop unparseable values, and
+       * a record that cannot say when it changed must not be allowed to advance
+       * a watermark past records that can.
+       */
       for (const event of data.data) {
         const record = mapEvent(event, args.connectionId);
-        // Keyed, not appended: the peek and the target walk overlap, and on an
-        // account whose history fits inside the peek they overlap entirely.
-        // `upsertEvents` would dedup these anyway — handing it duplicates just
-        // makes every count downstream of this poll wrong about its own work.
         records.set(record.eventId, record);
-        const at = str(event["date_created"]) ?? null;
-        cur.maxSeen = laterDate(cur.maxSeen, at);
-        cur.covLo = earlierDate(cur.covLo ?? null, at);
-        cur.covHi = laterDate(cur.covHi ?? null, at);
+        const changedAt = str(event["date_updated"]) ?? null;
+        const happenedAt = str(event["date_created"]) ?? null;
+        cur.maxSeen = laterDate(cur.maxSeen, changedAt);
+        cur.covLo = earlierDate(cur.covLo ?? null, happenedAt);
+        cur.covHi = laterDate(cur.covHi ?? null, happenedAt);
       }
 
       const next = data.cursor_next ?? null;
-      if (bound.getTime() > target.getTime()) {
-        // The peek is done — one request, whatever it returned. Step out to the
-        // full target and keep walking WITHIN this poll: ending the sweep here
-        // would put the real window a whole cadence interval away, and on a
-        // quiet account the peek is empty, so the first Test would show nothing
-        // at all — worse than showing month-old events.
-        //
-        // Not charged against the page budget, deliberately: one request per
-        // first sync, and charging it would shorten every first walk of the
-        // actual window by a page.
-        bound = target;
-        cur.cont = null;
-        /**
-         * THE ONLY PLACE the coverage marks are cleared, and the invariant that
-         * makes them mean anything: every return path below reports the span of
-         * the TARGET walk, because this is the one bound whose marks do not
-         * survive to a return.
-         *
-         * Without it the peek's newest record (an hour old) pairs with the target
-         * bound's oldest (the 30-day floor) and the reported span becomes the
-         * whole window after a single page — while the days in between are not
-         * held at all. That is the overstatement `covLo` exists to prevent,
-         * arriving by a different route than `maxSeen`.
-         */
-        cur.covLo = null;
-        cur.covHi = null;
-        continue;
-      }
       if (!next || data.data.length === 0) {
         // The target window is drained: the high-water mark advances to the
         // newest ingested, and the floor/progress bookkeeping is no longer
@@ -454,67 +468,44 @@ export const closeConnector: Connector = {
   },
 
   /**
-   * The newest `n` events — PROVEN newest, not assumed newest.
+   * The newest `n` events, in ONE request.
    *
-   * This used to be one unbounded request for the first page, on the ASSUMPTION
-   * that the Event Log is newest-first. It is (see the note above
-   * `FIRST_RUNG_DAYS`) — but a function named `testFetchLatest` that returns the
-   * oldest events in the workspace whenever that assumption stops holding is the
-   * connect-time preview, the first thing anyone sees, and there is nothing in
-   * the response that would have made the mistake visible.
+   * This was a six-request search that narrowed and widened a window until it
+   * could PROVE which end of the log it was holding, because the ordering was an
+   * assumption and a preview that silently shows the oldest events in the
+   * workspace is the first thing a new user sees. The proof machinery is gone,
+   * and what replaced it is a citation rather than a shortcut: Close documents
+   * that events are *"always ordered by date (latest first), i.e. the
+   * `date_updated` field"*, so page 1 is the recent end and asking for it is
+   * enough.
    *
-   * There is no `_order_by` to lean on (C7 probes for one) and no
-   * `date_created__lte`, so the newest page cannot be requested directly. What
-   * CAN be established from a response is this: when a bounded request comes
-   * back with `cursor_next` null, that one page IS the entire window — every
-   * event since the bound, in whatever order. Since every window here ends at
-   * `now`, the newest `n` of a fully-held window are the newest `n` overall,
-   * whichever way the provider sorted them.
+   * The search was also never doing what it claimed. Every one of its requests
+   * carried `date_created__gte`, which this endpoint discards — so all six were
+   * the same unbounded request, and the "window" it believed it was narrowing
+   * never moved. It could not have detected a wrong ordering; it could only have
+   * spent six calls agreeing with itself.
    *
-   * So: bound at a day, and adjust. A window held whole with too few events
-   * reaches further back; a window that needs paging narrows toward now until it
-   * fits — unless the page is demonstrably newest-first, in which case page one
-   * already holds the answer and one request was enough. On Close's live
-   * ordering that early exit is the usual path, so the search costs one request
-   * in practice and the narrowing is what makes it safe if that ever changes.
-   *
-   * Every attempt accumulates, and the newest are taken at the end from
-   * everything seen. That makes the fallback safe rather than arbitrary: if the
-   * search runs out of attempts, it returns the newest events it managed to
-   * reach, which is the closest honest answer available.
+   * TWO AXES SHOW UP HERE TOO. The provider returns the page sorted by
+   * `date_updated`; the preview then sorts by `date_created`, because "latest
+   * records" to a person means the things that happened most recently, not the
+   * ones edited most recently. On a consolidated log those differ, and the
+   * person is right.
    */
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
     const key = apiKey_(args.credentials);
     const want = Math.max(1, Math.min(n, EVENT_LOG_LIMIT));
-    const seen = new Map<string, Record<string, unknown>>();
-    let span = PREVIEW_START_MS;
-
-    for (let attempt = 0; attempt < PREVIEW_MAX_CALLS; attempt++) {
-      const params = new URLSearchParams({
-        _limit: String(EVENT_LOG_LIMIT),
-        date_created__gte: new Date(Date.now() - span).toISOString(),
-      });
-      const data = await fetchJson<{ data: Array<Record<string, unknown>>; cursor_next?: string | null }>(
-        `${API}/event/?${params.toString()}`,
-        { headers: { authorization: basicAuth(key) } },
-      );
-      for (const event of data.data) seen.set(String(event["id"]), event);
-
-      if (!data.cursor_next) {
-        // The whole window, in hand. Enough events (or as deep as a preview goes)
-        // means the newest `want` of them are settled.
-        if (data.data.length >= want || span >= PREVIEW_MAX_MS) break;
-        span = Math.min(PREVIEW_MAX_MS, span * 4);
-        continue;
-      }
-      // Paged, so this page is not the window. Newest-first means it is still
-      // the newest events; anything else means narrow and try again.
-      if (isNewestFirst(data.data)) break;
-      if (span <= PREVIEW_MIN_MS) break;
-      span = Math.max(PREVIEW_MIN_MS, Math.floor(span / 4));
-    }
-
-    return [...seen.values()]
+    const params = new URLSearchParams({
+      _limit: String(EVENT_LOG_LIMIT),
+      // Bounded at the retention window: the endpoint holds nothing older, so
+      // this asks for everything there is and makes the request self-describing.
+      date_updated__gte: new Date(Date.now() - FIRST_SYNC_DAYS * 86_400_000).toISOString(),
+    });
+    const data = await fetchJson<{ data: Array<Record<string, unknown>>; cursor_next?: string | null }>(
+      `${API}/event/?${params.toString()}`,
+      { headers: { authorization: basicAuth(key) } },
+    );
+    return data.data
+      .slice()
       .sort((a, b) => dateMs(b) - dateMs(a))
       .slice(0, want)
       .map((event) => mapEvent(event, args.connectionId));
@@ -540,29 +531,20 @@ export const closeConnector: Connector = {
   },
 };
 
-/** Where the preview's bounded search starts, and how far it may move. */
-const PREVIEW_START_MS = 86_400_000;
-const PREVIEW_MIN_MS = 5 * 60_000;
-const PREVIEW_MAX_MS = FIRST_SYNC_DAYS * 86_400_000;
-/** Requests the preview may spend before answering with the best it reached. */
-const PREVIEW_MAX_CALLS = 6;
-
+/** When a record says it HAPPENED — the axis a preview is sorted on. */
 const dateMs = (event: Record<string, unknown>): number => Date.parse(str(event["date_created"]) ?? "") || 0;
 
 /**
- * Whether a page is DEMONSTRABLY newest-first.
+ * Map one Event Log entry to a canonical event (shared by poll + preview).
  *
- * False for fewer than two dates and for an all-identical page: both are
- * consistent with either ordering, and the caller uses a true answer to stop
- * searching — so "cannot tell" has to read as "keep looking", never as yes.
+ * `occurredAt` is `date_created` and stays there. It is the one field in this
+ * connector that must NOT follow the cursor onto `date_updated`: a record's
+ * event time is when the thing happened, and Close's consolidation is explicit
+ * that an edited record keeps its original `date_created` and takes a new
+ * `date_updated`. Dating rows by the latter would move a lead's creation to
+ * whenever somebody last touched it — every metric built on "leads per day"
+ * would restate itself as people tidied up old records.
  */
-function isNewestFirst(rows: Array<Record<string, unknown>>): boolean {
-  const ts = rows.map(dateMs).filter((t) => t > 0);
-  if (ts.length < 2 || ts[0] === ts[ts.length - 1]) return false;
-  return ts.every((t, i) => i === 0 || ts[i - 1] >= t);
-}
-
-/** Map one Event Log entry to a canonical event (shared by poll + preview). */
 function mapEvent(event: Record<string, unknown>, connectionId: string): CanonicalEvent {
   const objectType = str(event["object_type"]) ?? "object";
   const action = str(event["action"]) ?? "event";
