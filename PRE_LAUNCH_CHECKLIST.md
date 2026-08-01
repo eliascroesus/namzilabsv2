@@ -442,6 +442,30 @@ So it prints four things and stops:
 pinned from documented shape only. The same run confirms your stored API key is
 v2-era (v1 keys stopped working Jan 19, 2026).
 
+### ⚠ "newest-first" is now known to be LOAD-BEARING, and is still unverified
+
+`tests/connector-contract.test.ts` pins what that assumption is worth. Instantly
+sends **no date parameter at all** — `limit` and `campaign_id` only — and applies
+its window in its own loop, stopping the walk as soon as one whole page falls
+below the floor (`instantly.ts`, `pageAllBelowFloor`). On a newest-first list
+that is right and cheap. On a list ordered any other way, the FIRST page is the
+oldest records, the walk stops before reaching anything inside the window, and
+the high-water mark does not advance — so the next sweep repeats it.
+
+**The result is not a partial import. It is no import, forever, with no error.**
+The contract lane demonstrates exactly this against a reversed log, so the
+dependence is a pinned fact rather than a worry.
+
+The same shape is in `sendblue.ts`. **Sendblue is parked** and this is recorded
+for completeness, not as work.
+
+So this item now has a second job: **establish which field Instantly orders by,
+and in which direction, by comparing responses rather than by reading the docs.**
+Close's ordering claim was right about the direction and wrong about the FIELD
+for months, and no amount of reading found it — only a control request did. Until
+this runs, Instantly's `raw_emails` stream rests on an assumption nobody has
+tested against the live API.
+
 **Key:** Instantly → Settings → Integrations → API → create/copy a **v2** API
 key.
 
@@ -527,6 +551,60 @@ the writer moves only after a clean soak.
 
 **Keys/env:** these are Vercel (or hosting) environment variables on the
 production deployment. `DATABASE_URL` is unchanged throughout.
+
+### Before you start: what can and cannot be undone
+
+**Nothing this rollout does persists in the database.** No migration, no schema
+change, and no stored row records which driver wrote it. Rows written while the
+pool driver is active are ordinary rows; the driver changes how writes *arrive*
+(atomically or not), never what they look like afterwards.
+
+Three specifics, checked in the code rather than assumed:
+
+1. **Advisory locks cannot be stranded.** Every lock this codebase takes is
+   `pg_try_advisory_xact_lock` / `pg_advisory_xact_lock` — **transaction**-scoped,
+   not session-scoped. Postgres releases them on commit, rollback or disconnect.
+   There is no path where a crashed sweep leaves a stream locked forever, which
+   is the failure people reasonably fear here. (Session-scoped locks *would* have
+   that failure; none are used.)
+2. **Turning locks ON cannot strand data.** When a stream's lock is already held,
+   `withStreamWriteLock` returns `acquired: false` and the caller skips the write
+   entirely — it does not advance a cursor or count the sweep as done
+   (`streams.ts:561`, and the restamp marker is set only on the branch that
+   actually wrote). So contention costs a sweep, never a record.
+3. **The data written under pool stays readable under http.** Atomicity is the
+   only difference.
+
+**The one thing that is NOT instant, and the docs above used to imply it was:**
+the driver handle is cached at module scope (`cachedDefault` / `cachedRead` in
+`src/db/client.ts`). A warm serverless container keeps whatever driver it booted
+with, so **changing the variable does nothing to instances already running.**
+Rolling back means unset the variable **and redeploy**. Budget for that: "instant
+rollback" is a redeploy, not a toggle.
+
+**The one thing that can bite while it is happening:** connection count.
+`new Pool({ connectionString })` is created with no `max` and no idle timeout, so
+each container can hold up to node-postgres's default of 10 sockets, and nothing
+calls `pool.end()`. `reconcile-connection` is capped at 1 *per connection* and
+not globally, so live containers scale with how many connections are syncing.
+Under fan-out that is (containers × up to 10) sockets against Neon's ceiling.
+It is recoverable — redeploy to http and the sockets drain — but it is the
+failure that looks like an outage rather than a warning, and it is the reason
+reads soak first.
+
+**Watch, in this order, at every step:** Neon's connection count, then
+`WebSocket`/`ECONNRESET`/`too many connections` in the logs, then latency.
+
+### ⚠ Run step 4d BEFORE 4c, not after
+
+The order printed below for years was 4c (flip the writer) then 4d (verify the
+pool driver works). That is backwards: it puts production writes on a driver
+before checking the driver functions against this database URL.
+`scripts/verify-pool-driver.ts` builds its own pool from `DATABASE_URL` and does
+not read the app's `DB_DRIVER`, so **it can and should run first.** The most
+common failure it catches — a URL pointing at a transaction-mode pooler, which
+breaks session semantics and therefore advisory locks — is exactly the thing you
+want to learn before the writer depends on it, not after.
 
 **Step 4a — flip reads.** Set on production:
 

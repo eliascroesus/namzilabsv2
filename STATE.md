@@ -96,6 +96,13 @@ connection with a healthy webhook widens to the 60-minute backstop.
 - **Health checks** — nightly invariant scan (streams that stopped being polled,
   connections failing on a streak, wedged backfills, unresolved dead letters,
   empty mirrors) and a per-sweep mirror row-count check.
+- **The connector contract lane** (`tests/connector-contract.test.ts`) — every
+  windowed connector is run against a declaration of what it filters on, what it
+  advances its cursor on, and whether it depends on the provider's ordering.
+  Each declaration is asserted in both directions, so a stale one fails rather
+  than rots. It is the CI half of the gate in `docs/CONNECTOR_SPEC_PROPOSAL.md`;
+  it proves the code agrees with what we believe, and only the live lane tests
+  the belief.
 - **Parse-drift observation** — every provider timestamp is checked against both
   date parsers and disagreements log as `[parse-drift]`. Nothing changes as a
   result; it exists to find out whether a provider has ever sent one of the
@@ -154,7 +161,7 @@ Three things to know before it moves:
 | Blocked | Waiting on |
 |---|---|
 | **Declaring Close's and Sendblue's real rate limits (5b)** | A day of production traffic now that Close is connected (checklist item 7). Both fall through to `DEFAULT_RPM = 60` → 42/min (31 background), a guess no provider published. Close returns real `ratelimit` headers on every response and the connector already parses them, so the evidence accumulates on its own — it just has to accumulate. |
-| **Instantly's contract check** | A live key (checklist item 2). |
+| **Instantly's contract check** | A live key (checklist item 2). Now carries a second question: its `raw_emails` walk sends NO date parameter and stops when a page falls below its floor, so it silently imports **nothing at all** on a log that is not newest-first. `tests/connector-contract.test.ts` pins that dependence; only a live run can say whether the assumption holds. |
 | **`DB_DRIVER=pool`** | A read-path soak with `DB_DRIVER_READ=pool` first (checklist item 4 / LAUNCH_DAY D4 → F3). Until then advisory locks and `db.transaction` are inert, which is why one test stands in for lock contention rather than producing it. |
 | **The "cursor stopped advancing" invariant** | A column. `sync_state.cursor` holds only the current value and is rewritten every poll, so standing still is unobservable from stored state, and inferring it from `occurred_at` would flag every quiet account. Needs a migration; the CI stranding contract catches the same class meanwhile. Written up in `docs/DATA_MODEL.md`. |
 
@@ -222,7 +229,7 @@ grep for `-drift\|-scan\|-probe` covers every "look at this" signal.
 ## Verification bar
 
 `pnpm typecheck && pnpm test && pnpm build && pnpm check:orphans`, all green,
-before anything ships. Currently **841 tests / 68 files**. Behavioural changes
+before anything ships. Currently **847 tests / 69 files**. Behavioural changes
 are sabotage-verified: break the thing, confirm its own test fails and no other.
 `check:orphans` fails the build on an exported function no production code
 calls — a feature only its own tests call is not shipped.
