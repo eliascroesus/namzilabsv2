@@ -577,7 +577,37 @@ set from here on.
 
 ---
 
-## 5. One-time legacy-row reconciliation (AFTER deploy, BEFORE any backfill/replay)
+## 5. One-time legacy-row reconciliation — ✅ DONE BY WIPE (2026-07-29)
+
+**Resolved without running the script.** The 29 July wipe removed every row that
+matched, so the target set is empty. Confirmed against the live database:
+
+```sql
+-- Ghost rows: a sync generation but no stream identity, on a stream-scoped
+-- source. Zero rows = nothing for the reconciliation to retire.
+SELECT count(*) FROM events
+WHERE sync_generation >= 1
+  AND stream_hash IS NULL
+  AND source IN ('gsheets', 'gcal', 'calendly', 'instantly');
+--> 0
+```
+
+Live state at confirmation: `close` 400 rows / 0 with `stream_hash` (correct —
+Close is connection-scoped, so a NULL hash is its normal shape and not a ghost),
+`gcal` 398/398, `gsheets` 144/144, `calendly` 25/25. Every stream-scoped row
+carries a hash; nothing is stranded.
+
+**What this unblocks:** backfills and replays, which were gated on this step.
+`scripts/reconcile-sendblue-ids.ts` and the Action remain in the repo — they are
+idempotent, report `Nothing to do` on a clean database, and are the right tool if
+pre-unified-writer rows ever reappear from a restored branch.
+
+**Re-run the query above before trusting this**, if the database has been
+restored from a Neon branch older than 29 July: a restore brings the ghosts back
+with it.
+
+<details>
+<summary>Original instructions, kept for the restore case</summary>
 
 **Why:** rows written before the unified writer can sit on stream-scoped
 connections (Sheets, Calendar, Calendly) with no stream identity
@@ -645,6 +675,10 @@ the script is idempotent and batched, so re-running (or resuming an
 interrupted run) is always safe and never double-deletes. If counts look
 wildly larger than expected, stop and inspect: rows are only soft-deleted, so
 nothing is lost, and `deleted_at` can be cleared for a mistaken batch.
+
+---
+
+</details>
 
 ---
 

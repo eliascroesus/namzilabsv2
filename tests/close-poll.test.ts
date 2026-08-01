@@ -451,6 +451,77 @@ describe("Close first-sync bound", () => {
 });
 
 /**
+ * WHAT EACH EVENT TYPE IS CALLED.
+ *
+ * Naming, not fetching: an unmapped pair falls through as `objectType.action`
+ * and is already filterable, so these assertions are about whether a person can
+ * find the thing, not whether it is stored.
+ */
+describe("Close event type names", () => {
+  /** One event of an arbitrary type, dated now-ish so it lands in the window. */
+  const typed = (objectType: string, action: string): Ev => {
+    const at = new Date(T0 + 60_000).toISOString().replace("Z", "+00:00");
+    return { id: `${objectType}.${action}`, object_type: objectType, action, date_created: at, date_updated: at };
+  };
+
+  const typeOf = async (objectType: string, action: string): Promise<string> => {
+    mockEventLog([typed(objectType, action)]);
+    const res = await closeConnector.poll!(pollArgs(null));
+    return res.records[0].eventType;
+  };
+
+  it("names the call lifecycle so dials can be compared against connects", async () => {
+    expect(await typeOf("activity.call", "created")).toBe("call_logged");
+    expect(await typeOf("activity.call", "answered")).toBe("call_connected");
+    expect(await typeOf("activity.call", "completed")).toBe("call_completed");
+  });
+
+  it("names the meeting lifecycle so booked can be compared against held", async () => {
+    expect(await typeOf("activity.meeting", "scheduled")).toBe("meeting_scheduled");
+    expect(await typeOf("activity.meeting", "created")).toBe("meeting_logged");
+    expect(await typeOf("activity.meeting", "completed")).toBe("meeting_held");
+  });
+
+  /**
+   * THE COLLISION THAT IS NOT ALLOWED TO HAPPEN.
+   *
+   * Calendly emits `booked`. Giving Close's scheduled meetings the same name
+   * would let one flow count meetings across both sources — and since nothing
+   * here can tell a Calendly meeting from the Close activity logged for the same
+   * meeting, it would count that meeting TWICE, silently, at a number that looks
+   * entirely plausible. Pinned as an assertion because it is a decision somebody
+   * will otherwise "tidy up" into consistency.
+   */
+  it("does NOT reuse Calendly's `booked`, because nothing here could dedupe the two", async () => {
+    expect(await typeOf("activity.meeting", "scheduled")).not.toBe("booked");
+  });
+
+  it("passes an unmapped pair through verbatim rather than inventing a name", async () => {
+    // A reschedule and a typo fix are the same event, so there is no honest name
+    // for it — and unmapped still means stored and filterable.
+    expect(await typeOf("activity.meeting", "updated")).toBe("activity.meeting.updated");
+    expect(await typeOf("custom_object", "whatever")).toBe("custom_object.whatever");
+  });
+
+  it("keeps the mappings the census found nothing for", async () => {
+    // 0 of 500 says this workspace does not use tasks, not that nobody does.
+    expect(await typeOf("task", "completed")).toBe("task_completed");
+  });
+
+  it("agrees between the poll and the webhook path", async () => {
+    // `normalize` and `mapEvent` both route through canonicalType. If they ever
+    // stop agreeing, the same real-world event gets two names depending on how
+    // it arrived — and both rows survive, because the id does not carry the type.
+    const [rec] = closeConnector.normalize!(
+      { event: { id: "w1", object_type: "activity.call", action: "answered", date_created: new Date(T0).toISOString() } },
+      { connectionId: "c1" },
+    );
+    expect(rec.eventType).toBe("call_connected");
+    expect(rec.eventId).toBe("close:c1:w1");
+  });
+});
+
+/**
  * COVERAGE IS ON THE OTHER AXIS FROM THE CURSOR, and this block is why.
  *
  * "Covering 12 of 30 days" is read as *how much of my history do I have* — a

@@ -269,13 +269,53 @@ function laterDate(a: string | null, b: string | null): string | null {
  * large enough to be worth any of that.
  */
 
-/** Map Close event log object_type + action to a canonical event type. */
+/**
+ * Map Close event log object_type + action to a canonical event type.
+ *
+ * NAMING, NOT FETCHING. An unmapped pair falls through to `objectType.action`
+ * verbatim, so every type Close sends is already stored and already filterable —
+ * `activity.meeting.completed` works in a Filter step today. What a name buys is
+ * that somebody can find it, and that it reads as the thing it measures.
+ *
+ * The additions come from a census of 500 live events (SECTION 7c of
+ * `scripts/verify-close-pagination.ts`), which found the calls-and-meetings
+ * lifecycle sitting unnamed while a mapped pair — `task.completed` — appeared
+ * ZERO times. Sales teams measure dials against connects and meetings booked
+ * against meetings held; neither comparison was expressible without knowing
+ * Close's raw vocabulary.
+ *
+ * `activity.call.created` was `"call"` and is now `call_logged`. A bare "call"
+ * cannot sit next to `call_connected` and `call_completed` without reading like
+ * the total of them, which it is not.
+ *
+ * DELIBERATELY NOT ALIGNED WITH CALENDLY. `activity.meeting.scheduled` is
+ * `meeting_scheduled` and not `booked`, even though Calendly emits `booked` and
+ * a shared name would let one flow count meetings across both sources. Nothing
+ * in this system can tell a Calendly meeting from the Close activity logged for
+ * the same meeting, so a shared name does not merge them — it counts them twice,
+ * silently, and the number looks plausible.
+ *
+ * `activity.meeting.updated` stays unmapped ON PURPOSE: a reschedule and a typo
+ * correction are the same event, so no honest name exists for it.
+ * `task.completed` stays mapped despite 0/500 — a census of one workspace says
+ * that workspace does not use tasks, not that nobody does, and an unused mapping
+ * costs nothing.
+ */
 function canonicalType(objectType: string, action: string): string {
   const key = `${objectType}.${action}`;
   const map: Record<string, string> = {
     "activity.sms.created": "sms_sent",
-    "activity.call.created": "call",
     "activity.email.created": "email_sent",
+    // The call lifecycle: logged → connected → finished. Dials against connects
+    // is the ratio; without the middle one it cannot be asked.
+    "activity.call.created": "call_logged",
+    "activity.call.answered": "call_connected",
+    "activity.call.completed": "call_completed",
+    // The meeting lifecycle. `scheduled` is booked ahead of time; `created` is
+    // logged after the fact; `held` is the one that converts.
+    "activity.meeting.scheduled": "meeting_scheduled",
+    "activity.meeting.created": "meeting_logged",
+    "activity.meeting.completed": "meeting_held",
     "lead.created": "lead_created",
     "opportunity.created": "opportunity_created",
     "task.completed": "task_completed",

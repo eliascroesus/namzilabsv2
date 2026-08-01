@@ -816,6 +816,63 @@ A flow whose graph still references a deleted connection does not crash —
 `appSource` returns null and the step renders empty, and `appConds` filters on a
 connection id that matches nothing. Zero, not an error.
 
+## `raw_events` holds webhook payloads ONLY — so reprocess cannot restate a poll
+
+`storeRawEvent` has exactly one caller in the codebase: the inbound webhook route
+(`src/app/api/webhooks/[connectionId]/route.ts`). **Polling never stores a raw
+payload.** Every poll-derived row is normalized on the way past and the provider's
+JSON is discarded.
+
+The consequence is not obvious and matters more than the fact:
+**`reprocessConnection` — "re-run normalization from stored raw events, no
+provider calls" — can restate webhook-derived rows and NOTHING ELSE.** For
+Calendly, Close, Instantly, Sheets and Calendar, whose rows arrive by poll, a
+reprocess has no input to work from and changes nothing at all. It does not
+error; there is simply nothing there.
+
+So there are two different repair tools and they cover disjoint sets:
+
+| to restate | use | works because |
+|---|---|---|
+| webhook-derived rows | **Reprocess** | the payload was kept |
+| poll-derived rows | **Full re-sync** | the provider still has the record |
+
+**Which one a change needs is a design constraint, not an afterthought.** A
+change to how poll-derived rows are normalized is only shippable if a re-sync can
+carry it — that is, if the provider will hand the records back. Close's event log
+retains 30 days, so a re-sync restates the last 30 days and no more; anything
+older than the retention window cannot be restated by either tool, because
+neither we nor the provider still has it.
+
+And a full re-sync is not only a rewrite. It bumps the generation and then
+soft-deletes every poll-managed row it did *not* re-fetch
+(`resync.ts`, the `full` branch) — correct, since a record the provider no longer
+returns is a record that is gone. But it means "re-sync to restate the types" and
+"re-sync to prune what upstream deleted" are the same operation, and rows beyond
+the provider's retention are pruned rather than restated.
+
+## Future-dated events are normal, and every window excludes them
+
+Google Calendar reads `timeMin = now - 30d` to `timeMax = now + 365d`, so a
+freshly synced calendar legitimately holds rows dated up to a year ahead. This is
+not a bug and nothing treats it as one — but it is only safe because of a
+property worth stating outright:
+
+**Every relative time preset is bounded at both ends.** `last_30_days` resolves
+to `{start: now - 30d, end: now}`, and so does every other preset including the
+fallback (`{start: 0, end: now}`). None is open-ended. So a meeting eleven months
+out cannot inflate "meetings in the last 30 days" — it is outside the window, the
+same as a meeting from last year.
+
+Reaching future rows is therefore an explicit act: an `after` or `between` filter
+on the date field, which is exactly how "upcoming meetings" should have to be
+asked for.
+
+Nothing else compares `occurred_at` against `now`. The health checks run on sweep
+times, `connections.last_event_at` is stamped with the sync time rather than the
+event time, and retention runs on `disabled_at` / `deleted_at`. A future
+`occurred_at` reaches no code path that would read it as an error.
+
 ## Watching for absence, not just for failure
 
 Everything else here asks "did this piece of work succeed?". Nothing was asking

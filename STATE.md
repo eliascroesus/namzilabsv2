@@ -23,10 +23,11 @@ branch.
 Close's contract is now **verified against the live API**, and that run found
 the connector had been sending a date filter Close silently discards — every
 request unbounded for the life of the connector, hidden by the provider's own
-30-day retention happening to match our intended depth. Instantly's and
-Sendblue's contracts have still never been run. The oldest unfinished item is
-not a provider check at all: the **legacy row reconciliation** (LAUNCH_DAY D1)
-has been waiting since deploy.
+30-day retention happening to match our intended depth. The legacy row
+reconciliation, outstanding since deploy, turned out to be **already resolved by
+the 29 July wipe** — so backfills and replays are unblocked. What is left is the
+pool-driver rollout, a day of Close traffic to replace the guessed rate limits,
+and Instantly's contract check. **Sendblue is parked** by decision, not blocked.
 
 ---
 
@@ -153,10 +154,13 @@ Three things to know before it moves:
 | Blocked | Waiting on |
 |---|---|
 | **Declaring Close's and Sendblue's real rate limits (5b)** | A day of production traffic now that Close is connected (checklist item 7). Both fall through to `DEFAULT_RPM = 60` → 42/min (31 background), a guess no provider published. Close returns real `ratelimit` headers on every response and the connector already parses them, so the evidence accumulates on its own — it just has to accumulate. |
-| **Legacy row reconciliation (LAUNCH_DAY D1 → D2)** | A human running the Action, inspect first. **Still outstanding, and it is the oldest unfinished item.** Until it runs, pre-unified-writer ghost rows sit on stream-scoped connections where no sweep can reach them, and backfills/replays stay blocked. |
-| **Instantly and Sendblue contract checks** | Live keys (checklist items 2 and 3). Sendblue's includes the date-parameter probe, which decides whether its offset machinery can be replaced with Close's simpler shape. |
+| **Instantly's contract check** | A live key (checklist item 2). |
 | **`DB_DRIVER=pool`** | A read-path soak with `DB_DRIVER_READ=pool` first (checklist item 4 / LAUNCH_DAY D4 → F3). Until then advisory locks and `db.transaction` are inert, which is why one test stands in for lock contention rather than producing it. |
 | **The "cursor stopped advancing" invariant** | A column. `sync_state.cursor` holds only the current value and is rewritten every poll, so standing still is unobservable from stored state, and inferring it from `occurred_at` would flag every quiet account. Needs a migration; the CI stranding contract catches the same class meanwhile. Written up in `docs/DATA_MODEL.md`. |
+
+**Sendblue is PARKED** — by decision, not blocked on anything. Its contract check
+(item 3) and its date-parameter probe are not to be run, planned for, or counted
+as outstanding work.
 
 ### Answered, so nobody re-opens them
 
@@ -170,6 +174,11 @@ Three things to know before it moves:
   Six walks and six cursors to save 70% of volume that costs 6× more per sweep in
   steady state. Numbers above `canonicalType` in `src/connectors/close.ts` and in
   checklist 9c.
+- **Legacy row reconciliation (checklist 5).** DONE BY WIPE — the 29 July wipe
+  removed every matching row, confirmed by query: zero rows have
+  `sync_generation >= 1 AND stream_hash IS NULL` on a stream-scoped source. The
+  backfills and replays it gated are unblocked. Re-run the query if the database
+  is ever restored from a branch older than 29 July.
 - **The Event Log's ordering.** An early script run reported oldest-first; that
   was a bug in the script (one unparseable value made every comparison against
   NaN false), not a fact about Close. It is latest-first **by `date_updated`** —
@@ -213,7 +222,7 @@ grep for `-drift\|-scan\|-probe` covers every "look at this" signal.
 ## Verification bar
 
 `pnpm typecheck && pnpm test && pnpm build && pnpm check:orphans`, all green,
-before anything ships. Currently **835 tests / 68 files**. Behavioural changes
+before anything ships. Currently **841 tests / 68 files**. Behavioural changes
 are sabotage-verified: break the thing, confirm its own test fails and no other.
 `check:orphans` fails the build on an exported function no production code
 calls — a feature only its own tests call is not shipped.
