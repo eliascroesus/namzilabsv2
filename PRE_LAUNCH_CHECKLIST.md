@@ -435,6 +435,70 @@ So it prints four things and stops:
 
 ---
 
+## 1b. Calendly — `/scheduled_events` parameter contract
+
+**Why:** Calendly is the most parameter-dependent connector here and the only one
+that has never been verified against a live API. Its scan alternates outward from
+now — the past side asks for `sort=start_time:desc` bounded by `min_start_time` /
+`max_start_time`, the future side the same with `:asc` — and steps each side's
+`page_token` believing the previous page ended where the sort implies. **Five
+parameters, and the traversal is wrong if any one of them is quietly not doing
+its job.**
+
+That shape has already been wrong twice. Close sent `date_created__gte` for the
+life of the connector to an endpoint that filters on `date_updated`; Close's
+ordering was documented, believed, and checked against the wrong field for
+months. Neither was findable by reading, and both were findable in one request
+pair.
+
+**Key:** a Calendly **Personal Access Token** — Calendly → *Integrations & apps*
+→ *API & webhooks* → *Personal Access Tokens* → **Generate new token**
+(https://calendly.com/integrations/api_webhooks). A free plan can create one.
+Store it as the repo secret **`CALENDLY_API_TOKEN`**.
+
+**Run — no terminal needed.** Actions → **Verify providers (read-only)** → Run
+workflow → provider **calendly** (or **all**).
+
+<details><summary>Local equivalent</summary>
+
+```bash
+CALENDLY_API_TOKEN=eyJ… pnpm tsx scripts/verify-calendly.ts
+```
+
+Env knobs: `CALENDLY_VERIFY_PAGES` (walk depth, default 6),
+`CALENDLY_SCOPE` (`user`, the connector's default, or `organization`).
+
+</details>
+
+### ⚠ READ THE `[INFO]` LINES. A PASS IS NOT THE ANSWER HERE.
+
+Every parameter is measured against a **control** — the same request without it,
+comparing what came back. A provider that accepts a parameter and ignores it
+returns HTTP 200 and a perfectly plausible page; there is no error for it to
+raise, so **an ignored parameter is reported as an INFO line and cannot fail the
+run.** The exit code only covers the structural checks (CL1, CL2, CL8).
+
+What to look for, and what each would mean:
+
+| Line | If it says | Then |
+|---|---|---|
+| **CL4** `sort` | `IDENTICAL SEQUENCES … accepted and IGNORED in both directions` | the outward scan's pivot means nothing — both sides walk in whatever order the endpoint returns, and "recent past first" is a coincidence |
+| **CL4** observed order | `does NOT match: asked for descending` | worse than ignored: it sorts, on something else |
+| **CL5** bounds | `IDENTICAL id set to the unbounded control` | the window is not a window; the scan reads the whole account and the 30/90-day framing is decoration |
+| **CL6** `status` | `IDENTICAL id set to no-status — accepted and IGNORED` | narrowing a flow to "canceled only" silently returns everything, and nothing filters it client-side |
+| **CL7** `count=101` | `ACCEPTED … MORE than the assumed cap` | the page size in `calendly.ts` is not the real cap |
+| **CL8** two page sizes | FAIL | `page_token` steps over records — Defect #2's shape, in the connector nobody had checked |
+
+**`sort` is compared as a SEQUENCE, not a set** — a working sort returns the same
+records in a different order, so the id-set comparison used for every filter would
+report a functioning parameter as "ignored". That distinction is the difference
+between this script finding something and confidently finding nothing.
+
+**No events on the account?** CL1 onward cannot execute. Book one test meeting and
+re-run; the checks need at least two dated events to bound between.
+
+---
+
 ## 2. Instantly — v2 emails list contract (and key era)
 
 **Why:** the Instantly poll mirrors the same window-walk pattern over

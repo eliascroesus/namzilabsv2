@@ -20,6 +20,7 @@ on:
         options:
           - all
           - close
+          - calendly
           - instantly
           - sendblue
 
@@ -66,6 +67,26 @@ jobs:
           else
             code=$?
             echo "FAIL|Close|Script exited $code — see the Close step above for the failing check (C1-C5)." >> "$RESULTS"
+            exit 1
+          fi
+
+      - name: Calendly — scheduled_events parameter contract
+        if: ${{ inputs.providers == 'all' || inputs.providers == 'calendly' }}
+        continue-on-error: true
+        env:
+          CALENDLY_API_TOKEN: ${{ secrets.CALENDLY_API_TOKEN }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CALENDLY_API_TOKEN:-}" ]; then
+            echo "SKIP|Calendly|Secret CALENDLY_API_TOKEN is not set on this repository." >> "$RESULTS"
+            echo "::warning::Skipping Calendly — add CALENDLY_API_TOKEN (Calendly -> Integrations & apps -> API & webhooks -> Personal Access Tokens)."
+            exit 0
+          fi
+          if pnpm tsx scripts/verify-calendly.ts; then
+            echo "PASS|Calendly|No check contradicted the pinned contract — READ THE INFO LINES: an ignored parameter is reported there, not as a failure." >> "$RESULTS"
+          else
+            code=$?
+            echo "FAIL|Calendly|Script exited $code — see checks CL0-CL8 above." >> "$RESULTS"
             exit 1
           fi
 
