@@ -372,16 +372,53 @@ connector as-is: the pagination assumptions in `src/connectors/close.ts` and
 does (the failing check tells you which assumption broke), then re-run until
 green.
 
+### C0 IS A MERGE GATE, NOT A FINDING
+
+**`branch close/date-updated` must not merge until SECTION 0 passes.**
+
+That branch changes the connector's window bound from `date_created__gte` to
+`date_updated__gte`. The old name was accepted and silently discarded by Close,
+so every request the connector ever made was unbounded while looking bounded —
+and nothing in the code, the tests or the response could have revealed it. Only
+a comparison can: SECTION 0 issues the bounded request and an unbounded control
+and checks the id sets DIFFER.
+
+- **C0 passes** → the bound does something. Merge.
+- **C0 fails** (`IDENTICAL id sets`) → the new parameter is being ignored too.
+  **Do not merge.** The connector would be unbounded again, and the tests would
+  not notice, because a fixture cannot tell you what a server ignores.
+- **C0c** is the negative control: it confirms the OLD parameter really is
+  discarded. If `date_created__gte` turns out to change the response, the whole
+  account of this bug is wrong and everything above needs re-reading.
+
+The same rule generalizes in `docs/CONNECTOR_SPEC_PROPOSAL.md` §1: a connector
+must not reach main carrying a provider claim nobody has observed, for the same
+reason a migration must not reach main before its SQL is applied.
+
+**SECTION 0b — `_limit`.** Close's docs say this endpoint does not support
+`_limit`; the live API honours 50 and rejects 51 naming `max_limit=50`. Recorded
+because it is the counter-example: docs-first would get this wrong, code-first
+got `date_created__gte` wrong, and neither source is authoritative alone.
+
+### SECTION 7 gates Phase 9 — read it before building anything
+
+`object_type` and `action` are supported filters, but the docs restrict which
+COMBINATIONS are allowed and that list is what matters. If `object_type` cannot
+be combined with `date_updated__gte`, narrowing by type costs the incremental
+bound — a filtered unbounded window instead of a bounded one, which is a bad
+trade at any filtering ratio. SECTION 7 probes each filter alone and in
+combination, and reports accepted-and-ignored as loudly as rejected.
+
 **Also read the `[INFO]` findings**, which cannot fail the run and are worth
 acting on:
 
-- **C2 observed ordering.** Nothing depends on a direction any more, but a change
-  here is worth knowing.
-- **C6 `date_created__lte`.** If Close accepts an upper bound, a first sync can
-  walk the window in exclusive recent-first SEGMENTS with no re-reads, which is
-  strictly better than the two-rung ladder in `close.ts` (`FIRST_RUNG_DAYS`).
-- **C7 `_order_by`.** If it works, `testFetchLatest` becomes one request instead
-  of a bounded search.
+- **C2 which field the log is sorted by.** The connector's preview now relies on
+  the documented latest-first-by-`date_updated` ordering, so a change here is a
+  behaviour change rather than a curiosity.
+- **C6 an upper bound.** If Close accepts `date_updated__lte`, a first sync can
+  walk the window in exclusive recent-first SEGMENTS with no re-reads.
+- **C7 `_order_by`.** If it works, the ordering stops being something we rely on
+  the provider's default for.
 
 ---
 
