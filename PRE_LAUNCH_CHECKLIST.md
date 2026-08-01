@@ -606,6 +606,70 @@ common failure it catches — a URL pointing at a transaction-mode pooler, which
 breaks session semantics and therefore advisory locks — is exactly the thing you
 want to learn before the writer depends on it, not after.
 
+### Step 4-zero — SIZE THE POOL. Do this before 4a. ✅ code shipped, number is yours
+
+The pool was `new Pool({ connectionString })`: node-postgres's default of **10
+sockets per container, no idle timeout, never closed**. Shipped and harmless
+today because no `Pool` is constructed while both driver variables are unset —
+but 4a is the moment it becomes live, and its symptom is refused connections
+across the whole app rather than one slow query.
+
+`src/db/client.ts` now sets `max`, `idleTimeoutMillis` and
+`connectionTimeoutMillis`. What remains is the number, and it needs two inputs
+this repo cannot know.
+
+**The ceiling has to be the DIRECT endpoint's.** Neon's `-pooler` host is
+transaction-mode PgBouncer: it does not hold a session across statements, so
+advisory locks — the entire reason for this rollout — do not work through it. You
+are on the direct host and its lower ceiling by construction. Read it:
+
+```sql
+SHOW max_connections;   -- run on the DIRECT (non "-pooler") host
+```
+
+**The demand floor, from the code, is 6.** `scanInvariants` issues four queries
+through one `Promise.all`; a transaction holds its client for its whole body, and
+`awaitStreamWriteLock` parks on a lock for up to 15 seconds while holding one;
+plus one spare. Below that the pool does not slow down, it **deadlocks** — so
+`DB_POOL_MAX` is clamped up to 6 rather than honoured below it, and
+`tests/pool-tuning.test.ts` fails if the fan-out grows past what 6 covers.
+
+**So the tunable is container count, not pool size:**
+
+```
+                    max_connections × 0.7        ← 0.7 leaves room for migrations,
+containers_safe  =  ─────────────────────          the Neon console and any psql
+                             6                     (the same share the provider
+                                                    budget already reserves)
+```
+
+Fill it in with your real `max_connections`. If `containers_safe` is lower than
+the peak number of Vercel instances that touch the database at once, **do not
+start the rollout** — raise the Neon compute size (which raises
+`max_connections`) or cap concurrency first. Shrinking the pool is not available
+as an answer; that is what the clamp is saying.
+
+`DB_POOL_MAX` raises the cap if you ever need more than 6 per container.
+
+### What to watch in Neon during the soak, and when to stop
+
+| Watch | Where | Stop and roll back at |
+|---|---|---|
+| **Active connections** | Neon → Monitoring → Connections | sustained above **70%** of `max_connections`, or any single spike to 90% |
+| `too many connections for role` / `remaining connection slots` | app logs | **one occurrence** — this is the outage, not a warning |
+| `Connection terminated due to connection timeout` | app logs | more than a handful an hour: the pool is saturating even though the ceiling is not |
+| `ECONNRESET` / `WebSocket` errors | app logs | a rate materially above the pre-soak baseline |
+| Dashboard p95 latency | hosting metrics | worse than the HTTP-driver baseline |
+
+The first two are the ones that matter. Connection count climbing steadily
+rather than plateauing means sockets are not being released — that is the failure
+the idle timeout is meant to prevent, and it says the timeout is not working
+rather than that the ceiling is too low.
+
+**Rolling back is a redeploy, not a toggle** (see above) — budget for that when
+you decide, because the variable alone changes nothing for instances already
+running.
+
 **Step 4a — flip reads.** Set on production:
 
 ```bash

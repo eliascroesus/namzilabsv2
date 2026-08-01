@@ -40,6 +40,7 @@ and Instantly's contract check. **Sendblue is parked** by decision, not blocked.
 | `WEBHOOK_EVENT_TIME_LIVE` | **unset (off)** | Off: the nightly scan works out which payload key holds each webhook connection's event time and records the answer, but events keep being dated exactly as before. On: new events use the resolved key, AND the first nightly run restamps every catch-hook connection's stored events. Both halves flip together on purpose — dating new events better while old ones keep the old answer puts two meanings inside one number. **Look before flipping:** paste `scripts/webhook-event-time.sql` into the Neon editor. |
 | `DB_DRIVER` | **unset → `http`** | `pool` switches the WRITER to the WebSocket driver: real sessions, so `db.transaction()` and Postgres advisory locks start actually doing something. Until then the stream write-lock runs its body without a lock (harmless — the Inngest concurrency key is still the first-line serializer). Rollout order matters; see checklist item 4. |
 | `DB_DRIVER_READ` | **unset → falls back to `DB_DRIVER`** | Set to `pool` FIRST and soak the read-only surfaces before moving the writer. |
+| `DB_POOL_MAX` | **unset → 6** | Sockets per container when the pool driver is active. 6 is a FLOOR derived from the code (four concurrent reads in `scanInvariants`, plus a transaction that can park on a lock for 15s, plus a spare) — a smaller pool deadlocks rather than degrades, so a lower value is clamped up. Raise it only if the fan-out grows; the lever for staying under Neon's ceiling is container count. Arithmetic in checklist item 4. |
 
 ### Provider keys — only needed to run the verification scripts
 
@@ -229,7 +230,7 @@ grep for `-drift\|-scan\|-probe` covers every "look at this" signal.
 ## Verification bar
 
 `pnpm typecheck && pnpm test && pnpm build && pnpm check:orphans`, all green,
-before anything ships. Currently **847 tests / 69 files**. Behavioural changes
+before anything ships. Currently **851 tests / 70 files**. Behavioural changes
 are sabotage-verified: break the thing, confirm its own test fails and no other.
 `check:orphans` fails the build on an exported function no production code
 calls — a feature only its own tests call is not shipped.
