@@ -228,6 +228,47 @@ function laterDate(a: string | null, b: string | null): string | null {
   return (Date.parse(b) || 0) > (Date.parse(a) || 0) ? b : a;
 }
 
+/**
+ * SERVER-SIDE FILTERING BY TYPE: MEASURED, AND ANSWERED NO. Do not re-open.
+ *
+ * This connector fetches every event type and maps six. Filtering the request
+ * instead — "Phase 9" — looks obviously right: fewer rows, less storage, fewer
+ * pages. It was probed against the live API and it is worse. The numbers, so
+ * that the next person to have the idea can check them rather than repeat the
+ * work:
+ *
+ * WHAT THE API ALLOWS (`scripts/verify-close-pagination.ts` SECTION 7):
+ *   object_type + action + date_updated__gte   ACCEPTED — one pair per request
+ *   object_type + date_updated__gte            REJECTED
+ *   action + date_updated__gte                 REJECTED
+ *   multiple values (`__in`, repeated key, comma-separated)   NOT SUPPORTED
+ *
+ * The middle two are what decide it. `action` alone would have collapsed five
+ * of the six pairs into a single `action=created` walk; `object_type` alone
+ * would have allowed three. Neither combines with the incremental bound, so
+ * every pair needs its own request and its own cursor: SIX walks.
+ *
+ * THE ARITHMETIC, in the state the system is in almost all of the time:
+ *   a steady-state sweep with ~4 new events
+ *     today     1 request
+ *     filtered  6 requests, five of them returning nothing, forever
+ *
+ * So filtering is 6× WORSE in normal operation, and it only pays during a first
+ * import — which Close already caps at 30 days of retention. It is an
+ * optimization that costs six times more except in the one case that is already
+ * bounded.
+ *
+ * AND THE PART THAT IS NOT ABOUT COST. Six walks means six independent cursors.
+ * One of them stalling loses one event type silently while the other five keep
+ * moving and the connection looks healthy — the exact silent-partial-data shape
+ * this project has spent months removing, and one this codebase has already
+ * found three times in three different connectors (`tests/stranding-contract.test.ts`).
+ * Trading a single cursor for six is buying five new ways to be quietly wrong.
+ *
+ * The six mapped pairs are ~30% of the log by volume, so the upside was never
+ * large enough to be worth any of that.
+ */
+
 /** Map Close event log object_type + action to a canonical event type. */
 function canonicalType(objectType: string, action: string): string {
   const key = `${objectType}.${action}`;

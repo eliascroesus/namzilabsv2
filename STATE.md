@@ -18,8 +18,15 @@ Everything through batch 8 is on `main` and live. Batch 9 (the custom webhook's
 event time) is on `main` too but **inert behind a flag** — it observes and
 records, and changes nothing, until `WEBHOOK_EVENT_TIME_LIVE=1`. Batch 5 (the
 day-30/day-60 data purge) is **the only unmerged work**, held deliberately on a
-branch. Two provider contracts have never been verified against a live API, and
-one rate-limit decision is waiting on the first of them.
+branch.
+
+Close's contract is now **verified against the live API**, and that run found
+the connector had been sending a date filter Close silently discards — every
+request unbounded for the life of the connector, hidden by the provider's own
+30-day retention happening to match our intended depth. Instantly's and
+Sendblue's contracts have still never been run. The oldest unfinished item is
+not a provider check at all: the **legacy row reconciliation** (LAUNCH_DAY D1)
+has been waiting since deploy.
 
 ---
 
@@ -68,7 +75,11 @@ connection with a healthy webhook widens to the 60-minute backstop.
   per-stream cursors, per-connection lease, provider budget ledger with a
   breaker.
 - **Six connectors** — Calendly, Close, Instantly, Sendblue, Google Sheets,
-  Google Calendar, plus the custom webhook.
+  Google Calendar, plus the custom webhook. **Close's incremental window is
+  verified against the live API**: it bounds on `date_updated` (the field the
+  endpoint filters and sorts on) and dates rows by `date_created` (when the thing
+  happened). Those are different fields on purpose — Close consolidates edits
+  into one event that keeps its creation date and takes a new update date.
 - **Sheets date column** — a sheet dates its rows from a column in the sheet,
   detected automatically by default, and says which column it used. Choosing a
   different one restamps the rows already stored.
@@ -141,21 +152,30 @@ Three things to know before it moves:
 
 | Blocked | Waiting on |
 |---|---|
-| **Declaring Close's and Sendblue's real rate limits** | A live run of `scripts/verify-close-pagination.ts`. Both currently fall through to `DEFAULT_RPM = 60`, taken at the 70% share → 42/min (31 for background work). That is a guess no provider published. Close returns real `ratelimit` headers on every response, so one live run replaces the guess with evidence. |
-| **Close checks C4 and C5** | Same live run. C4 (cursor integrity) and C5 (the 30-day first-sync bound) **have still never passed against the live API** — an earlier run aborted before reaching them. Everything else in that script has passed. |
-| **Phase 9 (per-object Close scoping)** | The same run, plus the backfill lane, because scoping Close per flow makes it a Records-class stream. |
-| **Instantly and Sendblue contract checks** | Live keys (checklist items 2 and 3). |
-| **`DB_DRIVER=pool`** | A read-path soak with `DB_DRIVER_READ=pool` first (checklist item 4). Until then advisory locks are inert, which is why one test stands in for lock contention rather than producing it. |
+| **Declaring Close's and Sendblue's real rate limits (5b)** | A day of production traffic now that Close is connected (checklist item 7). Both fall through to `DEFAULT_RPM = 60` → 42/min (31 background), a guess no provider published. Close returns real `ratelimit` headers on every response and the connector already parses them, so the evidence accumulates on its own — it just has to accumulate. |
+| **Legacy row reconciliation (LAUNCH_DAY D1 → D2)** | A human running the Action, inspect first. **Still outstanding, and it is the oldest unfinished item.** Until it runs, pre-unified-writer ghost rows sit on stream-scoped connections where no sweep can reach them, and backfills/replays stay blocked. |
+| **Instantly and Sendblue contract checks** | Live keys (checklist items 2 and 3). Sendblue's includes the date-parameter probe, which decides whether its offset machinery can be replaced with Close's simpler shape. |
+| **`DB_DRIVER=pool`** | A read-path soak with `DB_DRIVER_READ=pool` first (checklist item 4 / LAUNCH_DAY D4 → F3). Until then advisory locks and `db.transaction` are inert, which is why one test stands in for lock contention rather than producing it. |
+| **The "cursor stopped advancing" invariant** | A column. `sync_state.cursor` holds only the current value and is rewritten every poll, so standing still is unobservable from stored state, and inferring it from `occurred_at` would flag every quiet account. Needs a migration; the CI stranding contract catches the same class meanwhile. Written up in `docs/DATA_MODEL.md`. |
 
-### One correction worth remembering
+### Answered, so nobody re-opens them
 
-An earlier run of the Close script reported the Event Log as **oldest-first**.
-That was a bug in the script, not a fact about Close — it compared parsed dates
-and one event's timestamp did not parse, so every comparison against NaN came
-back false. **Close is newest-first**, as its documentation says. The code was
-rewritten to assume no ordering at all while the wrong answer stood, and that
-was deliberately NOT reverted: a progress number that is right only because a
-provider sorts a particular way is one nobody can check.
+- **Close's window bound** — verified live before merge. The bound is on
+  `date_updated`; `date_created__gte` was accepted and discarded for the life of
+  the connector, confirmed by a control request returning an identical id set.
+- **Close checks C4 / C5** — C4 now measures the field Close actually sorts on
+  and passes; C5 is informational, because it tests the parameter the connector
+  no longer sends.
+- **Phase 9 (per-object Close scoping)** — **NO**, on measurements, not deferred.
+  Six walks and six cursors to save 70% of volume that costs 6× more per sweep in
+  steady state. Numbers above `canonicalType` in `src/connectors/close.ts` and in
+  checklist 9c.
+- **The Event Log's ordering.** An early script run reported oldest-first; that
+  was a bug in the script (one unparseable value made every comparison against
+  NaN false), not a fact about Close. It is latest-first **by `date_updated`** —
+  and the axis was the half that stayed wrong for months afterwards, because
+  every check asked about `date_created`. The connector still assumes no ordering
+  anywhere that data depends on it.
 
 ---
 
@@ -193,7 +213,7 @@ grep for `-drift\|-scan\|-probe` covers every "look at this" signal.
 ## Verification bar
 
 `pnpm typecheck && pnpm test && pnpm build && pnpm check:orphans`, all green,
-before anything ships. Currently **831 tests / 68 files**. Behavioural changes
+before anything ships. Currently **835 tests / 68 files**. Behavioural changes
 are sabotage-verified: break the thing, confirm its own test fails and no other.
 `check:orphans` fails the build on an exported function no production code
 calls — a feature only its own tests call is not shipped.

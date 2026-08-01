@@ -754,17 +754,52 @@ path is unreachable in production. That is the intended default. Wiring it
 means adding per-flow storage for the flag and a UI to set it — post-launch
 work, gated on the parity suite staying green.
 
-### 9c. Close per-object scoping — deferred, no trigger
+### 9c. Close per-object scoping — ✅ ANSWERED: NO. Not deferred, decided.
 
-Close polls its whole workspace event log with only a date bound and no
-server-side `object_type` filter, so it fetches every type and maps five. It
-works today and is cursor-friendly; this is optimization, not correctness. If
-it is ever scoped per flow, 9a's trigger 1 applies.
+Probed against the live API and rejected on the measurements. Close accepts
+`object_type + action + date_updated__gte` **one pair at a time**; both
+`object_type + bound` and `action + bound` are rejected, and no filter takes
+multiple values in any of its three spellings. So the six mapped pairs need six
+walks with six cursors.
+
+A steady-state sweep with ~4 new events costs **1 request today and 6 filtered**,
+five of them returning nothing, forever — 6× worse in normal operation, paying
+back only during a first import that Close's own 30-day retention already caps.
+And six cursors is six independent things to stall: one stopping loses one event
+type silently while the others look fine, which is the failure class
+`tests/stranding-contract.test.ts` exists for and which this codebase has already
+found three times in three connectors.
+
+The six pairs are ~30% of the log by volume. Full reasoning and the numbers are
+recorded above `canonicalType` in `src/connectors/close.ts`, deliberately next to
+the code the change would have touched.
+
+**This does not un-defer 9a.** Close stays a whole-workspace stream, so trigger 1
+is not met by anything here.
+
+**What the probe DID turn up is a naming question, not a fetching one** — the
+census showed event types being stored raw (`activity.meeting.completed`,
+`activity.call.answered`, …) that look more useful to a sales team than one of
+the six currently mapped (`task.completed`, which appeared zero times in 500
+events). See "Pending" below. No API cost and no migration: these rows are
+already stored.
 
 ---
 
 ## Pending — will be added here when built
 
+- **Close `canonicalType`: which event types get names** — OPEN PRODUCT
+  QUESTION, awaiting a decision. The SECTION 7c census showed types being stored
+  raw that look more useful to a sales team than one of the six currently mapped
+  (`task.completed` appeared **zero** times in 500 events), including
+  `activity.call.answered`, `activity.call.completed` and four meeting types.
+  **This is naming, not fetching:** every one of these rows is already stored and
+  already filterable by its raw `objectType.action`, so there is no API cost and
+  no migration. The one real cost is that renaming changes `eventType` for NEW
+  rows only — a flow filtering the old name silently stops matching — so any
+  change ships with a `reprocessConnection` replay, which re-derives from stored
+  raw payloads. Candidate list and shares are in the session notes; pick, then
+  build.
 - **Index rollout at scale**: if `events` has grown large (>10⁷ rows) before
   launch, apply new index migrations manually with `CREATE INDEX CONCURRENTLY`
   instead of the transactional migration runner. Not needed at current size.
