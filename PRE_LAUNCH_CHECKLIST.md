@@ -400,21 +400,34 @@ reason a migration must not reach main before its SQL is applied.
 because it is the counter-example: docs-first would get this wrong, code-first
 got `date_created__gte` wrong, and neither source is authoritative alone.
 
-### SECTION 7 gates Phase 9 — read it before building anything
+### SECTIONS 7 / 7b / 7c gate Phase 9 — read them before building anything
 
-`object_type` and `action` are supported filters, but the docs restrict which
-COMBINATIONS are allowed and that list is what matters. If `object_type` cannot
-be combined with `date_updated__gte`, narrowing by type costs the incremental
-bound — a filtered unbounded window instead of a bounded one, which is a bad
-trade at any filtering ratio. SECTION 7 probes each filter alone and in
-combination, and reports accepted-and-ignored as loudly as rejected.
+**These sections deliberately contain no verdict.** The earlier version had one,
+and it was wrong: it saw `object_type + date_updated__gte` return 400 and printed
+"filtering costs the incremental bound", while the very next row of its own
+output showed `object_type + action + date_updated__gte` returning 200. The
+combination works — `object_type` simply cannot be used without `action`. A
+canned conclusion drawn from one probe contradicted the table printed beside it,
+which is the same failure this script exists to prevent, at the top of the stack.
 
-**Also read the `[INFO]` findings**, which cannot fail the run and are worth
-acting on:
+So it prints four things and stops:
 
-- **C2 which field the log is sorted by.** The connector's preview now relies on
-  the documented latest-first-by-`date_updated` ordering, so a change here is a
-  behaviour change rather than a curiosity.
+| | |
+|---|---|
+| **SECTION 7** | which combinations are accepted, with the **full 400 body** listing what the endpoint allows (previously clipped at 300 chars — the answer was cut off mid-sentence). Includes `action + date_updated__gte`, never previously tried: if `action` combines with the bound on its own, five of our six mapped pairs collapse into ONE walk. |
+| **SECTION 7b** | whether a filter takes MULTIPLE values — `object_type__in`, repeated keys, comma-separated — each checked against the response, because a form that silently keeps the first value returns 200 and a plausible page. |
+| **SECTION 7c** | what share of the log our six mapped pairs actually are, with the full `object_type.action` census. **This is the number that decides it:** N filtered walks beat one unfiltered walk only if the six are a small fraction. |
+| **C11b** | how many walks are needed under each of the above answers. |
+
+**Also read the `[INFO]` findings**, which cannot fail the run:
+
+- **C2 / C4b / C4c which field the log is sorted by.** The ordering checks now
+  measure `date_updated`, and the same questions about `date_created` are
+  reported rather than failed — a consolidated log has no reason to be monotonic
+  by creation, so failing on it was measuring our own mistake, not Close.
+- **C5** is now informational for the same reason: it tests the parameter the
+  connector no longer sends, as a historical record. SECTION 0's C0c is the
+  load-bearing version and *does* fail.
 - **C6 an upper bound.** If Close accepts `date_updated__lte`, a first sync can
   walk the window in exclusive recent-first SEGMENTS with no re-reads.
 - **C7 `_order_by`.** If it works, the ordering stops being something we rely on

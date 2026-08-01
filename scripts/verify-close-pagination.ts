@@ -89,7 +89,35 @@ async function attempt(params: Record<string, string>): Promise<Attempt> {
     headers: { authorization: `Basic ${Buffer.from(`${key}:`).toString("base64")}` },
   });
   const body = await res.text();
-  if (!res.ok) return { ok: false, status: res.status, body: body.slice(0, 300) };
+  // NOT truncated. An error body was clipped to 300 characters, and the one that
+  // matters most — the 400 listing which filter combinations this endpoint
+  // allows — is longer than that, so the answer to the only question SECTION 7
+  // asks was being cut off mid-sentence. Callers that want a short form slice it
+  // themselves; the script's job is to report what the provider said.
+  if (!res.ok) return { ok: false, status: res.status, body };
+  return { ok: true, status: res.status, page: JSON.parse(body) as EventPage };
+}
+
+/**
+ * The same request, from a URLSearchParams the caller built.
+ *
+ * Exists because `Record<string, string>` cannot express a REPEATED parameter,
+ * and "repeat the key" is one of the three spellings a multi-value filter might
+ * take — so the shape of the helper was quietly deciding which questions could
+ * be asked.
+ */
+async function attemptRaw(qs: URLSearchParams): Promise<Attempt> {
+  const key = process.env.CLOSE_API_KEY;
+  if (!key) {
+    console.error("Set CLOSE_API_KEY (the connection's API key) and re-run.");
+    process.exit(2);
+  }
+  requests += 1;
+  const res = await fetch(`${API}/event/?${qs.toString()}`, {
+    headers: { authorization: `Basic ${Buffer.from(`${key}:`).toString("base64")}` },
+  });
+  const body = await res.text();
+  if (!res.ok) return { ok: false, status: res.status, body };
   return { ok: true, status: res.status, page: JSON.parse(body) as EventPage };
 }
 
@@ -239,7 +267,11 @@ async function main() {
       const hi = Math.max(...ok.map((e) => e.ms!));
       note("page 1 parsed span", `${iso(lo)} .. ${iso(hi)}  (${((hi - lo) / 3_600_000).toFixed(2)} hours)`);
     }
-    return { page, list, order };
+    // `order` is the DATE_UPDATED order, because that is the field Close sorts
+    // on and every downstream check reasons about the sort. Returning the
+    // date_created order here is what made the page-boundary check in SECTION 3
+    // measure one field while claiming to be about the sort of another.
+    return { page, list, order: updOrder, createdOrder: order };
   });
 
   /**
@@ -376,17 +408,26 @@ async function main() {
   // ═══════════════════════════════════════════════════════════ the cursor walk
   head("SECTION 3 — the cursor walk");
 
-  /** Walk `cursor_next`, recording every page so a failure can be shown. */
+  /**
+   * Walk `cursor_next`, recording every page so a failure can be shown.
+   *
+   * BOTH FIELDS are kept per page. `upd` is the one the ordering checks use —
+   * Close sorts by `date_updated` — and `list` (`date_created`) is retained so
+   * the same questions can be reported about it informationally. Keeping only
+   * one was the bug: the checks below asked about the sort while measuring a
+   * field the provider never claimed to sort on.
+   */
   async function walk(limit: number, extra: Record<string, string> = {}, maxPages = WALK_PAGES) {
     const params = { _limit: String(limit), ...extra };
-    const pages: Array<{ index: number; list: Ev[]; order: Order }> = [];
+    const pages: Array<{ index: number; list: Ev[]; upd: Ev[]; order: Order; createdOrder: Order }> = [];
     const seen = new Map<string, Ev>();
     const duplicates: Ev[] = [];
     let page = await get(params);
     let n = 1;
     for (;;) {
       const list = evs(page);
-      pages.push({ index: n, list, order: orderOf(list).order });
+      const upd = evs(page, "date_updated");
+      pages.push({ index: n, list, upd, order: orderOf(upd).order, createdOrder: orderOf(list).order });
       for (const e of list) {
         if (seen.has(e.id)) duplicates.push(e);
         else seen.set(e.id, e);
@@ -410,20 +451,43 @@ async function main() {
     const summary = [...dirs.entries()].map(([o, idx]) => `${o} x${idx.length} (pages ${idx.slice(0, 6).join(",")}${idx.length > 6 ? "…" : ""})`).join("; ");
     const informative = w.pages.filter((p) => p.order !== "too-few-dates" && p.order !== "all-timestamps-equal");
     const disagreeing = informative.filter((p) => p.order !== order1);
-    check("C4 every page runs the same direction as page 1", disagreeing.length === 0, `page 1 is ${order1}; across ${w.count} pages: ${summary}`);
+    check(
+      "C4 every page runs the same direction as page 1, BY DATE_UPDATED",
+      disagreeing.length === 0,
+      `page 1 is ${order1}; across ${w.count} pages: ${summary}`,
+    );
+
+    /**
+     * The same question about `date_created`, reported and never failed.
+     *
+     * This used to be the check itself, and it failed on a correctly sorted log:
+     * consolidation means an edited record keeps its old `date_created`, so a
+     * page sorted properly by `date_updated` has no reason to be monotonic by
+     * creation — the breaks are real data, not a provider fault. Kept because a
+     * shift here is still worth seeing; demoted because failing on it told us
+     * about our own measurement rather than about Close.
+     */
+    const cDirs = new Map<Order, number[]>();
+    for (const p of w.pages) cDirs.set(p.createdOrder, [...(cDirs.get(p.createdOrder) ?? []), p.index]);
+    note(
+      "C4b same question about date_created (informational)",
+      [...cDirs.entries()].map(([o, idx]) => `${o} x${idx.length}`).join("; ") +
+        "  — Close does not sort on this field, so disagreement here is expected on a consolidated log",
+    );
+
     for (const p of disagreeing.slice(0, 5)) {
-      const ok = dated(p.list);
+      const ok = dated(p.upd);
       console.log(`         page ${p.index} is ${p.order} — ${p.list.length} events, ${ok.length} dated`);
       console.log(`           first: ${ok.length ? showEv(ok[0]) : "(none dated)"}`);
       console.log(`           last:  ${ok.length ? showEv(ok[ok.length - 1]) : "(none dated)"}`);
-      const { descBreaks, ascBreaks } = orderOf(p.list);
+      const { descBreaks, ascBreaks } = orderOf(p.upd);
       for (const [a, b] of [...descBreaks, ...ascBreaks].slice(0, 4)) {
         console.log(`           break: ${showEv(a)}\n               -> ${showEv(b)}`);
       }
-      console.log(`           this page's raw date_created (first ${Math.min(6, p.list.length)} and last ${Math.min(6, p.list.length)}):`);
-      for (const e of p.list.slice(0, 6)) console.log(`             ${showEv(e)}`);
-      if (p.list.length > 12) console.log(`             … ${p.list.length - 12} more …`);
-      for (const e of p.list.slice(-6)) console.log(`             ${showEv(e)}`);
+      console.log(`           this page's raw date_updated (first ${Math.min(6, p.upd.length)} and last ${Math.min(6, p.upd.length)}):`);
+      for (const e of p.upd.slice(0, 6)) console.log(`             ${showEv(e)}`);
+      if (p.upd.length > 12) console.log(`             … ${p.upd.length - 12} more …`);
+      for (const e of p.upd.slice(-6)) console.log(`             ${showEv(e)}`);
     }
 
     check(
@@ -433,25 +497,53 @@ async function main() {
     );
     for (const d of w.duplicates.slice(0, 10)) console.log(`           duplicate: ${showEv(d)}`);
 
-    // Page-boundary regression, in the direction page 1 actually runs.
-    let regressions = 0;
-    for (let i = 1; i < w.pages.length; i++) {
-      const prev = dated(w.pages[i - 1].list);
-      const cur = dated(w.pages[i].list);
-      if (prev.length === 0 || cur.length === 0) continue;
-      const prevEdge = prev[prev.length - 1].ms!;
-      const curFirst = cur[0].ms!;
-      const bad = order1 === "newest-first" ? curFirst > prevEdge : order1 === "oldest-first" ? curFirst < prevEdge : false;
-      if (bad) {
-        regressions += 1;
-        if (regressions <= 5) {
-          console.log(`         page ${w.pages[i].index} starts on the wrong side of page ${w.pages[i - 1].index}'s edge`);
-          console.log(`           prev page last: ${showEv(prev[prev.length - 1])}`);
-          console.log(`           this page first: ${showEv(cur[0])}`);
-        }
+    /**
+     * Page-boundary regression, ON THE SORT FIELD.
+     *
+     * This measured `date_created` and reported neither the field nor the
+     * amount, so its one failure — 367ms at the 39/40 boundary — could not be
+     * read as anything. On the sort field it is a real question: a page starting
+     * on the wrong side of the previous page's edge is a cursor that moved
+     * backwards, which is how a walk re-reads or skips.
+     *
+     * It is also the WEAKER form of the question. SECTION 4 walks the same log
+     * twice at different page sizes and compares the id sets, which detects a
+     * skip whether or not the boundaries look tidy. If these two ever disagree,
+     * believe SECTION 4.
+     */
+    const edgeRegressions = (field: "upd" | "list") => {
+      const out: Array<{ i: number; prevEdge: Ev; curFirst: Ev; deltaMs: number }> = [];
+      for (let i = 1; i < w.pages.length; i++) {
+        const prev = dated(w.pages[i - 1][field]);
+        const cur = dated(w.pages[i][field]);
+        if (prev.length === 0 || cur.length === 0) continue;
+        const prevEdge = prev[prev.length - 1];
+        const curFirst = cur[0];
+        const bad =
+          order1 === "newest-first" ? curFirst.ms! > prevEdge.ms! : order1 === "oldest-first" ? curFirst.ms! < prevEdge.ms! : false;
+        if (bad) out.push({ i: w.pages[i].index, prevEdge, curFirst, deltaMs: Math.abs(curFirst.ms! - prevEdge.ms!) });
       }
+      return out;
+    };
+    const regressions = edgeRegressions("upd");
+    for (const r of regressions.slice(0, 5)) {
+      console.log(`         page ${r.i} starts on the wrong side of page ${r.i - 1}'s edge, by ${r.deltaMs}ms`);
+      console.log(`           prev page last: ${showEv(r.prevEdge)}`);
+      console.log(`           this page first: ${showEv(r.curFirst)}`);
     }
-    check("C4 no page starts on the wrong side of the previous page's edge", regressions === 0, `${regressions} regression(s) over ${w.count} page boundaries`);
+    check(
+      "C4 no page starts on the wrong side of the previous page's edge, BY DATE_UPDATED",
+      regressions.length === 0,
+      `${regressions.length} regression(s) over ${w.count} page boundaries` +
+        (regressions.length > 0 ? `; largest ${Math.max(...regressions.map((r) => r.deltaMs))}ms` : ""),
+    );
+    const createdRegressions = edgeRegressions("list");
+    note(
+      "C4c same question about date_created (informational)",
+      `${createdRegressions.length} boundary regression(s)` +
+        (createdRegressions.length > 0 ? `, largest ${Math.max(...createdRegressions.map((r) => r.deltaMs))}ms` : "") +
+        " — expected on a consolidated log, since Close does not order by this field",
+    );
 
     note(
       "walk termination",
@@ -514,7 +606,21 @@ async function main() {
   });
 
   // ════════════════════════════ the 30-day bound batch 1 shipped and never verified
-  head("SECTION 5 — date_created__gte, the bound src/connectors/close.ts sends");
+  /**
+   * SECTION 5 — INFORMATIONAL. The parameter the connector used to send.
+   *
+   * `close.ts` no longer sends `date_created__gte`; this section stays as the
+   * historical record of what it did, and as a standing check that the answer
+   * has not changed. Everything in it is a `note`, deliberately: a FAILING check
+   * here would say "the parameter we stopped using still does not work", which
+   * is the expected state and not a reason to fail the run.
+   *
+   * The live answer, the day this was demoted: identical id sets to an unbounded
+   * request. Accepted and discarded. SECTION 0's C0c is the load-bearing version
+   * of this and does fail, because there it is the control that makes the
+   * account of the bug measured rather than assumed.
+   */
+  head("SECTION 5 — date_created__gte, the bound close.ts USED to send (informational)");
   await section("date_created__gte", async () => {
     const ok = dated(evs(page1));
     if (ok.length < 2) {
@@ -569,10 +675,10 @@ async function main() {
         : `different: unbounded ${ub.size} ids, bounded ${bset.size} ids, ${[...ub].filter((id) => !bset.has(id)).length} dropped by the bound`,
     );
 
-    check(
+    note(
       "C5 date_created__gte excludes everything below the bound",
-      below.length === 0,
-      `${below.length} of ${bl.length} returned events are below ${bound}`,
+      `${below.length} of ${bl.length} returned events are below ${bound}` +
+        (below.length > 0 ? "  [as expected: the parameter is discarded, so nothing is excluded]" : ""),
     );
 
     // Which SPELLINGS the endpoint honours. close.ts sends the first one, so if
@@ -625,19 +731,40 @@ async function main() {
   });
 
   /**
-   * PHASE 9's ONLY REAL QUESTION, and it is not "is object_type supported".
+   * SECTION 7 — PHASE 9, and a verdict this script got wrong once already.
    *
-   * The docs say `date_updated` "can optionally be used with any allowed filter
-   * combination", followed by a restricted list of supported combinations. If
-   * `object_type` cannot be combined with `date_updated__gte`, then narrowing by
-   * type costs the incremental bound — we would be trading a bounded window for
-   * a filtered unbounded one, which is a bad trade at any filtering ratio.
+   * The previous version probed `object_type + date_updated__gte`, watched it
+   * return 400, and printed a canned line saying filtering costs the incremental
+   * bound. The very next row of its own output showed
+   * `object_type + action + date_updated__gte` returning 200. **The combination
+   * works; `object_type` merely cannot be used without `action`.** A hardcoded
+   * conclusion drawn from one of the combinations it tested contradicted the
+   * rest of the table it printed.
    *
-   * So each filter is probed ALONE and then IN COMBINATION, and the combination
-   * is the answer. Reported, never acted on: Phase 9 is on hold until a human
-   * has read this output.
+   * So there is no verdict here now. Verdicts are what this script removed from
+   * everywhere else, for exactly this reason, and the one place a verdict was
+   * left is the one place it lied. What it prints instead are the four numbers
+   * the decision actually turns on:
+   *
+   *   1. which filter combinations the endpoint accepts, with the FULL 400 body
+   *      listing what it allows;
+   *   2. whether a filter takes MULTIPLE values, in any of its spellings;
+   *   3. how many separate walks our six mapped pairs would therefore need;
+   *   4. what fraction of an unfiltered page is one of those six — the number
+   *      that decides whether N filtered walks beat one unfiltered one.
    */
-  head("SECTION 7 — Phase 9: which filters combine with the incremental bound?");
+  head("SECTION 7 — Phase 9: the numbers, no verdict");
+
+  /** The six (object_type, action) pairs `canonicalType` in close.ts maps. */
+  const MAPPED_PAIRS: Array<[string, string]> = [
+    ["activity.sms", "created"],
+    ["activity.call", "created"],
+    ["activity.email", "created"],
+    ["lead", "created"],
+    ["opportunity", "created"],
+    ["task", "completed"],
+  ];
+
   await section("filter combinations", async () => {
     const base = await get({ _limit: String(MAX_LIMIT) });
     const baseIds = new Set(evs(base).map((e) => e.id));
@@ -649,41 +776,150 @@ async function main() {
               Math.floor((Math.max(...withDate.map((e) => e.ms!)) - Math.min(...withDate.map((e) => e.ms!))) / 2),
           ).toISOString()
         : null;
-    // Types the connector actually maps (canonicalType in close.ts) — probing a
-    // type we do not consume would answer a question nobody asked.
+    if (!boundValue) note("  bound", "page 1 has too few distinct date_updated values to build a bound; combinations run unbounded");
+
+    const bound: Record<string, string> = boundValue ? { date_updated__gte: boundValue } : {};
     const combos: Array<[string, Record<string, string>]> = [
       ["object_type alone", { object_type: "activity.sms" }],
       ["action alone", { action: "created" }],
       ["object_type + action", { object_type: "activity.sms", action: "created" }],
+      ["object_type + date_updated__gte", { object_type: "activity.sms", ...bound }],
+      // The one the previous verdict never tried. If `action` combines with the
+      // bound on its own, five of our six pairs collapse into ONE walk
+      // (action=created) plus one more for task.completed — a different answer
+      // entirely from six walks.
+      ["action + date_updated__gte  <-- could collapse 5 pairs into 1 walk", { action: "created", ...bound }],
+      ["object_type + action + date_updated__gte", { object_type: "activity.sms", action: "created", ...bound }],
     ];
-    if (boundValue) {
-      combos.push(
-        ["object_type + date_updated__gte  <-- THE ONE THAT DECIDES PHASE 9", { object_type: "activity.sms", date_updated__gte: boundValue }],
-        ["object_type + action + date_updated__gte", { object_type: "activity.sms", action: "created", date_updated__gte: boundValue }],
-      );
-    }
+
     for (const [label, params] of combos) {
       const res = await attempt({ _limit: String(MAX_LIMIT), ...params });
       if (!res.ok) {
-        note(`  ${label}`, `REJECTED HTTP ${res.status}: ${res.body}   [combination NOT supported]`);
+        note(`  ${label}`, `REJECTED HTTP ${res.status}   [combination NOT supported]`);
+        // IN FULL. The 400 body is where Close lists which combinations it
+        // allows, and it was being clipped at 300 characters — cutting off the
+        // answer to the only question this section asks.
+        console.log(`           full response body:`);
+        for (const line of res.body.split("\n")) console.log(`             ${line}`);
         continue;
       }
       const rows = evs(res.page);
       const rIds = new Set(rows.map((e) => e.id));
       const unchanged = rIds.size === baseIds.size && [...rIds].every((id) => baseIds.has(id));
-      // Accepted-and-ignored is the failure mode this whole exercise is about,
-      // so an unchanged response is reported as loudly as a rejection.
+      const types = new Set(res.page.data.map((e) => `${String(e["object_type"])}.${String(e["action"])}`));
       note(
         `  ${label}`,
-        `accepted, ${rows.length} events` +
-          (unchanged
-            ? "   [SAME IDS AS NO FILTER — accepted and IGNORED, which is the date_created__gte failure again]"
-            : "   [response differs from unfiltered: the filter did something]"),
+        `ACCEPTED, ${rows.length} events, ${types.size} distinct object_type.action: ${[...types].slice(0, 8).join(", ")}` +
+          (unchanged ? "   [SAME IDS AS NO FILTER — accepted and IGNORED]" : ""),
       );
     }
+  });
+
+  /**
+   * Can one request cover more than one type?
+   *
+   * Every spelling is probed and then CHECKED AGAINST THE RESPONSE, because
+   * "accepted" is not "honoured": a form that silently takes the first value and
+   * drops the rest returns 200 and a plausible page, and would have us build six
+   * walks' worth of coverage out of one walk's worth of data. So the test is
+   * whether BOTH requested types actually come back.
+   */
+  head("SECTION 7b — does a filter take multiple values?");
+  await section("multi-value filters", async () => {
+    const probes: Array<[string, string]> = [
+      ["object_type__in=a,b", "in"],
+      ["object_type=a&object_type=b (repeated)", "repeat"],
+      ["object_type=a,b (comma in one value)", "comma"],
+    ];
+    for (const [label, style] of probes) {
+      const qs = new URLSearchParams({ _limit: String(MAX_LIMIT), action: "created" });
+      if (style === "in") qs.set("object_type__in", "activity.sms,lead");
+      if (style === "comma") qs.set("object_type", "activity.sms,lead");
+      if (style === "repeat") {
+        qs.append("object_type", "activity.sms");
+        qs.append("object_type", "lead");
+      }
+      const res = await attemptRaw(qs);
+      if (!res.ok) {
+        note(`  ${label}`, `REJECTED HTTP ${res.status}: ${res.body.slice(0, 400)}`);
+        continue;
+      }
+      const types = new Set(res.page.data.map((e) => String(e["object_type"])));
+      const both = types.has("activity.sms") && types.has("lead");
+      note(
+        `  ${label}`,
+        `ACCEPTED, ${res.page.data.length} events, object_types seen: ${[...types].join(", ") || "(none)"}` +
+          (both
+            ? "   [HONOURED: both types returned — one walk can cover several]"
+            : "   [accepted but only one type came back: either ignored, or the page happens to hold one type — re-run to be sure]"),
+      );
+    }
+    // Same question for `action`, since collapsing on that axis is the cheaper win.
+    const qs = new URLSearchParams({ _limit: String(MAX_LIMIT) });
+    qs.append("action", "created");
+    qs.append("action", "completed");
+    const res = await attemptRaw(qs);
     note(
-      "  Phase 9 verdict",
-      "if `object_type + date_updated__gte` is rejected or ignored, filtering by type costs the incremental bound — do not build it",
+      "  action=created&action=completed (repeated)",
+      res.ok
+        ? `ACCEPTED, actions seen: ${[...new Set(res.page.data.map((e) => String(e["action"])))].join(", ")}`
+        : `REJECTED HTTP ${res.status}: ${res.body.slice(0, 400)}`,
+    );
+  });
+
+  /**
+   * THE NUMBER THAT DECIDES IT.
+   *
+   * N filtered walks beat one unfiltered walk only if the six mapped pairs are a
+   * small fraction of what an unfiltered page returns. If they are most of it,
+   * filtering multiplies request count to remove almost nothing — and it costs
+   * N cursors, N continuations and N ways for a walk to fall behind.
+   *
+   * Measured over the walk SECTION 3 already performed, so it costs no extra
+   * requests and samples far more than one page.
+   */
+  head("SECTION 7c — what fraction of the log is actually one of our six pairs?");
+  await section("mapped-pair census", async () => {
+    // `walk()` reduces each page to `{id, raw, ms}` triples, which do not carry
+    // object_type — so the census re-reads its own pages rather than pretending
+    // the earlier walk kept what it needs. Ten pages, up to 500 events: enough
+    // to be a share rather than an anecdote, bounded so this stays cheap.
+    const CENSUS_PAGES = Math.min(WALK_PAGES, 10);
+    const rawRows: Array<Record<string, unknown>> = [];
+    let page = await get({ _limit: String(MAX_LIMIT) });
+    for (let n = 1; ; n++) {
+      rawRows.push(...page.data);
+      if (!page.cursor_next || page.data.length === 0 || n >= CENSUS_PAGES) break;
+      page = await get({ _limit: String(MAX_LIMIT), _cursor: String(page.cursor_next) });
+    }
+
+    const counts = new Map<string, number>();
+    for (const e of rawRows) {
+      const key = `${String(e["object_type"])}.${String(e["action"])}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const total = rawRows.length;
+    if (total === 0) return skip("C11 mapped-pair share", "no events returned");
+
+    const mapped = new Set(MAPPED_PAIRS.map(([o, a]) => `${o}.${a}`));
+    let hit = 0;
+    for (const [key, n2] of counts) if (mapped.has(key)) hit += n2;
+
+    console.log(`         every object_type.action seen over ${total} events, most common first:`);
+    for (const [key, n2] of [...counts.entries()].sort((a, b) => b[1] - a[1])) {
+      console.log(`           ${mapped.has(key) ? "MAPPED  " : "        "} ${key.padEnd(40)} ${n2}  (${((100 * n2) / total).toFixed(1)}%)`);
+    }
+    note(
+      "C11 share of the log our six pairs represent",
+      `${hit} of ${total} events = ${((100 * hit) / total).toFixed(1)}%.  ` +
+        `Filtering is worth its extra walks only if this is LOW; at ${((100 * hit) / total).toFixed(0)}% ` +
+        `it would remove ${(100 - (100 * hit) / total).toFixed(0)}% of the volume.`,
+    );
+    note(
+      "C11b walks needed if no filter takes multiple values",
+      `${MAPPED_PAIRS.length} (one per mapped pair). If \`action\` combines with the bound on its own (SECTION 7), ` +
+        `it is 2 instead — action=created covers five pairs, action=completed the sixth — at the cost of also ` +
+        `returning every OTHER object_type's created events.`,
     );
   });
 

@@ -112,6 +112,19 @@ Every check is a **comparison**, because comparison is what works:
 - **How deep does history go?** Walk until empty; compare to declared retention.
 - **What are the real rate limits?** Read the headers; fill every `PROBED`.
 
+**And it must not draw conclusions.** The first live run proved this the hard
+way: the Phase 9 section printed a canned verdict — "filtering costs the
+incremental bound" — derived from one probe returning 400, while the very next
+row of its own output showed the same filter working when paired with `action`.
+The evidence was right there and the summary contradicted it.
+
+That is the third time in this file's history that a verdict has been wrong
+while the raw numbers beside it were right (an ordering claim, a bound that was
+never applied, and now this). The rule that follows is not "write better
+verdicts" — it is that a prober prints measurements and a human decides. The
+only sentences a prober may assert are ones that compare two responses it made
+itself, which is why every live check above is phrased as a comparison.
+
 ### 1.6 The worked example: `_limit`, where the docs are the wrong source
 
 Close's documentation states the Event Log **does not support `_limit`**. The

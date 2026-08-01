@@ -99,7 +99,8 @@ const FIRST_SYNC_DAYS = 30;
 /**
  * Poll cursor for the Close Event Log. Serialized as the plain high-water
  * date string when no page walk is in flight (back-compat with cursors stored
- * by the old single-page poll), or as JSON mid-walk:
+ * by the old single-page poll), or as JSON mid-walk.
+ *
  * TWO FIELDS, TWO JOBS, and mixing them is the defect this shape now prevents.
  * `date_updated` is when Close last touched a record — the axis the endpoint
  * FILTERS and SORTS on, so it is the only correct axis for a watermark: a
