@@ -36,6 +36,11 @@ const API = "https://api.calendly.com";
 const PAST_DAYS = 30;
 const FUTURE_DAYS = 90;
 
+/** Consecutive restarts before a side is reported as not advancing. */
+const RESTART_ALARM = 2;
+/** The page size every scan request asks for. */
+const COUNT_PER_PAGE = 100;
+
 /** invitee.created -> booked, invitee.canceled -> canceled, etc. */
 const EVENT_TYPE_MAP: Record<string, string> = {
   "invitee.created": "booked",
@@ -221,6 +226,14 @@ type PollCursor = {
   past?: string | null;
   future?: string | null;
   next: Side;
+  /**
+   * Consecutive sweeps whose stored page_token was rejected.
+   *
+   * Lives in the cursor because there is nowhere else: a poll sees no state
+   * between sweeps except what it persisted. Cleared by any sweep that did not
+   * have to restart, so it only ever counts a RUN of failures.
+   */
+  restarts?: number;
 };
 
 /**
@@ -259,7 +272,7 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
   const url = (pageToken?: string | null) => {
     const p = new URLSearchParams({
       ...target,
-      count: "100",
+      count: String(COUNT_PER_PAGE),
       ...(side === "past"
         ? { sort: "start_time:desc", min_start_time: cur.floor, max_start_time: cur.pivot }
         : { sort: "start_time:asc", min_start_time: cur.pivot, max_start_time: cur.ceil }),
@@ -273,11 +286,39 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
 
   const token_in = cur[side] ?? null;
   let data: CalendlyList;
+  let restarted = false;
   try {
     data = await fetchJson<CalendlyList>(url(token_in), { headers: authHeader(token) });
   } catch (e) {
-    // A page token that expired between sweeps self-heals by restarting that side.
     if (!token_in) throw e;
+    /**
+     * A REJECTED CONTINUATION RESTARTS THIS SIDE — and now says so.
+     *
+     * This was one line with a comment reading "a page token that expired
+     * between sweeps self-heals by restarting that side". That is one of two
+     * things it can mean, and the code could not tell them apart:
+     *
+     *   - the token genuinely expired between sweeps → restarting is correct and
+     *     the next sweep gets further;
+     *   - the REQUEST SHAPE is rejected (or tokens never survive the gap) → the
+     *     restart happens every single sweep, the scan never advances past its
+     *     first page, and each side holds only its first 100 events. **For
+     *     ever, with no error anywhere**, because the retry succeeds.
+     *
+     * The tokens are read from the PERSISTED cursor, so the gap between issuing
+     * one and using it is a full cadence interval — ten minutes at base, up to an
+     * hour on the widened webhook backstop. Whether a Calendly token survives
+     * that has never been measured; `scripts/verify-calendly.ts` CL10/CL11 do it.
+     *
+     * So the restart is counted in the cursor. One is unremarkable. Two in a row
+     * means the side is not advancing, and that is reported rather than absorbed.
+     */
+    restarted = true;
+    console.warn(
+      `[calendly-probe] ${side} side: page_token rejected (${e instanceof Error ? e.message : String(e)}); ` +
+        `restarting this side at page 1. ` +
+        `consecutive restarts: ${(cur.restarts ?? 0) + 1}`,
+    );
     data = await fetchJson<CalendlyList>(url(null), { headers: authHeader(token) });
   }
 
@@ -314,12 +355,46 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
     );
   }
 
+  /**
+   * The restart counter, reset by any request that did NOT have to restart.
+   *
+   * A one-off expiry clears itself on the next sweep, so a count only survives
+   * while restarts keep happening — which is the state worth naming.
+   */
+  const restarts = restarted ? (cur.restarts ?? 0) + 1 : 0;
+
   // Advance this side, then hand the turn to the other one.
-  const advanced: PollCursor = { ...cur, [side]: data.pagination?.next_page_token ?? null, next: other(side) };
+  const advanced: PollCursor = {
+    ...cur,
+    [side]: data.pagination?.next_page_token ?? null,
+    next: other(side),
+    ...(restarts > 0 ? { restarts } : { restarts: undefined }),
+  };
   const done = drained(advanced, "past") && drained(advanced, "future");
+
+  /**
+   * A SCAN THAT KEEPS RESTARTING IS NOT FINISHING, and says so.
+   *
+   * Two consecutive restarts cannot be two coincidental expiries — it means the
+   * stored token is never usable, so this side re-reads page 1 every sweep and
+   * everything past the first `count` events is unreachable. `incomplete` holds
+   * the connection at base cadence (rather than letting the ladder widen it to
+   * an hour, which would make the loop slower AND quieter) and tells a Test that
+   * the import has outstanding work, which is true.
+   */
+  const stuck = restarts >= RESTART_ALARM;
+  if (stuck) {
+    console.warn(
+      `[calendly-probe] ${side} side has restarted ${restarts} sweeps in a row — the stored page_token is never ` +
+        `accepted, so this side is re-reading its first page and holding at most ${COUNT_PER_PAGE} events. ` +
+        `Run scripts/verify-calendly.ts (CL10 = request shape, CL11 = token lifetime) to say which.`,
+    );
+  }
+
   return {
     records,
     nextCursor: done ? null : JSON.stringify(advanced),
+    ...(stuck ? { incomplete: true } : {}),
     // Stored data tracks the window rather than only growing past it. Without
     // this, narrowing the history window left the older import stranded behind
     // the new floor with a gap in between — data matching neither window.
@@ -364,6 +439,7 @@ function parseCursor(raw: string | null, windowFloor: Date | null = null): PollC
           ...("past" in c ? { past: typeof c.past === "string" ? c.past : null } : {}),
           ...("future" in c ? { future: typeof c.future === "string" ? c.future : null } : {}),
           next: c.next === "future" ? "future" : "past",
+          ...(typeof c.restarts === "number" && c.restarts > 0 ? { restarts: c.restarts } : {}),
         };
       }
     } catch {

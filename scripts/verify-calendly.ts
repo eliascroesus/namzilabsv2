@@ -52,7 +52,9 @@
  *
  * Env knobs: CALENDLY_SCOPE ("user" — the connector's default — or
  * "organization"), CALENDLY_SKIP_FROM (how far back the skip detector reaches,
- * default 2015-01-01 — widen it if an account has too few events to paginate).
+ * default 2015-01-01 — widen it if an account has too few events to paginate),
+ * CALENDLY_TOKEN_WAIT (seconds CL11 ages a page_token before retrying it —
+ * default 60; use "600" to match base cadence, or "60,540" to bracket it).
  */
 
 const API = "https://api.calendly.com";
@@ -485,45 +487,143 @@ async function main(): Promise<void> {
    * token would produce the same 400, and only the comparison separates them.
    * ════════════════════════════════════════════════════════════════════════
    */
-  head("SECTION 6a — must a page_token be sent ALONE, or with its original query?");
-  let tokenAlone = true;
+  head("SECTION 6a — a page_token, paired with the query it came from");
+  let tokenAlone = false;
   await section("continuation form", async () => {
-    const span = { min_start_time: SKIP_FROM, max_start_time: ceil };
-    const first = await get({ ...scope, ...span, count: String(SKIP_PAGE_A) });
-    const tok = first.pagination?.next_page_token ?? null;
+    /**
+     * THE CONNECTOR'S EXACT QUERY, not an approximation of it.
+     *
+     * An earlier version of this section built its own simpler query — scope,
+     * bounds, count — and paired the token with THAT. It was same-query pairing
+     * and it did isolate the form, but it omitted `sort`, which `calendly.ts`
+     * always sends. If the rejection is specifically about `sort` travelling
+     * with a `page_token`, that version could not have seen it.
+     *
+     * So the first request here is the past side of the outward scan, verbatim
+     * from `calendly.ts`: scope, count=100, `sort=start_time:desc`,
+     * `min_start_time`, `max_start_time`.
+     */
+    const connectorQuery: Record<string, string> = {
+      ...scope,
+      count: String(COUNT),
+      sort: "start_time:desc",
+      min_start_time: SKIP_FROM,
+      max_start_time: ceil,
+    };
+    const first = await attempt("/scheduled_events", connectorQuery);
+    if (!first.ok) {
+      return check("CL10 the connector's own first request succeeds", false, `HTTP ${first.status}: ${first.body}`);
+    }
+    const tok = first.page.pagination?.next_page_token ?? null;
     if (!tok) {
       return skip(
         "CL10 continuation form",
-        `page 1 at count=${SKIP_PAGE_A} returned no next_page_token — the span holds one page, so there is no continuation to test`,
+        `the connector's query returned ${first.page.collection.length} events and NO next_page_token — ` +
+          `this account has one page in that span, so there is no continuation to test. Widen CALENDLY_SKIP_FROM.`,
       );
     }
+    // The token itself, because its shape is worth seeing when it is rejected.
+    console.log(`         token: ${tok.length} chars, starts ${JSON.stringify(tok.slice(0, 24))}`);
+
+    // Back to back, so expiry cannot explain a difference between the two arms.
+    const combined = await attempt("/scheduled_events", { ...connectorQuery, page_token: tok });
     const alone = await attempt("/scheduled_events", { page_token: tok });
-    const combined = await attempt("/scheduled_events", { ...scope, ...span, count: String(SKIP_PAGE_A), page_token: tok });
+
     note(
-      "CL10 page_token ALONE",
+      "CL10 token + the IDENTICAL query it came from (what calendly.ts sends)",
+      combined.ok ? `ACCEPTED, ${combined.page.collection.length} events` : `REJECTED HTTP ${combined.status}: ${combined.body}`,
+    );
+    note(
+      "CL10 token ALONE",
       alone.ok ? `ACCEPTED, ${alone.page.collection.length} events` : `REJECTED HTTP ${alone.status}: ${alone.body}`,
     );
-    note(
-      "CL10 page_token WITH the original query (what calendly.ts sends)",
-      combined.ok
-        ? `ACCEPTED, ${combined.page.collection.length} events`
-        : `REJECTED HTTP ${combined.status}: ${combined.body}`,
-    );
-    tokenAlone = alone.ok;
-    if (alone.ok && !combined.ok) {
-      // A FAIL, not a note: this is a defect in the connector, established by
-      // comparison rather than inferred from one failing request.
+    tokenAlone = alone.ok && !combined.ok;
+
+    if (combined.ok) {
+      check(
+        "CL10 the form calendly.ts sends is accepted",
+        true,
+        "token + its originating query works — the connector's pagination shape is correct, and an earlier 400 " +
+          "was something else (see CL11 for lifetime)",
+      );
+    } else if (alone.ok) {
       check(
         "CL10 the form calendly.ts sends is accepted",
         false,
-        "the token works ALONE but is rejected alongside its original query — which is the form " +
-          "src/connectors/calendly.ts:270 sends. Its catch block then retries without the token and " +
-          "restarts the side at page 1, so the outward scan never advances past its first page and " +
-          "each side holds only the first 100 events. Silent: no error reaches the connection.",
+        "the token works ALONE but is REJECTED alongside the identical query it came from — which is the form " +
+          "src/connectors/calendly.ts:270 sends. Its catch block then retries without the token and restarts the " +
+          "side at page 1, so the outward scan never advances past its first page and each side holds only its " +
+          "first 100 events, silently.",
       );
-    } else if (!alone.ok && !combined.ok) {
-      note("CL10 both forms rejected", "the token itself is stale or invalid — re-run; this says nothing about the connector");
+    } else {
+      note(
+        "CL10 both arms rejected",
+        "the token is refused in every form seconds after being issued — not a query-shape problem. " +
+          "Read CL11: if the lifetime is near zero the token is single-use or immediately stale.",
+      );
     }
+  });
+
+  /**
+   * ════════════════════════════════════════════════════════════════════════
+   * SECTION 6b — HOW LONG DOES A TOKEN LIVE? The question nobody asked.
+   *
+   * `calendly.ts:275` reads `token_in` from the PERSISTED CURSOR. The connector
+   * takes one page, stores the token, ends the sweep, and reuses it on the NEXT
+   * sweep — ten minutes later at base cadence, and up to an hour on the widened
+   * webhook backstop.
+   *
+   * If Calendly's tokens do not survive that gap, the outward scan restarts at
+   * page 1 every single sweep and never advances past 100 events per side. Same
+   * outcome as a rejected query shape, entirely different mechanism, and the
+   * catch block hides both.
+   *
+   * Reported as a NUMBER — "survived N seconds" — not as a verdict. The default
+   * wait is deliberately short so a manual run is quick; set CALENDLY_TOKEN_WAIT
+   * to 600 to test the real base cadence when the runtime allows it.
+   * ════════════════════════════════════════════════════════════════════════
+   */
+  head("SECTION 6b — does a page_token survive the gap between sweeps?");
+  await section("token lifetime", async () => {
+    const waits = (process.env.CALENDLY_TOKEN_WAIT ?? "60")
+      .split(",")
+      .map((n) => Math.max(1, Number(n.trim()) || 0))
+      .filter((n) => n > 0);
+    const connectorQuery: Record<string, string> = {
+      ...scope,
+      count: String(COUNT),
+      sort: "start_time:desc",
+      min_start_time: SKIP_FROM,
+      max_start_time: ceil,
+    };
+    const first = await attempt("/scheduled_events", connectorQuery);
+    if (!first.ok) return skip("CL11 token lifetime", `the first request failed: HTTP ${first.status}`);
+    const tok = first.page.pagination?.next_page_token ?? null;
+    if (!tok) return skip("CL11 token lifetime", "no next_page_token to age");
+
+    let survivedFor = 0;
+    let died: string | null = null;
+    for (const wait of waits) {
+      console.log(`         waiting ${wait}s before retrying the token…`);
+      await new Promise((r) => setTimeout(r, wait * 1000));
+      const retry = await attempt("/scheduled_events", { ...connectorQuery, page_token: tok });
+      if (retry.ok) {
+        survivedFor += wait;
+        note(`CL11 token still valid after ${survivedFor}s`, `ACCEPTED, ${retry.page.collection.length} events`);
+      } else {
+        died = `HTTP ${retry.status}: ${retry.body}`;
+        note(`CL11 token REJECTED after ${survivedFor + wait}s`, died);
+        break;
+      }
+    }
+    note(
+      "CL11 observed token lifetime",
+      died === null
+        ? `survived at least ${survivedFor}s. Base cadence is 600s and the widened backstop is 3600s — ` +
+          `set CALENDLY_TOKEN_WAIT=600 (or 600,3000) to cover those.`
+        : `died between ${survivedFor}s and the next attempt. calendly.ts reuses a stored token ~600s later at ` +
+          `base cadence, so a lifetime under that means the outward scan restarts at page 1 every sweep.`,
+    );
   });
 
   head("SECTION 6 — does the page walk skip records?");

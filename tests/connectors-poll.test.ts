@@ -95,6 +95,97 @@ describe("Calendly polling", () => {
   });
 });
 
+/**
+ * A CONTINUATION THAT IS NEVER ACCEPTED, which the connector used to absorb.
+ *
+ * `calendly.ts` reads its `page_token` from the PERSISTED cursor, so the gap
+ * between issuing one and using it is a whole cadence interval — ten minutes at
+ * base, up to an hour on the widened backstop. If the token does not survive
+ * that (or the request shape carrying it is rejected), the catch block restarts
+ * the side at page 1, the retry SUCCEEDS, and nothing anywhere reports a
+ * problem. The scan then re-reads its first page every sweep, for ever, holding
+ * at most 100 events per side.
+ *
+ * One restart is a coincidence. Two in a row is a scan that is not advancing.
+ */
+describe("Calendly: a side that keeps restarting says so", () => {
+  /** Rejects any request carrying a page_token; serves page 1 otherwise. */
+  const rejectContinuations = (tokenOut: string | null) =>
+    vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("/users/me")) {
+        return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+      }
+      if (url.includes("page_token=")) throw new Error("HTTP 400: page_token is invalid");
+      return jsonResponse({
+        collection: [{ uri: "https://api.calendly.com/scheduled_events/E1", name: "Demo", start_time: "2026-02-01T10:00:00Z" }],
+        pagination: { next_page_token: tokenOut },
+      });
+    });
+
+  const poll = (cursor: string | null) =>
+    calendlyConnector.poll!({ connectionId: "c1", cursor, credentials: { accessToken: "tok" } });
+
+  it("counts consecutive restarts in the cursor and reports the side as incomplete", async () => {
+    vi.stubGlobal("fetch", rejectContinuations("TOK-1"));
+
+    /**
+     * THE SCAN ALTERNATES, so the sweeps are not what you would first guess.
+     *
+     * Sweep 1 runs the PAST side with no stored token and banks one. Sweep 2
+     * runs the FUTURE side — also with no stored token, because that side has
+     * not run yet — and banks one too. Only from sweep 3 does either side have a
+     * token to be rejected. Writing this as three sweeps asserted `restarts: 1`
+     * on a sweep that never sent a token at all.
+     */
+    const sweeps: Array<{ restarts: number | undefined; incomplete: boolean | undefined }> = [];
+    let cursor: string | null = null;
+    for (let i = 0; i < 4; i++) {
+      const res = await poll(cursor);
+      cursor = res.nextCursor;
+      sweeps.push({ restarts: JSON.parse(cursor!).restarts, incomplete: res.incomplete });
+    }
+
+    // 1 and 2 open each side; neither can restart.
+    expect(sweeps[0].restarts).toBeUndefined();
+    expect(sweeps[1].restarts).toBeUndefined();
+    // 3 is the first sweep with a stored token, and it is refused.
+    expect(sweeps[2].restarts).toBe(1);
+    // One restart is still consistent with a token that simply expired.
+    expect(sweeps[2].incomplete).toBeFalsy();
+    // 4 is refused too. Two in a row is not a coincidence.
+    expect(sweeps[3].restarts).toBe(2);
+    expect(sweeps[3].incomplete, "a scan re-reading page 1 every sweep reported itself as finished").toBe(true);
+  });
+
+  it("clears the count as soon as a sweep does not have to restart", async () => {
+    // A stuck cursor, then a provider that accepts continuations again.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) {
+          return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+        }
+        return jsonResponse({ collection: [], pagination: { next_page_token: null } });
+      }),
+    );
+    const stuck = JSON.stringify({
+      floor: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+      ceil: new Date(Date.now() + 90 * 86_400_000).toISOString(),
+      pivot: new Date().toISOString(),
+      past: "TOK-OLD",
+      next: "past",
+      restarts: 5,
+    });
+    const res = await poll(stuck);
+    // A run of failures that ends is not a failure worth carrying forward.
+    const after = res.nextCursor ? JSON.parse(res.nextCursor).restarts : undefined;
+    expect(after).toBeUndefined();
+    expect(res.incomplete).toBeFalsy();
+  });
+});
+
 describe("Calendly is stream-scoped (scope config lives on the flow node)", () => {
   it("is stream-scoped, and scope is a per-flow field, not a connect-time one", () => {
     expect(isStreamScoped("calendly")).toBe(true);
