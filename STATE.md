@@ -53,7 +53,7 @@ decision, not blocked.
 | `SENDBLUE_API_KEY_ID` / `SENDBLUE_API_SECRET` | `scripts/verify-sendblue.ts` (item 3). |
 | `CALENDLY_API_TOKEN` | `scripts/verify-calendly.ts` (item 1b). A Calendly **Personal Access Token**: Integrations & apps → API & webhooks → Personal Access Tokens. |
 | `CLOSE_VERIFY_PAGES` | Walk depth for the Close script. Default 40 pages. |
-| `CALENDLY_VERIFY_PAGES` | Walk depth for the Calendly script. Default 6 pages (Calendly publishes 60 req/min). |
+| `CALENDLY_SKIP_FROM` | How far back Calendly's skip detector reaches. Default `2015-01-01` — the check FAILS rather than passing if the span holds too few events to paginate. |
 
 ### Everything else in `.env.example`
 

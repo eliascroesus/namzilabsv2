@@ -50,18 +50,47 @@
  * Calendly → Integrations & apps → API & webhooks → Personal Access Tokens →
  * Generate new token (https://calendly.com/integrations/api_webhooks).
  *
- * Env knobs: CALENDLY_VERIFY_PAGES (walk depth, default 6),
- * CALENDLY_SCOPE ("user" — the connector's default — or "organization").
+ * Env knobs: CALENDLY_SCOPE ("user" — the connector's default — or
+ * "organization"), CALENDLY_SKIP_FROM (how far back the skip detector reaches,
+ * default 2015-01-01 — widen it if an account has too few events to paginate).
  */
 
 const API = "https://api.calendly.com";
 
 /** The connector's page size, mirrored from `calendly.ts`. */
 const COUNT = 100;
-/** Walk depth for the skip detector. Kept low: Calendly publishes 60 req/min. */
-const WALK_PAGES = Math.max(2, Number(process.env.CALENDLY_VERIFY_PAGES ?? 6) || 6);
-/** Second page size for the skip detector — different boundaries, same data. */
-const ALT_COUNT = 25;
+/**
+ * THE SKIP DETECTOR'S OWN SIZING — and the reason it is not `COUNT` and `25`.
+ *
+ * The first version of this script walked the connector's own 30-back/90-forward
+ * window at 100 and at 25, and on the first live account that window held 23
+ * events. Both walks returned "23 unique over 1 pages" and the check PASSED —
+ * with no page boundaries in either walk, so nothing about `page_token` was
+ * exercised at all. A vacuous pass, from data that satisfied the assumption
+ * instead of testing it, which is the same trap as a fixture that only ever
+ * serves newest-first.
+ *
+ * So the detector now takes a PREFIX of a deliberately wide span: exactly
+ * `SKIP_TARGET` records at two page sizes that both force several boundaries.
+ * Two properties make the comparison valid:
+ *
+ *   - both walks stop after the SAME number of records, so a shorter walk
+ *     cannot read as a skip;
+ *   - the only assumption is that the endpoint's order is STABLE between two
+ *     requests — not that `sort` works, not which field it sorts by. Whatever
+ *     the first 90 records are, both walks should see the same 90.
+ */
+const SKIP_TARGET = 90;
+const SKIP_PAGE_A = 10; // 9 pages
+const SKIP_PAGE_B = 30; // 3 pages
+/**
+ * How far back the skip detector reaches — wide on purpose, and NOT the
+ * connector's window. The question here is whether `page_token` steps over
+ * records, which is a property of the pagination and not of the window; asking
+ * it inside a span too small to have boundaries is how the vacuous pass
+ * happened.
+ */
+const SKIP_FROM = process.env.CALENDLY_SKIP_FROM ?? "2015-01-01T00:00:00.000Z";
 /** The window `calendly.ts` reads: 30 days back, 90 forward. */
 const PAST_DAYS = 30;
 const FUTURE_DAYS = 90;
@@ -174,7 +203,7 @@ const sameSequence = (a: string[], b: string[]) => a.length === b.length && a.ev
 
 async function main(): Promise<void> {
   console.log("Calendly /scheduled_events — RAW EVIDENCE (read-only)");
-  console.log(`walk depth: ${WALK_PAGES} pages of ${COUNT}\n`);
+  console.log(`skip detector: first ${SKIP_TARGET} records at page size ${SKIP_PAGE_A} and ${SKIP_PAGE_B}, from ${SKIP_FROM}\n`);
 
   // ══════════════════════════════════════════════════════════════ who is this
   head("SECTION 0 — the token, and the scope every later request uses");
@@ -427,57 +456,133 @@ async function main(): Promise<void> {
    */
   head("SECTION 6 — does the page walk skip records?");
   await section("skip detection", async () => {
-    const span = { min_start_time: floor, max_start_time: ceil };
-    const walk = async (count: number) => {
+    const span = { min_start_time: SKIP_FROM, max_start_time: ceil };
+    console.log(`         span: ${SKIP_FROM} .. ${ceil}   (deliberately wider than the connector's window)`);
+    console.log(`         taking the first ${SKIP_TARGET} records at page size ${SKIP_PAGE_A} and again at ${SKIP_PAGE_B}`);
+
+    /** The first `target` records of the span, and how many pages it took. */
+    const walk = async (count: number, target: number) => {
       const seen = new Map<string, Record<string, unknown>>();
       const duplicates: string[] = [];
       let pageToken: string | null = null;
       let pages = 0;
-      for (; pages < WALK_PAGES; pages++) {
-        const params: Record<string, string> = { ...scope, ...span, count: String(count), sort: "start_time:asc" };
+      let exhausted = false;
+      while (seen.size < target && pages < Math.ceil(target / count) + 2) {
+        const params: Record<string, string> = { ...scope, ...span, count: String(count) };
         if (pageToken) params.page_token = pageToken;
         const p = await get(params);
+        pages += 1;
         for (const e of p.collection) {
           const id = String(e["uri"]);
           if (seen.has(id)) duplicates.push(id);
-          else seen.set(id, e);
+          else if (seen.size < target) seen.set(id, e);
         }
         pageToken = p.pagination?.next_page_token ?? null;
-        if (!pageToken || p.collection.length === 0) break;
+        if (!pageToken || p.collection.length === 0) {
+          exhausted = true;
+          break;
+        }
       }
-      return { seen, duplicates, pages: pages + 1, drained: !pageToken };
+      return { seen, duplicates, pages, exhausted };
     };
 
-    const a = await walk(COUNT);
-    const b = await walk(ALT_COUNT);
+    const a = await walk(SKIP_PAGE_A, SKIP_TARGET);
+    const b = await walk(SKIP_PAGE_B, SKIP_TARGET);
+
+    /**
+     * THE GUARD AGAINST A VACUOUS PASS, and it FAILS rather than skips.
+     *
+     * A walk that returned one page crossed no boundary, so it cannot have
+     * detected a cursor stepping over one. Reporting that as a pass is how this
+     * check spent its first live run proving nothing — so a run that could not
+     * exercise the question says so as a failure, with what to change.
+     */
+    const paged = a.pages >= 2 && b.pages >= 2;
+    check(
+      "CL8 both walks actually paginated (a single-page walk tests nothing)",
+      paged,
+      `page size ${SKIP_PAGE_A}: ${a.pages} page(s), ${a.seen.size} records; ` +
+        `page size ${SKIP_PAGE_B}: ${b.pages} page(s), ${b.seen.size} records` +
+        (paged
+          ? ""
+          : `  — the span holds too few events to have a page boundary. Widen it with ` +
+            `CALENDLY_SKIP_FROM=<earlier ISO date>, or this account genuinely has under ${SKIP_PAGE_B * 2} events.`),
+    );
+
     check(
       "CL8 no event returned twice within a walk",
       a.duplicates.length === 0 && b.duplicates.length === 0,
-      `page size ${COUNT}: ${a.seen.size} unique over ${a.pages} pages, ${a.duplicates.length} duplicate(s); ` +
-        `page size ${ALT_COUNT}: ${b.seen.size} unique over ${b.pages} pages, ${b.duplicates.length} duplicate(s)`,
+      `${a.duplicates.length} duplicate(s) at page size ${SKIP_PAGE_A}, ${b.duplicates.length} at ${SKIP_PAGE_B}`,
     );
 
-    if (!a.drained || !b.drained) {
-      note(
-        "CL8 walk termination",
-        `stopped on the ${WALK_PAGES}-page cap (${a.drained ? "" : `count=${COUNT} `}${b.drained ? "" : `count=${ALT_COUNT}`} still had a token) — ` +
-          `raise CALENDLY_VERIFY_PAGES to compare complete walks`,
+    // Both walks took the same prefix, so a size difference is itself a finding:
+    // it means one of them ran out early and the sets are not comparable.
+    const comparable = paged && a.seen.size === b.seen.size;
+    if (!comparable) {
+      skip(
+        "CL8 two page sizes see the same records",
+        `walks covered different amounts (${a.seen.size} vs ${b.seen.size}) — not comparable. ` +
+          (a.exhausted || b.exhausted ? "The span ran out before the target." : ""),
       );
+      return;
     }
     const onlyA = [...a.seen.keys()].filter((id) => !b.seen.has(id));
     const onlyB = [...b.seen.keys()].filter((id) => !a.seen.has(id));
-    // Only meaningful when BOTH walks drained; a truncated walk legitimately
-    // holds fewer records and would read as a skip.
-    if (a.drained && b.drained) {
-      check(
-        "CL8 two page sizes over one span see the same records",
-        onlyA.length === 0 && onlyB.length === 0,
-        `${onlyA.length} seen only at count=${COUNT}, ${onlyB.length} seen only at count=${ALT_COUNT}`,
-      );
-      for (const id of [...onlyA, ...onlyB].slice(0, 10)) console.log(`           only one walk saw: ${id}`);
-    } else {
-      skip("CL8 two page sizes over one span see the same records", "at least one walk hit the page cap — not comparable");
+    check(
+      "CL8 two page sizes over one span see the same records",
+      onlyA.length === 0 && onlyB.length === 0,
+      `${a.seen.size} records each, ${a.pages} pages vs ${b.pages} pages; ` +
+        `${onlyA.length} seen only at count=${SKIP_PAGE_A}, ${onlyB.length} seen only at count=${SKIP_PAGE_B}`,
+    );
+    for (const id of [...onlyA, ...onlyB].slice(0, 10)) console.log(`           only one walk saw: ${id}`);
+  });
+
+  /**
+   * SECTION 7 — the scopes this run did NOT use.
+   *
+   * Everything above ran under `user` scope, because that is what `scopeOf` in
+   * `calendly.ts` defaults to. But the connector offers two more through its
+   * flowFields — `organization` and `group` — and they change the `/scheduled_events`
+   * target parameter entirely. Verifying one scope and saying nothing about the
+   * others would leave the same gap this whole script exists to close.
+   *
+   * These are reported rather than asserted: an empty organization result is a
+   * legitimate answer for a token without org admin rights, and groups are a
+   * paid-tier feature, so neither is a failure.
+   */
+  head("SECTION 7 — the organization and group scopes the connector also offers");
+  await section("other scopes", async () => {
+    const me = await attempt("/users/me", {});
+    if (!me.ok) return skip("CL9 other scopes", `could not re-read identity: HTTP ${me.status}`);
+    const org = (me.page as unknown as { resource?: { current_organization?: string } }).resource?.current_organization;
+    note("CL9 scope this run used", `user — every check above. organization/group are exercised only below.`);
+    if (!org) return skip("CL9 organization scope", "the token reports no current_organization");
+
+    const orgRes = await attempt("/scheduled_events", { organization: org, count: String(COUNT) });
+    note(
+      "CL9 organization scope",
+      orgRes.ok
+        ? `${orgRes.page.collection.length} events returned` +
+          (orgRes.page.collection.length === 0
+            ? "  [zero — the signature of a token without organization admin rights, which is what calendly.ts's [calendly-probe] line watches for]"
+            : "")
+        : `REJECTED HTTP ${orgRes.status}: ${orgRes.body}`,
+    );
+
+    const groups = await attempt("/groups", { organization: org, count: "100" });
+    if (!groups.ok) return note("CL9 group scope", `/groups REJECTED HTTP ${groups.status}: ${groups.body}`);
+    const list = groups.page.collection ?? [];
+    if (list.length === 0) {
+      return note("CL9 group scope", "no groups on this plan — groups are a paid-tier feature, so an empty list is legitimate");
     }
+    const uri = String(list[0]["uri"]);
+    const groupRes = await attempt("/scheduled_events", { organization: org, group: uri, count: String(COUNT) });
+    note(
+      "CL9 group scope",
+      groupRes.ok
+        ? `${list.length} group(s); first returned ${groupRes.page.collection.length} events`
+        : `REJECTED HTTP ${groupRes.status}: ${groupRes.body}`,
+    );
   });
 
   report();

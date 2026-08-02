@@ -465,8 +465,9 @@ workflow → provider **calendly** (or **all**).
 CALENDLY_API_TOKEN=eyJ… pnpm tsx scripts/verify-calendly.ts
 ```
 
-Env knobs: `CALENDLY_VERIFY_PAGES` (walk depth, default 6),
-`CALENDLY_SCOPE` (`user`, the connector's default, or `organization`).
+Env knobs: `CALENDLY_SCOPE` (`user`, the connector's default, or
+`organization`), `CALENDLY_SKIP_FROM` (how far back CL8 reaches, default
+`2015-01-01` — widen it if the account has too few events to paginate).
 
 </details>
 
@@ -487,7 +488,9 @@ What to look for, and what each would mean:
 | **CL5** bounds | `IDENTICAL id set to the unbounded control` | the window is not a window; the scan reads the whole account and the 30/90-day framing is decoration |
 | **CL6** `status` | `IDENTICAL id set to no-status — accepted and IGNORED` | narrowing a flow to "canceled only" silently returns everything, and nothing filters it client-side |
 | **CL7** `count=101` | `ACCEPTED … MORE than the assumed cap` | the page size in `calendly.ts` is not the real cap |
+| **CL8** both walks paginated | FAIL | the span held too few events to have a page boundary, so the skip question was **not asked**. Widen `CALENDLY_SKIP_FROM`. This fails rather than passing because the first live run reported "23 unique over 1 pages" at both page sizes and called it a PASS — a walk that crossed no boundary cannot detect a cursor stepping over one |
 | **CL8** two page sizes | FAIL | `page_token` steps over records — Defect #2's shape, in the connector nobody had checked |
+| **CL9** organization scope | `zero` events | the token has no organization admin rights. Not a failure — but every check above ran under `user` scope, and the connector offers `organization` and `group` through its flowFields, so those paths are exercised only by this line |
 
 **`sort` is compared as a SEQUENCE, not a set** — a working sort returns the same
 records in a different order, so the id-set comparison used for every filter would
