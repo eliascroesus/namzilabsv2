@@ -34,8 +34,10 @@
  * The key is a **v2** key: Instantly → Settings → Integrations → API.
  * (v1 keys stopped working 19 Jan 2026; a 401 here is the signature.)
  *
- * Env knobs: INSTANTLY_SKIP_TARGET (records the skip detector compares,
- * default 60), INSTANTLY_CAMPAIGN (pin a campaign id instead of the first one).
+ * Env knobs: INSTANTLY_SKIP_TARGET (records the skip detector compares, default
+ * 60), INSTANTLY_CAMPAIGN (pin a campaign instead of walking the list for one
+ * with data), INSTANTLY_GAP_MS (spacing between requests, default 3200ms — the
+ * live API enforces 20/min, exactly what the catalog declares).
  */
 
 const API = "https://api.instantly.ai/api/v2";
@@ -92,7 +94,33 @@ function key(): string {
   return k;
 }
 
+/**
+ * PACING — because the first run died on HTTP 429 partway through.
+ *
+ * "Maximum 20 requests per minute allowed", which is EXACTLY the
+ * `requestsPerMinute: 20` our catalog declares for every Instantly operation.
+ * The declared budget was right; this script simply spent it. The twelve
+ * date-parameter probes in SECTION 2 are twelve requests on their own, and the
+ * skip detector wants a dozen more.
+ *
+ * So requests are spaced to stay inside the provider's own limit rather than
+ * discovering it again. 3.2s apart is 18.75/min — under 20 with room for the
+ * burst at the start. A full run is therefore slow by design; it is a one-time
+ * verification, not something in a request path.
+ *
+ * `INSTANTLY_GAP_MS` tightens or loosens the spacing if the limit ever changes.
+ */
+const MIN_REQUEST_GAP_MS = Math.max(0, Number(process.env.INSTANTLY_GAP_MS ?? 3200) || 3200);
+let lastRequestAt = 0;
+
+async function pace(): Promise<void> {
+  const wait = lastRequestAt + MIN_REQUEST_GAP_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastRequestAt = Date.now();
+}
+
 async function attempt(path: string, params: Record<string, string> = {}): Promise<Attempt> {
+  await pace();
   const qs = new URLSearchParams(params).toString();
   requests += 1;
   const res = await fetch(`${API}${path}${qs ? `?${qs}` : ""}`, {
@@ -159,7 +187,7 @@ async function main(): Promise<void> {
 
   // ═════════════════════════════════════════════════ the key, and the campaigns
   head("SECTION 0 — the key era, and the campaign census");
-  const campaign = await section("campaigns", async () => {
+  const campaigns = await section("campaigns", async () => {
     const a = await attempt("/campaigns", { limit: "100" });
     if (!a.ok) {
       check(
@@ -167,18 +195,24 @@ async function main(): Promise<void> {
         false,
         `HTTP ${a.status}: ${a.body}` + (a.status === 401 ? "  — v1 keys stopped working 19 Jan 2026; create a v2 key" : ""),
       );
-      return null;
+      return { chosen: null, ids: [] as string[] };
     }
     const rows = asRows(a.body);
     check("I0 the key is accepted", true, `${rows.length} campaign(s) returned`);
+    // The whole list, not just the first: SECTION 4 has to walk it looking for a
+    // campaign with activity, because asking the first one and getting zero rows
+    // is what made the window test vacuous on the first run.
+    const ids = rows.map((r) => String(r["id"] ?? "")).filter(Boolean);
     const pinned = process.env.INSTANTLY_CAMPAIGN;
-    const chosen = pinned ?? (rows[0] ? String(rows[0]["id"]) : null);
     note(
-      "I0 campaign used for the analytics sections",
-      chosen ? `${chosen}${pinned ? " (pinned via INSTANTLY_CAMPAIGN)" : " (first in the list)"}` : "none — no campaigns on this account",
+      "I0 campaign pool for the analytics sections",
+      pinned ? `${pinned} (pinned via INSTANTLY_CAMPAIGN)` : `${ids.length} campaign(s); SECTION 4 walks them until one has daily rows`,
     );
-    return chosen;
+    return { chosen: pinned ?? ids[0] ?? null, ids };
   });
+
+  const campaign = campaigns?.chosen ?? null;
+  const campaignPool = campaigns?.ids ?? [];
 
   /**
    * ════════════════════════════════════════════════════════════════════════
@@ -376,61 +410,100 @@ async function main(): Promise<void> {
     const to = new Date();
     const from = new Date(to.getTime() - WINDOW_DAYS * 86_400_000);
     const narrowFrom = new Date(to.getTime() - 3 * 86_400_000);
+    const daily = (extra: Record<string, string>) =>
+      attempt("/campaigns/analytics/daily", { end_date: ymd(to), exclude_total_leads_count: "true", ...extra });
 
-    const full = await attempt("/campaigns/analytics/daily", {
-      campaign_id: campaign,
-      start_date: ymd(from),
-      end_date: ymd(to),
-      exclude_total_leads_count: "true",
-    });
-    if (!full.ok) return note("I6 analytics_daily", `REJECTED HTTP ${full.status}: ${full.body}`);
-    const fullRows = asRows(full.body);
-    note("I6 the request the connector sends", `${WINDOW_DAYS}-day window returned ${fullRows.length} row(s)`);
-
-    // Does `start_date` bound? A 3-day window must return fewer rows than 30.
-    const narrow = await attempt("/campaigns/analytics/daily", {
-      campaign_id: campaign,
-      start_date: ymd(narrowFrom),
-      end_date: ymd(to),
-      exclude_total_leads_count: "true",
-    });
-    if (narrow.ok) {
-      const narrowRows = asRows(narrow.body);
+    /**
+     * FIND A CAMPAIGN WITH DATA FIRST.
+     *
+     * The first run asked about the first campaign in the list and got 0 rows,
+     * then compared a 30-day window of 0 rows against a 3-day window of 0 rows
+     * and reported the window as tested. It was not: two empty responses agree
+     * about nothing. Same vacuous-test rule as Calendly's CL8 — a check whose
+     * data cannot distinguish the answers has not run.
+     *
+     * So: walk campaigns until one returns rows, and say which. If none does,
+     * that is itself the finding and the window checks below are FAILED rather
+     * than passed, because they cannot be performed.
+     */
+    let subject: string | null = null;
+    let fullRows: Rows = [];
+    const tried: string[] = [];
+    const pool = process.env.INSTANTLY_CAMPAIGN ? [process.env.INSTANTLY_CAMPAIGN] : campaignPool.slice(0, 8);
+    for (const id of pool) {
+      const res = await daily({ campaign_id: id, start_date: ymd(from) });
+      tried.push(`${id}:${res.ok ? asRows(res.body).length : `HTTP ${res.status}`}`);
+      if (res.ok && asRows(res.body).length > 0) {
+        subject = id;
+        fullRows = asRows(res.body);
+        break;
+      }
+    }
+    note("I6 campaigns tried, and how many daily rows each returned", tried.join(", ") || "(none)");
+    if (!subject) {
+      check(
+        "I6 a campaign with daily rows was found (without one, nothing below can be tested)",
+        false,
+        `${tried.length} campaign(s) returned zero daily rows. The window and scoping checks CANNOT run — ` +
+          `this is not a pass. Either these campaigns genuinely have no activity in the last ${WINDOW_DAYS} days, ` +
+          `or campaign_id behaves here as it does on /campaigns/analytics (accepted and ignored) in a way that ` +
+          `returns nothing. Pin a campaign you know has sends with INSTANTLY_CAMPAIGN and re-run.`,
+      );
+      // The unfiltered control still says something useful about the endpoint.
+      const bare = await daily({ start_date: ymd(from) });
       note(
-        "I6 start_date/end_date bound the window",
-        `30-day window ${fullRows.length} rows vs 3-day window ${narrowRows.length} rows` +
-          (fullRows.length === narrowRows.length
-            ? "   [IDENTICAL counts — the window may be accepted and IGNORED, which would make `days` decorative]"
-            : "   [narrowing the window returned fewer rows]"),
+        "I6 the same window with NO campaign_id",
+        bare.ok
+          ? `${asRows(bare.body).length} row(s) — a non-zero count here while every campaign returns zero means ` +
+            `campaign_id is not merely ignored, it is excluding everything`
+          : `REJECTED HTTP ${bare.status}: ${bare.body.slice(0, 300)}`,
+      );
+      return;
+    }
+    note("I6 campaign used below", `${subject} — ${fullRows.length} row(s) over ${WINDOW_DAYS} days`);
+
+    // Does `start_date` bound? Only meaningful once a non-empty side exists.
+    const narrow = await daily({ campaign_id: subject, start_date: ymd(narrowFrom) });
+    if (!narrow.ok) {
+      note("I6 start_date/end_date", `3-day request REJECTED HTTP ${narrow.status}: ${narrow.body.slice(0, 300)}`);
+    } else {
+      const narrowRows = asRows(narrow.body);
+      check(
+        "I6 narrowing the window changes the result (a 0-vs-0 comparison proves nothing)",
+        fullRows.length > 0 && narrowRows.length !== fullRows.length,
+        `${WINDOW_DAYS}-day window ${fullRows.length} rows vs 3-day window ${narrowRows.length} rows` +
+          (narrowRows.length === fullRows.length
+            ? "  — identical counts. Either this campaign has activity only in the last 3 days, or start_date is " +
+              "accepted and IGNORED, which would make the `days` field decorative. Re-run against a campaign with " +
+              "a longer history to separate them."
+            : ""),
       );
     }
 
-    // Is `campaign_id` honoured, or does it return the whole workspace? This is
-    // the same question `probeCampaignScoping` asks from production logs.
-    const noCampaign = await attempt("/campaigns/analytics/daily", {
-      start_date: ymd(from),
-      end_date: ymd(to),
-      exclude_total_leads_count: "true",
-    });
+    // Is `campaign_id` honoured, or does it return the whole workspace?
+    const bare = await daily({ start_date: ymd(from) });
     note(
       "I6 campaign_id — request WITHOUT it, as the control",
-      noCampaign.ok
-        ? `${asRows(noCampaign.body).length} row(s) with no campaign_id vs ${fullRows.length} with it` +
-          (asRows(noCampaign.body).length === fullRows.length
-            ? "   [same count — either one campaign exists, or the filter is ignored; check the ids below]"
-            : "")
-        : `REJECTED HTTP ${noCampaign.status}: ${noCampaign.body.slice(0, 300)}   [campaign_id appears required]`,
+      bare.ok
+        ? `${asRows(bare.body).length} row(s) with no campaign_id vs ${fullRows.length} with it`
+        : `REJECTED HTTP ${bare.status}: ${bare.body.slice(0, 300)}   [campaign_id appears required]`,
     );
     const ids = new Set(fullRows.map((r) => String(r["campaign_id"] ?? r["campaign"] ?? "")).filter(Boolean));
     note(
       "I6 campaign ids echoed in the filtered response",
       ids.size === 0
-        ? "the endpoint does not echo a campaign id — scoping cannot be confirmed from the rows"
-        : [...ids].every((id) => id === campaign)
-          ? `every row carries the requested campaign (${campaign})`
+        ? "the endpoint echoes no campaign id — the connector falls back to its repeated-date guard for scoping"
+        : [...ids].every((id) => id === subject)
+          ? `every row carries the requested campaign (${subject})`
           : `FOREIGN ids present: ${[...ids].slice(0, 5).join(", ")} — the campaign_id filter is not scoping`,
     );
-    // What the connector stores wholesale, so a field vanishing is visible.
+    const dates = fullRows.map((r) => String(r["date"] ?? r["day"] ?? "")).filter(Boolean);
+    note(
+      "I6 repeated dates (the connector's fallback scoping signal)",
+      new Set(dates).size === dates.length
+        ? `${dates.length} row(s), all distinct dates — consistent with one campaign`
+        : `${dates.length} row(s) but only ${new Set(dates).size} distinct dates — the response spans several campaigns`,
+    );
     if (fullRows[0]) note("I6 fields on a daily row", Object.keys(fullRows[0]).sort().join(", "));
   });
 

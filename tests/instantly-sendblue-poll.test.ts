@@ -107,6 +107,116 @@ describe("Instantly is campaign-scoped and analytics-first", () => {
     expect(a.mirrorScope).toBeUndefined();
   });
 
+  /**
+   * THE LIVE BUG THIS BLOCK EXISTS FOR.
+   *
+   * `/campaigns/analytics` IGNORES `campaign_id` — verified against the live API
+   * on 2026-08-02: the filtered request returned 49 rows and the identical
+   * unfiltered request returned the same 49. It answers with one row per
+   * campaign in the workspace, whatever you ask for.
+   *
+   * The connector took `rows[0]` and then spread `campaign_id: <requested>` over
+   * it. On a 52-campaign workspace that meant every "Campaign totals" stream
+   * stored the FIRST campaign's numbers under whichever campaign the user chose,
+   * and the overwrite made the row claim to be the right one. Wrong numbers
+   * wearing the right label — nothing about the stored row looked wrong.
+   *
+   * The fixture puts the requested campaign SECOND on purpose. A fixture with
+   * one row, or with the right row first, passes against the broken code.
+   */
+  // Identified by `id`, not `campaign_id`, for two reasons: it exercises the
+  // fallback in `rowCampaignId` (a per-campaign totals row's own id IS the
+  // campaign), and it makes the no-overwrite assertion below able to fail —
+  // stamping `campaign_id` onto a row keyed by `campaign_id` is a no-op, so a
+  // fixture using that key cannot detect the overwrite at all.
+  const totalsFor = (id: string, sent: number) => ({ id, sent, created_at: "2026-01-01T00:00:00Z" });
+
+  it("campaign totals: picks the requested campaign out of a response containing every campaign", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ items: [totalsFor("camp-OTHER", 999), totalsFor("camp-1", 500), totalsFor("camp-3", 7)] })),
+    );
+    const res = await instantlyConnector.poll!({
+      connectionId: "c1", cursor: null, credentials: { apiKey: "k" }, config: CFG({ streamType: "analytics_totals" }),
+    });
+
+    expect(res.records).toHaveLength(1);
+    expect(res.records[0].properties?.sent, "stored another campaign's totals").toBe(500);
+    // BYTE-FOR-BYTE what the provider sent — no added key, no overwritten one.
+    // Spreading `campaign_id: <requested>` over the row is the step that turned
+    // a wrong row into an unnoticeable one, and only an exact comparison can
+    // see a field being added.
+    expect(res.records[0].properties).toEqual({ id: "camp-1", sent: 500, created_at: "2026-01-01T00:00:00Z" });
+  });
+
+  it("campaign totals: stores NOTHING when the response holds no row for this campaign", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ items: [totalsFor("camp-OTHER", 999), totalsFor("camp-3", 7)] })));
+    const res = await instantlyConnector.poll!({
+      connectionId: "c1", cursor: null, credentials: { apiKey: "k" }, config: CFG({ streamType: "analytics_totals" }),
+    });
+    // An empty stream is visible — the nightly invariant scan reports it. A
+    // plausible total belonging to somebody else is not.
+    expect(res.records).toHaveLength(0);
+  });
+
+  it("daily analytics: keeps only the requested campaign's days out of a multi-campaign response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({
+          items: [
+            { date: "2026-06-29", sent: 111, campaign_id: "camp-OTHER" },
+            { date: "2026-06-29", sent: 10, campaign_id: "camp-1" },
+            { date: "2026-06-30", sent: 222, campaign_id: "camp-OTHER" },
+          ],
+        }),
+      ),
+    );
+    const res = await instantlyConnector.poll!({
+      connectionId: "c1", cursor: null, credentials: { apiKey: "k" }, config: CFG({ days: 7 }),
+    });
+    expect(res.records).toHaveLength(1);
+    expect(res.records[0].properties?.sent).toBe(10);
+    expect(res.records[0].eventId).toBe("instantly:c1:camp-1:daily:2026-06-29");
+  });
+
+  /**
+   * The case scoping-by-field cannot reach: rows that name no campaign at all.
+   *
+   * One row per DAY is the endpoint's shape, so a repeated date proves the
+   * response spans several campaigns. Every row for that day would collide on
+   * one `eventId` and the last written would win, arbitrarily — the totals bug
+   * again, in a stream that looks like it is working.
+   */
+  it("daily analytics: stores nothing when unlabelled rows repeat a date", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({ items: [{ date: "2026-06-29", sent: 111 }, { date: "2026-06-29", sent: 10 }] }),
+      ),
+    );
+    const res = await instantlyConnector.poll!({
+      connectionId: "c1", cursor: null, credentials: { apiKey: "k" }, config: CFG({ days: 7 }),
+    });
+    expect(res.records).toHaveLength(0);
+  });
+
+  it("daily analytics: unlabelled rows with distinct dates are still stored", async () => {
+    // The benign reading of the same shape — one campaign's days, no id echoed.
+    // Refusing these too would empty a working stream on a provider that simply
+    // does not repeat the campaign on every row.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({ items: [{ date: "2026-06-29", sent: 10 }, { date: "2026-06-30", sent: 20 }] }),
+      ),
+    );
+    const res = await instantlyConnector.poll!({
+      connectionId: "c1", cursor: null, credentials: { apiKey: "k" }, config: CFG({ days: 7 }),
+    });
+    expect(res.records).toHaveLength(2);
+  });
+
   it("raw emails stay campaign-scoped and date-bounded — never a workspace dump", async () => {
     const seen: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (u: string) => {

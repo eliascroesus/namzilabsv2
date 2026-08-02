@@ -109,6 +109,12 @@ connection with a healthy webhook widens to the 60-minute backstop.
   than rots. It is the CI half of the gate in `docs/CONNECTOR_SPEC_PROPOSAL.md`;
   it proves the code agrees with what we believe, and only the live lane tests
   the belief.
+- **Instantly campaign scoping** — `/campaigns/analytics` ignores `campaign_id`
+  (verified live: 49 rows filtered, the same 49 unfiltered). The connector now
+  selects the row whose own id matches the requested campaign and stores nothing
+  if none does, rather than taking `rows[0]` and stamping the requested id over
+  it — which on a 52-campaign workspace showed the first campaign's numbers under
+  whichever campaign the user picked.
 - **Parse-drift observation** — every provider timestamp is checked against both
   date parsers and disagreements log as `[parse-drift]`. Nothing changes as a
   result; it exists to find out whether a provider has ever sent one of the
@@ -236,7 +242,7 @@ grep for `-drift\|-scan\|-probe` covers every "look at this" signal.
 ## Verification bar
 
 `pnpm typecheck && pnpm test && pnpm build && pnpm check:orphans`, all green,
-before anything ships. Currently **851 tests / 70 files**. Behavioural changes
+before anything ships. Currently **856 tests / 70 files**. Behavioural changes
 are sabotage-verified: break the thing, confirm its own test fails and no other.
 `check:orphans` fails the build on an exported function no production code
 calls — a feature only its own tests call is not shipped.

@@ -203,6 +203,34 @@ const ymd = (d: Date) => d.toISOString().slice(0, 10);
  * filter (a correctness problem worth knowing about immediately); if every row
  * carries the requested id, batching is plausible and can be measured later.
  */
+/**
+ * Which campaign a row is actually ABOUT — the provider's answer, never ours.
+ *
+ * `campaign_id` first, then `campaign`, then `id`: a row from
+ * `/campaigns/analytics` is one campaign's totals, so its own `id` is that
+ * campaign. Returns null when the row claims no identity at all, which is a
+ * different answer from "a different campaign" and is treated differently below.
+ */
+function rowCampaignId(row: Record<string, unknown>): string | null {
+  return str(row["campaign_id"]) ?? str(row["campaign"]) ?? str(row["id"]) ?? null;
+}
+
+/**
+ * VERIFIED LIVE, 2026-08-02: `campaign_id` DOES NOTHING on
+ * `/campaigns/analytics`. A request carrying it returned 49 rows; the identical
+ * request without it returned the same 49. The endpoint answers with one row per
+ * campaign in the workspace, whatever you ask for.
+ *
+ * The connector took `rows[0]` and then spread `campaign_id: <requested>` over
+ * it. On a 52-campaign workspace that meant **every** "Campaign totals" stream
+ * stored the first campaign's numbers under whichever campaign the user picked —
+ * wrong numbers wearing the right label, which is the worst shape a bug can take
+ * here because nothing about the row looks wrong.
+ *
+ * So scoping is done HERE, against what the provider actually returned. The
+ * request parameter is still sent — it costs nothing and may start working — but
+ * nothing depends on it.
+ */
 function probeCampaignScoping(rows: Array<Record<string, unknown>>, requested: string): void {
   const ids = new Set(rows.map((r) => str(r["campaign_id"]) ?? str(r["campaign"]) ?? "").filter(Boolean));
   if (ids.size === 0) return; // endpoint doesn't echo the campaign — nothing to learn
@@ -228,8 +256,38 @@ async function pollDailyAnalytics(args: PollArgs): Promise<PollResult> {
     end_date: ymd(to),
     exclude_total_leads_count: "true",
   });
-  const rows = asRows(await getJson(`${API}/campaigns/analytics/daily?${params.toString()}`, args.credentials));
-  probeCampaignScoping(rows, campaignId);
+  const all = asRows(await getJson(`${API}/campaigns/analytics/daily?${params.toString()}`, args.credentials));
+  probeCampaignScoping(all, campaignId);
+
+  /**
+   * SCOPE TO THE REQUESTED CAMPAIGN, TWO WAYS, because one of them can be
+   * unavailable.
+   *
+   * The sibling endpoint `/campaigns/analytics` was found to ignore
+   * `campaign_id` entirely, so this one cannot be assumed to honour it either.
+   *
+   * 1. If the rows say which campaign they belong to, keep only ours.
+   * 2. If they say nothing, fall back to a property that does not need them to:
+   *    this endpoint returns one row per DAY, so a repeated date means the
+   *    response covers more than one campaign. That cannot be scoped after the
+   *    fact — every row for a given day would collide on one `eventId` and the
+   *    last one written would win, arbitrarily.
+   *
+   * Case 2 stores nothing and says so. The alternative is the totals bug in a
+   * new place: a plausible daily number belonging to a campaign nobody chose.
+   */
+  const identified = all.filter((r) => rowCampaignId(r) !== null);
+  let rows = identified.length > 0 ? all.filter((r) => rowCampaignId(r) === campaignId) : all;
+  if (identified.length === 0) {
+    const dates = all.map((r) => str(r["date"]) ?? str(r["day"])).filter(Boolean);
+    if (new Set(dates).size !== dates.length) {
+      console.warn(
+        `[instantly-probe] daily analytics: ${all.length} row(s) carry no campaign id and repeat dates, so the ` +
+          `response covers several campaigns and cannot be scoped to ${campaignId}. Storing nothing.`,
+      );
+      rows = [];
+    }
+  }
 
   const records: CanonicalEvent[] = [];
   for (const row of rows) {
@@ -241,7 +299,9 @@ async function pollDailyAnalytics(args: PollArgs): Promise<PollResult> {
       eventType: "campaign_day",
       subject: `${campaignId} ${ymd(at)}`,
       occurredAt: at,
-      properties: { ...row, campaign_id: campaignId },
+      // As sent. Stamping the requested id over the row is what made the totals
+      // bug invisible; a row selected BY that field gains nothing from it.
+      properties: { ...row },
     });
   }
 
@@ -256,8 +316,29 @@ async function pollCampaignTotals(args: PollArgs): Promise<PollResult> {
   if (!campaignId) return { records: [], nextCursor: null };
   const params = new URLSearchParams({ campaign_id: campaignId, exclude_total_leads_count: "true" });
   const rows = asRows(await getJson(`${API}/campaigns/analytics?${params.toString()}`, args.credentials));
-  const row = rows[0];
-  if (!row) return { records: [], nextCursor: null };
+
+  /**
+   * THE ROW FOR THE CAMPAIGN THAT WAS ASKED FOR — not `rows[0]`.
+   *
+   * `rows[0]` was the bug: the endpoint ignores `campaign_id` and returns one
+   * row per campaign, so the first row is whichever campaign the workspace
+   * happens to list first. See the note above `probeCampaignScoping`.
+   */
+  const row = rows.find((r) => rowCampaignId(r) === campaignId);
+  if (!row) {
+    // Empty and LOUD, rather than a plausible number belonging to somebody
+    // else. An empty stream is visible — the nightly invariant scan reports it —
+    // and a wrong total is not.
+    if (rows.length > 0) {
+      const identified = rows.filter((r) => rowCampaignId(r) !== null).length;
+      console.warn(
+        `[instantly-probe] campaign totals: ${rows.length} row(s) returned, none of them campaign ${campaignId} ` +
+          `(${identified} carried a campaign id). Storing nothing — the alternative is another campaign's numbers ` +
+          `under this campaign's name.`,
+      );
+    }
+    return { records: [], nextCursor: null };
+  }
   return {
     records: [
       {
@@ -269,7 +350,12 @@ async function pollCampaignTotals(args: PollArgs): Promise<PollResult> {
         // preserveOccurredAt below pins so it neither shows 1970 nor marches
         // forward on every sweep.
         occurredAt: parseDate(str(row["created_at"]) ?? str(row["campaign_created_at"]), "created_at") ?? new Date(),
-        properties: { ...row, campaign_id: campaignId },
+        // The row EXACTLY as the provider sent it. It used to be spread with
+        // `campaign_id: campaignId`, which stamped the requested id over
+        // whatever campaign the row was really about — the step that turned a
+        // wrong row into an unnoticeable one. The row is now selected by that
+        // field, so overwriting it could only ever hide a mismatch.
+        properties: { ...row },
       },
     ],
     nextCursor: null,
@@ -285,6 +371,33 @@ async function pollCampaignTotals(args: PollArgs): Promise<PollResult> {
  * DEFERRED DEPENDENCY: this is a Records-class stream. Before it is offered for
  * an account with real history it needs the E.8 backfill lane (checkpointed,
  * resumable, low-priority) — see the deferred-triggers section of the plan.
+ *
+ * ════════════════════════════════════════════════════════════════════════════
+ * SETTLED LIVE, 2026-08-02 — THERE IS NO DATE PARAMETER. Do not probe again.
+ *
+ * `scripts/verify-instantly.ts` (I5) sent twelve names — `start_date`,
+ * `end_date`, `from_date`, `to_date`, `created_after`, `created_before`,
+ * `after`, `before`, `since`, `timestamp_created_gte`,
+ * `timestamp_created_after`, `updated_after` — each against an unbounded
+ * control. **All twelve were ACCEPTED and returned an identical id set.** Every
+ * one is discarded, which is exactly what Close did with `date_created__gte`.
+ *
+ * Two consequences, and both are load-bearing rather than stylistic:
+ *
+ * 1. **The client-side floor loop below STAYS.** It is not a stopgap for a
+ *    server bound nobody got round to; it is the only bound that exists.
+ * 2. **The newest-first dependence STAYS with it.** `pageAllBelowFloor` ends the
+ *    walk when a whole page falls under the floor, which is only correct while
+ *    the oldest records arrive last. That assumption is declared and asserted in
+ *    both directions in `tests/connector-contract.test.ts`, and I2 confirmed it
+ *    live on both `timestamp_created` and `timestamp_email`. It cannot be
+ *    removed by finding a better parameter, because there is not one.
+ *
+ * Also observed: **`limit` has no cap at 50.** `limit=51` was accepted and
+ * returned 51 rows. `PAGE_LIMIT` is our own pacing choice against a 20 req/min
+ * budget, not a provider maximum — raising it is a rate-limit decision rather
+ * than a correctness one.
+ * ════════════════════════════════════════════════════════════════════════════
  */
 async function pollRawEmails(args: PollArgs): Promise<PollResult> {
   const campaignId = str(args.config?.["campaignId"]);

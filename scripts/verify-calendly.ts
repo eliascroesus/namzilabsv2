@@ -454,6 +454,78 @@ async function main(): Promise<void> {
    * pagination question and the one that does not depend on the boundaries
    * looking tidy.
    */
+  /**
+   * ════════════════════════════════════════════════════════════════════════
+   * SECTION 6a — HOW MUST A CONTINUATION BE SENT? And this one is about US.
+   *
+   * The first live run of the skip detector got HTTP 400 "page_token is
+   * invalid". The obvious reading is a broken cursor. The likelier one is that
+   * Calendly's `next_page_token` already encodes the query it came from, so
+   * re-sending scope/bounds/count alongside it is a second, contradictory
+   * description of the same page.
+   *
+   * THAT DISTINCTION IS NOT COSMETIC, because `src/connectors/calendly.ts:270`
+   * sends the full query WITH the token:
+   *
+   *     if (pageToken) p.set("page_token", pageToken);   // …on top of everything else
+   *
+   * and its catch block retries the same request WITHOUT the token, which
+   * restarts that side at page 1:
+   *
+   *     if (!token_in) throw e;
+   *     data = await fetchJson(url(null), …)             // "an expired token self-heals"
+   *
+   * So if the combined form is rejected, every second-page request 400s, every
+   * retry re-reads page 1, and the stored token 400s again next sweep — the scan
+   * never paginates and each side holds only its first 100 events, forever, with
+   * no error surfaced anywhere. On an account under 100 events per side that is
+   * completely invisible, which is why nothing has reported it.
+   *
+   * Both forms are tried and reported. Nothing is concluded here: an expired
+   * token would produce the same 400, and only the comparison separates them.
+   * ════════════════════════════════════════════════════════════════════════
+   */
+  head("SECTION 6a — must a page_token be sent ALONE, or with its original query?");
+  let tokenAlone = true;
+  await section("continuation form", async () => {
+    const span = { min_start_time: SKIP_FROM, max_start_time: ceil };
+    const first = await get({ ...scope, ...span, count: String(SKIP_PAGE_A) });
+    const tok = first.pagination?.next_page_token ?? null;
+    if (!tok) {
+      return skip(
+        "CL10 continuation form",
+        `page 1 at count=${SKIP_PAGE_A} returned no next_page_token — the span holds one page, so there is no continuation to test`,
+      );
+    }
+    const alone = await attempt("/scheduled_events", { page_token: tok });
+    const combined = await attempt("/scheduled_events", { ...scope, ...span, count: String(SKIP_PAGE_A), page_token: tok });
+    note(
+      "CL10 page_token ALONE",
+      alone.ok ? `ACCEPTED, ${alone.page.collection.length} events` : `REJECTED HTTP ${alone.status}: ${alone.body}`,
+    );
+    note(
+      "CL10 page_token WITH the original query (what calendly.ts sends)",
+      combined.ok
+        ? `ACCEPTED, ${combined.page.collection.length} events`
+        : `REJECTED HTTP ${combined.status}: ${combined.body}`,
+    );
+    tokenAlone = alone.ok;
+    if (alone.ok && !combined.ok) {
+      // A FAIL, not a note: this is a defect in the connector, established by
+      // comparison rather than inferred from one failing request.
+      check(
+        "CL10 the form calendly.ts sends is accepted",
+        false,
+        "the token works ALONE but is rejected alongside its original query — which is the form " +
+          "src/connectors/calendly.ts:270 sends. Its catch block then retries without the token and " +
+          "restarts the side at page 1, so the outward scan never advances past its first page and " +
+          "each side holds only the first 100 events. Silent: no error reaches the connection.",
+      );
+    } else if (!alone.ok && !combined.ok) {
+      note("CL10 both forms rejected", "the token itself is stale or invalid — re-run; this says nothing about the connector");
+    }
+  });
+
   head("SECTION 6 — does the page walk skip records?");
   await section("skip detection", async () => {
     const span = { min_start_time: SKIP_FROM, max_start_time: ceil };
@@ -468,8 +540,13 @@ async function main(): Promise<void> {
       let pages = 0;
       let exhausted = false;
       while (seen.size < target && pages < Math.ceil(target / count) + 2) {
-        const params: Record<string, string> = { ...scope, ...span, count: String(count) };
-        if (pageToken) params.page_token = pageToken;
+        // Sent in whichever form SECTION 6a established works. See there for
+        // why this is not a detail: `calendly.ts` uses the other one.
+        const params: Record<string, string> = pageToken
+          ? tokenAlone
+            ? { page_token: pageToken }
+            : { ...scope, ...span, count: String(count), page_token: pageToken }
+          : { ...scope, ...span, count: String(count) };
         const p = await get(params);
         pages += 1;
         for (const e of p.collection) {
