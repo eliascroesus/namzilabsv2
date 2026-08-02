@@ -130,7 +130,16 @@ const { seconds: TOKEN_WAITS, rejected: TOKEN_WAIT_REJECTED } = parseWaitSeconds
  */
 const SCRIPT_WORK_SECONDS = 300;
 
-type Page = { collection: Array<Record<string, unknown>>; pagination?: { next_page_token?: string | null } };
+/**
+ * `next_page` is read here and NOT by the connector — which is the whole of
+ * SECTION 6b. Calendly's pagination object carries a complete, ready-to-call URL
+ * beside the opaque token, and `calendly.ts` uses the token in both places it
+ * paginates (`:204` in `listAll`, `:283` in the outward scan).
+ */
+type Page = {
+  collection: Array<Record<string, unknown>>;
+  pagination?: { next_page?: string | null; next_page_token?: string | null };
+};
 type Attempt = { ok: true; status: number; page: Page } | { ok: false; status: number; body: string };
 
 /** One event, with the provider's string kept verbatim beside the parse result. */
@@ -212,17 +221,47 @@ function runtimeGuard(): void {
   process.exit(3);
 }
 
-async function attempt(path: string, params: Record<string, string>): Promise<Attempt> {
-  const qs = new URLSearchParams(params).toString();
+/**
+ * The one place a request is actually made — and it takes a URL, not parts.
+ *
+ * Separate from `attempt` because SECTION 6b has to send a URL Calendly built
+ * **byte for byte**. Round-tripping it through `URLSearchParams` to reuse
+ * `attempt` would re-encode it, which is one of the two things that section is
+ * trying to tell apart.
+ */
+async function attemptUrl(url: string): Promise<Attempt> {
   requests += 1;
-  const res = await fetch(`${API}${path}${qs ? `?${qs}` : ""}`, {
-    headers: { authorization: `Bearer ${token()}` },
-  });
+  const res = await fetch(url, { headers: { authorization: `Bearer ${token()}` } });
   const body = await res.text();
   // NOT truncated: an error body is where a provider explains which parameter
   // combinations it allows, and clipping it cuts the answer off mid-sentence.
   if (!res.ok) return { ok: false, status: res.status, body };
   return { ok: true, status: res.status, page: JSON.parse(body) as Page };
+}
+
+async function attempt(path: string, params: Record<string, string>): Promise<Attempt> {
+  const qs = new URLSearchParams(params).toString();
+  return attemptUrl(`${API}${path}${qs ? `?${qs}` : ""}`);
+}
+
+/**
+ * Where two URLs first diverge, with context either side.
+ *
+ * The measurement that separates "a rebuilt request is not the supported way to
+ * continue" from "our rebuild differs only in how it encodes the same thing".
+ * Both produce an identical 400; only the characters say which.
+ */
+function firstDifference(theirs: string, ours: string): string {
+  const n = Math.min(theirs.length, ours.length);
+  let i = 0;
+  while (i < n && theirs[i] === ours[i]) i += 1;
+  if (i === n && theirs.length === ours.length) return "none — the two URLs are byte-identical";
+  const from = Math.max(0, i - 30);
+  return (
+    `at character ${i} of ${theirs.length} (ours is ${ours.length})\n` +
+    `           theirs: …${theirs.slice(from, i + 50)}\n` +
+    `           ours:   …${ours.slice(from, i + 50)}`
+  );
 }
 
 async function get(params: Record<string, string>): Promise<Page> {
@@ -645,7 +684,146 @@ async function main(): Promise<void> {
 
   /**
    * ════════════════════════════════════════════════════════════════════════
-   * SECTION 6b — HOW LONG DOES A TOKEN LIVE? The question nobody asked.
+   * SECTION 6b — THE CONTINUATION CALENDLY HANDS YOU, vs THE ONE WE REBUILD.
+   *
+   * Calendly's pagination object carries TWO continuations: `next_page_token`,
+   * an opaque string, and `next_page`, a complete ready-to-call URL. Both of our
+   * pagination sites use the token and rebuild a URL around it —
+   * `calendly.ts:204` (`listAll`, the meeting-type picker) and `:283` (the
+   * outward scan). Neither has ever read `next_page`.
+   *
+   * WHAT CL10 ALREADY RULED OUT, and this is why this section exists at all.
+   * CL10 sent the token two ways and both were refused. That result eliminates
+   * more than it looks like it does:
+   *
+   *   - EXPIRY is out. Both arms ran back to back, milliseconds after the token
+   *     was issued. Nothing that dies of age dies that fast.
+   *   - SINGLE-USE is out. The same token was used twice; if the first use
+   *     consumed it, the FIRST arm would have succeeded. Neither did.
+   *   - A TIMESTAMP-FORMAT problem in `min_start_time`/`max_start_time` is out.
+   *     It is a real reported cause of this exact error, but CL10's second arm
+   *     sent the token with NO timestamps at all and was refused anyway.
+   *
+   * What survives is a problem of FORM, and there are two candidates left. They
+   * want the same experiment and DIFFERENT fixes:
+   *
+   *   (a) a rebuilt request is simply not the supported continuation, and only
+   *       the URL Calendly returns is honoured — fix: follow `next_page`, at the
+   *       cost of no longer controlling the query on page 2+;
+   *   (b) our rebuild differs from Calendly's URL only in ENCODING.
+   *       `URLSearchParams` percent-encodes `:` inside the timestamps and
+   *       re-encodes the token itself; if the token is validated against the
+   *       query string it was minted from, any such difference is fatal — fix:
+   *       encode it their way, and keep control of the query.
+   *
+   * So every form runs against ONE token, back to back, and the two URLs are
+   * printed with the first character at which they diverge. No verdict: (a) and
+   * (b) are distinguished by that diff line and by which arms came back 200,
+   * both of which are printed, and a human reads them.
+   *
+   * WHAT FIX (a) WOULD COST, checked against the code before the run rather
+   * than after, because it is the first thing anyone will ask. Following
+   * `next_page` means the connector stops choosing the query on page 2+ — the
+   * stored URL carries whatever page 1 was asked. For the outward scan that is
+   * already true and therefore free:
+   *
+   *   - `min_start_time`/`max_start_time` come from `cur.floor/ceil/pivot`,
+   *     which `parseCursor` (calendly.ts:434-444) returns VERBATIM from the
+   *     stored cursor mid-scan. `windowFloor` is consulted only on the fresh
+   *     path (`:451`). So sweep N+1 already rebuilds byte-identical bounds —
+   *     a stored URL freezes nothing that was not already frozen.
+   *   - `scope`, `groupUri` and `status` are request-shaping (only
+   *     `meetingType` carries a `readFilter`, catalog.ts:212), so changing any
+   *     of them changes `streamConfigHash` → a new stream → a fresh cursor. A
+   *     stored URL cannot outlive the config that produced it.
+   *
+   * The one thing it would genuinely freeze is `count`: a stored URL keeps the
+   * page size page 1 was asked for, so changing COUNT_PER_PAGE would take
+   * effect only after in-flight scans drain. That is a real consequence and a
+   * small one.
+   * ════════════════════════════════════════════════════════════════════════
+   */
+  head("SECTION 6b — next_page (theirs) vs a URL rebuilt from next_page_token (ours)");
+  let nextPageWorks = false;
+  await section("continuation source", async () => {
+    const connectorQuery: Record<string, string> = {
+      ...scope,
+      count: String(COUNT),
+      sort: "start_time:desc",
+      min_start_time: SKIP_FROM,
+      max_start_time: ceil,
+    };
+    const first = await attempt("/scheduled_events", connectorQuery);
+    if (!first.ok) return check("CL12 the connector's own first request succeeds", false, `HTTP ${first.status}: ${first.body}`);
+
+    const pg = first.page.pagination ?? {};
+    const nextUrl = typeof pg.next_page === "string" && pg.next_page !== "" ? pg.next_page : null;
+    const tok = typeof pg.next_page_token === "string" && pg.next_page_token !== "" ? pg.next_page_token : null;
+
+    // Both absent is the legitimate end of a collection, not a finding.
+    if (!nextUrl && !tok) {
+      return skip(
+        "CL12 continuation source",
+        `the connector's query returned ${first.page.collection.length} events and neither continuation field — ` +
+          `one page in this span. Widen CALENDLY_SKIP_FROM.`,
+      );
+    }
+
+    check(
+      "CL12 the pagination object carries BOTH continuations",
+      nextUrl !== null && tok !== null,
+      `next_page=${nextUrl === null ? "ABSENT or null" : `${nextUrl.length} chars, a URL`} · ` +
+        `next_page_token=${tok === null ? "ABSENT or null" : `${tok.length} chars, opaque`}`,
+    );
+
+    // ── every form, one token, back to back ────────────────────────────────
+    // Arm 1: the URL Calendly returned, untouched. Arm 2: what calendly.ts:283
+    // sends. Arm 3: the minimal rebuild. Arm 4: the same query with the token
+    // appended WITHOUT percent-encoding — the arm that separates (a) from (b).
+    const verbatim = nextUrl ? await attemptUrl(nextUrl) : null;
+    const rebuilt = tok ? await attempt("/scheduled_events", { ...connectorQuery, page_token: tok }) : null;
+    const tokenOnly = tok ? await attempt("/scheduled_events", { page_token: tok }) : null;
+    const rawAppended = tok
+      ? await attemptUrl(`${API}/scheduled_events?${new URLSearchParams(connectorQuery).toString()}&page_token=${tok}`)
+      : null;
+
+    const arms: Array<[string, Attempt | null]> = [
+      ["next_page VERBATIM (theirs, untouched)", verbatim],
+      ["rebuilt from token + full query (calendly.ts:283)", rebuilt],
+      ["rebuilt from token, token only", tokenOnly],
+      ["rebuilt from token, appended UNENCODED", rawAppended],
+    ];
+    for (const [label, a] of arms) {
+      if (!a) continue;
+      note(`CL12 ${label}`, a.ok ? `ACCEPTED, ${a.page.collection.length} events` : `REJECTED HTTP ${a.status}: ${a.body}`);
+    }
+
+    if (nextUrl && tok) {
+      const ours = `${API}/scheduled_events?${new URLSearchParams({ ...connectorQuery, page_token: tok }).toString()}`;
+      console.log(`         theirs: ${nextUrl}`);
+      console.log(`         ours:   ${ours}`);
+      note("CL12 first difference between the two URLs", firstDifference(nextUrl, ours));
+    }
+
+    // Two arms that both work must return the SAME page, or "it works" means
+    // two different things. Same control discipline as every filter above.
+    const ok = arms.filter((x): x is [string, Attempt & { ok: true }] => x[1]?.ok === true);
+    for (const [label, a] of ok.slice(1)) {
+      const [baseLabel, base] = ok[0];
+      note(
+        `CL12 "${label}" vs "${baseLabel}"`,
+        sameSet(idSet(a.page), idSet(base.page))
+          ? `IDENTICAL id set (${a.page.collection.length} events) — the two forms are interchangeable`
+          : `DIFFERENT id sets: ${a.page.collection.length} vs ${base.page.collection.length} events`,
+      );
+    }
+
+    nextPageWorks = verbatim?.ok === true;
+  });
+
+  /**
+   * ════════════════════════════════════════════════════════════════════════
+   * SECTION 6c — HOW LONG DOES A TOKEN LIVE? The question nobody asked.
    *
    * `calendly.ts:275` reads `token_in` from the PERSISTED CURSOR. The connector
    * takes one page, stores the token, ends the sweep, and reuses it on the NEXT
@@ -715,35 +893,61 @@ async function main(): Promise<void> {
     console.log(`         span: ${SKIP_FROM} .. ${ceil}   (deliberately wider than the connector's window)`);
     console.log(`         taking the first ${SKIP_TARGET} records at page size ${SKIP_PAGE_A} and again at ${SKIP_PAGE_B}`);
 
-    /** The first `target` records of the span, and how many pages it took. */
+    /**
+     * The first `target` records of the span, and how many pages it took.
+     *
+     * CONTINUES THE WAY SECTION 6b FOUND TO WORK. This walk spent its first two
+     * live runs unable to reach page 2 at all — every continuation came back
+     * "page_token is invalid" — so the skip question, which is the entire point
+     * of the section, was never actually asked. Following `next_page` when 6b
+     * showed it is honoured is what makes CL8 runnable; when it is not honoured
+     * this falls back to exactly the previous behaviour and CL8 fails loudly, as
+     * it did before.
+     *
+     * `next_page` carries the original `count`, so a walk keeps its page size
+     * across the boundary — which the two-page-size comparison depends on.
+     */
     const walk = async (count: number, target: number) => {
       const seen = new Map<string, Record<string, unknown>>();
       const duplicates: string[] = [];
+      let nextUrl: string | null = null;
       let pageToken: string | null = null;
       let pages = 0;
       let exhausted = false;
+      let via = "first page";
       while (seen.size < target && pages < Math.ceil(target / count) + 2) {
-        // Sent in whichever form SECTION 6a established works. See there for
-        // why this is not a detail: `calendly.ts` uses the other one.
-        const params: Record<string, string> = pageToken
-          ? tokenAlone
-            ? { page_token: pageToken }
-            : { ...scope, ...span, count: String(count), page_token: pageToken }
-          : { ...scope, ...span, count: String(count) };
-        const p = await get(params);
+        let p: Page;
+        if (nextUrl && nextPageWorks) {
+          const a = await attemptUrl(nextUrl);
+          if (!a.ok) throw new Error(`next_page HTTP ${a.status}: ${a.body}`);
+          p = a.page;
+          via = "next_page";
+        } else {
+          // Sent in whichever form SECTION 6a established works. See there for
+          // why this is not a detail: `calendly.ts` uses the other one.
+          const params: Record<string, string> = pageToken
+            ? tokenAlone
+              ? { page_token: pageToken }
+              : { ...scope, ...span, count: String(count), page_token: pageToken }
+            : { ...scope, ...span, count: String(count) };
+          p = await get(params);
+          if (pageToken) via = "rebuilt page_token";
+        }
         pages += 1;
         for (const e of p.collection) {
           const id = String(e["uri"]);
           if (seen.has(id)) duplicates.push(id);
           else if (seen.size < target) seen.set(id, e);
         }
+        nextUrl = typeof p.pagination?.next_page === "string" && p.pagination.next_page !== "" ? p.pagination.next_page : null;
         pageToken = p.pagination?.next_page_token ?? null;
-        if (!pageToken || p.collection.length === 0) {
+        const more = (nextPageWorks && nextUrl) || pageToken;
+        if (!more || p.collection.length === 0) {
           exhausted = true;
           break;
         }
       }
-      return { seen, duplicates, pages, exhausted };
+      return { seen, duplicates, pages, exhausted, via };
     };
 
     const a = await walk(SKIP_PAGE_A, SKIP_TARGET);
@@ -761,8 +965,8 @@ async function main(): Promise<void> {
     check(
       "CL8 both walks actually paginated (a single-page walk tests nothing)",
       paged,
-      `page size ${SKIP_PAGE_A}: ${a.pages} page(s), ${a.seen.size} records; ` +
-        `page size ${SKIP_PAGE_B}: ${b.pages} page(s), ${b.seen.size} records` +
+      `page size ${SKIP_PAGE_A}: ${a.pages} page(s) via ${a.via}, ${a.seen.size} records; ` +
+        `page size ${SKIP_PAGE_B}: ${b.pages} page(s) via ${b.via}, ${b.seen.size} records` +
         (paged
           ? ""
           : `  — the span holds too few events to have a page boundary. Widen it with ` +
