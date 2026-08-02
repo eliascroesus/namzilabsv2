@@ -90,7 +90,7 @@ jobs:
             exit 1
           fi
 
-      - name: Instantly — v2 emails list contract
+      - name: Instantly — emails walk + the analytics streams customers get
         if: ${{ inputs.providers == 'all' || inputs.providers == 'instantly' }}
         continue-on-error: true
         env:
@@ -102,11 +102,11 @@ jobs:
             echo "::warning::Skipping Instantly — add the INSTANTLY_API_KEY secret (a v2 key) to run it."
             exit 0
           fi
-          if pnpm tsx scripts/verify-instantly-pagination.ts; then
-            echo "PASS|Instantly|Emails-list contract holds, and the key is v2-era." >> "$RESULTS"
+          if pnpm tsx scripts/verify-instantly.ts; then
+            echo "PASS|Instantly|No check contradicted the pinned contract — READ THE INFO LINES: an ignored parameter is reported there, not as a failure." >> "$RESULTS"
           else
             code=$?
-            echo "FAIL|Instantly|Script exited $code — a 401 means the key is invalid or v1-era; otherwise see checks I1-I4 above." >> "$RESULTS"
+            echo "FAIL|Instantly|Script exited $code — a 401 means the key is invalid or v1-era; otherwise see checks I0-I7 above." >> "$RESULTS"
             exit 1
           fi
 
@@ -136,6 +136,8 @@ jobs:
         run: |
           set -uo pipefail
           echo "## Provider verification" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Selected: \`${{ inputs.providers }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           if [ ! -s "${RESULTS:-/nonexistent}" ]; then
             echo "Nothing ran. (No provider selected, or the job stopped early.)" >> "$GITHUB_STEP_SUMMARY"
@@ -183,3 +185,21 @@ jobs:
             msg="$msg $skipped were skipped for missing secrets — add those secrets and re-run if you need them covered."
           fi
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+
+          # A GREEN TABLE IS NOT COVERAGE. The table only holds providers that
+          # actually ran, so a run of one provider produces a one-row table that
+          # reads exactly like a clean sweep. Name the absentees explicitly.
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          missing=""
+          for p in close calendly instantly sendblue; do
+            if ! grep -qi "|$p|" "$RESULTS" 2>/dev/null && ! grep -qiE "^[A-Z]+\|$p\|" "$RESULTS" 2>/dev/null; then
+              missing="$missing $p"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "> **NOT covered by this run:**$missing" >> "$GITHUB_STEP_SUMMARY"
+            echo ">" >> "$GITHUB_STEP_SUMMARY"
+            echo "> These were not selected, so nothing above says anything about them." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "> All four providers were covered by this run." >> "$GITHUB_STEP_SUMMARY"
+          fi

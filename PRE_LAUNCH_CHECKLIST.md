@@ -509,7 +509,23 @@ re-run; the checks need at least two dated events to bound between.
 pinned from documented shape only. The same run confirms your stored API key is
 v2-era (v1 keys stopped working Jan 19, 2026).
 
-### ⚠ "newest-first" is now known to be LOAD-BEARING, and is still unverified
+### ⚠ The script was rewritten — the old one had three gaps
+
+`verify-instantly-pagination.ts` (86 lines) is replaced by `verify-instantly.ts`.
+What it could not see:
+
+| Gap | Why it mattered |
+|---|---|
+| **No skip detector.** Its I4 checked two pages do not OVERLAP — that catches duplicates. A cursor stepping OVER records produces none and passed it clean. | The defect found three times in three connectors |
+| **No control comparison.** It never sent a filter and compared against unfiltered. | The check that caught Close's dead parameter |
+| **The wrong endpoint.** It probed `/emails`, but `raw_emails` is not selectable — customers get `analytics_daily` / `analytics_totals`, which were untested. | The streams that actually ship |
+
+**I5 is the one worth reading.** `pollRawEmails` sends no date parameter and
+filters client-side, and that loop's early exit is what creates the ordering
+dependence below. I5 probes twelve parameter names against an unbounded control.
+**If any of them bounds, the loop and the dependence can both be deleted.**
+
+### ⚠ "newest-first" is LOAD-BEARING — ✅ confirmed live (I2 passed)
 
 `tests/connector-contract.test.ts` pins what that assumption is worth. Instantly
 sends **no date parameter at all** — `limit` and `campaign_id` only — and applies
@@ -526,12 +542,14 @@ dependence is a pinned fact rather than a worry.
 The same shape is in `sendblue.ts`. **Sendblue is parked** and this is recorded
 for completeness, not as work.
 
-So this item now has a second job: **establish which field Instantly orders by,
-and in which direction, by comparing responses rather than by reading the docs.**
-Close's ordering claim was right about the direction and wrong about the FIELD
-for months, and no amount of reading found it — only a control request did. Until
-this runs, Instantly's `raw_emails` stream rests on an assumption nobody has
-tested against the live API.
+**Confirmed against the live API:** I2 reports newest-first, so the assumption
+holds today. It is measured on BOTH `timestamp_created` and `timestamp_email` —
+the two fields the connector reads — because Close's ordering claim was right
+about the direction and wrong about the FIELD for months, and only a per-field
+measurement finds that.
+
+This is a standing check rather than a settled one: the dependence stays until
+I5 finds a server-side bound, and a provider is free to change its default order.
 
 **Key:** Instantly → Settings → Integrations → API → create/copy a **v2** API
 key.
@@ -543,7 +561,7 @@ workflow → provider **instantly** (or **all**).
 <details><summary>Local equivalent</summary>
 
 ```bash
-INSTANTLY_API_KEY=xxx pnpm tsx scripts/verify-instantly-pagination.ts
+INSTANTLY_API_KEY=xxx pnpm tsx scripts/verify-instantly.ts
 ```
 
 </details>

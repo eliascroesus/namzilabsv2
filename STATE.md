@@ -49,7 +49,8 @@ decision, not blocked.
 | Setting | Needed for |
 |---|---|
 | `CLOSE_API_KEY` | `scripts/verify-close-pagination.ts` (checklist item 1). Store as a repo secret; run via Actions → *Verify providers (read-only)*. |
-| `INSTANTLY_API_KEY` | `scripts/verify-instantly.ts` (item 2). |
+| `INSTANTLY_API_KEY` | `scripts/verify-instantly.ts` (item 2). A **v2** key — a 401 is the signature of a v1-era one. |
+| `INSTANTLY_SKIP_TARGET` / `INSTANTLY_CAMPAIGN` | Records the Instantly skip detector compares (default 60), and a campaign to pin instead of the first. |
 | `SENDBLUE_API_KEY_ID` / `SENDBLUE_API_SECRET` | `scripts/verify-sendblue.ts` (item 3). |
 | `CALENDLY_API_TOKEN` | `scripts/verify-calendly.ts` (item 1b). A Calendly **Personal Access Token**: Integrations & apps → API & webhooks → Personal Access Tokens. |
 | `CLOSE_VERIFY_PAGES` | Walk depth for the Close script. Default 40 pages. |

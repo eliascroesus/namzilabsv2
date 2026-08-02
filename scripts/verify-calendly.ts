@@ -610,3 +610,14 @@ void main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
+
+/**
+ * Makes this file a MODULE rather than a global script.
+ *
+ * Without it, TypeScript puts every top-level name here — `API`, `check`,
+ * `Attempt`, `section` — into the shared global scope, where it collides with
+ * the next verification script somebody writes. `verify-calendly.ts` typechecked
+ * cleanly only because it was briefly the only non-module script in `scripts/`;
+ * adding `verify-instantly.ts` beside it broke both at once.
+ */
+export {};
