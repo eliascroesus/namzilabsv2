@@ -55,7 +55,15 @@
  * default 2015-01-01 — widen it if an account has too few events to paginate),
  * CALENDLY_TOKEN_WAIT (seconds CL11 ages a page_token before retrying it —
  * default 60; use "600" to match base cadence, or "60,540" to bracket it).
+ *
+ * And three the CI workflow sets so the run can refuse to start rather than be
+ * killed mid-sleep — see `runtimeGuard()`: JOB_TIMEOUT_MINUTES (the runner's
+ * per-job ceiling), JOB_STARTED_AT (unix seconds, stamped in the job's first
+ * step), VERIFY_RESERVE_SECONDS (time to leave for the steps that run after
+ * this one). All three absent — a laptop — means no ceiling and no guard.
  */
+
+import { jobBudget, parseWaitSeconds } from "./lib/job-budget";
 
 const API = "https://api.calendly.com";
 
@@ -97,6 +105,31 @@ const SKIP_FROM = process.env.CALENDLY_SKIP_FROM ?? "2015-01-01T00:00:00.000Z";
 const PAST_DAYS = 30;
 const FUTURE_DAYS = 90;
 
+/**
+ * CL11's sleeps, parsed ONCE at module scope.
+ *
+ * Once, because two things need this number and they must not be able to
+ * disagree: the runtime guard, which decides whether the run can finish, and
+ * SECTION 6b, which does the sleeping. A guard that approves one number while
+ * the code sleeps for another is not a guard.
+ *
+ * An empty string falls back to the 60s default; a string with no usable number
+ * in it does NOT — see `parseWaitSeconds` for why substituting a default there
+ * would answer a question nobody asked.
+ */
+const TOKEN_WAIT_RAW = process.env.CALENDLY_TOKEN_WAIT?.trim() || "60";
+const { seconds: TOKEN_WAITS, rejected: TOKEN_WAIT_REJECTED } = parseWaitSeconds(TOKEN_WAIT_RAW);
+
+/**
+ * The budget for everything in this script that is NOT a deliberate sleep.
+ *
+ * Observed runs are well under a minute — roughly 90 GETs, none paced, none
+ * retried. Five minutes is therefore ~5× the measured cost, on purpose: the
+ * guard below spends this number to decide whether to refuse, and erring high
+ * refuses a run that would have fit, while erring low approves one that dies.
+ */
+const SCRIPT_WORK_SECONDS = 300;
+
 type Page = { collection: Array<Record<string, unknown>>; pagination?: { next_page_token?: string | null } };
 type Attempt = { ok: true; status: number; page: Page } | { ok: false; status: number; body: string };
 
@@ -135,6 +168,48 @@ function token(): string {
     process.exit(2);
   }
   return t;
+}
+
+/**
+ * Refuse a run that the job ceiling would kill, BEFORE issuing a request.
+ *
+ * The failure this prevents: dispatch with CALENDLY_TOKEN_WAIT=3600, watch the
+ * job sit there, and get a cancelled run with no summary — CL0 through CL10 all
+ * passed and all of it was thrown away, because a job killed at the ceiling
+ * reports nothing, not something partial.
+ *
+ * Exits 3, which is neither 1 (a check contradicted the contract) nor 2 (no
+ * token). Nothing was measured, so it must not read like a measurement failed.
+ */
+function runtimeGuard(): void {
+  const ceilingMinutes = Number(process.env.JOB_TIMEOUT_MINUTES);
+  const ceilingSeconds = Number.isFinite(ceilingMinutes) && ceilingMinutes > 0 ? Math.floor(ceilingMinutes * 60) : null;
+  const startedAt = Number(process.env.JOB_STARTED_AT);
+  const startKnown = Number.isFinite(startedAt) && startedAt > 0;
+  const budget = jobBudget({
+    waitSeconds: TOKEN_WAITS.reduce((a, b) => a + b, 0),
+    workSeconds: SCRIPT_WORK_SECONDS,
+    reserveSeconds: Number(process.env.VERIFY_RESERVE_SECONDS) || 0,
+    elapsedSeconds: startKnown ? Math.max(0, Math.floor(Date.now() / 1000) - startedAt) : 0,
+    ceilingSeconds,
+    elapsedKnown: startKnown,
+  });
+
+  if (TOKEN_WAIT_REJECTED.length > 0) {
+    note("CL11 wait values discarded", `CALENDLY_TOKEN_WAIT=${TOKEN_WAIT_RAW} — not positive numbers: ${TOKEN_WAIT_REJECTED.join(", ")}`);
+  }
+  note("runtime budget", budget.explain);
+  if (budget.fits) return;
+
+  console.error(
+    "\n  [STOP] the job ceiling would kill this run before it finished.\n" +
+      `         ${budget.explain}\n` +
+      "         NOTHING WAS REQUESTED — no provider calls were made, so nothing here\n" +
+      "         says anything about Calendly.\n" +
+      "         Re-dispatch with a smaller CL11 wait, or select calendly on its own so\n" +
+      "         no time has to be reserved for the other provider steps.",
+  );
+  process.exit(3);
 }
 
 async function attempt(path: string, params: Record<string, string>): Promise<Attempt> {
@@ -205,7 +280,11 @@ const sameSequence = (a: string[], b: string[]) => a.length === b.length && a.ev
 
 async function main(): Promise<void> {
   console.log("Calendly /scheduled_events — RAW EVIDENCE (read-only)");
-  console.log(`skip detector: first ${SKIP_TARGET} records at page size ${SKIP_PAGE_A} and ${SKIP_PAGE_B}, from ${SKIP_FROM}\n`);
+  console.log(`skip detector: first ${SKIP_TARGET} records at page size ${SKIP_PAGE_A} and ${SKIP_PAGE_B}, from ${SKIP_FROM}`);
+  console.log(`CL11 token wait: ${TOKEN_WAITS.length > 0 ? TOKEN_WAITS.join("s, then ") + "s" : "(none — CL11 will skip)"}\n`);
+
+  // Before the first request, not after the last one. See `runtimeGuard`.
+  runtimeGuard();
 
   // ══════════════════════════════════════════════════════════════ who is this
   head("SECTION 0 — the token, and the scope every later request uses");
@@ -579,16 +658,20 @@ async function main(): Promise<void> {
    * catch block hides both.
    *
    * Reported as a NUMBER — "survived N seconds" — not as a verdict. The default
-   * wait is deliberately short so a manual run is quick; set CALENDLY_TOKEN_WAIT
-   * to 600 to test the real base cadence when the runtime allows it.
+   * wait is deliberately short so a manual run is quick; the "Verify providers"
+   * Action exposes 60 / 600 / 3600 as a dropdown, and 600 is the one that
+   * matches base cadence. A wait too long for the job ceiling is refused before
+   * the first request rather than killed at the end — see `runtimeGuard`.
    * ════════════════════════════════════════════════════════════════════════
    */
   head("SECTION 6b — does a page_token survive the gap between sweeps?");
   await section("token lifetime", async () => {
-    const waits = (process.env.CALENDLY_TOKEN_WAIT ?? "60")
-      .split(",")
-      .map((n) => Math.max(1, Number(n.trim()) || 0))
-      .filter((n) => n > 0);
+    // The SAME list the runtime guard budgeted for — parsed at module scope so
+    // the two cannot drift apart.
+    const waits = TOKEN_WAITS;
+    if (waits.length === 0) {
+      return skip("CL11 token lifetime", `CALENDLY_TOKEN_WAIT=${TOKEN_WAIT_RAW} held no positive number of seconds`);
+    }
     const connectorQuery: Record<string, string> = {
       ...scope,
       count: String(COUNT),
@@ -620,7 +703,7 @@ async function main(): Promise<void> {
       "CL11 observed token lifetime",
       died === null
         ? `survived at least ${survivedFor}s. Base cadence is 600s and the widened backstop is 3600s — ` +
-          `set CALENDLY_TOKEN_WAIT=600 (or 600,3000) to cover those.`
+          `re-dispatch the Action with "CL11 token wait" set to 600, then 3600, to cover those.`
         : `died between ${survivedFor}s and the next attempt. calendly.ts reuses a stored token ~600s later at ` +
           `base cadence, so a lifetime under that means the outward scan restarts at page 1 every sweep.`,
     );
@@ -789,12 +872,13 @@ void main().catch((e) => {
 });
 
 /**
- * Makes this file a MODULE rather than a global script.
+ * Kept even though the `./lib/job-budget` import above already makes this file a
+ * module, because that import is the kind of thing that gets removed.
  *
- * Without it, TypeScript puts every top-level name here — `API`, `check`,
- * `Attempt`, `section` — into the shared global scope, where it collides with
- * the next verification script somebody writes. `verify-calendly.ts` typechecked
- * cleanly only because it was briefly the only non-module script in `scripts/`;
- * adding `verify-instantly.ts` beside it broke both at once.
+ * Without one or the other, TypeScript puts every top-level name here — `API`,
+ * `check`, `Attempt`, `section` — into the shared global scope, where it
+ * collides with the next verification script somebody writes. This file
+ * typechecked cleanly only because it was briefly the only non-module script in
+ * `scripts/`; adding `verify-instantly.ts` beside it broke both at once.
  */
 export {};

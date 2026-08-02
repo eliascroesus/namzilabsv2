@@ -457,18 +457,31 @@ pair.
 Store it as the repo secret **`CALENDLY_API_TOKEN`**.
 
 **Run — no terminal needed.** Actions → **Verify providers (read-only)** → Run
-workflow → provider **calendly** (or **all**).
+workflow → provider **calendly** (or **all**), and set **Calendly CL11: seconds
+to age a page_token** — 60 (fast, and answers nothing about the connector), 600
+(base cadence), or 3600 (the widened webhook backstop). **600 is the run worth
+doing**: it is the gap `calendly.ts` actually reuses a stored token across.
+
+That dropdown is the whole reason the job takes minutes instead of seconds, so
+it is deliberately not on by default. A wait that would not fit inside the
+runner's 6-hour job ceiling is **refused before the first request** — the run
+fails immediately with the arithmetic rather than sleeping for an hour and being
+killed with nothing to show. At 3600s with all four providers selected there is
+still well over four hours of headroom, so in practice every option runs.
 
 <details><summary>Local equivalent</summary>
 
 ```bash
-CALENDLY_API_TOKEN=eyJ… pnpm tsx scripts/verify-calendly.ts
+CALENDLY_API_TOKEN=eyJ… CALENDLY_TOKEN_WAIT=600 pnpm tsx scripts/verify-calendly.ts
 ```
 
 Env knobs: `CALENDLY_SCOPE` (`user`, the connector's default, or
 `organization`), `CALENDLY_SKIP_FROM` (how far back CL8 reaches, default
 `2015-01-01`), `CALENDLY_TOKEN_WAIT` (seconds CL11 ages a token — default 60;
 **use `600` to match base cadence**, or `60,540` to bracket it).
+
+There is no job ceiling on a laptop, so the guard prints its arithmetic and
+steps aside. It only refuses when `JOB_TIMEOUT_MINUTES` says a limit exists.
 
 </details>
 
@@ -490,7 +503,7 @@ What to look for, and what each would mean:
 | **CL6** `status` | `IDENTICAL id set to no-status — accepted and IGNORED` | narrowing a flow to "canceled only" silently returns everything, and nothing filters it client-side |
 | **CL7** `count=101` | `ACCEPTED … MORE than the assumed cap` | the page size in `calendly.ts` is not the real cap |
 | **CL10** token + its own query | FAIL | the token works ALONE but is refused alongside the identical query it came from — the form `calendly.ts:270` sends. The catch at `:277` then restarts the side at page 1 every sweep and the scan never advances |
-| **CL11** token lifetime | a number under 600 | `calendly.ts` reuses a page_token from the PERSISTED cursor a full cadence interval later — 600s at base, 3600s on the widened backstop. A shorter lifetime means the outward scan restarts every sweep, holding at most 100 events per side. Set `CALENDLY_TOKEN_WAIT=600` to test the real gap |
+| **CL11** token lifetime | a number under 600 | `calendly.ts` reuses a page_token from the PERSISTED cursor a full cadence interval later — 600s at base, 3600s on the widened backstop. A shorter lifetime means the outward scan restarts every sweep, holding at most 100 events per side. **A 60s run cannot answer this** — it only rules out a token that dies immediately. Set the Action's CL11 dropdown to 600 |
 | **CL8** both walks paginated | FAIL | the span held too few events to have a page boundary, so the skip question was **not asked**. Widen `CALENDLY_SKIP_FROM`. This fails rather than passing because the first live run reported "23 unique over 1 pages" at both page sizes and called it a PASS — a walk that crossed no boundary cannot detect a cursor stepping over one |
 | **CL8** two page sizes | FAIL | `page_token` steps over records — Defect #2's shape, in the connector nobody had checked |
 | **CL9** organization scope | `zero` events | the token has no organization admin rights. Not a failure — but every check above ran under `user` scope, and the connector offers `organization` and `group` through its flowFields, so those paths are exercised only by this line |

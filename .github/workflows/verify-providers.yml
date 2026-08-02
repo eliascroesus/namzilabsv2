@@ -23,6 +23,27 @@ on:
           - calendly
           - instantly
           - sendblue
+      # CL11 is the only check here that costs wall-clock time, and it costs it
+      # on purpose: the only way to find out how long a Calendly page_token
+      # lives is to hold one and retry it later. 60 keeps a routine run quick
+      # and answers nothing about the connector — calendly.ts reuses a STORED
+      # token on the next sweep, 600s later at base cadence and up to 3600s on
+      # the widened webhook backstop, so those are the two numbers that matter.
+      #
+      # The ceiling is 6 hours (GitHub's per-job limit on hosted runners), so
+      # even 3600 leaves well over four hours spare — every option here is
+      # offerable. The script re-does this arithmetic with the real elapsed time
+      # and refuses to start if it ever stops being true, rather than being
+      # killed at the end with nothing to show.
+      calendly_token_wait:
+        description: "Calendly CL11: seconds to age a page_token before retrying it (600 = base cadence, 3600 = webhook backstop; job ceiling is 6h)"
+        type: choice
+        required: true
+        default: "60"
+        options:
+          - "60"
+          - "600"
+          - "3600"
 
 permissions:
   contents: read
@@ -30,7 +51,22 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      # GitHub's documented per-job ceiling for hosted runners. Passed to the
+      # scripts so the runtime guard checks against the real limit instead of
+      # an assumption. IF A `timeout-minutes:` IS EVER ADDED TO THIS JOB, this
+      # number has to become that number — a guard measuring against a ceiling
+      # that is not the one enforcing itself is worse than no guard.
+      JOB_TIMEOUT_MINUTES: "360"
     steps:
+      # FIRST — before checkout and install, so elapsed time includes them.
+      # A clock started after setup under-reports by a minute or two, which is
+      # exactly the margin the guard exists to protect.
+      - name: Prepare
+        run: |
+          echo "RESULTS=$RUNNER_TEMP/results.txt" >> "$GITHUB_ENV"
+          echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
@@ -47,9 +83,6 @@ jobs:
       # Each provider writes one line to $RESULTS: PASS / FAIL / SKIP.
       # `continue-on-error` lets every selected provider run even if an earlier
       # one fails, so one dispatch tells you about all three.
-      - name: Prepare
-        run: echo "RESULTS=$RUNNER_TEMP/results.txt" >> "$GITHUB_ENV"
-
       - name: Close — Event Log pagination contract
         if: ${{ inputs.providers == 'all' || inputs.providers == 'close' }}
         continue-on-error: true
@@ -75,6 +108,12 @@ jobs:
         continue-on-error: true
         env:
           CALENDLY_API_TOKEN: ${{ secrets.CALENDLY_API_TOKEN }}
+          CALENDLY_TOKEN_WAIT: ${{ inputs.calendly_token_wait }}
+          # Time this step must NOT consume, because the steps after it need it.
+          # Instantly paces itself at 3.2s between requests and walks two page
+          # sizes, so it is the expensive one; Sendblue is a handful of GETs.
+          # Zero when Calendly runs alone, because then nothing follows it.
+          VERIFY_RESERVE_SECONDS: ${{ inputs.providers == 'all' && '900' || '0' }}
         run: |
           set -uo pipefail
           if [ -z "${CALENDLY_API_TOKEN:-}" ]; then
@@ -83,10 +122,18 @@ jobs:
             exit 0
           fi
           if pnpm tsx scripts/verify-calendly.ts; then
-            echo "PASS|Calendly|No check contradicted the pinned contract — READ THE INFO LINES: an ignored parameter is reported there, not as a failure." >> "$RESULTS"
+            echo "PASS|Calendly|CL11 aged a page_token ${CALENDLY_TOKEN_WAIT}s. No check contradicted the pinned contract — READ THE INFO LINES: an ignored parameter is reported there, not as a failure." >> "$RESULTS"
           else
             code=$?
-            echo "FAIL|Calendly|Script exited $code — see checks CL0-CL8 above." >> "$RESULTS"
+            # Exit 3 is the runtime guard refusing to start, not a contract
+            # failure. Nothing was requested, so nothing was measured — saying
+            # "see checks CL0-CL11" there would send you looking for output
+            # that does not exist.
+            if [ "$code" -eq 3 ]; then
+              echo "FAIL|Calendly|REFUSED TO START — a ${CALENDLY_TOKEN_WAIT}s CL11 wait does not fit in the job's remaining time. No Calendly requests were made. See the [STOP] line above for the arithmetic; re-run with a smaller wait or with providers=calendly." >> "$RESULTS"
+            else
+              echo "FAIL|Calendly|Script exited $code — see checks CL0-CL11 above." >> "$RESULTS"
+            fi
             exit 1
           fi
 
@@ -138,6 +185,10 @@ jobs:
           echo "## Provider verification" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Selected: \`${{ inputs.providers }}\`" >> "$GITHUB_STEP_SUMMARY"
+          # Named even when Calendly did not run: a report that does not say
+          # which wait it used cannot be compared against the next one, and 60
+          # vs 600 is the difference between a number and an answer.
+          echo "Calendly CL11 token wait: \`${{ inputs.calendly_token_wait }}s\` (600s = base cadence, 3600s = webhook backstop)" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           if [ ! -s "${RESULTS:-/nonexistent}" ]; then
             echo "Nothing ran. (No provider selected, or the job stopped early.)" >> "$GITHUB_STEP_SUMMARY"
