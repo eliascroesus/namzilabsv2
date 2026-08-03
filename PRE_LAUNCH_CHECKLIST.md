@@ -485,6 +485,30 @@ steps aside. It only refuses when `JOB_TIMEOUT_MINUTES` says a limit exists.
 
 </details>
 
+### ⚠ RUN THIS AGAIN — CL13 IS OUTSTANDING (2026-08-03)
+
+The pagination bug this script was written to find has been found and fixed: the
+connector rebuilt every page request from `next_page_token`, Calendly refuses
+that rebuild in every form, and the outward scan had therefore never reached
+page 2 on any account with more than 100 events on a side. It now follows
+`pagination.next_page`.
+
+**What is not yet measured is whether a `next_page` URL survives the gap between
+sweeps.** The connector stores one in its cursor and reuses it ~600s later at
+base cadence, up to 3600s on the widened backstop. CL11 measured a *token's*
+lifetime, which is now irrelevant. CL13 measures the URL, and it is the one
+number that says whether the fix is sufficient.
+
+**Dispatch "Verify providers" with `calendly` and the wait at `600`, then again
+at `3600`.** The default is now 600 — the old 60 was removed because it tested a
+lifetime nothing depends on and, being the default, was what got run.
+
+If CL13 comes back REJECTED inside 600s, the fix is not sufficient on its own and
+the walk must be re-minted each sweep rather than stored. The connector is no
+worse than before in that case — a refused continuation restarts the side at
+page 1 exactly as it did — and `restartingScans` in the daily invariant scan will
+now say so out loud.
+
 ### ⚠ READ THE `[INFO]` LINES. A PASS IS NOT THE ANSWER HERE.
 
 Every parameter is measured against a **control** — the same request without it,
@@ -502,10 +526,12 @@ What to look for, and what each would mean:
 | **CL5** bounds | `IDENTICAL id set to the unbounded control` | the window is not a window; the scan reads the whole account and the 30/90-day framing is decoration |
 | **CL6** `status` | `IDENTICAL id set to no-status — accepted and IGNORED` | narrowing a flow to "canceled only" silently returns everything, and nothing filters it client-side |
 | **CL7** `count=101` | `ACCEPTED … MORE than the assumed cap` | the page size in `calendly.ts` is not the real cap |
-| **CL10** token + its own query | FAIL | the token works ALONE but is refused alongside the identical query it came from — the form `calendly.ts:270` sends. The catch at `:277` then restarts the side at page 1 every sweep and the scan never advances |
-| **CL12** `next_page` VERBATIM | `ACCEPTED` while every rebuilt arm is `REJECTED` | Calendly honours only the URL it hands back. Both our pagination sites rebuild from `next_page_token` instead (`calendly.ts:204` in `listAll`, `:283` in the outward scan), so neither can reach page 2 — the scan caps at 100 events per side and the meeting-type picker at 100 types, both silently. Read the **first difference** line beneath it: if the two URLs differ only in percent-encoding, the fix is our encoding and the connector keeps control of the query; if they differ in kind, the fix is to store and follow the URL |
+| **CL10** token + its own query | FAIL | the token works ALONE but is refused alongside the identical query it came from. Historical: the connector no longer sends either form |
+| **CL12** `next_page` VERBATIM | `ACCEPTED` while every rebuilt arm is `REJECTED` | Calendly honours only the URL it hands back. Both our pagination sites rebuild from `next_page_token` instead (`calendly.ts:204` in `listAll`, `:283` in the outward scan), so neither can reach page 2 — the scan caps at 100 events per side and the meeting-type picker at 100 types, both silently. **SETTLED 2026-08-03 — this is what the live run found, and it is fixed.** The connector now stores and follows `next_page` at both sites. Re-running should show CL12 unchanged (Calendly still refuses rebuilds); what matters now is CL13 |
 | **CL12** all four arms `REJECTED` | — | the token is refused in every form including Calendly's own URL, back to back. Expiry and single-use are already excluded by construction (the arms share one token, issued milliseconds earlier), so this would point somewhere none of the current hypotheses reach |
-| **CL11** token lifetime | a number under 600 | `calendly.ts` reuses a page_token from the PERSISTED cursor a full cadence interval later — 600s at base, 3600s on the widened backstop. A shorter lifetime means the outward scan restarts every sweep, holding at most 100 events per side. **A 60s run cannot answer this** — it only rules out a token that dies immediately. Set the Action's CL11 dropdown to 600 |
+| **CL13** `next_page` lifetime | a number under 600 | **THE GATE. Read this line before anything else.** The connector now stores a `next_page` URL in its cursor and reuses it a full cadence interval later — 600s at base, 3600s on the widened backstop. A URL that dies inside that gap means the fix swapped one broken continuation for another, and the walk has to be re-minted each sweep instead of stored. CL13 and CL11 age together in one sleep, so the wait you pick applies to both |
+| **CL13** order of the aged page | `ascending (NOT what page 1 asked for)` | `sort` is not carried inside the continuation after all. Not a correctness problem — the window still drains completely — but page 2+ arrive in a different order than page 1 asked for, which is worth knowing before anyone relies on scan order |
+| **CL11** token lifetime | anything | **Historical now.** The connector no longer sends a rebuilt `page_token` (CL12 settled that it is always refused), so this measures a continuation nothing depends on. Kept because it is free — it shares CL13's sleep |
 | **CL8** both walks paginated | FAIL | the span held too few events to have a page boundary, so the skip question was **not asked**. Widen `CALENDLY_SKIP_FROM`. This fails rather than passing because the first live run reported "23 unique over 1 pages" at both page sizes and called it a PASS — a walk that crossed no boundary cannot detect a cursor stepping over one |
 | **CL8** two page sizes | FAIL | `page_token` steps over records — Defect #2's shape, in the connector nobody had checked |
 | **CL9** organization scope | `zero` events | the token has no organization admin rights. Not a failure — but every check above ran under `user` scope, and the connector offers `organization` and `group` through its flowFields, so those paths are exercised only by this line |
