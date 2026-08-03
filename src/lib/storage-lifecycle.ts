@@ -294,6 +294,8 @@ export async function retentionBacklog(
     usageCounterDays: opts.usageCounterDays,
     usageEvidenceDays: opts.usageEvidenceDays,
   });
+  // Four concurrent reads — the ceiling `MIN_POOL_MAX` in `src/db/client.ts` is
+  // derived from. Do not add a fifth; a pool under that floor deadlocks.
   const [dl, tr, counters, evidence] = await Promise.all([
     countWhere(db, deliveryLog, p.deliveryLog),
     countWhere(db, testRuns, p.testRuns),

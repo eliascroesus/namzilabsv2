@@ -37,6 +37,13 @@ function envDriver(name: string, fallback: Driver): Driver {
  *   4  `scanInvariants` runs four queries through one `Promise.all`
  *      (`src/lib/health/invariants.ts`), and the helpers inside them are
  *      sequential, so four is the widest read fan-out anywhere.
+ *
+ *      THREE call sites now sit exactly on that four, not one: that scan, plus
+ *      `retentionBacklog` and the inspect path of `pruneOperationalTables`
+ *      (`src/lib/storage-lifecycle.ts`). None of them overlap — Inngest runs
+ *      steps sequentially — but a fifth concurrent read added to ANY of them
+ *      invalidates this number, and the symptom is the deadlock below rather
+ *      than a slow query. Both files carry a comment saying so.
  *   1  a transaction holds its client for the whole body, and
  *      `awaitStreamWriteLock` deliberately BLOCKS on `pg_advisory_xact_lock`
  *      for up to 15 seconds while holding it.

@@ -966,6 +966,61 @@ not an incident.
 
 ---
 
+## 7b. Flip storage pruning from inspect to live (after ONE nightly run)
+
+**Why:** `usage_ledger` had no retention path and writes a row per (connection,
+operation, minute-window) — 150-600 rows per connection per day. It now has
+one, in two tiers, and the counter tier is new logic that decides a row is
+disposable when `observed_limit IS NULL AND throttled = 0 AND errors = 0`. A
+predicate that classifies rows as worthless gets read by a human against real
+data before it acts on real data, so the first run reports and deletes nothing.
+
+**This does NOT race item 7.** The evidence tier retains anything carrying
+`observed_limit`, `throttled` or `errors` for 90 days, which is exactly what
+item 7's query reads. Pruning cannot delete the evidence item 7 is waiting for,
+in either order.
+
+**Step 1 — read the inspect run.** `prune-storage` runs nightly at 03:17 UTC.
+Find its output in the logs:
+
+```
+[storage-prune-inspect] {"deliveryLog":N,"testRuns":N,"usageLedger":{"counters":N,"evidence":N},...}
+```
+
+These counts are exact totals, not batch-capped — this is the true backlog.
+
+**PASS:** `usageLedger.counters` is large (this is the backlog that had no
+policy) and `usageLedger.evidence` is small relative to it. That ratio is the
+whole premise of the two tiers: evidence rows are rare because `throttled`,
+`errors` and `observed_limit` are only written on a real denial, a real failure,
+or a provider that actually sends a header.
+
+**INVESTIGATE (do not flip yet):** `evidence` is a large fraction of
+`counters`. That means far more throttling or erroring is being recorded than
+expected — which is item 7's problem, not this one. Answer item 7 first; the
+inspect run is telling you something real.
+
+**Step 2 — flip the gate.** Set `STORAGE_PRUNE_LIVE=1` in the deployment
+environment. No deploy and no migration; the next nightly run prunes.
+
+**Step 3 — confirm the following night.** The run returns `truncated: false`
+and the `backlog` step reports near zero. A `[storage-prune-truncated]` line
+means a ceiling stopped the sweep with rows still past retention — harmless for
+the first night or two while a large backlog drains, but if it persists, ingest
+has outpaced the sweep and `PRUNE_BUDGET_MS` / `DELETE_BATCH` need revisiting.
+
+**Rollback:** unset `STORAGE_PRUNE_LIVE`. Rows already deleted are gone — spent
+rate-limiter buckets past their window, which nothing reads — but nothing
+further is removed.
+
+**Still unpruned, deliberately:** `raw_events`, `events` tombstones, and
+`dead_letter` (whose resolved rows are only ever cleared by connection
+deletion). All three are recorded as known gaps in
+`tests/retention-coverage.test.ts`, which fails if a new table is added without
+a retention decision.
+
+---
+
 ## 8. Enable the compiled engine per flow (optional, after item 5)
 
 **Why:** the compiled path (filter pushdown into SQL) is built, proven
