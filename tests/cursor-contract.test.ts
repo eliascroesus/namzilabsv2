@@ -188,7 +188,7 @@ describe("an empty page does not end the scan", () => {
         // genuinely advances — the source never runs out, so only the page
         // budget can stop the walk.
         endless += 1;
-        return respond(200, { collection: [ev(`A${endless}`, "Wanted")], pagination: { next_page_token: `P${endless}` } });
+        return respond(200, { collection: [ev(`A${endless}`, "Wanted")], pagination: { next_page: `https://api.calendly.com/scheduled_events?page_token=P${endless}` } });
       }),
     );
 
@@ -216,7 +216,7 @@ describe("an empty page does not end the scan", () => {
         if (url.includes("/users/me")) {
           return respond(200, { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
         }
-        return respond(200, { collection: [ev("A", "Wanted")], pagination: { next_page_token: null } });
+        return respond(200, { collection: [ev("A", "Wanted")], pagination: { next_page: null } });
       }),
     );
     const [conn] = await db.select().from(connections).where(eq(connections.id, connId)).limit(1);
@@ -261,7 +261,7 @@ describe("an empty page does not end the scan", () => {
         }
         return respond(200, {
           collection: [{ uri: "E1", name: "Wanted", status: "active", start_time: inWindow, created_at: stranded }],
-          pagination: { next_page_token: null },
+          pagination: { next_page: null },
         });
       }),
     );
@@ -302,7 +302,7 @@ describe("an empty page does not end the scan", () => {
           return respond(200, { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
         }
         n += 1;
-        return respond(200, { collection: [], pagination: { next_page_token: `P${n}` } });
+        return respond(200, { collection: [], pagination: { next_page: `https://api.calendly.com/scheduled_events?page_token=P${n}` } });
       }),
     );
     const [conn] = await db.select().from(connections).where(eq(connections.id, connId)).limit(1);
@@ -325,9 +325,9 @@ describe("an empty page does not end the scan", () => {
         pages += 1;
         // A provider may legitimately return an empty page mid-scan. The walk
         // used to stop at the first one and report "0 loaded".
-        if (pages === 1) return respond(200, { collection: [], pagination: { next_page_token: "P2" } });
-        if (pages === 2) return respond(200, { collection: [], pagination: { next_page_token: "P3" } });
-        return respond(200, { collection: [ev("C", "Wanted")], pagination: { next_page_token: null } });
+        if (pages === 1) return respond(200, { collection: [], pagination: { next_page: "https://api.calendly.com/scheduled_events?page_token=P2" } });
+        if (pages === 2) return respond(200, { collection: [], pagination: { next_page: "https://api.calendly.com/scheduled_events?page_token=P3" } });
+        return respond(200, { collection: [ev("C", "Wanted")], pagination: { next_page: null } });
       }),
     );
 

@@ -286,7 +286,7 @@ describe("the ledger counts what was actually spent", () => {
         const url = String(input);
         const body = url.includes("/users/me")
           ? { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } }
-          : { collection: [], pagination: { next_page_token: `P${++n}` } };
+          : { collection: [], pagination: { next_page: `https://api.calendly.com/scheduled_events?page_token=P${++n}` } };
         return {
           ok: true,
           status: 200,

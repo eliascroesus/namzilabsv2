@@ -26,7 +26,7 @@ function serveEmpty() {
       urls.push(url);
       const body = url.includes("/users/me")
         ? { resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } }
-        : { collection: [], pagination: { next_page_token: null } };
+        : { collection: [], pagination: { next_page: null } };
       return {
         ok: true,
         status: 200,
