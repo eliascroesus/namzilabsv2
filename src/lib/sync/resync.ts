@@ -106,16 +106,24 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
 
     if (mode === "full") {
       const gen = Math.max(1, (conn.syncGeneration ?? 0) + 1);
-      const { records, cursor } = await pollAll(connector, base);
+      const { records, cursor, complete } = await pollAll(connector, base);
       const res = await upsertEvents(db, { ...meta, generation: gen }, records);
 
       // Only NOW (after the replacement generation is in) remove poll-managed rows
       // that were not seen this run — i.e. removed upstream. Webhook rows (gen 0) are safe.
-      const del = await db
-        .update(events)
-        .set({ deletedAt: new Date() })
-        .where(and(eq(events.connectionId, conn.id), gte(events.syncGeneration, 1), lt(events.syncGeneration, gen), isNull(events.deletedAt)))
-        .returning({ id: events.id });
+      //
+      // And only when the walk REACHED THE END. A truncated walk holds a prefix,
+      // so "not seen this run" stops meaning "gone from the source" and starts
+      // meaning "we did not get that far" — the same distinction `syncStream`
+      // draws before running `retireOutsideWindow`. The generation bump and the
+      // re-import still stand; only the tombstoning waits for a complete pass.
+      const del = complete
+        ? await db
+            .update(events)
+            .set({ deletedAt: new Date() })
+            .where(and(eq(events.connectionId, conn.id), gte(events.syncGeneration, 1), lt(events.syncGeneration, gen), isNull(events.deletedAt)))
+            .returning({ id: events.id })
+        : [];
 
       await db
         .update(connections)
@@ -195,7 +203,7 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
   const polledHashes: string[] = [];
   for (const stream of streams) {
     const base: PollArgs = { connectionId: conn.id, cursor: null, credentials, config: stream.config ?? undefined, streamHash: stream.configHash };
-    const { records, cursor } = await pollAll(connector, base);
+    const { records, cursor, complete } = await pollAll(connector, base);
     const res = await upsertEvents(
       db,
       {
@@ -211,7 +219,11 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
     upserted += res.total;
     inserted += res.inserted;
     updated += res.updated;
-    polledHashes.push(stream.configHash);
+    // Eligible for the retire only if THIS stream's walk reached the end. Scoped
+    // per stream rather than per connection, so one truncated stream does not
+    // stop the others being pruned — and does not get pruned itself on the
+    // strength of a prefix.
+    if (complete) polledHashes.push(stream.configHash);
     await db
       .update(sourceStreams)
       .set({ cursor, status: "active", lastError: null, lastPolledAt: new Date(), updatedAt: new Date() })
@@ -270,25 +282,58 @@ export async function reprocessConnection(db: DB, orgId: string, connectionId: s
   return { processed };
 }
 
-async function pollAll(connector: Connector, base: PollArgs): Promise<{ records: CanonicalEvent[]; cursor: string | null }> {
+/**
+ * Walk a source to exhaustion for a full re-sync, and say whether it got there.
+ *
+ * `complete` is what licenses the retire. A full re-sync tombstones every
+ * poll-managed row the walk did not re-fetch, which is right for a record the
+ * provider no longer has and catastrophic for one the walk simply never reached
+ * — and those two are indistinguishable from the row.
+ *
+ * ONLY a null `nextCursor` counts as done. That is the connector's explicit
+ * "the scan is finished" (PollResult.nextCursor: null means START OVER next
+ * time). Every other exit is a PREFIX and says so:
+ *
+ *  - a cursor that stopped advancing is a connector that cannot go further,
+ *    which is exactly what Google Calendar returns when it spends its internal
+ *    page budget;
+ *  - an A→B→A oscillation is a walk that is not converging;
+ *  - `PAGE_CAP` is our own ceiling, and hitting it says nothing about the
+ *    provider having run out of data.
+ *
+ * `records.length === 0` USED TO END THE WALK HERE, and that is the defect this
+ * shape removes. `syncStream` deleted the same condition from its own page loop
+ * and the comment beside it explains why: a connector that filters client-side
+ * returns an empty page while the next one is full, and Calendly's two-sided
+ * scan returns an empty PAST page for any account with no meetings in the last
+ * 30 days. The walk stopped there, upserted nothing at the new generation, and
+ * the retire below tombstoned every live upcoming meeting.
+ */
+async function pollAll(
+  connector: Connector,
+  base: PollArgs,
+): Promise<{ records: CanonicalEvent[]; cursor: string | null; complete: boolean }> {
   const seen = new Map<string, CanonicalEvent>();
   let cursor: string | null = null; // full re-sync starts from the beginning
   let last: string | null = null;
+  let complete = false;
   for (let page = 0; page < PAGE_CAP; page++) {
     const { records, nextCursor } = await connector.poll!({ ...base, cursor });
     for (const r of records) seen.set(r.eventId, r);
-    if (!nextCursor || nextCursor === cursor || records.length === 0) {
+    if (!nextCursor) {
       // null means START OVER (PollResult.nextCursor), so it is stored as null —
       // the following incremental sweep then begins a fresh scan instead of
-      // resuming from a page token whose scan already completed.
-      cursor = nextCursor;
+      // resuming from a page token whose scan already completed. It is also the
+      // only answer that means the source ran out of data rather than us.
+      cursor = null;
+      complete = true;
       break;
     }
-    if (nextCursor === last) break;
+    if (nextCursor === cursor || nextCursor === last) break; // stalled or cycling
     last = cursor;
     cursor = nextCursor;
   }
-  return { records: [...seen.values()], cursor };
+  return { records: [...seen.values()], cursor, complete };
 }
 
 async function upsertCursor(db: DB, connectionId: string, cursor: string | null): Promise<void> {
