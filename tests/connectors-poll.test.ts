@@ -96,38 +96,123 @@ describe("Calendly polling", () => {
 });
 
 /**
- * A CONTINUATION THAT IS NEVER ACCEPTED, which the connector used to absorb.
+ * PAGINATION, AND THE CONTINUATION THAT WAS NEVER ACCEPTED.
  *
- * `calendly.ts` reads its `page_token` from the PERSISTED cursor, so the gap
- * between issuing one and using it is a whole cadence interval — ten minutes at
- * base, up to an hour on the widened backstop. If the token does not survive
- * that (or the request shape carrying it is rejected), the catch block restarts
- * the side at page 1, the retry SUCCEEDS, and nothing anywhere reports a
- * problem. The scan then re-reads its first page every sweep, for ever, holding
- * at most 100 events per side.
+ * Until 2026-08-03 `calendly.ts` rebuilt each page request from
+ * `next_page_token` instead of following the `next_page` URL Calendly returns.
+ * The rebuild is refused — verified live, in every form, milliseconds after the
+ * token was issued — so the catch block restarted the side at page 1, the retry
+ * SUCCEEDED, and nothing reported a problem. Every scan re-read its first page
+ * for ever, holding at most 100 events per side, from a window frozen at
+ * whenever it started (a side that never drains never re-opens one).
  *
- * One restart is a coincidence. Two in a row is a scan that is not advancing.
+ * The suite did not catch it because it asserted the ALARM, never a second
+ * page. So the first test below is the one that was missing, and the restart
+ * counter keeps its own tests underneath: one restart is a coincidence, two in
+ * a row is a scan that is not advancing.
  */
-describe("Calendly: a side that keeps restarting says so", () => {
-  /** Rejects any request carrying a page_token; serves page 1 otherwise. */
-  const rejectContinuations = (tokenOut: string | null) =>
+
+/** A cursor over the connector's own 30-back/90-forward window, plus overrides. */
+const window = (over: Record<string, unknown>) =>
+  JSON.stringify({
+    floor: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+    ceil: new Date(Date.now() + 90 * 86_400_000).toISOString(),
+    pivot: new Date().toISOString(),
+    ...over,
+  });
+
+describe("Calendly: the scan follows next_page and actually reaches page 2", () => {
+  const EV = (id: string) => ({
+    uri: `https://api.calendly.com/scheduled_events/${id}`,
+    name: "Demo",
+    start_time: "2026-02-01T10:00:00Z",
+  });
+  const PAGE_2 = "https://api.calendly.com/scheduled_events?page_token=P2";
+
+  /**
+   * A provider that paginates the way the live API does: page 1 hands back a
+   * complete `next_page` URL, and that URL serves page 2.
+   *
+   * It also REJECTS any rebuilt request carrying `page_token` in a query it
+   * assembled itself — which is what production does, and what the connector
+   * used to send. A connector that rebuilds cannot pass this.
+   */
+  const paginates = () =>
+    vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("/users/me")) {
+        return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+      }
+      if (url === PAGE_2) return jsonResponse({ collection: [EV("E2")], pagination: { next_page: null } });
+      if (url.includes("page_token=")) throw new Error("HTTP 400: page_token is invalid");
+      return jsonResponse({ collection: [EV("E1")], pagination: { next_page: PAGE_2 } });
+    });
+
+  /** Rejects every continuation, so a side can never advance. */
+  const rejectContinuations = (nextOut: string | null) =>
     vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
       if (url.includes("/users/me")) {
         return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
       }
       if (url.includes("page_token=")) throw new Error("HTTP 400: page_token is invalid");
-      return jsonResponse({
-        collection: [{ uri: "https://api.calendly.com/scheduled_events/E1", name: "Demo", start_time: "2026-02-01T10:00:00Z" }],
-        pagination: { next_page_token: tokenOut },
-      });
+      return jsonResponse({ collection: [EV("E1")], pagination: { next_page: nextOut } });
     });
 
   const poll = (cursor: string | null) =>
     calendlyConnector.poll!({ connectionId: "c1", cursor, credentials: { accessToken: "tok" } });
 
+  /**
+   * THE ASSERTION WHOSE ABSENCE LET THIS SHIP (see the describe title).
+   *
+   * The previous version of this suite mocked a provider that rejected every
+   * `page_token` — production, exactly — and asserted only that the connector
+   * NOTICED. It passed for as long as the bug existed, because the alarm
+   * working is the bug. Nothing ever asserted a second page was read.
+   */
+  it("reads page 2 by following the URL Calendly returned", async () => {
+    const fetchMock = paginates();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = await poll(null);
+    expect(first.records.map((r) => r.eventId)).toContain("calendly:c1:https://api.calendly.com/scheduled_events/E1");
+    // Page 1 banked Calendly's own URL, not a token we would have to rebuild.
+    expect(JSON.parse(first.nextCursor!).past).toBe(PAGE_2);
+
+    // Sweep 2 runs the OTHER side (the scan alternates), so drive the past side
+    // again by handing back a cursor whose turn is 'past'.
+    const resume = JSON.stringify({ ...JSON.parse(first.nextCursor!), next: "past" });
+    const second = await poll(resume);
+
+    expect(
+      second.records.map((r) => r.eventId),
+      "the second page was never fetched — the scan is stuck on page 1",
+    ).toContain("calendly:c1:https://api.calendly.com/scheduled_events/E2");
+    // Requested verbatim: no rebuilt query, no re-encoded token.
+    expect(fetchMock.mock.calls.some((c) => String(c[0]) === PAGE_2)).toBe(true);
+    // Exhausted: no next_page means this side is drained.
+    expect(JSON.parse(second.nextCursor!).past).toBeNull();
+  });
+
+  it("drains both sides and then starts over, which is what nextCursor: null means", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) {
+          return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+        }
+        return jsonResponse({ collection: [EV("E1")], pagination: { next_page: null } });
+      }),
+    );
+    const first = await poll(null); // past drains
+    expect(first.nextCursor).not.toBeNull();
+    const second = await poll(first.nextCursor); // future drains → both done
+    expect(second.nextCursor, "both sides drained must re-open the window, not carry on").toBeNull();
+  });
+
   it("counts consecutive restarts in the cursor and reports the side as incomplete", async () => {
-    vi.stubGlobal("fetch", rejectContinuations("TOK-1"));
+    vi.stubGlobal("fetch", rejectContinuations(PAGE_2));
 
     /**
      * THE SCAN ALTERNATES, so the sweeps are not what you would first guess.
@@ -167,22 +252,93 @@ describe("Calendly: a side that keeps restarting says so", () => {
         if (url.includes("/users/me")) {
           return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
         }
-        return jsonResponse({ collection: [], pagination: { next_page_token: null } });
+        return jsonResponse({ collection: [], pagination: { next_page: null } });
       }),
     );
-    const stuck = JSON.stringify({
-      floor: new Date(Date.now() - 30 * 86_400_000).toISOString(),
-      ceil: new Date(Date.now() + 90 * 86_400_000).toISOString(),
-      pivot: new Date().toISOString(),
-      past: "TOK-OLD",
-      next: "past",
-      restarts: 5,
-    });
-    const res = await poll(stuck);
+    const res = await poll(window({ past: PAGE_2, next: "past", restarts: 5 }));
     // A run of failures that ends is not a failure worth carrying forward.
     const after = res.nextCursor ? JSON.parse(res.nextCursor).restarts : undefined;
     expect(after).toBeUndefined();
     expect(res.incomplete).toBeFalsy();
+  });
+});
+
+/**
+ * MIGRATING THE CURSORS THAT ARE ALREADY OUT THERE.
+ *
+ * Every live Calendly stream has a stored `page_token` that can only 400. The
+ * fix has to recognise that shape, or each stream burns one request a sweep
+ * discovering it again — and would keep reading the window frozen at whenever
+ * its scan first started, because a scan that never drains never re-opens one.
+ */
+describe("Calendly: a cursor from before next_page", () => {
+  const firstPageOnly = () =>
+    vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("/users/me")) {
+        return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+      }
+      if (url.includes("page_token=")) throw new Error("HTTP 400: page_token is invalid");
+      return jsonResponse({
+        collection: [{ uri: "https://api.calendly.com/scheduled_events/E1", name: "Demo", start_time: "2026-02-01T10:00:00Z" }],
+        pagination: { next_page: null },
+      });
+    });
+
+  const poll = (cursor: string | null) =>
+    calendlyConnector.poll!({ connectionId: "c1", cursor, credentials: { accessToken: "tok" } });
+
+  it("is discarded without spending a request on the dead token", async () => {
+    const fetchMock = firstPageOnly();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await poll(window({ past: "TOK-OLD", next: "past", restarts: 5 }));
+
+    // The dead token is never sent. Retrying it and catching the 400 would
+    // "work", and would cost every stream a wasted call on every sweep.
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("TOK-OLD"))).toBe(false);
+  });
+
+  it("re-opens the window at now rather than keeping the frozen one", async () => {
+    vi.stubGlobal("fetch", firstPageOnly());
+    const stale = new Date(Date.now() - 200 * 86_400_000).toISOString();
+
+    const res = await poll(
+      JSON.stringify({ floor: stale, ceil: stale, pivot: stale, past: "TOK-OLD", next: "past" }),
+    );
+
+    // A scan that could never drain never re-opened its window, so the stored
+    // bounds are as old as the bug. Carrying them forward would keep reading a
+    // window that stopped being true months ago.
+    const after = JSON.parse(res.nextCursor!);
+    expect(after.pivot).not.toBe(stale);
+    expect(Date.parse(after.ceil)).toBeGreaterThan(Date.now());
+  });
+
+  it("leaves a not-started side and a drained side alone", async () => {
+    // The future side keeps paginating, so the scan does not finish and there
+    // is a cursor left to inspect.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/users/me")) {
+          return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+        }
+        return jsonResponse({
+          collection: [{ uri: "https://api.calendly.com/scheduled_events/E1", name: "Demo", start_time: "2026-02-01T10:00:00Z" }],
+          pagination: { next_page: "https://api.calendly.com/scheduled_events?page_token=NEXT" },
+        });
+      }),
+    );
+
+    // `undefined` (never ran) and `null` (drained) are not continuations, so
+    // neither may be mistaken for the old shape. If either were, every healthy
+    // cursor in the fleet would be discarded on the first sweep after deploy.
+    const pinned = window({ past: null, next: "future" });
+    const kept = JSON.parse((await poll(pinned))!.nextCursor!);
+    expect(kept.past, "a drained side was thrown away as if it held a stale token").toBeNull();
+    expect(kept.pivot, "a healthy cursor had its window re-opened").toBe(JSON.parse(pinned).pivot);
   });
 });
 
@@ -216,17 +372,30 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
         { uri: "https://api.calendly.com/scheduled_events/EVTa", name: "Active", status: "active", start_time: "2026-03-01T10:00:00Z", created_at: "2026-02-01T08:00:00Z" },
         { uri: "https://api.calendly.com/scheduled_events/EVTc", name: "Gone", status: "canceled", start_time: "2026-03-02T10:00:00Z", created_at: "2026-02-02T08:00:00Z", updated_at: "2026-02-15T09:00:00Z" },
       ],
-      pagination: { next_page_token: "TOK2" },
+      pagination: { next_page: "" }, // filled in per side below
     };
-    const lastPage = { collection: [], pagination: { next_page_token: null } };
+    const nextFor = (side: string) => `https://api.calendly.com/scheduled_events?page_token=TOK2&side=${side}`;
+    const lastPage = { collection: [], pagination: { next_page: null } };
     const sides: string[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
         const url = new URL(String(input));
         if (url.pathname.endsWith("/users/me")) return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
-        sides.push(url.searchParams.get("sort")!);
-        return jsonResponse(url.searchParams.get("page_token") === "TOK2" ? lastPage : meetings);
+        /**
+         * Only a FIRST request carries `sort` — every page after it is
+         * Calendly's own URL, followed verbatim. So the mock tags the side onto
+         * the URL it hands back, which is the only way this test can still see
+         * which side each request served and keep asserting the alternation.
+         */
+        const sort = url.searchParams.get("sort");
+        const side = sort ? (sort === "start_time:desc" ? "past" : "future") : url.searchParams.get("side")!;
+        sides.push(side);
+        return jsonResponse(
+          url.searchParams.get("page_token") === "TOK2"
+            ? lastPage
+            : { ...meetings, pagination: { next_page: nextFor(side) } },
+        );
       }),
     );
     const base = { connectionId: "c1", credentials: { accessToken: "t" }, config: { scope: "user" }, streamHash: "h" };
@@ -245,7 +414,8 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
     // window that fetched them — otherwise the retire would tombstone one.
     expect(canceled.occurredAt.toISOString()).toBe("2026-03-02T10:00:00.000Z");
     expect((canceled.properties as Record<string, unknown>).canceled_at).toBe("2026-02-15T09:00:00Z");
-    expect(first.nextCursor).toContain("TOK2"); // more pages → cursor advances
+    // More pages → the cursor banks Calendly's own next-page URL, verbatim.
+    expect(JSON.parse(first.nextCursor!).past).toBe(nextFor("past"));
 
     // Walk it out. Each call takes one page from whichever side is due, and the
     // cursor only clears once BOTH have run out — a scan that stopped when the
@@ -258,7 +428,7 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
     expect(cursor).toBeNull();
     // Recent past first (the question a preview answers), then upcoming, then
     // back again — never four pages of one end of the window.
-    expect(sides).toEqual(["start_time:desc", "start_time:asc", "start_time:desc", "start_time:asc"]);
+    expect(sides).toEqual(["past", "future", "past", "future"]);
   });
 
   it("listOptions('groupUri') lists the token's Calendly groups", async () => {

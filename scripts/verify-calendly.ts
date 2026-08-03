@@ -53,8 +53,9 @@
  * Env knobs: CALENDLY_SCOPE ("user" — the connector's default — or
  * "organization"), CALENDLY_SKIP_FROM (how far back the skip detector reaches,
  * default 2015-01-01 — widen it if an account has too few events to paginate),
- * CALENDLY_TOKEN_WAIT (seconds CL11 ages a page_token before retrying it —
- * default 60; use "600" to match base cadence, or "60,540" to bracket it).
+ * CALENDLY_CONTINUATION_WAIT (seconds CL11/CL13 age a continuation before
+ * retrying it — default 60; use "600" to match base cadence, or "60,540" to
+ * bracket it). Also accepted as CALENDLY_TOKEN_WAIT, its former name.
  *
  * And three the CI workflow sets so the run can refuse to start rather than be
  * killed mid-sleep — see `runtimeGuard()`: JOB_TIMEOUT_MINUTES (the runner's
@@ -106,18 +107,32 @@ const PAST_DAYS = 30;
 const FUTURE_DAYS = 90;
 
 /**
- * CL11's sleeps, parsed ONCE at module scope.
+ * The CL11/CL13 sleep, parsed ONCE at module scope.
  *
  * Once, because two things need this number and they must not be able to
  * disagree: the runtime guard, which decides whether the run can finish, and
- * SECTION 6b, which does the sleeping. A guard that approves one number while
- * the code sleeps for another is not a guard.
+ * SECTION 6c, which does the sleeping. A guard that approves one number while
+ * the code sleeps for another is not a guard. That is also why 6c ages BOTH
+ * continuations inside a single pass of these waits rather than sleeping twice.
  *
  * An empty string falls back to the 60s default; a string with no usable number
  * in it does NOT — see `parseWaitSeconds` for why substituting a default there
  * would answer a question nobody asked.
+ *
+ * READ UNDER BOTH NAMES, DELIBERATELY. The wait now ages a `next_page` URL as
+ * well as a token, so `CALENDLY_CONTINUATION_WAIT` is the name that describes
+ * it. But `workflow_dispatch` renders its inputs from the DEFAULT BRANCH's copy
+ * of the workflow file, so while this runs from a branch the Action still
+ * passes `CALENDLY_TOKEN_WAIT`. Reading only the new name would leave the
+ * variable unset on exactly the runs that matter, fall back to 60s, and produce
+ * a fast green result that measured nothing — the failure this section exists
+ * to rule out. Accept both; retire the old name once the rename is on `main`.
  */
-const TOKEN_WAIT_RAW = process.env.CALENDLY_TOKEN_WAIT?.trim() || "60";
+const WAIT_VAR = process.env.CALENDLY_CONTINUATION_WAIT?.trim()
+  ? "CALENDLY_CONTINUATION_WAIT"
+  : "CALENDLY_TOKEN_WAIT";
+const TOKEN_WAIT_RAW =
+  process.env.CALENDLY_CONTINUATION_WAIT?.trim() || process.env.CALENDLY_TOKEN_WAIT?.trim() || "60";
 const { seconds: TOKEN_WAITS, rejected: TOKEN_WAIT_REJECTED } = parseWaitSeconds(TOKEN_WAIT_RAW);
 
 /**
@@ -131,10 +146,14 @@ const { seconds: TOKEN_WAITS, rejected: TOKEN_WAIT_REJECTED } = parseWaitSeconds
 const SCRIPT_WORK_SECONDS = 300;
 
 /**
- * `next_page` is read here and NOT by the connector — which is the whole of
- * SECTION 6b. Calendly's pagination object carries a complete, ready-to-call URL
- * beside the opaque token, and `calendly.ts` uses the token in both places it
- * paginates (`:204` in `listAll`, `:283` in the outward scan).
+ * Both continuations Calendly returns: the opaque `next_page_token` and the
+ * complete, ready-to-call `next_page` URL.
+ *
+ * SECTION 6b was written when `calendly.ts` used the TOKEN at both of its
+ * pagination sites and this script was the only thing reading `next_page`. CL12
+ * settled it — the rebuilt token request is refused in every form — and the
+ * connector now follows `next_page` in both places. So this type is no longer
+ * documenting a divergence; it is documenting what CL13 ages.
  */
 type Page = {
   collection: Array<Record<string, unknown>>;
@@ -205,7 +224,7 @@ function runtimeGuard(): void {
   });
 
   if (TOKEN_WAIT_REJECTED.length > 0) {
-    note("CL11 wait values discarded", `CALENDLY_TOKEN_WAIT=${TOKEN_WAIT_RAW} — not positive numbers: ${TOKEN_WAIT_REJECTED.join(", ")}`);
+    note("CL11/CL13 wait values discarded", `${WAIT_VAR}=${TOKEN_WAIT_RAW} — not positive numbers: ${TOKEN_WAIT_REJECTED.join(", ")}`);
   }
   note("runtime budget", budget.explain);
   if (budget.fits) return;
@@ -215,7 +234,7 @@ function runtimeGuard(): void {
       `         ${budget.explain}\n` +
       "         NOTHING WAS REQUESTED — no provider calls were made, so nothing here\n" +
       "         says anything about Calendly.\n" +
-      "         Re-dispatch with a smaller CL11 wait, or select calendly on its own so\n" +
+      "         Re-dispatch with a smaller CL11/CL13 wait, or select calendly on its own so\n" +
       "         no time has to be reserved for the other provider steps.",
   );
   process.exit(3);
@@ -320,7 +339,7 @@ const sameSequence = (a: string[], b: string[]) => a.length === b.length && a.ev
 async function main(): Promise<void> {
   console.log("Calendly /scheduled_events — RAW EVIDENCE (read-only)");
   console.log(`skip detector: first ${SKIP_TARGET} records at page size ${SKIP_PAGE_A} and ${SKIP_PAGE_B}, from ${SKIP_FROM}`);
-  console.log(`CL11 token wait: ${TOKEN_WAITS.length > 0 ? TOKEN_WAITS.join("s, then ") + "s" : "(none — CL11 will skip)"}\n`);
+  console.log(`CL11/CL13 continuation wait: ${TOKEN_WAITS.length > 0 ? TOKEN_WAITS.join("s, then ") + "s" : "(none — both will skip)"}\n`);
 
   // Before the first request, not after the last one. See `runtimeGuard`.
   runtimeGuard();
@@ -842,13 +861,28 @@ async function main(): Promise<void> {
    * the first request rather than killed at the end — see `runtimeGuard`.
    * ════════════════════════════════════════════════════════════════════════
    */
-  head("SECTION 6b — does a page_token survive the gap between sweeps?");
-  await section("token lifetime", async () => {
-    // The SAME list the runtime guard budgeted for — parsed at module scope so
-    // the two cannot drift apart.
+  head("SECTION 6c — do the two continuations survive the gap between sweeps?");
+  await section("continuation lifetime", async () => {
+    /**
+     * CL11 AND CL13 AGE TOGETHER, IN ONE SLEEP. This matters three ways.
+     *
+     * The wall clock is the scarce resource here — a 3600s dispatch is already
+     * near the job ceiling, and `runtimeGuard` budgeted for ONE pass of
+     * `TOKEN_WAITS`. Sleeping twice would silently double the wait past what
+     * the guard approved and get the job killed at the end, which is the exact
+     * failure the guard exists to prevent.
+     *
+     * It also makes the two answers comparable: same account, same instant,
+     * same age. "The token died at 600s and the URL lived" is only a finding if
+     * nothing else differed between them.
+     *
+     * And CL13 is now the one that matters. The connector no longer sends a
+     * rebuilt `page_token` (CL12 proved it is always refused), so CL11 is kept
+     * for the record while CL13 measures the continuation actually in use.
+     */
     const waits = TOKEN_WAITS;
     if (waits.length === 0) {
-      return skip("CL11 token lifetime", `CALENDLY_TOKEN_WAIT=${TOKEN_WAIT_RAW} held no positive number of seconds`);
+      return skip("CL11/CL13 continuation lifetime", `${WAIT_VAR}=${TOKEN_WAIT_RAW} held no positive number of seconds`);
     }
     const connectorQuery: Record<string, string> = {
       ...scope,
@@ -858,33 +892,82 @@ async function main(): Promise<void> {
       max_start_time: ceil,
     };
     const first = await attempt("/scheduled_events", connectorQuery);
-    if (!first.ok) return skip("CL11 token lifetime", `the first request failed: HTTP ${first.status}`);
-    const tok = first.page.pagination?.next_page_token ?? null;
-    if (!tok) return skip("CL11 token lifetime", "no next_page_token to age");
+    if (!first.ok) return skip("CL11/CL13 continuation lifetime", `the first request failed: HTTP ${first.status}`);
 
-    let survivedFor = 0;
-    let died: string | null = null;
+    const tok = first.page.pagination?.next_page_token ?? null;
+    const nextUrl =
+      typeof first.page.pagination?.next_page === "string" && first.page.pagination.next_page !== ""
+        ? first.page.pagination.next_page
+        : null;
+    if (!tok && !nextUrl) return skip("CL11/CL13 continuation lifetime", "the first page offered no continuation of either kind");
+    if (!nextUrl) note("CL13 next_page absent", "only a token was returned — CL13 cannot run on this page");
+
+    /** Order of the aged page, which is what settles whether `sort` survives the continuation. */
+    const orderOfPage = (p: Page): string => {
+      const ts = p.collection
+        .map((e) => Date.parse(String((e as Record<string, unknown>)["start_time"] ?? "")))
+        .filter((n) => Number.isFinite(n));
+      if (ts.length < 2) return "too few dated events to tell";
+      const desc = ts.every((v, i) => i === 0 || ts[i - 1] >= v);
+      const asc = ts.every((v, i) => i === 0 || ts[i - 1] <= v);
+      return desc ? "descending (the sort we asked for)" : asc ? "ascending (NOT what page 1 asked for)" : "unordered";
+    };
+
+    let aged = 0;
+    let tokenDied: string | null = null;
+    let urlDied: string | null = null;
     for (const wait of waits) {
-      console.log(`         waiting ${wait}s before retrying the token…`);
+      console.log(`         waiting ${wait}s before retrying both continuations…`);
       await new Promise((r) => setTimeout(r, wait * 1000));
-      const retry = await attempt("/scheduled_events", { ...connectorQuery, page_token: tok });
-      if (retry.ok) {
-        survivedFor += wait;
-        note(`CL11 token still valid after ${survivedFor}s`, `ACCEPTED, ${retry.page.collection.length} events`);
-      } else {
-        died = `HTTP ${retry.status}: ${retry.body}`;
-        note(`CL11 token REJECTED after ${survivedFor + wait}s`, died);
-        break;
+      aged += wait;
+
+      if (tok && tokenDied === null) {
+        const retry = await attempt("/scheduled_events", { ...connectorQuery, page_token: tok });
+        if (retry.ok) note(`CL11 token still valid after ${aged}s`, `ACCEPTED, ${retry.page.collection.length} events`);
+        else {
+          tokenDied = `HTTP ${retry.status}: ${retry.body}`;
+          note(`CL11 token REJECTED after ${aged}s`, tokenDied);
+        }
       }
+
+      if (nextUrl && urlDied === null) {
+        const retry = await attemptUrl(nextUrl);
+        if (retry.ok) {
+          note(
+            `CL13 next_page URL still valid after ${aged}s`,
+            `ACCEPTED, ${retry.page.collection.length} events; order of the aged page: ${orderOfPage(retry.page)}`,
+          );
+        } else {
+          urlDied = `HTTP ${retry.status}: ${retry.body}`;
+          note(`CL13 next_page URL REJECTED after ${aged}s`, urlDied);
+        }
+      }
+
+      if ((!tok || tokenDied) && (!nextUrl || urlDied)) break;
     }
-    note(
-      "CL11 observed token lifetime",
-      died === null
-        ? `survived at least ${survivedFor}s. Base cadence is 600s and the widened backstop is 3600s — ` +
-          `re-dispatch the Action with "CL11 token wait" set to 600, then 3600, to cover those.`
-        : `died between ${survivedFor}s and the next attempt. calendly.ts reuses a stored token ~600s later at ` +
-          `base cadence, so a lifetime under that means the outward scan restarts at page 1 every sweep.`,
-    );
+
+    /**
+     * CL13 IS THE GATE. The connector stores a `next_page` URL across sweeps —
+     * ~600s at base cadence, up to 3600s on the widened backstop — so a URL
+     * that dies inside that gap means the fix replaced one broken continuation
+     * with another, and the walk needs re-minting each sweep instead.
+     */
+    if (nextUrl) {
+      note(
+        "CL13 observed next_page lifetime — THE ONE THE CONNECTOR DEPENDS ON",
+        urlDied === null
+          ? `survived at least ${aged}s. Base cadence is 600s and the widened backstop 3600s; re-dispatch with ` +
+            `the wait set to each to cover both. Following next_page across sweeps is safe up to the number here.`
+          : `died by ${aged}s: ${urlDied}. calendly.ts reuses a stored next_page URL ~600s later, so a lifetime ` +
+            `under that means the outward scan still restarts at page 1 every sweep and the fix is not sufficient.`,
+      );
+    }
+    if (tok) {
+      note(
+        "CL11 observed token lifetime (kept for the record — the connector no longer sends one)",
+        tokenDied === null ? `survived at least ${aged}s` : `died by ${aged}s`,
+      );
+    }
   });
 
   head("SECTION 6 — does the page walk skip records?");

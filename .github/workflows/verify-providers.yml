@@ -36,12 +36,16 @@ on:
       # and refuses to start if it ever stops being true, rather than being
       # killed at the end with nothing to show.
       calendly_token_wait:
-        description: "Calendly CL11: seconds to age a page_token before retrying it (600 = base cadence, 3600 = webhook backstop; job ceiling is 6h)"
+        # 60 was the default and tested a lifetime nothing depends on: the
+        # connector reuses a continuation a full cadence interval later, so a
+        # 60s pass is a fast green that answers no question anyone asked. 600 is
+        # base cadence — the shortest gap that is real. Ages BOTH continuations
+        # in one sleep (CL11 token, CL13 next_page URL).
+        description: "Calendly CL11/CL13: seconds to age a continuation before retrying it (600 = base cadence, 3600 = webhook backstop; job ceiling is 6h)"
         type: choice
         required: true
-        default: "60"
+        default: "600"
         options:
-          - "60"
           - "600"
           - "3600"
 
@@ -108,7 +112,14 @@ jobs:
         continue-on-error: true
         env:
           CALENDLY_API_TOKEN: ${{ secrets.CALENDLY_API_TOKEN }}
+          # Both names, on purpose. The input keeps its old id because
+          # `workflow_dispatch` renders inputs from the DEFAULT BRANCH's copy of
+          # this file — renaming it while the change is still on a branch means
+          # the UI passes the old id, the script sees nothing under the new one,
+          # and a 60s default silently replaces the wait that was asked for.
+          # Rename the input once this is on `main`, then drop the old line.
           CALENDLY_TOKEN_WAIT: ${{ inputs.calendly_token_wait }}
+          CALENDLY_CONTINUATION_WAIT: ${{ inputs.calendly_token_wait }}
           # Time this step must NOT consume, because the steps after it need it.
           # Instantly paces itself at 3.2s between requests and walks two page
           # sizes, so it is the expensive one; Sendblue is a handful of GETs.

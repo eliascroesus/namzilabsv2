@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, like, lt, ne, or, sql } from "drizzle-orm";
 import { connections, deadLetter, events, sourceStreams, usageLedger } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { isMirrorSource } from "@/connectors/catalog";
@@ -51,6 +51,14 @@ const UNSWEPT_MS = 24 * HOUR_MS;
  */
 const FAILING_STREAK = 5;
 
+/**
+ * Consecutive restarts that mean a paged scan is not advancing.
+ *
+ * Mirrored from `RESTART_ALARM` in `src/connectors/calendly.ts`, which is where
+ * the counter is written. Two in a row cannot be two coincidental expiries.
+ */
+const RESTART_ALARM = 2;
+
 /** How long a dead-letter row may sit unresolved before it is reported. */
 const DLQ_UNRESOLVED_MS = 24 * HOUR_MS;
 
@@ -85,6 +93,8 @@ export type InvariantReport = {
   emptyMirrors: Array<{ streamId: string; connectionId: string; source: string; lastPolledAt: Date | null }>;
   /** Connections whose own budget is denying their calls on a sustained basis. */
   throttledConnections: Array<{ connectionId: string; provider: string; throttled: number; calls: number }>;
+  /** Paged scans whose stored continuation keeps being refused, so they never advance. */
+  restartingScans: Array<{ streamId: string; connectionId: string; source: string; restarts: number }>;
   /** True when any check found something. Lets a caller alert without re-deriving it. */
   anyFindings: boolean;
 };
@@ -120,6 +130,54 @@ async function throttledConnections(db: DB, now: Date) {
     .groupBy(usageLedger.connectionId, usageLedger.provider)
     .having(sql`sum(${usageLedger.throttled}) >= ${THROTTLED_DAY}`)
     .limit(REPORT_LIMIT);
+}
+
+/**
+ * A paged scan that keeps restarting, and the reason this check exists at all.
+ *
+ * `calendly.ts` has counted consecutive rejected continuations in its cursor
+ * since the day the question was raised. It was RIGHT, it fired on every sweep
+ * from the third onward, and it had been doing so on every affected connection
+ * since the connector shipped — because the connector rebuilt each page request
+ * from `next_page_token` and that rebuild is always refused. Nobody saw it. The
+ * counter wrote to `console.warn`, `incomplete` fed the cadence ladder, and no
+ * check anywhere asked whether a scan was advancing.
+ *
+ * That is the second time in a fortnight a counter built for one silent failure
+ * turned out to be incrementing unread — `usage_ledger.throttled` was the
+ * first. So the counter gets a reader.
+ *
+ * Cheap because the count is already persisted: it rides in the cursor JSON on
+ * the stream row, so this is a `LIKE` over `source_streams` and no new column.
+ * After the fix the expected value everywhere is zero, which is what makes a
+ * nonzero one worth printing.
+ */
+async function restartingScans(db: DB) {
+  const rows = await db
+    .select({
+      streamId: sourceStreams.id,
+      connectionId: sourceStreams.connectionId,
+      source: connections.source,
+      cursor: sourceStreams.cursor,
+    })
+    .from(sourceStreams)
+    .innerJoin(connections, eq(connections.id, sourceStreams.connectionId))
+    .where(and(eq(connections.status, "active"), isNull(connections.disabledAt), like(sourceStreams.cursor, '%"restarts"%')))
+    .limit(REPORT_LIMIT * 4);
+
+  return rows
+    .flatMap((r) => {
+      // Parsed rather than pattern-matched out of the JSON: the threshold is a
+      // number comparison, and a cursor this cannot read is not a finding.
+      try {
+        const n = (JSON.parse(r.cursor ?? "") as { restarts?: unknown }).restarts;
+        if (typeof n !== "number" || n < RESTART_ALARM) return [];
+        return [{ streamId: r.streamId, connectionId: r.connectionId, source: r.source, restarts: n }];
+      } catch {
+        return [];
+      }
+    })
+    .slice(0, REPORT_LIMIT);
 }
 
 /**
@@ -238,6 +296,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
     .where(and(isNull(deadLetter.resolvedAt), lt(deadLetter.createdAt, new Date(now.getTime() - DLQ_UNRESOLVED_MS))));
 
   const throttled = await throttledConnections(db, now);
+  const stalledScans = await restartingScans(db);
 
   const report: Omit<InvariantReport, "anyFindings"> = {
     unsweptStreams: unswept,
@@ -251,6 +310,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
     unresolvedDeadLetters: dlq?.c ?? 0,
     emptyMirrors: empty,
     throttledConnections: throttled,
+    restartingScans: stalledScans,
   };
   return {
     ...report,
@@ -260,6 +320,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
       report.stalledBackfills.length > 0 ||
       report.unresolvedDeadLetters > 0 ||
       report.emptyMirrors.length > 0 ||
-      report.throttledConnections.length > 0,
+      report.throttledConnections.length > 0 ||
+      report.restartingScans.length > 0,
   };
 }

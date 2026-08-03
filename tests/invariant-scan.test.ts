@@ -268,6 +268,51 @@ describe("a connection being refused by its own budget", () => {
   });
 });
 
+/**
+ * The reader the Calendly restart counter never had. It had been incrementing
+ * on every affected connection since the connector shipped, correctly, into a
+ * `console.warn` nobody greps.
+ */
+describe("a paged scan that keeps restarting", () => {
+  const cursorWith = (restarts: number | undefined) =>
+    JSON.stringify({
+      floor: new Date(Date.now() - 30 * DAY).toISOString(),
+      ceil: new Date(Date.now() + 90 * DAY).toISOString(),
+      pivot: new Date().toISOString(),
+      next: "past",
+      ...(restarts === undefined ? {} : { restarts }),
+    });
+
+  it("is reported once the count says it is not a coincidence", async () => {
+    const conn = await connection({ source: "calendly" });
+    const s = await stream(conn.id);
+    await db.update(sourceStreams).set({ cursor: cursorWith(7) }).where(eq(sourceStreams.id, s.id));
+
+    const report = await scanInvariants(db);
+    expect(report.restartingScans).toHaveLength(1);
+    expect(report.restartingScans[0]).toMatchObject({ streamId: s.id, source: "calendly", restarts: 7 });
+    // Nothing else notices: the retry succeeds, so no failure is ever recorded.
+    expect(report.failingConnections).toHaveLength(0);
+  });
+
+  it("stays quiet for a single restart, which is just an expiry", async () => {
+    const conn = await connection({ source: "calendly" });
+    const s = await stream(conn.id);
+    await db.update(sourceStreams).set({ cursor: cursorWith(1) }).where(eq(sourceStreams.id, s.id));
+    expect((await scanInvariants(db)).restartingScans).toHaveLength(0);
+  });
+
+  it("ignores healthy cursors and unreadable ones alike", async () => {
+    const conn = await connection({ source: "calendly" });
+    const healthy = await stream(conn.id, { configHash: "h-ok" });
+    const junk = await stream(conn.id, { configHash: "h-junk" });
+    await db.update(sourceStreams).set({ cursor: cursorWith(undefined) }).where(eq(sourceStreams.id, healthy.id));
+    // A cursor this cannot parse is not a finding — it must not throw either.
+    await db.update(sourceStreams).set({ cursor: '{"restarts": not-json' }).where(eq(sourceStreams.id, junk.id));
+    expect((await scanInvariants(db)).restartingScans).toHaveLength(0);
+  });
+});
+
 describe("the summary flag", () => {
   it("is false on a healthy fleet and true the moment anything is found", async () => {
     const conn = await connection();

@@ -190,34 +190,70 @@ export const calendlyConnector: Connector = {
  */
 const MAX_OPTION_PAGES = 10;
 
+/**
+ * FOLLOW THE URL CALENDLY GIVES YOU. Never rebuild one from `next_page_token`.
+ *
+ * Calendly's pagination object carries two continuations: `next_page_token`, an
+ * opaque string, and `next_page`, a complete ready-to-call URL. This connector
+ * used the token at both of its pagination sites and rebuilt a request around
+ * it. **The rebuild is rejected in every form.** Verified live, 2026-08-03:
+ *
+ *   - CL12 sent `next_page` verbatim → ACCEPTED, 100 events. Sent the same
+ *     token rebuilt three ways — full query, token only, token appended
+ *     unencoded → all three HTTP 400 `{"parameter":"page_token"}`.
+ *   - CL10 sent the token back MILLISECONDS after it was issued, with and
+ *     without the query it came from. Both refused. So it is not expiry, not
+ *     single-use, and not timestamp precision — the second arm carried no
+ *     timestamps at all.
+ *   - CL8 walked a wide span through `next_page` at two page sizes: 9 pages at
+ *     count=10 and 3 at count=30 returned the same 90 records with zero
+ *     duplicates. Two walks with completely different page boundaries agreeing
+ *     is also why the `sort` parameter's absence from Calendly's own URL is
+ *     cosmetic — the order is carried inside the continuation, not in the
+ *     query string.
+ *
+ * The cost of following their URL rather than ours is that we stop choosing the
+ * query on page 2+, which is nearly free here: the window bounds already came
+ * from the stored cursor byte-identically, and scope/status changes mint a new
+ * `streamConfigHash` and therefore a new cursor. The one thing it does freeze
+ * is `count` — a stored URL keeps the page size page 1 asked for, so changing
+ * COUNT_PER_PAGE takes effect only after in-flight scans drain.
+ */
+const nextPage = (p?: { next_page?: string | null } | null): string | null => {
+  const url = p?.next_page;
+  return typeof url === "string" && url !== "" ? url : null;
+};
+
 async function listAll<T>(token: string, path: string, params: Record<string, string>): Promise<T[]> {
   const out: T[] = [];
-  let pageToken: string | null = null;
-  for (let page = 0; page < MAX_OPTION_PAGES; page++) {
-    const p = new URLSearchParams({ ...params, count: "100" });
-    if (pageToken) p.set("page_token", pageToken);
-    const data = await fetchJson<{ collection?: T[]; pagination?: { next_page_token?: string | null } }>(
-      `${API}${path}?${p.toString()}`,
-      { headers: authHeader(token) },
-    );
+  let next: string | null = `${API}${path}?${new URLSearchParams({ ...params, count: "100" }).toString()}`;
+  for (let page = 0; page < MAX_OPTION_PAGES && next; page++) {
+    const data: { collection?: T[]; pagination?: { next_page?: string | null } } = await fetchJson(next, {
+      headers: authHeader(token),
+    });
     out.push(...(data.collection ?? []));
-    pageToken = data.pagination?.next_page_token ?? null;
-    if (!pageToken) break;
+    next = nextPage(data.pagination);
   }
   return out;
 }
 
-type CalendlyList = { collection: Array<Record<string, unknown>>; pagination?: { next_page_token?: string | null } };
+type CalendlyList = { collection: Array<Record<string, unknown>>; pagination?: { next_page?: string | null } };
 
 type Side = "past" | "future";
 
 /**
  * A scan's whole state: the window it is draining, the instant it calls "now",
- * and one page token per direction.
+ * and one CONTINUATION URL per direction.
  *
  * `undefined` = that side has not started, `null` = it is drained. All three
  * boundaries are pinned when the scan starts, so pagination stays stable while
  * it runs and a later sweep opens a fresh window around then-now.
+ *
+ * `past`/`future` held a `page_token` until 2026-08-03 and now hold Calendly's
+ * own `next_page` URL — see `nextPage` above for why. The three-state meaning
+ * is unchanged and still load-bearing; only what the string contains moved.
+ * `parseCursor` detects the old shape and starts over rather than spending a
+ * request on a token that can only 400.
  */
 type PollCursor = {
   floor: string;
@@ -227,7 +263,7 @@ type PollCursor = {
   future?: string | null;
   next: Side;
   /**
-   * Consecutive sweeps whose stored page_token was rejected.
+   * Consecutive sweeps whose stored continuation was rejected.
    *
    * Lives in the cursor because there is nowhere else: a poll sees no state
    * between sweeps except what it persisted. Cleared by any sweep that did not
@@ -269,7 +305,17 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
   // Whichever side is due, unless it is finished — then the other one. Both
   // finished cannot reach here: that returns a null cursor and starts over.
   const side: Side = drained(cur, cur.next) ? other(cur.next) : cur.next;
-  const url = (pageToken?: string | null) => {
+  /**
+   * The FIRST request of a side. Every page after it is Calendly's own
+   * `next_page` URL, followed verbatim.
+   *
+   * So `sort`, `status` and the window bounds are set here and here only. That
+   * changes nothing about what the walk returns: the bounds already came from
+   * the stored cursor unchanged every sweep, `status` and scope are
+   * request-shaping fields whose change mints a new stream and a fresh cursor,
+   * and CL8 showed the ordering survives inside the continuation.
+   */
+  const firstPage = () => {
     const p = new URLSearchParams({
       ...target,
       count: String(COUNT_PER_PAGE),
@@ -280,46 +326,46 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
     // Sent only when the flow narrowed it. Omitted, Calendly returns every
     // status — which is what lets a cancellation be seen at all.
     if (status) p.set("status", status);
-    if (pageToken) p.set("page_token", pageToken);
     return `${API}/scheduled_events?${p.toString()}`;
   };
 
-  const token_in = cur[side] ?? null;
+  const continuation = cur[side] ?? null;
   let data: CalendlyList;
   let restarted = false;
   try {
-    data = await fetchJson<CalendlyList>(url(token_in), { headers: authHeader(token) });
+    data = await fetchJson<CalendlyList>(continuation ?? firstPage(), { headers: authHeader(token) });
   } catch (e) {
-    if (!token_in) throw e;
+    if (!continuation) throw e;
     /**
-     * A REJECTED CONTINUATION RESTARTS THIS SIDE — and now says so.
+     * A REJECTED CONTINUATION RESTARTS THIS SIDE, and counts it.
      *
-     * This was one line with a comment reading "a page token that expired
-     * between sweeps self-heals by restarting that side". That is one of two
-     * things it can mean, and the code could not tell them apart:
+     * THE QUESTION THIS COUNTER ANSWERED, now settled. It was added because a
+     * rejected continuation has two possible meanings the code could not tell
+     * apart: a continuation that genuinely expired between sweeps (restarting
+     * is correct, the next sweep gets further), or one that is never accepted
+     * at all (the restart happens every sweep, the scan never passes page 1,
+     * and each side holds at most `COUNT_PER_PAGE` events — for ever, with no
+     * error anywhere, because the retry succeeds).
      *
-     *   - the token genuinely expired between sweeps → restarting is correct and
-     *     the next sweep gets further;
-     *   - the REQUEST SHAPE is rejected (or tokens never survive the gap) → the
-     *     restart happens every single sweep, the scan never advances past its
-     *     first page, and each side holds only its first 100 events. **For
-     *     ever, with no error anywhere**, because the retry succeeds.
+     * It was the second, and it had been happening since the connector shipped:
+     * the rebuilt `page_token` request is refused in every form (see
+     * `nextPage`). The counter fired correctly on every sweep from the third
+     * onward and nothing read it, which is the reason this went unnoticed
+     * rather than any failure of the counter.
      *
-     * The tokens are read from the PERSISTED cursor, so the gap between issuing
-     * one and using it is a full cadence interval — ten minutes at base, up to an
-     * hour on the widened webhook backstop. Whether a Calendly token survives
-     * that has never been measured; `scripts/verify-calendly.ts` CL10/CL11 do it.
-     *
-     * So the restart is counted in the cursor. One is unremarkable. Two in a row
-     * means the side is not advancing, and that is reported rather than absorbed.
+     * It stays because its meaning is now sharper, not weaker. Following
+     * `next_page` removes the request-shape cause entirely, so a restart now
+     * means Calendly refused ITS OWN URL — which is either a real expiry (CL13
+     * measures whether that happens inside a cadence interval) or a genuine
+     * fault. Either way it is a live signal rather than a permanent state.
      */
     restarted = true;
     console.warn(
-      `[calendly-probe] ${side} side: page_token rejected (${e instanceof Error ? e.message : String(e)}); ` +
+      `[calendly-probe] ${side} side: continuation rejected (${e instanceof Error ? e.message : String(e)}); ` +
         `restarting this side at page 1. ` +
         `consecutive restarts: ${(cur.restarts ?? 0) + 1}`,
     );
-    data = await fetchJson<CalendlyList>(url(null), { headers: authHeader(token) });
+    data = await fetchJson<CalendlyList>(firstPage(), { headers: authHeader(token) });
   }
 
   // Every meeting the window returns is stored. Narrowing to one meeting type is
@@ -348,10 +394,10 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
   // meeting-type read filter matches on. `typed` well below `returned` is the
   // one way that filter could quietly show nothing, and it belongs in a log
   // rather than being inferred from an empty dashboard.
-  if (!token_in) {
+  if (!continuation) {
     console.log(
       `[calendly-probe] side=${side} returned=${data.collection.length} typed=${typed} ` +
-        `paginated=${Boolean(data.pagination?.next_page_token)} scope=${Object.keys(target).join("+")} status=${status ?? "all"}`,
+        `paginated=${Boolean(nextPage(data.pagination))} scope=${Object.keys(target).join("+")} status=${status ?? "all"}`,
     );
   }
 
@@ -363,10 +409,12 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
    */
   const restarts = restarted ? (cur.restarts ?? 0) + 1 : 0;
 
-  // Advance this side, then hand the turn to the other one.
+  // Advance this side, then hand the turn to the other one. A side is drained
+  // when Calendly stops offering a next page, which is the same signal it always
+  // was — only the field it is read from changed.
   const advanced: PollCursor = {
     ...cur,
-    [side]: data.pagination?.next_page_token ?? null,
+    [side]: nextPage(data.pagination),
     next: other(side),
     ...(restarts > 0 ? { restarts } : { restarts: undefined }),
   };
@@ -376,18 +424,19 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
    * A SCAN THAT KEEPS RESTARTING IS NOT FINISHING, and says so.
    *
    * Two consecutive restarts cannot be two coincidental expiries — it means the
-   * stored token is never usable, so this side re-reads page 1 every sweep and
-   * everything past the first `count` events is unreachable. `incomplete` holds
-   * the connection at base cadence (rather than letting the ladder widen it to
-   * an hour, which would make the loop slower AND quieter) and tells a Test that
-   * the import has outstanding work, which is true.
+   * stored continuation is never usable, so this side re-reads page 1 every
+   * sweep and everything past the first `count` events is unreachable.
+   * `incomplete` holds the connection at base cadence (rather than letting the
+   * ladder widen it to an hour, which would make the loop slower AND quieter)
+   * and tells a Test that the import has outstanding work, which is true.
    */
   const stuck = restarts >= RESTART_ALARM;
   if (stuck) {
     console.warn(
-      `[calendly-probe] ${side} side has restarted ${restarts} sweeps in a row — the stored page_token is never ` +
-        `accepted, so this side is re-reading its first page and holding at most ${COUNT_PER_PAGE} events. ` +
-        `Run scripts/verify-calendly.ts (CL10 = request shape, CL11 = token lifetime) to say which.`,
+      `[calendly-probe] ${side} side has restarted ${restarts} sweeps in a row — the stored next_page URL is ` +
+        `never accepted, so this side is re-reading its first page and holding at most ${COUNT_PER_PAGE} events. ` +
+        `The rebuilt-page_token cause is fixed and ruled out; this means Calendly is refusing its own URL. ` +
+        `Run scripts/verify-calendly.ts (CL13 = how long a next_page URL survives).`,
     );
   }
 
@@ -425,6 +474,17 @@ function drained(cur: PollCursor, side: Side): boolean {
  * silently retire history the stream is supposed to hold, so a nonsensical
  * value degrades to the default rather than destroying anything.
  */
+/**
+ * A stored continuation from before 2026-08-03, when these fields held a
+ * `page_token` rather than Calendly's `next_page` URL.
+ *
+ * Unambiguous: the replacement is always an absolute Calendly URL and a token
+ * never is. `undefined` (side not started) and `null` (side drained) are not
+ * continuations at all and must pass through untouched — only a non-URL STRING
+ * is the old shape.
+ */
+const isLegacyContinuation = (v: unknown): boolean => typeof v === "string" && !v.startsWith(`${API}/`);
+
 function parseCursor(raw: string | null, windowFloor: Date | null = null): PollCursor {
   if (raw) {
     try {
@@ -432,15 +492,39 @@ function parseCursor(raw: string | null, windowFloor: Date | null = null): PollC
       // `pivot` is required, so a cursor from before the scan became two-sided
       // restarts rather than being read as a half-finished one.
       if (typeof c.floor === "string" && typeof c.ceil === "string" && typeof c.pivot === "string") {
-        return {
-          floor: c.floor,
-          ceil: c.ceil,
-          pivot: c.pivot,
-          ...("past" in c ? { past: typeof c.past === "string" ? c.past : null } : {}),
-          ...("future" in c ? { future: typeof c.future === "string" ? c.future : null } : {}),
-          next: c.next === "future" ? "future" : "past",
-          ...(typeof c.restarts === "number" && c.restarts > 0 ? { restarts: c.restarts } : {}),
-        };
+        /**
+         * A CURSOR HOLDING A DEAD TOKEN IS DISCARDED WHOLE, not repaired.
+         *
+         * Every stored `page_token` is unusable — that is the bug being fixed —
+         * so keeping the rest of the cursor would preserve the damage rather
+         * than the progress. The window bounds are the damage: `done` requires
+         * BOTH sides drained, neither side could ever drain while its
+         * continuation 400d, so `nextCursor` never went null and
+         * `floor`/`ceil`/`pivot` have been frozen at whenever the scan first
+         * started — potentially months. Re-using them would keep reading a
+         * stale window and keep declaring it to `retireOutsideWindow`.
+         *
+         * Falling through re-opens the window around now, which is exactly the
+         * `nextCursor: null` path the connector already takes every time a scan
+         * finishes. It costs one rescan, which dedup-on-insert makes cheap, and
+         * it repairs the window in the same move. It also avoids spending a
+         * request per sweep on a token that can only 400.
+         */
+        if (!isLegacyContinuation(c.past) && !isLegacyContinuation(c.future)) {
+          return {
+            floor: c.floor,
+            ceil: c.ceil,
+            pivot: c.pivot,
+            ...("past" in c ? { past: typeof c.past === "string" ? c.past : null } : {}),
+            ...("future" in c ? { future: typeof c.future === "string" ? c.future : null } : {}),
+            next: c.next === "future" ? "future" : "past",
+            ...(typeof c.restarts === "number" && c.restarts > 0 ? { restarts: c.restarts } : {}),
+          };
+        }
+        console.warn(
+          `[calendly-probe] discarding a cursor that stored a page_token instead of a next_page URL; ` +
+            `re-opening the window at now. This is a one-time migration per stream.`,
+        );
       }
     } catch {
       // Not our JSON (e.g. a legacy timestamp cursor) — fall through to a fresh window.

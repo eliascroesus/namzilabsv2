@@ -390,8 +390,9 @@ async function pollCampaignTotals(args: PollArgs): Promise<PollResult> {
  *    walk when a whole page falls under the floor, which is only correct while
  *    the oldest records arrive last. That assumption is declared and asserted in
  *    both directions in `tests/connector-contract.test.ts`, and I2 confirmed it
- *    live on both `timestamp_created` and `timestamp_email`. It cannot be
- *    removed by finding a better parameter, because there is not one.
+ *    live on both `timestamp_created` and `timestamp_email` across 50 dated
+ *    rows, none absent and none unparseable. It cannot be removed by finding a
+ *    better parameter, because there is not one.
  *
  * Also observed: **`limit` has no cap at 50.** `limit=51` was accepted and
  * returned 51 rows. `PAGE_LIMIT` is our own pacing choice against a 20 req/min
