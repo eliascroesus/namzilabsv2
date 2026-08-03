@@ -554,7 +554,7 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
         const url = String(input);
         if (url.includes("/users/me")) return jsonResponse(ME[1]);
         seen = url;
-        return jsonResponse({ collection: [], pagination: { next_page_token: null } });
+        return jsonResponse({ collection: [], pagination: { next_page: null } });
       }),
     );
     await calendlyConnector.poll!({ connectionId: `c-${Math.random()}`, cursor, credentials: { accessToken: "t" }, config });
@@ -596,7 +596,7 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
         const url = String(input);
         if (url.includes("/users/me")) return jsonResponse(ME[1]);
         urls.push(url);
-        return jsonResponse({ collection: [], pagination: { next_page_token: "MORE" } });
+        return jsonResponse({ collection: [], pagination: { next_page: "https://api.calendly.com/scheduled_events?page_token=MORE" } });
       }),
     );
     const base = { connectionId: "c-sides", credentials: { accessToken: "t" }, config: { scope: "user" } };
@@ -807,7 +807,7 @@ describe("Calendly asks Calendly only for what Calendly can narrow", () => {
           meCalls += 1;
           return jsonResponse(ME[1]);
         }
-        return jsonResponse({ collection: [], pagination: { next_page_token: null } });
+        return jsonResponse({ collection: [], pagination: { next_page: null } });
       }),
     );
     const args = { connectionId: "c-memo", cursor: null, credentials: { accessToken: "t" }, config: { scope: "user" } };
