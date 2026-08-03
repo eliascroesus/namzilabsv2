@@ -200,6 +200,17 @@ export type StreamSyncResult = {
    */
   incomplete?: boolean;
   /**
+   * This stream ended the sweep holding a provider-issued continuation that
+   * expires, per `Connector.holdsContinuation`.
+   *
+   * Feeds the cadence, which must not widen the gap to the next sweep past the
+   * continuation's life. Evaluated against the cursor that was actually
+   * PERSISTED, so it is right on every exit from the walk — including the one
+   * where the write-lock was contended and the previous cursor was kept, which
+   * is the exit that sets no other signal at all.
+   */
+  heldContinuation?: boolean;
+  /**
    * The occurred-at window this stream now covers, when the connector declared
    * one (`retireOutsideWindow`). Carried out so the UI can name the window in
    * plain words rather than leaving a short count looking like a bug — a
@@ -752,8 +763,24 @@ export async function syncStream(
       .where(eq(sourceStreams.id, stream.id));
     throw e;
   }
-  return { inserted, updated, deduped, softDeleted, incomplete, covered: covered ?? undefined, deferred, mirrorDrift };
+  /**
+   * Asked of the cursor that was actually PERSISTED, once, at the end.
+   *
+   * Not per poll, and not from the `PollResult`. When the write-lock is
+   * contended the loop breaks and the PREVIOUS cursor is kept, so a per-poll
+   * flag would describe a value that never reached the database — and that exit
+   * is the one this signal exists for, because it is the only one that leaves a
+   * continuation stored while setting no other flag.
+   *
+   * `?? false` is the default for a connector that declares nothing, which is
+   * Calendar and Sheets: their cursors are non-null for the life of the
+   * connection, and pinning them at base cadence forever would trade H.1/H.2 for
+   * a problem they do not have.
+   */
+  const heldContinuation = connector.holdsContinuation?.(cursor) ?? false;
+  return { inserted, updated, deduped, softDeleted, incomplete, heldContinuation, covered: covered ?? undefined, deferred, mirrorDrift };
 }
+
 /** All streams of one connection that should be polled. */
 export async function activeStreams(db: DB, connectionId: string): Promise<StreamRow[]> {
   return db

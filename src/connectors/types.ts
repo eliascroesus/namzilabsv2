@@ -449,6 +449,42 @@ export interface Connector {
   operationFor?(config?: Record<string, unknown>): string;
   /** Every operation key `operationFor` can return. Checked against the catalog. */
   operations?: readonly string[];
+  /**
+   * "Is this stored cursor a live continuation I must come back to before it
+   * expires?" — as opposed to a settled mark that can sit for as long as it
+   * likes.
+   *
+   * The cadence layer widens the gap between sweeps when a connection looks
+   * idle, and a connector that persists a PROVIDER-ISSUED continuation across
+   * sweeps is not idle: it is holding something with a lifetime. Calendly is the
+   * measured case — CL13 found its `next_page` URL accepted at 600s and refused
+   * at 3600s — and the reuse gap is 600-1200s, because `next_sweep_at` is set to
+   * <end of sweep> + 600s and the sweep cron only fires every 600s. Age the URL
+   * past its life and the outward scan restarts at page 1 every sweep, forever,
+   * with no error anywhere because the restart succeeds.
+   *
+   * WHY THE CONNECTOR ANSWERS AND NOT THE RUNNER. "A cursor exists" is a
+   * different question and a wrong one. Three of the four stream-scoped sources
+   * keep a non-null cursor for the life of the connection — Calendar's sync
+   * token, Sheets' change-detection marker, Instantly's bare high-water mark —
+   * so keying on non-null would pin every Google connection at base cadence
+   * permanently and repeal H.1/H.2. Nor can the shape be sniffed: the cursor is
+   * declared opaque here ("sync token, timestamp, row number, …"), and the one
+   * convention that looks generic — a leading `{` — is exactly wrong for Sheets,
+   * whose SETTLED marker is also JSON.
+   *
+   * A PURE FUNCTION OF THE CURSOR, not a field on `PollResult`, and that is
+   * load-bearing rather than stylistic. When the stream write-lock is contended
+   * the runner discards the poll's result and re-persists the PREVIOUS cursor,
+   * so a per-poll flag would describe a cursor that is not the one stored — and
+   * that path is the motivating case, since it is the one exit that leaves a
+   * continuation stored without the page-budget rule noticing.
+   *
+   * Omitting it means "nothing I persist expires", which is the right answer for
+   * Calendar and Sheets and the safe default for anything new: an undeclared
+   * connector is never pinned.
+   */
+  holdsContinuation?(cursor: string | null): boolean;
   /** Optional: list live choices for a dynamic flow-level field (spreadsheets, tabs, calendars…). */
   listOptions?(key: string, args: ListOptionsArgs): Promise<SourceOption[]>;
   /** Optional: latest N records for the connect-time preview. */

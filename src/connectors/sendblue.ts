@@ -11,7 +11,7 @@ import type {
 import { safeEqual } from "@/lib/signatures";
 import { hashId } from "@/lib/ids";
 import { fetchJson } from "@/lib/http-client";
-import { asObject, parseDate, spanCovered, str } from "./field-utils";
+import { asObject, holdsWindowContinuation, parseDate, spanCovered, str } from "./field-utils";
 
 /**
  * Sendblue API host. Their API lives on the .co domain (the .com is marketing).
@@ -98,6 +98,15 @@ const SECRET_HEADERS = [
 export const sendblueConnector: Connector = {
   source: "sendblue",
   authType: "secret",
+
+  /**
+   * `cont` here is an object (`{offset, lowWater}`) rather than a string, which
+   * the shared helper handles: it tests for presence, not for shape. An offset
+   * cannot expire the way a provider-issued token can, so this is the weakest
+   * case in the catalog — but a stored offset still means a walk is in flight,
+   * and a walk in flight is not an idle connection.
+   */
+  holdsContinuation: holdsWindowContinuation,
 
   verifySignature({ headers, secret }: VerifyArgs): boolean {
     // Fails CLOSED. This connector is reachable at the inbound route (unlike

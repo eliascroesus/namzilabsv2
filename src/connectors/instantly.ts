@@ -2,7 +2,7 @@ import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs,
 import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
 import { hashId } from "@/lib/ids";
 import { fetchJson, HttpError } from "@/lib/http-client";
-import { asObject, parseDate, str } from "./field-utils";
+import { asObject, holdsWindowContinuation, parseDate, str } from "./field-utils";
 
 const API = "https://api.instantly.ai/api/v2";
 
@@ -57,6 +57,13 @@ const RECONNECT_HINT =
 export const instantlyConnector: Connector = {
   source: "instantly",
   authType: "apiKey",
+
+  /**
+   * Only the `raw_emails` walk ever holds one. Both analytics streams return
+   * `nextCursor: null` on every poll, so this is false for them by construction
+   * rather than by a special case.
+   */
+  holdsContinuation: holdsWindowContinuation,
 
   /**
    * Every endpoint this connector claims budget against. The catalog declares a

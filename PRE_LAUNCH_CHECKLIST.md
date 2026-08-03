@@ -846,6 +846,23 @@ session semantics; use the direct Neon host for the pool driver).
 are active wherever the code gates on the pool driver. Keep `DB_DRIVER=pool`
 set from here on.
 
+**What else the flip turns on, and why it is already safe.** Once the advisory
+locks engage, `withStreamWriteLock` can return `acquired: false`, and
+`syncStream`'s page loop then breaks out of the walk (`streams.ts`, the
+`!swap.acquired` line) **without** setting `incomplete` and re-persists the
+PREVIOUS cursor. On the http driver that branch is unreachable, so until now the
+property "a stored continuation implies base cadence" held only as a side effect
+of the page-budget rule.
+
+That is why `CadenceInput.heldContinuation` exists and is sourced from
+`Connector.holdsContinuation` rather than from `incomplete`: whatever the reason
+the walk stopped, a connection holding a perishable continuation stays at base
+cadence. It matters for Calendly specifically, where CL13 measured the
+`next_page` URL as accepted at 600s and refused at 3600s — and the real reuse gap
+is 600–1200s, because `next_sweep_at` is `<end of sweep> + 600s` while the sweep
+cron only fires every 600s. Nothing to do at rollout; this is the record of why
+the flip does not reopen it.
+
 ---
 
 ## 5. One-time legacy-row reconciliation — ✅ DONE BY WIPE (2026-07-29)

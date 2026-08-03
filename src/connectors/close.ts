@@ -10,7 +10,7 @@ import type {
 } from "./types";
 import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
 import { fetchJson, basicAuth, HttpError, parseRateLimit, type ObservedRateLimit } from "@/lib/http-client";
-import { asObject, parseDate, spanCovered, str } from "./field-utils";
+import { asObject, holdsWindowContinuation, parseDate, spanCovered, str } from "./field-utils";
 
 const API = "https://api.close.com/api/v1";
 
@@ -331,6 +331,14 @@ function canonicalType(objectType: string, action: string): string {
 export const closeConnector: Connector = {
   source: "close",
   authType: "apiKey",
+
+  /**
+   * Mid-walk means a `_cursor` is stored, not merely that a mark is stored.
+   * `serializeCloseCursor` drops to a bare `date_updated` string the moment the
+   * window drains, and that string is non-null for the life of the connection —
+   * so `cursor != null` would pin this connection at base cadence forever.
+   */
+  holdsContinuation: holdsWindowContinuation,
 
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     if (!secret) return false;

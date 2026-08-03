@@ -77,6 +77,23 @@ export const calendlyConnector: Connector = {
     return "scheduled_events.list";
   },
 
+  /**
+   * EVERY non-null Calendly cursor is a live scan.
+   *
+   * The cursor goes null only when both sides have drained (`done`), which is
+   * this connector's START OVER — so "a cursor exists" and "a continuation is
+   * held" happen to coincide here, and nowhere else in the catalog. It is stated
+   * rather than left to the runner because the runner cannot tell: for Calendar
+   * and Sheets the same test would be true forever.
+   *
+   * What it buys: the sweep gap stays at base cadence for as long as a
+   * `next_page` URL is stored, so the URL is never aged past the lifetime CL13
+   * measured (accepted at 600s, refused at 3600s).
+   */
+  holdsContinuation(cursor: string | null): boolean {
+    return cursor != null;
+  },
+
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     if (!secret) return false; // Calendly always signs when a key is configured.
     const header = headers["calendly-webhook-signature"];

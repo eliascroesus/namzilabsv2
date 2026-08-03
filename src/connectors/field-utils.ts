@@ -186,6 +186,36 @@ export function spanCovered(
 }
 
 /**
+ * Is this `{hw, cont, maxSeen}` cursor mid-walk?
+ *
+ * Close, Instantly and Sendblue all serialize the same way: JSON while a
+ * provider continuation is in flight, a bare high-water date string once the
+ * window has drained. So `cont` is the field that separates "come back before
+ * this expires" from "a mark that can sit indefinitely", and the bare form —
+ * which is non-null and stays non-null for the life of the connection — is
+ * emphatically NOT a continuation.
+ *
+ * That distinction is the whole reason `Connector.holdsContinuation` exists
+ * rather than the runner testing `cursor != null`: for these three, and for
+ * Calendar and Sheets, a non-null cursor is the steady state.
+ *
+ * Defensive on every axis. A cursor that will not parse, or parses to something
+ * that is not an object, reads as NOT held — because the failure mode of
+ * guessing "held" is a connection pinned at base cadence forever, which is a
+ * cost nobody would ever attribute to a corrupt cursor.
+ */
+export function holdsWindowContinuation(cursor: string | null): boolean {
+  if (!cursor || !cursor.startsWith("{")) return false;
+  try {
+    const parsed: unknown = JSON.parse(cursor);
+    if (!parsed || typeof parsed !== "object") return false;
+    return (parsed as { cont?: unknown }).cont != null;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * How much time two provider date strings span, or 0 if either is missing or
  * unparseable — which is what "nothing ingested yet" should read as, never as
  * complete.

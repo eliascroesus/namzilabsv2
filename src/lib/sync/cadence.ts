@@ -58,6 +58,31 @@ export type CadenceInput = {
    * opposite of idle.
    */
   incomplete?: boolean;
+  /**
+   * This connection is holding a PROVIDER-ISSUED continuation that expires.
+   *
+   * Close to `incomplete` and deliberately not folded into it. `incomplete`
+   * means "there is more to fetch" and is reported by whoever noticed — the
+   * connector, or the runner running out of page budget. This means "something
+   * we persisted has a lifetime, and the next sweep has to arrive before it runs
+   * out", which is a fact about the CURSOR rather than about the work. They
+   * usually coincide; the case where they do not is the one that matters. When
+   * the stream write-lock is contended the runner breaks out of the walk without
+   * setting `incomplete` and re-persists the previous cursor, so the connection
+   * looks idle while holding a continuation that is already ageing.
+   *
+   * Measured, not assumed: CL13 found Calendly's `next_page` URL accepted at
+   * 600s and refused at 3600s, against a real reuse gap of 600-1200s
+   * (`next_sweep_at` is <end of sweep> + 600s, and the sweep cron fires every
+   * 600s, so a sweep finishing just after a tick waits nearly two intervals).
+   * Widening past that makes the outward scan restart at page 1 every sweep,
+   * silently, because the restart succeeds.
+   *
+   * Sourced from `Connector.holdsContinuation`, never from "a cursor exists" —
+   * Calendar, Sheets and a settled Instantly stream all keep a non-null cursor
+   * for the life of the connection.
+   */
+  heldContinuation?: boolean;
   /** When the provider webhook was last verified healthy (F.5). */
   webhookHealthyAt?: Date | null;
   now?: Date;
@@ -68,7 +93,7 @@ export type CadenceDecision = {
   nextSweepAt: Date;
   consecutiveNoOpSweeps: number;
   /** Why this interval — surfaced in tests and useful for support. */
-  reason: "changed" | "idle-tier" | "webhook-backstop" | "scan-incomplete";
+  reason: "changed" | "idle-tier" | "webhook-backstop" | "scan-incomplete" | "continuation-held";
 };
 
 /** Pure cadence policy — no I/O, so the rules are directly testable. */
@@ -92,6 +117,30 @@ export function decideCadence(input: CadenceInput): CadenceDecision {
       nextSweepAt: new Date(now.getTime() + BASE_INTERVAL_MS),
       consecutiveNoOpSweeps: input.previousNoOps,
       reason: "scan-incomplete",
+    };
+  }
+
+  /**
+   * A continuation with a lifetime is being held, so the gap to the next sweep
+   * is not ours to widen — the provider decided it.
+   *
+   * AFTER `incomplete` and before the ladder, because the two say different
+   * things and only this one is about a deadline. A sweep can be complete (the
+   * walk ended cleanly) and still be holding a continuation the next sweep must
+   * reach in time; that is precisely the state the ladder used to widen out of.
+   *
+   * The streak is HELD rather than advanced or cleared, exactly as `incomplete`
+   * holds it. Advancing it would let a run of mid-scan sweeps tier the
+   * connection down the moment the scan finally drained — punishing it for the
+   * sweeps that were still working. Clearing it would treat a walk in progress
+   * as evidence of new data, which it is not.
+   */
+  if (input.heldContinuation) {
+    return {
+      intervalMs: BASE_INTERVAL_MS,
+      nextSweepAt: new Date(now.getTime() + BASE_INTERVAL_MS),
+      consecutiveNoOpSweeps: input.previousNoOps,
+      reason: "continuation-held",
     };
   }
 

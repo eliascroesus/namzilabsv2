@@ -51,6 +51,12 @@ export type ReconcileResult = {
    * CadenceInput.incomplete.
    */
   incomplete?: boolean;
+  /**
+   * At least one stream (or the connection cursor) ended this sweep holding a
+   * provider-issued continuation that expires. The cadence must not widen the
+   * gap to the next sweep past its life — see CadenceInput.heldContinuation.
+   */
+  heldContinuation?: boolean;
   /** Tenant + source identity, so callers can mark dependent flows stale. */
   orgId: string;
   source: string;
@@ -118,6 +124,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     const decision = decideCadence({
       changed: reconcileChanged(result),
       incomplete: result.incomplete,
+      heldContinuation: result.heldContinuation,
       previousNoOps: conn.consecutiveNoOpSweeps ?? 0,
       webhookHealthyAt: healthy ? new Date() : conn.webhookHealthyAt,
     });
@@ -187,6 +194,10 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     let deduped = 0;
     let failures = 0;
     let incomplete = false;
+    // ORed across streams: one stream mid-walk is enough to keep the whole
+    // connection at base cadence, because the sweep gap is a property of the
+    // connection and the continuation belongs to a stream inside it.
+    let heldContinuation = false;
     const changedStreamHashes: string[] = [];
     for (const stream of streams) {
       try {
@@ -215,6 +226,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
         softDeleted += r.softDeleted;
         deduped += r.deduped;
         if (r.incomplete) incomplete = true;
+        if (r.heldContinuation) heldContinuation = true;
         // G.1: remember WHICH streams changed, so staleness stays stream-scoped.
         if (r.inserted + r.updated + r.softDeleted > 0) changedStreamHashes.push(stream.configHash);
       } catch (e) {
@@ -233,7 +245,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
       }
     }
     if (streams.length > 0 && failures === 0) await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
-    return withCadence({ inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, changedStreamHashes, incomplete, orgId: conn.orgId, source: conn.source });
+    return withCadence({ inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, changedStreamHashes, incomplete, heldContinuation, orgId: conn.orgId, source: conn.source });
   }
 
   /**
@@ -326,6 +338,13 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     return withCadence({
       inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped,
       polled: true, webhook, changedStreamHashes: [], incomplete,
+      // Asked of the cursor just persisted, which for Close and Sendblue is
+      // where a mid-walk `cont` lives. It is not the same question as
+      // `incomplete`: Close's 400-handler returns a cursor with `cont` cleared
+      // AND `incomplete: true`, while a budget-bounded walk returns both set —
+      // only the stored cursor says whether something with a deadline is being
+      // held.
+      heldContinuation: connector.holdsContinuation?.(nextCursor) ?? false,
       ...(observedPause ? { deferredUntil: observedPause } : {}),
       orgId: conn.orgId, source: conn.source,
     });
