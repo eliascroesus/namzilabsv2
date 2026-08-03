@@ -844,21 +844,29 @@ async function main(): Promise<void> {
    * ════════════════════════════════════════════════════════════════════════
    * SECTION 6c — HOW LONG DOES A TOKEN LIVE? The question nobody asked.
    *
-   * `calendly.ts:275` reads `token_in` from the PERSISTED CURSOR. The connector
-   * takes one page, stores the token, ends the sweep, and reuses it on the NEXT
-   * sweep — ten minutes later at base cadence, and up to an hour on the widened
-   * webhook backstop.
+   * The connector reads its continuation from the PERSISTED CURSOR. It takes one
+   * page, stores the continuation, ends the sweep, and reuses it on the NEXT
+   * sweep.
    *
-   * If Calendly's tokens do not survive that gap, the outward scan restarts at
-   * page 1 every single sweep and never advances past 100 events per side. Same
-   * outcome as a rejected query shape, entirely different mechanism, and the
-   * catch block hides both.
+   * THAT GAP IS 600-1200s, NOT 600s. `applyCadence` sets
+   * `next_sweep_at = <end of sweep> + 600s`, and `dueConnectionsForSweep` only
+   * picks the connection up when a cron firing every 600s next runs — so a sweep
+   * that finished just after a tick waits nearly two full intervals. The hour-long
+   * webhook backstop this section used to cite is unreachable for Calendly: it
+   * needs `webhook_healthy_at`, which is written only for a connector implementing
+   * `verifyWebhookSubscription`, and Sendblue is the only one that does.
    *
-   * Reported as a NUMBER — "survived N seconds" — not as a verdict. The default
-   * wait is deliberately short so a manual run is quick; the "Verify providers"
-   * Action exposes 60 / 600 / 3600 as a dropdown, and 600 is the one that
-   * matches base cadence. A wait too long for the job ceiling is refused before
-   * the first request rather than killed at the end — see `runtimeGuard`.
+   * If a continuation does not survive that gap, the outward scan restarts at
+   * page 1 every sweep and never advances past one page per side. Same outcome as
+   * a rejected query shape, entirely different mechanism, and the catch block
+   * hides both.
+   *
+   * Reported as an INTERVAL — "survived X, died by Y" — not as a verdict, and
+   * never against a hardcoded target. Pass a comma-separated staircase
+   * (`600,600,600`) to narrow the bracket in ONE run: the sleeps accumulate and
+   * the loop stops as soon as both continuations are dead. A wait too long for
+   * the job ceiling is refused before the first request rather than killed at
+   * the end — see `runtimeGuard`.
    * ════════════════════════════════════════════════════════════════════════
    */
   head("SECTION 6c — do the two continuations survive the gap between sweeps?");
@@ -902,6 +910,34 @@ async function main(): Promise<void> {
     if (!tok && !nextUrl) return skip("CL11/CL13 continuation lifetime", "the first page offered no continuation of either kind");
     if (!nextUrl) note("CL13 next_page absent", "only a token was returned — CL13 cannot run on this page");
 
+    /**
+     * ARE CL11 AND CL13 MEASURING TWO THINGS OR ONE?
+     *
+     * The 3600s run's rejection body named `{"parameter":"page_token"}` — for a
+     * request that sent no `page_token` at all, only Calendly's own URL. Two
+     * readings, and they are not equally comfortable:
+     *
+     *   - the URL CARRIES the token as a query parameter, in which case aging
+     *     the URL ages the token and the two sections measure ONE object. "CL11
+     *     confirms the token died the same way" would then be a tautology rather
+     *     than corroboration;
+     *   - Calendly reports every continuation failure under that parameter name,
+     *     and the two are genuinely independent.
+     *
+     * One substring settles it, so it is recorded rather than reasoned about.
+     */
+    if (nextUrl) {
+      const carries = /[?&]page_token=/.test(nextUrl);
+      note(
+        "CL13 does next_page carry the token?",
+        carries
+          ? "YES — next_page contains a page_token= parameter, so CL11 and CL13 age ONE object. Read their " +
+            "agreement as a single measurement, not as two."
+          : "no page_token= parameter in the URL, so the two continuations are independent objects and their " +
+            "lifetimes are two measurements. The 400 naming `page_token` is then Calendly's own error vocabulary.",
+      );
+    }
+
     /** Order of the aged page, which is what settles whether `sort` survives the continuation. */
     const orderOfPage = (p: Page): string => {
       const ts = p.collection
@@ -914,17 +950,25 @@ async function main(): Promise<void> {
     };
 
     let aged = 0;
+    /** The last age at which each continuation was still ACCEPTED. 0 = never retried successfully. */
+    let tokenSurvived = 0;
+    let urlSurvived = 0;
     let tokenDied: string | null = null;
     let urlDied: string | null = null;
+    /** Every age actually tested, so a conclusion can name its own resolution. */
+    const checkpoints: number[] = [];
     for (const wait of waits) {
       console.log(`         waiting ${wait}s before retrying both continuations…`);
       await new Promise((r) => setTimeout(r, wait * 1000));
       aged += wait;
+      checkpoints.push(aged);
 
       if (tok && tokenDied === null) {
         const retry = await attempt("/scheduled_events", { ...connectorQuery, page_token: tok });
-        if (retry.ok) note(`CL11 token still valid after ${aged}s`, `ACCEPTED, ${retry.page.collection.length} events`);
-        else {
+        if (retry.ok) {
+          tokenSurvived = aged;
+          note(`CL11 token still valid after ${aged}s`, `ACCEPTED, ${retry.page.collection.length} events`);
+        } else {
           tokenDied = `HTTP ${retry.status}: ${retry.body}`;
           note(`CL11 token REJECTED after ${aged}s`, tokenDied);
         }
@@ -933,6 +977,7 @@ async function main(): Promise<void> {
       if (nextUrl && urlDied === null) {
         const retry = await attemptUrl(nextUrl);
         if (retry.ok) {
+          urlSurvived = aged;
           note(
             `CL13 next_page URL still valid after ${aged}s`,
             `ACCEPTED, ${retry.page.collection.length} events; order of the aged page: ${orderOfPage(retry.page)}`,
@@ -947,25 +992,55 @@ async function main(): Promise<void> {
     }
 
     /**
-     * CL13 IS THE GATE. The connector stores a `next_page` URL across sweeps —
-     * ~600s at base cadence, up to 3600s on the widened backstop — so a URL
-     * that dies inside that gap means the fix replaced one broken continuation
-     * with another, and the walk needs re-minting each sweep instead.
+     * THE BRACKET THIS RUN ESTABLISHED, and nothing wider.
+     *
+     * This used to end in a sentence hardcoding 600s — "calendly.ts reuses a
+     * stored next_page URL ~600s later, so a lifetime under that means the fix
+     * is not sufficient" — which was written assuming the wait WAS 600 and did
+     * not adapt to the wait actually used. The 3600s run therefore printed it
+     * verbatim and a result that had just proved the URL outlives base cadence
+     * read as a failure. A measurement that reports someone else's number is
+     * not a measurement.
+     *
+     * So: report the interval, from the last age that was accepted to the first
+     * that was refused, and name the checkpoints so the resolution is visible.
+     * Comma-separate the wait (`600,600,600`) to narrow it in one run — the
+     * sleeps accumulate and the loop stops once both continuations are dead.
+     */
+    const bracket = (survived: number, died: string | null): string => {
+      const tested = checkpoints.length > 0 ? ` (checked at ${checkpoints.join("s, ")}s)` : "";
+      if (died === null) return `survived at least ${aged}s${tested}; this run did not test beyond that`;
+      return survived > 0
+        ? `survived ${survived}s, died by ${aged}s${tested}: ${died}`
+        : `died by the first checkpoint, ${aged}s${tested}: ${died}`;
+    };
+
+    /**
+     * CL13 IS THE GATE — and the gap it has to clear is NOT 600s.
+     *
+     * `applyCadence` sets `next_sweep_at = <end of sweep> + 600s`, and
+     * `dueConnectionsForSweep` only picks a connection up when a cron that fires
+     * every 600s next runs. A sweep finishing just after a tick therefore waits
+     * nearly two full intervals, so the real reuse gap alternates between about
+     * 600s and about 1200s, plus jitter and queue latency.
+     *
+     * The 60-minute figure this note used to quote is not reachable at all for
+     * Calendly: the widened backstop needs `webhook_healthy_at`, which is only
+     * written for a connector implementing `verifyWebhookSubscription`, and
+     * Sendblue is the only one that does.
      */
     if (nextUrl) {
       note(
         "CL13 observed next_page lifetime — THE ONE THE CONNECTOR DEPENDS ON",
-        urlDied === null
-          ? `survived at least ${aged}s. Base cadence is 600s and the widened backstop 3600s; re-dispatch with ` +
-            `the wait set to each to cover both. Following next_page across sweeps is safe up to the number here.`
-          : `died by ${aged}s: ${urlDied}. calendly.ts reuses a stored next_page URL ~600s later, so a lifetime ` +
-            `under that means the outward scan still restarts at page 1 every sweep and the fix is not sufficient.`,
+        `${bracket(urlSurvived, urlDied)}. The connector's real reuse gap is 600-1200s (base cadence plus the ` +
+          `cron phase it lands in), so a lifetime at or under 1200s means some sweeps restart at page 1 with no ` +
+          `error anywhere. 600s alone clears the best case and leaves no margin for the worst.`,
       );
     }
     if (tok) {
       note(
         "CL11 observed token lifetime (kept for the record — the connector no longer sends one)",
-        tokenDied === null ? `survived at least ${aged}s` : `died by ${aged}s`,
+        bracket(tokenSurvived, tokenDied),
       );
     }
   });

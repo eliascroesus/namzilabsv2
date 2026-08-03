@@ -23,31 +23,39 @@ on:
           - calendly
           - instantly
           - sendblue
-      # CL11 is the only check here that costs wall-clock time, and it costs it
-      # on purpose: the only way to find out how long a Calendly page_token
-      # lives is to hold one and retry it later. 60 keeps a routine run quick
-      # and answers nothing about the connector — calendly.ts reuses a STORED
-      # token on the next sweep, 600s later at base cadence and up to 3600s on
-      # the widened webhook backstop, so those are the two numbers that matter.
+      # CL11/CL13 are the only checks here that cost wall-clock time, and they
+      # cost it on purpose: the only way to find out how long a Calendly
+      # continuation lives is to hold one and retry it later.
+      #
+      # A FREE-TEXT STAIRCASE, NOT A DROPDOWN, and the reason is that a dropdown
+      # made this answer one question per dispatch. `parseWaitSeconds` already
+      # accepts a comma-separated list and SECTION 6c already accumulates the
+      # ages and stops once both continuations are dead — so `600,600,600` ages
+      # ONE continuation through 600s, 1200s and 1800s in a single run and
+      # reports the bracket, where two dispatches at 600 and 3600 report two
+      # unrelated objects and no interval between them.
+      #
+      # It also removes a standing trap: `workflow_dispatch` renders its inputs
+      # from the DEFAULT BRANCH, so adding a dropdown option is not dispatchable
+      # until it is merged. A string needs no new options ever.
       #
       # The ceiling is 6 hours (GitHub's per-job limit on hosted runners), so
-      # even 3600 leaves well over four hours spare — every option here is
-      # offerable. The script re-does this arithmetic with the real elapsed time
-      # and refuses to start if it ever stops being true, rather than being
-      # killed at the end with nothing to show.
+      # even a full hour of sleeps leaves four hours spare. The script re-does
+      # this arithmetic with the real elapsed time and refuses to start if it
+      # ever stops being true, rather than being killed at the end with nothing
+      # to show. A value with no usable number in it is REPORTED and skipped,
+      # never coerced to a default — see `parseWaitSeconds`.
       calendly_token_wait:
-        # 60 was the default and tested a lifetime nothing depends on: the
-        # connector reuses a continuation a full cadence interval later, so a
-        # 60s pass is a fast green that answers no question anyone asked. 600 is
-        # base cadence — the shortest gap that is real. Ages BOTH continuations
-        # in one sleep (CL11 token, CL13 next_page URL).
-        description: "Calendly CL11/CL13: seconds to age a continuation before retrying it (600 = base cadence, 3600 = webhook backstop; job ceiling is 6h)"
-        type: choice
+        # The default brackets the whole plausible range in one run and stops
+        # early on rejection, so a death at 1800s costs 30 minutes rather than
+        # 60. 1200s is the checkpoint that matters most: the connector's real
+        # reuse gap is 600-1200s, because `next_sweep_at` is set to
+        # <end of sweep> + 600s and the sweep cron only fires every 600s, so a
+        # sweep finishing just after a tick waits nearly two full intervals.
+        description: "Calendly CL11/CL13: seconds to age a continuation before retrying it. Comma-separated ages accumulate (600,600,600 = checks at 600s, 1200s, 1800s). Job ceiling is 6h."
+        type: string
         required: true
-        default: "600"
-        options:
-          - "600"
-          - "3600"
+        default: "600,600,600,600,600,600"
 
 permissions:
   contents: read
@@ -133,7 +141,7 @@ jobs:
             exit 0
           fi
           if pnpm tsx scripts/verify-calendly.ts; then
-            echo "PASS|Calendly|CL11 aged a page_token ${CALENDLY_TOKEN_WAIT}s. No check contradicted the pinned contract — READ THE INFO LINES: an ignored parameter is reported there, not as a failure." >> "$RESULTS"
+            echo "PASS|Calendly|CL11/CL13 aged a continuation through ${CALENDLY_TOKEN_WAIT}s (cumulative). No check contradicted the pinned contract — READ THE INFO LINES: the continuation LIFETIME is reported there as an interval, not as a pass, and so is an ignored parameter." >> "$RESULTS"
           else
             code=$?
             # Exit 3 is the runtime guard refusing to start, not a contract
@@ -141,7 +149,7 @@ jobs:
             # "see checks CL0-CL11" there would send you looking for output
             # that does not exist.
             if [ "$code" -eq 3 ]; then
-              echo "FAIL|Calendly|REFUSED TO START — a ${CALENDLY_TOKEN_WAIT}s CL11 wait does not fit in the job's remaining time. No Calendly requests were made. See the [STOP] line above for the arithmetic; re-run with a smaller wait or with providers=calendly." >> "$RESULTS"
+              echo "FAIL|Calendly|REFUSED TO START — the CL11/CL13 waits (${CALENDLY_TOKEN_WAIT}, summed) do not fit in the job's remaining time. No Calendly requests were made. See the [STOP] line above for the arithmetic; re-run with fewer or shorter steps, or with providers=calendly so nothing is reserved for later steps." >> "$RESULTS"
             else
               echo "FAIL|Calendly|Script exited $code — see checks CL0-CL11 above." >> "$RESULTS"
             fi
