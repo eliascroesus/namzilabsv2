@@ -312,9 +312,36 @@ async function pollDailyAnalytics(args: PollArgs): Promise<PollResult> {
     });
   }
 
-  // The read enumerates this window completely, so a day that stops being
-  // reported inside it is genuinely gone — but nothing behind `from` is.
-  return { records, nextCursor: null, mirrorScope: { from, to } };
+  /**
+   * The read enumerates this window completely, so a day that stops being
+   * reported inside it is genuinely gone — but nothing behind `from` is.
+   *
+   * NOT DECLARED WHEN THE READ PRODUCED NOTHING, and this one was live.
+   *
+   * `mirrorScope` licenses `retireAbsent` to tombstone every stored row inside
+   * the window that the read did not produce, and with an empty record set that
+   * is EVERY row inside the window — `retireAbsent` drops its `notInArray`
+   * clause when there is nothing present to exclude. A verification run on a
+   * real workspace returned zero daily rows for two campaigns out of three, so
+   * every sweep was tombstoning those campaigns' last 30 days and the next
+   * response that carried rows resurrected them. A number that empties and
+   * refills with nothing on screen to say why.
+   *
+   * An empty response here is not the same claim as an empty spreadsheet. A
+   * whole-resource mirror has READ the whole resource, so nothing coming back
+   * means nothing is there — that is the mirror contract and `mirror-window`
+   * pins it. This endpoint reports days that had activity; a campaign that was
+   * quiet returns nothing at all, which is indistinguishable from a campaign
+   * whose days were withdrawn. Between "retire real rows on a quiet campaign"
+   * and "keep rows the provider stopped mentioning", only the second is
+   * recoverable.
+   *
+   * It also covers the ambiguous branch above, where `rows` is deliberately
+   * emptied because the response could not be scoped: having decided to store
+   * nothing, the connector must not simultaneously claim to have enumerated the
+   * window.
+   */
+  return { records, nextCursor: null, ...(records.length > 0 ? { mirrorScope: { from, to } } : {}) };
 }
 
 /** One restated row per campaign (derived-mirror, no window to bound). */
