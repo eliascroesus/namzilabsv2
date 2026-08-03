@@ -641,6 +641,14 @@ export async function syncStream(
           dateField: stream.dateField ?? null,
         });
         const { records, nextCursor, mirrorScope, preserveOccurredAt, retireOutsideWindow } = pageRes;
+        // The connector's OWN "there is more to fetch", which this loop used to
+        // drop on the floor — it destructured five fields and not this one. So
+        // Calendly's restart alarm reached the log and nothing else, and
+        // `PollResult.incomplete`'s promise that it "feeds the cadence" was true
+        // only for connection-scoped sources, which read it in reconcile.ts.
+        // ORed, never assigned: a later page finishing cleanly does not undo an
+        // earlier page saying it was cut short.
+        if (pageRes.incomplete) incomplete = true;
         await settleUp(pageRes, claimedAt);
         if (retireOutsideWindow) covered = retireOutsideWindow;
         const swap = await withStreamWriteLock(db, `stream:${stream.id}`, async (tx) => {
@@ -746,7 +754,6 @@ export async function syncStream(
   }
   return { inserted, updated, deduped, softDeleted, incomplete, covered: covered ?? undefined, deferred, mirrorDrift };
 }
-
 /** All streams of one connection that should be polled. */
 export async function activeStreams(db: DB, connectionId: string): Promise<StreamRow[]> {
   return db
