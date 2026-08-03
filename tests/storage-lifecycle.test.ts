@@ -1,13 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createTestDb, seedConnection } from "./helpers/testdb";
-import { deliveryLog, testRuns } from "@/db/schema";
+import { deliveryLog, testRuns, usageLedger } from "@/db/schema";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
 import type { DB } from "@/db/types";
 
 /**
  * H.6 — operational tables that grow with ACTIVITY (not customer data) must
  * have a retention policy or they become the largest, slowest table in the
- * database. test_runs (one row per Test click) joins delivery_log here.
+ * database. test_runs (one row per Test click) and usage_ledger (one row per
+ * connection per operation per MINUTE) join delivery_log here.
  */
 
 let db: DB;
@@ -16,6 +17,7 @@ let connectionId: string;
 const ORG = "org_test";
 const NOW = new Date("2026-07-01T00:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000);
+const EMPTY_LEDGER = { counters: 0, evidence: 0 };
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
@@ -31,6 +33,29 @@ async function seedDelivery(createdAt: Date) {
 async function seedRun(createdAt: Date, status = "ok", updatedAt = createdAt) {
   await db.insert(testRuns).values({ orgId: ORG, status, result: {}, createdAt, updatedAt });
 }
+/**
+ * One ledger bucket. `operation` defaults to a unique value per call because
+ * `usage_ledger_bucket_uq` is (connection, operation, window) — seeding N rows
+ * in the same window needs N distinct operations.
+ */
+let opSeq = 0;
+async function seedLedger(
+  windowStart: Date,
+  evidence: Partial<{ throttled: number; errors: number; observedLimit: number }> = {},
+) {
+  await db.insert(usageLedger).values({
+    orgId: ORG,
+    connectionId,
+    provider: "close",
+    operation: `op.${opSeq++}`,
+    windowStart,
+    calls: 10,
+    throttled: evidence.throttled ?? 0,
+    errors: evidence.errors ?? 0,
+    observedLimit: evidence.observedLimit ?? null,
+  });
+}
+const countLedger = async () => (await db.select().from(usageLedger)).length;
 
 describe("operational retention", () => {
   it("prunes rows past the window and keeps everything inside it", async () => {
@@ -41,21 +66,32 @@ describe("operational retention", () => {
     await seedRun(daysAgo(2));
 
     const before = await retentionBacklog(db, 30, NOW);
-    expect(before).toEqual({ deliveryLog: 2, testRuns: 1 });
+    expect(before).toEqual({ deliveryLog: 2, testRuns: 1, usageLedger: EMPTY_LEDGER });
 
     const pruned = await pruneOperationalTables(db, { now: NOW });
-    expect(pruned).toEqual({ deliveryLog: 2, testRuns: 1 });
+    expect(pruned).toEqual({
+      deliveryLog: 2,
+      testRuns: 1,
+      usageLedger: EMPTY_LEDGER,
+      truncated: false,
+      inspected: false,
+    });
 
     expect(await db.select().from(deliveryLog)).toHaveLength(1); // the 5-day-old row
     expect(await db.select().from(testRuns)).toHaveLength(1); // the 2-day-old run
-    expect(await retentionBacklog(db, 30, NOW)).toEqual({ deliveryLog: 0, testRuns: 0 });
+    expect(await retentionBacklog(db, 30, NOW)).toEqual({
+      deliveryLog: 0,
+      testRuns: 0,
+      usageLedger: EMPTY_LEDGER,
+    });
   });
 
   it("is idempotent and safe on empty tables", async () => {
-    expect(await pruneOperationalTables(db, { now: NOW })).toEqual({ deliveryLog: 0, testRuns: 0 });
+    const empty = { deliveryLog: 0, testRuns: 0, usageLedger: EMPTY_LEDGER, truncated: false, inspected: false };
+    expect(await pruneOperationalTables(db, { now: NOW })).toEqual(empty);
     await seedRun(daysAgo(90));
     await pruneOperationalTables(db, { now: NOW });
-    expect(await pruneOperationalTables(db, { now: NOW })).toEqual({ deliveryLog: 0, testRuns: 0 });
+    expect(await pruneOperationalTables(db, { now: NOW })).toEqual(empty);
   });
 
   it("sweeps settled Test runs quickly, leaving in-flight ones alone", async () => {
@@ -68,5 +104,173 @@ describe("operational retention", () => {
     const left = await db.select().from(testRuns);
     expect(left).toHaveLength(2);
     expect(left.map((r) => r.status).sort()).toEqual(["ok", "running"]);
+  });
+});
+
+/**
+ * The two tiers, which are the new decision in this batch: a bucket holding
+ * only `calls` is a spent rate-limiter window and dies at 2 days, while a row
+ * carrying `observed_limit`, `throttled` or `errors` is evidence a human may
+ * want weeks later and lives 90.
+ */
+describe("usage_ledger two-tier retention", () => {
+  it("drops spent counters at 2 days and keeps evidence for 90", async () => {
+    await seedLedger(daysAgo(1)); // counter, inside window → keep
+    await seedLedger(daysAgo(5)); // counter, past window → go
+    await seedLedger(daysAgo(30)); // counter, well past → go
+    await seedLedger(daysAgo(30), { throttled: 3 }); // evidence, inside 90d → keep
+    await seedLedger(daysAgo(30), { errors: 1 }); // evidence, inside 90d → keep
+    await seedLedger(daysAgo(30), { observedLimit: 300 }); // evidence, inside 90d → keep
+    await seedLedger(daysAgo(120), { throttled: 3 }); // evidence, past 90d → go
+
+    const pruned = await pruneOperationalTables(db, { now: NOW });
+    expect(pruned.usageLedger).toEqual({ counters: 2, evidence: 1 });
+
+    const left = await db.select().from(usageLedger);
+    expect(left).toHaveLength(4);
+    // The one surviving counter is the fresh one; the other three carry evidence.
+    expect(left.filter((r) => r.observedLimit === null && r.throttled === 0 && r.errors === 0)).toHaveLength(1);
+  });
+
+  it("each evidence column alone is enough to survive the counter window", async () => {
+    for (const evidence of [{ throttled: 1 }, { errors: 1 }, { observedLimit: 1 }]) {
+      await seedLedger(daysAgo(60), evidence);
+    }
+    await pruneOperationalTables(db, { now: NOW });
+    expect(await countLedger()).toBe(3);
+  });
+
+  it("counts each row in exactly one tier, so the two never double-count", async () => {
+    // A row with every evidence column set is still one evidence row, and the
+    // predicates are complements — a row can never be in both passes.
+    await seedLedger(daysAgo(120), { throttled: 2, errors: 2, observedLimit: 100 });
+    await seedLedger(daysAgo(120));
+    const pruned = await pruneOperationalTables(db, { now: NOW });
+    expect(pruned.usageLedger).toEqual({ counters: 1, evidence: 1 });
+    expect(await countLedger()).toBe(0);
+  });
+
+  it("reports backlog split by tier", async () => {
+    await seedLedger(daysAgo(5));
+    await seedLedger(daysAgo(5));
+    await seedLedger(daysAgo(120), { throttled: 1 });
+    expect((await retentionBacklog(db, 30, NOW)).usageLedger).toEqual({ counters: 2, evidence: 1 });
+  });
+});
+
+/**
+ * The drain loop, which is the fix this batch exists for. The old pass removed
+ * one batch per table per night; usage_ledger arrives two orders of magnitude
+ * faster than that, so a pass that stops after one batch never catches up.
+ *
+ * `batchSize` is injected small so multi-pass draining is exercised honestly
+ * without seeding 10,000 rows per assertion.
+ */
+describe("drain loop", () => {
+  it("empties a backlog larger than one batch, which the single-pass sweep could not", async () => {
+    for (let i = 0; i < 25; i++) await seedLedger(new Date(daysAgo(10).getTime() + i * 60_000));
+
+    const pruned = await pruneOperationalTables(db, { now: NOW, batchSize: 5 });
+    expect(pruned.usageLedger.counters).toBe(25);
+    expect(pruned.truncated).toBe(false);
+    expect(await countLedger()).toBe(0);
+    expect((await retentionBacklog(db, 30, NOW)).usageLedger.counters).toBe(0);
+  });
+
+  it("drains every table in one run, not just the first", async () => {
+    for (let i = 0; i < 12; i++) {
+      await seedDelivery(daysAgo(40));
+      await seedRun(daysAgo(40));
+      await seedLedger(new Date(daysAgo(10).getTime() + i * 60_000));
+    }
+    const pruned = await pruneOperationalTables(db, { now: NOW, batchSize: 5 });
+    expect(pruned).toMatchObject({
+      deliveryLog: 12,
+      testRuns: 12,
+      usageLedger: { counters: 12, evidence: 0 },
+      truncated: false,
+    });
+    expect(await db.select().from(deliveryLog)).toHaveLength(0);
+    expect(await db.select().from(testRuns)).toHaveLength(0);
+    expect(await countLedger()).toBe(0);
+  });
+
+  it("stops at the wall-clock ceiling and says so rather than running past it", async () => {
+    for (let i = 0; i < 25; i++) await seedLedger(new Date(daysAgo(10).getTime() + i * 60_000));
+
+    // A clock that has already blown the budget by the second check: one batch
+    // goes, the rest is reported as unfinished. This is the behaviour that
+    // keeps the step from being killed mid-flight by the 60s route ceiling.
+    let t = 0;
+    const pruned = await pruneOperationalTables(db, {
+      now: NOW,
+      batchSize: 5,
+      nowMs: () => (t++ === 0 ? 0 : 1_000_000),
+    });
+
+    expect(pruned.truncated).toBe(true);
+    expect(await countLedger()).toBeGreaterThan(0);
+    // Whatever it did remove, it removed completely — a truncated run leaves
+    // consistent state, it does not half-delete a batch.
+    expect(pruned.usageLedger.counters + (await countLedger())).toBe(25);
+  });
+
+  it("a truncated run leaves the remainder for the next one, which finishes it", async () => {
+    for (let i = 0; i < 25; i++) await seedLedger(new Date(daysAgo(10).getTime() + i * 60_000));
+    let t = 0;
+    await pruneOperationalTables(db, { now: NOW, batchSize: 5, nowMs: () => (t++ === 0 ? 0 : 1_000_000) });
+    const second = await pruneOperationalTables(db, { now: NOW, batchSize: 5 });
+    expect(second.truncated).toBe(false);
+    expect(await countLedger()).toBe(0);
+  });
+});
+
+/**
+ * Inspect mode: the first production run reports and removes nothing, because
+ * the counter-tier predicate is new logic deciding what is disposable and that
+ * judgement should be read against real data before it acts on real data.
+ */
+describe("inspect mode", () => {
+  it("removes nothing and reports what it would remove, split by tier", async () => {
+    await seedDelivery(daysAgo(40));
+    await seedRun(daysAgo(40));
+    await seedLedger(daysAgo(5));
+    await seedLedger(daysAgo(5));
+    await seedLedger(daysAgo(120), { throttled: 1 });
+    await seedLedger(daysAgo(1)); // inside every window → reported by nothing
+
+    const report = await pruneOperationalTables(db, { now: NOW, inspect: true });
+    expect(report).toEqual({
+      deliveryLog: 1,
+      testRuns: 1,
+      usageLedger: { counters: 2, evidence: 1 },
+      truncated: false,
+      inspected: true,
+    });
+
+    // Nothing moved.
+    expect(await db.select().from(deliveryLog)).toHaveLength(1);
+    expect(await db.select().from(testRuns)).toHaveLength(1);
+    expect(await countLedger()).toBe(4);
+  });
+
+  it("reports the TRUE backlog, uncapped by the delete batch", async () => {
+    for (let i = 0; i < 25; i++) await seedLedger(new Date(daysAgo(10).getTime() + i * 60_000));
+    // The point of inspect: a live run with this batch size would report what
+    // it managed to remove, while inspect reports how much there actually is.
+    const report = await pruneOperationalTables(db, { now: NOW, inspect: true, batchSize: 5 });
+    expect(report.usageLedger.counters).toBe(25);
+    expect(await countLedger()).toBe(25);
+  });
+
+  it("agrees with the live run: what inspect predicts is what pruning removes", async () => {
+    await seedDelivery(daysAgo(40));
+    await seedLedger(daysAgo(5));
+    await seedLedger(daysAgo(120), { errors: 2 });
+    await seedLedger(daysAgo(1));
+
+    const predicted = await pruneOperationalTables(db, { now: NOW, inspect: true });
+    const actual = await pruneOperationalTables(db, { now: NOW });
+    expect({ ...actual, inspected: true }).toEqual(predicted);
   });
 });

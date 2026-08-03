@@ -1,5 +1,5 @@
 import { and, eq, gte, isNull, lt, ne, or, sql } from "drizzle-orm";
-import { connections, deadLetter, events, sourceStreams } from "@/db/schema";
+import { connections, deadLetter, events, sourceStreams, usageLedger } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { isMirrorSource } from "@/connectors/catalog";
 import { stalledJobs } from "@/lib/backfill/jobs";
@@ -57,6 +57,21 @@ const DLQ_UNRESOLVED_MS = 24 * HOUR_MS;
 /** Rows returned per check, so one broken deploy cannot produce an unbounded report. */
 const REPORT_LIMIT = 50;
 
+/** Window over which throttling is totalled — long enough that one bad hour doesn't report. */
+const THROTTLE_WINDOW_MS = 24 * HOUR_MS;
+
+/**
+ * Denied calls in that window that mean "this budget is mis-sized", not "we
+ * touched the ceiling once".
+ *
+ * The base sweep is every ten minutes, so a day is ~144 sweeps per stream. A
+ * connection that has been denied fifty times is being refused on a large
+ * fraction of its sweeps rather than clipping the limit during one burst —
+ * which is the difference between backpressure working and a connection that
+ * is quietly falling behind because its budget is too small.
+ */
+const THROTTLED_DAY = 50;
+
 export type InvariantReport = {
   /** Streams an active, unpaused connection has stopped polling. */
   unsweptStreams: Array<{ streamId: string; connectionId: string; source: string; lastPolledAt: Date | null }>;
@@ -68,9 +83,44 @@ export type InvariantReport = {
   unresolvedDeadLetters: number;
   /** Mirror streams that have been read successfully and hold nothing. */
   emptyMirrors: Array<{ streamId: string; connectionId: string; source: string; lastPolledAt: Date | null }>;
+  /** Connections whose own budget is denying their calls on a sustained basis. */
+  throttledConnections: Array<{ connectionId: string; provider: string; throttled: number; calls: number }>;
   /** True when any check found something. Lets a caller alert without re-deriving it. */
   anyFindings: boolean;
 };
+
+/**
+ * A connection being refused by its own rate budget.
+ *
+ * This is the same shape as every other check here — something that should be
+ * moving has stopped — but it is the one case where the system is doing the
+ * stopping. `usage_ledger.throttled` has been incremented on every denial since
+ * F.1 and read by nothing, so a connection could be having a large fraction of
+ * its calls refused every night with no error anywhere: the breaker sees no
+ * failure (there was no call), the stream still reports a successful poll (it
+ * did poll, with less data), and `lastError` stays clean.
+ *
+ * Reported rather than alerted, like `emptyMirrors`: sustained throttling is
+ * sometimes correct — a genuinely busy account against a small provider limit —
+ * and the fix is a budget change, which is a human decision. `calls` rides
+ * along because the ratio is what makes it readable; 60 denials against 6,000
+ * calls is backpressure working, and against 100 is a connection crawling.
+ */
+async function throttledConnections(db: DB, now: Date) {
+  const since = new Date(now.getTime() - THROTTLE_WINDOW_MS);
+  return db
+    .select({
+      connectionId: usageLedger.connectionId,
+      provider: usageLedger.provider,
+      throttled: sql<number>`sum(${usageLedger.throttled})::int`,
+      calls: sql<number>`sum(${usageLedger.calls})::int`,
+    })
+    .from(usageLedger)
+    .where(gte(usageLedger.windowStart, since))
+    .groupBy(usageLedger.connectionId, usageLedger.provider)
+    .having(sql`sum(${usageLedger.throttled}) >= ${THROTTLED_DAY}`)
+    .limit(REPORT_LIMIT);
+}
 
 /**
  * A stream that should be being polled and is not.
@@ -154,6 +204,12 @@ async function emptyMirrors(db: DB, now: Date) {
 }
 
 export async function scanInvariants(db: DB, now = new Date()): Promise<InvariantReport> {
+  // EXACTLY FOUR CONCURRENT READS HERE. `MIN_POOL_MAX` in `src/db/client.ts` is
+  // derived from this call site — "4 concurrent reads + 1 transaction + 1
+  // spare" — and a pool below that floor DEADLOCKS rather than degrades, so a
+  // fifth entry in this array silently invalidates the derivation and the
+  // symptom is a hung nightly job, not a slow one. New checks go sequentially
+  // below, which is why `throttledConnections` is not in here.
   const [unswept, failing, stalled, empty] = await Promise.all([
     unsweptStreams(db, now),
     db
@@ -172,10 +228,16 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
     emptyMirrors(db, now),
   ]);
 
+  // Sequential from here, and deliberately so — see the note on the Promise.all
+  // above. These two are cheap aggregates; the cost of running them one after
+  // another is a round trip, and the cost of getting the pool floor wrong is a
+  // nightly job that hangs instead of reporting.
   const [dlq] = await db
     .select({ c: sql<number>`count(*)::int` })
     .from(deadLetter)
     .where(and(isNull(deadLetter.resolvedAt), lt(deadLetter.createdAt, new Date(now.getTime() - DLQ_UNRESOLVED_MS))));
+
+  const throttled = await throttledConnections(db, now);
 
   const report: Omit<InvariantReport, "anyFindings"> = {
     unsweptStreams: unswept,
@@ -188,6 +250,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
     })),
     unresolvedDeadLetters: dlq?.c ?? 0,
     emptyMirrors: empty,
+    throttledConnections: throttled,
   };
   return {
     ...report,
@@ -196,6 +259,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
       report.failingConnections.length > 0 ||
       report.stalledBackfills.length > 0 ||
       report.unresolvedDeadLetters > 0 ||
-      report.emptyMirrors.length > 0,
+      report.emptyMirrors.length > 0 ||
+      report.throttledConnections.length > 0,
   };
 }

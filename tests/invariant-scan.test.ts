@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
-import { backfillJobs, connections, deadLetter, events, sourceStreams } from "@/db/schema";
+import { backfillJobs, connections, deadLetter, events, sourceStreams, usageLedger } from "@/db/schema";
 import { scanInvariants } from "@/lib/health/invariants";
 import type { DB } from "@/db/types";
 
@@ -212,6 +212,62 @@ describe("a mirror holding nothing", () => {
   });
 });
 
+/**
+ * The check that closes the F.1 gap: `usage_ledger.throttled` has been written
+ * on every denial since the budget landed and read by nothing, so a connection
+ * could have a large fraction of its calls refused every night while every
+ * other signal stayed clean. The breaker sees no failure — there was no call.
+ */
+describe("a connection being refused by its own budget", () => {
+  /** N denials spread across N minute-windows, the shape the runner actually writes. */
+  async function throttle(connectionId: string, denials: number, calls = 10, ageMs = HOUR) {
+    for (let i = 0; i < denials; i++) {
+      await db.insert(usageLedger).values({
+        orgId: ORG,
+        connectionId,
+        provider: "close",
+        operation: "*",
+        windowStart: new Date(Date.now() - ageMs - i * 60_000),
+        calls,
+        throttled: 1,
+      });
+    }
+  }
+
+  it("is reported, though no error is written anywhere", async () => {
+    const conn = await connection();
+    await throttle(conn.id, 60);
+
+    const report = await scanInvariants(db);
+    expect(report.throttledConnections).toHaveLength(1);
+    expect(report.throttledConnections[0]).toMatchObject({ connectionId: conn.id, provider: "close", throttled: 60 });
+    // The connection looks perfectly healthy by every other measure.
+    expect(report.failingConnections).toHaveLength(0);
+    const [c] = await db.select().from(connections).where(eq(connections.id, conn.id));
+    expect(c.lastError).toBeNull();
+    expect(c.consecutiveFailures).toBe(0);
+  });
+
+  it("carries the call total, because the ratio is what makes it readable", async () => {
+    const conn = await connection();
+    await throttle(conn.id, 60, 100);
+    const [row] = (await scanInvariants(db)).throttledConnections;
+    expect(row).toMatchObject({ throttled: 60, calls: 6_000 });
+  });
+
+  it("stays quiet for occasional backpressure, which is the system working", async () => {
+    const conn = await connection();
+    await throttle(conn.id, 5);
+    expect((await scanInvariants(db)).throttledConnections).toHaveLength(0);
+  });
+
+  it("only counts the last day, so an old bad night does not report forever", async () => {
+    const conn = await connection();
+    await throttle(conn.id, 60, 10, 3 * DAY);
+    expect((await scanInvariants(db)).throttledConnections).toHaveLength(0);
+  });
+});
+
 describe("the summary flag", () => {
   it("is false on a healthy fleet and true the moment anything is found", async () => {
     const conn = await connection();
@@ -220,6 +276,26 @@ describe("the summary flag", () => {
     expect((await scanInvariants(db)).anyFindings).toBe(false);
 
     await db.update(sourceStreams).set({ lastPolledAt: new Date(Date.now() - 2 * DAY) }).where(eq(sourceStreams.id, s.id));
+    expect((await scanInvariants(db)).anyFindings).toBe(true);
+  });
+
+  it("is raised by throttling alone, with every other check clean", async () => {
+    const conn = await connection();
+    const s = await stream(conn.id);
+    await row(conn.id, s.configHash);
+    expect((await scanInvariants(db)).anyFindings).toBe(false);
+
+    for (let i = 0; i < 60; i++) {
+      await db.insert(usageLedger).values({
+        orgId: ORG,
+        connectionId: conn.id,
+        provider: "gsheets",
+        operation: "*",
+        windowStart: new Date(Date.now() - HOUR - i * 60_000),
+        calls: 10,
+        throttled: 1,
+      });
+    }
     expect((await scanInvariants(db)).anyFindings).toBe(true);
   });
 });

@@ -117,14 +117,42 @@ export const materializeStale = inngest.createFunction(
 
 /**
  * H.6 storage lifecycle: nightly retention over the operational tables that
- * grow with activity (delivery_log, test_runs), plus a frequent sweep of
- * settled Test runs so the editor's working state never accumulates.
+ * grow with activity (delivery_log, test_runs, usage_ledger), plus a frequent
+ * sweep of settled Test runs so the editor's working state never accumulates.
  */
 export const pruneStorage = inngest.createFunction(
   { id: "prune-storage", retries: 2, concurrency: { limit: 1 }, triggers: [{ cron: "17 3 * * *" }] },
   async ({ step }) => {
     const settled = await step.run("prune-settled-test-runs", () => pruneSettledTestRuns(getDb()));
-    const retained = await step.run("prune-operational-tables", () => pruneOperationalTables(getDb()));
+    /**
+     * INSPECT ONLY while `STORAGE_PRUNE_LIVE` is unset, which is the rollout
+     * gate and the reason the mode is a parameter rather than a constant.
+     *
+     * The counter tier is new logic that decides what to delete — a row is
+     * disposable if `observed_limit IS NULL AND throttled = 0 AND errors = 0`
+     * — and a predicate that classifies rows as worthless should be read by a
+     * human against real data before it is allowed to act on real data. So the
+     * first run reports what it WOULD remove, split by tier, and removes
+     * nothing. Inspect counts are exact rather than capped, so that same run
+     * also answers the question nobody can currently answer: how far past
+     * retention the tables already are.
+     *
+     * Flipping the gate is a one-line env change and needs no deploy.
+     */
+    const inspect = process.env.STORAGE_PRUNE_LIVE !== "1";
+    const retained = await step.run("prune-operational-tables", () =>
+      pruneOperationalTables(getDb(), { inspect }),
+    );
+    if (retained.inspected) {
+      // The whole point of the inspect run is that a human reads the numbers,
+      // so they go to the log as well as the durable return value. Same
+      // `[name]` shape as `[invariant-scan]` and `[mirror-drift]`.
+      console.warn(`[storage-prune-inspect] ${JSON.stringify(retained)}`);
+    } else if (retained.truncated) {
+      // A ceiling stopped the sweep with rows still past retention. Harmless
+      // once; night after night it means ingest has outpaced the sweep.
+      console.warn(`[storage-prune-truncated] ${JSON.stringify(retained)}`);
+    }
     // H.6 capacity signal: what is STILL past retention after this run. A
     // non-zero backlog that persists night after night means pruning is not
     // keeping up with ingest — visible here before it becomes a disk problem.
