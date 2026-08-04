@@ -1,5 +1,5 @@
 import { and, eq, gt, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
-import { deliveryLog, testRuns, usageLedger } from "@/db/schema";
+import { deadLetter, deliveryLog, rawEvents, testRuns, usageLedger } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 /**
@@ -99,6 +99,32 @@ const MAX_PASSES = 400;
 const USAGE_COUNTER_DAYS = 2;
 const USAGE_EVIDENCE_DAYS = 90;
 
+/**
+ * How long a verbatim provider payload is kept.
+ *
+ * `raw_events` is the replay source of truth and the largest table in the
+ * schema, and until now it was the one table with NO retention at all — it grew
+ * with every webhook for the life of every connection, which is unbounded in
+ * exactly the dimension that scales with the product. Thirty days is the
+ * decided policy (it matches `delivery_log`, whose rows point at these), and
+ * what it costs is stated rather than implied: `reprocessConnection` and the
+ * event-time restamp can only rebuild from what still exists, so both become
+ * 30-day operations. The NORMALIZED rows in `events` are permanent — pruning a
+ * raw never touches the data a dashboard reads.
+ *
+ * A raw with an UNRESOLVED dead letter is never pruned, whatever its age. The
+ * dead letter's replay path reads the raw by id (`replayRawEvent`), so pruning
+ * it would turn "failed, will be replayed once fixed" into "failed, gone" —
+ * silently, which is the class of deletion this file exists to refuse. The
+ * exclusion is by NOT EXISTS rather than by age so a dead letter discovered
+ * late still protects its payload.
+ */
+const RAW_EVENT_DAYS = 30;
+
+/** No unresolved dead letter points at this raw payload. */
+const noUnresolvedDeadLetter = () =>
+  sql`not exists (select 1 from ${deadLetter} where ${deadLetter.rawEventId} = ${rawEvents.id} and ${deadLetter.resolvedAt} is null)`;
+
 /** A ledger row that recorded something a human might later want to read. */
 const hasEvidence = () =>
   or(isNotNull(usageLedger.observedLimit), gt(usageLedger.throttled, 0), gt(usageLedger.errors, 0))!;
@@ -119,6 +145,8 @@ export type RetentionBacklog = {
   deliveryLog: number;
   testRuns: number;
   usageLedger: UsageLedgerTiers;
+  /** Verbatim provider payloads past RAW_EVENT_DAYS with no unresolved dead letter. */
+  rawEvents: number;
 };
 
 export type RetentionResult = RetentionBacklog & {
@@ -140,6 +168,7 @@ type PruneOpts = {
   testRunDays?: number;
   usageCounterDays?: number;
   usageEvidenceDays?: number;
+  rawEventDays?: number;
   now?: Date;
   /**
    * Report what would be removed and delete nothing. The counts are exact
@@ -165,7 +194,7 @@ type RunBudget = { deadline: number; nowMs: () => number };
  */
 async function drain(
   db: DB,
-  table: typeof deliveryLog | typeof testRuns | typeof usageLedger,
+  table: typeof deliveryLog | typeof testRuns | typeof usageLedger | typeof rawEvents,
   where: SQL,
   budget: RunBudget,
   batchSize: number,
@@ -189,7 +218,7 @@ async function drain(
 
 async function countWhere(
   db: DB,
-  table: typeof deliveryLog | typeof testRuns | typeof usageLedger,
+  table: typeof deliveryLog | typeof testRuns | typeof usageLedger | typeof rawEvents,
   where: SQL,
 ): Promise<number> {
   const [row] = await db.select({ c: sql<number>`count(*)::int` }).from(table).where(where);
@@ -209,6 +238,10 @@ function predicates(now: Date, opts: PruneOpts) {
     usageEvidence: and(
       lt(usageLedger.windowStart, ago(opts.usageEvidenceDays ?? USAGE_EVIDENCE_DAYS)),
       hasEvidence(),
+    )!,
+    rawEvents: and(
+      lt(rawEvents.receivedAt, ago(opts.rawEventDays ?? RAW_EVENT_DAYS)),
+      noUnresolvedDeadLetter(),
     )!,
   };
 }
@@ -231,7 +264,12 @@ export async function pruneOperationalTables(db: DB, opts: PruneOpts = {}): Prom
       countWhere(db, usageLedger, p.usageCounters),
       countWhere(db, usageLedger, p.usageEvidence),
     ]);
-    return { deliveryLog: dl, testRuns: tr, usageLedger: { counters, evidence }, truncated: false, inspected: true };
+    // SEQUENTIAL, not a fifth arm of the Promise.all: the pool floor in
+    // `src/db/client.ts` is derived from a widest fan-out of four, and the
+    // comment above this block is the contract. One more await costs one round
+    // trip; a fifth concurrent read invalidates MIN_POOL_MAX.
+    const raws = await countWhere(db, rawEvents, p.rawEvents);
+    return { deliveryLog: dl, testRuns: tr, usageLedger: { counters, evidence }, rawEvents: raws, truncated: false, inspected: true };
   }
 
   const nowMs = opts.nowMs ?? Date.now;
@@ -243,6 +281,11 @@ export async function pruneOperationalTables(db: DB, opts: PruneOpts = {}): Prom
   // floor in `src/db/client.ts` is derived assuming this job does one thing at
   // a time. Evidence rows drain last because they are the rarest and the most
   // valuable: if a ceiling stops the run, it should stop it there.
+  // Raws drain first: the biggest table with the biggest first-night backlog,
+  // and the rows are payload copies whose normalized descendants are permanent —
+  // so if the deadline stops the run anywhere, stopping it after the raws have
+  // drained loses the least. Evidence rows stay last for the mirror reason.
+  const raws = await drain(db, rawEvents, p.rawEvents, budget, batch);
   const dl = await drain(db, deliveryLog, p.deliveryLog, budget, batch);
   const tr = await drain(db, testRuns, p.testRuns, budget, batch);
   const counters = await drain(db, usageLedger, p.usageCounters, budget, batch);
@@ -252,7 +295,8 @@ export async function pruneOperationalTables(db: DB, opts: PruneOpts = {}): Prom
     deliveryLog: dl.removed,
     testRuns: tr.removed,
     usageLedger: { counters: counters.removed, evidence: evidence.removed },
-    truncated: dl.truncated || tr.truncated || counters.truncated || evidence.truncated,
+    rawEvents: raws.removed,
+    truncated: raws.truncated || dl.truncated || tr.truncated || counters.truncated || evidence.truncated,
     inspected: false,
   };
 }
@@ -295,12 +339,14 @@ export async function retentionBacklog(
     usageEvidenceDays: opts.usageEvidenceDays,
   });
   // Four concurrent reads — the ceiling `MIN_POOL_MAX` in `src/db/client.ts` is
-  // derived from. Do not add a fifth; a pool under that floor deadlocks.
+  // derived from. Do not add a fifth; a pool under that floor deadlocks. The
+  // raw-events count therefore runs SEQUENTIALLY after the barrier.
   const [dl, tr, counters, evidence] = await Promise.all([
     countWhere(db, deliveryLog, p.deliveryLog),
     countWhere(db, testRuns, p.testRuns),
     countWhere(db, usageLedger, p.usageCounters),
     countWhere(db, usageLedger, p.usageEvidence),
   ]);
-  return { deliveryLog: dl, testRuns: tr, usageLedger: { counters, evidence } };
+  const raws = await countWhere(db, rawEvents, p.rawEvents);
+  return { deliveryLog: dl, testRuns: tr, usageLedger: { counters, evidence }, rawEvents: raws };
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createTestDb, seedConnection } from "./helpers/testdb";
-import { deliveryLog, testRuns, usageLedger } from "@/db/schema";
+import { deadLetter, deliveryLog, rawEvents, testRuns, usageLedger } from "@/db/schema";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
 import type { DB } from "@/db/types";
 
@@ -18,6 +18,14 @@ const ORG = "org_test";
 const NOW = new Date("2026-07-01T00:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000);
 const EMPTY_LEDGER = { counters: 0, evidence: 0 };
+
+async function seedRaw(receivedAt: Date): Promise<string> {
+  const [row] = await db
+    .insert(rawEvents)
+    .values({ orgId: ORG, connectionId, source: "webhook", headers: {}, payload: { seeded: true }, receivedAt })
+    .returning();
+  return row.id;
+}
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
@@ -66,13 +74,14 @@ describe("operational retention", () => {
     await seedRun(daysAgo(2));
 
     const before = await retentionBacklog(db, 30, NOW);
-    expect(before).toEqual({ deliveryLog: 2, testRuns: 1, usageLedger: EMPTY_LEDGER });
+    expect(before).toEqual({ deliveryLog: 2, testRuns: 1, usageLedger: EMPTY_LEDGER, rawEvents: 0 });
 
     const pruned = await pruneOperationalTables(db, { now: NOW });
     expect(pruned).toEqual({
       deliveryLog: 2,
       testRuns: 1,
       usageLedger: EMPTY_LEDGER,
+      rawEvents: 0,
       truncated: false,
       inspected: false,
     });
@@ -83,11 +92,12 @@ describe("operational retention", () => {
       deliveryLog: 0,
       testRuns: 0,
       usageLedger: EMPTY_LEDGER,
+      rawEvents: 0,
     });
   });
 
   it("is idempotent and safe on empty tables", async () => {
-    const empty = { deliveryLog: 0, testRuns: 0, usageLedger: EMPTY_LEDGER, truncated: false, inspected: false };
+    const empty = { deliveryLog: 0, testRuns: 0, usageLedger: EMPTY_LEDGER, rawEvents: 0, truncated: false, inspected: false };
     expect(await pruneOperationalTables(db, { now: NOW })).toEqual(empty);
     await seedRun(daysAgo(90));
     await pruneOperationalTables(db, { now: NOW });
@@ -244,6 +254,7 @@ describe("inspect mode", () => {
       deliveryLog: 1,
       testRuns: 1,
       usageLedger: { counters: 2, evidence: 1 },
+      rawEvents: 0,
       truncated: false,
       inspected: true,
     });
@@ -272,5 +283,55 @@ describe("inspect mode", () => {
     const predicted = await pruneOperationalTables(db, { now: NOW, inspect: true });
     const actual = await pruneOperationalTables(db, { now: NOW });
     expect({ ...actual, inspected: true }).toEqual(predicted);
+  });
+});
+
+/**
+ * `raw_events` was the ONE growing table with no retention: verbatim provider
+ * payloads, kept for the life of every connection. Thirty days now — matching
+ * `delivery_log`, whose rows point at these — with one exception that is the
+ * point of the design: a raw with an UNRESOLVED dead letter is never pruned,
+ * because `replayRawEvent` reads the raw by id and pruning it would turn
+ * "failed, will be replayed once fixed" into "failed, gone", silently.
+ *
+ * The normalized rows in `events` are permanent; pruning a raw never touches
+ * what a dashboard reads.
+ */
+describe("raw payload retention", () => {
+  it("prunes old raws, keeps young ones, and never counts what it keeps", async () => {
+    await seedRaw(daysAgo(45));
+    await seedRaw(daysAgo(31));
+    await seedRaw(daysAgo(5));
+
+    const report = await pruneOperationalTables(db, { now: NOW, inspect: true });
+    expect(report.rawEvents).toBe(2);
+
+    const pruned = await pruneOperationalTables(db, { now: NOW });
+    expect(pruned.rawEvents).toBe(2);
+    expect(await db.select().from(rawEvents)).toHaveLength(1); // the 5-day-old payload
+  });
+
+  it("never prunes a raw with an unresolved dead letter, however old", async () => {
+    const doomed = await seedRaw(daysAgo(120));
+    const protectedId = await seedRaw(daysAgo(120));
+    await db.insert(deadLetter).values({ orgId: ORG, connectionId, rawEventId: protectedId, attempts: 3, error: "boom" });
+
+    const pruned = await pruneOperationalTables(db, { now: NOW });
+    expect(pruned.rawEvents).toBe(1);
+
+    const left = await db.select().from(rawEvents);
+    expect(left.map((r) => r.id)).toEqual([protectedId]);
+    expect(left.map((r) => r.id)).not.toContain(doomed);
+  });
+
+  it("a RESOLVED dead letter no longer protects its raw", async () => {
+    const id = await seedRaw(daysAgo(120));
+    await db.insert(deadLetter).values({
+      orgId: ORG, connectionId, rawEventId: id, attempts: 3, error: "boom", resolvedAt: daysAgo(100),
+    });
+
+    const pruned = await pruneOperationalTables(db, { now: NOW });
+    expect(pruned.rawEvents).toBe(1);
+    expect(await db.select().from(rawEvents)).toHaveLength(0);
   });
 });

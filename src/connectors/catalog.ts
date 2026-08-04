@@ -238,6 +238,28 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     connect: "apiKey",
     instant: true,
     poll: true,
+    /**
+     * NO DECLARED rateLimits, deliberately — the DEFAULT_RPM of 60/min governs,
+     * and for Close that is a conservative floor rather than a guess at a
+     * ceiling. Close does not publish fixed per-endpoint numbers: its limits
+     * are per endpoint GROUP, per API key, with an org-wide limit ~3x the
+     * key's (developer.close.com/api/overview/rate-limits — their worked
+     * example is 20 rps per key, i.e. 1200/min), and the ACTUAL limit arrives
+     * on every response in the `ratelimit` header. Two consequences pinned
+     * here:
+     *
+     * - Bans are prevented REACTIVELY, not by this catalog: `parseRateLimit` →
+     *   `applyObservedRateLimit` pauses the connection the moment Close says
+     *   its quota is spent, and a 429's `rate_reset` is honoured. The declared
+     *   number only paces us; the header is the authority.
+     * - The right declared number is a MEASUREMENT waiting in
+     *   `usage_ledger.observed_limit` (recorded every sweep since F.1). Once a
+     *   few days have accumulated, read `scripts/observed-limits.sql` and
+     *   declare what Close actually reported — with `operations`/`operationFor`
+     *   on the connector, which the budget-operations contract requires of any
+     *   entry that declares keys. Raising the pace before that data exists
+     *   would be inventing a number, which is how the DEFAULT got here.
+     */
     autoWebhook: true,
     credentialFields: [{ key: "apiKey", label: "API Key", placeholder: "api_..." }],
   },
@@ -319,6 +341,11 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     // Poll backstop over the message history list; the sweep also verifies the
     // provider-side webhook subscription and re-registers it when missing.
     poll: true,
+    // NO DECLARED rateLimits: Sendblue publishes none, and inventing a ceiling
+    // for a provider that never stated one is the mistake the Close entry above
+    // documents. The 60/min DEFAULT_RPM paces the poll; anything the provider
+    // ever reports lands in `usage_ledger.observed_limit` and becomes the
+    // declaration when it exists.
     autoWebhook: false,
     credentialFields: [
       { key: "apiKey", label: "API Key ID", placeholder: "..." },
