@@ -313,6 +313,89 @@ describe("Close Event Log poll (Defect #2)", () => {
   });
 
   /**
+   * THE SAME DEFECT, IN THE STEADY STATE THE SERIALIZER DOES NOT GUARD.
+   *
+   * `serializeCloseCursor` keeps the JSON shape while `!hw && floor` — the FIRST
+   * SYNC — precisely so a dead continuation cannot promote an early page's newest
+   * record to the next floor. Once `hw` exists that clause is false, so clearing
+   * `cont` fell through to `maxSeen ?? hw`. The log is newest-first by
+   * `date_updated`, so a walk that dies on page two has read the newest records
+   * and left the older part of its window unread; promoting `maxSeen` puts that
+   * remainder below the next floor, where nothing requests it again.
+   *
+   * The test needs a walk that got somewhere first — the existing case above
+   * starts with `maxSeen: null`, so it could never have caught this.
+   */
+  it("a continuation that dies mid-walk leaves the mark below the records it never reached", async () => {
+    const hw = new Date(T0).toISOString().replace("Z", "+00:00");
+    const newest = new Date(T0 + 90 * 1000).toISOString().replace("Z", "+00:00");
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        call += 1;
+        // Page one lands and sets maxSeen; its continuation is then rejected.
+        const body =
+          call === 1
+            ? { data: [{ id: "e-newest", object_type: "lead", action: "created", date_created: newest, date_updated: newest }], cursor_next: "c2" }
+            : { error: "invalid cursor" };
+        return {
+          ok: call === 1,
+          status: call === 1 ? 200 : 400,
+          statusText: call === 1 ? "OK" : "Bad Request",
+          headers: { get: () => null },
+          json: async () => body,
+          text: async () => JSON.stringify(body),
+        } as unknown as Response;
+      }),
+    );
+
+    const res = await closeConnector.poll!(pollArgs(JSON.stringify({ hw, cont: null, maxSeen: null })));
+
+    // What landed is kept; only the mark is held back.
+    expect(res.records.map((r) => r.eventId)).toEqual(["close:c1:e-newest"]);
+    expect(res.nextCursor).toBe(hw);
+    expect(res.nextCursor).not.toBe(newest);
+    expect(res.incomplete).toBe(true);
+  });
+
+  /**
+   * The first-sync half, which the serializer does guard — asserted so the two
+   * halves cannot drift apart. The pinned `floor` must survive, or the next walk
+   * re-derives its depth from a clock that has moved.
+   */
+  it("a first sync keeps its pinned floor when a continuation dies", async () => {
+    const floor = new Date(T0 - 30 * DAY).toISOString();
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        call += 1;
+        const at = new Date(T0 - 1000).toISOString().replace("Z", "+00:00");
+        const body =
+          call === 1
+            ? { data: [{ id: "e1", object_type: "lead", action: "created", date_created: at, date_updated: at }], cursor_next: "c2" }
+            : { error: "invalid cursor" };
+        return {
+          ok: call === 1,
+          status: call === 1 ? 200 : 400,
+          statusText: "x",
+          headers: { get: () => null },
+          json: async () => body,
+          text: async () => JSON.stringify(body),
+        } as unknown as Response;
+      }),
+    );
+
+    const res = await closeConnector.poll!(pollArgs(JSON.stringify({ hw: null, cont: null, maxSeen: null, floor })));
+    const stored = JSON.parse(res.nextCursor!);
+    expect(stored.hw).toBeNull();
+    expect(stored.floor).toBe(floor);
+    // The partial walk's newest record is NOT carried as a mark.
+    expect(stored.maxSeen).toBeNull();
+  });
+
+  /**
    * The preview is ONE request now.
    *
    * It used to be a six-request search that narrowed and widened a window until

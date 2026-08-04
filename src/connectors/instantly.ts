@@ -451,9 +451,32 @@ async function pollRawEmails(args: PollArgs): Promise<PollResult> {
     try {
       data = await getJson(`${API}/emails?${params.toString()}`, args.credentials);
     } catch (e) {
-      // A dead continuation must not wedge the stream: restart the window next sweep.
+      /**
+       * A dead continuation must not wedge the stream — and must not ADVANCE THE
+       * MARK on its way out, which is what this did.
+       *
+       * `serializeWindowCursor` falls through to `maxSeen ?? hw` the moment
+       * `cont` is null, so `{...cur, cont: null}` promoted the newest record of a
+       * PARTIAL walk to the next window's floor. The list is newest-first, so the
+       * partial walk holds the newest pages and the unread remainder is older
+       * than everything in it: promoting `maxSeen` puts that remainder below the
+       * floor, where nothing requests it ever again. The stream unwedges and
+       * silently drops whatever it had not reached.
+       *
+       * So the mark stays exactly where it was and `maxSeen` is discarded. The
+       * next sweep re-walks the same window from the same floor, which is the
+       * only safe reading of "we did not finish".
+       *
+       * `incomplete` because there IS outstanding work: the window is going to be
+       * re-walked, and a connection mid-import that reports nothing reads as idle,
+       * tiers its cadence down, and slows the very pages it is waiting on.
+       */
       if (cur.cont && e instanceof HttpError && e.status === 400) {
-        return { records, nextCursor: serializeWindowCursor({ ...cur, cont: null }) };
+        return {
+          records,
+          nextCursor: serializeWindowCursor({ hw: cur.hw, cont: null, maxSeen: null }),
+          incomplete: true,
+        };
       }
       throw e;
     }
@@ -470,7 +493,21 @@ async function pollRawEmails(args: PollArgs): Promise<PollResult> {
     }
 
     const next = data.next_starting_after ?? null;
-    if (!next || items.length === 0 || pageAllBelowFloor) {
+    /**
+     * DRAINED MEANS THE PROVIDER SAID SO, or the walk paged past the floor.
+     *
+     * `items.length === 0` used to count as drained too, and it is neither. An
+     * empty page carrying a continuation is a provider that has more to give —
+     * the same shape that cost this codebase the Calendly past-side window and
+     * the truncated `pollAll` walk, both of which ended on an empty page and then
+     * tombstoned everything the walk had not reached. Here the cost is the same
+     * one: promoting `maxSeen` to the floor while the older remainder is unread.
+     *
+     * `pageAllBelowFloor` starts as `items.length > 0`, so an empty page can no
+     * longer satisfy it either — the walk continues on the continuation, and the
+     * page budget bounds it.
+     */
+    if (!next || pageAllBelowFloor) {
       return { records, nextCursor: serializeWindowCursor({ hw: cur.maxSeen ?? cur.hw, cont: null, maxSeen: null }) };
     }
     cur.cont = next;

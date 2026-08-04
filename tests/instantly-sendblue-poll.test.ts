@@ -365,3 +365,106 @@ describe("Sendblue messages poll + webhook health", () => {
     expect(res.detail).toContain("500");
   });
 });
+
+/**
+ * A WALK THAT GAVE UP MUST NOT MOVE THE MARK IT DID NOT REACH.
+ *
+ * `serializeWindowCursor` falls through to `maxSeen ?? hw` the moment `cont` is
+ * null, which is right for a walk that DRAINED and wrong for one that stopped.
+ * The 400 handler cleared `cont` to unwedge the stream and took the promotion
+ * with it: `/emails` is newest-first, so a partial walk holds the newest pages
+ * and the unread remainder is older than everything in it. Promoting `maxSeen`
+ * puts that remainder below the next window's floor, where nothing requests it
+ * again — the stream unwedges by silently discarding what it had not reached.
+ *
+ * Close had the same defect and its serializer guarded only the first sync
+ * (`!hw && floor`), so a steady-state connection was unprotected. Both now
+ * decide at the call site, where "drained" and "gave up" are distinguishable.
+ */
+describe("Instantly: a dead continuation restarts the window without advancing it", () => {
+  const email = (id: string, iso: string) => ({
+    id,
+    ue_type: 1,
+    to_address_email_list: "a@b.com",
+    timestamp_created: iso,
+  });
+
+  it("keeps the high-water mark where it was, and reports the sweep unfinished", async () => {
+    const hw = "2026-06-01T00:00:00.000Z";
+    const newest = "2026-06-20T00:00:00.000Z";
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        call += 1;
+        // Page one lands and sets maxSeen; the continuation is then rejected.
+        if (call === 1) return jsonResponse({ items: [email("e1", newest)], next_starting_after: "cont-2" });
+        return jsonResponse({ error: "invalid starting_after" }, 400);
+      }),
+    );
+
+    const res = await instantlyConnector.poll!({
+      connectionId: "c1",
+      cursor: JSON.stringify({ hw, cont: null, maxSeen: null }),
+      credentials: { apiKey: "k" },
+      config: CFG({ streamType: "raw_emails", days: 90 }),
+    });
+
+    // What landed is kept — only the mark is held back.
+    expect(res.records.map((r) => r.eventId)).toEqual(["instantly:c1:email:e1"]);
+    expect(res.nextCursor).toBe(hw);
+    expect(res.nextCursor).not.toBe(newest);
+    // There is outstanding work: the window is going to be re-walked.
+    expect(res.incomplete).toBe(true);
+  });
+
+  it("still promotes the mark when the walk actually drained", async () => {
+    const hw = "2026-06-01T00:00:00.000Z";
+    const newest = "2026-06-20T00:00:00.000Z";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ items: [email("e1", newest)], next_starting_after: null })),
+    );
+
+    const res = await instantlyConnector.poll!({
+      connectionId: "c1",
+      cursor: JSON.stringify({ hw, cont: null, maxSeen: null }),
+      credentials: { apiKey: "k" },
+      config: CFG({ streamType: "raw_emails", days: 90 }),
+    });
+    expect(res.nextCursor).toBe(newest);
+    expect(res.incomplete).toBeFalsy();
+  });
+
+  /**
+   * An empty page carrying a continuation is a provider with more to give, not a
+   * finished walk. Treating it as drained is the shape that cost this codebase
+   * the Calendly past-side window and the truncated `pollAll` walk; here it would
+   * promote the mark over an unread remainder.
+   */
+  it("walks past an empty page instead of calling it the end", async () => {
+    const hw = "2026-06-01T00:00:00.000Z";
+    const older = "2026-06-10T00:00:00.000Z";
+    const newest = "2026-06-20T00:00:00.000Z";
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        call += 1;
+        if (call === 1) return jsonResponse({ items: [email("e1", newest)], next_starting_after: "p2" });
+        if (call === 2) return jsonResponse({ items: [], next_starting_after: "p3" });
+        return jsonResponse({ items: [email("e2", older)], next_starting_after: null });
+      }),
+    );
+
+    const res = await instantlyConnector.poll!({
+      connectionId: "c1",
+      cursor: JSON.stringify({ hw, cont: null, maxSeen: null }),
+      credentials: { apiKey: "k" },
+      config: CFG({ streamType: "raw_emails", days: 90 }),
+    });
+
+    expect(res.records.map((r) => r.eventId).sort()).toEqual(["instantly:c1:email:e1", "instantly:c1:email:e2"]);
+    expect(res.nextCursor).toBe(newest);
+  });
+});

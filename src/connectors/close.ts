@@ -182,6 +182,17 @@ function parseCloseCursor(cursor: string | null): CloseCursor {
  * again. That is the Defect #2 failure reached through the cursor instead of
  * through the walk. The path that gets there is real: an expired continuation
  * returns `{…cur, cont: null}` partway through a first sync.
+ *
+ * IT DOES NOT GUARD THE STEADY STATE, and it must not have to. With `hw` set,
+ * this falls through to `maxSeen ?? hw` for any caller that clears `cont` — so a
+ * MID-WALK caller doing that promotes a partial walk's newest record to the next
+ * floor, which is the identical failure one paragraph up, on a connection that
+ * has simply been running longer. This function cannot tell "drained" from "gave
+ * up", because `cont: null` is what both look like from in here.
+ *
+ * So the rule lives at the CALL SITES, where the difference is known: a caller
+ * that drained promotes `maxSeen`, a caller that stopped early clears it. Both
+ * say which they are rather than leaving this function to guess.
  */
 function serializeCloseCursor(c: CloseCursor): string | null {
   if (c.cont || (!c.hw && c.floor)) return JSON.stringify(c);
@@ -511,7 +522,23 @@ export const closeConnector: Connector = {
         if (cur.cont && e instanceof HttpError && e.status === 400) {
           return {
             records: [...records.values()],
-            nextCursor: serializeCloseCursor({ ...cur, cont: null }),
+            /**
+             * `maxSeen` IS DISCARDED, and that is the fix rather than a detail.
+             *
+             * `serializeCloseCursor` guards the first sync — `(!c.hw && c.floor)`
+             * keeps the JSON shape so an early page's newest record cannot become
+             * the floor. In STEADY STATE it did not: with `hw` set, dropping
+             * `cont` fell through to `maxSeen ?? hw`, and the log is newest-first
+             * by `date_updated`, so a walk that died on page three had read the
+             * newest pages and left the older part of its window unread. Promoting
+             * `maxSeen` put that remainder below the next floor, where nothing
+             * requests it again. The comment on the serializer described exactly
+             * this failure and guarded only the case where `hw` was absent.
+             *
+             * The mark stays where it was. The window is re-walked from the same
+             * bound next sweep, and `event_id` dedup makes the re-read free.
+             */
+            nextCursor: serializeCloseCursor({ ...cur, cont: null, maxSeen: null }),
             providerCalls,
             rateLimit: rateLimit ?? undefined,
             // The window is going to be re-walked from its bound next sweep, so
