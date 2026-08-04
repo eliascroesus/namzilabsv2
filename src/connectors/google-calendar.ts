@@ -108,13 +108,54 @@ export const googleCalendarConnector: Connector = {
         });
       }
 
-      if (data.nextSyncToken) return { records, nextCursor: data.nextSyncToken, providerCalls };
-      if (!data.nextPageToken) return { records, nextCursor: args.cursor, providerCalls };
+      /**
+       * DID A SYNC TOKEN COME BACK, AND IF NOT, WHY NOT?
+       *
+       * The whole incremental design rests on `nextSyncToken` arriving on the
+       * last page of the FIRST sync, and that first request carries three
+       * parameters Google documents as incompatible with a sync token —
+       * `orderBy`, `timeMin`, `timeMax`. The docs say those cannot be sent
+       * ALONGSIDE a token; they do not say whether a request carrying them is
+       * refused a token in the first place. Nobody has ever looked.
+       *
+       * If a token is withheld, every exit below hands back `args.cursor`, which
+       * on a first sync is null — START OVER. The connector would re-list the
+       * whole 30d/365d window every sweep, for ever, and the data would stay
+       * CORRECT the entire time because dedup absorbs it. The only symptom is
+       * cost, charged to the per-project Google quota every customer shares.
+       *
+       * So this is a measurement, not an error path: one line per terminating
+       * poll, saying which exit was taken and what was in hand. Read it in the
+       * Inngest run output for a real connection.
+       */
+      const probe = (exit: string) =>
+        console.log(
+          `[gcal-probe] exit=${exit} first_sync=${!args.cursor} page=${page + 1}/${MAX_PAGES} ` +
+            `items=${data.items?.length ?? 0} nextSyncToken=${data.nextSyncToken ? "PRESENT" : "absent"} ` +
+            `nextPageToken=${data.nextPageToken ? "present" : "absent"} ` +
+            `sent=${[...new URLSearchParams(params).keys()].join("+")}`,
+        );
+
+      if (data.nextSyncToken) {
+        probe("sync-token");
+        return { records, nextCursor: data.nextSyncToken, providerCalls };
+      }
+      if (!data.nextPageToken) {
+        // The listing ended and Google offered no token. On a first sync this
+        // returns null — START OVER — so the next sweep re-lists the window and
+        // the connection never becomes incremental.
+        probe(args.cursor ? "listing-ended-incremental" : "listing-ended-NO-TOKEN");
+        return { records, nextCursor: args.cursor, providerCalls };
+      }
       pageToken = data.nextPageToken;
     }
 
     // Page budget spent before the listing ended (pathological change volume):
     // keep the old token so the next sweep retries; dedup absorbs the re-reads.
+    console.log(
+      `[gcal-probe] exit=page-budget first_sync=${!args.cursor} pages=${MAX_PAGES} records=${records.length} ` +
+        `nextSyncToken=never-seen — on a first sync this returns null (START OVER), so the window is re-listed next sweep`,
+    );
     return { records, nextCursor: args.cursor, providerCalls };
   },
 

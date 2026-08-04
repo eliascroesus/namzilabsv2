@@ -677,7 +677,27 @@ export async function syncStream(
           const gone = mirrorScope ? await retireAbsent(tx, conn, stream, records, mirrorScope) : 0;
           return { res, gone };
         });
-        if (!swap.acquired || !swap.result) break; // another writer holds this stream
+        if (!swap.acquired || !swap.result) {
+          /**
+           * Another writer holds this stream, so this walk stops HERE — with the
+           * previous cursor still stored and the window only partly read.
+           *
+           * That is not a finished sweep, and until now it reported as one. The
+           * page-budget rule below never runs, so `incomplete` stayed false: the
+           * retire-outside-window pass would go ahead on a prefix, the cadence
+           * would tier the connection down as idle, and a Test would render a
+           * short count as final. It also lets the gap to the next sweep widen
+           * while a perishable continuation sits in the row, which is the exact
+           * state `heldContinuation` exists to prevent — and the only exit that
+           * sets no other signal at all.
+           *
+           * Unreachable on the http driver (`withStreamWriteLock` runs the body
+           * directly), and reachable the moment `DB_DRIVER=pool` engages the
+           * advisory locks. Fixed before the flip rather than after it.
+           */
+          incomplete = true;
+          break;
+        }
         inserted += swap.result.res.inserted;
         updated += swap.result.res.updated;
         deduped += swap.result.res.deduped;
