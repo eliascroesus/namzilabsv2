@@ -112,15 +112,51 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
       const { records, cursor, complete } = await pollAll(connector, base);
       const res = await upsertEvents(db, { ...meta, generation: gen }, records);
 
-      // Only NOW (after the replacement generation is in) remove poll-managed rows
-      // that were not seen this run — i.e. removed upstream. Webhook rows (gen 0) are safe.
-      //
-      // And only when the walk REACHED THE END. A truncated walk holds a prefix,
-      // so "not seen this run" stops meaning "gone from the source" and starts
-      // meaning "we did not get that far" — the same distinction `syncStream`
-      // draws before running `retireOutsideWindow`. The generation bump and the
-      // re-import still stand; only the tombstoning waits for a complete pass.
-      const del = complete
+      /**
+       * ABSENCE LICENSES DELETION ONLY WHERE THE READ WAS OF THE WHOLE RESOURCE,
+       * and on this path it never is.
+       *
+       * The delete is scoped by connection and by generation, and by nothing
+       * else — no date, no window. It was gated on `complete`, which
+       * distinguishes a truncated walk from a finished one and nothing more. Two
+       * ways that is not enough, both live:
+       *
+       * COMPLETION WITH NOTHING. `pollAll` sets `complete` when `nextCursor` is
+       * null, and Close's drained branch passes `{hw: maxSeen ?? hw, …}` with no
+       * `floor` key, so `serializeCloseCursor` falls through to `maxSeen ?? hw` —
+       * both null on a fresh walk that returned zero records. So a full re-sync
+       * of a Close workspace with no Event Log activity in thirty days reported a
+       * complete walk of nothing and tombstoned the connection's entire history.
+       * Sendblue's serializer has the identical shape. This is `ebc1ec3` through
+       * a different door: `complete` separates truncation from completion, not
+       * completion-with-data from completion-with-nothing, and an empty read
+       * means NOTHING WAS READ rather than everything was deleted — the same rule
+       * the mirror path already enforces with `unchanged`.
+       *
+       * COMPLETION WITH A WINDOW. Worse, because it needs no edge case. Close's
+       * Event Log retains thirty days, so a completed walk covers thirty days of
+       * a database that may hold years. Every older row stays at the previous
+       * generation and is tombstoned — a full re-sync of any mature Close
+       * connection deleting all history older than the provider's retention,
+       * from a button labelled "rebuild this dataset safely".
+       *
+       * Both come from the same missing idea: this walk reads a WINDOW, and
+       * "not seen this run" cannot mean "gone from the source" unless the run
+       * saw everything that should exist. That is exactly what a mirror does and
+       * exactly what an incremental source does not — and it is the distinction
+       * `mirrorScope` and `retireOutsideWindow` already draw for the stream path,
+       * where a connector must DECLARE the span inside which absence means
+       * deletion. Neither connection-scoped connector declares one, and `pollAll`
+       * discards those fields anyway.
+       *
+       * So the retire runs for mirror-class sources only. No connection-scoped
+       * source is one today (Close and Sendblue are both incremental), which
+       * makes this branch unreachable — and that is the honest outcome rather
+       * than a regression: the only conditions under which it fired were the two
+       * above. A connection-scoped mirror added later gets the behaviour it can
+       * actually support.
+       */
+      const del = complete && isMirrorSource(conn.source)
         ? await db
             .update(events)
             .set({ deletedAt: new Date() })
@@ -267,11 +303,28 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
     upserted += res.total;
     inserted += res.inserted;
     updated += res.updated;
-    // Eligible for the retire only if THIS stream's walk reached the end. Scoped
-    // per stream rather than per connection, so one truncated stream does not
-    // stop the others being pruned — and does not get pruned itself on the
-    // strength of a prefix.
-    if (complete) polledHashes.push(stream.configHash);
+    /**
+     * Eligible for the retire only if THIS stream's walk reached the end. Scoped
+     * per stream rather than per connection, so one truncated stream does not
+     * stop the others being pruned — and does not get pruned itself on the
+     * strength of a prefix.
+     *
+     * AND ONLY IF IT ACTUALLY READ SOMETHING, unless the read was a mirror's.
+     * The distinction is the whole point rather than caution: a mirror re-reads
+     * the entire resource, so an empty read genuinely means an empty resource
+     * and the rows SHOULD go — that is what makes a sheet with its rows deleted
+     * come out empty here. Every other class reads a bounded window, where an
+     * empty result says only that the window was empty and nothing at all about
+     * the rows outside it.
+     *
+     * Instantly is why this is not hypothetical. Its analytics streams return
+     * `nextCursor: null` on every poll by construction, so `complete` is ALWAYS
+     * true for them — a campaign whose analytics response comes back empty
+     * tombstoned that stream's whole history on any full re-sync, with no edge
+     * case required. Calendly reaches the same place whenever an account has no
+     * meetings in its window.
+     */
+    if (complete && (isMirrorSource(conn.source) || records.length > 0)) polledHashes.push(stream.configHash);
     await db
       .update(sourceStreams)
       .set({

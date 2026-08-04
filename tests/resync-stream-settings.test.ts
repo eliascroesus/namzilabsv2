@@ -43,7 +43,7 @@ const ORG = "org_settings";
  * entries is what puts these two on the path under test. Vitest isolates
  * modules per file, so this array mutation does not escape.
  */
-function registerStreamScoped(source: string, name: string): void {
+function registerStreamScoped(source: string, name: string, sync?: "mirror"): void {
   CONNECTOR_CATALOG.push({
     source,
     name,
@@ -54,10 +54,12 @@ function registerStreamScoped(source: string, name: string): void {
     autoWebhook: false,
     credentialFields: [],
     flowFields: [{ key: "resource", label: "Resource" }],
+    ...(sync ? { sync } : {}),
   });
 }
 registerStreamScoped("windowed-stream", "Windowed");
 registerStreamScoped("dated-stream", "Dated");
+registerStreamScoped("mirror-stream", "Mirror", "mirror");
 
 /** Every PollArgs the connector was handed, so what was dropped is visible. */
 let SEEN: PollArgs[] = [];
@@ -243,5 +245,96 @@ describe("the stream's dating settings reach the re-poll", () => {
     expect(SEEN[0].restamp).toBe(true);
     expect(res.inserted).toBe(1);
     expect(await liveSubjects(conn)).toEqual(["row-1"]);
+  });
+});
+
+/**
+ * AN EMPTY READ MEANS NOTHING WAS READ, NOT THAT EVERYTHING WAS DELETED.
+ *
+ * The full re-sync's retire is scoped by connection and generation and by
+ * nothing else — no date, no window — and was gated only on `complete`.
+ * `complete` separates a truncated walk from a finished one; it does not
+ * separate completion-with-data from completion-with-nothing, and it says
+ * nothing at all about rows outside the window the walk covered.
+ *
+ * Both gaps are reachable. `pollAll` sets `complete` when `nextCursor` is null,
+ * and the window serializers in Close, Sendblue and Instantly all fall through
+ * to `maxSeen ?? hw` — both null on a fresh walk that returned nothing. Worse,
+ * Instantly's analytics streams return `nextCursor: null` on EVERY poll by
+ * construction, so an empty analytics response needs no edge case at all.
+ *
+ * A mirror is the exception, and the reason is the rule: it re-reads the whole
+ * resource, so an empty read genuinely means an empty resource and those rows
+ * should go.
+ */
+describe("an empty full re-sync does not tombstone the history it did not read", () => {
+  /** Serves rows on the first run and nothing on the second, draining both times. */
+  let SERVE = true;
+  const emptyingConnector: Connector = {
+    source: "emptying-stream",
+    authType: "none",
+    verifySignature: () => true,
+    poll: async (args: PollArgs): Promise<PollResult> => {
+      SEEN.push(args);
+      // Drained either way: the provider says there is no next page.
+      return { records: SERVE ? [rec("kept", 5)] : [], nextCursor: null };
+    },
+  };
+  registerConnector(emptyingConnector);
+  registerStreamScoped("emptying-stream", "Emptying");
+
+  beforeEach(() => {
+    SERVE = true;
+  });
+
+  it("keeps rows a completed-but-empty walk never saw", async () => {
+    const conn = await seedConnection(db, { orgId: ORG, source: "emptying-stream" });
+    await seedStream(conn);
+
+    await runSync(db, conn, "full");
+    expect(await liveSubjects(conn)).toEqual(["kept"]);
+
+    // The window is now empty — an account with no activity in its window, not
+    // an account whose records were deleted.
+    SERVE = false;
+    const second = await runSync(db, conn, "full");
+    expect(second.softDeleted).toBe(0);
+    expect(await liveSubjects(conn)).toEqual(["kept"]);
+  });
+});
+
+/**
+ * A MIRROR IS THE ONE CLASS WHERE AN EMPTY READ IS AN ANSWER, because it read
+ * the whole resource. A sheet whose rows were deleted comes back empty, and
+ * those rows genuinely should go — so the guard above must not apply here.
+ */
+describe("a mirror still retires on an empty re-read", () => {
+  let MIRROR_SERVE = true;
+  const mirrorConnector: Connector = {
+    source: "mirror-stream",
+    authType: "none",
+    verifySignature: () => true,
+    poll: async (args: PollArgs): Promise<PollResult> => {
+      SEEN.push(args);
+      return { records: MIRROR_SERVE ? [rec("row-1", 1)] : [], nextCursor: null };
+    },
+  };
+  registerConnector(mirrorConnector);
+
+  beforeEach(() => {
+    MIRROR_SERVE = true;
+  });
+
+  it("removes rows the whole-resource read no longer produced", async () => {
+    const conn = await seedConnection(db, { orgId: ORG, source: "mirror-stream" });
+    await seedStream(conn);
+
+    await runSync(db, conn, "full");
+    expect(await liveSubjects(conn)).toEqual(["row-1"]);
+
+    MIRROR_SERVE = false;
+    const second = await runSync(db, conn, "full");
+    expect(second.softDeleted).toBe(1);
+    expect(await liveSubjects(conn)).toEqual([]);
   });
 });

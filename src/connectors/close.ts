@@ -843,11 +843,21 @@ const dateMs = (event: Record<string, unknown>): number => Date.parse(str(event[
  * few. Every row outside that window KEEPS `subject = null` indefinitely,
  * because `hw` only moves forward and nothing re-reads behind it.
  *
- * Repairing those is a full resync (`resync.ts`), which re-polls from a null
- * cursor at the next generation and therefore reaches `FIRST_SYNC_DAYS` back.
- * That is the complete repair rather than a partial one: Close's Event Log
- * retains 30 days and `FIRST_SYNC_DAYS` is 30, so a resync reaches everything
- * this connector could ever have seen.
+ * A full resync reaches further but NOT all the way, and the difference is not
+ * a detail. It re-polls from a null cursor, so it reaches `FIRST_SYNC_DAYS`
+ * back — which is everything Close SERVES, because the Event Log retains 30
+ * days. It is not everything this database HOLDS. A connection older than a
+ * month contains rows imported while they were still inside that window, and
+ * Close will never serve them again, so nothing can re-read them: those rows
+ * keep `subject = null` permanently, and no operation available to us changes
+ * that. The repair is bounded by the provider's retention, not by ours.
+ *
+ * And a full resync is not the tool for it anyway, for a reason that lives in
+ * `resync.ts`: the retire is scoped by generation and connection with no date
+ * bound, so a completed thirty-day walk over a longer-lived database used to
+ * tombstone everything older. That is now gated — see the comment there — but
+ * the shape of the operation is still "re-import a window", which cannot be a
+ * backfill for rows outside it.
  *
  * `occurredAt` is `date_created` and stays there. It is the one field in this
  * connector that must NOT follow the cursor onto `date_updated`: a record's

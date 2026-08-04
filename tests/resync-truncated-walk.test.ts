@@ -168,3 +168,65 @@ describe("a walk cut short by the page cap licenses no retire", () => {
     expect(await liveIds(conn)).toContain("old-1");
   });
 });
+
+/**
+ * A COMPLETED WALK OF NOTHING IS NOT A DELETION NOTICE.
+ *
+ * `complete` separates a truncated walk from a finished one, which is what
+ * `ebc1ec3` was for. It does not separate completion-with-data from
+ * completion-with-nothing, and the connection-scoped retire is scoped by
+ * connection and generation with no date bound at all — so a finished walk that
+ * returned zero records tombstoned the connection's entire history.
+ *
+ * The path is real rather than contrived. `pollAll` sets `complete` when
+ * `nextCursor` is null, and Close's drained branch hands
+ * `{hw: maxSeen ?? hw, cont: null, maxSeen: null}` to a serializer that falls
+ * through to `maxSeen ?? hw` — both null on a fresh walk that found nothing. A
+ * Close workspace with no Event Log activity in thirty days is all it takes.
+ * Sendblue's serializer has the identical shape.
+ *
+ * The deeper problem the gate fixes is not the empty case though: a completed
+ * walk covers a WINDOW. Close's Event Log retains thirty days, so any mature
+ * connection had everything older than that tombstoned on every full re-sync,
+ * from a button that offers to rebuild the dataset. Absence licenses deletion
+ * only where the read covered the whole resource, so the retire is limited to
+ * mirror-class sources — and no connection-scoped source is one.
+ */
+describe("a full re-sync of a windowed source never tombstones on absence", () => {
+  it("keeps history when a completed walk comes back empty", async () => {
+    const conn = await seedConnection(db, { source: "trunc-poller" });
+
+    PAGES = [{ records: [rec("historical-1"), rec("historical-2")], nextCursor: null }];
+    await runSync(db, conn, "full");
+    expect(await liveIds(conn)).toEqual(["historical-1", "historical-2"]);
+
+    // The provider's window is now empty — which says nothing whatever about
+    // rows imported when they were still inside it.
+    served = 0;
+    PAGES = [{ records: [], nextCursor: null }];
+    const second = await runSync(db, conn, "full");
+
+    expect(second.softDeleted).toBe(0);
+    expect(await liveIds(conn)).toEqual(["historical-1", "historical-2"]);
+  });
+
+  /**
+   * The case that needs no edge condition. A walk that returns records still
+   * only covers its window, and everything the provider no longer serves sits
+   * outside it at an older generation.
+   */
+  it("keeps rows older than the window even when the walk returns data", async () => {
+    const conn = await seedConnection(db, { source: "trunc-poller" });
+
+    PAGES = [{ records: [rec("old-1"), rec("old-2")], nextCursor: null }];
+    await runSync(db, conn, "full");
+
+    // A later re-sync sees only what the provider still serves.
+    served = 0;
+    PAGES = [{ records: [rec("recent-1")], nextCursor: null }];
+    const second = await runSync(db, conn, "full");
+
+    expect(second.softDeleted).toBe(0);
+    expect(await liveIds(conn)).toEqual(["old-1", "old-2", "recent-1"]);
+  });
+});

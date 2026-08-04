@@ -3,6 +3,7 @@ import { eq, isNull, and } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { runSync, reprocessConnection } from "@/lib/sync/resync";
 import { registerConnector } from "@/connectors/registry";
+import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { storeRawEvent } from "@/ingestion/raw-store";
 import { events } from "@/db/schema";
 import type { Connector, CanonicalEvent } from "@/connectors/types";
@@ -27,6 +28,27 @@ const resyncConnector: Connector = {
 };
 registerConnector(resyncConnector);
 
+/**
+ * DECLARED A MIRROR, because that is what this fixture actually is — `POLL` is
+ * the entire upstream dataset on every read — and the declaration is now
+ * load-bearing. The full re-sync's retire is gated on `isMirrorSource`:
+ * absence licenses deletion only where the read covered the whole resource. An
+ * undeclared source defaults to webhook-only, whose full re-sync deliberately
+ * retires nothing, and the "removes upstream-deleted ones" assertion below is
+ * exactly the behaviour the gate reserves for mirrors.
+ */
+CONNECTOR_CATALOG.push({
+  source: "resync-poller",
+  name: "Resync fixture",
+  description: "test stub",
+  connect: "apiKey",
+  instant: false,
+  poll: true,
+  sync: "mirror",
+  autoWebhook: false,
+  credentialFields: [],
+});
+
 let db: DB;
 let close: () => Promise<void>;
 beforeEach(async () => {
@@ -43,7 +65,7 @@ async function activeIds(connectionId: string): Promise<string[]> {
 }
 
 describe("full re-sync (versioned, safe replacement)", () => {
-  it("imports, then on the next full sync updates changed records, removes upstream-deleted ones, keeps new", async () => {
+  it("imports, then on the next full sync updates changed records, removes upstream-deleted ones, keeps new (mirror-class)", async () => {
     const conn = await seedConnection(db, { source: "resync-poller" });
 
     POLL = [rec("A", 10), rec("B", 20), rec("C", 30)];

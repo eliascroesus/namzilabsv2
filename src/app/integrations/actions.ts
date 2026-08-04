@@ -67,7 +67,17 @@ export async function syncNewAction(formData: FormData): Promise<void> {
   redirect(`/connections/${id}`);
 }
 
-/** Rebuild the connection's dataset safely (versioned replacement; removes upstream-deleted records). */
+/**
+ * Rebuild the connection's dataset (versioned replacement: re-import at a new
+ * generation, then retire what the run did not see).
+ *
+ * "Removes upstream-deleted records" is what this used to claim, and it is only
+ * true where the run re-read the WHOLE resource. A source that reads a bounded
+ * window cannot tell a deleted record from one outside the window, so the retire
+ * is now limited to mirror-class reads — see the gates in `resync.ts`. For every
+ * other source this rebuilds and refreshes without deleting, which is the only
+ * promise the read can keep.
+ */
 export async function fullResyncAction(formData: FormData): Promise<void> {
   const { orgId } = await requireOrg();
   const id = String(formData.get("id") ?? "");
