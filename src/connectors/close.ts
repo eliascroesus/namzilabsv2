@@ -7,8 +7,11 @@ import type {
   PollResult,
   RegisterWebhookArgs,
   RegisterWebhookResult,
+  VerifyWebhookArgs,
+  VerifyWebhookResult,
 } from "./types";
-import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
+import { createHmac } from "node:crypto";
+import { safeEqual } from "@/lib/signatures";
 import { fetchJson, basicAuth, HttpError, parseRateLimit, type ObservedRateLimit } from "@/lib/http-client";
 import { asObject, holdsWindowContinuation, parseDate, spanCovered, str } from "./field-utils";
 
@@ -324,8 +327,46 @@ function canonicalType(objectType: string, action: string): string {
 }
 
 /**
+ * CLOSE'S SIGNATURE KEY IS HEX, AND THE BYTES ARE THE KEY.
+ *
+ * `registerWebhook` stores `signature_key` exactly as Close returns it — a
+ * 64-character hex string — and the shared `hmacSha256Hex` keys an HMAC with the
+ * UTF-8 bytes of whatever string it is handed. So the key in use was the 64
+ * ASCII characters "4f7a…", not the 32 bytes they spell. Close's own
+ * verification example decodes first:
+ *
+ *   hmac.new(bytearray.fromhex(signature_key), (timestamp + data).encode(), sha256)
+ *
+ * Those two HMACs share no bytes, so **every Close webhook delivery has been
+ * rejected with a 401 since the connector shipped** — not intermittently, not
+ * under load: all of them, always. It stayed invisible because a rejection wrote
+ * nothing anywhere (fixed in `lib/webhooks/rejections.ts`) and because the poll
+ * lane kept importing the same events a few minutes later, so the data looked
+ * merely slow rather than broken.
+ *
+ * DECODED HERE AND NOWHERE ELSE. `hmacSha256Hex` is deliberately left alone:
+ * every other signing secret in this codebase is minted by `randomSecret()` as
+ * `whsec_<base64url>` and is used as UTF-8 on both sides by construction, so a
+ * global "decode hex keys" rule would silently break the catch-hook, Instantly
+ * and gsheets the moment one of those secrets happened to contain only hex
+ * digits. Close is the only connector that is handed a key BY a provider, and
+ * therefore the only one whose key format is not ours to choose.
+ *
+ * A key that is not clean hex is refused rather than coerced.
+ * `Buffer.from(s, "hex")` truncates at the first invalid character instead of
+ * throwing, so an unchecked decode of `whsec_…` yields an empty key and an HMAC
+ * that verifies nothing — the same silent-wrong-key failure being fixed here.
+ * Refusing surfaces as a recorded `invalid-signature` rejection, which the
+ * nightly scan reads.
+ */
+function closeSigningKey(secret: string): Buffer | null {
+  if (secret.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(secret)) return null;
+  return Buffer.from(secret, "hex");
+}
+
+/**
  * Close CRM. Instant path: Event Log webhook subscriptions signed as
- * `close-sig-hash = HMAC-SHA256(signatureKey, close-sig-timestamp + body)`.
+ * `close-sig-hash = HMAC-SHA256(fromhex(signatureKey), close-sig-timestamp + body)`.
  * Backfill path: the Event Log list endpoint. Auth: API key as Basic username.
  */
 export const closeConnector: Connector = {
@@ -345,7 +386,9 @@ export const closeConnector: Connector = {
     const hash = headers["close-sig-hash"];
     const timestamp = headers["close-sig-timestamp"];
     if (!hash || !timestamp) return false;
-    const expected = hmacSha256Hex(secret, `${timestamp}${rawBody}`);
+    const key = closeSigningKey(secret);
+    if (!key) return false;
+    const expected = createHmac("sha256", key).update(`${timestamp}${rawBody}`, "utf8").digest("hex");
     return safeEqual(hash, expected);
   },
 
@@ -618,6 +661,67 @@ export const closeConnector: Connector = {
       }),
     });
     return { signingSecret: res.signature_key, externalId: res.id };
+  },
+
+  /**
+   * THE HEX FIX ALONE DOES NOT BRING CLOSE BACK, because the subscription is
+   * almost certainly switched off at the provider by now.
+   *
+   * Close pauses a webhook subscription after roughly three days during which
+   * every delivery fails, and a paused subscription stays paused until something
+   * re-activates it. Deliveries here failed 100% of the time from the day the
+   * connector shipped, so the three days elapsed long ago: correcting the key
+   * makes the *next* delivery verifiable and there is no next delivery. Fixing
+   * the signature without this is fixing a lock on a door nobody is knocking at.
+   *
+   * RE-ACTIVATE, NEVER RE-CREATE — and this is the sharp edge. `POST /webhook/`
+   * mints a NEW `signature_key`, and `VerifyWebhookResult` has no field to carry
+   * a secret back, so a re-creating implementation would leave the connection
+   * holding the OLD key against a NEW subscription and every delivery would fail
+   * again, silently, exactly as before. Sendblue can re-create safely because its
+   * secret is one we mint; Close's is one we are given. So a missing subscription
+   * is REPORTED rather than replaced — replacing it needs a secret to be written,
+   * which belongs to `createConnection`, not to a sweep-time health check.
+   *
+   * The re-activation verb is `PUT /webhook/{id}/` with `{"status": "active"}`,
+   * matching the `status` field the list endpoint returns. That shape is not
+   * confirmed against documentation this environment can reach, so it is written
+   * to FAIL LOUDLY rather than quietly: a rejected PUT surfaces as `healthy:
+   * false` carrying Close's own error text onto the connection, and the first
+   * sweep after deploy is the measurement.
+   *
+   * Reading is unconditional, mutating is not: the PUT is issued only when a
+   * subscription exists AND reports a non-active status, so a healthy connection
+   * costs one GET per sweep and writes nothing.
+   */
+  async verifyWebhookSubscription(args: VerifyWebhookArgs): Promise<VerifyWebhookResult> {
+    const key = apiKey_(args.credentials);
+    try {
+      const data = await fetchJson<{ data?: Array<Record<string, unknown>> }>(`${API}/webhook/`, {
+        headers: { authorization: basicAuth(key) },
+      });
+      const hook = (data.data ?? []).find((h) => str(h["url"]) === args.webhookUrl);
+      if (!hook) {
+        return {
+          healthy: false,
+          reregistered: false,
+          detail: "no Close webhook subscription points at this URL; reconnect to create one (a new subscription issues a new signing key, which only connect-time can store)",
+        };
+      }
+      const status = str(hook["status"]) ?? "unknown";
+      if (status === "active") return { healthy: true, reregistered: false };
+
+      const id = str(hook["id"]);
+      if (!id) return { healthy: false, reregistered: false, detail: `subscription is ${status} and carries no id to re-activate` };
+      await fetchJson(`${API}/webhook/${id}/`, {
+        method: "PUT",
+        headers: { authorization: basicAuth(key), "content-type": "application/json" },
+        body: JSON.stringify({ status: "active" }),
+      });
+      return { healthy: true, reregistered: true };
+    } catch (e) {
+      return { healthy: false, reregistered: false, detail: e instanceof Error ? e.message : String(e) };
+    }
   },
 };
 

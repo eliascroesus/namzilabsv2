@@ -672,3 +672,98 @@ describe("Close if the Event Log ran oldest-first", () => {
     expect(Date.now() - Date.parse(stored.maxSeen)).toBeGreaterThan(15 * DAY);
   });
 });
+
+/**
+ * THE SIGNATURE FIX ALONE BRINGS NOTHING BACK.
+ *
+ * Close pauses a subscription after ~3 days in which every delivery fails, and
+ * ours failed 100% of the time from the day the connector shipped — the key was
+ * stored as Close's hex string and used as UTF-8 bytes. So the subscription has
+ * been switched off at the provider for a long time, and a correct key only
+ * makes the NEXT delivery verifiable. There was no next delivery, and nothing in
+ * the codebase could notice: `externalId` is written at connect time and read
+ * nowhere, and Close had no `verifyWebhookSubscription`.
+ *
+ * The half that matters most is what this must NOT do. `POST /webhook/` issues a
+ * new `signature_key`, and `VerifyWebhookResult` has no field to carry a secret
+ * back — so a re-creating implementation would leave the connection holding the
+ * old key against a new subscription, failing every delivery again, silently,
+ * for the same reason as before. Sendblue may re-create because its secret is
+ * one we mint. Close may not.
+ */
+describe("Close webhook-subscription health", () => {
+  const webhookUrl = "https://app.example/api/webhooks/c1";
+  const args = { connectionId: "c1", webhookUrl, credentials: { apiKey: "k" } };
+
+  /** Records every request so the mutating ones can be counted, not just observed. */
+  function mockWebhookApi(hooks: Array<Record<string, unknown>>) {
+    const reqs: Array<{ url: string; method: string; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        const method = (init?.method ?? "GET").toUpperCase();
+        reqs.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : null });
+        if (method === "PUT") {
+          const id = url.split("/webhook/")[1].replace(/\/$/, "");
+          const hook = hooks.find((h) => h.id === id);
+          if (hook) hook.status = (JSON.parse(String(init?.body)) as { status: string }).status;
+          return jsonRes({ data: hook });
+        }
+        return jsonRes({ data: hooks });
+      }),
+    );
+    return reqs;
+  }
+  const jsonRes = (body: unknown, status = 200) =>
+    ({
+      ok: status < 400,
+      status,
+      statusText: status === 200 ? "OK" : "ERR",
+      headers: { get: () => null },
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    }) as unknown as Response;
+
+  it("an active subscription is healthy, and nothing is written", async () => {
+    const reqs = mockWebhookApi([{ id: "whsub_1", url: webhookUrl, status: "active" }]);
+    expect(await closeConnector.verifyWebhookSubscription!(args)).toEqual({ healthy: true, reregistered: false });
+    // One GET per sweep on a healthy connection, and no mutation at all.
+    expect(reqs.map((r) => r.method)).toEqual(["GET"]);
+  });
+
+  it("re-activates a paused subscription in place, keeping the signing key we already hold", async () => {
+    const hooks = [{ id: "whsub_1", url: webhookUrl, status: "paused" }];
+    const reqs = mockWebhookApi(hooks);
+
+    expect(await closeConnector.verifyWebhookSubscription!(args)).toEqual({ healthy: true, reregistered: true });
+    const put = reqs.find((r) => r.method === "PUT")!;
+    expect(put.url).toContain("/webhook/whsub_1/");
+    expect(put.body).toEqual({ status: "active" });
+    // Never POST: a new subscription means a new signature_key, and this call
+    // has no way to store one.
+    expect(reqs.some((r) => r.method === "POST")).toBe(false);
+
+    // Once active, the next sweep is a read and nothing more.
+    const again = await closeConnector.verifyWebhookSubscription!(args);
+    expect(again).toEqual({ healthy: true, reregistered: false });
+    expect(reqs.filter((r) => r.method === "PUT")).toHaveLength(1);
+  });
+
+  it("reports a missing subscription rather than creating one behind a stale key", async () => {
+    const reqs = mockWebhookApi([{ id: "whsub_other", url: "https://app.example/api/webhooks/OTHER", status: "active" }]);
+    const res = await closeConnector.verifyWebhookSubscription!(args);
+    expect(res.healthy).toBe(false);
+    expect(res.reregistered).toBe(false);
+    expect(res.detail).toContain("reconnect");
+    expect(reqs.map((r) => r.method)).toEqual(["GET"]);
+  });
+
+  it("reports failure without throwing, so a health check never blocks the sweep", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonRes({ error: "nope" }, 403)));
+    const res = await closeConnector.verifyWebhookSubscription!(args);
+    expect(res.healthy).toBe(false);
+    expect(res.reregistered).toBe(false);
+    expect(res.detail).toContain("403");
+  });
+});
