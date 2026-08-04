@@ -10,6 +10,62 @@ import { withConnectionSyncLock } from "@/lib/sync/locks";
 import { upsertEvents } from "./pipeline";
 import { activeStreams, syncStream } from "@/lib/sync/streams";
 import { applyCadence, decideCadence } from "@/lib/sync/cadence";
+import { rejectingConnections } from "@/lib/webhooks/rejections";
+
+/**
+ * HOW LONG A REFUSED DELIVERY IS REMEMBERED, when deciding whether a provider's
+ * paused subscription may be switched back on.
+ *
+ * Twenty-four hours, and the number is a duty cycle rather than a timeout.
+ *
+ * No finite window ends the cycle it guards against. A provider that pauses
+ * after N days of total failure stops delivering at the pause, so the refusals
+ * stop too, so any window eventually goes quiet and the next sweep re-activates
+ * — and if nothing was actually repaired the failure period simply begins again.
+ * What the window sets is the RATIO: with a three-day pause threshold, one hour
+ * of memory means a broken endpoint is under flood ~97% of the time, and a day
+ * of memory means ~75%. It is a dial on wasted load, not a switch.
+ *
+ * So the trade is: every hour of memory is an hour a genuinely REPAIRED
+ * connection stays dark, because a deploy that fixes verification is invisible
+ * from `delivery_log` — evidence from five minutes before the fix reads exactly
+ * like evidence from now. And the cost of staying dark is LATENCY, not data:
+ * the poll lane imports the same records on the next sweep, which is precisely
+ * why a webhook path failing 100% of the time went unnoticed for months. Being
+ * slow is cheap; running a three-day flood of rejected requests, each one a
+ * database read and a decrypt, is not. So the window leans long.
+ *
+ * A day is also one nightly invariant scan. A connection held back from
+ * re-activation is reported to a human at least once before the guard next lets
+ * it try on its own, which is the property that makes an automatic probe
+ * defensible at all.
+ *
+ * The floor is set by the recorder, not by taste: rejections are sampled at one
+ * row per connection per minute, so any window shorter than a few sweep
+ * intervals could miss a live flood between two sweeps. A day is 144 sweeps.
+ *
+ * THERE MAY BE AN EXIT FROM THE CYCLE ENTIRELY, and it is measured rather than
+ * assumed. If Close's LIST response carries `signature_key`, comparing it with
+ * the stored secret answers "will verification succeed?" directly — positive
+ * evidence, before a delivery is attempted — and a mismatch is repairable from
+ * here, which holds both the database and the encryption key. That would make
+ * this window a cost dial rather than the correctness mechanism. The update
+ * endpoint's documented response includes the field; the list endpoint is a
+ * different endpoint, and providers routinely omit secrets from collection
+ * responses. `scripts/verify-close-subscription-fields.ts` settles it.
+ */
+const REJECTION_MEMORY_MS = 24 * 3_600_000;
+
+/**
+ * The health check could not be afforded this sweep.
+ *
+ * A distinct type rather than a flag because it travels through the same
+ * `catch` as a real provider failure, and the two must not be recorded the same
+ * way: one means the subscription is in trouble, the other means we chose not to
+ * ask. Conflating them would write a scary `lastError` for a request that was
+ * never sent.
+ */
+class SkipHealthCheck extends Error {}
 
 export type ReconcileResult = {
   inserted: number;
@@ -110,6 +166,17 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   if (!conn) throw new Error(`connection ${connectionId} not found`);
 
   /**
+   * Has this endpoint refused a delivery inside the memory window?
+   *
+   * Read once, below, and consumed by two decisions that must not disagree:
+   * whether a paused subscription may be switched back on, and whether a
+   * "healthy" subscription licenses widening the poll floor. False until the
+   * read happens, and it stays false for sources with no health check — which
+   * is right, because those never widen the floor either.
+   */
+  let recentlyRejecting = false;
+
+  /**
    * H.1/H.2/F.5 — every exit path records the next due time, so a connection
    * can never be left without a cadence. Wrapped here rather than sprinkled
    * through the returns.
@@ -120,7 +187,30 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     // A skipped sweep is the same case for the same reason, plus one more: the
     // writer that DID hold the lease sets the cadence from real work.
     if (result.deferredUntil || result.skipped) return result;
-    const healthy = result.webhook === "ok" || result.webhook === "reregistered";
+    /**
+     * A HEALTHY SUBSCRIPTION WIDENS THE POLL FLOOR, so "healthy" had better mean
+     * deliveries are arriving — and on its own it does not.
+     *
+     * `decideCadence` raises any interval below sixty minutes up to sixty when
+     * this is true (F.5): the poll becomes a backstop because the instant path
+     * is carrying the data. That is sound when the instant path works and
+     * backwards when it does not. If deliveries land, `promoteToBaseCadence`
+     * holds the connection at base anyway and the widening never bites; if they
+     * do not, nothing promotes it and freshness silently drops from ten minutes
+     * to sixty. The widening happens exactly when the instant path is broken.
+     *
+     * Close is the proof. It had no `verifyWebhookSubscription` at all, so this
+     * never fired for it; adding one made a subscription reporting
+     * `status: "active"` sufficient to triple its poll interval — and
+     * `status: "active"` is precisely the state that connection held for months
+     * while rejecting every single POST with a 401.
+     *
+     * So the same evidence that decides whether a paused subscription may be
+     * switched back on also decides this: if this endpoint refused a delivery
+     * inside the memory window, the instant path is not carrying anything and
+     * the poll is not a backstop. ONE reading of `delivery_log`, both verdicts.
+     */
+    const healthy = (result.webhook === "ok" || result.webhook === "reregistered") && !recentlyRejecting;
     const decision = decideCadence({
       changed: reconcileChanged(result),
       incomplete: result.incomplete,
@@ -161,7 +251,33 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
       // Same construction as webhookUrlFor (src/lib/connections.ts), inlined so
       // the ingestion layer doesn't pull in app-layer modules.
       const webhookUrl = `${process.env.APP_BASE_URL ?? ""}/api/webhooks/${conn.id}`;
-      const v = await connector.verifyWebhookSubscription({ connectionId: conn.id, webhookUrl, credentials });
+      // Read here rather than in the connector, which has no database. ONE
+      // reading, TWO decisions — see `webhookHealthy` for the second, which is
+      // the one that quietly triples this connection's poll interval.
+      const refusing = await rejectingConnections(db, REJECTION_MEMORY_MS);
+      recentlyRejecting = refusing.some((r) => r.connectionId === conn.id);
+      // THE HEALTH CHECK IS A PROVIDER CALL AND THE LEDGER MUST SEE IT.
+      //
+      // One GET per connection per sweep, plus a PUT when a paused subscription
+      // is re-activated, all of it previously invisible to the budget — the same
+      // shape as the settle bug: requests leaving the process that the model of
+      // our own traffic does not contain. It draws on the SAME operation bucket
+      // as the poll because it is the same provider quota; a separate bucket
+      // would be a second model of one limit, which is how you go over it.
+      //
+      // A refused claim SKIPS the check rather than deferring the sweep. This is
+      // a backstop competing with the primary path for a scarce resource, and a
+      // backstop that can starve the thing it backs up is worse than one that
+      // occasionally does not run. `webhook` stays undefined, which reads as
+      // "not verifiable this sweep" — not as failure, and not as health.
+      const healthOp = pollOperation(conn.source, conn.config);
+      const healthClaimedAt = new Date();
+      const healthClaim = await claimCalls(db, conn, healthOp, 1, healthClaimedAt);
+      if (!healthClaim.allowed) throw new SkipHealthCheck();
+      const v = await connector.verifyWebhookSubscription({ connectionId: conn.id, webhookUrl, credentials, recentlyRejecting });
+      // The GET always happens; the PUT only on a re-activation. Settling the
+      // real number is the half the settle bug got wrong.
+      await settlePollCalls(db, conn, healthOp, { providerCalls: v.reregistered ? 2 : 1 }, 1, healthClaimedAt);
       webhook = v.healthy ? (v.reregistered ? "reregistered" : "ok") : "failed";
       if (!v.healthy) {
         await db
@@ -170,11 +286,16 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
           .where(eq(connections.id, conn.id));
       }
     } catch (e) {
-      webhook = "failed";
-      await db
-        .update(connections)
-        .set({ lastError: `Webhook subscription check failed: ${e instanceof Error ? e.message : String(e)}`, updatedAt: new Date() })
-        .where(eq(connections.id, conn.id));
+      // A skipped check is not a failed one. Leaving `webhook` undefined keeps
+      // it out of BOTH verdicts: nothing is written to the connection, and the
+      // cadence floor is not widened on the strength of a check never made.
+      if (!(e instanceof SkipHealthCheck)) {
+        webhook = "failed";
+        await db
+          .update(connections)
+          .set({ lastError: `Webhook subscription check failed: ${e instanceof Error ? e.message : String(e)}`, updatedAt: new Date() })
+          .where(eq(connections.id, conn.id));
+      }
     }
   }
 

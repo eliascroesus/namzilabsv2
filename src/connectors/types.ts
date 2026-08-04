@@ -390,6 +390,20 @@ export type VerifyWebhookArgs = {
   /** Our inbound URL the provider must be pointing a subscription at. */
   webhookUrl: string;
   credentials?: Record<string, unknown> | null;
+  /**
+   * This endpoint has REFUSED at least one delivery inside the recent window —
+   * i.e. we have direct evidence that deliveries arriving now would be rejected.
+   *
+   * Passed in rather than looked up, because the answer lives in `delivery_log`
+   * and connectors do not reach the database. The caller (`reconcile`) reads it
+   * with `rejectingConnections` and hands down a boolean, which keeps the
+   * decision that uses it a pure function of its arguments.
+   *
+   * A connector that can switch a paused subscription back on must consult this
+   * first: turning deliveries back on toward an endpoint known to reject them
+   * restarts a failure cycle rather than repairing anything.
+   */
+  recentlyRejecting?: boolean;
 };
 
 export type VerifyWebhookResult = {

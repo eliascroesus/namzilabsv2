@@ -732,6 +732,55 @@ describe("Close webhook-subscription health", () => {
     expect(reqs.map((r) => r.method)).toEqual(["GET"]);
   });
 
+  /**
+   * Close states its own case, so stop inferring one. The subscription object
+   * carries `latest_error`, `pause_reason`, `health_status` and
+   * `recent_consecutive_fail_buckets_cnt` — the provider saying what is wrong,
+   * on a GET already being made. `latest_error` is the sentence a human needs
+   * and it reaches `connections.lastError` through `detail`.
+   *
+   * The VERDICT is taken from the counter, never the words: a count resets on a
+   * success and needs no vocabulary, while `health_status` is an unenumerated
+   * string whose value set this codebase has not observed. Branching on a
+   * guessed enumeration is the same mistake as a guessed key encoding.
+   */
+  it("reports Close's own diagnosis for a subscription that is active but failing", async () => {
+    const reqs = mockWebhookApi([
+      {
+        id: "whsub_1",
+        url: webhookUrl,
+        status: "active",
+        health_status: "failing",
+        latest_error: "401 Unauthorized from endpoint",
+        recent_consecutive_fail_buckets_cnt: 42,
+      },
+    ]);
+    const res = await closeConnector.verifyWebhookSubscription!(args);
+    expect(res.healthy).toBe(false);
+    expect(res.detail).toContain("401 Unauthorized from endpoint");
+    expect(res.detail).toContain("recent_consecutive_fail_buckets_cnt=42");
+    // Diagnosing is reading. Nothing is written on the strength of it.
+    expect(reqs.map((r) => r.method)).toEqual(["GET"]);
+  });
+
+  /**
+   * The guard. Re-activating an endpoint we have direct evidence is refusing
+   * deliveries does not repair it — it restarts the three-day failure period
+   * that caused the pause, at one to three rejected requests a second.
+   */
+  it("leaves a paused subscription paused while this endpoint is still refusing deliveries", async () => {
+    const reqs = mockWebhookApi([
+      { id: "whsub_1", url: webhookUrl, status: "paused", pause_reason: "too_many_failures", latest_error: "401 Unauthorized" },
+    ]);
+    const res = await closeConnector.verifyWebhookSubscription!({ ...args, recentlyRejecting: true });
+    expect(res.healthy).toBe(false);
+    expect(res.reregistered).toBe(false);
+    expect(res.detail).toContain("left paused");
+    // Close's reason travels with the refusal, so the connection says why.
+    expect(res.detail).toContain("pause_reason=too_many_failures");
+    expect(reqs.some((r) => r.method === "PUT")).toBe(false);
+  });
+
   it("re-activates a paused subscription in place, keeping the signing key we already hold", async () => {
     const hooks = [{ id: "whsub_1", url: webhookUrl, status: "paused" }];
     const reqs = mockWebhookApi(hooks);
@@ -765,5 +814,88 @@ describe("Close webhook-subscription health", () => {
     expect(res.healthy).toBe(false);
     expect(res.reregistered).toBe(false);
     expect(res.detail).toContain("403");
+  });
+});
+
+/**
+ * ONE EVENT, TWO ARRIVAL PATHS, ONE ROW — AND ONE SET OF VALUES.
+ *
+ * The webhook and the poll produce the identical `event_id`, so a disagreement
+ * between them never shows up as duplicate rows. It shows up as a row that
+ * changes its mind: `upsertEvents` writes `excluded.subject` whenever it differs
+ * and the incoming generation is at least the stored one, and the poll writes
+ * generation >= 1 over a webhook's 0. The webhook path read a name out of
+ * `data`; the poll path wrote `null`. So every Close row would have gained a
+ * name on delivery and lost it at the next sweep, every ten minutes, forever.
+ *
+ * Dormant until now — no Close webhook has ever verified, so `normalize` has
+ * never written a row. Correcting the signing key is exactly what would have
+ * woken it, which is why both changes are in one commit.
+ *
+ * The comparison feeds the SAME event object down both paths — wrapped in the
+ * webhook's `{event: …}` envelope on one side, served by the Event Log fixture
+ * on the other — so what is under test is the mapper and not the provider.
+ * Whether Close's two representations of one event are themselves identical is a
+ * separate question no fixture can answer;
+ * `scripts/verify-close-payload-shapes.ts` measures it against live data.
+ *
+ * The poll's mapper is reached THROUGH `poll()`, not exported for the occasion:
+ * a private function made public to be asserted on is a function whose call
+ * sites are no longer the thing under test.
+ */
+describe("the webhook and the poll describe the same event identically", () => {
+  const event = {
+    id: "ev_shared_1",
+    object_type: "activity.sms",
+    action: "created",
+    date_created: "2026-06-30T12:00:00Z",
+    date_updated: "2026-06-30T12:05:00Z",
+    data: { to: "+15551234567", contact_name: "Ada Lovelace" },
+  };
+  const viaPoll = async (ev: Record<string, unknown>): Promise<CanonicalEvent> => {
+    mockEventLog([ev]);
+    const res = await closeConnector.poll!(pollArgs(null));
+    return res.records[0];
+  };
+
+  it("produces an identical CanonicalEvent from both paths", async () => {
+    const [fromWebhook] = closeConnector.normalize!({ event }, { connectionId: "c1" });
+    expect(fromWebhook).toEqual(await viaPoll(event));
+  });
+
+  it("and the shared value is the NAME, not null — the poll used to erase it", async () => {
+    const [fromWebhook] = closeConnector.normalize!({ event }, { connectionId: "c1" });
+    expect(fromWebhook.subject).toBe("Ada Lovelace");
+    expect((await viaPoll(event)).subject).toBe("Ada Lovelace");
+  });
+
+  /**
+   * `fallbackOccurredAt` is the DELIVERY time and exists only on the webhook
+   * path; the poll has no such thing. The difference shows only on an
+   * unparseable `date_created` — and only then does it matter enormously,
+   * because `new Date()` dates the row to whenever the mapper RAN, which for a
+   * replay out of `raw_events` is the replay rather than the event. Close was
+   * ignoring the field entirely.
+   */
+  it("dates an unparseable event by the delivery time, not by now", () => {
+    const undatable = { id: "ev_bad_date", object_type: "note", action: "created", date_created: "not a date" };
+    const delivered = new Date("2026-05-04T09:00:00Z");
+    const [ev] = closeConnector.normalize!({ event: undatable }, { connectionId: "c1", fallbackOccurredAt: delivered });
+    expect(ev.occurredAt.toISOString()).toBe(delivered.toISOString());
+
+    // With no delivery time to fall back on — the poll's case — it is now.
+    const [poll] = closeConnector.normalize!({ event: undatable }, { connectionId: "c1" });
+    expect(poll.occurredAt.getTime()).toBe(Date.now());
+  });
+
+  it("agrees on the id even when the event carries none", async () => {
+    // `date_updated` is what the Event Log fixture filters on, so it is present
+    // for the fixture's sake; the id is the thing being left out.
+    const idless = { object_type: "note", action: "created", date_created: "2026-06-30T12:00:00Z", date_updated: "2026-06-30T12:00:00Z" };
+    const [fromWebhook] = closeConnector.normalize!({ event: idless }, { connectionId: "c1" });
+    expect(fromWebhook.eventId).toBe((await viaPoll(idless)).eventId);
+    // And it is not the string "undefined", which collapsed every id-less
+    // record onto a single row.
+    expect(fromWebhook.eventId).not.toContain("undefined");
   });
 });

@@ -392,27 +392,14 @@ export const closeConnector: Connector = {
     return safeEqual(hash, expected);
   },
 
+  /**
+   * The webhook envelope is `{event: {...}}`; the event inside is the same kind
+   * of object the Event Log returns, so it goes through the SAME mapper the poll
+   * uses. Unwrapping is the only thing this function does that `mapEvent` does
+   * not — see `mapEvent` for why sharing it is not a tidiness preference.
+   */
   normalize(rawPayload: unknown, ctx: NormalizeContext): CanonicalEvent[] {
-    const body = asObject(rawPayload);
-    const event = asObject(body["event"]);
-    const objectType = str(event["object_type"]) ?? "object";
-    const action = str(event["action"]) ?? "event";
-    const naturalId = str(event["id"]) ?? `${str(event["date_created"])}`;
-    const data = asObject(event["data"]);
-    return [
-      {
-        eventId: `close:${ctx.connectionId}:${naturalId}`,
-        eventType: canonicalType(objectType, action),
-        subject:
-          str(data["contact_name"]) ??
-          str(data["lead_name"]) ??
-          str(data["to"]) ??
-          str(data["phone"]) ??
-          null,
-        occurredAt: parseDate(str(event["date_created"]), "date_created") ?? new Date(),
-        properties: event,
-      },
-    ];
+    return [mapEvent(asObject(asObject(rawPayload)["event"]), ctx.connectionId, ctx.fallbackOccurredAt)];
   },
 
   /**
@@ -683,16 +670,40 @@ export const closeConnector: Connector = {
    * is REPORTED rather than replaced — replacing it needs a secret to be written,
    * which belongs to `createConnection`, not to a sweep-time health check.
    *
-   * The re-activation verb is `PUT /webhook/{id}/` with `{"status": "active"}`,
-   * matching the `status` field the list endpoint returns. That shape is not
-   * confirmed against documentation this environment can reach, so it is written
-   * to FAIL LOUDLY rather than quietly: a rejected PUT surfaces as `healthy:
-   * false` carrying Close's own error text onto the connection, and the first
-   * sweep after deploy is the measurement.
+   * The re-activation verb is `PUT /api/v1/webhook/{id}/` with a `status` field,
+   * which Close's update documentation demonstrates directly — its own cURL
+   * example sends `{"status": "paused"}` and documents `status` as an optional
+   * request field. The literal `"active"` is the one thing not enumerated there,
+   * so the call stays written to FAIL LOUDLY: a rejected PUT surfaces as
+   * `healthy: false` carrying Close's own error text onto the connection, rather
+   * than as a silent no-op that looks like success.
+   *
+   * CLOSE DIAGNOSES ITSELF, so stop inferring. The subscription object carries
+   * `health_status`, `latest_error`, `pause_reason` and
+   * `recent_consecutive_fail_buckets_cnt` — the provider stating what is wrong,
+   * on a GET already being made. `latest_error` goes onto the connection because
+   * it is the sentence a human actually needs, and guessing from a status string
+   * when the provider will simply say it is how this connector got here.
+   *
+   * The failure signal used for a VERDICT is the counter, not the words.
+   * `recent_consecutive_fail_buckets_cnt > 0` means deliveries are failing right
+   * now and resets when one succeeds; `health_status` is an unenumerated string
+   * this codebase has not seen the value set of, so it is reported and never
+   * branched on. A number is unambiguous without documentation. A vocabulary is
+   * not — and inventing one is the same mistake as assuming a key encoding.
+   *
+   * RE-ACTIVATION IS GUARDED, because switching deliveries back on toward an
+   * endpoint we know refuses them does not repair anything — it restarts the
+   * three-day failure period that caused the pause. `recentlyRejecting` is the
+   * caller's reading of `delivery_log`: direct evidence that requests arriving
+   * now are being refused. When it is set, the subscription is left paused and
+   * the reason is reported. See `REJECTION_MEMORY_MS` for why the window leans
+   * long and what it does and does not accomplish.
    *
    * Reading is unconditional, mutating is not: the PUT is issued only when a
-   * subscription exists AND reports a non-active status, so a healthy connection
-   * costs one GET per sweep and writes nothing.
+   * subscription exists, reports a non-active status, AND nothing is being
+   * refused — so a healthy connection costs one GET per sweep and writes
+   * nothing.
    */
   async verifyWebhookSubscription(args: VerifyWebhookArgs): Promise<VerifyWebhookResult> {
     const key = apiKey_(args.credentials);
@@ -709,10 +720,27 @@ export const closeConnector: Connector = {
         };
       }
       const status = str(hook["status"]) ?? "unknown";
-      if (status === "active") return { healthy: true, reregistered: false };
+      const diagnosis = closeDiagnosis(hook);
+
+      if (status === "active") {
+        // Active and delivering: nothing to say. Active while every delivery
+        // fails is the state this connector spent its whole life in, so it is
+        // reported rather than counted as healthy.
+        const failing = num(hook["recent_consecutive_fail_buckets_cnt"]) > 0;
+        if (!failing) return { healthy: true, reregistered: false };
+        return { healthy: false, reregistered: false, detail: `subscription is active but Close reports consecutive delivery failures — ${diagnosis}` };
+      }
+
+      if (args.recentlyRejecting) {
+        return {
+          healthy: false,
+          reregistered: false,
+          detail: `subscription is ${status} and this endpoint refused a delivery within the last day, so it is left paused rather than re-activated into the same failure — ${diagnosis}`,
+        };
+      }
 
       const id = str(hook["id"]);
-      if (!id) return { healthy: false, reregistered: false, detail: `subscription is ${status} and carries no id to re-activate` };
+      if (!id) return { healthy: false, reregistered: false, detail: `subscription is ${status} and carries no id to re-activate — ${diagnosis}` };
       await fetchJson(`${API}/webhook/${id}/`, {
         method: "PUT",
         headers: { authorization: basicAuth(key), "content-type": "application/json" },
@@ -725,11 +753,54 @@ export const closeConnector: Connector = {
   },
 };
 
+/**
+ * Close's own account of what is wrong with a subscription, as one line.
+ *
+ * `latest_error` first because it is the only field written for a human to read;
+ * the rest give it context when it is absent or stale. Every part is omitted
+ * when the provider did not send it, so this never manufactures a diagnosis it
+ * does not have.
+ */
+function closeDiagnosis(hook: Record<string, unknown>): string {
+  const parts = [
+    str(hook["latest_error"]) && `Close reports: ${str(hook["latest_error"])}`,
+    str(hook["pause_reason"]) && `pause_reason=${str(hook["pause_reason"])}`,
+    str(hook["health_status"]) && `health_status=${str(hook["health_status"])}`,
+    hook["recent_consecutive_fail_buckets_cnt"] != null &&
+      `recent_consecutive_fail_buckets_cnt=${num(hook["recent_consecutive_fail_buckets_cnt"])}`,
+  ].filter((p): p is string => typeof p === "string" && p.length > 0);
+  return parts.length > 0 ? parts.join("; ") : "Close reported no detail";
+}
+
+/** A numeric field, or 0 — used only where a count's ABSENCE and zero mean the same thing. */
+function num(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
 /** When a record says it HAPPENED — the axis a preview is sorted on. */
 const dateMs = (event: Record<string, unknown>): number => Date.parse(str(event["date_created"]) ?? "") || 0;
 
 /**
- * Map one Event Log entry to a canonical event (shared by poll + preview).
+ * THE ONLY MAPPER. Webhook, poll and preview all arrive here.
+ *
+ * It was two, and they disagreed about `subject`: the webhook path read
+ * `contact_name`/`lead_name`/`to`/`phone` out of `data`, and this one wrote
+ * `null`. Both produce the identical `event_id`, so the disagreement never
+ * showed up as duplicate rows — it showed up as a row that could not decide what
+ * it was called. `upsertEvents` writes `excluded.subject` whenever it differs
+ * and the incoming generation is at least the stored one, and the poll writes
+ * generation >= 1 over a webhook's 0, so every Close row would have gained a
+ * name the moment a delivery verified and lost it again at the next sweep, every
+ * ten minutes, forever.
+ *
+ * That defect was DORMANT and this batch is what wakes it: no Close webhook has
+ * ever verified, so `normalize` has never once written a row. Which is why the
+ * signature fix and this cannot ship apart — correcting the key without
+ * correcting this turns a path that produced nothing into a path that flaps.
+ *
+ * So the mapper is one function rather than two that agree today, because two
+ * that agree today are two that stop agreeing on the next edit, silently, and
+ * the symptom is a value oscillating in the database rather than a test failing.
  *
  * `occurredAt` is `date_created` and stays there. It is the one field in this
  * connector that must NOT follow the cursor onto `date_updated`: a record's
@@ -738,15 +809,49 @@ const dateMs = (event: Record<string, unknown>): number => Date.parse(str(event[
  * `date_updated`. Dating rows by the latter would move a lead's creation to
  * whenever somebody last touched it — every metric built on "leads per day"
  * would restate itself as people tidied up old records.
+ *
+ * The id falls back to `date_created`, which the poll path did not do — it
+ * interpolated a missing id straight into the string and produced
+ * `close:<conn>:undefined`, collapsing every id-less record onto one row. An
+ * Event Log entry without an `id` is close to hypothetical, and the fallback
+ * costs nothing, but the old behaviour was a silent merge rather than a loud
+ * failure and that is not a thing to keep.
  */
-function mapEvent(event: Record<string, unknown>, connectionId: string): CanonicalEvent {
+function mapEvent(event: Record<string, unknown>, connectionId: string, fallbackOccurredAt?: Date): CanonicalEvent {
   const objectType = str(event["object_type"]) ?? "object";
   const action = str(event["action"]) ?? "event";
+  const naturalId = str(event["id"]) ?? str(event["date_created"]) ?? "unknown";
+  const data = asObject(event["data"]);
   return {
-    eventId: `close:${connectionId}:${str(event["id"])}`,
+    eventId: `close:${connectionId}:${naturalId}`,
     eventType: canonicalType(objectType, action),
-    subject: null,
-    occurredAt: parseDate(str(event["date_created"]), "date_created") ?? new Date(),
+    subject: str(data["contact_name"]) ?? str(data["lead_name"]) ?? str(data["to"]) ?? str(data["phone"]) ?? null,
+    /**
+     * `fallbackOccurredAt` is the DELIVERY time, and it only exists on the
+     * webhook path — the poll has no such thing, so it keeps `new Date()`.
+     *
+     * The difference only shows on an unparseable `date_created`, and only then
+     * does it matter enormously: `new Date()` dates the row to whenever this
+     * function ran, which for a REPLAY out of `raw_events` is the replay, not
+     * the event. Dating a two-month-old delivery to this afternoon because a
+     * timestamp failed to parse is precisely the failure this field exists to
+     * prevent, and Close was ignoring it.
+     */
+    occurredAt: parseDate(str(event["date_created"]), "date_created") ?? fallbackOccurredAt ?? new Date(),
+    /**
+     * NOT UNIFIED, deliberately, and this is the open question rather than an
+     * oversight. Both paths store the provider's object verbatim, but the
+     * webhook's comes out of the `{event: {...}}` envelope and may carry fields
+     * the Event Log's copy does not. If it does, `properties` differs from
+     * `excluded.properties` on every sweep, the row is rewritten every ten
+     * minutes, `updated > 0` marks the stream changed, and every Close
+     * connection is pinned at base cadence with a recompute behind it.
+     *
+     * That is a measurement, not a guess, and it cannot be taken yet: no Close
+     * webhook has ever verified, so no stored payload exists to diff against
+     * `GET /event/{id}`. `scripts/verify-close-payload-shapes.ts` takes it the
+     * moment one does.
+     */
     properties: event,
   };
 }

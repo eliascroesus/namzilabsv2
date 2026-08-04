@@ -5,7 +5,8 @@ import { reconcileConnection } from "@/ingestion/reconcile";
 import { registerConnector } from "@/connectors/registry";
 import { markStaleForSource } from "@/lib/flow/materialize";
 import type { Connector, CanonicalEvent } from "@/connectors/types";
-import { syncState, events, flows, flowVersions, flowResults, connections } from "@/db/schema";
+import { syncState, events, flows, flowVersions, flowResults, connections, deliveryLog, usageLedger } from "@/db/schema";
+import { recordRejectedDelivery } from "@/lib/webhooks/rejections";
 import type { DB } from "@/db/types";
 
 let db: DB;
@@ -31,13 +32,18 @@ registerConnector(pollConnector);
 
 // A connector with provider-side webhook verification (the D.6 sweep hook).
 let WEBHOOK_HEALTH: { healthy: boolean; reregistered: boolean; detail?: string } = { healthy: true, reregistered: false };
+/** What the sweep told the connector about this endpoint's recent refusals. */
+let SEEN_RECENTLY_REJECTING: boolean | undefined;
 const hookedConnector: Connector = {
   source: "hooked-poller",
   authType: "none",
   verifySignature: () => true,
   normalize: () => [],
   poll: async () => ({ records: [], nextCursor: null }),
-  verifyWebhookSubscription: async () => WEBHOOK_HEALTH,
+  verifyWebhookSubscription: async (args) => {
+    SEEN_RECENTLY_REJECTING = args.recentlyRejecting;
+    return WEBHOOK_HEALTH;
+  },
 };
 registerConnector(hookedConnector);
 
@@ -94,6 +100,132 @@ describe("webhook subscription health (D.6) runs with the sweep", () => {
     const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId));
     expect(conn.lastError).toContain("Webhook subscription check failed");
     expect(conn.lastError).toContain("provider 500");
+  });
+});
+
+/**
+ * A HEALTHY SUBSCRIPTION WIDENS THE POLL FLOOR FROM TEN MINUTES TO SIXTY, so
+ * "healthy" has to mean deliveries are arriving.
+ *
+ * The widening is backwards on its own: if deliveries land, the connection is
+ * held at base anyway and it never bites; if they do not, nothing promotes it
+ * and freshness silently drops by 6x. It fires exactly when the instant path is
+ * broken. Close is the proof — a subscription reporting `status: "active"` was
+ * enough, and `active` is the state that connection held for months while
+ * rejecting every POST with a 401.
+ *
+ * So one reading of `delivery_log` gates both decisions: whether a paused
+ * subscription may be re-activated, and whether the poll may relax.
+ */
+describe("a refusing endpoint is not a healthy one", () => {
+  const REJECTION_WINDOW_MS = 24 * 3_600_000;
+
+  it("hands the connector the recent-refusal evidence", async () => {
+    const connectionId = await seedConnection(db, { source: "hooked-poller" });
+    WEBHOOK_HEALTH = { healthy: true, reregistered: false };
+    SEEN_RECENTLY_REJECTING = undefined;
+    await reconcileConnection(db, connectionId);
+    expect(SEEN_RECENTLY_REJECTING).toBe(false);
+
+    await recordRejectedDelivery(db, { id: connectionId, orgId: "org_test", source: "hooked-poller" }, "invalid-signature");
+    SEEN_RECENTLY_REJECTING = undefined;
+    await reconcileConnection(db, connectionId);
+    expect(SEEN_RECENTLY_REJECTING).toBe(true);
+  });
+
+  it("does NOT widen the poll floor while deliveries are being refused", async () => {
+    const connectionId = await seedConnection(db, { source: "hooked-poller" });
+    WEBHOOK_HEALTH = { healthy: true, reregistered: false };
+
+    // Clean endpoint: the backstop applies and the floor goes to an hour.
+    await reconcileConnection(db, connectionId);
+    const [relaxed] = await db.select().from(connections).where(eq(connections.id, connectionId));
+    expect(relaxed.webhookHealthyAt).not.toBeNull();
+    const relaxedGap = relaxed.nextSweepAt!.getTime() - Date.now();
+    expect(relaxedGap).toBeGreaterThan(30 * 60_000);
+
+    // Same "ok" from the provider, but this endpoint is refusing deliveries —
+    // so the instant path is carrying nothing and the poll is not a backstop.
+    await db.update(connections).set({ webhookHealthyAt: null }).where(eq(connections.id, connectionId));
+    await recordRejectedDelivery(db, { id: connectionId, orgId: "org_test", source: "hooked-poller" }, "invalid-signature");
+    const res = await reconcileConnection(db, connectionId);
+    expect(res.webhook).toBe("ok"); // the provider still says the subscription is fine
+
+    const [held] = await db.select().from(connections).where(eq(connections.id, connectionId));
+    expect(held.webhookHealthyAt).toBeNull();
+    const heldGap = held.nextSweepAt!.getTime() - Date.now();
+    expect(heldGap).toBeLessThan(30 * 60_000);
+  });
+
+  it("forgets a refusal older than the memory window", async () => {
+    const connectionId = await seedConnection(db, { source: "hooked-poller" });
+    WEBHOOK_HEALTH = { healthy: true, reregistered: false };
+    await recordRejectedDelivery(db, { id: connectionId, orgId: "org_test", source: "hooked-poller" }, "invalid-signature");
+    await db
+      .update(deliveryLog)
+      .set({ createdAt: new Date(Date.now() - REJECTION_WINDOW_MS - 60_000) })
+      .where(eq(deliveryLog.connectionId, connectionId));
+
+    SEEN_RECENTLY_REJECTING = undefined;
+    await reconcileConnection(db, connectionId);
+    expect(SEEN_RECENTLY_REJECTING).toBe(false);
+  });
+});
+
+/**
+ * THE HEALTH CHECK IS A PROVIDER CALL. One GET per connection per sweep, plus a
+ * PUT on re-activation, all of it previously invisible to the budget — requests
+ * leaving the process that our model of our own traffic did not contain.
+ */
+describe("the health check is on the ledger", () => {
+  it("claims and settles against the poll's own bucket", async () => {
+    const connectionId = await seedConnection(db, { source: "hooked-poller" });
+    WEBHOOK_HEALTH = { healthy: true, reregistered: false };
+    await reconcileConnection(db, connectionId);
+
+    const rows = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, connectionId));
+    // One for the health GET, one for the poll. A ledger holding only the poll's
+    // call is the bug: the GET happened either way.
+    expect(rows.reduce((n, r) => n + r.calls, 0)).toBeGreaterThanOrEqual(2);
+  });
+
+  /**
+   * A backstop that can starve the thing it backs up is worse than one that
+   * occasionally does not run. When the budget refuses the claim the check is
+   * SKIPPED — and a skipped check must read as neither failure nor health: no
+   * scary `lastError` for a request never sent, and no widened poll floor on the
+   * strength of a question never asked.
+   */
+  it("skips the check when the budget refuses, without calling it a failure", async () => {
+    const connectionId = await seedConnection(db, { source: "hooked-poller" });
+    WEBHOOK_HEALTH = { healthy: true, reregistered: false };
+    // Burn the window's allowance so the health claim cannot be afforded.
+    await db.insert(usageLedger).values({
+      orgId: "org_test",
+      connectionId,
+      provider: "hooked-poller",
+      operation: "*",
+      windowStart: new Date(Math.floor(Date.now() / 60_000) * 60_000),
+      calls: 100_000,
+    });
+
+    SEEN_RECENTLY_REJECTING = undefined;
+    const res = await reconcileConnection(db, connectionId);
+    expect(SEEN_RECENTLY_REJECTING).toBeUndefined(); // never asked
+    expect(res.webhook).toBeUndefined(); // not "failed"
+
+    const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId));
+    expect(conn.lastError ?? "").not.toContain("Webhook subscription check failed");
+    expect(conn.webhookHealthyAt).toBeNull();
+  });
+
+  it("a re-activation settles the PUT as well as the GET", async () => {
+    const connectionId = await seedConnection(db, { source: "hooked-poller" });
+    WEBHOOK_HEALTH = { healthy: true, reregistered: true };
+    await reconcileConnection(db, connectionId);
+
+    const rows = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, connectionId));
+    expect(rows.reduce((n, r) => n + r.calls, 0)).toBeGreaterThanOrEqual(3);
   });
 });
 
