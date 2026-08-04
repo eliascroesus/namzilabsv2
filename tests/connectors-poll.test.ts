@@ -95,23 +95,6 @@ describe("Calendly polling", () => {
   });
 });
 
-/**
- * PAGINATION, AND THE CONTINUATION THAT WAS NEVER ACCEPTED.
- *
- * Until 2026-08-03 `calendly.ts` rebuilt each page request from
- * `next_page_token` instead of following the `next_page` URL Calendly returns.
- * The rebuild is refused — verified live, in every form, milliseconds after the
- * token was issued — so the catch block restarted the side at page 1, the retry
- * SUCCEEDED, and nothing reported a problem. Every scan re-read its first page
- * for ever, holding at most 100 events per side, from a window frozen at
- * whenever it started (a side that never drains never re-opens one).
- *
- * The suite did not catch it because it asserted the ALARM, never a second
- * page. So the first test below is the one that was missing, and the restart
- * counter keeps its own tests underneath: one restart is a coincidence, two in
- * a row is a scan that is not advancing.
- */
-
 /** A cursor over the connector's own 30-back/90-forward window, plus overrides. */
 const window = (over: Record<string, unknown>) =>
   JSON.stringify({
@@ -121,77 +104,236 @@ const window = (over: Record<string, unknown>) =>
     ...over,
   });
 
-describe("Calendly: the scan follows next_page and actually reaches page 2", () => {
-  const EV = (id: string) => ({
+/**
+ * RESUME BY DATE BOUND — NOTHING PERISHABLE CROSSES A SWEEP.
+ *
+ * Two continuation generations died here. The rebuilt `page_token` was rejected
+ * in every form (CL10/CL12). Its replacement, Calendly's own `next_page` URL,
+ * was accepted — and CL13 then measured it surviving 600s and being refused at
+ * 1200s, against a sweep gap of 600-1200s. The brackets intersect: some sweeps
+ * restarted at page 1 silently, because the restart succeeds. No continuation
+ * lifetime fixes that, so the cursor now stores DATE WATERMARKS — the boundary
+ * `start_time` of ground actually ingested — and every request is a fresh
+ * first-page request bounded by the mark. A date cannot expire.
+ *
+ * CL15 measured both `min_start_time` and `max_start_time` as INCLUSIVE, so
+ * the bound is the exact mark: the tie group AT the mark is re-read on resume
+ * and `event_id` dedup absorbs it. The residual risk is a tie group larger
+ * than one page pinning the mark inside a single second — counted by the
+ * repurposed `restarts` alarm below.
+ */
+describe("Calendly: the scan resumes by narrowing the bound, and the union is complete", () => {
+  const T = (iso: string) => Date.parse(iso);
+  const EV = (id: string, start: string) => ({
     uri: `https://api.calendly.com/scheduled_events/${id}`,
     name: "Demo",
-    start_time: "2026-02-01T10:00:00Z",
+    start_time: start,
   });
-  const PAGE_2 = "https://api.calendly.com/scheduled_events?page_token=P2";
 
   /**
-   * A provider that paginates the way the live API does: page 1 hands back a
-   * complete `next_page` URL, and that URL serves page 2.
-   *
-   * It also REJECTS any rebuilt request carrying `page_token` in a query it
-   * assembled itself — which is what production does, and what the connector
-   * used to send. A connector that rebuilds cannot pass this.
+   * A provider serving a PAST side deeper than one page: meetings at 10:00,
+   * 09:00, 08:00... served strictly by the request's own bounds, the way the
+   * live API does (CL5: both bounds bound; CL15: inclusively). `next_page` is
+   * offered whenever more remain below the requested window — but as a lure:
+   * following or storing it is the bug, so the URL 400s if ever requested.
    */
-  const paginates = () =>
+  const MEETINGS = [
+    EV("E1", "2026-07-30T10:00:00Z"),
+    EV("E2", "2026-07-29T10:00:00Z"),
+    EV("E3", "2026-07-28T10:00:00Z"),
+    EV("E4", "2026-07-27T10:00:00Z"),
+  ];
+  const boundedProvider = (pageSize: number, meetings = MEETINGS) =>
     vi.fn(async (input: string | URL | Request) => {
-      const url = String(input);
-      if (url.includes("/users/me")) {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/users/me")) {
         return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
       }
-      if (url === PAGE_2) return jsonResponse({ collection: [EV("E2")], pagination: { next_page: null } });
-      if (url.includes("page_token=")) throw new Error("HTTP 400: page_token is invalid");
-      return jsonResponse({ collection: [EV("E1")], pagination: { next_page: PAGE_2 } });
-    });
-
-  /** Rejects every continuation, so a side can never advance. */
-  const rejectContinuations = (nextOut: string | null) =>
-    vi.fn(async (input: string | URL | Request) => {
-      const url = String(input);
-      if (url.includes("/users/me")) {
-        return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
-      }
-      if (url.includes("page_token=")) throw new Error("HTTP 400: page_token is invalid");
-      return jsonResponse({ collection: [EV("E1")], pagination: { next_page: nextOut } });
+      if (url.searchParams.has("page_token")) throw new Error("HTTP 400: a continuation was followed or stored");
+      const min = T(url.searchParams.get("min_start_time")!);
+      const max = T(url.searchParams.get("max_start_time")!);
+      const asc = url.searchParams.get("sort") === "start_time:asc";
+      const inWindow = meetings
+        .filter((m) => T(m.start_time) >= min && T(m.start_time) <= max) // inclusive both ends (CL15)
+        .sort((a, b) => (asc ? T(a.start_time) - T(b.start_time) : T(b.start_time) - T(a.start_time)));
+      const page = inWindow.slice(0, pageSize);
+      return jsonResponse({
+        collection: page,
+        pagination: { next_page: inWindow.length > page.length ? "https://api.calendly.com/scheduled_events?page_token=LURE" : null },
+      });
     });
 
   const poll = (cursor: string | null) =>
     calendlyConnector.poll!({ connectionId: "c1", cursor, credentials: { accessToken: "tok" } });
 
-  /**
-   * THE ASSERTION WHOSE ABSENCE LET THIS SHIP (see the describe title).
-   *
-   * The previous version of this suite mocked a provider that rejected every
-   * `page_token` — production, exactly — and asserted only that the connector
-   * NOTICED. It passed for as long as the bug existed, because the alarm
-   * working is the bug. Nothing ever asserted a second page was read.
-   */
-  it("reads page 2 by following the URL Calendly returned", async () => {
-    const fetchMock = paginates();
+  it("walks a burst deeper than the page budget across polls, with a complete union", async () => {
+    const fetchMock = boundedProvider(2);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const seen = new Set<string>();
+    let cursor: string | null = null;
+    // past page (E1,E2) → future (empty, drains) → past page (E3,E4) → past drains
+    for (let i = 0; i < 4 && (i === 0 || cursor); i++) {
+      const res = await poll(cursor);
+      for (const r of res.records) seen.add(r.eventId.split("/").pop()!);
+      cursor = res.nextCursor;
+    }
+
+    // Every meeting arrived exactly through narrowed bounds — no continuation
+    // was ever requested (the provider throws on one) or stored.
+    expect([...seen].sort()).toEqual(["E1", "E2", "E3", "E4"]);
+    expect(cursor).toBeNull();
+    for (const call of fetchMock.mock.calls) expect(String(call[0])).not.toContain("page_token");
+  });
+
+  it("banks a date watermark, not a URL, and narrows the next request to it", async () => {
+    const fetchMock = boundedProvider(2);
     vi.stubGlobal("fetch", fetchMock);
 
     const first = await poll(null);
-    expect(first.records.map((r) => r.eventId)).toContain("calendly:c1:https://api.calendly.com/scheduled_events/E1");
-    // Page 1 banked Calendly's own URL, not a token we would have to rebuild.
-    expect(JSON.parse(first.nextCursor!).past).toBe(PAGE_2);
+    const banked = JSON.parse(first.nextCursor!).past;
+    // The lowest start_time ingested — a date, which cannot expire.
+    expect(banked).toBe("2026-07-29T10:00:00.000Z");
 
-    // Sweep 2 runs the OTHER side (the scan alternates), so drive the past side
-    // again by handing back a cursor whose turn is 'past'.
-    const resume = JSON.stringify({ ...JSON.parse(first.nextCursor!), next: "past" });
-    const second = await poll(resume);
+    // Drive the past side again; its request must be bounded at the mark.
+    const again = JSON.stringify({ ...JSON.parse(first.nextCursor!), next: "past" });
+    await poll(again);
+    const pastCalls = fetchMock.mock.calls
+      .map((c) => new URL(String(c[0])))
+      .filter((u) => u.searchParams.get("sort") === "start_time:desc");
+    expect(pastCalls[1].searchParams.get("max_start_time")).toBe(banked);
+  });
 
-    expect(
-      second.records.map((r) => r.eventId),
-      "the second page was never fetched — the scan is stuck on page 1",
-    ).toContain("calendly:c1:https://api.calendly.com/scheduled_events/E2");
-    // Requested verbatim: no rebuilt query, no re-encoded token.
-    expect(fetchMock.mock.calls.some((c) => String(c[0]) === PAGE_2)).toBe(true);
-    // Exhausted: no next_page means this side is drained.
-    expect(JSON.parse(second.nextCursor!).past).toBeNull();
+  /**
+   * The tie group at the boundary is RE-READ, never skipped. The bound is the
+   * exact mark and CL15 measured it inclusive, so a resume's page includes the
+   * meetings AT the mark again; dedup absorbs them. Skipping would need an
+   * exclusive bound — under which a tie group spanning the page edge would be
+   * lost forever, silently.
+   */
+  it("re-reads the boundary tie group on resume rather than skipping it", async () => {
+    const tied = [
+      EV("A1", "2026-07-30T10:00:00Z"),
+      EV("A2", "2026-07-29T10:00:00Z"),
+      EV("A3", "2026-07-29T10:00:00Z"), // shares the boundary second with A2
+      EV("A4", "2026-07-28T10:00:00Z"),
+    ];
+    // Page size 3: the tie group (2) is SMALLER than the page, so the resume
+    // page reaches past it and the mark advances. A tie group >= the page is
+    // the residual risk, pinned by the alarm test below, not by this one.
+    const fetchMock = boundedProvider(3, tied);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const seen = new Set<string>();
+    let cursor: string | null = null;
+    for (let i = 0; i < 6 && (i === 0 || cursor); i++) {
+      const res = await poll(cursor);
+      for (const r of res.records) seen.add(r.eventId.split("/").pop()!);
+      cursor = res.nextCursor;
+    }
+    // A2/A3 share the boundary second after page 1 (A1, A2, A3). The inclusive
+    // resume re-reads them and still reaches A4; an exclusive bound would have
+    // skipped whichever tie member fell past the page edge.
+    expect([...seen].sort()).toEqual(["A1", "A2", "A3", "A4"]);
+  });
+
+  /**
+   * The tie group SPLIT ACROSS THE PAGE EDGE — the case that separates the two
+   * bound semantics for real. Page 1 ends at A2; A3 shares A2's exact second
+   * and sits on the next page. An INCLUSIVE resume re-reads the boundary and
+   * either reaches A3 or pins loudly (the alarm). An EXCLUSIVE resume skips
+   * past the second entirely: the scan completes, the union is silently short
+   * one meeting, and nothing anywhere says so. Silent loss is the one outcome
+   * this design must never produce, so the assertion is: the scan may finish
+   * only if A3 was seen.
+   */
+  it("never completes silently past a tie member split across the page edge", async () => {
+    const split = [
+      EV("A1", "2026-07-30T10:00:00Z"),
+      EV("A2", "2026-07-29T10:00:00Z"),
+      EV("A3", "2026-07-29T10:00:00Z"), // beyond page 1, sharing A2's second
+      EV("A4", "2026-07-28T10:00:00Z"),
+    ];
+    vi.stubGlobal("fetch", boundedProvider(2, split));
+
+    const seen = new Set<string>();
+    let cursor: string | null = null;
+    let finished = false;
+    for (let i = 0; i < 8; i++) {
+      const res = await poll(cursor);
+      for (const r of res.records) seen.add(r.eventId.split("/").pop()!);
+      cursor = res.nextCursor;
+      if (cursor == null) {
+        finished = true;
+        break;
+      }
+    }
+    if (finished) expect([...seen]).toContain("A3");
+    // With a page-sized tie the inclusive bound pins instead — loudly.
+    if (!finished) expect(JSON.parse(cursor!).restarts).toBeGreaterThanOrEqual(1);
+  });
+
+  /**
+   * The repurposed alarm: a side that ingests a page, is offered more, and
+   * cannot move its mark is pinned — the tie-group-larger-than-a-page case.
+   * Two polls of that in a row is not a coincidence, and `incomplete` keeps
+   * the connection at base cadence while it lasts.
+   */
+  it("counts polls that cannot advance the mark, and reports the side incomplete", async () => {
+    // Every meeting ON EACH SIDE shares one start second and there is always
+    // another page — the tie-group-bigger-than-the-page shape. Served per side
+    // (past ties in the past, future ties in the future), because the live API
+    // honours the window bounds and a future request cannot return July.
+    const pastTie = new Date(Date.now() - 5 * 86_400_000).toISOString();
+    const futureTie = new Date(Date.now() + 5 * 86_400_000).toISOString();
+    const pinned = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/users/me")) {
+        return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
+      }
+      const tie = url.searchParams.get("sort") === "start_time:desc" ? pastTie : futureTie;
+      return jsonResponse({
+        collection: [EV("T1", tie), EV("T2", tie)],
+        pagination: { next_page: "https://api.calendly.com/scheduled_events?page_token=MORE" },
+      });
+    });
+    vi.stubGlobal("fetch", pinned);
+
+    const sweeps: Array<{ restarts?: number; incomplete?: boolean }> = [];
+    let cursor: string | null = null;
+    for (let i = 0; i < 4; i++) {
+      const res = await poll(cursor);
+      cursor = res.nextCursor;
+      sweeps.push({ restarts: JSON.parse(cursor!).restarts, incomplete: res.incomplete });
+    }
+
+    // Poll 1 (past): first page, mark moves from pivot to the tie second — progress.
+    expect(sweeps[0].restarts).toBeUndefined();
+    // Poll 2 (future): same, on its own side.
+    expect(sweeps[1].restarts).toBeUndefined();
+    // Poll 3 (past again): bounded at the mark, same page back, mark cannot move.
+    expect(sweeps[2].restarts).toBe(1);
+    expect(sweeps[2].incomplete).toBeFalsy(); // one pin could still be coincidence
+    // Poll 4: pinned again. Two in a row is a stuck side, and it says so.
+    expect(sweeps[3].restarts).toBe(2);
+    expect(sweeps[3].incomplete, "a side re-reading the same tie group reported itself as fine").toBe(true);
+  });
+
+  it("clears the count as soon as the mark moves or the side drains", async () => {
+    vi.stubGlobal("fetch", boundedProvider(2));
+    const stuck = JSON.stringify({
+      floor: "2026-07-01T00:00:00.000Z",
+      ceil: "2026-10-01T00:00:00.000Z",
+      pivot: "2026-08-01T00:00:00.000Z",
+      past: "2026-07-31T00:00:00.000Z",
+      next: "past",
+      restarts: 5,
+    });
+    const res = await poll(stuck);
+    // The page under the mark advanced it — a run of pins that ended is not
+    // worth carrying forward.
+    expect(JSON.parse(res.nextCursor!).restarts).toBeUndefined();
+    expect(res.incomplete).toBeFalsy();
   });
 
   it("drains both sides and then starts over, which is what nextCursor: null means", async () => {
@@ -202,7 +344,7 @@ describe("Calendly: the scan follows next_page and actually reaches page 2", () 
         if (url.includes("/users/me")) {
           return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
         }
-        return jsonResponse({ collection: [EV("E1")], pagination: { next_page: null } });
+        return jsonResponse({ collection: [EV("E1", "2026-07-30T10:00:00Z")], pagination: { next_page: null } });
       }),
     );
     const first = await poll(null); // past drains
@@ -210,68 +352,20 @@ describe("Calendly: the scan follows next_page and actually reaches page 2", () 
     const second = await poll(first.nextCursor); // future drains → both done
     expect(second.nextCursor, "both sides drained must re-open the window, not carry on").toBeNull();
   });
-
-  it("counts consecutive restarts in the cursor and reports the side as incomplete", async () => {
-    vi.stubGlobal("fetch", rejectContinuations(PAGE_2));
-
-    /**
-     * THE SCAN ALTERNATES, so the sweeps are not what you would first guess.
-     *
-     * Sweep 1 runs the PAST side with no stored token and banks one. Sweep 2
-     * runs the FUTURE side — also with no stored token, because that side has
-     * not run yet — and banks one too. Only from sweep 3 does either side have a
-     * token to be rejected. Writing this as three sweeps asserted `restarts: 1`
-     * on a sweep that never sent a token at all.
-     */
-    const sweeps: Array<{ restarts: number | undefined; incomplete: boolean | undefined }> = [];
-    let cursor: string | null = null;
-    for (let i = 0; i < 4; i++) {
-      const res = await poll(cursor);
-      cursor = res.nextCursor;
-      sweeps.push({ restarts: JSON.parse(cursor!).restarts, incomplete: res.incomplete });
-    }
-
-    // 1 and 2 open each side; neither can restart.
-    expect(sweeps[0].restarts).toBeUndefined();
-    expect(sweeps[1].restarts).toBeUndefined();
-    // 3 is the first sweep with a stored token, and it is refused.
-    expect(sweeps[2].restarts).toBe(1);
-    // One restart is still consistent with a token that simply expired.
-    expect(sweeps[2].incomplete).toBeFalsy();
-    // 4 is refused too. Two in a row is not a coincidence.
-    expect(sweeps[3].restarts).toBe(2);
-    expect(sweeps[3].incomplete, "a scan re-reading page 1 every sweep reported itself as finished").toBe(true);
-  });
-
-  it("clears the count as soon as a sweep does not have to restart", async () => {
-    // A stuck cursor, then a provider that accepts continuations again.
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        const url = String(input);
-        if (url.includes("/users/me")) {
-          return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
-        }
-        return jsonResponse({ collection: [], pagination: { next_page: null } });
-      }),
-    );
-    const res = await poll(window({ past: PAGE_2, next: "past", restarts: 5 }));
-    // A run of failures that ends is not a failure worth carrying forward.
-    const after = res.nextCursor ? JSON.parse(res.nextCursor).restarts : undefined;
-    expect(after).toBeUndefined();
-    expect(res.incomplete).toBeFalsy();
-  });
 });
 
 /**
  * MIGRATING THE CURSORS THAT ARE ALREADY OUT THERE.
  *
- * Every live Calendly stream has a stored `page_token` that can only 400. The
- * fix has to recognise that shape, or each stream burns one request a sweep
- * discovering it again — and would keep reading the window frozen at whenever
- * its scan first started, because a scan that never drains never re-opens one.
+ * Every live Calendly stream stores a continuation — a `next_page` URL, or a
+ * `page_token` from the generation before. Both are dead weight now: a URL may
+ * be expired (CL13) and neither says what was INGESTED, so no mark can be
+ * derived from them. The cursor is discarded whole and the window re-opened,
+ * for the same reason as the last migration: `done` never fired while
+ * continuations were failing, so the stored window may be frozen at whenever
+ * the scan first started.
  */
-describe("Calendly: a cursor from before next_page", () => {
+describe("Calendly: a cursor from the continuation era", () => {
   const firstPageOnly = () =>
     vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
@@ -288,14 +382,19 @@ describe("Calendly: a cursor from before next_page", () => {
   const poll = (cursor: string | null) =>
     calendlyConnector.poll!({ connectionId: "c1", cursor, credentials: { accessToken: "tok" } });
 
-  it("is discarded without spending a request on the dead token", async () => {
+  it("discards a stored next_page URL without requesting it", async () => {
     const fetchMock = firstPageOnly();
     vi.stubGlobal("fetch", fetchMock);
 
-    await poll(window({ past: "TOK-OLD", next: "past", restarts: 5 }));
+    await poll(window({ past: "https://api.calendly.com/scheduled_events?page_token=P2", next: "past", restarts: 5 }));
 
-    // The dead token is never sent. Retrying it and catching the 400 would
-    // "work", and would cost every stream a wasted call on every sweep.
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("page_token=P2"))).toBe(false);
+  });
+
+  it("discards a page_token cursor the same way", async () => {
+    const fetchMock = firstPageOnly();
+    vi.stubGlobal("fetch", fetchMock);
+    await poll(window({ past: "TOK-OLD", next: "past" }));
     expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("TOK-OLD"))).toBe(false);
   });
 
@@ -304,20 +403,15 @@ describe("Calendly: a cursor from before next_page", () => {
     const stale = new Date(Date.now() - 200 * 86_400_000).toISOString();
 
     const res = await poll(
-      JSON.stringify({ floor: stale, ceil: stale, pivot: stale, past: "TOK-OLD", next: "past" }),
+      JSON.stringify({ floor: stale, ceil: stale, pivot: stale, past: "https://api.calendly.com/x?page_token=P", next: "past" }),
     );
 
-    // A scan that could never drain never re-opened its window, so the stored
-    // bounds are as old as the bug. Carrying them forward would keep reading a
-    // window that stopped being true months ago.
     const after = JSON.parse(res.nextCursor!);
     expect(after.pivot).not.toBe(stale);
     expect(Date.parse(after.ceil)).toBeGreaterThan(Date.now());
   });
 
-  it("leaves a not-started side and a drained side alone", async () => {
-    // The future side keeps paginating, so the scan does not finish and there
-    // is a cursor left to inspect.
+  it("leaves a not-started side, a drained side and a date mark alone", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
@@ -332,10 +426,10 @@ describe("Calendly: a cursor from before next_page", () => {
       }),
     );
 
-    // `undefined` (never ran) and `null` (drained) are not continuations, so
-    // neither may be mistaken for the old shape. If either were, every healthy
-    // cursor in the fleet would be discarded on the first sweep after deploy.
-    const pinned = window({ past: null, next: "future" });
+    // `undefined` (never ran), `null` (drained) and a parseable date (the new
+    // shape) are all valid. If any were mistaken for the old shape, every
+    // healthy cursor in the fleet would be discarded on the first sweep.
+    const pinned = window({ past: null, future: "2026-08-01T00:00:00.000Z", next: "future" });
     const kept = JSON.parse((await poll(pinned))!.nextCursor!);
     expect(kept.past, "a drained side was thrown away as if it held a stale token").toBeNull();
     expect(kept.pivot, "a healthy cursor had its window re-opened").toBe(JSON.parse(pinned).pivot);
@@ -367,35 +461,45 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
   });
 
   it("emits booked + canceled, dates both by meeting time, and alternates sides until both drain", async () => {
-    const meetings = {
-      collection: [
-        { uri: "https://api.calendly.com/scheduled_events/EVTa", name: "Active", status: "active", start_time: "2026-03-01T10:00:00Z", created_at: "2026-02-01T08:00:00Z" },
-        { uri: "https://api.calendly.com/scheduled_events/EVTc", name: "Gone", status: "canceled", start_time: "2026-03-02T10:00:00Z", created_at: "2026-02-02T08:00:00Z", updated_at: "2026-02-15T09:00:00Z" },
-      ],
-      pagination: { next_page: "" }, // filled in per side below
-    };
-    const nextFor = (side: string) => `https://api.calendly.com/scheduled_events?page_token=TOK2&side=${side}`;
-    const lastPage = { collection: [], pagination: { next_page: null } };
+    const pastAt = new Date(Date.now() - 3 * 86_400_000);
+    const futureAt = new Date(Date.now() + 3 * 86_400_000);
+    const meeting = (id: string, at: Date, extra: Record<string, unknown> = {}) => ({
+      uri: `https://api.calendly.com/scheduled_events/${id}`,
+      name: id,
+      status: "active",
+      start_time: at.toISOString(),
+      created_at: "2026-02-01T08:00:00Z",
+      ...extra,
+    });
+    /**
+     * Two meetings per side. Page size is COUNT_PER_PAGE (100), so each side
+     * would drain in one page — the mock offers a `next_page` on the first
+     * request of each side anyway, forcing a SECOND bounded request per side,
+     * which is what lets this test see the alternation and the narrowed bound
+     * rather than a single-shot drain.
+     */
     const sides: string[] = [];
+    const served = new Set<string>();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
         const url = new URL(String(input));
         if (url.pathname.endsWith("/users/me")) return jsonResponse({ resource: { uri: "https://api.calendly.com/users/U1", current_organization: "O1" } });
-        /**
-         * Only a FIRST request carries `sort` — every page after it is
-         * Calendly's own URL, followed verbatim. So the mock tags the side onto
-         * the URL it hands back, which is the only way this test can still see
-         * which side each request served and keep asserting the alternation.
-         */
-        const sort = url.searchParams.get("sort");
-        const side = sort ? (sort === "start_time:desc" ? "past" : "future") : url.searchParams.get("side")!;
+        const side = url.searchParams.get("sort") === "start_time:desc" ? "past" : "future";
         sides.push(side);
-        return jsonResponse(
-          url.searchParams.get("page_token") === "TOK2"
-            ? lastPage
-            : { ...meetings, pagination: { next_page: nextFor(side) } },
-        );
+        const first = !served.has(side);
+        served.add(side);
+        const rows =
+          side === "past"
+            ? [
+                meeting("EVTa", pastAt),
+                meeting("EVTc", pastAt, { status: "canceled", updated_at: "2026-02-15T09:00:00Z" }),
+              ]
+            : [meeting("EVTf", futureAt)];
+        return jsonResponse({
+          collection: rows,
+          pagination: { next_page: first ? "https://api.calendly.com/scheduled_events?page_token=MORE" : null },
+        });
       }),
     );
     const base = { connectionId: "c1", credentials: { accessToken: "t" }, config: { scope: "user" }, streamHash: "h" };
@@ -406,22 +510,22 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
     // Dated by WHEN THE MEETING IS — the same axis Calendly's window filters on,
     // and the axis the retire depends on. Booking time lives in `booked_at`.
     const booked = first.records.find((r) => r.eventId.endsWith("EVTa"))!;
-    expect(booked.occurredAt.toISOString()).toBe("2026-03-01T10:00:00.000Z");
+    expect(booked.occurredAt.toISOString()).toBe(pastAt.toISOString());
     expect((booked.properties as Record<string, unknown>).booked_at).toBe("2026-02-01T08:00:00Z");
     const canceled = first.records.find((r) => r.eventType === "canceled")!;
     expect(canceled.eventId).toContain(":canceled:");
     // The cancellation sits in the slot it freed, so both rows fall inside the
     // window that fetched them — otherwise the retire would tombstone one.
-    expect(canceled.occurredAt.toISOString()).toBe("2026-03-02T10:00:00.000Z");
+    expect(canceled.occurredAt.toISOString()).toBe(pastAt.toISOString());
     expect((canceled.properties as Record<string, unknown>).canceled_at).toBe("2026-02-15T09:00:00Z");
-    // More pages → the cursor banks Calendly's own next-page URL, verbatim.
-    expect(JSON.parse(first.nextCursor!).past).toBe(nextFor("past"));
+    // More pages → the cursor banks a DATE WATERMARK, never a URL.
+    expect(JSON.parse(first.nextCursor!).past).toBe(pastAt.toISOString());
 
     // Walk it out. Each call takes one page from whichever side is due, and the
     // cursor only clears once BOTH have run out — a scan that stopped when the
     // first side finished would leave the other half of the window unread.
     let cursor = first.nextCursor;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 3 && cursor; i++) {
       const next = await calendlyConnector.poll!({ ...base, cursor });
       cursor = next.nextCursor;
     }

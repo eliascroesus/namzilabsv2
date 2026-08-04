@@ -71,13 +71,13 @@ export type EventTimeConfig = {
    * The user's answer. Null means "detect" or "use delivery time" — see
    * `locked`.
    *
-   * NOTHING WRITES THESE TWO YET, and that is stated rather than hidden: the
-   * override is honoured everywhere it matters (`effectiveEventTimeKey` reads
-   * it, the scan leaves an answered connection's dating alone, the note says
-   * what a human chose) but no picker sets it. It lands with the connection-page
-   * control, on the same three-answer shape the sheet's picker uses. Until then
-   * the ambiguous case is answered by choosing in the database, which is exactly
-   * as unsatisfying as it sounds and is why this is written down.
+   * Written by the connection-page picker (`EventTimePicker` →
+   * `setEventTimeAction` → `setEventTime`), on the same three-answer shape the
+   * sheet's picker uses, and honoured everywhere it matters:
+   * `effectiveEventTimeKey` reads it, the scan leaves an answered connection's
+   * dating alone, and the note records what a human chose. An earlier version
+   * of this comment said nothing wrote these yet; that stopped being true when
+   * the picker shipped, and the stale claim nearly caused it to be built twice.
    */
   key?: string | null;
   /** Whether a human has answered. False (the default) lets detection decide. */

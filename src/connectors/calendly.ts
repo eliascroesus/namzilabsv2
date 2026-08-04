@@ -78,21 +78,16 @@ export const calendlyConnector: Connector = {
   },
 
   /**
-   * EVERY non-null Calendly cursor is a live scan.
+   * NO `holdsContinuation`, deliberately — this connector no longer stores one.
    *
-   * The cursor goes null only when both sides have drained (`done`), which is
-   * this connector's START OVER — so "a cursor exists" and "a continuation is
-   * held" happen to coincide here, and nowhere else in the catalog. It is stated
-   * rather than left to the runner because the runner cannot tell: for Calendar
-   * and Sheets the same test would be true forever.
-   *
-   * What it buys: the sweep gap stays at base cadence for as long as a
-   * `next_page` URL is stored, so the URL is never aged past the lifetime CL13
-   * measured (accepted at 600s, refused at 3600s).
+   * It used to hold Calendly's `next_page` URL across sweeps, and CL13 measured
+   * why that could never be reliable: the URL survives 600s and is rejected by
+   * 1200s, while the sweep gap is 600-1200s. The brackets intersect, so some
+   * sweeps restarted at page 1 silently — the restart SUCCEEDED, which is what
+   * made it invisible. The cursor now stores date watermarks (see PollCursor),
+   * which cannot expire, and the mid-scan cadence hold rides `incomplete`
+   * instead, which the runner reads since b8ff1a7.
    */
-  holdsContinuation(cursor: string | null): boolean {
-    return cursor != null;
-  },
 
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     if (!secret) return false; // Calendly always signs when a key is configured.
@@ -229,12 +224,12 @@ const MAX_OPTION_PAGES = 10;
  *     cosmetic — the order is carried inside the continuation, not in the
  *     query string.
  *
- * The cost of following their URL rather than ours is that we stop choosing the
- * query on page 2+, which is nearly free here: the window bounds already came
- * from the stored cursor byte-identically, and scope/status changes mint a new
- * `streamConfigHash` and therefore a new cursor. The one thing it does freeze
- * is `count` — a stored URL keeps the page size page 1 asked for, so changing
- * COUNT_PER_PAGE takes effect only after in-flight scans drain.
+ * TWO CONSUMERS NOW, WITH DIFFERENT RIGHTS. `listAll` (the config pickers)
+ * still follows `next_page` — within one call, which CL8 backs. The POLL reads
+ * it only as a boolean ("is this side drained?") and never follows or stores
+ * it: CL13 measured the URL surviving 600s and dying by 1200s, inside the
+ * sweep gap, so a continuation that crosses a sweep is a coin toss and the
+ * poll resumes by date watermark instead.
  */
 const nextPage = (p?: { next_page?: string | null } | null): string | null => {
   const url = p?.next_page;
@@ -260,17 +255,36 @@ type Side = "past" | "future";
 
 /**
  * A scan's whole state: the window it is draining, the instant it calls "now",
- * and one CONTINUATION URL per direction.
+ * and one DATE WATERMARK per direction.
  *
- * `undefined` = that side has not started, `null` = it is drained. All three
- * boundaries are pinned when the scan starts, so pagination stays stable while
- * it runs and a later sweep opens a fresh window around then-now.
+ * `undefined` = that side has not started, `null` = it is drained, a string =
+ * mid-walk. The three-state meaning is the one this cursor has always had; what
+ * the string CONTAINS has now changed twice, and the second change is the one
+ * that removes the failure class instead of shrinking it.
  *
- * `past`/`future` held a `page_token` until 2026-08-03 and now hold Calendly's
- * own `next_page` URL — see `nextPage` above for why. The three-state meaning
- * is unchanged and still load-bearing; only what the string contains moved.
- * `parseCursor` detects the old shape and starts over rather than spending a
- * request on a token that can only 400.
+ * It held a `page_token` (rejected in every rebuilt form — CL10/CL12), then
+ * Calendly's own `next_page` URL — which CL13 measured surviving 600s and being
+ * rejected at 1200s, against a sweep gap of 600-1200s. Those brackets
+ * intersect: some sweeps restarted at page 1, silently, because the restart
+ * succeeded. No continuation lifetime we can influence fixes that. So no
+ * continuation crosses a sweep at all.
+ *
+ * The watermark is the boundary `start_time` of ground actually ingested:
+ * lowest seen for the past side, highest for the future side. Each poll issues
+ * a FRESH first-page request bounded by the mark, so nothing perishable is
+ * ever stored — a date cannot expire. That resume-by-bound works here for a
+ * reason that does not generalise: the walk is strictly monotonic in the sort
+ * direction and `start_time` is IMMUTABLE (a meeting's start does not drift
+ * when edited), so the mark only ever moves to the edge of ground already
+ * read. Close cannot do this — its axis (`date_updated`) is mutable, so a
+ * record can appear below a mark that already passed, which is why its mark
+ * only promotes on drain.
+ *
+ * THE BOUND IS EXACT, not padded. CL15 measured BOTH `min_start_time` and
+ * `max_start_time` as INCLUSIVE, so a request bounded at mark L re-reads the
+ * tie group AT L (meetings sharing that exact start) and `event_id` dedup
+ * absorbs the repeats. An earlier draft padded by one second to be safe under
+ * either reading; the measurement made the padding dead weight.
  */
 type PollCursor = {
   floor: string;
@@ -280,35 +294,48 @@ type PollCursor = {
   future?: string | null;
   next: Side;
   /**
-   * Consecutive sweeps whose stored continuation was rejected.
+   * Consecutive polls where a side ingested a page and its watermark DID NOT
+   * MOVE (and the side did not drain).
    *
-   * Lives in the cursor because there is nowhere else: a poll sees no state
-   * between sweeps except what it persisted. Cleared by any sweep that did not
-   * have to restart, so it only ever counts a RUN of failures.
+   * The counter that used to count rejected continuations, repurposed rather
+   * than deleted, because the residual risk changed shape but not severity: a
+   * tie group larger than one page (hundreds of meetings sharing one exact
+   * start second) pins the mark inside that instant, and the scan re-reads it
+   * every sweep — silently, without this. Lives in the cursor because a poll
+   * sees no state between sweeps except what it persisted; cleared by any poll
+   * that advanced or drained, so it only ever counts a RUN.
    */
   restarts?: number;
 };
 
 /**
- * Poll one page of scheduled events, walking Calendly's pagination across calls.
+ * Poll one page of scheduled events, resuming BY DATE BOUND rather than by
+ * continuation.
  *
  *  - Queries ALL statuses (no `status` filter) unless the flow narrowed it, so
  *    cancellations are seen: every meeting emits a "booked" event, and canceled
  *    ones ALSO emit a "canceled" event with its own id, so the booking →
  *    cancellation transition survives dedup-on-insert.
  *  - **Scans OUTWARD FROM NOW, alternating direction.** The past side runs
- *    `start_time:desc` from the pivot (most recent meeting first); the future
- *    side runs `start_time:asc` from the pivot (soonest first); each call takes
- *    one page from whichever side is next and not yet drained.
- *  - Emits ids tagged with the stream.
+ *    `start_time:desc` from the pivot down toward the floor; the future side
+ *    runs `start_time:asc` from the pivot up toward the ceiling; each call
+ *    takes one page from whichever side is next and not yet drained.
+ *  - EVERY request is a first-page request. The past side is bounded above by
+ *    its watermark (the lowest `start_time` already ingested), the future side
+ *    below by its own (the highest). Calendly's `next_page` URL is read only to
+ *    answer "is this side drained?" and never stored — CL13 measured it dying
+ *    between sweeps, silently, because the page-1 restart succeeds.
+ *
+ * A side is DRAINED when its bounded request comes back with no `next_page`.
+ * The bound is `[floor, mark]` (or `[mark, ceil]`), so no next page means the
+ * provider returned everything left inside it — a within-response signal,
+ * evaluated in the same response that produced it, never carried anywhere.
  *
  * The alternation is the point. This used to run `start_time:asc` from the
  * window's floor, so the first pages were the OLDEST meetings in it — a 4-page
  * Test on a busy account returned 400 meetings from a month ago and nothing
- * else, while "Latest 3 records" showed appointments two weeks stale and every
- * upcoming meeting was missing. Whatever budget a scan gets, it should be spent
- * on the meetings nearest to now in both directions, because those are the ones
- * anyone is looking at.
+ * else. Whatever budget a scan gets, it should be spent on the meetings nearest
+ * to now in both directions, because those are the ones anyone is looking at.
  *
  * The cursor goes null only when BOTH sides are drained, which is what makes the
  * next sweep rescan the window (reconciliation — dedup makes re-inserts cheap).
@@ -322,68 +349,24 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
   // Whichever side is due, unless it is finished — then the other one. Both
   // finished cannot reach here: that returns a null cursor and starts over.
   const side: Side = drained(cur, cur.next) ? other(cur.next) : cur.next;
+  const mark = cur[side] ?? null;
   /**
-   * The FIRST request of a side. Every page after it is Calendly's own
-   * `next_page` URL, followed verbatim.
-   *
-   * So `sort`, `status` and the window bounds are set here and here only. That
-   * changes nothing about what the walk returns: the bounds already came from
-   * the stored cursor unchanged every sweep, `status` and scope are
-   * request-shaping fields whose change mints a new stream and a fresh cursor,
-   * and CL8 showed the ordering survives inside the continuation.
+   * The side's current resume bound: its watermark, or the pivot before the
+   * first page. `sort`, `status`, scope and the bounds are all set fresh on
+   * every request — there is no other request shape left.
    */
-  const firstPage = () => {
-    const p = new URLSearchParams({
-      ...target,
-      count: String(COUNT_PER_PAGE),
-      ...(side === "past"
-        ? { sort: "start_time:desc", min_start_time: cur.floor, max_start_time: cur.pivot }
-        : { sort: "start_time:asc", min_start_time: cur.pivot, max_start_time: cur.ceil }),
-    });
-    // Sent only when the flow narrowed it. Omitted, Calendly returns every
-    // status — which is what lets a cancellation be seen at all.
-    if (status) p.set("status", status);
-    return `${API}/scheduled_events?${p.toString()}`;
-  };
-
-  const continuation = cur[side] ?? null;
-  let data: CalendlyList;
-  let restarted = false;
-  try {
-    data = await fetchJson<CalendlyList>(continuation ?? firstPage(), { headers: authHeader(token) });
-  } catch (e) {
-    if (!continuation) throw e;
-    /**
-     * A REJECTED CONTINUATION RESTARTS THIS SIDE, and counts it.
-     *
-     * THE QUESTION THIS COUNTER ANSWERED, now settled. It was added because a
-     * rejected continuation has two possible meanings the code could not tell
-     * apart: a continuation that genuinely expired between sweeps (restarting
-     * is correct, the next sweep gets further), or one that is never accepted
-     * at all (the restart happens every sweep, the scan never passes page 1,
-     * and each side holds at most `COUNT_PER_PAGE` events — for ever, with no
-     * error anywhere, because the retry succeeds).
-     *
-     * It was the second, and it had been happening since the connector shipped:
-     * the rebuilt `page_token` request is refused in every form (see
-     * `nextPage`). The counter fired correctly on every sweep from the third
-     * onward and nothing read it, which is the reason this went unnoticed
-     * rather than any failure of the counter.
-     *
-     * It stays because its meaning is now sharper, not weaker. Following
-     * `next_page` removes the request-shape cause entirely, so a restart now
-     * means Calendly refused ITS OWN URL — which is either a real expiry (CL13
-     * measures whether that happens inside a cadence interval) or a genuine
-     * fault. Either way it is a live signal rather than a permanent state.
-     */
-    restarted = true;
-    console.warn(
-      `[calendly-probe] ${side} side: continuation rejected (${e instanceof Error ? e.message : String(e)}); ` +
-        `restarting this side at page 1. ` +
-        `consecutive restarts: ${(cur.restarts ?? 0) + 1}`,
-    );
-    data = await fetchJson<CalendlyList>(firstPage(), { headers: authHeader(token) });
-  }
+  const bound = mark ?? cur.pivot;
+  const p = new URLSearchParams({
+    ...target,
+    count: String(COUNT_PER_PAGE),
+    ...(side === "past"
+      ? { sort: "start_time:desc", min_start_time: cur.floor, max_start_time: bound }
+      : { sort: "start_time:asc", min_start_time: bound, max_start_time: cur.ceil }),
+  });
+  // Sent only when the flow narrowed it. Omitted, Calendly returns every
+  // status — which is what lets a cancellation be seen at all.
+  if (status) p.set("status", status);
+  const data = await fetchJson<CalendlyList>(`${API}/scheduled_events?${p.toString()}`, { headers: authHeader(token) });
 
   // Every meeting the window returns is stored. Narrowing to one meeting type is
   // a READ filter now (catalog `readFilter`), applied by the engine over a sync
@@ -394,73 +377,91 @@ async function pollScheduledEvents(args: PollArgs, rawCursor: string | null): Pr
   const tag = streamTag(args);
   const records: CanonicalEvent[] = [];
   let typed = 0;
+  /**
+   * The page's extreme `start_time` in this side's walk direction, computed
+   * over PARSED values rather than trusted from response order. CL4 verified
+   * both sorts are honoured live, but a mark derived positionally would be
+   * silently wrong the day that stops being true, and min/max over the page
+   * costs nothing.
+   */
+  let edge: number | null = null;
   for (const ev of data.collection) {
     if (!str(ev["uri"])) continue;
     if (str(ev["event_type"])) typed += 1;
     records.push(bookedEvent(args.connectionId, tag, ev));
     if (str(ev["status"]) === "canceled") records.push(canceledEvent(args.connectionId, tag, ev));
+    const t = Date.parse(str(ev["start_time"]) ?? "");
+    if (Number.isFinite(t)) edge = edge == null ? t : side === "past" ? Math.min(edge, t) : Math.max(edge, t);
   }
 
   // Settle the unverified parts of this contract from production logs rather
-  // than another guess (the same approach Instantly's probe takes): the docs
-  // host is unreachable from CI, so what the response ACTUALLY contains is the
-  // only evidence available. `returned=0` on an organization scope is the
-  // signature of a token without org admin rights.
-  //
-  // `typed` counts returned events carrying an `event_type` URI — the field the
-  // meeting-type read filter matches on. `typed` well below `returned` is the
-  // one way that filter could quietly show nothing, and it belongs in a log
-  // rather than being inferred from an empty dashboard.
-  if (!continuation) {
+  // than another guess: the docs host is unreachable from CI, so what the
+  // response ACTUALLY contains is the only evidence available. `returned=0` on
+  // an organization scope is the signature of a token without org admin rights.
+  // Logged on a side's first page only, so a draining walk stays one line.
+  if (mark == null) {
     console.log(
       `[calendly-probe] side=${side} returned=${data.collection.length} typed=${typed} ` +
         `paginated=${Boolean(nextPage(data.pagination))} scope=${Object.keys(target).join("+")} status=${status ?? "all"}`,
     );
   }
 
+  const sideDrained = nextPage(data.pagination) == null;
   /**
-   * The restart counter, reset by any request that did NOT have to restart.
-   *
-   * A one-off expiry clears itself on the next sweep, so a count only survives
-   * while restarts keep happening — which is the state worth naming.
+   * Did this page move the mark? Bounds are inclusive (CL15), so the tie group
+   * AT the mark is re-read on every resume and the new edge can EQUAL the old
+   * bound — that is the re-read working, not progress. Only a strict move in
+   * the walk direction counts.
    */
-  const restarts = restarted ? (cur.restarts ?? 0) + 1 : 0;
+  const boundMs = Date.parse(bound);
+  const advancedMark = edge != null && (side === "past" ? edge < boundMs : edge > boundMs);
 
-  // Advance this side, then hand the turn to the other one. A side is drained
-  // when Calendly stops offering a next page, which is the same signal it always
-  // was — only the field it is read from changed.
+  /**
+   * A SIDE THAT KEEPS NOT ADVANCING IS PINNED, and says so.
+   *
+   * With a per-page watermark the one way a scan stops making progress is a tie
+   * group larger than the page: every meeting on the page shares the boundary
+   * second, the mark cannot move past the instant, and the same page re-reads
+   * every sweep. Narrow — the tie census measured 100 events / 100 distinct
+   * starts on the live account — but silent, which is the shape this codebase
+   * keeps paying for. If this alarm ever fires the escalation is to follow
+   * `next_page` WITHIN the single poll to walk the tie group (fresh
+   * continuation, nothing stored); not built until the alarm says it happens.
+   */
+  const restarts = sideDrained || advancedMark ? 0 : (cur.restarts ?? 0) + 1;
+  if (restarts >= RESTART_ALARM) {
+    console.warn(
+      `[calendly-probe] ${side} side has not advanced for ${restarts} polls — the watermark is pinned at ` +
+        `${bound} with more pages behind it. A tie group larger than ${COUNT_PER_PAGE} meetings at one ` +
+        `start second is the known cause; the escalation is walking next_page within a single poll.`,
+    );
+  }
+
   const advanced: PollCursor = {
     ...cur,
-    [side]: nextPage(data.pagination),
+    [side]: sideDrained ? null : advancedMark ? new Date(edge!).toISOString() : bound,
     next: other(side),
     ...(restarts > 0 ? { restarts } : { restarts: undefined }),
   };
   const done = drained(advanced, "past") && drained(advanced, "future");
 
-  /**
-   * A SCAN THAT KEEPS RESTARTING IS NOT FINISHING, and says so.
-   *
-   * Two consecutive restarts cannot be two coincidental expiries — it means the
-   * stored continuation is never usable, so this side re-reads page 1 every
-   * sweep and everything past the first `count` events is unreachable.
-   * `incomplete` holds the connection at base cadence (rather than letting the
-   * ladder widen it to an hour, which would make the loop slower AND quieter)
-   * and tells a Test that the import has outstanding work, which is true.
-   */
-  const stuck = restarts >= RESTART_ALARM;
-  if (stuck) {
-    console.warn(
-      `[calendly-probe] ${side} side has restarted ${restarts} sweeps in a row — the stored next_page URL is ` +
-        `never accepted, so this side is re-reading its first page and holding at most ${COUNT_PER_PAGE} events. ` +
-        `The rebuilt-page_token cause is fixed and ruled out; this means Calendly is refusing its own URL. ` +
-        `Run scripts/verify-calendly.ts (CL13 = how long a next_page URL survives).`,
-    );
-  }
-
   return {
     records,
     nextCursor: done ? null : JSON.stringify(advanced),
-    ...(stuck ? { incomplete: true } : {}),
+    /**
+     * `incomplete` comes from the ALARM only, never from "mid-scan". The
+     * runner owns the mid-scan signal: it walks pages within a sweep and sets
+     * `incomplete` itself when the budget runs out with the cursor still live
+     * (`page === maxPages - 1` in streams.ts), while a scan that drains inside
+     * the budget breaks on the null cursor first. A blanket `!done` here would
+     * be ORed across pages and taint a sweep whose LAST page finished the scan
+     * — reporting a completed walk as partial, skipping the window retire, and
+     * telling a Test the import never finishes. The cadence hold that
+     * `holdsContinuation` used to provide is therefore the runner's
+     * budget-exhaustion signal, which fires on exactly the sweeps that end
+     * mid-scan.
+     */
+    ...(restarts >= RESTART_ALARM ? { incomplete: true } : {}),
     // Stored data tracks the window rather than only growing past it. Without
     // this, narrowing the history window left the older import stranded behind
     // the new floor with a gap in between — data matching neither window.
@@ -492,15 +493,19 @@ function drained(cur: PollCursor, side: Side): boolean {
  * value degrades to the default rather than destroying anything.
  */
 /**
- * A stored continuation from before 2026-08-03, when these fields held a
- * `page_token` rather than Calendly's `next_page` URL.
+ * A stored side value from EITHER previous cursor generation: the `page_token`
+ * era (opaque strings, rejected in every rebuilt form) or the `next_page`-URL
+ * era (perishable — CL13 measured rejection between sweeps). A valid side value
+ * is now a date watermark, so the test is simply "does it parse as a date":
+ * URLs and tokens parse to NaN, ISO timestamps do not. Inverted from the last
+ * migration, where a URL was the NEW shape.
  *
- * Unambiguous: the replacement is always an absolute Calendly URL and a token
- * never is. `undefined` (side not started) and `null` (side drained) are not
- * continuations at all and must pass through untouched — only a non-URL STRING
- * is the old shape.
+ * `undefined` (side not started) and `null` (side drained) are not marks at all
+ * and must pass through untouched — were either mistaken for the old shape,
+ * every healthy cursor in the fleet would be discarded on the first sweep after
+ * deploy.
  */
-const isLegacyContinuation = (v: unknown): boolean => typeof v === "string" && !v.startsWith(`${API}/`);
+const isLegacyContinuation = (v: unknown): boolean => typeof v === "string" && !Number.isFinite(Date.parse(v));
 
 function parseCursor(raw: string | null, windowFloor: Date | null = null): PollCursor {
   if (raw) {
@@ -510,22 +515,20 @@ function parseCursor(raw: string | null, windowFloor: Date | null = null): PollC
       // restarts rather than being read as a half-finished one.
       if (typeof c.floor === "string" && typeof c.ceil === "string" && typeof c.pivot === "string") {
         /**
-         * A CURSOR HOLDING A DEAD TOKEN IS DISCARDED WHOLE, not repaired.
+         * A CURSOR HOLDING A CONTINUATION IS DISCARDED WHOLE, not repaired —
+         * same rule as the last migration, same reason, one generation on.
          *
-         * Every stored `page_token` is unusable — that is the bug being fixed —
-         * so keeping the rest of the cursor would preserve the damage rather
-         * than the progress. The window bounds are the damage: `done` requires
-         * BOTH sides drained, neither side could ever drain while its
-         * continuation 400d, so `nextCursor` never went null and
-         * `floor`/`ceil`/`pivot` have been frozen at whenever the scan first
-         * started — potentially months. Re-using them would keep reading a
-         * stale window and keep declaring it to `retireOutsideWindow`.
+         * A stored `next_page` URL means the scan was mid-walk when this code
+         * deployed, and `done` never fired while continuations were failing —
+         * so `floor`/`ceil`/`pivot` may be frozen at whenever the scan first
+         * started. Re-using them would keep reading a stale window and keep
+         * declaring it to `retireOutsideWindow`. Converting the URL to a mark
+         * is not possible either: the URL does not say what was ingested.
          *
          * Falling through re-opens the window around now, which is exactly the
          * `nextCursor: null` path the connector already takes every time a scan
-         * finishes. It costs one rescan, which dedup-on-insert makes cheap, and
-         * it repairs the window in the same move. It also avoids spending a
-         * request per sweep on a token that can only 400.
+         * finishes. One rescan, which dedup-on-insert makes cheap, and the
+         * window is repaired in the same move.
          */
         if (!isLegacyContinuation(c.past) && !isLegacyContinuation(c.future)) {
           return {
@@ -539,8 +542,8 @@ function parseCursor(raw: string | null, windowFloor: Date | null = null): PollC
           };
         }
         console.warn(
-          `[calendly-probe] discarding a cursor that stored a page_token instead of a next_page URL; ` +
-            `re-opening the window at now. This is a one-time migration per stream.`,
+          `[calendly-probe] discarding a cursor that stored a continuation (page_token or next_page URL) ` +
+            `instead of a date watermark; re-opening the window at now. One-time migration per stream.`,
         );
       }
     } catch {

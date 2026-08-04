@@ -152,9 +152,16 @@ describe("which connectors hold a perishable continuation", () => {
    * stranding-contract.test.ts uses as its mid-walk heuristic, and it is WRONG
    * for Sheets, whose SETTLED marker is also JSON.
    */
-  it("calendly: any non-null cursor is a live scan, null is START OVER", () => {
-    expect(calendlyConnector.holdsContinuation!(null)).toBe(false);
-    expect(calendlyConnector.holdsContinuation!('{"floor":"x","ceil":"y","pivot":"z","next":"past"}')).toBe(true);
+  /**
+   * Calendly DECLARES NOTHING, and the absence is the design. Its cursor holds
+   * date watermarks now — nothing perishable, nothing to age between sweeps —
+   * so declaring `holdsContinuation` would pin the connection at base cadence
+   * for the whole life of a scan on a claim that stopped being true. The
+   * mid-scan cadence hold rides the runner's own `incomplete` (budget exhausted
+   * with a live cursor) instead.
+   */
+  it("calendly: no holdsContinuation, because nothing stored can expire", () => {
+    expect(calendlyConnector.holdsContinuation).toBeUndefined();
   });
 
   it("close / instantly / sendblue: the `cont` field, not the bare high-water mark", () => {
