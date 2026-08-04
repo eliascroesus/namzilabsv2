@@ -17,10 +17,13 @@ import type { DB } from "@/db/types";
  * operator's key rotation quietly turned an authenticated endpoint into an
  * anonymous one.
  *
- * And what gets written that way is PERMANENT: webhook rows land at generation 0
- * with a null `stream_hash`, and every soft-delete site in the codebase skips
- * that class by construction, because the append-only guarantee depends on it.
- * There is no sweep that cleans up an injected row.
+ * And what gets written that way is PERMANENT as far as anything automatic goes:
+ * webhook rows land at generation 0 with a null `stream_hash`, and every SWEEP's
+ * soft-delete is generation-guarded or stream-hash-scoped, because the
+ * append-only guarantee depends on it. No sweep cleans up an injected row. (Two
+ * operator-invoked tools do reach generation 0 — disconnect, which hides a whole
+ * connection, and the Sendblue rekey script — so "permanent" means "no automatic
+ * repair", not "literally unreachable".)
  */
 
 const KEY = randomBytes(32).toString("base64");
@@ -178,9 +181,10 @@ describe("a stream-scoped webhook rings the bell without delivering anything", (
 
   /**
    * THE constraint. Records written from here land at generation 0 with a null
-   * `stream_hash`, and every one of the seven soft-delete sites skips that
-   * class by construction — so they would be permanent, unreachable duplicates
-   * of the rows the poll writes properly.
+   * `stream_hash`, and no SWEEP can retire that class — every sweep's
+   * soft-delete is generation-guarded or stream-hash-scoped — so they would be
+   * unreachable duplicates of the rows the poll writes properly, with no
+   * automatic route to removing them.
    */
   it("stores nothing and never enqueues ingestion", async () => {
     const id = await seed({ source: "calendly", secret: "cal_secret" });

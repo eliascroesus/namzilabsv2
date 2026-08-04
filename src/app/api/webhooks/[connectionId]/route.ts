@@ -55,7 +55,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
   // failure (rotated ENCRYPTION_KEY, corrupted ciphertext) silently produced
   // `secret = null`, which the fail-open connectors read as "unauthenticated is
   // fine". Rows written that way land at generation 0 with a null stream_hash,
-  // which every soft-delete site skips by construction — so they are permanent.
+  // which no SWEEP can retire — every sweep's soft-delete is generation-guarded
+  // or stream-hash-scoped — so nothing automatic will ever remove them.
   //
   // A configured-but-unreadable secret now fails CLOSED for every connector,
   // including the deliberately-open catch-hook: an endpoint the operator chose

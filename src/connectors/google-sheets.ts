@@ -234,7 +234,7 @@ async function fetchStamp(token: string, spreadsheetId: string): Promise<string>
  * Cheaper too, incidentally: a changed poll is the probe plus the values read,
  * where it used to be the probe, the values read, and a second Drive call.
  */
-async function readRows(args: PollArgs, knownStamp: string | null = null, fromDataRow = 0): Promise<PollResult> {
+async function readRows(args: PollArgs, knownStamp: string | null = null): Promise<PollResult> {
   const token = str(args.credentials?.["accessToken"]);
   if (!token) throw new Error("gsheets: missing access token");
   const spreadsheetId = str(args.config?.["spreadsheetId"]);
@@ -309,7 +309,14 @@ async function readRows(args: PollArgs, knownStamp: string | null = null, fromDa
   const undatedEventIds = new Set<string>();
 
   const records: CanonicalEvent[] = [];
-  for (let i = fromDataRow; i < dataRows.length; i++) {
+  // EVERY data row, every time. There is deliberately no way to ask for a
+  // slice: a mirror's contract is that the read covered the whole resource,
+  // and `retireAbsent` tombstones this stream's rows that the read did not
+  // produce. A partial read therefore reads as "every row before this one was
+  // deleted upstream". The offset parameter that used to sit here was unused
+  // by both call sites and is gone rather than documented, because a comment
+  // cannot stop the next caller passing one.
+  for (let i = 0; i < dataRows.length; i++) {
     const cells = dataRows[i];
     // Fully blank rows carry no data: skip them, so a row someone cleared out
     // mirrors as deleted (its id stops being produced) rather than as an

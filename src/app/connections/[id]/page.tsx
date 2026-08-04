@@ -98,6 +98,14 @@ export default async function ConnectionPage({
           <Field label="Data guarantee" value={GUARANTEE_LABEL[syncGuarantee(conn.source)]} />
         </dl>
 
+        {/* A source whose class is not uniform across its streams says so here.
+            The field above is one value per SOURCE, which is exact everywhere
+            except Instantly — whose analytics streams are provider totals while a
+            legacy per-email stream is an ordinary incremental walk. Rendering the
+            source-wide value alone told a per-email user they had a guarantee
+            they do not have. */}
+        {entry?.syncNote && <p className="mt-2 text-xs text-neutral-500">{entry.syncNote}</p>}
+
         {/* The weaker guarantee class is stated plainly, not hidden in a tooltip:
             with no list endpoint to reconcile against, a webhook this provider
             fails to deliver (downtime, expired subscription) is not recoverable
@@ -279,7 +287,9 @@ function PreviewTable({ rows }: { rows: CanonicalEvent[] }) {
 const GUARANTEE_LABEL: Record<ReturnType<typeof syncGuarantee>, string> = {
   mirror: "Mirror — always matches the source",
   incremental: "Incremental — gaps reconciled by polling",
-  "derived-mirror": "Provider totals — the numbers Instantly reports, refreshed",
+  // Source-agnostic: this map is keyed by CLASS, and naming one provider in it
+  // reads as a fact about the class.
+  "derived-mirror": "Provider totals — the numbers the provider reports, refreshed",
   "webhook-only": "Webhook-only — no poll backstop",
 };
 

@@ -20,10 +20,12 @@ import type { DB } from "@/db/types";
  * - **Poll-written** rows sit at generation >= 1, so a **full re-sync** retires
  *   them through the existing generation mechanism. No new code, no risk.
  * - **Webhook-written** rows sit at generation 0 with `stream_hash` NULL, and
- *   **nothing can reach them**: every soft-delete site in the codebase is
- *   either generation-guarded or stream-hash-scoped, by construction, because
- *   the append-only class must survive every sweep. They are permanent until
- *   something deliberately targets them.
+ *   **no sweep can reach them**: every sweep's soft-delete is either
+ *   generation-guarded or stream-hash-scoped, by construction, because the
+ *   append-only class must survive every sweep. Disconnect does reach them — it
+ *   tombstones a whole connection, reversibly — but that hides everything rather
+ *   than repairing this. They are permanent until something deliberately targets
+ *   them, which is what this is.
  *
  * That second class is why this exists.
  *

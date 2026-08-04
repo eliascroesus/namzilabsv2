@@ -72,6 +72,24 @@ export type ConnectorCatalogEntry = {
   /** Guarantee class (defaults: poll sources "incremental", else "webhook-only"). */
   sync?: SyncGuarantee;
   /**
+   * Said out loud when `sync` is not the whole truth for every stream of a
+   * source.
+   *
+   * `sync` is ONE value per source, and the connection page renders it as the
+   * connection's "Data guarantee". That is exact for five of the six sources.
+   * Instantly is the exception: its analytics streams really are
+   * provider-computed totals, but its legacy per-email stream is an ordinary
+   * incremental record walk — `docs/DATA_MODEL.md` lists it that way, and the
+   * runtime agrees, because the retire is driven by the per-read `mirrorScope`
+   * and not by this field. Only the LABEL was wrong, telling a per-email user
+   * they had a mirror guarantee they do not have.
+   *
+   * A qualifier rather than a per-stream class, because the connection page is
+   * connection-scoped and has no stream in hand — and inventing a query to
+   * resolve one would be a lot of machinery to restate a sentence.
+   */
+  syncNote?: string;
+  /**
    * Provider-declared budgets per operation (from published docs), keyed
    * `"resource.verb"`. The reactive layer sizes page walks under them today;
    * the provider-gateway token buckets (workstream F) will enforce them.
@@ -233,6 +251,11 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     // Analytics-first: the primary streams read provider-COMPUTED totals, which
     // is a different guarantee from mirroring records. See docs/DATA_MODEL.md.
     sync: "derived-mirror",
+    // …but not for every stream. See `syncNote`.
+    syncNote:
+      "That applies to the Daily performance and Campaign totals streams. A per-email stream — no longer " +
+      "offered, but still synced where one was configured — is incremental instead: individual records, " +
+      "reconciled by polling.",
     /**
      * CONSERVATIVE by decision (documented in DATA_MODEL.md): the analytics
      * endpoints are assumed to share the same tight 20/min bucket as the emails
