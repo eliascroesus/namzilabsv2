@@ -13,6 +13,9 @@ import type { CanonicalEvent, Connector, PollArgs, ImportCoverage } from "@/conn
 
 const PAGE_CAP = 200;
 
+/** The stream row's own shape, so the dating state travels back in its stored form. */
+type StreamRow = typeof sourceStreams.$inferSelect;
+
 export type SyncMode = "full" | "incremental";
 export type SyncResult = {
   mode: SyncMode;
@@ -202,8 +205,53 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
   let updated = 0;
   const polledHashes: string[] = [];
   for (const stream of streams) {
-    const base: PollArgs = { connectionId: conn.id, cursor: null, credentials, config: stream.config ?? undefined, streamHash: stream.configHash };
-    const { records, cursor, complete } = await pollAll(connector, base);
+    /**
+     * THE STREAM'S OWN SETTINGS TRAVEL WITH THE RE-POLL. They were being dropped
+     * here, and a full re-sync is the one place where dropping them destroys
+     * data rather than merely producing a worse read.
+     *
+     * `windowFloor` is the live loss. It is how far back a stream is SUPPOSED to
+     * reach when a backfill deepened it past the connector's default, and
+     * Calendly's `parseCursor` reads it to set the request bound. Absent, the
+     * bound falls back to the default — so a stream deepened to 90 days is
+     * re-polled over 30, the older rows are never re-fetched, and the retire
+     * below tombstones every row it did not see because they are still at the
+     * previous generation. Deliberately-imported history, deleted by the
+     * operation the user asked for to REPAIR their data, with the deletion
+     * counted as ordinary cleanup.
+     *
+     * `dateField` corrupts rather than deletes, and it is permanent. Sheets
+     * dates a row from the column nominated here; without it the connector falls
+     * back to first-seen, which is the import moment. `preserveOccurredAt` is
+     * true for mirrors, so rows the re-sync sees for the FIRST time are stamped
+     * with the moment of the re-sync and then frozen there by every later
+     * sweep — a wrong date that no amount of re-reading corrects.
+     *
+     * `detectDateField` carries the same answer for a stream nobody has answered
+     * for, on the same terms `syncStream` uses: locked means a human decided,
+     * unlocked means find one.
+     *
+     * `restamp` is unconditionally true here, and only here. It means "read even
+     * if you believe nothing changed", and a full re-sync is exactly the caller
+     * that must not be told nothing changed: it re-polls from a null cursor at a
+     * NEW generation, so an `unchanged` answer returns no records while the
+     * retire is looking for rows at that generation. Today the empty answer also
+     * returns a non-null cursor, so the walk does not report `complete` and the
+     * retire is skipped — the damage is bounded by a coincidence rather than by
+     * intent, and this removes the dependence on it.
+     */
+    const base: PollArgs = {
+      connectionId: conn.id,
+      cursor: null,
+      credentials,
+      config: stream.config ?? undefined,
+      streamHash: stream.configHash,
+      windowFloor: stream.windowFloor ?? null,
+      dateField: stream.dateField ?? null,
+      detectDateField: !stream.dateFieldLocked,
+      restamp: true,
+    };
+    const { records, cursor, complete, dateFieldState } = await pollAll(connector, base);
     const res = await upsertEvents(
       db,
       {
@@ -226,7 +274,20 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
     if (complete) polledHashes.push(stream.configHash);
     await db
       .update(sourceStreams)
-      .set({ cursor, status: "active", lastError: null, lastPolledAt: new Date(), updatedAt: new Date() })
+      .set({
+        cursor,
+        status: "active",
+        lastError: null,
+        lastPolledAt: new Date(),
+        updatedAt: new Date(),
+        // A DATING DECISION THAT NOBODY CAN SEE IS WORSE THAN NONE, which is the
+        // rule `dateFieldState` exists to enforce — so a re-sync that detected a
+        // column records it, exactly as a sweep would. Without this the next
+        // sweep sees "never looked", detects the same column, calls it a change
+        // and restamps the rows it just wrote. Self-healing, and a whole sweep
+        // of wasted work explaining itself as a correction.
+        ...(dateFieldState !== undefined ? { dateFieldState } : {}),
+      })
       .where(eq(sourceStreams.id, stream.id));
   }
 
@@ -312,13 +373,29 @@ export async function reprocessConnection(db: DB, orgId: string, connectionId: s
 async function pollAll(
   connector: Connector,
   base: PollArgs,
-): Promise<{ records: CanonicalEvent[]; cursor: string | null; complete: boolean }> {
+): Promise<{
+  records: CanonicalEvent[];
+  cursor: string | null;
+  complete: boolean;
+  dateFieldState?: StreamRow["dateFieldState"];
+}> {
   const seen = new Map<string, CanonicalEvent>();
   let cursor: string | null = null; // full re-sync starts from the beginning
   let last: string | null = null;
   let complete = false;
+  /**
+   * The dating decision of the LAST page that reported one.
+   *
+   * Last rather than first because the counts accumulate as the walk proceeds
+   * and the later answer is taken over more of the resource. `at` is stamped
+   * here rather than by the connector, which does not own the clock that says
+   * when a row was written — the same split `syncStream` makes.
+   */
+  let dateFieldState: StreamRow["dateFieldState"] | undefined;
   for (let page = 0; page < PAGE_CAP; page++) {
-    const { records, nextCursor } = await connector.poll!({ ...base, cursor });
+    const res = await connector.poll!({ ...base, cursor });
+    const { records, nextCursor } = res;
+    if (res.dateFieldState) dateFieldState = { ...res.dateFieldState, at: new Date().toISOString() };
     for (const r of records) seen.set(r.eventId, r);
     if (!nextCursor) {
       // null means START OVER (PollResult.nextCursor), so it is stored as null —
@@ -333,7 +410,7 @@ async function pollAll(
     last = cursor;
     cursor = nextCursor;
   }
-  return { records: [...seen.values()], cursor, complete };
+  return { records: [...seen.values()], cursor, complete, dateFieldState };
 }
 
 async function upsertCursor(db: DB, connectionId: string, cursor: string | null): Promise<void> {
