@@ -425,8 +425,26 @@ import type { FlowRecord } from "./records";
 
 export type Dataset = { kind: "dataset"; records: FlowRecord[] };
 export type Scalar = { kind: "scalar"; value: number; label?: string };
-export type Series = { kind: "series"; series: Array<{ bucket: string; value: number }> };
-export type Grouped = { kind: "grouped"; groups: Array<{ label: string; value: number }> };
+/**
+ * A split metric, and `total` is the METRIC — the aggregation applied to the
+ * whole record set, not to the buckets.
+ *
+ * A tile renders one headline above its bars, and that headline used to be the
+ * sum of the bucket values whatever produced them. For a sum or a count that is
+ * the same number; for anything else it is nonsense with a plausible shape — an
+ * average deal size split by month rendered the sum of twelve monthly averages,
+ * roughly twelve times the answer, above bars that were each correct.
+ *
+ * It has to be carried rather than derived: a consumer holding only the buckets
+ * cannot recover it. Averaging the averages is wrong too, and differently — it
+ * weights a month with three deals like one with three hundred — and a distinct
+ * count over the whole set is not the sum of the per-bucket distinct counts.
+ *
+ * Optional, so a shape built by a path that has no records in hand degrades to
+ * the old sum rather than to `undefined`.
+ */
+export type Series = { kind: "series"; series: Array<{ bucket: string; value: number }>; total?: number };
+export type Grouped = { kind: "grouped"; groups: Array<{ label: string; value: number }>; total?: number };
 export type Shape = Dataset | Scalar | Series | Grouped;
 
 /** The saved presentation of one Output node. */

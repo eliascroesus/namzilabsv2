@@ -663,10 +663,13 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
   if (shape.kind === "scalar") tile.value = shape.value;
   else if (shape.kind === "series") {
     tile.series = shape.series;
-    tile.value = round(shape.series.reduce((a, b) => a + b.value, 0));
+    // The metric over the whole set when the shape carried one; the sum of the
+    // buckets only as the fallback it always was. For a sum or a count the two
+    // agree, so no existing tile moves.
+    tile.value = shape.total ?? round(shape.series.reduce((a, b) => a + b.value, 0));
   } else if (shape.kind === "grouped") {
     tile.groups = shape.groups;
-    tile.value = round(shape.groups.reduce((a, b) => a + b.value, 0));
+    tile.value = shape.total ?? round(shape.groups.reduce((a, b) => a + b.value, 0));
   } else {
     tile.value = shape.records.length;
     tile.sample = shape.records.slice(0, 5);
@@ -819,6 +822,9 @@ function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series
     return {
       kind: "series",
       series: [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([bucket, recs]) => ({ bucket, value: computeAgg(recs, cfg.aggregation, cfg.field, cfg.distinctField) })),
+      // The headline, computed HERE because this is where the records are. See
+      // the note on `Series` for why it cannot be derived from the buckets.
+      total: computeAgg(records, cfg.aggregation, cfg.field, cfg.distinctField),
     };
   }
   const field = cfg.groupBy.field;
@@ -828,7 +834,11 @@ function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
-  return { kind: "grouped", groups: [...groups.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.field, cfg.distinctField) })).sort((a, b) => b.value - a.value) };
+  return {
+    kind: "grouped",
+    groups: [...groups.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.field, cfg.distinctField) })).sort((a, b) => b.value - a.value),
+    total: computeAgg(records, cfg.aggregation, cfg.field, cfg.distinctField),
+  };
 }
 
 function computeAgg(records: FlowRecord[], aggregation: string, field: string, distinctField: string): number {
@@ -848,8 +858,29 @@ function computeAgg(records: FlowRecord[], aggregation: string, field: string, d
       if (nums.length === 0) return 0;
       if (aggregation === "sum") return round(nums.reduce((a, b) => a + b, 0));
       if (aggregation === "avg") return round(nums.reduce((a, b) => a + b, 0) / nums.length);
-      if (aggregation === "min") return Math.min(...nums);
-      return Math.max(...nums);
+      /**
+       * A LOOP, NOT A SPREAD, and not as a micro-optimisation.
+       *
+       * `Math.min(...nums)` passes every value as a separate ARGUMENT, and the
+       * argument count is bounded by the engine stack. Measured on this
+       * runtime: 125,000 passes, 200,000 throws `RangeError: Maximum call
+       * stack size exceeded`. `APP_LOAD_CEILING` is 500,000, so a min or max
+       * over a stream holding more than roughly 150k records in the window did
+       * not return a wrong number — it threw, and the node reported an error
+       * the user could do nothing about. Every other aggregation here is a
+       * reduce, which is why only these two ever hit it.
+       *
+       * A higher threshold would still be a threshold. A spread over a
+       * collection with no fixed bound is the defect; the loop removes the
+       * class rather than moving the number.
+       */
+      let best = nums[0];
+      if (aggregation === "min") {
+        for (const n of nums) if (n < best) best = n;
+      } else {
+        for (const n of nums) if (n > best) best = n;
+      }
+      return best;
     }
   }
 }
