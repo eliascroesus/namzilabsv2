@@ -528,6 +528,143 @@ async function main(): Promise<void> {
   });
 
   /**
+   * ════════════════════════════════════════════════════════════════════════
+   * SECTION 3b — THE TWO QUESTIONS THE WATERMARK DESIGN TURNS ON.
+   *
+   * CL13 settled that a `next_page` URL cannot carry a scan across sweeps: it
+   * survived 600s and was refused at 1200s, against a reuse gap of 600-1200s.
+   * The replacement is a per-side DATE WATERMARK — the next sweep re-bounds on
+   * the lowest (past) or highest (future) `start_time` it reached.
+   *
+   * That is keyset pagination on `start_time`, which is NOT unique. The standard
+   * construction adds a unique tiebreaker and compares tuples, `(start_time,
+   * uri)`; this endpoint exposes only `min_start_time` and `max_start_time`, so
+   * the textbook answer may simply be unavailable. Both questions below decide
+   * how much of it can be recovered, and both are one request each.
+   *
+   * NEITHER IS A PASS/FAIL. They are inputs to a design decision, so they report
+   * what happened and say what each answer would mean.
+   * ════════════════════════════════════════════════════════════════════════
+   */
+  head("SECTION 3b — composite sort, and whether the bounds include their edge");
+
+  /**
+   * CL14 — is a SECOND sort key accepted?
+   *
+   * If `start_time:asc,uri:asc` is honoured, the order becomes a deterministic
+   * TOTAL order rather than one with arbitrary ties, so every walk over the same
+   * span visits records in the same sequence.
+   *
+   * WHAT IT WOULD AND WOULD NOT BUY, stated up front so the result is not
+   * over-read. It would NOT remove the tie problem: a bound is still expressible
+   * only on `start_time`, so a re-bound at an instant still re-reads that whole
+   * instant and still cannot page past a tie group larger than what one walk can
+   * hold. What it buys is determinism — the same records in the same order every
+   * time — which is what makes a re-read provably a re-read rather than a
+   * different slice wearing the same bound.
+   */
+  await section("composite sort", async () => {
+    const base = await attempt("/scheduled_events", { ...scope, count: String(COUNT), sort: "start_time:asc" });
+    if (!base.ok) return skip("CL14 composite sort", `the single-key control failed: HTTP ${base.status}`);
+    const control1 = ids(base.page);
+
+    for (const value of ["start_time:asc,uri:asc", "start_time:asc,created_at:asc", "start_time:asc&sort=uri:asc"]) {
+      const res = await attempt("/scheduled_events", { ...scope, count: String(COUNT), sort: value });
+      if (!res.ok) {
+        note(`CL14 sort=${value}`, `REJECTED HTTP ${res.status}: ${res.body}`);
+        continue;
+      }
+      const got = ids(res.page);
+      note(
+        `CL14 sort=${value}`,
+        `ACCEPTED, ${got.length} events` +
+          (sameSet(new Set(got), new Set(control1)) ? "; same id set as the single-key control" : "; DIFFERENT id set — not purely an ordering") +
+          (sameSequence(got, control1)
+            ? "; identical SEQUENCE to the single-key control — accepted and ignored, or the account has no ties to break"
+            : "; sequence DIFFERS from the single-key control — the second key did something"),
+      );
+    }
+    note(
+      "CL14 what a hit would mean",
+      "an accepted second key gives a deterministic total order. It does NOT make the tie group pageable — " +
+        "only `start_time` is boundable — so the livelock guard below is required either way.",
+    );
+  });
+
+  /**
+   * CL15 — is the bound INCLUSIVE of its own edge, and how big are the ties?
+   *
+   * This is the question the watermark's correctness rests on, and it has two
+   * possible answers with opposite consequences:
+   *
+   *   INCLUSIVE (`start_time <= max`) — re-bounding at the lowest instant seen
+   *     re-reads that whole instant. Duplicates, which `event_id` dedup absorbs
+   *     for free. SAFE.
+   *   EXCLUSIVE (`start_time < max`) — re-bounding at that instant SKIPS every
+   *     event sharing it that did not fit on the page. Silent, permanent loss —
+   *     the failure this project exists to prevent.
+   *
+   * So the bound is probed against a real event's own `start_time`: ask for
+   * `max_start_time = T` where T is exactly one event's start, and see whether
+   * that event comes back.
+   *
+   * THE TIE CENSUS beside it is what says whether the livelock is theoretical.
+   * An inclusive bound cannot advance past a tie group larger than one page, and
+   * `count` is hard-capped at 100 (CL7), so the largest tie group this account
+   * actually has is the number that matters.
+   */
+  await section("bound inclusivity + tie census", async () => {
+    const rows = dated(evs(control));
+    if (rows.length === 0) return skip("CL15 bound inclusivity", "no dated events on the control page");
+
+    // Tie census first — it needs no extra request.
+    const byInstant = new Map<number, number>();
+    for (const e of rows) byInstant.set(e.ms!, (byInstant.get(e.ms!) ?? 0) + 1);
+    const largest = Math.max(...byInstant.values());
+    const at = [...byInstant.entries()].find(([, n]) => n === largest)![0];
+    note(
+      "CL15 largest tie group on the control page",
+      `${largest} event(s) share ${iso(at)} — out of ${rows.length} events at ${byInstant.size} distinct start_times. ` +
+        (largest >= COUNT
+          ? `AT OR ABOVE the ${COUNT} page cap: an inclusive re-bound at that instant cannot advance, and the ` +
+            `no-progress alarm is not theoretical on this account.`
+          : `below the ${COUNT} page cap, so a re-bound at any instant here advances. This is one page of one ` +
+            `account, not a bound on what any account can hold.`),
+    );
+
+    // Inclusivity: bound at one event's exact start_time and look for it.
+    const target = rows[Math.floor(rows.length / 2)];
+    const T = iso(target.ms!);
+    const upper = await attempt("/scheduled_events", { ...scope, count: String(COUNT), max_start_time: T });
+    if (!upper.ok) {
+      note("CL15 max_start_time at an event's own start_time", `REJECTED HTTP ${upper.status}: ${upper.body}`);
+    } else {
+      const present = idSet(upper.page).has(target.id);
+      note(
+        "CL15 is max_start_time INCLUSIVE?",
+        `bound at ${T}, the exact start_time of ${target.id}. That event is ${present ? "PRESENT" : "ABSENT"} → ` +
+          (present
+            ? "INCLUSIVE. Re-bounding the past side at the lowest start_time reached re-reads that instant; " +
+              "duplicates only, no skip."
+            : "EXCLUSIVE. Re-bounding at the lowest start_time reached would SKIP every event sharing it that did " +
+              "not fit on the page. The watermark must be set one resolution unit ABOVE the lowest seen instead."),
+      );
+    }
+
+    const lower = await attempt("/scheduled_events", { ...scope, count: String(COUNT), min_start_time: T });
+    if (!lower.ok) {
+      note("CL15 min_start_time at an event's own start_time", `REJECTED HTTP ${lower.status}: ${lower.body}`);
+    } else {
+      const present = idSet(lower.page).has(target.id);
+      note(
+        "CL15 is min_start_time INCLUSIVE?",
+        `bound at ${T} → ${target.id} is ${present ? "PRESENT" : "ABSENT"} → ${present ? "INCLUSIVE" : "EXCLUSIVE"}. ` +
+          "The future side re-bounds on this one, and needs the same answer in the other direction.",
+      );
+    }
+  });
+
+  /**
    * SECTION 4 — `status`.
    *
    * The connector OMITS this by default, deliberately: every meeting emits a
