@@ -10,7 +10,7 @@ import { withConnectionSyncLock } from "@/lib/sync/locks";
 import { upsertEvents } from "./pipeline";
 import { activeStreams, syncStream } from "@/lib/sync/streams";
 import { applyCadence, decideCadence } from "@/lib/sync/cadence";
-import { rejectingConnections } from "@/lib/webhooks/rejections";
+import { connectionRefusedRecently } from "@/lib/webhooks/rejections";
 
 /**
  * HOW LONG A REFUSED DELIVERY IS REMEMBERED, when deciding whether a provider's
@@ -254,8 +254,7 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
       // Read here rather than in the connector, which has no database. ONE
       // reading, TWO decisions — see `webhookHealthy` for the second, which is
       // the one that quietly triples this connection's poll interval.
-      const refusing = await rejectingConnections(db, REJECTION_MEMORY_MS);
-      recentlyRejecting = refusing.some((r) => r.connectionId === conn.id);
+      recentlyRejecting = await connectionRefusedRecently(db, conn.id, REJECTION_MEMORY_MS);
       // THE HEALTH CHECK IS A PROVIDER CALL AND THE LEDGER MUST SEE IT.
       //
       // One GET per connection per sweep, plus a PUT when a paused subscription

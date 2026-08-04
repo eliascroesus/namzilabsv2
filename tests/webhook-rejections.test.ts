@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { deliveryLog, rawEvents } from "@/db/schema";
-import { recordRejectedDelivery, rejectingConnections } from "@/lib/webhooks/rejections";
+import { connectionRefusedRecently, recordRejectedDelivery, rejectingConnections } from "@/lib/webhooks/rejections";
 import { scanInvariants } from "@/lib/health/invariants";
 import type { DB } from "@/db/types";
 
@@ -85,6 +85,40 @@ describe("the reader, which is the half that was missing", () => {
     // Minutes in which something was refused, not requests — the recorder
     // samples, so a request count would be uninterpretable.
     expect(found[0]).toMatchObject({ connectionId: connId, minutes: 2 });
+  });
+
+  /**
+   * The sweep asks about ONE connection, and asking it with the aggregate meant
+   * a full scan-and-group of a table that grows with every delivery, once per
+   * connection per sweep, to keep a single boolean. This form leads with
+   * `connection_id` so it rides `delivery_log_conn_idx` and stops at the first
+   * match — same answer, no migration.
+   */
+  it("answers the scoped question without aggregating the table", async () => {
+    const t0 = Date.now();
+    const other = await seedConnection(db, { orgId: ORG, source: "webhook" });
+
+    expect(await connectionRefusedRecently(db, connId, 24 * 3_600_000)).toBe(false);
+    await recordRejectedDelivery(db, conn(), "invalid-signature", t0);
+    expect(await connectionRefusedRecently(db, connId, 24 * 3_600_000)).toBe(true);
+
+    // Scoped: one connection refusing says nothing about its neighbour.
+    expect(await connectionRefusedRecently(db, other, 24 * 3_600_000)).toBe(false);
+  });
+
+  it("forgets a refusal older than the window, and agrees with the aggregate", async () => {
+    const t0 = Date.now();
+    await recordRejectedDelivery(db, conn(), "invalid-signature", t0);
+    await db
+      .update(deliveryLog)
+      .set({ createdAt: new Date(t0 - 2 * 3_600_000) })
+      .where(eq(deliveryLog.connectionId, connId));
+
+    // Inside a wide window both readers see it; inside a narrow one neither does.
+    expect(await connectionRefusedRecently(db, connId, 24 * 3_600_000)).toBe(true);
+    expect(await rejectingConnections(db, 24 * 3_600_000)).toHaveLength(1);
+    expect(await connectionRefusedRecently(db, connId, 3_600_000)).toBe(false);
+    expect(await rejectingConnections(db, 3_600_000)).toHaveLength(0);
   });
 
   it("says nothing about a connection that is not refusing anything", async () => {

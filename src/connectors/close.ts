@@ -802,6 +802,26 @@ const dateMs = (event: Record<string, unknown>): number => Date.parse(str(event[
  * that agree today are two that stop agreeing on the next edit, silently, and
  * the symptom is a value oscillating in the database rather than a test failing.
  *
+ * WHAT THIS DOES TO EXISTING ROWS, so a later reader does not diagnose a bug.
+ * The poll now writes a `subject` where it used to write null, and `subject` is
+ * in `upsertEvents`'s change gate — so a re-polled row is UPDATED rather than
+ * deduped, and the sweep that does it reports a raised `updated` count, marks
+ * the stream changed and triggers one recompute. Expected, once, not a
+ * regression.
+ *
+ * It is NOT a backfill of every Close row, and the difference matters if anyone
+ * is waiting for a spike to confirm the deploy. The window is
+ * `date_updated >= hw - overlap`, so an incremental sweep re-reads only records
+ * Close has touched since the last high-water mark — on a steady connection,
+ * few. Every row outside that window KEEPS `subject = null` indefinitely,
+ * because `hw` only moves forward and nothing re-reads behind it.
+ *
+ * Repairing those is a full resync (`resync.ts`), which re-polls from a null
+ * cursor at the next generation and therefore reaches `FIRST_SYNC_DAYS` back.
+ * That is the complete repair rather than a partial one: Close's Event Log
+ * retains 30 days and `FIRST_SYNC_DAYS` is 30, so a resync reaches everything
+ * this connector could ever have seen.
+ *
  * `occurredAt` is `date_created` and stays there. It is the one field in this
  * connector that must NOT follow the cursor onto `date_updated`: a record's
  * event time is when the thing happened, and Close's consolidation is explicit

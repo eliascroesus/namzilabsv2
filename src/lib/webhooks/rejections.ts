@@ -84,12 +84,56 @@ export async function recordRejectedDelivery(
 }
 
 /**
+ * Has THIS connection refused a delivery recently?
+ *
+ * The same question as `rejectingConnections` asks of everything, and a
+ * different query on purpose. The aggregate below is unscoped — it filters on
+ * `status` and `created_at`, neither of which is usefully indexed
+ * (`delivery_log_status_idx` holds four values, `created_at` holds none), groups
+ * the whole table, and is therefore a sequential scan. That is fine once a
+ * night. On the sweep it was being run once per connection and all but one row
+ * of the result thrown away: a full aggregate of a table that grows with every
+ * delivery, on the hot path, N times per sweep, to answer a yes/no question
+ * about one row.
+ *
+ * This form leads with `connection_id`, so it uses `delivery_log_conn_idx` and
+ * stops at the first match. No migration: the index it needs already exists, and
+ * scoping first makes the unindexed columns a filter over one connection's rows
+ * rather than over the table.
+ */
+export async function connectionRefusedRecently(
+  db: DB,
+  connectionId: string,
+  sinceMs: number,
+  now = new Date(),
+): Promise<boolean> {
+  const cutoff = new Date(now.getTime() - sinceMs);
+  const rows = await db
+    .select({ id: deliveryLog.id })
+    .from(deliveryLog)
+    .where(
+      and(
+        eq(deliveryLog.connectionId, connectionId),
+        eq(deliveryLog.status, "rejected"),
+        gte(deliveryLog.createdAt, cutoff),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
  * Connections that have refused at least one delivery recently.
  *
  * Read by the nightly invariant scan, which is the whole reason this is written
  * down rather than logged. Counts MINUTES in which something was refused, not
  * requests — the recorder samples, so a request count would be a number nobody
  * could interpret.
+ *
+ * WHOLE-TABLE AND UNSCOPED, which is correct HERE and was wrong on the sweep.
+ * Once a night, asking about every connection at once, a scan is the right plan
+ * and an index would be maintained on every write to be read once a day. The
+ * hot-path caller uses `connectionRefusedRecently` instead.
  */
 export async function rejectingConnections(
   db: DB,
