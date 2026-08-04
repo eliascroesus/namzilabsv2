@@ -9,6 +9,7 @@ import { inngest } from "@/inngest/client";
 import { headersToObject } from "@/lib/http";
 import { decrypt, getEncryptionKey } from "@/lib/crypto";
 import { promoteToBaseCadence } from "@/lib/sync/cadence";
+import { recordRejectedDelivery } from "@/lib/webhooks/rejections";
 
 export const runtime = "nodejs";
 
@@ -67,12 +68,35 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
       secret = decrypt(conn.signingSecretEncrypted, getEncryptionKey());
     } catch {
       console.error(`[webhook] signing secret unreadable for connection ${conn.id} — rejecting until it is re-set`);
+      await recordRejectedDelivery(db, conn, "unreadable-secret");
       return NextResponse.json({ error: "signing secret unreadable" }, { status: 401 });
     }
   }
 
   const verified = connector.verifySignature({ rawBody, headers, secret });
   if (!verified) {
+    /**
+     * THIS BRANCH WAS SILENT, and it is the likelier of the two.
+     *
+     * A connection can refuse every delivery for weeks with no record anywhere:
+     * nothing reaches `raw_events` (correct — the payload failed authentication
+     * and must never enter the replay source of truth), nothing reached
+     * `delivery_log`, and this path did not even log. The only evidence was the
+     * platform request log.
+     *
+     * Note what a 401 does and does not cost, because it differs by source. For
+     * a stream-scoped connector the inbound hook is a DOORBELL — the bail below
+     * only asks for a sweep, and the poll is the sole ingest path — so a refused
+     * delivery loses nothing at all. For the custom webhook there is no poll, so
+     * a refused delivery is gone. `google-calendar` is the one that can never
+     * succeed: its `verifySignature` returns false unconditionally, so every
+     * POST to a gcal connection 401s whatever is configured.
+     */
+    console.warn(
+      `[webhook] invalid signature for connection ${conn.id} (${conn.source}) — ` +
+        `secret ${secret ? "configured" : "absent"}; rejected without storing the payload`,
+    );
+    await recordRejectedDelivery(db, conn, "invalid-signature");
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 

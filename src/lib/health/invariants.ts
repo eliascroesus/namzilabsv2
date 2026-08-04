@@ -3,6 +3,7 @@ import { connections, deadLetter, events, sourceStreams, usageLedger } from "@/d
 import type { DB } from "@/db/types";
 import { isMirrorSource } from "@/connectors/catalog";
 import { stalledJobs } from "@/lib/backfill/jobs";
+import { rejectingConnections } from "@/lib/webhooks/rejections";
 
 /**
  * 10(b) — the daily invariant scan. READS ONLY, and no provider calls at all.
@@ -91,6 +92,20 @@ export type InvariantReport = {
   unresolvedDeadLetters: number;
   /** Mirror streams that have been read successfully and hold nothing. */
   emptyMirrors: Array<{ streamId: string; connectionId: string; source: string; lastPolledAt: Date | null }>;
+  /**
+   * Endpoints refusing inbound deliveries.
+   *
+   * The same shape as every other check here — something that should be
+   * arriving has stopped — but it is the only one whose evidence had to be
+   * created first. A 401 wrote nothing anywhere, so a connection could reject
+   * every delivery indefinitely and no query could see it.
+   *
+   * `minutes` counts MINUTES in which something was refused, not requests: the
+   * recorder samples at one row per connection per minute so a flood cannot
+   * become a disk problem, which makes a request count a number nobody could
+   * interpret.
+   */
+  rejectingEndpoints: Array<{ connectionId: string; minutes: number; lastAt: Date; lastError: string | null }>;
   /** Connections whose own budget is denying their calls on a sustained basis. */
   throttledConnections: Array<{ connectionId: string; provider: string; throttled: number; calls: number }>;
   /** Paged scans whose stored continuation keeps being refused, so they never advance. */
@@ -268,7 +283,10 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
   // fifth entry in this array silently invalidates the derivation and the
   // symptom is a hung nightly job, not a slow one. New checks go sequentially
   // below, which is why `throttledConnections` is not in here.
-  const [unswept, failing, stalled, empty] = await Promise.all([
+  // FIVE concurrent reads now, not four. `MIN_POOL_MAX` in src/db/client.ts is
+  // derived from the widest read fan-out in the codebase and this is it, so the
+  // floor moves with this array — see the comment there before adding a sixth.
+  const [unswept, failing, stalled, empty, rejecting] = await Promise.all([
     unsweptStreams(db, now),
     db
       .select({
@@ -284,6 +302,9 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
     // second notion of "not progressing" would drift from the first.
     stalledJobs(db, 6 * HOUR_MS, now),
     emptyMirrors(db, now),
+    // A day, matching the dead-letter window: shorter would miss an endpoint
+    // that rejects in bursts, longer would keep reporting one already fixed.
+    rejectingConnections(db, DLQ_UNRESOLVED_MS, now),
   ]);
 
   // Sequential from here, and deliberately so — see the note on the Promise.all
@@ -311,6 +332,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
     emptyMirrors: empty,
     throttledConnections: throttled,
     restartingScans: stalledScans,
+    rejectingEndpoints: rejecting,
   };
   return {
     ...report,
@@ -321,6 +343,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
       report.unresolvedDeadLetters > 0 ||
       report.emptyMirrors.length > 0 ||
       report.throttledConnections.length > 0 ||
-      report.restartingScans.length > 0,
+      report.restartingScans.length > 0 ||
+      report.rejectingEndpoints.length > 0,
   };
 }
