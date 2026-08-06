@@ -33,11 +33,25 @@ function classify(value: unknown): string {
   return "string";
 }
 
+/**
+ * Nesting depth past which an object is recorded as a leaf, not descended.
+ *
+ * MIRRORS `MAX_DEPTH` IN normalize-dates.ts, and the number matching matters
+ * more than the number itself: properties are date-normalized to depth 4 at
+ * ingest, so a registry path deeper than that would describe values the
+ * normalizer never visits — fields the pickers would offer and the engine
+ * would then read un-normalized. It also bounds the walk on pathological
+ * payloads: this recursion had NO limit, so a deeply-nested (or cyclic)
+ * provider payload produced unbounded dotted paths — and, before the batching
+ * below, one database round trip for every one of them.
+ */
+const MAX_DEPTH = 4;
+
 /** Flatten a record's properties into dotted paths (arrays are leaves). */
-function flatten(obj: Record<string, unknown>, prefix = "", out: Map<string, unknown> = new Map()): Map<string, unknown> {
+function flatten(obj: Record<string, unknown>, prefix = "", out: Map<string, unknown> = new Map(), depth = 1): Map<string, unknown> {
   for (const [k, v] of Object.entries(obj)) {
     const path = prefix ? `${prefix}.${k}` : k;
-    if (v && typeof v === "object" && !Array.isArray(v)) flatten(v as Record<string, unknown>, path, out);
+    if (v && typeof v === "object" && !Array.isArray(v) && depth < MAX_DEPTH) flatten(v as Record<string, unknown>, path, out, depth + 1);
     else out.set(path, v);
   }
   return out;
@@ -70,30 +84,41 @@ export async function recordFields(db: DB, scope: RegistryScope, records: Canoni
   }
 
   const now = new Date();
-  for (const [fieldPath, info] of seen) {
+  /**
+   * ONE multi-row statement per chunk, not one per field. The loop this
+   * replaces awaited a separate INSERT … ON CONFLICT per distinct field path
+   * — a 60-column sheet was 60 sequential round trips after EVERY page of
+   * every poll, on the write path of every connector. Distinct paths within
+   * one scope are distinct conflict keys, so a single VALUES list is legal;
+   * the per-row numbers move into `excluded.*` so each row still folds with
+   * its own counts.
+   */
+  const FIELD_CHUNK = 500;
+  const rows = [...seen.entries()].map(([fieldPath, info]) => ({
+    orgId: scope.orgId,
+    connectionId: scope.connectionId,
+    streamHash: scope.streamHash ?? null,
+    fieldPath,
+    inferredType: info.type,
+    approxCardinality: info.distinct.size,
+    seenCount: info.count,
+    sample: { value: info.sample ?? null },
+    firstSeen: now,
+    lastSeen: now,
+  }));
+  for (let i = 0; i < rows.length; i += FIELD_CHUNK) {
     await db
       .insert(streamFields)
-      .values({
-        orgId: scope.orgId,
-        connectionId: scope.connectionId,
-        streamHash: scope.streamHash ?? null,
-        fieldPath,
-        inferredType: info.type,
-        approxCardinality: info.distinct.size,
-        seenCount: info.count,
-        sample: { value: info.sample ?? null },
-        firstSeen: now,
-        lastSeen: now,
-      })
+      .values(rows.slice(i, i + FIELD_CHUNK))
       .onConflictDoUpdate({
         target: [streamFields.connectionId, streamFields.streamHash, streamFields.fieldPath],
         set: {
           // Cardinality across batches is a MAX, not a sum: the same values
           // recur every mirror sweep, so summing would inflate without bound.
-          approxCardinality: sql`greatest(${streamFields.approxCardinality}, ${info.distinct.size})`,
-          seenCount: sql`${streamFields.seenCount} + ${info.count}`,
-          inferredType: sql`case when ${streamFields.inferredType} = 'null' then ${info.type} else ${streamFields.inferredType} end`,
-          lastSeen: now,
+          approxCardinality: sql`greatest(${streamFields.approxCardinality}, excluded.approx_cardinality)`,
+          seenCount: sql`${streamFields.seenCount} + excluded.seen_count`,
+          inferredType: sql`case when ${streamFields.inferredType} = 'null' then excluded.inferred_type else ${streamFields.inferredType} end`,
+          lastSeen: sql`excluded.last_seen`,
         },
       });
   }
