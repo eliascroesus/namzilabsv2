@@ -6,6 +6,7 @@ import { isStreamScoped } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { applyObservedRateLimit, claimCalls, isPaused, pauseConnection, recordObservedLimit, recordProviderError, recordSuccess, settlePollCalls, tripBreaker } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
+import { HttpError } from "@/lib/http-client";
 import { withConnectionSyncLock } from "@/lib/sync/locks";
 import { upsertEvents } from "./pipeline";
 import { activeStreams, syncStream } from "@/lib/sync/streams";
@@ -149,6 +150,31 @@ export async function dueConnectionsForSweep(
         or(isNull(connections.nextSweepAt), lte(connections.nextSweepAt, now)),
       ),
     );
+}
+
+/**
+ * A 429 IS A RATE LIMIT, NOT A FAULT — and the breaker must never see one.
+ *
+ * A surviving 429 (fetchJson retries once, honoring Retry-After up to its
+ * backoff cap) used to land in the same catch as a revoked credential and a
+ * 500: recordProviderError → tripBreaker → first rung of the probe ladder =
+ * ONE HOUR paused, plus a consecutiveFailures notch that makes the next
+ * genuine fault start further up the ladder. For the providers that send
+ * `ratelimit-remaining` the observed-limit path already defers proactively;
+ * this is the same courtesy for the ones that only say it with a 429.
+ *
+ * Returns the pause expiry when it handled the error, null when the error is
+ * not a 429 (caller falls through to the breaker). The clamp mirrors
+ * applyObservedRateLimit: at least 1s, at most 10 minutes, defaulting to 60s
+ * when the provider sent no Retry-After. recordProviderError still runs — the
+ * ledger's audit trail should show the throttle — but consecutiveFailures is
+ * deliberately untouched.
+ */
+async function pauseForRateLimit(db: DB, conn: typeof connections.$inferSelect, e: unknown): Promise<Date | null> {
+  if (!(e instanceof HttpError) || e.status !== 429) return null;
+  const waitMs = Math.max(1_000, Math.min(e.retryAfterMs ?? 60_000, 10 * 60_000));
+  await recordProviderError(db, conn);
+  return pauseConnection(db, conn.id, waitMs, `${conn.source} rate limited (429) — resumes automatically`);
 }
 
 /**
@@ -369,6 +395,21 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
           });
         }
       } catch (e) {
+        // A 429 STOPS THE SWEEP — the same taxonomy as `observedPause` above:
+        // it is the provider's account of the CREDENTIAL's quota, which every
+        // stream here shares, so polling the next stream would spend requests
+        // straight into the wall. It does NOT count into `failures`: the
+        // breaker rung below is for faults, and a rate limit is not one.
+        // Returning here also keeps the pause alive — recordSuccess (which
+        // nulls pausedUntil) is never reached.
+        const rateLimited = await pauseForRateLimit(db, conn, e);
+        if (rateLimited) {
+          return withCadence({
+            inserted, updated, softDeleted, deduped,
+            polled: true, webhook, changedStreamHashes,
+            deferredUntil: rateLimited, orgId: conn.orgId, source: conn.source,
+          });
+        }
         failures += 1;
         await recordProviderError(db, conn);
         // Recorded on the stream row; other streams keep syncing.
@@ -453,6 +494,17 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
         config: conn.config ?? undefined,
       }));
     } catch (e) {
+      // A rate limit defers; only a FAULT trips the breaker (see
+      // pauseForRateLimit). The old path sent a surviving 429 up the probe
+      // ladder: one unlucky minute cost an hour of freshness.
+      const rateLimited = await pauseForRateLimit(db, conn, e);
+      if (rateLimited) {
+        return withCadence({
+          inserted: 0, updated: 0, softDeleted: 0, deduped: 0,
+          polled: true, webhook, changedStreamHashes: [],
+          deferredUntil: rateLimited, orgId: conn.orgId, source: conn.source,
+        });
+      }
       // F.6: trip one notch of the probe ladder — paused, never terminal.
       await recordProviderError(db, conn);
       const until = await tripBreaker(db, conn.id, e instanceof Error ? e.message : String(e));

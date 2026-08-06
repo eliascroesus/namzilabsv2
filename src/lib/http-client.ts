@@ -51,7 +51,7 @@ export class HttpTimeoutError extends Error {
 export type FetchJsonOptions = RequestInit & {
   /** Per-attempt deadline. Default 30s. */
   timeoutMs?: number;
-  /** Extra attempts after the first (default 2 → up to 3 tries). */
+  /** Extra attempts after the first (default 1 → up to 2 tries). */
   retries?: number;
   /** Full-jitter backoff base (default 500ms; delay ∈ [0, min(cap, base·2^n)]). */
   backoffBaseMs?: number;
