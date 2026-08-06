@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { backfillJobs, connections, flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
@@ -205,14 +205,59 @@ export async function resultsVersion(db: DB, orgId: string): Promise<string> {
  * nothing to do. The skip lives where the work originates, not here.
  */
 
-/** Recompute every flow that currently has stale results (scheduled + on-demand). */
-export async function materializeStaleAll(db: DB): Promise<number> {
+/**
+ * One recompute pass may hold its Inngest step this long. The serverless
+ * ceiling is 60s (`maxDuration` in api/inngest/route.ts); the margin leaves
+ * room for the work-list query and for the one flow allowed to START near the
+ * deadline — the check runs between flows, so a single slow flow can overrun
+ * its slice but the LOOP can no longer compound that across the fleet.
+ */
+const MATERIALIZE_BUDGET_MS = 45_000;
+
+/**
+ * Recompute flows that currently have stale results (scheduled + on-demand).
+ *
+ * `orgId` narrows the pass to one tenant, and the debounced recompute MUST
+ * pass it: `recomputeStaleFlows` debounces and serializes per org
+ * (`event.data.orgId`), and an unscoped body under a per-org key made both
+ * halves of that config a lie — two orgs' events ran two concurrent fleet-wide
+ * passes over the same rows, and "org A's burst collapses into one run" was
+ * true while org A's run also recomputed every OTHER tenant's dashboards with
+ * no lock against a sibling run doing the same. The nightly-style cron
+ * backstop stays unscoped, which is its job.
+ *
+ * Longest-stale first, for the same reason `activeStreams` is LRU-first: the
+ * budget below truncates the tail, and without an order that favours the
+ * starved, the same tail is cut off every tick. A truncated flow keeps its old
+ * `computed_at`, so the next pass sorts it ahead of everything just
+ * recomputed; never-computed tiles (NULL) are the most starved of all.
+ *
+ * At least ONE flow always runs — a budget too small to matter must degrade to
+ * slow progress, not to a stall that looks like a healthy no-op.
+ */
+export async function materializeStaleAll(
+  db: DB,
+  opts: { orgId?: string; budgetMs?: number } = {},
+): Promise<{ recomputed: number; pending: number }> {
+  const budgetMs = opts.budgetMs ?? MATERIALIZE_BUDGET_MS;
+  const deadline = Date.now() + budgetMs;
   const stale = await db
-    .selectDistinct({ orgId: flowResults.orgId, flowId: flowResults.flowId })
+    .select({ orgId: flowResults.orgId, flowId: flowResults.flowId })
     .from(flowResults)
-    .where(eq(flowResults.status, "stale"));
-  for (const s of stale) await materializeFlow(db, s.orgId, s.flowId);
-  return stale.length;
+    .where(opts.orgId ? and(eq(flowResults.status, "stale"), eq(flowResults.orgId, opts.orgId)) : eq(flowResults.status, "stale"))
+    .groupBy(flowResults.orgId, flowResults.flowId)
+    .orderBy(sql`min(${flowResults.computedAt}) asc nulls first`, asc(flowResults.flowId));
+  let recomputed = 0;
+  for (const s of stale) {
+    await materializeFlow(db, s.orgId, s.flowId);
+    recomputed += 1;
+    if (Date.now() >= deadline) break;
+  }
+  const pending = stale.length - recomputed;
+  // A silent cap reads as "covered everything" when it didn't; the backstop
+  // cron picks the tail up within 10 minutes, but the log must say there IS one.
+  if (pending > 0) console.warn(`[materialize-truncated] budgetMs=${budgetMs} recomputed=${recomputed} pending=${pending}${opts.orgId ? ` org=${opts.orgId}` : ""}`);
+  return { recomputed, pending };
 }
 
 async function upsertResult(

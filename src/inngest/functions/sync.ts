@@ -106,10 +106,17 @@ export const recomputeStaleFlows = inngest.createFunction(
     concurrency: { key: "event.data.orgId", limit: 1 },
     triggers: [{ event: "flow/recompute.requested" }],
   },
-  async ({ step }) => step.run("materialize-stale", () => materializeStaleAll(getDb())),
+  // Scoped to the org whose event this is — the debounce and concurrency keys
+  // above only mean what they claim when the body works on that org alone. An
+  // unscoped pass here recomputed EVERY tenant's stale flows under a per-org
+  // lock, so two orgs' bursts ran two concurrent fleet-wide passes over the
+  // same rows.
+  async ({ event, step }) =>
+    step.run("materialize-stale", () => materializeStaleAll(getDb(), { orgId: (event.data as { orgId: string }).orgId })),
 );
 
-/** Scheduled backstop: anything the event path missed still recomputes. */
+/** Scheduled backstop: anything the event path missed still recomputes —
+ * fleet-wide by design, longest-stale first, under the pass's time budget. */
 export const materializeStale = inngest.createFunction(
   { id: "materialize-stale", retries: 2, triggers: [{ cron: "*/10 * * * *" }] },
   async ({ step }) => step.run("materialize-stale", () => materializeStaleAll(getDb())),
