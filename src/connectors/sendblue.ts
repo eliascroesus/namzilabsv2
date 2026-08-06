@@ -14,12 +14,19 @@ import { fetchJson } from "@/lib/http-client";
 import { asObject, holdsWindowContinuation, parseDate, spanCovered, str } from "./field-utils";
 
 /**
- * Sendblue API host. Their API lives on the .co domain (the .com is marketing).
- * CONFIRM ONCE against a live account before first production sweep — one
- * authenticated GET /api/v2/messages with real keys settles it; a wrong host
- * fails loudly (DNS/404) on the first poll and is recorded on the connection.
+ * Sendblue API host. The official API reference (docs.sendblue.com/api-v2,
+ * read 2026-08-05) states the base URL as `https://api.sendblue.com` — the
+ * previous `.co` here was a guess recorded as one ("CONFIRM ONCE against a
+ * live account"), and the docs are now reachable and answer it. The paths and
+ * auth headers this connector uses (`GET /api/v2/messages`,
+ * `GET|POST /api/account/webhooks`, `sb-api-key-id`/`sb-api-secret-key`)
+ * match that same reference verbatim.
+ *
+ * `scripts/verify-sendblue.ts` still auto-retries the alternate host, so a
+ * live run remains the final word; a wrong host fails loudly (DNS/404) on the
+ * first poll and is recorded on the connection.
  */
-const API_BASE = "https://api.sendblue.co";
+const API_BASE = "https://api.sendblue.com";
 
 /** Pages walked per poll; offset pagination, newest-first. */
 /** How far back an initial, cursor-less sweep reaches. */

@@ -24,8 +24,10 @@
  * that on its own once a connection exists. Exits 0 when every check passes.
  */
 
-const PRIMARY = "https://api.sendblue.co";
-const ALTERNATE = "https://api.sendblue.com";
+// Primary matches the connector's API_BASE (official docs state .com); the
+// alternate is the old guessed host, kept so a live run still settles it.
+const PRIMARY = "https://api.sendblue.com";
+const ALTERNATE = "https://api.sendblue.co";
 
 type MessagePage = { messages?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
 type WebhookPage = { webhooks?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
