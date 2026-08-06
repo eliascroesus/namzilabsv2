@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { createTestDb } from "./helpers/testdb";
 import { connections, events } from "@/db/schema";
@@ -172,5 +173,58 @@ describe("metrics read one org", () => {
   it("builder dropdowns never list a neighbour's sources or event types", async () => {
     expect(await distinctSources(db, ORG_A)).toEqual(["close"]); // sendblue exists only in org B
     expect(await distinctEventTypes(db, ORG_A, null)).not.toContain("neighbour_only_type");
+  });
+
+  /**
+   * THE WRITE-SIDE HOLE THE READ TESTS CANNOT SEE. `events.event_id` is
+   * globally unique with no org in the key, and the upsert's SET list never
+   * re-asserts org or connection — so a colliding id from org B's connection
+   * would overwrite org A's row CONTENT while `org_id` stayed A. Every
+   * org-scoped read above would then serve B's data to A with its predicates
+   * fully intact, which is why this needs its own test: the leak lives inside
+   * a row, not across a WHERE clause. Unreachable today (every connector
+   * namespaces ids with the connection UUID); this pins the guard for the
+   * connector that forgets.
+   */
+  it("a cross-connection event_id collision cannot overwrite another tenant's row", async () => {
+    const { upsertEvents } = await import("@/ingestion/pipeline");
+    const shared = "unnamespaced:collision";
+    await upsertEvents(db, { orgId: ORG_A, connectionId: connA, source: "close", generation: 1 }, [
+      { eventId: shared, eventType: "booked", subject: "a-subject", occurredAt: new Date("2026-06-02T00:00:00Z"), properties: { owner: "A" } },
+    ]);
+
+    // Org B collides at a HIGHER generation — the strongest overwrite claim
+    // the ratchet knows. The guard must still refuse it.
+    const res = await upsertEvents(db, { orgId: ORG_B, connectionId: connB, source: "close", generation: 9 }, [
+      { eventId: shared, eventType: "stolen", subject: "b-subject", occurredAt: new Date("2026-06-03T00:00:00Z"), properties: { owner: "B" } },
+    ]);
+
+    expect(res.inserted).toBe(0);
+    expect(res.updated).toBe(0);
+    expect(res.deduped).toBe(1); // suppressed, visibly counted as a no-op
+
+    const [row] = await db.select().from(events).where(eq(events.eventId, shared));
+    expect(row.orgId).toBe(ORG_A);
+    expect(row.connectionId).toBe(connA);
+    expect(row.eventType).toBe("booked");
+    expect(row.subject).toBe("a-subject");
+    expect(row.properties).toEqual({ owner: "A" });
+    expect(row.syncGeneration).toBe(1);
+  });
+
+  it("the guard does not over-tighten: the SAME connection still updates on redelivery", async () => {
+    const { upsertEvents } = await import("@/ingestion/pipeline");
+    const id = "same-conn:redelivery";
+    await upsertEvents(db, { orgId: ORG_A, connectionId: connA, source: "close", generation: 1 }, [
+      { eventId: id, eventType: "booked", subject: "v1", occurredAt: new Date("2026-06-02T00:00:00Z") },
+    ]);
+    const res = await upsertEvents(db, { orgId: ORG_A, connectionId: connA, source: "close", generation: 2 }, [
+      { eventId: id, eventType: "booked", subject: "v2", occurredAt: new Date("2026-06-02T00:00:00Z") },
+    ]);
+
+    expect(res.updated).toBe(1);
+    const [row] = await db.select().from(events).where(eq(events.eventId, id));
+    expect(row.subject).toBe("v2");
+    expect(row.syncGeneration).toBe(2);
   });
 });

@@ -112,7 +112,23 @@ export async function upsertEvents(db: DB, meta: EventMeta, canonical: Canonical
           syncGeneration: sql`greatest(${events.syncGeneration}, excluded.sync_generation)`,
           deletedAt: sql`null`,
         },
-        setWhere: sql`excluded.sync_generation >= ${events.syncGeneration} and (
+        /**
+         * THE FIRST CONJUNCT IS A TENANT WALL. The conflict target is
+         * `event_id` alone — globally unique, with no org or connection in
+         * the key — and the SET list never re-asserts either. So a colliding
+         * event_id minted by a DIFFERENT connection would overwrite this
+         * row's content while `org_id`/`connection_id` kept pointing at the
+         * original tenant: leaked data, served by every org-scoped read,
+         * invisible to the tenant-isolation tests because their predicates
+         * stay intact. Every connector namespaces its ids with the connection
+         * UUID, so the state is unreachable today — this guard is for the
+         * connector that forgets. On mismatch the update silently no-ops and
+         * the record lands in `deduped`; a counter would require diffing
+         * returned ids for a case namespacing already makes impossible.
+         * Connection implies org, and is strictly stronger: it also stops two
+         * connections WITHIN one org from cross-clobbering.
+         */
+        setWhere: sql`${events.connectionId} = excluded.connection_id and excluded.sync_generation >= ${events.syncGeneration} and (
           ${events.deletedAt} is not null
           or ${events.syncGeneration} is distinct from greatest(${events.syncGeneration}, excluded.sync_generation)
           or ${events.eventType} is distinct from excluded.event_type
