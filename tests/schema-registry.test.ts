@@ -88,6 +88,39 @@ describe("recordFields batches its writes", () => {
   });
 });
 
+describe("null-hash scopes upsert instead of accumulating (migration 0021)", () => {
+  /**
+   * `stream_hash` is NULL for connection-scoped sources, and a default unique
+   * index treats NULLs as distinct — so ON CONFLICT never fired for those
+   * scopes and EVERY batch inserted a fresh row per field path: unbounded
+   * duplicate rows on the write path of every poll, an inflated field list,
+   * and a dedupe warning computed off one fragment of the counts. Migration
+   * 0021 collapses the duplicates and rebuilds the index NULLS NOT DISTINCT;
+   * the test DB replays that migration, so this pins the real index.
+   */
+  it("two batches on a connection-scoped source fold into ONE row per field", async () => {
+    const nullScope = { orgId: "org_reg", connectionId: connId, streamHash: null };
+    await recordFields(db, nullScope, [ev({ email: "a@x.com" })]);
+    await recordFields(db, nullScope, [ev({ email: "b@x.com" })]);
+
+    const rows = await db.select().from(streamFields).where(eq(streamFields.connectionId, connId));
+    // THE regression: before 0021 this was two rows, and one more per batch forever.
+    expect(rows).toHaveLength(1);
+    expect(rows[0].fieldPath).toBe("email");
+    expect(rows[0].streamHash).toBeNull();
+    expect(rows[0].seenCount).toBe(2); // folded, not fragmented
+  });
+
+  it("distinct non-null hashes still keep separate rows — NULLS NOT DISTINCT tightened nothing else", async () => {
+    await recordFields(db, { orgId: "org_reg", connectionId: connId, streamHash: "h-1" }, [ev({ email: "a@x.com" })]);
+    await recordFields(db, { orgId: "org_reg", connectionId: connId, streamHash: "h-2" }, [ev({ email: "a@x.com" })]);
+
+    const rows = await db.select().from(streamFields).where(eq(streamFields.connectionId, connId));
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.streamHash))).toEqual(new Set(["h-1", "h-2"]));
+  });
+});
+
 describe("flatten is depth-bounded", () => {
   it("stores no path deeper than 4 segments; the depth-4 value is an object leaf", async () => {
     const deep = { l1: { l2: { l3: { l4: { l5: { l6: "buried" } } } } } };

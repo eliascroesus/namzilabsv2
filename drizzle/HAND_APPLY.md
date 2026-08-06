@@ -469,3 +469,96 @@ after this paste shows 34 `ok` rows and no `MISSING INDEX`.
 > **Numbering note.** 0016 remains reserved by the unmerged
 > `batch5/retention-purge` branch; the snapshot-chain warning under 0018
 > still applies at merge time.
+
+---
+
+## 0021 — stream_fields: collapse null-hash duplicates, rebuild the unique index NULLS NOT DISTINCT
+
+**Why.** `stream_hash` is NULL for connection-scoped sources (Close, Sendblue,
+webhook), and Postgres unique indexes default to treating NULLs as distinct —
+so `recordFields`' upsert never conflicted for those scopes and every poll
+page inserted a fresh row per field path. Unbounded duplicate rows on the
+busiest write path, an inflated field list in the pickers, and a dedupe
+warning computed off one fragment of the counts.
+
+**Order inside the block matters and is already correct:** the merge runs
+before the index swap, because the new index cannot build over the duplicates
+it exists to prevent. The merge folds duplicates exactly the way the writer
+folds batches — `seen_count` sums, `approx_cardinality` takes the max,
+`first_seen` the min, `last_seen` the max, `inferred_type` keeps the first
+non-`'null'`, and the surviving row is the earliest-inserted one (whose
+insert-only `sample` is the one the writer would have kept).
+
+Paste the whole block; it is idempotent in effect (a second run finds no
+duplicates and rebuilds the same index):
+
+```sql
+WITH dupes AS (
+  SELECT
+    connection_id,
+    field_path,
+    min(first_seen) AS first_seen,
+    max(last_seen) AS last_seen,
+    sum(seen_count)::int AS seen_count,
+    max(approx_cardinality) AS approx_cardinality,
+    (array_agg(inferred_type ORDER BY (inferred_type = 'null'), first_seen, id))[1] AS inferred_type,
+    (array_agg(id ORDER BY first_seen, id))[1] AS keep_id
+  FROM "stream_fields"
+  WHERE stream_hash IS NULL
+  GROUP BY connection_id, field_path
+  HAVING count(*) > 1
+)
+UPDATE "stream_fields" sf
+SET
+  seen_count = d.seen_count,
+  approx_cardinality = d.approx_cardinality,
+  first_seen = d.first_seen,
+  last_seen = d.last_seen,
+  inferred_type = d.inferred_type
+FROM dupes d
+WHERE sf.id = d.keep_id;
+
+WITH dupes AS (
+  SELECT
+    connection_id,
+    field_path,
+    (array_agg(id ORDER BY first_seen, id))[1] AS keep_id
+  FROM "stream_fields"
+  WHERE stream_hash IS NULL
+  GROUP BY connection_id, field_path
+  HAVING count(*) > 1
+)
+DELETE FROM "stream_fields" sf
+USING dupes d
+WHERE sf.stream_hash IS NULL
+  AND sf.connection_id = d.connection_id
+  AND sf.field_path = d.field_path
+  AND sf.id <> d.keep_id;
+
+DROP INDEX IF EXISTS "stream_fields_key_uq";
+
+CREATE UNIQUE INDEX IF NOT EXISTS "stream_fields_key_uq"
+  ON "stream_fields" USING btree ("connection_id","stream_hash","field_path")
+  NULLS NOT DISTINCT;
+```
+
+Verify (expect `0` and `1`):
+
+```sql
+SELECT
+  (SELECT count(*) FROM (
+     SELECT 1 FROM stream_fields WHERE stream_hash IS NULL
+     GROUP BY connection_id, field_path HAVING count(*) > 1
+   ) g)                                                            AS dup_groups_should_be_0,
+  (SELECT count(*) FROM pg_indexes
+    WHERE schemaname='public' AND indexname='stream_fields_key_uq'
+      AND indexdef LIKE '%NULLS NOT DISTINCT%')                    AS nnd_index_should_be_1;
+```
+
+> **Why `schema.ts` cannot say this.** drizzle-orm 0.45 only exposes
+> `nullsNotDistinct()` on `unique()` table constraints, and drizzle-kit's
+> snapshot has no field for it on indexes — so the `uniqueIndex` declaration
+> keeps its name and columns, this file carries the null semantics, and no
+> later `db:generate` can emit a spurious diff (the tool cannot represent
+> what it would be "correcting"). The comment on the declaration in
+> `src/db/schema.ts` records the same thing.

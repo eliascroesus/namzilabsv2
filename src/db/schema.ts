@@ -342,6 +342,17 @@ export const streamFields = pgTable(
     lastSeen: timestamp("last_seen", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
+    // THE LIVE INDEX IS `NULLS NOT DISTINCT` (migration 0021) AND THIS
+    // DECLARATION CANNOT SAY SO: drizzle-orm 0.45 only exposes
+    // nullsNotDistinct() on unique() table constraints, and drizzle-kit's
+    // snapshot has no field for it on indexes — so the declaration
+    // under-describes, deliberately, and the migration file is the truth.
+    // Safe because drizzle-kit cannot diff what it cannot represent (no
+    // later db:generate can emit a spurious "correction"), and the schema
+    // audit checks index NAMES only. Why it matters: stream_hash is NULL for
+    // connection-scoped sources, and with default NULLS-DISTINCT semantics
+    // recordFields' ON CONFLICT never fired for those scopes — a duplicate
+    // row per field per batch, forever.
     uniqueIndex("stream_fields_key_uq").on(t.connectionId, t.streamHash, t.fieldPath),
     index("stream_fields_org_idx").on(t.orgId),
   ],
