@@ -233,6 +233,73 @@ describe("6.2 mid-flight — the window is widened when the job STARTS", () => {
     // outside 47 days.
     expect((await streamRow()).windowFloor!.getTime()).toBe(back(47).getTime());
   });
+
+  /**
+   * THE hole the narrow-only shape had: `reachedFloor` is null until the first
+   * checkpoint, so a job that died before it left the floor at the full target
+   * forever — the stream declared 90 days nobody delivered, with nothing left
+   * to correct it and (before the stalled-detector fix below) nothing that
+   * could even see it.
+   */
+  it("a job that dies before its first checkpoint gives the window back", async () => {
+    const { job } = await ask(90);
+    await startJob(db, job.id, NOW);
+    expect((await streamRow()).windowFloor!.getTime()).toBe(back(90).getTime());
+
+    await finishJob(db, job.id, { status: "failed", detail: "died before first checkpoint" }, NOW);
+
+    // NULL = the connector's default — exactly where the stream was before the
+    // job made its claim and delivered nothing against it.
+    expect((await streamRow()).windowFloor).toBeNull();
+  });
+
+  it("reconciles to the deepest SURVIVING claim, not to the job that happens to finish", async () => {
+    const first = await ask(90);
+    await startJob(db, first.job.id, NOW);
+    await checkpointJob(db, first.job.id, { checkpoint: "c1", oldestSeen: back(60), rowsImported: 50 }, NOW);
+    await finishJob(db, first.job.id, { status: "complete" }, NOW);
+    expect((await streamRow()).windowFloor!.getTime()).toBe(back(60).getTime());
+
+    const second = await ask(180);
+    expect(second.created).toBe(true);
+    await startJob(db, second.job.id, NOW);
+    expect((await streamRow()).windowFloor!.getTime()).toBe(back(180).getTime());
+
+    await finishJob(db, second.job.id, { status: "failed", detail: "no checkpoint" }, NOW);
+
+    // The failed attempt's 180-day claim dies with it; the completed job's 60
+    // delivered days survive. The old shape left 180 declared forever.
+    expect((await streamRow()).windowFloor!.getTime()).toBe(back(60).getTime());
+  });
+
+  it("keeps delivered rows inside the window even when their job FAILED", async () => {
+    const { job } = await ask(90);
+    await startJob(db, job.id, NOW);
+    await checkpointJob(db, job.id, { checkpoint: "c1", oldestSeen: back(47), rowsImported: 100 }, NOW);
+    await finishJob(db, job.id, { status: "failed", detail: "boom" }, NOW);
+
+    // 100 rows landed down to 47 days back. A failure does not un-deliver
+    // them, and narrowing past them would license the next sweep's
+    // retire-outside-window to tombstone rows that are correct.
+    expect((await streamRow()).windowFloor!.getTime()).toBe(back(47).getTime());
+  });
+
+  it("never rips a RUNNING sibling's widening out from under it", async () => {
+    const shallow = await ask(90);
+    await startJob(db, shallow.job.id, NOW);
+    const deep = await ask(365);
+    expect(deep.created).toBe(true);
+    await startJob(db, deep.job.id, NOW);
+    expect((await streamRow()).windowFloor!.getTime()).toBe(back(365).getTime());
+
+    await checkpointJob(db, shallow.job.id, { checkpoint: "c1", oldestSeen: back(50), rowsImported: 10 }, NOW);
+    await finishJob(db, shallow.job.id, { status: "complete" }, NOW);
+
+    // The old narrow-to-this-job shape set the floor to 50 days here — pulling
+    // the window out from under the deep import mid-flight, so the next sweep
+    // would retire everything it had already landed past 50 days.
+    expect((await streamRow()).windowFloor!.getTime()).toBe(back(365).getTime());
+  });
 });
 
 describe("checkpoints resume rather than restart", () => {
@@ -265,6 +332,18 @@ describe("checkpoints resume rather than restart", () => {
     await checkpointJob(db, job.id, { checkpoint: "c1", oldestSeen: back(5), rowsImported: 1 }, NOW);
 
     expect(await stalledJobs(db, 3_600_000, new Date(NOW.getTime() + 30 * 60_000))).toHaveLength(0);
+    expect(await stalledJobs(db, 3_600_000, new Date(NOW.getTime() + 4 * 3_600_000))).toHaveLength(1);
+  });
+
+  it("flags a job that started and NEVER checkpointed — the one whose widened window nothing else can see", async () => {
+    const { job } = await ask(90);
+    await startJob(db, job.id, NOW);
+
+    // Within the threshold: healthy, merely young.
+    expect(await stalledJobs(db, 3_600_000, new Date(NOW.getTime() + 30 * 60_000))).toHaveLength(0);
+    // Past it with zero checkpoints: startedAt is the progress epoch. The old
+    // isNotNull(lastProgressAt) guard made exactly this job — the die-before-
+    // first-checkpoint case — the one the detector could never return.
     expect(await stalledJobs(db, 3_600_000, new Date(NOW.getTime() + 4 * 3_600_000))).toHaveLength(1);
   });
 });

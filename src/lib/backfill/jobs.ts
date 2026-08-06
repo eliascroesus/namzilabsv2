@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, lte, ne, or, sql } from "drizzle-orm";
 import { backfillJobs, connections, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
 import type { ImportCoverage } from "@/connectors/types";
@@ -232,12 +232,36 @@ export async function checkpointJob(
 
 /**
  * Put a job into a terminal state, and reconcile the stream's declared window
- * with what was actually reached.
+ * with the evidence that survives.
  *
- * A job that stopped short leaves the stream declaring depth it does not hold,
- * which would be a lie on every display and would keep the ordinary sweep
- * fetching a range with nothing in it. Narrowing back to `reachedFloor` destroys
- * nothing: by definition no row lies outside it.
+ * RECONCILE, not narrow-to-this-job. The old shape — narrow only when THIS
+ * job's `reachedFloor` was non-null and short — had a hole exactly where the
+ * evidence is thinnest: a job that died before its FIRST checkpoint has
+ * `reachedFloor` null, so the floor `startJob` widened to the full target
+ * stayed widened forever. The stream then declared depth nobody delivered, on
+ * every display and in every sweep's request bound, with nothing left to
+ * correct it.
+ *
+ * The invariant this function maintains: AT EVERY TERMINAL TRANSITION, the
+ * declared window equals delivered evidence. (While a job runs, the window
+ * deliberately over-declares to the target — see startJob; over-declaring
+ * retires LESS, which is the safe direction mid-import.)
+ *
+ * The claim set, computed over EVERY job of the stream:
+ *  - any job with a non-null `reachedFloor` claims it — delivered rows are
+ *    delivered whatever the job's lifecycle state, INCLUDING failed jobs
+ *    (their rows are real and must stay inside the window) and failed jobs
+ *    later re-queued by `requestBackfill` (which keeps `reachedFloor`);
+ *  - a `running` job additionally claims its full `targetFloor` — its
+ *    up-front widening must not be ripped out from under an active import;
+ *  - `queued` jobs with nothing delivered claim nothing: they widened nothing
+ *    yet, and startJob re-widens when they start.
+ *
+ * `windowFloor := min(claims)`, or NULL — the connector's default — when the
+ * set is empty. A claim SHALLOWER than a connector's own default is inert by
+ * construction: connectors clamp with `Math.min(requested, defaultFloor)`
+ * (see calendly.ts parseCursor), so reconciliation cannot narrow a window
+ * below what the ordinary sweep covers anyway.
  */
 export async function finishJob(
   db: DB,
@@ -253,12 +277,21 @@ export async function finishJob(
   const job = rows[0];
   if (!job) return null;
 
-  if (job.reachedFloor && job.reachedFloor > job.targetFloor) {
-    await db
-      .update(sourceStreams)
-      .set({ windowFloor: job.reachedFloor, updatedAt: now })
-      .where(and(eq(sourceStreams.id, job.streamId), sql`${sourceStreams.windowFloor} < ${job.reachedFloor}`));
+  // Freshly selected AFTER the update above, so this job participates with
+  // its terminal status and the set is complete evidence: `window_floor` has
+  // exactly two writers (startJob and this reconciliation), both driven from
+  // these rows. This path is rare — two reads and one write is fine.
+  const siblings = await db
+    .select({ status: backfillJobs.status, targetFloor: backfillJobs.targetFloor, reachedFloor: backfillJobs.reachedFloor })
+    .from(backfillJobs)
+    .where(eq(backfillJobs.streamId, job.streamId));
+  const claims: number[] = [];
+  for (const s of siblings) {
+    if (s.reachedFloor) claims.push(s.reachedFloor.getTime());
+    if (s.status === "running") claims.push(s.targetFloor.getTime());
   }
+  const floor = claims.length > 0 ? new Date(Math.min(...claims)) : null;
+  await db.update(sourceStreams).set({ windowFloor: floor, updatedAt: now }).where(eq(sourceStreams.id, job.streamId));
   return job;
 }
 
@@ -428,11 +461,19 @@ export async function importProgressByStreamRef(
  * latter: a job retried every ten minutes without ever advancing its checkpoint
  * looks perfectly healthy by `updatedAt` and is exactly the thing worth
  * flagging.
+ *
+ * `startedAt` is the progress EPOCH when no checkpoint exists yet: a job that
+ * started and never checkpointed has made zero progress since exactly then.
+ * The old `isNotNull(lastProgressAt)` guard inverted the check's purpose — the
+ * job that dies BEFORE its first checkpoint (the one whose widened
+ * `window_floor` nothing else can see or repair) was precisely the job the
+ * detector could never return. startJob always stamps `startedAt`, so the
+ * coalesce is total over `running` rows.
  */
 export async function stalledJobs(db: DB, stalledForMs: number, now = new Date()): Promise<BackfillJob[]> {
   const cutoff = new Date(now.getTime() - stalledForMs);
   return db
     .select()
     .from(backfillJobs)
-    .where(and(eq(backfillJobs.status, "running"), isNotNull(backfillJobs.lastProgressAt), lt(backfillJobs.lastProgressAt, cutoff)));
+    .where(and(eq(backfillJobs.status, "running"), sql`coalesce(${backfillJobs.lastProgressAt}, ${backfillJobs.startedAt}) < ${cutoff}`));
 }
