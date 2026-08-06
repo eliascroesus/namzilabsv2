@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, isNull, lt, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { connections, events, flows, flowVersions, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
 import type { CanonicalEvent } from "@/connectors/types";
@@ -269,6 +269,13 @@ type ConnRow = typeof connections.$inferSelect;
  * Always scoped to the stream's own hash, so webhook rows (null hash) and other
  * streams on the same connection are untouchable either way.
  */
+/**
+ * Rows retired per UPDATE. Matches UPSERT_CHUNK's parameter arithmetic
+ * (pipeline.ts): 500 ids per statement stays orders of magnitude under
+ * Postgres's 65,535 wire-protocol bind limit.
+ */
+const RETIRE_CHUNK = 500;
+
 async function retireAbsent(
   db: DB,
   conn: ConnRow,
@@ -277,20 +284,53 @@ async function retireAbsent(
   scope?: { from: Date; to: Date },
 ): Promise<number> {
   const present = records.map((r) => r.eventId);
-  const gone = await db
-    .update(events)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(
-        eq(events.connectionId, conn.id),
-        eq(events.streamHash, stream.configHash),
-        isNull(events.deletedAt),
-        ...(scope ? [gte(events.occurredAt, scope.from), lte(events.occurredAt, scope.to)] : []),
-        ...(present.length ? [notInArray(events.eventId, present)] : []),
-      ),
-    )
-    .returning({ id: events.id });
-  return gone.length;
+  const scopeFilter = scope ? [gte(events.occurredAt, scope.from), lte(events.occurredAt, scope.to)] : [];
+  // Nothing present: the whole (scoped) set is absent — one statement, no
+  // per-row parameters, nothing to chunk.
+  if (present.length === 0) {
+    const gone = await db
+      .update(events)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(events.connectionId, conn.id), eq(events.streamHash, stream.configHash), isNull(events.deletedAt), ...scopeFilter))
+      .returning({ id: events.id });
+    return gone.length;
+  }
+  /**
+   * Read–diff–write, NOT one `NOT IN` statement, and NOT a chunked `NOT IN`.
+   *
+   * The single statement bound one parameter per present row: a 50,000-row
+   * sheet was a 50,000-parameter UPDATE every sweep, and past Postgres's
+   * 65,535-bind wire limit (~a 70k-row tab) the sweep hard-failed. And
+   * `NOT IN` cannot be chunked — a row absent from chunk 1 but present in
+   * chunk 2 would be retired by the chunk-1 pass, tombstoning live data.
+   *
+   * So: read the stream's live ids (an id-only scan over
+   * `events_conn_stream_live_idx`, which exists for exactly this shape), diff
+   * against the present set in memory, retire by PRIMARY KEY in bounded
+   * chunks. Runs inside the caller's stream-write-lock, so the read and the
+   * writes see one writer — the same atomicity discipline the single
+   * statement had under the sweep's single-writer rule.
+   */
+  const live = await db
+    .select({ id: events.id, eventId: events.eventId })
+    .from(events)
+    .where(and(eq(events.connectionId, conn.id), eq(events.streamHash, stream.configHash), isNull(events.deletedAt), ...scopeFilter));
+  const presentSet = new Set(present);
+  const toRetire = live.filter((r) => !presentSet.has(r.eventId)).map((r) => r.id);
+  // One instant for the whole retire: rows tombstoned by one sweep should
+  // carry one timestamp, not drift across chunk boundaries.
+  const now = new Date();
+  let gone = 0;
+  for (let i = 0; i < toRetire.length; i += RETIRE_CHUNK) {
+    const chunk = toRetire.slice(i, i + RETIRE_CHUNK);
+    const res = await db
+      .update(events)
+      .set({ deletedAt: now })
+      .where(and(inArray(events.id, chunk), isNull(events.deletedAt)))
+      .returning({ id: events.id });
+    gone += res.length;
+  }
+  return gone;
 }
 
 /**
