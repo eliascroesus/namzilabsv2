@@ -279,18 +279,28 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "offered, but still synced where one was configured — is incremental instead: individual records, " +
       "reconciled by polling.",
     /**
-     * CONSERVATIVE by decision (documented in DATA_MODEL.md): the analytics
-     * endpoints are assumed to share the same tight 20/min bucket as the emails
-     * list, because that is the only published figure we have and being wrong
-     * in this direction only costs throughput. If they turn out to be more
-     * generous, raise these — they are enforced per endpoint now, so each moves
-     * independently.
+     * ONE WORKSPACE-WIDE BUCKET, because that is the limit Instantly actually
+     * publishes (developer.instantly.ai/getting-started/rate-limit, read
+     * 2026-08-05): **6,000 requests/minute** (and 100/sec), applied to the
+     * ENTIRE workspace, shared between API v1 and v2 and across every API key
+     * of that workspace. There is no per-endpoint figure at all.
+     *
+     * The previous declaration was four per-endpoint buckets of 20/min — a
+     * guess recorded as conservative, and it was 300× below the published
+     * number on the product's highest-volume source. Worse than slow: four
+     * separate buckets modelled a limit the provider charges as one, so the
+     * shape was wrong as well as the size.
+     *
+     * Declared on `"*"` — the shared account-wide bucket — and the connector
+     * deliberately has NO `operationFor`, so every claim lands in that one
+     * bucket exactly as Instantly charges it. With the 70% share: 4,200/min,
+     * 3,150 for background sweeps. The 100/sec ceiling is not modelled here
+     * (the ledger's grain is the minute); nothing in this codebase can reach
+     * 100 concurrent Instantly requests for one connection today, and the
+     * reactive layer (Retry-After on 429) covers the burst edge.
      */
     rateLimits: {
-      "emails.list": { requestsPerMinute: 20 },
-      "campaigns.list": { requestsPerMinute: 20 },
-      "campaigns.analytics": { requestsPerMinute: 20 },
-      "campaigns.analytics.daily": { requestsPerMinute: 20 },
+      "*": { requestsPerMinute: 6_000 },
     },
     autoWebhook: false,
     credentialFields: [{ key: "apiKey", label: "API Key (v2)", placeholder: "..." }],

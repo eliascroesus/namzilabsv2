@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { instantlyConnector, looksLikeInstantlyV1Key } from "@/connectors/instantly";
 import { sendblueConnector } from "@/connectors/sendblue";
 import { catalogEntry, syncGuarantee } from "@/connectors/catalog";
+import { pollOperation } from "@/lib/provider-gateway/operations";
 
 /**
  * D.4 poll backstops for the formerly webhook-only sources, plus D.6
@@ -47,24 +48,26 @@ const CFG = (over: Record<string, unknown> = {}) => ({ campaignId: "camp-1", ...
 describe("Instantly is campaign-scoped and analytics-first", () => {
   const daily = (date: string, sent: number) => ({ date, sent, campaign_id: "camp-1" });
 
-  it("is declared: derived-mirror class, per-campaign flowFields, a budget for every operation", () => {
+  it("is declared: derived-mirror class, per-campaign flowFields, the workspace-wide budget", () => {
     const entry = catalogEntry("instantly")!;
     expect(entry.poll).toBe(true);
     expect(syncGuarantee("instantly")).toBe("derived-mirror");
     // Stream-scoped: the resource is chosen per flow, never workspace-wide.
     expect(entry.flowFields?.map((f) => f.key)).toEqual(["campaignId", "streamType", "days"]);
-    // Every endpoint it can call has its own enforced budget.
-    for (const op of instantlyConnector.operations ?? []) {
-      expect(entry.rateLimits?.[op]?.requestsPerMinute).toBe(20);
-    }
+    // ONE bucket, deliberately. Instantly publishes a single workspace-wide
+    // 6,000/min limit shared across every endpoint and key, so the catalog
+    // declares it on "*" and the connector emits no per-endpoint operations —
+    // four invented 20/min buckets used to throttle this source to 0.3% of
+    // its documented capacity.
+    expect(instantlyConnector.operations).toBeUndefined();
+    expect(instantlyConnector.operationFor).toBeUndefined();
+    expect(entry.rateLimits?.["*"]?.requestsPerMinute).toBe(6_000);
   });
 
-  it("routes each streamType to its own endpoint budget", () => {
-    const op = (t?: string) => instantlyConnector.operationFor!(t ? { streamType: t } : undefined);
-    expect(op("analytics_daily")).toBe("campaigns.analytics.daily");
-    expect(op("analytics_totals")).toBe("campaigns.analytics");
-    expect(op("raw_emails")).toBe("emails.list");
-    expect(op()).toBe("campaigns.analytics.daily"); // daily is the default
+  it("every streamType lands on the one workspace bucket the provider actually has", () => {
+    for (const config of [{ streamType: "analytics_daily" }, { streamType: "analytics_totals" }, { streamType: "raw_emails" }, undefined]) {
+      expect(pollOperation("instantly", config)).toBe("*");
+    }
   });
 
   it("daily analytics: one row per day, date-bounded, declaring its window as a mirror scope", async () => {

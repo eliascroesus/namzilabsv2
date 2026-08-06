@@ -66,25 +66,15 @@ export const instantlyConnector: Connector = {
   holdsContinuation: holdsWindowContinuation,
 
   /**
-   * Every endpoint this connector claims budget against. The catalog declares a
-   * published limit per key, and the budget layer enforces each separately —
-   * so this list and the catalog's `rateLimits` must agree. A declared limit
-   * with no operation emitting it is dead config; a provider-gateway test fails
-   * on that mismatch in either direction.
+   * DELIBERATELY no `operationFor` and no `operations`: Instantly publishes
+   * exactly one limit — 6,000/min for the whole workspace, shared across every
+   * endpoint, both API versions and all keys — so every claim must land in the
+   * one `"*"` bucket the catalog declares. Per-endpoint keys here would split
+   * a single provider-side budget into several ledger buckets, each enforced
+   * alone, which models a limit the provider does not have. What is lost is
+   * per-endpoint attribution in the ledger's audit trail; what is gained is
+   * that the enforced shape matches the charged shape.
    */
-  operations: ["emails.list", "campaigns.list", "campaigns.analytics", "campaigns.analytics.daily"] as const,
-
-  /** Which endpoint a poll of this stream will hit — resolved before the call. */
-  operationFor(config?: Record<string, unknown>): string {
-    switch (streamTypeOf(config)) {
-      case "analytics_daily":
-        return "campaigns.analytics.daily";
-      case "analytics_totals":
-        return "campaigns.analytics";
-      default:
-        return "emails.list";
-    }
-  },
 
   /** The campaign picker in the Get data step. */
   async listOptions(key, args) {
@@ -101,10 +91,9 @@ export const instantlyConnector: Connector = {
 
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     // Fails CLOSED, for the same reason as Sendblue: injected rows land at
-    // generation 0 and are unreachable by every sweep. Currently unreachable
-    // anyway — the route 202-ignores stream-scoped sources before verifying —
-    // but a fail-open default one routing change away from being live is not a
-    // default worth keeping.
+    // generation 0 and are unreachable by every sweep. This IS reachable now —
+    // the route verifies BEFORE the stream-scoped doorbell bail, so this check
+    // is what stands between an anonymous POST and a quota-spending sweep.
     if (!secret) return false;
     const provided = headers["x-instantly-signature"];
     if (!provided) return false;

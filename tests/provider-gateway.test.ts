@@ -53,11 +53,14 @@ afterEach(async () => {
 const conn = () => ({ id: connectionId, orgId: ORG, source: "instantly" });
 
 describe("F.1 — budgets come from the catalog's declared limits", () => {
-  it("Instantly's declared 20/min emails.list budget is now ENFORCED at the configured share", () => {
-    // 20 published × 0.7 share = 14 calls/minute actually spent.
-    expect(budgetFor("instantly", "emails.list")).toBe(14);
-    // Undeclared operations fall back to the default budget.
-    expect(budgetFor("instantly", "*")).toBe(42);
+  it("Instantly's documented 6,000/min workspace budget is declared on the shared bucket", () => {
+    // Instantly publishes ONE limit — 6,000/min for the whole workspace,
+    // shared across every endpoint and key — so it is declared on "*" and
+    // every claim lands there. 6,000 × 0.7 share = 4,200/min actually spent.
+    expect(budgetFor("instantly", "*")).toBe(4_200);
+    // Per-endpoint keys are deliberately NOT declared (the provider has no
+    // such buckets); an explicitly-named operation falls back to the default.
+    expect(budgetFor("instantly", "emails.list")).toBe(42);
     expect(budgetFor("close", "*")).toBe(42);
   });
 
@@ -112,9 +115,11 @@ describe("F.1 — budgets come from the catalog's declared limits", () => {
 
 describe("F.8 — reserved headroom for interactive work", () => {
   it("background stops short of the budget; interactive may use the reserve", () => {
-    // 14 total → 25% reserve (4) → background 10, interactive 14.
-    expect(laneLimit("instantly", "emails.list", "background")).toBe(10);
-    expect(laneLimit("instantly", "emails.list", "interactive")).toBe(14);
+    // The mechanism, exercised on the 42-call default bucket ("emails.list"
+    // is deliberately undeclared for Instantly — its provider budget is one
+    // workspace-wide bucket): 42 total → 25% reserve (11) → background 31.
+    expect(laneLimit("instantly", "emails.list", "background")).toBe(31);
+    expect(laneLimit("instantly", "emails.list", "interactive")).toBe(42);
     expect(laneLimit("instantly", "emails.list", "background")).toBeLessThan(budgetFor("instantly", "emails.list"));
   });
 

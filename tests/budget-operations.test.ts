@@ -77,11 +77,13 @@ describe("the sweep claims against the endpoint it actually calls", () => {
   });
 
   it("spends the declared budget, not the default one", async () => {
-    // 20/min published × 0.7 share = 14, vs the undeclared default of 60 × 0.7 = 42.
-    expect(budgetFor("instantly", "emails.list")).toBe(14);
-    expect(budgetFor("instantly", "*")).toBe(42);
-    // What the sweep now resolves to must be the strict one.
-    expect(budgetFor("instantly", pollOperation("instantly"))).toBe(14);
+    // Instantly publishes ONE workspace-wide limit (6,000/min, shared across
+    // every endpoint and key), declared on "*": 6,000 × 0.7 = 4,200 — vs the
+    // undeclared default of 60 × 0.7 = 42.
+    expect(budgetFor("instantly", "*")).toBe(4_200);
+    expect(budgetFor("close", "*")).toBe(42);
+    // What the sweep resolves to must be the declared bucket.
+    expect(budgetFor("instantly", pollOperation("instantly"))).toBe(4_200);
   });
 });
 
@@ -95,7 +97,10 @@ describe("declared limits and claimed operations cannot drift apart", () => {
   it("every declared rateLimits key is one some operation can actually emit", () => {
     for (const entry of declaring) {
       const connector = getConnector(entry.source);
-      const emits = new Set(connector?.operations ?? []);
+      // "*" is always emittable: pollOperation falls back to it for a
+      // connector with no operationFor, and declaring a limit on it is the
+      // honest model for a provider with one account-wide bucket (Instantly).
+      const emits = new Set<string>([...(connector?.operations ?? []), "*"]);
       for (const key of Object.keys(entry.rateLimits!)) {
         expect(
           emits.has(key),
@@ -155,8 +160,15 @@ describe("declared limits and claimed operations cannot drift apart", () => {
     }
   });
 
-  it("a source that declares limits never resolves to the wildcard bucket", () => {
+  it("a source that declares PER-ENDPOINT limits never resolves to the wildcard bucket", () => {
     for (const entry of declaring) {
+      const keys = Object.keys(entry.rateLimits!);
+      // A source whose ONLY declaration is "*" is the opposite case, not an
+      // exemption from the rule: its provider charges one account-wide bucket,
+      // "*" IS the declared bucket, and resolving to it is enforcement — the
+      // bug this test exists for is a declared per-endpoint limit being
+      // bypassed via the wildcard FALLBACK.
+      if (keys.length === 1 && keys[0] === "*") continue;
       expect(
         pollOperation(entry.source),
         `${entry.source} declares per-endpoint limits but its polls resolve to "*", ` +
@@ -216,12 +228,14 @@ describe("pollOperation resolution", () => {
     expect(pollOperation("gcal")).toBe("events.list");
   });
 
-  it("is resolved from config, so per-stream endpoints get separate budgets", () => {
-    // The real connector already does this: two streams on ONE Instantly
-    // connection hit different endpoints and draw on different buckets.
-    expect(pollOperation("instantly", { streamType: "analytics_daily" })).toBe("campaigns.analytics.daily");
-    expect(pollOperation("instantly", { streamType: "analytics_totals" })).toBe("campaigns.analytics");
-    expect(pollOperation("instantly", { streamType: "raw_emails" })).toBe("emails.list");
+  it("resolves every Instantly stream to the ONE workspace bucket its provider charges", () => {
+    // Instantly's published limit is workspace-wide, shared across every
+    // endpoint — so all stream types deliberately land in the same "*"
+    // bucket. Splitting them into per-endpoint buckets would enforce each
+    // alone and permit a multiple of the real limit in aggregate.
+    expect(pollOperation("instantly", { streamType: "analytics_daily" })).toBe("*");
+    expect(pollOperation("instantly", { streamType: "analytics_totals" })).toBe("*");
+    expect(pollOperation("instantly", { streamType: "raw_emails" })).toBe("*");
   });
 
   it("is safe for an unknown source", () => {
