@@ -151,7 +151,13 @@ type CloseCursor = {
   covHi?: string | null;
 };
 
-function parseCloseCursor(cursor: string | null): CloseCursor {
+/**
+ * Exported for the nightly invariant scan (`closeCursorLag` in
+ * lib/health/invariants.ts), which needs to read `hw` out of stored cursors —
+ * ONE definition of the cursor grammar, two readers, rather than the scan
+ * re-implementing a parse that would silently drift the day this changes.
+ */
+export function parseCloseCursor(cursor: string | null): CloseCursor {
   if (!cursor) return { hw: null, cont: null, maxSeen: null };
   if (cursor.startsWith("{")) {
     try {

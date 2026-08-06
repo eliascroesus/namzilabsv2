@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
-import { backfillJobs, connections, deadLetter, events, sourceStreams, usageLedger } from "@/db/schema";
+import { backfillJobs, connections, deadLetter, events, sourceStreams, syncState, usageLedger } from "@/db/schema";
 import { scanInvariants } from "@/lib/health/invariants";
 import type { DB } from "@/db/types";
 
@@ -310,6 +310,55 @@ describe("a paged scan that keeps restarting", () => {
     // A cursor this cannot parse is not a finding — it must not throw either.
     await db.update(sourceStreams).set({ cursor: '{"restarts": not-json' }).where(eq(sourceStreams.id, junk.id));
     expect((await scanInvariants(db)).restartingScans).toHaveLength(0);
+  });
+});
+
+describe("a Close walk aging toward the provider's 30-day cliff", () => {
+  /**
+   * Close deletes its event log at 30 days, in the provider's hands. The
+   * walk's watermark advances only when a window drains, so a workspace
+   * churning faster than ~200 events per sweep never moves its mark and the
+   * unwalked tail ages off the cliff — silently: the poll succeeds, the
+   * breaker is clean, lastError is empty. The Close cursor is the one place
+   * the watermark date is stored, in either of two forms.
+   */
+  const seedClose = async (cursor: string) => {
+    const conn = await connection({ source: "close" });
+    await db.insert(syncState).values({ connectionId: conn.id, cursor });
+    return conn;
+  };
+  const daysAgo = (d: number) => new Date(Date.now() - d * DAY).toISOString();
+
+  it("flags the steady-state form: a bare ISO watermark 26 days old", async () => {
+    const conn = await seedClose(daysAgo(26));
+    const report = await scanInvariants(db);
+    expect(report.closeCursorLag).toHaveLength(1);
+    expect(report.closeCursorLag[0].connectionId).toBe(conn.id);
+    expect(report.closeCursorLag[0].ageDays).toBe(26);
+    expect(report.anyFindings).toBe(true);
+  });
+
+  it("flags the mid-walk JSON form — the busy workspace IS the lagging case", async () => {
+    await seedClose(JSON.stringify({ hw: daysAgo(27), cont: "tok-123", maxSeen: daysAgo(1) }));
+    const report = await scanInvariants(db);
+    expect(report.closeCursorLag).toHaveLength(1);
+    expect(report.closeCursorLag[0].ageDays).toBe(27);
+  });
+
+  it("stays quiet inside the margin, for other sources, and for cursors it cannot read", async () => {
+    await seedClose(daysAgo(5)); // fresh mark — healthy
+    const gcal = await connection({ source: "gcal" });
+    await db.insert(syncState).values({ connectionId: gcal.id, cursor: daysAgo(300) }); // not Close's cursor grammar to judge
+    await seedClose("not-a-date"); // malformed → a different bug, not a lag
+    await seedClose(JSON.stringify({ hw: null, floor: daysAgo(90) })); // first sync — no mark yet
+
+    expect((await scanInvariants(db)).closeCursorLag).toHaveLength(0);
+  });
+
+  it("ignores disabled connections — a disconnected account has no walk to lag", async () => {
+    const conn = await seedClose(daysAgo(29));
+    await db.update(connections).set({ status: "disabled", disabledAt: new Date() }).where(eq(connections.id, conn.id));
+    expect((await scanInvariants(db)).closeCursorLag).toHaveLength(0);
   });
 });
 

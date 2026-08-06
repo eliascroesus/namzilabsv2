@@ -1,7 +1,8 @@
 import { and, eq, gte, isNull, like, lt, ne, or, sql } from "drizzle-orm";
-import { connections, deadLetter, events, sourceStreams, usageLedger } from "@/db/schema";
+import { connections, deadLetter, events, sourceStreams, syncState, usageLedger } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { isMirrorSource } from "@/connectors/catalog";
+import { parseCloseCursor } from "@/connectors/close";
 import { stalledJobs } from "@/lib/backfill/jobs";
 import { rejectingConnections } from "@/lib/webhooks/rejections";
 
@@ -110,6 +111,8 @@ export type InvariantReport = {
   throttledConnections: Array<{ connectionId: string; provider: string; throttled: number; calls: number }>;
   /** Paged scans whose stored continuation keeps being refused, so they never advance. */
   restartingScans: Array<{ streamId: string; connectionId: string; source: string; restarts: number }>;
+  /** Close connections whose watermark is aging toward the provider's 30-day event-log cliff. */
+  closeCursorLag: Array<{ connectionId: string; hw: string; ageDays: number }>;
   /** True when any check found something. Lets a caller alert without re-deriving it. */
   anyFindings: boolean;
 };
@@ -276,6 +279,53 @@ async function emptyMirrors(db: DB, now: Date) {
   return rows.filter((r) => isMirrorSource(r.source) && r.live === 0).slice(0, REPORT_LIMIT).map(({ live: _live, ...rest }) => rest);
 }
 
+/**
+ * Close's event log retains THIRTY DAYS, in the provider's own hands (a
+ * MongoDB TTL index, per their engineering writeup). The walk's watermark
+ * (`hw`) advances only when a window fully drains, and the page budget caps
+ * throughput at ~200 events per sweep — so a workspace that churns faster
+ * than the walk can drain NEVER moves its mark, and the unwalked tail slides
+ * past the retention cliff and is gone, with no error anywhere. This is the
+ * check the header above says needs a cursor-history column in the general
+ * case; Close is the one source where it doesn't, because the watermark date
+ * is sitting IN the stored cursor.
+ *
+ * Twenty-five days: a five-day margin to act before the cliff. Not
+ * `connections.lastError`, because `recordSuccess` wipes that on every clean
+ * poll — and a lagging walk IS polling cleanly; that is the whole problem.
+ */
+const CLOSE_HW_LAG_MS = 25 * 24 * HOUR_MS;
+
+async function closeCursorLag(db: DB, now: Date) {
+  const rows = await db
+    .select({ connectionId: connections.id, cursor: syncState.cursor })
+    .from(connections)
+    .innerJoin(syncState, eq(syncState.connectionId, connections.id))
+    .where(and(eq(connections.source, "close"), eq(connections.status, "active"), isNull(connections.disabledAt)))
+    .limit(REPORT_LIMIT * 4);
+  const findings: Array<{ connectionId: string; hw: string; ageDays: number }> = [];
+  for (const row of rows) {
+    // Both stored forms — the bare ISO string of the steady state and the
+    // JSON {hw, cont, …} of a walk in flight — through the connector's own
+    // parser. A null hw is a first sync that has not established a mark
+    // (the {floor} form); a stuck first sync is the unswept/failing checks'
+    // problem, not a lag. Unparseable dates are ignored for the same reason
+    // the whole scan is reads-only: a malformed cursor is a different bug,
+    // and misfiling it here would bury it.
+    const hw = parseCloseCursor(row.cursor)?.hw ?? null;
+    if (!hw) continue;
+    const t = Date.parse(hw);
+    if (!Number.isFinite(t)) continue;
+    const ageMs = now.getTime() - t;
+    if (ageMs <= CLOSE_HW_LAG_MS) continue;
+    const ageDays = Math.floor(ageMs / (24 * HOUR_MS));
+    console.warn(`[close-lag] connection=${row.connectionId} hw=${hw} ageDays=${ageDays} — Close deletes its event log at 30 days; data older than the mark is at risk`);
+    findings.push({ connectionId: row.connectionId, hw, ageDays });
+    if (findings.length >= REPORT_LIMIT) break;
+  }
+  return findings;
+}
+
 export async function scanInvariants(db: DB, now = new Date()): Promise<InvariantReport> {
   // EXACTLY FIVE CONCURRENT READS HERE, and `MIN_POOL_MAX = 7` in
   // src/db/client.ts is derived from this array: 5 concurrent reads + 1
@@ -319,6 +369,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
 
   const throttled = await throttledConnections(db, now);
   const stalledScans = await restartingScans(db);
+  const closeLag = await closeCursorLag(db, now);
 
   const report: Omit<InvariantReport, "anyFindings"> = {
     unsweptStreams: unswept,
@@ -334,6 +385,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
     throttledConnections: throttled,
     restartingScans: stalledScans,
     rejectingEndpoints: rejecting,
+    closeCursorLag: closeLag,
   };
   return {
     ...report,
@@ -345,6 +397,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
       report.emptyMirrors.length > 0 ||
       report.throttledConnections.length > 0 ||
       report.restartingScans.length > 0 ||
-      report.rejectingEndpoints.length > 0,
+      report.rejectingEndpoints.length > 0 ||
+      report.closeCursorLag.length > 0,
   };
 }
