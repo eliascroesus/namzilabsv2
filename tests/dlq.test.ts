@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe("dead-letter queue + replay", () => {
-  it("parks an exhausted event in the DLQ and flags the connection", async () => {
+  it("parks an exhausted event in the DLQ and keeps the connection in the sweep", async () => {
     const connectionId = await seedConnection(db);
     const raw = await storeRawEvent(db, {
       orgId: "org_test",
@@ -37,9 +37,59 @@ describe("dead-letter queue + replay", () => {
     const failed = await db.select().from(deliveryLog).where(eq(deliveryLog.status, "failed"));
     expect(failed).toHaveLength(1);
 
+    /**
+     * THE CONNECTION MUST STAY ACTIVE. `status = "error"` has no expiry and no
+     * probe — `dueConnectionsForSweep` selects only active, and the only writer
+     * back to active runs inside the sweep — so the old behaviour (flip to
+     * error here) meant one malformed webhook body silently ended polling
+     * forever on a connection whose poll path was healthy. The DLQ row plus
+     * `lastError` is the record; the sweep keeps running.
+     */
     const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId));
-    expect(conn.status).toBe("error");
-    expect(conn.lastError).toBe("processing blew up");
+    expect(conn.status).toBe("active");
+    expect(conn.lastError).toContain("processing blew up");
+    expect(conn.lastError).toContain("dead-lettered");
+  });
+
+  it("a successful replay un-parks a connection stuck at status=error from the old behaviour", async () => {
+    const connectionId = await seedConnection(db);
+    const raw = await storeRawEvent(db, {
+      orgId: "org_test",
+      connectionId,
+      source: "webhook",
+      headers: {},
+      payload: { id: "e1", type: "booked" },
+      signatureValid: true,
+    });
+    await deadLetterRawEvent(db, raw.id, 6, "was parked by the pre-fix code");
+    // Simulate a row written by the OLD dead-letter path, which set status=error.
+    await db.update(connections).set({ status: "error" }).where(eq(connections.id, connectionId));
+
+    await replayRawEvent(db, raw.id, "org_test");
+
+    const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId));
+    expect(conn.status).toBe("active");
+    expect(conn.lastError).toBeNull();
+  });
+
+  it("a replay never flips a DISABLED connection back on", async () => {
+    const connectionId = await seedConnection(db);
+    const raw = await storeRawEvent(db, {
+      orgId: "org_test",
+      connectionId,
+      source: "webhook",
+      headers: {},
+      payload: { id: "e1", type: "booked" },
+      signatureValid: true,
+    });
+    await deadLetterRawEvent(db, raw.id, 6, "boom");
+    // The user's off switch is not ours to flip on a replay.
+    await db.update(connections).set({ status: "disabled" }).where(eq(connections.id, connectionId));
+
+    await replayRawEvent(db, raw.id, "org_test");
+
+    const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId));
+    expect(conn.status).toBe("disabled");
   });
 
   it("replays a dead-lettered event: it processes and the DLQ row resolves", async () => {

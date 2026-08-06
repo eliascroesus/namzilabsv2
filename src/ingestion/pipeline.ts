@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { rawEvents, events, deliveryLog, deadLetter, connections } from "@/db/schema";
 import type { DB } from "@/db/types";
 import type { CanonicalEvent } from "@/connectors/types";
@@ -250,8 +250,24 @@ export async function processRawEvent(db: DB, rawEventId: string, opts: ProcessO
 }
 
 /**
- * Move an event to the dead-letter queue after retries are exhausted, and flag
- * the connection as errored. Nothing is dropped — the DLQ row is replayable.
+ * Move an event to the dead-letter queue after retries are exhausted. Nothing
+ * is dropped — the DLQ row is replayable.
+ *
+ * THE CONNECTION STAYS ACTIVE, and that is the fix rather than an oversight.
+ * This used to set `connections.status = "error"`, and `status` is the one
+ * state in the system with no expiry and no probe: `dueConnectionsForSweep`
+ * selects only `status = 'active'`, the only writer back to active is
+ * `recordSuccess` — which runs inside the sweep this very flag removed the
+ * connection from — and `replayRawEvent` resolved the DLQ row without touching
+ * the status. So ONE malformed webhook body silently ended polling forever,
+ * on a connection whose poll path was perfectly healthy: a processing failure
+ * of one payload says nothing about the credentials or the provider.
+ *
+ * That contradicted the system's own F.6 rule ("never a terminal state —
+ * every pause carries an expiry") a layer up from where the rule is enforced.
+ * Provider/credential failures already have their mechanism — the breaker's
+ * probe ladder, which pauses and retries. A payload failure gets a DLQ row
+ * and a `lastError` the connection page shows; the sweep keeps running.
  */
 export async function deadLetterRawEvent(
   db: DB,
@@ -278,7 +294,7 @@ export async function deadLetterRawEvent(
   });
   await db
     .update(connections)
-    .set({ status: "error", lastError: error, updatedAt: new Date() })
+    .set({ lastError: `webhook processing failed (dead-lettered, replayable): ${error.slice(0, 300)}`, updatedAt: new Date() })
     .where(eq(connections.id, raw.connectionId));
 }
 
@@ -303,5 +319,28 @@ export async function replayRawEvent(db: DB, rawEventId: string, orgId?: string)
     .update(deadLetter)
     .set({ resolvedAt: new Date() })
     .where(eq(deadLetter.rawEventId, rawEventId));
+  /**
+   * REPAIR for connections parked by the old dead-letter behaviour, which set
+   * `status = "error"` — a state with no expiry that removed the connection
+   * from the sweep with nothing to put it back (`dueConnectionsForSweep`
+   * selects only active; `recordSuccess` runs inside the sweep it was removed
+   * from). Dead-lettering no longer parks a connection, but rows written
+   * before the change are still stuck, and a successful replay of the very
+   * payload that parked them is direct evidence processing works again.
+   *
+   * Guarded on `status = "error"` so this never touches "disabled" — the
+   * user's off switch is not ours to flip.
+   */
+  const [raw2] = await db
+    .select({ connectionId: rawEvents.connectionId })
+    .from(rawEvents)
+    .where(eq(rawEvents.id, rawEventId))
+    .limit(1);
+  if (raw2) {
+    await db
+      .update(connections)
+      .set({ status: "active", lastError: null, updatedAt: new Date() })
+      .where(and(eq(connections.id, raw2.connectionId), eq(connections.status, "error")));
+  }
   return result;
 }
