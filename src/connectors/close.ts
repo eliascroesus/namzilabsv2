@@ -11,7 +11,7 @@ import type {
   VerifyWebhookResult,
 } from "./types";
 import { createHmac } from "node:crypto";
-import { safeEqual } from "@/lib/signatures";
+import { safeEqual, timestampFreshness } from "@/lib/signatures";
 import { fetchJson, basicAuth, HttpError, parseRateLimit, type ObservedRateLimit } from "@/lib/http-client";
 import { asObject, holdsWindowContinuation, parseDate, spanCovered, str } from "./field-utils";
 
@@ -400,7 +400,21 @@ export const closeConnector: Connector = {
     const key = closeSigningKey(secret);
     if (!key) return false;
     const expected = createHmac("sha256", key).update(`${timestamp}${rawBody}`, "utf8").digest("hex");
-    return safeEqual(hash, expected);
+    if (!safeEqual(hash, expected)) return false;
+    /**
+     * REPLAY PROTECTION, after authenticity. The timestamp is inside the
+     * signed message, so a valid HMAC over a stale timestamp proves exactly
+     * one thing: Close sent this ONCE — not that whoever is re-sending it now
+     * is Close. Without an age check a captured delivery verifies forever.
+     *
+     * "stale" rejects. "unparseable" ACCEPTS deliberately: Close's timestamp
+     * format is documented nowhere reachable (bot-walled docs), and rejecting
+     * on a format assumption is precisely how the hex-key bug silently
+     * refused every delivery this connector ever received. Authenticity is
+     * already proven; only the replay window is lost, and `event_id` dedup
+     * makes a replayed delivery a no-op anyway.
+     */
+    return timestampFreshness(timestamp) !== "stale";
   },
 
   /**

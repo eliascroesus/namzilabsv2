@@ -50,7 +50,7 @@ const RECORD_EVERY_MS = 60_000;
  */
 const lastRecorded = new Map<string, number>();
 
-export type RejectionReason = "unreadable-secret" | "invalid-signature";
+export type RejectionReason = "unreadable-secret" | "invalid-signature" | "oversized-body";
 
 /**
  * Note that a delivery was refused. Best-effort: an endpoint that is already

@@ -158,9 +158,11 @@ describe("inbound webhook authentication", () => {
  */
 describe("a stream-scoped webhook rings the bell without delivering anything", () => {
   const sign = (secret: string, body: unknown) => {
-    // Calendly's scheme: HMAC over `${t}.${rawBody}`.
+    // Calendly's scheme: HMAC over `${t}.${rawBody}`. `t` must be CURRENT —
+    // it is inside the signed payload and now doubles as replay protection,
+    // so a fixture pinned to a past date is correctly rejected as a replay.
     const raw = JSON.stringify(body);
-    const t = "1700000000";
+    const t = String(Math.floor(Date.now() / 1000));
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { createHmac } = require("node:crypto") as typeof import("node:crypto");
     const v1 = createHmac("sha256", secret).update(`${t}.${raw}`).digest("hex");

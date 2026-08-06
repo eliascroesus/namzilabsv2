@@ -24,3 +24,58 @@ export function safeEqual(a: string, b: string): boolean {
   if (ab.length !== bb.length) return false;
   return timingSafeEqual(ab, bb);
 }
+
+/**
+ * Replay-protection window for signed webhook timestamps: 5 minutes, either
+ * direction. This is Stripe's library default (300s) and the widest number in
+ * common use — Calendly's own verification example uses 3 minutes — chosen
+ * over a tighter one because the cost of too-wide is a replay window measured
+ * in minutes against an idempotent consumer (`event_id` dedup makes a replayed
+ * delivery a no-op), while the cost of too-tight is rejecting real deliveries
+ * from a provider whose clock, or ours, has drifted.
+ */
+export const WEBHOOK_TIMESTAMP_TOLERANCE_MS = 5 * 60_000;
+
+/**
+ * Is a signed webhook timestamp within the replay window?
+ *
+ * Three answers, not two, and the third is the design decision:
+ *  - "fresh"       — parsed, and within ±tolerance of now.
+ *  - "stale"       — parsed, and outside it. The caller must reject: the
+ *                    signature proves the provider sent this ONCE, not that
+ *                    whoever is sending it now is the provider.
+ *  - "unparseable" — a format this parser does not recognize. The caller
+ *                    should ACCEPT (and may log): the HMAC is computed over
+ *                    the timestamp string and the body together, so
+ *                    authenticity is already proven — only the replay window
+ *                    is lost. Rejecting on an unrecognized format would be the
+ *                    hex-key incident again: an assumption about a provider's
+ *                    encoding silently rejecting 100% of real deliveries.
+ *                    Close's timestamp format is documented nowhere we can
+ *                    reach (the docs are bot-walled), which is exactly the
+ *                    situation this branch exists for.
+ *
+ * Accepts unix seconds, unix milliseconds (magnitude-discriminated: values
+ * above 1e12 are milliseconds until the year 33658), and ISO-8601 date
+ * strings. Future timestamps are held to the same window — clock skew runs in
+ * both directions, and a timestamp far in the future is as suspect as one far
+ * in the past.
+ */
+export function timestampFreshness(
+  raw: string | null | undefined,
+  toleranceMs: number = WEBHOOK_TIMESTAMP_TOLERANCE_MS,
+  nowMs: number = Date.now(),
+): "fresh" | "stale" | "unparseable" {
+  if (!raw) return "unparseable";
+  const trimmed = raw.trim();
+  let ms: number | null = null;
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    const n = Number(trimmed);
+    if (Number.isFinite(n)) ms = n > 1e12 ? n : n * 1000;
+  } else {
+    const parsed = Date.parse(trimmed);
+    if (!Number.isNaN(parsed)) ms = parsed;
+  }
+  if (ms == null) return "unparseable";
+  return Math.abs(nowMs - ms) <= toleranceMs ? "fresh" : "stale";
+}

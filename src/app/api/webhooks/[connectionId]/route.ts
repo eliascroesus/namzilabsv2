@@ -29,6 +29,21 @@ export const runtime = "nodejs";
  */
 export const maxDuration = 60;
 
+/**
+ * The most bytes one delivery may carry.
+ *
+ * Vercel already rejects bodies over 4.5MB at the platform edge, so this is
+ * not the outer wall — it is the inner one, protecting what a payload becomes
+ * AFTER acceptance: a `raw_events.payload` jsonb row (stored verbatim,
+ * forever until retention), a `normalizeDatesDeep` walk, and an upsert
+ * statement. No provider here sends events beyond a few kilobytes; a
+ * megabyte is two orders of magnitude of headroom above the real traffic and
+ * three below the platform cap, so nothing legitimate is turned away.
+ *
+ * Checked on the BYTES READ, not the Content-Length header alone — a header
+ * is a claim, and chunked encodings may not send one at all.
+ */
+const MAX_BODY_BYTES = 1_000_000;
 
 /**
  * Universal inbound webhook receiver. Implements the fast-ack pattern:
@@ -47,8 +62,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
   const connector = getConnector(conn.source);
   if (!connector) return NextResponse.json({ error: "no connector for source" }, { status: 400 });
 
+  // Cheap first gate: a declared length over the cap is refused before the
+  // body is read at all. The read-side check below is the one that holds.
+  const declaredLength = Number(req.headers.get("content-length") ?? 0);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    await recordRejectedDelivery(db, conn, "oversized-body");
+    return NextResponse.json({ error: "payload too large" }, { status: 413 });
+  }
+
   // Read the exact raw bytes BEFORE parsing — HMAC must be computed over these.
   const rawBody = await req.text();
+  if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+    await recordRejectedDelivery(db, conn, "oversized-body");
+    return NextResponse.json({ error: "payload too large" }, { status: 413 });
+  }
   const headers = headersToObject(req.headers);
 
   // "No secret configured" and "a secret exists but we cannot read it" are

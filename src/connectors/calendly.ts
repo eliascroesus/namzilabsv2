@@ -8,7 +8,7 @@ import type {
   ListOptionsArgs,
   SourceOption,
 } from "./types";
-import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
+import { hmacSha256Hex, safeEqual, timestampFreshness } from "@/lib/signatures";
 import { fetchJson } from "@/lib/http-client";
 import { asObject, parseDate, str } from "./field-utils";
 
@@ -98,7 +98,14 @@ export const calendlyConnector: Connector = {
     const v1 = parts["v1"];
     if (!t || !v1) return false;
     const expected = hmacSha256Hex(secret, `${t}.${rawBody}`);
-    return safeEqual(v1, expected);
+    if (!safeEqual(v1, expected)) return false;
+    // Replay protection: `t` is unix seconds inside the signed payload, so a
+    // valid HMAC over a stale `t` proves only that Calendly sent this once.
+    // Calendly's own verification example enforces a tolerance (3 minutes);
+    // ours is the shared 5-minute window. "unparseable" accepts — see
+    // timestampFreshness for why a format surprise must not become a 100%
+    // rejection.
+    return timestampFreshness(t) !== "stale";
   },
 
   normalize(rawPayload: unknown, ctx: NormalizeContext): CanonicalEvent[] {
@@ -233,7 +240,27 @@ const MAX_OPTION_PAGES = 10;
  */
 const nextPage = (p?: { next_page?: string | null } | null): string | null => {
   const url = p?.next_page;
-  return typeof url === "string" && url !== "" ? url : null;
+  if (typeof url !== "string" || url === "") return null;
+  /**
+   * ORIGIN CHECK before the URL is stored or followed. A `next_page` is
+   * fetched verbatim with the customer's bearer token attached, and one exit
+   * (`parseCursor`) PERSISTS it in the stream cursor, where it is re-fetched
+   * every sweep — so a URL pointing anywhere but Calendly's API would ship
+   * the customer's PAT to an arbitrary host, from inside our runtime, on a
+   * schedule. Every legitimate continuation Calendly has ever returned is an
+   * absolute URL on this origin (verified live alongside CL12); anything
+   * else is treated as "no next page", which ends the walk exactly like a
+   * drained scan and costs nothing but a restart.
+   */
+  try {
+    if (new URL(url).origin !== new URL(API).origin) {
+      console.warn(`[calendly] refusing off-origin next_page URL: ${url.slice(0, 120)}`);
+      return null;
+    }
+  } catch {
+    return null; // not parseable as an absolute URL — not a continuation
+  }
+  return url;
 };
 
 async function listAll<T>(token: string, path: string, params: Record<string, string>): Promise<T[]> {

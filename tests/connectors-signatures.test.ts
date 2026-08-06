@@ -1,15 +1,20 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { createHmac } from "node:crypto";
 import { hmacSha256Hex } from "@/lib/signatures";
 import { calendlyConnector } from "@/connectors/calendly";
 import { closeConnector } from "@/connectors/close";
 import { instantlyConnector } from "@/connectors/instantly";
 import { sendblueConnector } from "@/connectors/sendblue";
 import { catchHookConnector } from "@/connectors/catch-hook";
+import { googleSheetsConnector } from "@/connectors/google-sheets";
+import { googleCalendarConnector } from "@/connectors/google-calendar";
 
 describe("Calendly signature (t=,v1= HMAC over `${t}.${body}`)", () => {
   const secret = "cal_signing_key";
   const body = JSON.stringify({ event: "invitee.created", payload: {} });
-  const t = "1700000000";
+  // Fresh, because `t` now doubles as replay protection: a fixture pinned to a
+  // past date would be correctly rejected as a replay.
+  const t = String(Math.floor(Date.now() / 1000));
   const sig = hmacSha256Hex(secret, `${t}.${body}`);
 
   it("accepts a valid signature", () => {
@@ -48,6 +53,19 @@ describe("Close signature (close-sig-hash HMAC over timestamp+body)", () => {
   /** A key in Close's shape: 64 hex characters = 32 bytes. */
   const secret = "4f7a2c1e9b0d8365a4e7f10c2b93d65847ae091f3c2d5b8e6017a4c9d2f3b5e8";
   const timestamp = "1700000000";
+  /**
+   * The digest literals below are a CROSS-IMPLEMENTATION vector computed for
+   * exactly this timestamp, so the timestamp cannot move to stay fresh —
+   * instead the clock moves to the timestamp. Replay staleness gets its own
+   * test at real distance below.
+   */
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(1_700_000_000_000 + 30_000));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   const body = '{"event":{"id":"ev_5Xx1kZ9qLm","object_type":"lead","action":"created"}}';
   /** HMAC-SHA256(fromhex(secret), timestamp + body) — the correct signature. */
   const hash = "718cf3ea81b048dc8a8cd49ff6bb5dca6a9e3d81bc0985dbd5f4041c129b9a9f";
@@ -103,6 +121,53 @@ describe("Close signature (close-sig-hash HMAC over timestamp+body)", () => {
       expect(closeConnector.verifySignature({ rawBody: body, headers, secret: bad })).toBe(false);
     }
   });
+
+  /**
+   * REPLAY PROTECTION. The timestamp is inside the signed message, so a valid
+   * HMAC over a stale timestamp proves only that Close sent this ONCE — not
+   * that whoever is re-sending it now is Close. A captured delivery used to
+   * verify forever.
+   */
+  it("rejects a genuinely signed delivery replayed outside the tolerance window", () => {
+    // Same authentic vector — but the clock is now an hour past the signature.
+    vi.setSystemTime(new Date(1_700_000_000_000 + 60 * 60_000));
+    const headers = { "close-sig-hash": hash, "close-sig-timestamp": timestamp };
+    expect(closeConnector.verifySignature({ rawBody: body, headers, secret })).toBe(false);
+  });
+
+  /**
+   * An UNRECOGNIZED timestamp format must not reject: the HMAC covers the
+   * timestamp string and body together, so authenticity is already proven, and
+   * Close's timestamp format is documented nowhere reachable. Rejecting on a
+   * format assumption is exactly how the hex-key bug silently refused 100% of
+   * deliveries — only the replay window is lost here, never the delivery.
+   */
+  it("accepts an authentic delivery whose timestamp format we do not recognize", () => {
+    const weird = "not-a-timestamp-format-we-know";
+    const key = Buffer.from(secret, "hex");
+    const h = createHmac("sha256", key).update(`${weird}${body}`, "utf8").digest("hex");
+    const headers = { "close-sig-hash": h, "close-sig-timestamp": weird };
+    expect(closeConnector.verifySignature({ rawBody: body, headers, secret })).toBe(true);
+  });
+});
+
+describe("Calendly replay protection (t inside the signed payload)", () => {
+  const secret = "cal_secret";
+  const body = JSON.stringify({ event: "invitee.created" });
+  const signedAt = (unixSeconds: number) => {
+    const v1 = hmacSha256Hex(secret, `${unixSeconds}.${body}`);
+    return { "calendly-webhook-signature": `t=${unixSeconds},v1=${v1}` };
+  };
+
+  it("accepts a fresh, authentic delivery", () => {
+    const now = Math.floor(Date.now() / 1000);
+    expect(calendlyConnector.verifySignature({ rawBody: body, headers: signedAt(now), secret })).toBe(true);
+  });
+
+  it("rejects an authentic delivery replayed outside the tolerance window", () => {
+    const hourAgo = Math.floor(Date.now() / 1000) - 3600;
+    expect(calendlyConnector.verifySignature({ rawBody: body, headers: signedAt(hourAgo), secret })).toBe(false);
+  });
 });
 
 describe("Instantly optional HMAC signature", () => {
@@ -152,12 +217,23 @@ describe("which connectors may accept an unsigned request", () => {
   const unsigned = { rawBody: "{}", headers: {}, secret: null };
 
   it("only the catch-hook, whose open endpoint IS the product", () => {
+    /**
+     * EVERY connector belongs in this list — gsheets was missing from it, and
+     * that omission is exactly how its fail-open shipped: the route verifies
+     * BEFORE the stream-scoped doorbell bail, gsheets never gets a secret
+     * (`instant: false`), and `if (!secret) return true` made any anonymous
+     * POST an unauthenticated "poll this connection now" against the org's —
+     * and the fleet's shared — Google quota. A contract test that samples the
+     * population cannot catch the member it skipped.
+     */
     const open = [
       ["webhook", catchHookConnector],
       ["calendly", calendlyConnector],
       ["close", closeConnector],
       ["instantly", instantlyConnector],
       ["sendblue", sendblueConnector],
+      ["gsheets", googleSheetsConnector],
+      ["gcal", googleCalendarConnector],
     ]
       .filter(([, c]) => (c as { verifySignature: (a: typeof unsigned) => boolean }).verifySignature(unsigned))
       .map(([name]) => name);

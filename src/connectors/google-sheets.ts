@@ -40,20 +40,37 @@ export const googleSheetsConnector: Connector = {
   operations: [SHEETS_OP, DRIVE_OP] as const,
   operationFor: () => SHEETS_OP,
 
+  /**
+   * FAILS CLOSED with no secret, and that is a fix, not a style choice.
+   *
+   * This returned `true` when no secret was configured — and a gsheets
+   * connection NEVER has one, because the catalog marks it `instant: false`
+   * and `createConnection` only mints signing secrets for instant sources. The
+   * route verifies BEFORE the stream-scoped doorbell bail, so the combination
+   * made `POST /api/webhooks/<gsheets-connection-id>` an unauthenticated
+   * "poll this connection now" primitive: any anonymous request reset the
+   * idle backoff and queued a real Google API sweep against the org's quota
+   * AND the fleet-shared per-project quota, repeatable at request rate.
+   *
+   * Fail-open is only ever justified where an open endpoint IS the product —
+   * the catch-hook — and this source has no inbound product at all. A future
+   * Drive push channel (files.watch) authenticates via Google's channel
+   * headers, not this path, so nothing legitimate is turned away by closing it.
+   */
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
-    if (!secret) return true;
+    if (!secret) return false;
     const provided = headers["x-namzilabs-signature"];
     if (!provided) return false;
     const normalized = provided.startsWith("sha256=") ? provided.slice("sha256=".length) : provided;
     return safeEqual(normalized, hmacSha256Hex(secret, rawBody));
   },
 
-  // NO `normalize`. This source is stream-scoped, so the webhook route answers
-  // `isStreamScoped` and rings the connection's doorbell before verification or
-  // storage — nothing ever reached the Apps Script push path. What lived here
-  // guessed a hard-coded `row["timestamp"]` while the poll below stamped
-  // `new Date()`: two different wrong answers for one source, and because this
-  // one was unreachable nothing could ever contradict it. If the push path is
+  // NO `normalize`. This source is stream-scoped: the webhook route verifies
+  // the signature and then answers `isStreamScoped` with a doorbell — the
+  // payload itself is never stored or normalized. What lived here guessed a
+  // hard-coded `row["timestamp"]` while the poll below stamped `new Date()`:
+  // two different wrong answers for one source, and because this one was
+  // unreachable nothing could ever contradict it. If a push path is ever
   // built, it reads `PollArgs.dateField` like the poll does.
 
   /**
