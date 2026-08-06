@@ -48,10 +48,15 @@ All seven pending migrations are additive from the old code's point of view, so
 a schema that is briefly ahead of the deployed code is safe. The reverse is not:
 new code against an old schema throws `column does not exist` on live traffic.
 
-Because B3 runs before the merge, `main` does **not** yet contain the repaired
-migration journal — so **B3 must be dispatched with the feature branch
-selected**. A guard in the workflow enforces this (it refuses to run an armed
-`0003_wipe_flows`), but select the right branch anyway.
+> **B2–B4 SUPERSEDED (2026-08-07).** The schema was applied **by hand** through
+> migration 0020 per `drizzle/HAND_APPLY.md` and verified by a green *Schema
+> drift check* run. The migrator path (`pnpm db:migrate`, the *DB Migrate
+> (production)* Action) has been **removed from the repo** — B3's mechanism no
+> longer exists, and the tracker B2 baselines is now a historical artifact
+> nothing reads. The 0003 protections live in `tests/db-migrate-guard.test.ts`
+> (CI, every push). B2–B4 are kept below as the record of the launch plan that
+> events overtook; the live procedure for any FUTURE migration is:
+> HAND_APPLY.md block → Neon SQL Editor → *Schema drift check* green → deploy.
 
 ---
 
@@ -139,7 +144,7 @@ snapshot.
 
 Keep this branch until Phase D is complete and the app has been exercised.
 
-## B2. Baseline the migration tracker 🛑
+## B2. Baseline the migration tracker — ✅ SUPERSEDED, see the banner above 🛑
 
 **Do:** Neon **SQL Editor**, against **production** (not the branch). Paste and
 run:
@@ -189,9 +194,9 @@ SELECT (SELECT count(*) FROM flows)         AS flows,
 > on exactly these rows; if the high-water mark is not `1784588933782`, B3 will
 > do the wrong thing.
 
-## B3. Apply migrations 0005–0011 🛑
+## B3. Apply migrations 0005–0011 — ✅ SUPERSEDED (applied by hand; the Action no longer exists) 🛑
 
-**Do:** Actions → **DB Migrate (production)** → *Run workflow* → **select the
+**Do (historical):** Actions → **DB Migrate (production)** → *Run workflow* → **select the
 feature branch** (`claude/namzila-codebase-analysis-5te76k`), not `main` → Run.
 
 **Selecting the branch matters.** `main` still has the pre-repair journal in
@@ -218,7 +223,7 @@ selected `main`. Re-run with the feature branch.
 > 🛑 **REPORT TO CLAUDE** — say whether it went green, and paste the last ~20
 > lines of the log either way.
 
-## B4. Verify the schema 🛑
+## B4. Verify the schema — live verification is now the *Schema drift check* Action (green ✅); the diagnostic below remains for forensics 🛑
 
 **Do:** Neon SQL Editor → paste the whole of
 [`scripts/migration-state-diagnostic.sql`](scripts/migration-state-diagnostic.sql)
@@ -444,5 +449,8 @@ deployment to the previous build; the schema is additive, so old code runs
 against the new schema fine — that is the same safe direction as the B3→C1
 window.
 
-**Any migration failure:** never blind-retry `db:migrate`. Run the diagnostic
-first and report what actually landed.
+**Any migration failure:** migrations are pasted by hand from
+`drizzle/HAND_APPLY.md` (the drizzle migrator has been removed from the repo).
+The blocks are idempotent, so re-pasting is safe — but confirm what actually
+landed first: run the *Schema drift check* Action or the diagnostic, then
+report.

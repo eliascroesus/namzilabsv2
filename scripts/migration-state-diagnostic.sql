@@ -80,7 +80,7 @@ SELECT
     WHEN count(*) FILTER (WHERE created_at IS NULL) > 0 THEN
       'NULL created_at ROW PRESENT -> drizzle picks it, Number(null)=0, ALL 12 replay from 0000 -> dies on CREATE TABLE "connections" (42P07). Loud, no data loss.'
     WHEN max(created_at) >= 1785600000000 THEN
-      'HWM >= 0003 stamp -> NOTHING runs. db:migrate prints "Migrations applied." and applies zero statements. 0004-0011 are skipped PERMANENTLY.'
+      'HWM >= 0003 stamp -> a drizzle migrator (since removed from this repo) would apply zero statements. 0004-0011 skipped PERMANENTLY by the tracker.'
     ELSE
       'HWM < 0003 stamp -> 0003_wipe_flows WILL RE-RUN AND DELETE ALL flows/flow_versions/flow_results. See section 6.'
   END AS what_db_migrate_would_do
@@ -162,7 +162,9 @@ WHERE schemaname = 'public';
 --
 -- The safe repair edits drizzle/meta/_journal.json FIRST and ships it, and
 -- only THEN touches the tracker row (UPDATE, never DELETE, never to NULL).
--- Do not run pnpm db:migrate until that has been done in that order.
+-- (The migrator script itself has been removed from the repo — migrations are
+-- hand-applied per drizzle/HAND_APPLY.md — so the tracker is history, not a
+-- live hazard. This diagnostic remains for reading that history.)
 -- ---------------------------------------------------------------------------
 SELECT
   (SELECT count(*) FROM flows)         AS flows_at_risk,

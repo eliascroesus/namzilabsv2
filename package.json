@@ -12,7 +12,6 @@
     "test:watch": "vitest",
     "check:orphans": "tsx scripts/check-orphans.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/db/migrate.ts",
     "inngest:dev": "npx inngest-cli@latest dev"
   },
   "dependencies": {

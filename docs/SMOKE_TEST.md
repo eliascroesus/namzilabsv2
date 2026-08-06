@@ -4,7 +4,7 @@ Run this after each production deploy. It exercises the critical paths end-to-en
 against the live environment. Estimated time: ~10 minutes.
 
 Prerequisites: `DATABASE_URL` (pooled) and `DATABASE_MIGRATION_URL` (direct) set,
-migrations applied (`pnpm db:migrate`), WorkOS + Google + Inngest env configured.
+migrations applied by hand (`drizzle/HAND_APPLY.md` → Neon SQL Editor), WorkOS + Google + Inngest env configured.
 
 ---
 

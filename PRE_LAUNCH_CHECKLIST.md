@@ -19,13 +19,28 @@ early enough to finish the soak.
 
 ---
 
-## 0. Repair the drizzle migration tracker (BLOCKS EVERYTHING — do this first)
+## 0. Repair the drizzle migration tracker — ✅ RESOLVED BY SUPERSESSION (2026-08-07)
 
-**Why:** migrations `0000`–`0004` were applied by hand in the Neon SQL Editor,
-so `drizzle.__drizzle_migrations` is **empty** — the schema and the tracker
-disagree. `pnpm db:migrate` currently fails on its first statement and can
-apply nothing. Worse, one migration in the set deletes data, and its journal
-timestamp is wrong in a way that makes the obvious repair destructive.
+> **This item is closed, and not by running its remaining steps.** Every
+> migration through **0020** was applied BY HAND per `drizzle/HAND_APPLY.md`
+> and verified live by a green *Schema drift check* run (which derives the
+> expected schema from `schema.ts`, so green is proof `0005`–`0011` and
+> everything after are physically present). The migrator path itself —
+> `pnpm db:migrate`, `src/db/migrate.ts`, the *DB Migrate (production)*
+> workflow — has been **removed from the repo**, so steps 0c/0d below are
+> moot: there is nothing left that reads the tracker. The tracker stays as-is,
+> a historical artifact `scripts/migration-state-diagnostic.sql` can still
+> read. The 0003-disarm protections the workflow carried now live in
+> `tests/db-migrate-guard.test.ts` (armed-stamp and live-DELETE assertions,
+> run on every CI push). The analysis below is kept because it documents WHY
+> `0003` is disarmed and why the tracker must never be "repaired" casually.
+
+**Why (historical):** migrations `0000`–`0004` were applied by hand in the
+Neon SQL Editor, so `drizzle.__drizzle_migrations` is **empty** — the schema
+and the tracker disagree. The migrator (since removed) failed on its first
+statement and could apply nothing. Worse, one migration in the set deletes
+data, and its journal timestamp was wrong in a way that made the obvious
+repair destructive.
 
 ### Verified live state (2026-07-25, read-only diagnostic)
 
@@ -44,7 +59,7 @@ The empty-tracker-with-existing-table combination means the runner was invoked
 at least once: it creates the schema and table first, then dies before its
 bookkeeping inserts (they are deferred to the very end of the run).
 
-### What `pnpm db:migrate` does today
+### What the migrator did (historical — the script has since been removed)
 
 Empty tracker → every migration is eligible → it starts at `0000`, hits
 `CREATE TABLE "connections"` on a table that already exists, and exits 1 with
@@ -108,8 +123,12 @@ No database writes. Three changes, all shipped and verified (typecheck clean,
    empty tracker — exactly the state in which an armed `0003` deletes live flows.
    With backup branches now routine, the file itself has to be inert everywhere.
 
-3. **`.github/workflows/db-migrate.yml` guarded** — see step 0d for why this was
-   necessary.
+3. **`.github/workflows/db-migrate.yml` guarded** — and since **removed
+   entirely**, along with `pnpm db:migrate` itself. Its two repo-state
+   assertions (no armed `1785600000000` stamp in `_journal.json`, no
+   line-leading `DELETE FROM` in `0003_wipe_flows.sql`) were ported to
+   `tests/db-migrate-guard.test.ts`, which CI runs on every push — stronger
+   than a check inside a workflow nobody dispatches.
 
 `scripts/migration-state-diagnostic.sql` was updated to map both hashes: the new
 one reports `0003_wipe_flows (DISARMED — no-op)`, the old one reports
@@ -168,28 +187,25 @@ SELECT (SELECT count(*) FROM flows)         AS flows,
        (SELECT count(*) FROM flow_results)  AS flow_results;
 ```
 
-### Step 0d — run the migrator — ⏸ HOLD UNTIL LAUNCH DAY (walkthrough step 2.3)
+### Step 0d — run the migrator — ✅ SUPERSEDED, NEVER RAN, CANNOT RUN AGAIN
 
-**Decision: do NOT apply 0005–0011 early.** Run it on launch day, immediately
-before the merge, via the **DB Migrate (production)** Action.
+**What actually happened instead:** `0005`–`0011` (and everything through
+`0020`) were applied **by hand** via `drizzle/HAND_APPLY.md`, and a green
+*Schema drift check* run confirmed the live schema matches `schema.ts` head.
+The *DB Migrate (production)* Action and `pnpm db:migrate` have been removed
+from the repo, so this step is not merely on hold — the mechanism it describes
+no longer exists. The branch-selection hazard and the workflow guard below are
+kept as the record of why the migrator path was dangerous enough to delete;
+its two guard assertions now run in CI via `tests/db-migrate-guard.test.ts`.
 
-**⚠ The Action does not check out the right branch by default.**
-`actions/checkout@v4` is used with no `ref:`, so on `workflow_dispatch` it checks
-out whatever branch is selected in the "Run workflow" dropdown — which
-**defaults to the repository default branch, `main`**. `main` still carries the
+**⚠ The hazard this step used to carry (historical).** The Action used
+`actions/checkout@v4` with no `ref:`, so `workflow_dispatch` checked out the
+dropdown's branch — defaulting to `main`, which at the time still carried the
 pre-repair journal with `0003`'s armed stamp `1785600000000`. Dispatching from
-`main` **after** step 0c would make `0003` the single eligible migration: it
-would delete every flow, flow_version and flow_result, and exit 0.
-
-A guard now blocks this at the source. The workflow fails before installing
-anything if the checked-out ref still contains `1785600000000` in
-`_journal.json`, or a live `DELETE FROM` in `0003_wipe_flows.sql`. Verified
-against both refs: it **blocks** `main` and **passes** on the repaired branch.
-Selecting the right branch is still correct practice — the guard is the net, not
-the plan.
-
-**Run:** Actions → *DB Migrate (production)* → *Run workflow* → **select the
-repaired branch** (or dispatch after it is merged to `main`).
+`main` **after** step 0c would have made `0003` the single eligible migration:
+it would have deleted every flow, flow_version and flow_result, and exited 0.
+The workflow's guard blocked that at the source; that guard is what moved into
+the test suite when the workflow was deleted.
 
 **Why hold rather than run now** (in order of weight):
 
@@ -246,17 +262,12 @@ table locks. Negligible at current size; if `events` has grown past ~10⁷ rows 
 launch, see the note in *Pending* about running index migrations with
 `CREATE INDEX CONCURRENTLY` instead.
 
-**PASS:** the run exits 0 printing `Migrations applied.` and the tracker holds 12
-rows. Re-running `scripts/migration-state-diagnostic.sql` should show every
-`m00xx_*` marker `true`, `m0005_webhook_endpoints_dropped` `true`, all three
-`m0006_old_*_still_present` **false**, and the flow counts still 1 / 2 / 1.
-
-**FAIL — do NOT retry blindly.** `neon-http` has no transactions and defers all
-bookkeeping to the end of the run, so a mid-run failure leaves earlier
-migrations committed with **zero** tracker rows written; a blind retry replays
-them and fails on the first one that already landed. Instead: re-run the
-diagnostic, see what physically landed, extend the step-0b baseline with those
-migrations' hashes and journal stamps, and run `db:migrate` again.
+**How it was actually verified instead:** the *Schema drift check* Action ran
+green against the live database — every table, column and index `schema.ts`
+declares is physically present, which is a stronger PASS than the tracker
+holding 12 rows (it checks the schema itself, not drizzle's beliefs about it).
+`scripts/migration-state-diagnostic.sql` §2 still answers "what physically
+landed" if the question ever comes up again.
 
 ### Proof of what step 0c applies (dry analysis)
 
@@ -305,18 +316,16 @@ rewritten to `1784400000000`, the highest stamp in the journal becomes `0011`'s
 `1785004537576` (2026-07-25T18:35:37Z) — already in the past. Every migration
 generated from now on carries a larger `Date.now()` and is always eligible.
 
-### Order of operations, at a glance
+### Order of operations, as it ended
 
-| | Step | Who | Touches the DB? |
-|---|---|---|---|
-| ✅ | **0a** journal stamp + disarm `0003` + workflow guard | done, pushed | no |
-| ⬜ | **0b** Neon branch snapshot | you | no (creates a copy) |
-| ⬜ | **0c** baseline INSERT (5 rows) | you, SQL Editor | yes — tracker only |
-| ⏸ | **0d** apply `0005`–`0011` | Action, launch day | yes — schema |
+| | Step | Outcome |
+|---|---|---|
+| ✅ | **0a** journal stamp + disarm `0003` + workflow guard | done, pushed; guard later ported to `tests/db-migrate-guard.test.ts` |
+| ✅ | **0b/0c/0d** tracker repair + migrator run | **superseded** — schema applied by hand through 0020 (drift check green); migrator + workflow removed, tracker left as historical record |
 
-The gap between 0a and 0c is safe in both directions: with the journal patched
-and the tracker still empty, an accidental `db:migrate` dies at `0000` exactly as
-it does today.
+With no migrator in the repo, there is no code path that reads the tracker —
+the 0003 wipe cannot fire through any mechanism that still exists, and the
+guard test keeps the file disarmed and the journal stamp corrected forever.
 
 ---
 

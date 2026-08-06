@@ -126,9 +126,10 @@ pnpm install
 cp .env.example .env          # fill in DATABASE_URL + ENCRYPTION_KEY at minimum
 pnpm db:generate              # (already generated; regenerate after schema edits)
 # Migrations are applied BY HAND: paste the blocks from drizzle/HAND_APPLY.md
-# into the Neon SQL Editor. `pnpm db:migrate` refuses to run without
-# DB_MIGRATE_I_UNDERSTAND=1 — the drizzle tracker has never matched this
-# database, so the migrator would replay migrations the database already has.
+# into the Neon SQL Editor, then verify with the Schema drift check Action.
+# There is deliberately NO migrator script — the drizzle tracker has never
+# matched this database, so a migrator run would replay migrations the
+# database already has (tests/db-migrate-guard.test.ts pins its absence).
 pnpm dev                      # Next.js
 pnpm inngest:dev              # Inngest dev server (separate terminal)
 ```
@@ -161,7 +162,7 @@ same payload is a no-op; a forced failure lands in the DLQ and is replayable via
    redirect URI to `https://<domain>/callback` and the post-sign-out redirect to your home URL.
 3. Apply migrations by pasting the blocks from `drizzle/HAND_APPLY.md` into the
    Neon SQL Editor, then verify with the Schema drift check Action (or
-   `scripts/schema-audit.sql`). Do NOT run `pnpm db:migrate` — see HAND_APPLY.md.
+   `scripts/schema-audit.sql`). There is no migrator script, deliberately — see HAND_APPLY.md.
 4. Register the Inngest app pointing at `https://<domain>/api/inngest`. The
    reconciliation cron is scheduled by Inngest — no Vercel Cron needed.
 5. Run `docs/SMOKE_TEST.md` against the deploy.

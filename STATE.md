@@ -217,11 +217,18 @@ as outstanding work.
 and is not to be read or repaired. `drizzle/HAND_APPLY.md` has a pasteable block
 and a verify query for every migration.
 
-Applied through **0019**. The rule, every time: paste the block, confirm it
-landed (Actions → *Schema drift check*, or paste `scripts/schema-audit.sql`),
-**then** deploy the code. Declaring a column in `schema.ts` is enough to break a
-deploy on its own — drizzle expands `select()` to an explicit column list — so a
-migration commit stays off the deploy branch until the SQL is applied.
+The migrator path (`pnpm db:migrate`, `src/db/migrate.ts`, the *DB Migrate
+(production)* workflow) has been **removed entirely** — it maintained a way to
+run the tracker this section says never to trust. The workflow's one real
+protection, the 0003-disarm assertion, now lives in
+`tests/db-migrate-guard.test.ts`, which also pins that the migrator stays gone.
+
+Applied through **0020** (0021 pending paste). The rule, every time: paste the
+block, confirm it landed (Actions → *Schema drift check*, or paste
+`scripts/schema-audit.sql`), **then** deploy the code. Declaring a column in
+`schema.ts` is enough to break a deploy on its own — drizzle expands `select()`
+to an explicit column list — so a migration commit stays off the deploy branch
+until the SQL is applied.
 
 ---
 
