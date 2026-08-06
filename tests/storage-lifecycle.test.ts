@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
-import { deadLetter, deliveryLog, rawEvents, testRuns, usageLedger } from "@/db/schema";
+import { connections, deadLetter, deliveryLog, rawEvents, testRuns, usageLedger } from "@/db/schema";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
 import type { DB } from "@/db/types";
 
@@ -298,7 +299,12 @@ describe("inspect mode", () => {
  * what a dashboard reads.
  */
 describe("raw payload retention", () => {
-  it("prunes old raws, keeps young ones, and never counts what it keeps", async () => {
+  /** The new policy's gate: raws prune only once their connection has been disabled past the window. */
+  const disableConnectionSince = (when: Date) =>
+    db.update(connections).set({ status: "disabled", disabledAt: when }).where(eq(connections.id, connectionId));
+
+  it("prunes a long-disabled connection's old raws, keeps young ones, and never counts what it keeps", async () => {
+    await disableConnectionSince(daysAgo(60));
     await seedRaw(daysAgo(45));
     await seedRaw(daysAgo(31));
     await seedRaw(daysAgo(5));
@@ -311,7 +317,38 @@ describe("raw payload retention", () => {
     expect(await db.select().from(rawEvents)).toHaveLength(1); // the 5-day-old payload
   });
 
+  /**
+   * THE GATE ITSELF. An active connection's raws feed two standing promises:
+   * the pending `WEBHOOK_EVENT_TIME_LIVE` restamp (which re-derives event
+   * times from these payloads, once, whenever the flag flips) and
+   * `reprocessConnection`. Age-pruning them would silently bound both to 30
+   * days — the exact contradiction STATE.md / checklist 7b / DATA_MODEL.md
+   * all warn about. Pruning is licensed by `disabled_at`, "the clock the
+   * purge runs on", never by age alone.
+   */
+  it("NEVER prunes an active connection's raws, whatever their age", async () => {
+    await seedRaw(daysAgo(400));
+    await seedRaw(daysAgo(45));
+
+    const report = await pruneOperationalTables(db, { now: NOW, inspect: true });
+    expect(report.rawEvents).toBe(0);
+
+    const pruned = await pruneOperationalTables(db, { now: NOW });
+    expect(pruned.rawEvents).toBe(0);
+    expect(await db.select().from(rawEvents)).toHaveLength(2);
+  });
+
+  it("a recently-disabled connection keeps its raws until the disable itself ages past the window", async () => {
+    await disableConnectionSince(daysAgo(5)); // reconnect within 30 days loses nothing
+    await seedRaw(daysAgo(400));
+
+    const pruned = await pruneOperationalTables(db, { now: NOW });
+    expect(pruned.rawEvents).toBe(0);
+    expect(await db.select().from(rawEvents)).toHaveLength(1);
+  });
+
   it("never prunes a raw with an unresolved dead letter, however old", async () => {
+    await disableConnectionSince(daysAgo(200));
     const doomed = await seedRaw(daysAgo(120));
     const protectedId = await seedRaw(daysAgo(120));
     await db.insert(deadLetter).values({ orgId: ORG, connectionId, rawEventId: protectedId, attempts: 3, error: "boom" });
@@ -325,6 +362,7 @@ describe("raw payload retention", () => {
   });
 
   it("a RESOLVED dead letter no longer protects its raw", async () => {
+    await disableConnectionSince(daysAgo(200));
     const id = await seedRaw(daysAgo(120));
     await db.insert(deadLetter).values({
       orgId: ORG, connectionId, rawEventId: id, attempts: 3, error: "boom", resolvedAt: daysAgo(100),

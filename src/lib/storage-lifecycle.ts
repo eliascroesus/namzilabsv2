@@ -1,5 +1,5 @@
 import { and, eq, gt, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
-import { deadLetter, deliveryLog, rawEvents, testRuns, usageLedger } from "@/db/schema";
+import { connections, deadLetter, deliveryLog, rawEvents, testRuns, usageLedger } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 /**
@@ -100,17 +100,35 @@ const USAGE_COUNTER_DAYS = 2;
 const USAGE_EVIDENCE_DAYS = 90;
 
 /**
- * How long a verbatim provider payload is kept.
+ * How long a verbatim provider payload is kept — FOR A DISCONNECTED
+ * CONNECTION. An active connection's raws are not pruned at all, and that
+ * restriction is the load-bearing half of this policy.
  *
- * `raw_events` is the replay source of truth and the largest table in the
- * schema, and until now it was the one table with NO retention at all — it grew
- * with every webhook for the life of every connection, which is unbounded in
- * exactly the dimension that scales with the product. Thirty days is the
- * decided policy (it matches `delivery_log`, whose rows point at these), and
- * what it costs is stated rather than implied: `reprocessConnection` and the
- * event-time restamp can only rebuild from what still exists, so both become
- * 30-day operations. The NORMALIZED rows in `events` are permanent — pruning a
- * raw never touches the data a dashboard reads.
+ * The first version of this predicate pruned by age alone, and that quietly
+ * contradicted three standing promises at once:
+ *  - `WEBHOOK_EVENT_TIME_LIVE` has never flipped, and its first live run
+ *    RESTAMPS every catch-hook connection's stored events from these
+ *    payloads (`restampWebhookEvents`, whose own docstring says "IT DEPENDS
+ *    ON raw_events STILL BEING THERE"). Age-pruning active raws would have
+ *    turned that pending one-time correction into a 30-day-bounded one —
+ *    every older event keeping its wrong date, silently and irreversibly.
+ *  - `reprocessConnection` re-normalizes from raws; same bound, same silence.
+ *  - STATE.md, PRE_LAUNCH_CHECKLIST.md item 7b and docs/DATA_MODEL.md all
+ *    state that nothing prunes raws for an active connection — and the gate
+ *    those docs tell an operator to flip (`STORAGE_PRUNE_LIVE=1`, "a safe
+ *    one-line env change") would have been the thing that made them false.
+ *
+ * So the predicate requires BOTH: the payload is older than the window, and
+ * its connection has been DISABLED for at least the same window
+ * (`connections.disabled_at` — the schema's own comment names it "the clock
+ * the purge runs on. Nothing may be hard-deleted on the strength of `status`
+ * alone"). A user who disconnects and comes back inside 30 days loses
+ * nothing; one who stays gone has chosen the outcome.
+ *
+ * Active-connection raw growth is therefore still an OPEN GAP, deliberately —
+ * recorded in tests/retention-coverage.test.ts. It becomes closeable only
+ * after the event-time flip has run (its restamp is one-shot), and the right
+ * long-term shape is archive-to-object-storage rather than delete.
  *
  * A raw with an UNRESOLVED dead letter is never pruned, whatever its age. The
  * dead letter's replay path reads the raw by id (`replayRawEvent`), so pruning
@@ -124,6 +142,15 @@ const RAW_EVENT_DAYS = 30;
 /** No unresolved dead letter points at this raw payload. */
 const noUnresolvedDeadLetter = () =>
   sql`not exists (select 1 from ${deadLetter} where ${deadLetter.rawEventId} = ${rawEvents.id} and ${deadLetter.resolvedAt} is null)`;
+
+/**
+ * The raw's connection has been disconnected for longer than `cutoff` allows.
+ * A connection deleted outright takes its raws with it (`deleteConnectionData`
+ * names raw_events), so rows whose connection no longer exists cannot appear
+ * here; rows whose connection is ACTIVE are excluded by construction.
+ */
+const connectionDisabledSince = (cutoff: Date) =>
+  sql`exists (select 1 from ${connections} where ${connections.id} = ${rawEvents.connectionId} and ${connections.disabledAt} is not null and ${connections.disabledAt} < ${cutoff})`;
 
 /** A ledger row that recorded something a human might later want to read. */
 const hasEvidence = () =>
@@ -241,6 +268,10 @@ function predicates(now: Date, opts: PruneOpts) {
     )!,
     rawEvents: and(
       lt(rawEvents.receivedAt, ago(opts.rawEventDays ?? RAW_EVENT_DAYS)),
+      // Only for connections DISABLED past the same window — an active
+      // connection's raws feed the pending event-time restamp and Reprocess,
+      // and pruning them would silently bound both. See RAW_EVENT_DAYS.
+      connectionDisabledSince(ago(opts.rawEventDays ?? RAW_EVENT_DAYS)),
       noUnresolvedDeadLetter(),
     )!,
   };

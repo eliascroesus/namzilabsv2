@@ -81,7 +81,7 @@ const TABLES: Record<string, Classification> = {
   // ── Known gaps ────────────────────────────────────────────────────────────
   raw_events: {
     kind: "gap",
-    why: "one row per inbound webhook delivery, and the replay source of truth. A window here IS the reach of Reprocess, which is why it is a stated product promise rather than a constant — Finding 7, 90d proposed, ships in its own batch because it deletes customer data",
+    why: "one row per inbound webhook delivery, and the replay source of truth. PARTIALLY pruned: storage-lifecycle removes raws only for connections DISABLED 30+ days (disabled_at is the clock, never age alone). ACTIVE connections' raws remain unbounded ON PURPOSE — the pending WEBHOOK_EVENT_TIME_LIVE restamp and reprocessConnection both re-derive from these payloads, so a window here IS the reach of both. Closeable only after the event-time flip has run; the long-term shape is archive-to-object-storage, not delete",
   },
   events: {
     kind: "gap",
