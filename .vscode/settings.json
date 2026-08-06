@@ -1,4 +1,0 @@
-{
-    "github.copilot.chat.claudeAgent.allowAutoPermissions": true,
-    "chat.permissions.default": "autoApprove"
-}

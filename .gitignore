@@ -37,3 +37,6 @@ pnpm-debug.log*
 
 # pglite / local db artifacts
 /pgdata
+
+# Editor-local settings — never shared
+.vscode/
