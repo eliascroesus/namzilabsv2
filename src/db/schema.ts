@@ -115,7 +115,17 @@ export const connections = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("connections_org_idx").on(t.orgId), index("connections_status_idx").on(t.status)],
+  (t) => [
+    index("connections_org_idx").on(t.orgId),
+    index("connections_status_idx").on(t.status),
+    // The sweep's work-list question, asked every 10 minutes of the whole
+    // table: "active, and due by cadence". `connections_status_idx` alone
+    // degrades to scanning every active connection — at fleet size that is a
+    // full scan per tick for the three-value status column. Partial on the
+    // status the sweep actually dispatches; NULL next_sweep_at rows (never
+    // swept → due immediately) are still in the index, btree stores them.
+    index("connections_due_sweep_idx").on(t.nextSweepAt).where(sql`status = 'active'`),
+  ],
 );
 
 /**
@@ -135,9 +145,12 @@ export const rawEvents = pgTable(
     receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
-    index("raw_events_conn_idx").on(t.connectionId),
     // The purge's access path: "this connection's raw payloads, older than X".
     // Without it that is a sequential scan of the largest table in the schema.
+    // Also serves every lookup the old `raw_events_conn_idx` served — a btree
+    // on (a, b) answers a-only queries, so the single-column index was pure
+    // write amplification on the highest-write table here (migration 0020
+    // drops it).
     index("raw_events_conn_received_idx").on(t.connectionId, t.receivedAt),
   ],
 );
@@ -567,7 +580,10 @@ export const usageLedger = pgTable(
   },
   (t) => [
     uniqueIndex("usage_ledger_bucket_uq").on(t.connectionId, t.operation, t.windowStart),
-    index("usage_ledger_org_idx").on(t.orgId),
+    // No org-scoped index: nothing has ever queried this table by org alone,
+    // and this is the highest-write-rate table in the schema — every provider
+    // call touches it, so a read-by-nothing index was pure write cost
+    // (migration 0020 drops the one that used to be here).
     index("usage_ledger_window_idx").on(t.windowStart),
   ],
 );
@@ -613,7 +629,14 @@ export const deliveryLog = pgTable(
     error: text("error"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("delivery_log_conn_idx").on(t.connectionId), index("delivery_log_status_idx").on(t.status)],
+  (t) => [
+    index("delivery_log_conn_idx").on(t.connectionId),
+    index("delivery_log_status_idx").on(t.status),
+    // Retention's access path: `created_at < now() - 30d`, connection-blind
+    // (storage-lifecycle.ts). Neither index above helps that shape — before
+    // this the nightly prune was a sequential scan, up to 400 batch passes.
+    index("delivery_log_created_idx").on(t.createdAt),
+  ],
 );
 
 /** Exhausted-retry events. Never silently dropped — visible here and replayable. */
@@ -629,7 +652,15 @@ export const deadLetter = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   },
-  (t) => [index("dead_letter_conn_idx").on(t.connectionId)],
+  (t) => [
+    index("dead_letter_conn_idx").on(t.connectionId),
+    // raw_events retention correlates on this column for EVERY candidate row
+    // (`not exists … where dead_letter.raw_event_id = raw_events.id and
+    // resolved_at is null`, storage-lifecycle.ts). Unindexed, each candidate
+    // cost a scan of this whole table — a per-row sequential scan inside the
+    // largest table's prune.
+    index("dead_letter_raw_event_idx").on(t.rawEventId),
+  ],
 );
 
 /**
@@ -752,5 +783,10 @@ export const flowResults = pgTable(
   (t) => [
     uniqueIndex("flow_results_flow_output_uq").on(t.flowId, t.outputNodeId),
     index("flow_results_org_idx").on(t.orgId),
+    // The 10-minute recompute asks "which tiles are stale?" fleet-wide
+    // (materializeStaleAll) and the org dashboard counts non-fresh tiles —
+    // both filter on status with no supporting index. Tiny per row, hot per
+    // tick.
+    index("flow_results_status_idx").on(t.status),
   ],
 );

@@ -756,19 +756,21 @@ are on the direct host and its lower ceiling by construction. Read it:
 SHOW max_connections;   -- run on the DIRECT (non "-pooler") host
 ```
 
-**The demand floor, from the code, is 6.** `scanInvariants` issues four queries
-through one `Promise.all`; a transaction holds its client for its whole body, and
-`awaitStreamWriteLock` parks on a lock for up to 15 seconds while holding one;
-plus one spare. Below that the pool does not slow down, it **deadlocks** — so
-`DB_POOL_MAX` is clamped up to 6 rather than honoured below it, and
-`tests/pool-tuning.test.ts` fails if the fan-out grows past what 6 covers.
+**The demand floor, from the code, is 7.** `scanInvariants` issues FIVE queries
+through one `Promise.all` (a fifth, `rejectingConnections`, was added after the
+floor was first derived — the floor moved with it, and `tests/pool-tuning.test.ts`
+now counts the fan-out from the source so the two cannot drift apart again);
+a transaction holds its client for its whole body, and `awaitStreamWriteLock`
+parks on a lock for up to 15 seconds while holding one; plus one spare. Below
+that the pool does not slow down, it **deadlocks** — so `DB_POOL_MAX` is
+clamped up to 7 rather than honoured below it.
 
 **So the tunable is container count, not pool size:**
 
 ```
                     max_connections × 0.7        ← 0.7 leaves room for migrations,
 containers_safe  =  ─────────────────────          the Neon console and any psql
-                             6                     (the same share the provider
+                             7                     (the same share the provider
                                                     budget already reserves)
 ```
 
@@ -778,7 +780,7 @@ start the rollout** — raise the Neon compute size (which raises
 `max_connections`) or cap concurrency first. Shrinking the pool is not available
 as an answer; that is what the clamp is saying.
 
-`DB_POOL_MAX` raises the cap if you ever need more than 6 per container.
+`DB_POOL_MAX` raises the cap if you ever need more than 7 per container.
 
 ### What to watch in Neon during the soak, and when to stop
 
@@ -1043,8 +1045,14 @@ or a provider that actually sends a header.
 expected — which is item 7's problem, not this one. Answer item 7 first; the
 inspect run is telling you something real.
 
-**Step 2 — flip the gate.** Set `STORAGE_PRUNE_LIVE=1` in the deployment
-environment. No deploy and no migration; the next nightly run prunes.
+**Step 2 — flip the gate.** First confirm **migration 0020 is applied**
+(`drizzle/HAND_APPLY.md`): it carries `delivery_log_created_idx` and
+`dead_letter_raw_event_idx`, the two access paths this prune uses. Without
+them the delivery_log pass is a sequential scan per batch and the raw_events
+pass runs a per-row scan of dead_letter — the first night against a real
+backlog burns its whole `PRUNE_BUDGET_MS` making no visible progress. Then set
+`STORAGE_PRUNE_LIVE=1` in the deployment environment. No deploy needed; the
+next nightly run prunes.
 
 **Step 3 — confirm the following night.** The run returns `truncated: false`
 and the `backlog` step reports near zero. A `[storage-prune-truncated]` line
@@ -1056,9 +1064,12 @@ has outpaced the sweep and `PRUNE_BUDGET_MS` / `DELETE_BATCH` need revisiting.
 rate-limiter buckets past their window, which nothing reads — but nothing
 further is removed.
 
-**Still unpruned, deliberately:** `raw_events`, `events` tombstones, and
-`dead_letter` (whose resolved rows are only ever cleared by connection
-deletion). All three are recorded as known gaps in
+**Still unpruned, deliberately:** `raw_events` for ACTIVE connections (raws are
+pruned only once their connection has been **disabled 30+ days** —
+`disabled_at` is the clock, never age alone, because the pending
+`WEBHOOK_EVENT_TIME_LIVE` restamp and Reprocess both re-derive from these
+payloads), `events` tombstones, and `dead_letter` (whose resolved rows are only
+ever cleared by connection deletion). All three are recorded as known gaps in
 `tests/retention-coverage.test.ts`, which fails if a new table is added without
 a retention decision.
 

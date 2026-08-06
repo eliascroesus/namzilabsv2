@@ -383,3 +383,89 @@ WHERE date_field IS NOT NULL AND date_field_locked = false;
 > `batch5/retention-purge` branch, and the snapshot-chain warning under 0018
 > applies to this migration too — batch5 now forks three migrations behind main,
 > not two.
+
+---
+
+## 0020 — four indexes the hot paths were missing, two dead ones dropped
+
+Pure DDL, no table or column changes, so ordering against code deploys is
+relaxed for once: the code runs correctly without these indexes, just slower.
+Apply it before `STORAGE_PRUNE_LIVE` is ever flipped, though — two of the four
+exist so the first live prune finishes (checklist 7b).
+
+What each one is for:
+
+- `connections_due_sweep_idx` — the sweep's work-list query
+  (`dueConnectionsForSweep`) runs every 10 minutes against the whole table and
+  only had the three-value `status` index to lean on: a full scan of active
+  connections per tick. Partial on `status = 'active'` because that is the only
+  status the sweep dispatches.
+- `dead_letter_raw_event_idx` — raw_events retention runs a
+  `NOT EXISTS (… WHERE dead_letter.raw_event_id = raw_events.id …)` per
+  candidate row; without this, each candidate scans the whole dead_letter
+  table from inside the prune of the largest table.
+- `delivery_log_created_idx` — retention filters `created_at < now() - 30d`
+  and the existing indexes lead on `connection_id` / `status`; sequential scan
+  otherwise.
+- `flow_results_status_idx` — the 10-minute recompute asks `status = 'stale'`
+  fleet-wide, and the dashboard counts non-fresh tiles per org.
+
+The two drops are write-cost with zero read value, both on high-write tables:
+`raw_events_conn_idx` is a strict prefix of `raw_events_conn_received_idx`
+(a btree on `(a, b)` answers every `a`-only query), and `usage_ledger_org_idx`
+has no query site anywhere in the code — nothing has ever read the busiest
+table by org alone.
+
+Deliberately NOT added: `raw_events(received_at)` alone. The audit flagged it,
+but the retention predicate has since changed (D1): it now leads with an
+`EXISTS` against disabled connections, so the planner drives from the few
+disabled connection rows into `raw_events_conn_received_idx`. A bare
+`received_at` index would be one more thing to maintain on the highest-write
+table, serving no surviving query shape.
+
+```sql
+DROP INDEX IF EXISTS "raw_events_conn_idx";
+DROP INDEX IF EXISTS "usage_ledger_org_idx";
+
+CREATE INDEX IF NOT EXISTS "connections_due_sweep_idx"
+  ON "connections" USING btree ("next_sweep_at")
+  WHERE status = 'active';
+
+CREATE INDEX IF NOT EXISTS "dead_letter_raw_event_idx"
+  ON "dead_letter" USING btree ("raw_event_id");
+
+CREATE INDEX IF NOT EXISTS "delivery_log_created_idx"
+  ON "delivery_log" USING btree ("created_at");
+
+CREATE INDEX IF NOT EXISTS "flow_results_status_idx"
+  ON "flow_results" USING btree ("status");
+```
+
+Plain `CREATE INDEX` takes a write lock on its table for the build. Fine at
+today's sizes; on a table that has since grown large (`delivery_log` is the
+likely one), use `CREATE INDEX CONCURRENTLY` instead — run it as its own
+statement outside any transaction, and re-check with the verify query because
+a concurrent build can fail and leave an INVALID index behind (same caveat as
+0014).
+
+Verify:
+
+```sql
+SELECT
+  (SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN
+    ('connections_due_sweep_idx','dead_letter_raw_event_idx',
+     'delivery_log_created_idx','flow_results_status_idx'))          AS created_should_be_4,
+  (SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN
+    ('raw_events_conn_idx','usage_ledger_org_idx'))                  AS dropped_should_be_0,
+  (SELECT count(*) FROM pg_index WHERE NOT indisvalid AND
+    indexrelid::regclass::text IN
+    ('connections_due_sweep_idx','dead_letter_raw_event_idx',
+     'delivery_log_created_idx','flow_results_status_idx'))          AS invalid_should_be_0;
+```
+
+`scripts/schema-audit.sql` query 2 knows about all six changes — a clean run
+after this paste shows 34 `ok` rows and no `MISSING INDEX`.
+
+> **Numbering note.** 0016 remains reserved by the unmerged
+> `batch5/retention-purge` branch; the snapshot-chain warning under 0018
+> still applies at merge time.

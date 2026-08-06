@@ -233,7 +233,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (32 expected).
+-- QUERY 2 (optional) — indexes (34 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -244,9 +244,12 @@ WITH expected (tbl, idx) AS (
     ('backfill_jobs', 'backfill_jobs_org_idx'),
     ('connections', 'connections_org_idx'),
     ('connections', 'connections_status_idx'),
+    ('connections', 'connections_due_sweep_idx'),
     ('dead_letter', 'dead_letter_conn_idx'),
+    ('dead_letter', 'dead_letter_raw_event_idx'),
     ('delivery_log', 'delivery_log_conn_idx'),
     ('delivery_log', 'delivery_log_status_idx'),
+    ('delivery_log', 'delivery_log_created_idx'),
     ('events', 'events_event_id_uq'),
     ('events', 'events_org_type_idx'),
     ('events', 'events_conn_stream_live_idx'),
@@ -255,12 +258,12 @@ WITH expected (tbl, idx) AS (
     ('events', 'events_deleted_idx'),
     ('flow_results', 'flow_results_flow_output_uq'),
     ('flow_results', 'flow_results_org_idx'),
+    ('flow_results', 'flow_results_status_idx'),
     ('flow_versions', 'flow_versions_flow_version_uq'),
     ('flow_versions', 'flow_versions_org_idx'),
     ('flows', 'flows_org_idx'),
     ('memberships', 'memberships_org_user_uq'),
     ('metrics', 'metrics_org_idx'),
-    ('raw_events', 'raw_events_conn_idx'),
     ('raw_events', 'raw_events_conn_received_idx'),
     ('source_streams', 'source_streams_conn_cfg_uq'),
     ('source_streams', 'source_streams_org_idx'),
@@ -269,7 +272,6 @@ WITH expected (tbl, idx) AS (
     ('test_runs', 'test_runs_org_idx'),
     ('test_runs', 'test_runs_created_idx'),
     ('usage_ledger', 'usage_ledger_bucket_uq'),
-    ('usage_ledger', 'usage_ledger_org_idx'),
     ('usage_ledger', 'usage_ledger_window_idx')
 )
 SELECT
