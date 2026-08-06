@@ -1,4 +1,4 @@
-import { and, eq, gt, gte, isNull, lt, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNull, lt, lte, notInArray, or, sql } from "drizzle-orm";
 import { connections, events, flows, flowVersions, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
 import type { CanonicalEvent } from "@/connectors/types";
@@ -6,7 +6,7 @@ import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
-import { claimCalls, isPaused, settlePollCalls, type CallLane } from "@/lib/provider-gateway/budget";
+import { applyObservedRateLimit, claimCalls, isPaused, recordObservedLimit, settlePollCalls, type CallLane } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { awaitStreamWriteLock, withStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
@@ -224,6 +224,20 @@ export type StreamSyncResult = {
    * connection or tell the user rather than reporting a short count as final.
    */
   deferred?: { reason: string; retryAfterMs: number };
+  /**
+   * The PROVIDER said its quota is spent (`ratelimit-remaining: 0`), and the
+   * connection has ALREADY been paused until this expiry — `applyObservedRateLimit`
+   * writes the pause where it observes the header, so no caller can forget to.
+   *
+   * Distinct from `deferred`, and the caller must treat them oppositely.
+   * `deferred` is OUR ledger denying ONE `(operation, minute)` bucket — the
+   * next stream may claim from a different bucket, so the right move is to skip
+   * this stream and keep going. This is the provider's own account of the
+   * CREDENTIAL's remaining quota, which every stream of the connection shares —
+   * polling the next stream would spend requests straight into the exhaustion
+   * the header just warned about, so the right move is to stop the sweep.
+   */
+  observedPause?: Date;
   /**
    * 10(c) — the mirror guarantee, checked against what is stored.
    *
@@ -451,6 +465,9 @@ export async function syncStream(
   let covered: { from: Date; to: Date } | null = null;
   let dateFieldState: StreamRow["dateFieldState"] | undefined;
   let mirrorDrift: StreamSyncResult["mirrorDrift"];
+  // F.1 (observed) — set when the provider's own headers said "spent". The
+  // pause is written where it is observed; this carries WHEN out to the caller.
+  let observedPause: Date | undefined;
   /**
    * The date column changed and every stored row is about to be restamped from
    * this read. Captured as the VALUE, not a boolean, because it is cleared by
@@ -505,6 +522,13 @@ export async function syncStream(
       // Before the `unchanged` return below — a skip still spends the Drive
       // probe, and a probe nobody counts is how a "cheap" sweep stops being one.
       await settleUp(mirrorRes, claimedAt);
+      // The stream path never read these headers — only the connection-scoped
+      // branch did — so Calendly/Instantly/Sheets/Calendar contributed no
+      // `observed_limit` evidence and never deferred on `remaining: 0`. The
+      // mirror's read is already whole at this point, so the pause only stops
+      // the SWEEP from starting more streams; nothing here is cut short.
+      await recordObservedLimit(db, conn, operation, mirrorRes.rateLimit, claimedAt);
+      observedPause = (await applyObservedRateLimit(db, conn, mirrorRes.rateLimit)) ?? undefined;
 
       // The source says it has not changed, so nothing was fetched. Returning
       // here is load-bearing: falling through would hand an EMPTY record set to
@@ -515,7 +539,7 @@ export async function syncStream(
           .update(sourceStreams)
           .set({ cursor: nextCursor ?? cursor, status: "active", lastError: null, lastPolledAt: new Date(), updatedAt: new Date() })
           .where(eq(sourceStreams.id, stream.id));
-        return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0 };
+        return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0, observedPause };
       }
       /**
        * The column this read actually dated from — chosen or detected — against
@@ -661,6 +685,12 @@ export async function syncStream(
         // earlier page saying it was cut short.
         if (pageRes.incomplete) incomplete = true;
         await settleUp(pageRes, claimedAt);
+        // Same headers the connection-scoped branch has always read, finally
+        // read here too. Recorded per page — the evidence the catalog's
+        // declarations are waiting on — and acted on AFTER this page's rows and
+        // cursor are persisted below, so nothing fetched is thrown away.
+        await recordObservedLimit(db, conn, operation, pageRes.rateLimit, claimedAt);
+        observedPause = (await applyObservedRateLimit(db, conn, pageRes.rateLimit)) ?? observedPause;
         if (retireOutsideWindow) covered = retireOutsideWindow;
         const swap = await withStreamWriteLock(db, `stream:${stream.id}`, async (tx) => {
           const res = await upsertEvents(
@@ -721,6 +751,14 @@ export async function syncStream(
         // whole organization did not. An advancing cursor is the connector
         // saying there IS more; `maxPages` is what bounds the walk.
         if (!advanced || nextCursor == null) break;
+        // The provider said its quota is spent. The break waits until HERE —
+        // after the write and the cursor advance — so the page it arrived on is
+        // kept; what stops is fetching the next one. More remained (the cursor
+        // is non-null), so this walk is a prefix and must say so.
+        if (observedPause) {
+          incomplete = true;
+          break;
+        }
         // Still more to fetch, and no budget left to fetch it: what we wrote is
         // a prefix, and the caller must be able to say so.
         if (page === maxPages - 1) incomplete = true;
@@ -798,15 +836,29 @@ export async function syncStream(
    * a problem they do not have.
    */
   const heldContinuation = connector.holdsContinuation?.(cursor) ?? false;
-  return { inserted, updated, deduped, softDeleted, incomplete, heldContinuation, covered: covered ?? undefined, deferred, mirrorDrift };
+  return { inserted, updated, deduped, softDeleted, incomplete, heldContinuation, covered: covered ?? undefined, deferred, observedPause, mirrorDrift };
 }
 
-/** All streams of one connection that should be polled. */
+/**
+ * All streams of one connection that should be polled — least-recently-polled
+ * FIRST, never-polled before everything.
+ *
+ * The order is load-bearing, not cosmetic. Without an ORDER BY Postgres returns
+ * heap order, which is stable in practice: every sweep walked the same prefix,
+ * and when the minute's budget ran out mid-list the same tail streams were cut
+ * off sweep after sweep — starved forever while their siblings stayed fresh.
+ * LRU-first makes the scarce budget rotate: whichever streams were cut short
+ * last time have the oldest `last_polled_at` and go to the front of the next
+ * sweep. NULLS FIRST because a stream that has never been polled is the most
+ * starved of all. `id` is the tiebreak that keeps the order deterministic when
+ * timestamps collide (bulk-created streams share a `created_at` to the ms).
+ */
 export async function activeStreams(db: DB, connectionId: string): Promise<StreamRow[]> {
   return db
     .select()
     .from(sourceStreams)
-    .where(and(eq(sourceStreams.connectionId, connectionId)));
+    .where(and(eq(sourceStreams.connectionId, connectionId)))
+    .orderBy(sql`${sourceStreams.lastPolledAt} asc nulls first`, asc(sourceStreams.createdAt), asc(sourceStreams.id));
 }
 
 /** Default freshness window for a non-forced prime: skip re-polling a stream

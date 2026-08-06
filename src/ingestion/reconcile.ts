@@ -318,6 +318,14 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     // connection at base cadence, because the sweep gap is a property of the
     // connection and the continuation belongs to a stream inside it.
     let heldContinuation = false;
+    // The earliest moment a denied claim said the budget frees up. Held instead
+    // of acted on, because acting on it used to mean RETURNING — and the first
+    // stream denied budget silenced every stream after it in the list. A claim
+    // denial is a fact about one (operation, minute) bucket, never about the
+    // connection: Sheets' tab read and its Drive probe are different buckets 40×
+    // apart, so the streams behind the denied one may have budget of their own.
+    // Each still-denied stream costs one ledger roundtrip, not a provider call.
+    let deferred: { reason: string; retryAfterMs: number } | undefined;
     const changedStreamHashes: string[] = [];
     for (const stream of streams) {
       try {
@@ -327,19 +335,16 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
         // permitted N × maxPages real calls against the provider's limit.
         const r = await syncStream(db, conn, stream, 5);
         if (r.deferred) {
-          const until = await pauseConnection(db, conn.id, r.deferred.retryAfterMs, `${r.deferred.reason} — resumes automatically`);
-          // Rows already written this sweep still count; the walk resumes from
-          // its stored cursor next time, so nothing is lost.
+          // Skip THIS stream, not the sweep. Rows already written still count;
+          // the walk resumes from its stored cursor next time, so nothing is
+          // lost — and the streams after this one get their own claim.
+          if (!deferred || r.deferred.retryAfterMs < deferred.retryAfterMs) deferred = r.deferred;
           inserted += r.inserted;
           updated += r.updated;
           softDeleted += r.softDeleted;
           deduped += r.deduped;
           if (r.inserted + r.updated + r.softDeleted > 0) changedStreamHashes.push(stream.configHash);
-          return withCadence({
-            inserted, updated, softDeleted, deduped,
-            polled: true, webhook, changedStreamHashes,
-            deferredUntil: until, orgId: conn.orgId, source: conn.source,
-          });
+          continue;
         }
         inserted += r.inserted;
         updated += r.updated;
@@ -349,6 +354,20 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
         if (r.heldContinuation) heldContinuation = true;
         // G.1: remember WHICH streams changed, so staleness stays stream-scoped.
         if (r.inserted + r.updated + r.softDeleted > 0) changedStreamHashes.push(stream.configHash);
+        // The PROVIDER said its quota is spent — the opposite call from the
+        // ledger's `deferred` above. That denial is about one operation bucket
+        // and the next stream may have its own; this is about the credential
+        // every stream here shares, so polling on would spend requests straight
+        // into a wall the provider just named. The pause is already on the
+        // connection row (written where the header was observed); returning
+        // before recordSuccess is what keeps it there.
+        if (r.observedPause) {
+          return withCadence({
+            inserted, updated, softDeleted, deduped,
+            polled: true, webhook, changedStreamHashes,
+            deferredUntil: r.observedPause, orgId: conn.orgId, source: conn.source,
+          });
+        }
       } catch (e) {
         failures += 1;
         await recordProviderError(db, conn);
@@ -364,7 +383,23 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
         }
       }
     }
-    if (streams.length > 0 && failures === 0) await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
+    // `!deferred` keeps recordSuccess honest: a budget-deferred sweep may have
+    // made no provider contact at all (denied at page 0 of every stream), and
+    // clearing `consecutiveFailures` on the strength of calls never made would
+    // reset the probe ladder without evidence. Same rule as before this loop
+    // learned to skip — deferral always returned before recordSuccess.
+    if (streams.length > 0 && failures === 0 && !deferred) await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
+    if (deferred) {
+      // Paused AFTER the loop, once, on the earliest retry the ledger offered —
+      // every stream got its claim first. recordSuccess clears pausedUntil, so
+      // this must stay behind the guard above, never before it.
+      const until = await pauseConnection(db, conn.id, deferred.retryAfterMs, `${deferred.reason} — resumes automatically`);
+      return withCadence({
+        inserted, updated, softDeleted, deduped,
+        polled: true, webhook, changedStreamHashes,
+        deferredUntil: until, orgId: conn.orgId, source: conn.source,
+      });
+    }
     return withCadence({ inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, changedStreamHashes, incomplete, heldContinuation, orgId: conn.orgId, source: conn.source });
   }
 
@@ -448,12 +483,16 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     // nobody published. Recorded, never acted on: a catalog limit should come
     // from a day of these, not from one header.
     await recordObservedLimit(db, conn, pollOperation(conn.source, conn.config), rateLimit);
+    // A clean poll clears any breaker state — the connection is healthy again
+    // (but never erases a standing webhook-health warning). BEFORE the observed
+    // pause below, and the order is load-bearing: recordSuccess nulls
+    // `pausedUntil`, so the old order wrote the pause and erased it three lines
+    // later — the sweep reported a deferral the connection row no longer
+    // carried, and the next sweep polled straight into the exhausted quota.
+    await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
     // The provider's own account of its remaining quota beats our declared
     // guess. Exhausted means exhausted — defer rather than learn it via a 429.
     const observedPause = await applyObservedRateLimit(db, conn, rateLimit);
-    // A clean poll clears any breaker state — the connection is healthy again
-    // (but never erases a standing webhook-health warning).
-    await recordSuccess(db, conn.id, { clearError: webhook !== "failed" });
 
     return withCadence({
       inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped,
