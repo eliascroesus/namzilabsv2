@@ -277,15 +277,16 @@ async function emptyMirrors(db: DB, now: Date) {
 }
 
 export async function scanInvariants(db: DB, now = new Date()): Promise<InvariantReport> {
-  // EXACTLY FOUR CONCURRENT READS HERE. `MIN_POOL_MAX` in `src/db/client.ts` is
-  // derived from this call site — "4 concurrent reads + 1 transaction + 1
-  // spare" — and a pool below that floor DEADLOCKS rather than degrades, so a
-  // fifth entry in this array silently invalidates the derivation and the
-  // symptom is a hung nightly job, not a slow one. New checks go sequentially
-  // below, which is why `throttledConnections` is not in here.
-  // FIVE concurrent reads now, not four. `MIN_POOL_MAX` in src/db/client.ts is
-  // derived from the widest read fan-out in the codebase and this is it, so the
-  // floor moves with this array — see the comment there before adding a sixth.
+  // EXACTLY FIVE CONCURRENT READS HERE, and `MIN_POOL_MAX = 7` in
+  // src/db/client.ts is derived from this array: 5 concurrent reads + 1
+  // transaction parked on an advisory lock + 1 spare. A pool below that floor
+  // DEADLOCKS rather than degrades, so a sixth entry in this array silently
+  // invalidates the derivation and the symptom is a hung nightly job, not a
+  // slow one. The floor MOVES WITH THIS ARRAY — the fifth entry
+  // (`rejectingConnections`) was once added without moving it, which is the
+  // exact latent deadlock tests/pool-tuning.test.ts now pins the arithmetic
+  // against. New checks go sequentially below unless the floor moves in the
+  // same commit.
   const [unswept, failing, stalled, empty, rejecting] = await Promise.all([
     unsweptStreams(db, now),
     db

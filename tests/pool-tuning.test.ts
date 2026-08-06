@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { poolTuning, MIN_POOL_MAX } from "@/db/client";
 
 /**
@@ -49,10 +50,23 @@ describe("pool tuning", () => {
     }
   });
 
-  it("the floor covers the widest fan-out in the codebase plus a transaction", () => {
-    // 4 concurrent reads (invariants.ts) + 1 held by a transaction + 1 spare.
-    // Stated as arithmetic so that widening a `Promise.all` past four fails here
-    // rather than in production at 3am.
-    expect(MIN_POOL_MAX).toBeGreaterThanOrEqual(4 + 1 + 1);
+  /**
+   * The floor is EXACTLY the widest fan-out plus a parked transaction plus a
+   * spare — measured from the source, not restated by hand.
+   *
+   * The previous form was `>= 4 + 1 + 1`, and that inequality is how a real
+   * deadlock shipped: `scanInvariants` grew a fifth concurrent read
+   * (`rejectingConnections`) while `MIN_POOL_MAX` stayed at 6, and a `>=`
+   * against a hand-typed 4 stayed green the whole time. Counting the
+   * `Promise.all` destructure in the file itself means widening the fan-out
+   * without moving the floor fails HERE, in the same commit, rather than as a
+   * hung nightly job at 3am on the pool driver.
+   */
+  it("the floor is exactly the widest fan-out in the codebase plus a transaction plus a spare", () => {
+    const src = readFileSync("src/lib/health/invariants.ts", "utf8");
+    const destructure = src.match(/const \[([^\]]+)\]\s*=\s*await Promise\.all/);
+    expect(destructure, "scanInvariants' Promise.all destructure not found — update this test's parser").toBeTruthy();
+    const fanOut = destructure![1].split(",").map((s) => s.trim()).filter(Boolean).length;
+    expect(MIN_POOL_MAX).toBe(fanOut + 1 + 1);
   });
 });

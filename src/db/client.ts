@@ -34,16 +34,22 @@ function envDriver(name: string, fallback: Driver): Driver {
  * The MOST simultaneous clients one invocation of this app can need.
  *
  * Not a guess and not a comfort margin — a floor derived from the code:
- *   4  `scanInvariants` runs four queries through one `Promise.all`
- *      (`src/lib/health/invariants.ts`), and the helpers inside them are
- *      sequential, so four is the widest read fan-out anywhere.
+ *   5  `scanInvariants` runs FIVE queries through one `Promise.all`
+ *      (`src/lib/health/invariants.ts` — unswept, failing, stalled, empty,
+ *      rejecting), and the helpers inside them are sequential, so five is the
+ *      widest read fan-out anywhere.
  *
- *      THREE call sites now sit exactly on that four, not one: that scan, plus
+ *      The floor was 6 while that array held four reads; the fifth
+ *      (`rejectingConnections`) was added without moving this number, which is
+ *      precisely the failure mode the derivation warns about — and the reason
+ *      `tests/pool-tuning.test.ts` now asserts the EXACT arithmetic instead of
+ *      a `>=` that stays green while the fan-out grows past the floor.
+ *
  *      `retentionBacklog` and the inspect path of `pruneOperationalTables`
- *      (`src/lib/storage-lifecycle.ts`). None of them overlap — Inngest runs
- *      steps sequentially — but a fifth concurrent read added to ANY of them
- *      invalidates this number, and the symptom is the deadlock below rather
- *      than a slow query. Both files carry a comment saying so.
+ *      (`src/lib/storage-lifecycle.ts`) sit at four. None of the three sites
+ *      overlap — Inngest runs steps sequentially — but a wider fan-out added
+ *      to ANY of them invalidates this number, and the symptom is the
+ *      deadlock below rather than a slow query.
  *   1  a transaction holds its client for the whole body, and
  *      `awaitStreamWriteLock` deliberately BLOCKS on `pg_advisory_xact_lock`
  *      for up to 15 seconds while holding it.
@@ -55,7 +61,7 @@ function envDriver(name: string, fallback: Driver): Driver {
  * rather than honoured below it, and the lever for staying under a connection
  * ceiling is how many containers run, not how small each pool is.
  */
-export const MIN_POOL_MAX = 6;
+export const MIN_POOL_MAX = 7;
 
 /** Fail fast when the ceiling is reached, rather than hanging the request. */
 const CONNECT_TIMEOUT_MS = 5_000;
