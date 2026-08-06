@@ -30,7 +30,13 @@ const PRIMARY = "https://api.sendblue.com";
 const ALTERNATE = "https://api.sendblue.co";
 
 type MessagePage = { messages?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
-type WebhookPage = { webhooks?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
+/**
+ * The documented webhook envelope: `webhooks` is an OBJECT keyed by event type
+ * (values: arrays of URL strings or {url} objects), with `globalSecret` — a
+ * bare string — mixed in among the event types. The first live S5 run proved
+ * this: the old flat-array expectation printed "undefined registered".
+ */
+type WebhookPage = { webhooks?: Record<string, unknown> | Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
 
 const failures: string[] = [];
 function check(name: string, ok: boolean, detail = ""): void {
@@ -138,8 +144,28 @@ async function main() {
     );
   }
 
-  const hooks = listOf(await getJson<WebhookPage>(`${base}/api/account/webhooks`), "webhooks");
-  check("S5 webhook list readable", Array.isArray(hooks), hooks.length === 0 ? "empty — fine, the sweep registers ours" : `${hooks.length} registered`);
+  // S5 — mirrors webhookUrls() in src/connectors/sendblue.ts (this script is
+  // deliberately standalone/raw-fetch, so the flattening is duplicated here).
+  const hookData = await getJson<WebhookPage>(`${base}/api/account/webhooks`);
+  const webhooksField = Array.isArray(hookData) ? hookData : (hookData?.webhooks ?? null);
+  const entryUrl = (entry: unknown): string | null =>
+    typeof entry === "string" ? entry : typeof (entry as Record<string, unknown> | null)?.["url"] === "string" ? String((entry as Record<string, unknown>)["url"]) : null;
+  let hookUrls: string[] = [];
+  let shapeNote = "";
+  if (Array.isArray(webhooksField)) {
+    hookUrls = webhooksField.map(entryUrl).filter((u): u is string => u != null);
+    shapeNote = "flat array shape";
+  } else if (webhooksField != null && typeof webhooksField === "object") {
+    const eventTypes = Object.entries(webhooksField).filter(([, v]) => Array.isArray(v));
+    hookUrls = eventTypes.flatMap(([, v]) => (v as unknown[]).map(entryUrl).filter((u): u is string => u != null));
+    const hasSecret = typeof (webhooksField as Record<string, unknown>)["globalSecret"] === "string";
+    shapeNote = `event types: ${eventTypes.map(([k]) => k).join(", ") || "none"}${hasSecret ? "; globalSecret present" : ""}`;
+  }
+  check(
+    "S5 webhook list readable",
+    Array.isArray(webhooksField) || (webhooksField != null && typeof webhooksField === "object"),
+    hookUrls.length === 0 ? `no URLs registered — fine, the sweep registers ours (${shapeNote})` : `${hookUrls.length} URL(s) registered (${shapeNote})`,
+  );
 
   console.log(
     failures.length === 0

@@ -328,20 +328,44 @@ describe("Sendblue messages poll + webhook health", () => {
     expect(records[0].eventId).toBe(fromWebhook.eventId);
   });
 
-  it("verifyWebhookSubscription: present → healthy; missing → re-registers via POST /api/account/webhooks", async () => {
+  /**
+   * The DOCUMENTED webhook envelope, verbatim (docs.sendblue.com): `webhooks`
+   * is an OBJECT keyed by event type — arrays of URL strings or {url} objects
+   * — with `globalSecret`, a bare string, mixed in among the event types. The
+   * first live S5 verify run proved it: the old flat-array fixture kept this
+   * suite green while production threw `.some is not a function` on every
+   * sweep and the self-heal never ran once.
+   */
+  const envelope = (receive: string[], outbound: Array<string | { url: string }> = []) => ({
+    message: "Webhooks retrieved successfully",
+    status: "OK",
+    webhooks: {
+      call_log: [],
+      contact_created: [],
+      globalSecret: "whsec_test123",
+      line_assigned: [],
+      line_blocked: [],
+      outbound,
+      receive,
+      typing_indicator: [],
+    },
+  });
+
+  it("verifyWebhookSubscription: present in the event-type map → healthy; missing → re-registers with the documented body", async () => {
     const posts: Array<{ url: string; body: unknown }> = [];
-    let hooks: Array<{ url: string }> = [{ url: "https://app.example/api/webhooks/OTHER" }];
+    let receive: string[] = ["https://app.example/api/webhooks/OTHER"];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
         expect(url).toContain("/api/account/webhooks");
         if ((init?.method ?? "GET").toUpperCase() === "POST") {
-          posts.push({ url, body: JSON.parse(String(init?.body)) });
-          hooks = [...hooks, { url: (JSON.parse(String(init?.body)) as { url: string }).url }];
+          const body = JSON.parse(String(init?.body)) as { webhooks: string[] };
+          posts.push({ url, body });
+          receive = [...receive, ...body.webhooks];
           return jsonResponse({ ok: true });
         }
-        return jsonResponse({ webhooks: hooks });
+        return jsonResponse(envelope(receive));
       }),
     );
     const args = { connectionId: "c1", webhookUrl: "https://app.example/api/webhooks/c1", credentials: { apiKey: "a", apiSecret: "b" } };
@@ -349,11 +373,48 @@ describe("Sendblue messages poll + webhook health", () => {
     const first = await sendblueConnector.verifyWebhookSubscription!(args);
     expect(first).toEqual({ healthy: true, reregistered: true });
     expect(posts).toHaveLength(1);
-    expect(posts[0].body).toEqual({ url: "https://app.example/api/webhooks/c1" });
+    // The documented request parameter — the old body `{url}` was a guess.
+    expect(posts[0].body).toEqual({ webhooks: ["https://app.example/api/webhooks/c1"] });
 
     const second = await sendblueConnector.verifyWebhookSubscription!(args);
     expect(second).toEqual({ healthy: true, reregistered: false });
     expect(posts).toHaveLength(1); // no duplicate registration
+  });
+
+  it("a URL registered under ANOTHER event type still counts (POST appends — re-registering would compound forever)", async () => {
+    const posts: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+        if ((init?.method ?? "GET").toUpperCase() === "POST") {
+          posts.push(init?.body);
+          return jsonResponse({ ok: true });
+        }
+        // Present only under `outbound`, and as an OBJECT entry — both the
+        // any-event-type rule and the {url} entry shape in one fixture.
+        return jsonResponse(envelope([], [{ url: "https://app.example/api/webhooks/c1" }]));
+      }),
+    );
+    const res = await sendblueConnector.verifyWebhookSubscription!({
+      connectionId: "c1",
+      webhookUrl: "https://app.example/api/webhooks/c1",
+      credentials: { apiKey: "a", apiSecret: "b" },
+    });
+    expect(res).toEqual({ healthy: true, reregistered: false });
+    expect(posts).toHaveLength(0);
+  });
+
+  it("the legacy flat-array shape is still tolerated", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ webhooks: [{ url: "https://app.example/api/webhooks/c1" }] })),
+    );
+    const res = await sendblueConnector.verifyWebhookSubscription!({
+      connectionId: "c1",
+      webhookUrl: "https://app.example/api/webhooks/c1",
+      credentials: { apiKey: "a", apiSecret: "b" },
+    });
+    expect(res).toEqual({ healthy: true, reregistered: false });
   });
 
   it("verifyWebhookSubscription reports failure without throwing (sweep never blocked)", async () => {

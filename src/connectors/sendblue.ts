@@ -264,18 +264,26 @@ export const sendblueConnector: Connector = {
   async verifyWebhookSubscription(args: VerifyWebhookArgs): Promise<VerifyWebhookResult> {
     const auth = authHeaders(args.credentials);
     try {
-      const data = await fetchJson<{ webhooks?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>(
-        `${API_BASE}/api/account/webhooks`,
-        { headers: auth },
-      );
-      const hooks = Array.isArray(data) ? data : (data.webhooks ?? []);
-      const present = hooks.some((h) => str(h["url"]) === args.webhookUrl);
+      const data = await fetchJson<unknown>(`${API_BASE}/api/account/webhooks`, { headers: auth });
+      /**
+       * Presence under ANY event type counts, deliberately. The provider's
+       * POST APPENDS to the existing configuration — a check that demanded the
+       * URL specifically under `receive` would re-POST on every sweep for an
+       * account whose URL sits under other types, accumulating duplicate
+       * registrations at the provider forever. Any-presence is the direction
+       * that cannot compound; the registration below covers the receive path
+       * the instant lane needs.
+       */
+      const present = webhookUrls(data).includes(args.webhookUrl);
       if (present) return { healthy: true, reregistered: false };
 
       await fetchJson(`${API_BASE}/api/account/webhooks`, {
         method: "POST",
         headers: { ...auth, "content-type": "application/json" },
-        body: JSON.stringify({ url: args.webhookUrl }),
+        // The documented request parameter: `webhooks` — "Array of webhook
+        // URLs or webhook objects" (docs.sendblue.com, webhooks create). The
+        // old body `{url}` was a guessed shape.
+        body: JSON.stringify({ webhooks: [args.webhookUrl] }),
       });
       return { healthy: true, reregistered: true };
     } catch (e) {
@@ -283,6 +291,42 @@ export const sendblueConnector: Connector = {
     }
   },
 };
+
+/**
+ * Every webhook URL the account has registered, whatever shape it arrived in.
+ *
+ * The documented envelope (docs.sendblue.com, read 2026-08-06) is
+ * `{ message, status, webhooks: { call_log: [urls], receive: [urls], ...,
+ * globalSecret: "whsec_..." } }` — `webhooks` is an OBJECT keyed by event
+ * type, each value an array of URL strings or `{url, secret}` objects, with
+ * `globalSecret` (a bare string) sitting AMONG the event types. The connector
+ * assumed a flat array and called `.some` on that object, which threw on every
+ * sweep — caught, reported as `{healthy: false}`, and the self-heal this check
+ * exists for never ran once (the exact failure the S5 verify check surfaced).
+ *
+ * Skipping non-array values is what skips `globalSecret`, and it also skips
+ * any scalar the provider adds next. The flat-array shape is still tolerated:
+ * cheap, and if Sendblue ever ships a THIRD shape this returns `[]`, the check
+ * re-registers every sweep, and the verdict shows perpetual `reregistered` —
+ * fail-loud, not fail-silent.
+ */
+function webhookUrls(data: unknown): string[] {
+  const entryUrl = (entry: unknown): string | null =>
+    typeof entry === "string" ? entry : (str((entry as Record<string, unknown> | null)?.["url"]) ?? null);
+  if (Array.isArray(data)) return data.map(entryUrl).filter((u): u is string => u != null);
+  const webhooks = (data as Record<string, unknown> | null)?.["webhooks"];
+  if (Array.isArray(webhooks)) return webhooks.map(entryUrl).filter((u): u is string => u != null);
+  if (webhooks == null || typeof webhooks !== "object") return [];
+  const urls: string[] = [];
+  for (const value of Object.values(webhooks)) {
+    if (!Array.isArray(value)) continue; // skips globalSecret and future scalars
+    for (const entry of value) {
+      const u = entryUrl(entry);
+      if (u != null) urls.push(u);
+    }
+  }
+  return urls;
+}
 
 function authHeaders(credentials?: Record<string, unknown> | null): Record<string, string> {
   const id = str(credentials?.["apiKey"]);
