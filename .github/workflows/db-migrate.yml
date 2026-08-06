@@ -59,6 +59,11 @@ jobs:
       - name: Apply pending migrations
         env:
           DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+          # src/db/migrate.ts refuses without this flag: the sanctioned path
+          # for migrations is hand-pasting drizzle/HAND_APPLY.md, and a stray
+          # local `pnpm db:migrate` must stop cold. This manual-only workflow
+          # is the one caller that sets it knowingly.
+          DB_MIGRATE_I_UNDERSTAND: "1"
         run: pnpm db:migrate
 
       - name: Summary

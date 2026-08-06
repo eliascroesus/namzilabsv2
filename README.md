@@ -125,7 +125,10 @@ tests/          69 tests: crypto, ids, signatures, dedup, DLQ+replay, reconcilia
 pnpm install
 cp .env.example .env          # fill in DATABASE_URL + ENCRYPTION_KEY at minimum
 pnpm db:generate              # (already generated; regenerate after schema edits)
-pnpm db:migrate               # apply migrations (uses DATABASE_MIGRATION_URL, the DIRECT Neon URL)
+# Migrations are applied BY HAND: paste the blocks from drizzle/HAND_APPLY.md
+# into the Neon SQL Editor. `pnpm db:migrate` refuses to run without
+# DB_MIGRATE_I_UNDERSTAND=1 — the drizzle tracker has never matched this
+# database, so the migrator would replay migrations the database already has.
 pnpm dev                      # Next.js
 pnpm inngest:dev              # Inngest dev server (separate terminal)
 ```
@@ -156,7 +159,9 @@ same payload is a no-op; a forced failure lands in the DLQ and is replayable via
    `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, and
    (for prod) `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY`. In the WorkOS dashboard, set the
    redirect URI to `https://<domain>/callback` and the post-sign-out redirect to your home URL.
-3. Run `pnpm db:migrate` (uses `DATABASE_MIGRATION_URL`), locally or as a deploy step.
+3. Apply migrations by pasting the blocks from `drizzle/HAND_APPLY.md` into the
+   Neon SQL Editor, then verify with the Schema drift check Action (or
+   `scripts/schema-audit.sql`). Do NOT run `pnpm db:migrate` — see HAND_APPLY.md.
 4. Register the Inngest app pointing at `https://<domain>/api/inngest`. The
    reconciliation cron is scheduled by Inngest — no Vercel Cron needed.
 5. Run `docs/SMOKE_TEST.md` against the deploy.
