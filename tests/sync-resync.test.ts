@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, isNull, and, gt } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { runSync, reprocessConnection } from "@/lib/sync/resync";
 import { registerConnector } from "@/connectors/registry";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { storeRawEvent } from "@/ingestion/raw-store";
-import { events } from "@/db/schema";
+import { events, usageLedger } from "@/db/schema";
 import type { Connector, CanonicalEvent } from "@/connectors/types";
 import type { DB } from "@/db/types";
 
@@ -120,6 +120,69 @@ describe("full re-sync (versioned, safe replacement)", () => {
     const r = await runSync(db, conn, "incremental");
     expect(r.softDeleted).toBe(0);
     expect(await activeIds(conn)).toEqual(["resync-poller:conn:A", "resync-poller:conn:B", "resync-poller:conn:C"]);
+  });
+
+  /**
+   * F.1 — a full re-sync's provider calls reach the ledger.
+   *
+   * `pollAll` was the one walk in the system that claimed NOTHING: up to 200
+   * pages of real provider requests, invisible to the per-connection bucket
+   * and to the fleet bucket every Google customer shares — and it fires
+   * automatically on every new connection. This asserts the walk now leaves
+   * usage_ledger evidence, which is what makes it deniable at all.
+   */
+  it("a full re-sync claims provider budget through the usage ledger", async () => {
+    const conn = await seedConnection(db, { source: "resync-poller" });
+    POLL = [rec("A", 10)];
+    await runSync(db, conn, "full");
+
+    const charged = await db
+      .select()
+      .from(usageLedger)
+      .where(and(eq(usageLedger.connectionId, conn), gt(usageLedger.calls, 0)));
+    expect(charged.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * A budget-denied walk is a TRUNCATED walk: what it wrote is a prefix, so
+   * the retire that absence licenses must not run — same semantics as the
+   * PAGE_CAP ceiling (tests/resync-truncated-walk.test.ts), arrived at
+   * through the budget instead of the page count.
+   */
+  it("a budget-denied full re-sync never retires rows on the strength of a prefix", async () => {
+    const conn = await seedConnection(db, { source: "resync-poller" });
+    POLL = [rec("A", 10), rec("B", 20)];
+    await runSync(db, conn, "full");
+    expect(await activeIds(conn)).toEqual(["resync-poller:conn:A", "resync-poller:conn:B"]);
+
+    // Exhaust this connection's minute window so the next walk's first claim
+    // is denied. budgetFor(default 60rpm) * 0.7 = 42; background lane cap is
+    // 42 - ceil(42*0.25) = 31. A pre-charged bucket of 1000 denies anything.
+    const windowStart = new Date(Math.floor(Date.now() / 60_000) * 60_000);
+    await db
+      .insert(usageLedger)
+      .values({
+        orgId: "org_test",
+        connectionId: conn,
+        provider: "resync-poller",
+        operation: "*",
+        windowStart,
+        calls: 1000,
+      })
+      // The first full sync above already charged this minute's bucket —
+      // which is itself the claim-per-page fix working — so pre-charging
+      // must update the existing row rather than insert a duplicate.
+      .onConflictDoUpdate({
+        target: [usageLedger.connectionId, usageLedger.operation, usageLedger.windowStart],
+        set: { calls: 1000 },
+      });
+
+    POLL = []; // upstream claims empty — but the walk never gets to ask
+    const r = await runSync(db, conn, "full");
+    expect(r.softDeleted).toBe(0);
+    expect(r.incomplete).toBe(true);
+    // Nothing was tombstoned: the walk was denied, not the data deleted.
+    expect(await activeIds(conn)).toEqual(["resync-poller:conn:A", "resync-poller:conn:B"]);
   });
 });
 

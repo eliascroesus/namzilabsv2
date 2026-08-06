@@ -7,7 +7,7 @@ import { getConnectionCredentials } from "@/lib/credentials";
 import { processRawEvent, upsertEvents } from "@/ingestion/pipeline";
 import { activeStreams, importProgressNote, syncStream, type PrimeStreamResult } from "@/lib/sync/streams";
 import { awaitConnectionSyncLock, releaseConnectionSyncLock, tryConnectionSyncLock } from "@/lib/sync/locks";
-import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
+import { applyObservedRateLimit, claimCalls, isPaused, recordObservedLimit, settlePollCalls } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import type { CanonicalEvent, Connector, PollArgs, ImportCoverage } from "@/connectors/types";
 
@@ -109,7 +109,7 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
 
     if (mode === "full") {
       const gen = Math.max(1, (conn.syncGeneration ?? 0) + 1);
-      const { records, cursor, complete } = await pollAll(connector, base);
+      const { records, cursor, complete, deferred } = await pollAll(db, conn, connector, base);
       const res = await upsertEvents(db, { ...meta, generation: gen }, records);
 
       /**
@@ -170,7 +170,14 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
         .where(eq(connections.id, conn.id));
       await upsertCursor(db, conn.id, cursor);
 
-      return { mode: "full", polled: true, upserted: res.total, inserted: res.inserted, updated: res.updated, softDeleted: del.length, generation: gen, orgId: conn.orgId, source: conn.source };
+      return {
+        mode: "full", polled: true, upserted: res.total, inserted: res.inserted, updated: res.updated,
+        softDeleted: del.length, generation: gen, orgId: conn.orgId, source: conn.source,
+        // A budget-denied walk is a truncated walk: more to fetch, retire
+        // already withheld by `complete` staying false. Saying so keeps the
+        // cadence from tiering the connection down mid-import.
+        ...(deferred ? { incomplete: true } : {}),
+      };
     }
 
     // incremental: fetch from the stored cursor, additive (no soft-delete).
@@ -287,7 +294,7 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
       detectDateField: !stream.dateFieldLocked,
       restamp: true,
     };
-    const { records, cursor, complete, dateFieldState } = await pollAll(connector, base);
+    const { records, cursor, complete, dateFieldState } = await pollAll(db, conn, connector, base);
     const res = await upsertEvents(
       db,
       {
@@ -422,8 +429,27 @@ export async function reprocessConnection(db: DB, orgId: string, connectionId: s
  * scan returns an empty PAST page for any account with no meetings in the last
  * 30 days. The walk stopped there, upserted nothing at the new generation, and
  * the retire below tombstoned every live upcoming meeting.
+ *
+ * F.1 — THE BUDGET IS CLAIMED PER PAGE, and this walk was the one path in the
+ * system that claimed nothing at all. Up to PAGE_CAP pages of real provider
+ * requests per stream — and for a connector that pages internally, several
+ * requests per page (Calendar makes up to 8) — none of it visible to the
+ * ledger, none of it deniable, none of it settling into the fleet bucket that
+ * every Google customer shares. It fires automatically on EVERY new
+ * connection (`createConnection` sends `mode: "full"`), so the largest
+ * unmetered spend in the system was also the one that ran at onboarding.
+ *
+ * The lane is "background": a full re-sync is import-class work, not a person
+ * waiting on one page, so it must never drain the interactive reserve that
+ * keeps a Test responsive. A denied claim ends the walk exactly like the
+ * PAGE_CAP ceiling does — `complete` stays false, so the retire that absence
+ * licenses cannot run on a prefix, which is the semantics every truncated
+ * walk already has (tests/resync-truncated-walk.test.ts). The next sweep
+ * continues incrementally from the persisted cursor; nothing is lost.
  */
 async function pollAll(
+  db: DB,
+  conn: ConnRow,
   connector: Connector,
   base: PollArgs,
 ): Promise<{
@@ -431,7 +457,11 @@ async function pollAll(
   cursor: string | null;
   complete: boolean;
   dateFieldState?: StreamRow["dateFieldState"];
+  /** The walk stopped on the provider budget, not on the data or PAGE_CAP. */
+  deferred?: { reason: string; retryAfterMs: number };
 }> {
+  const operation = pollOperation(conn.source, base.config);
+  let deferred: { reason: string; retryAfterMs: number } | undefined;
   const seen = new Map<string, CanonicalEvent>();
   let cursor: string | null = null; // full re-sync starts from the beginning
   let last: string | null = null;
@@ -446,7 +476,26 @@ async function pollAll(
    */
   let dateFieldState: StreamRow["dateFieldState"] | undefined;
   for (let page = 0; page < PAGE_CAP; page++) {
+    // One claim buys ONE request; the settle below corrects for connectors
+    // that page internally. Charged at the claim instant, not the settle
+    // instant, so a page straddling a minute boundary cannot refund out of
+    // the next window (see settlePollCalls).
+    const claimedAt = new Date();
+    const claim = await claimCalls(db, conn, operation, 1, claimedAt, "background");
+    if (!claim.allowed) {
+      deferred = { reason: claim.reason, retryAfterMs: claim.retryAfterMs };
+      break;
+    }
     const res = await connector.poll!({ ...base, cursor });
+    // The claim bought one call; the connector may have made several inside
+    // it (Calendar walks up to 8 pages per poll). Settle so the NEXT claim —
+    // and the fleet bucket every Google customer shares — sees the truth.
+    await settlePollCalls(db, conn, operation, res, 1, claimedAt);
+    // The provider's own account of its budget beats our declared guess:
+    // record the ceiling it stated, and stop the walk if it says exhausted —
+    // strictly better than discovering the limit through a 429 on page N+1.
+    await recordObservedLimit(db, conn, operation, res.rateLimit, claimedAt);
+    const observedPause = await applyObservedRateLimit(db, conn, res.rateLimit, claimedAt);
     const { records, nextCursor } = res;
     if (res.dateFieldState) dateFieldState = { ...res.dateFieldState, at: new Date().toISOString() };
     for (const r of records) seen.set(r.eventId, r);
@@ -462,8 +511,12 @@ async function pollAll(
     if (nextCursor === cursor || nextCursor === last) break; // stalled or cycling
     last = cursor;
     cursor = nextCursor;
+    if (observedPause) {
+      deferred = { reason: "provider reports its rate limit is spent", retryAfterMs: Math.max(1_000, observedPause.getTime() - Date.now()) };
+      break;
+    }
   }
-  return { records: [...seen.values()], cursor, complete, dateFieldState };
+  return { records: [...seen.values()], cursor, complete, dateFieldState, deferred };
 }
 
 async function upsertCursor(db: DB, connectionId: string, cursor: string | null): Promise<void> {
