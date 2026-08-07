@@ -30,8 +30,9 @@ import { parseGraph } from "@/lib/flow/types";
  * has no data yet.
  *
  * `all` — additionally the things a USER authored (connections, metrics, flows
- * and their versions). Organizations, users and memberships always survive;
- * there is no level that deletes an account.
+ * and their versions). Accounts and workspaces always survive — identity
+ * lives in WorkOS, not in this database (migration 0022) — so there is no
+ * level that deletes an account.
  */
 export type ResetLevel = "data" | "all";
 

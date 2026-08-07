@@ -1,13 +1,13 @@
 "use server";
 
 import { getWorkOS, withAuth, switchToOrganization, signOut } from "@workos-inc/authkit-nextjs";
-import { getDb } from "@/db/client";
-import { organizations } from "@/db/schema";
 
 /**
  * Create a new WorkOS organization (the tenant/workspace), add the current user
- * as a member, mirror its name locally for display, then switch the session
- * into it. `switchToOrganization` redirects, ending the action.
+ * as a member, then switch the session into it. `switchToOrganization`
+ * redirects, ending the action. WorkOS is the ONLY store of org identity —
+ * an earlier local `organizations` mirror was write-only (nothing ever read
+ * it back) and was dropped with migration 0022.
  */
 export async function createOrganizationAction(formData: FormData): Promise<void> {
   const auth = await withAuth({ ensureSignedIn: true });
@@ -37,13 +37,6 @@ export async function createOrganizationAction(formData: FormData): Promise<void
     organizationId: org.id,
     userId: auth.user.id,
   });
-
-  // Best-effort local mirror for display; never blocks org creation.
-  try {
-    await getDb().insert(organizations).values({ id: org.id, name: org.name }).onConflictDoNothing();
-  } catch {
-    // DATABASE_URL may be unset in some environments; WorkOS remains source of truth.
-  }
 
   await switchToOrganization(org.id, { returnTo: "/dashboard" });
 }

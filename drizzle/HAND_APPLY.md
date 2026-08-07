@@ -562,3 +562,41 @@ SELECT
 > later `db:generate` can emit a spurious diff (the tool cannot represent
 > what it would be "correcting"). The comment on the declaration in
 > `src/db/schema.ts` records the same thing.
+
+---
+
+## 0022 — drop the three identity-mirror tables nothing ever read
+
+WorkOS is the source of truth for organizations, users and memberships; the
+`orgId` on every domain table is the WorkOS organization id, derived only from
+the authenticated session. A reference census found `users` and `memberships`
+were never read OR written by any application code, and `organizations` had
+exactly one write (a best-effort insert at org creation) and zero reads. A
+mirror with no reader can only drift into a lie, and every table is one more
+surface the drift check and retention register must carry — so all three go.
+
+The only code change alongside this is the removal of that one write
+(`src/app/actions.ts`); nothing else referenced these tables.
+
+Safe to apply before or after deploying the code: the old code's mirror write
+is wrapped in a try/catch that swallows failure (it was best-effort by
+design), so old-code-against-new-schema degrades to exactly the no-op it
+already was in environments without a database.
+
+```sql
+DROP TABLE IF EXISTS "memberships" CASCADE;
+DROP TABLE IF EXISTS "users" CASCADE;
+DROP TABLE IF EXISTS "organizations" CASCADE;
+```
+
+Verify (expect 0):
+
+```sql
+SELECT count(*) AS should_be_0
+FROM information_schema.tables
+WHERE table_schema = 'public'
+  AND table_name IN ('organizations', 'users', 'memberships');
+```
+
+`scripts/schema-audit.sql` was regenerated: 15 tables, and
+`memberships_org_user_uq` is gone from the expected-index list.

@@ -148,6 +148,13 @@
       "when": 1785975839651,
       "tag": "0021_stream_fields_nulls_not_distinct",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1786056857196,
+      "tag": "0022_drop_identity_mirrors",
+      "breakpoints": true
     }
   ]
 }

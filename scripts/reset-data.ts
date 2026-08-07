@@ -81,7 +81,7 @@ async function main() {
   console.log(`  ${total.toString().padStart(9)}  rows in total\n`);
 
   if (r.dryRun) {
-    console.log("KEPT AT EVERY LEVEL: organizations, users, memberships.");
+    console.log("KEPT AT EVERY LEVEL: accounts and workspaces (identity lives in WorkOS, not this database).");
     console.log(
       level === "data"
         ? "KEPT AT THIS LEVEL:  connections (credentials + config), metrics, flows, flow_versions."

@@ -53,9 +53,8 @@ const TABLES: Record<string, Classification> = {
   usage_ledger: { kind: "pruned", window: "2d spent counters / 90d evidence" },
 
   // ── Bounded by something other than activity ──────────────────────────────
-  organizations: { kind: "bounded", by: "one row per tenant" },
-  users: { kind: "bounded", by: "one row per person" },
-  memberships: { kind: "bounded", by: "users x orgs" },
+  // (organizations/users/memberships are ABSENT on purpose: identity lives in
+  // WorkOS and the unread local mirrors were dropped by migration 0022.)
   connections: { kind: "bounded", by: "one row per connected account; disabled rows are kept on purpose" },
   source_streams: { kind: "bounded", by: "one row per configured stream" },
   sync_state: { kind: "bounded", by: "one row per connection" },

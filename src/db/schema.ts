@@ -13,34 +13,17 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * Multi-tenant identity. `organizations.id` / `users.id` are the WorkOS ids
- * (strings), so WorkOS remains the source of truth for identity and membership.
- * `orgId` on every domain table is the WorkOS organization id and is the tenant
- * isolation key — it is only ever derived from the authenticated session.
+ * IDENTITY LIVES IN WORKOS, NOT HERE — deliberately, and the schema now says
+ * so by omission. Early versions mirrored `organizations`, `users` and
+ * `memberships` locally; nothing ever read any of them (users/memberships
+ * were never even written), so migration 0022 dropped all three. `orgId` on
+ * every domain table is the WorkOS organization id and is the tenant
+ * isolation key — only ever derived from the authenticated session
+ * (src/lib/auth.ts), never from a local mirror that can drift. If a future
+ * feature (billing, per-org settings) needs local org state, add a table FOR
+ * THAT FEATURE, with a reader — a mirror with no reader is how these three
+ * earned their drop.
  */
-export const organizations = pgTable("organizations", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-export const users = pgTable("users", {
-  id: text("id").primaryKey(),
-  email: text("email").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-export const memberships = pgTable(
-  "memberships",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    orgId: text("org_id").notNull(),
-    userId: text("user_id").notNull(),
-    role: text("role").notNull().default("member"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (t) => [uniqueIndex("memberships_org_user_uq").on(t.orgId, t.userId)],
-);
 
 /**
  * A connected external account (one Calendly account, one Close org, one

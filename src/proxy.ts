@@ -11,8 +11,17 @@ import { authkit, handleAuthkitHeaders } from "@workos-inc/authkit-nextjs";
  * legal pages ("/", "/terms", "/privacy") are matched (so the header can render
  * auth-aware) but are not in the protected list, so anonymous users see them.
  */
-const PROTECTED_PAGE_PREFIXES = ["/dashboard", "/onboarding", "/app", "/integrations", "/connections"];
-const PROTECTED_API_PREFIXES = ["/api/replay", "/api/reconcile", "/api/connections", "/api/org", "/api/oauth"];
+/**
+ * Every prefix here must name a route that EXISTS. This list once carried
+ * "/app", "/api/reconcile", "/api/connections" and "/api/org" — protection
+ * for routes that were never built. Dead prefixes cost nothing at runtime but
+ * teach readers a false map of the app, and a false map is how the NEXT
+ * route ships unprotected ("it's probably covered, the list is long").
+ * Routes also enforce auth themselves (requireOrg / getOrgContext) — this
+ * layer is the outer wall, not the only one.
+ */
+const PROTECTED_PAGE_PREFIXES = ["/dashboard", "/onboarding", "/integrations", "/connections"];
+const PROTECTED_API_PREFIXES = ["/api/replay", "/api/results-version", "/api/oauth"];
 
 function isProtected(pathname: string): boolean {
   return [...PROTECTED_PAGE_PREFIXES, ...PROTECTED_API_PREFIXES].some(

@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (18 tables, 183 columns).
+-- QUERY 1 — tables and columns (15 tables, 172 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -126,11 +126,6 @@ WITH expected (tbl, col) AS (
     ('flows', 'published_version'),
     ('flows', 'created_at'),
     ('flows', 'updated_at'),
-    ('memberships', 'id'),
-    ('memberships', 'org_id'),
-    ('memberships', 'user_id'),
-    ('memberships', 'role'),
-    ('memberships', 'created_at'),
     ('metrics', 'id'),
     ('metrics', 'org_id'),
     ('metrics', 'name'),
@@ -140,9 +135,6 @@ WITH expected (tbl, col) AS (
     ('metrics', 'target'),
     ('metrics', 'definition'),
     ('metrics', 'created_at'),
-    ('organizations', 'id'),
-    ('organizations', 'name'),
-    ('organizations', 'created_at'),
     ('raw_events', 'id'),
     ('raw_events', 'org_id'),
     ('raw_events', 'connection_id'),
@@ -205,10 +197,7 @@ WITH expected (tbl, col) AS (
     ('usage_ledger', 'throttled'),
     ('usage_ledger', 'errors'),
     ('usage_ledger', 'observed_limit'),
-    ('usage_ledger', 'updated_at'),
-    ('users', 'id'),
-    ('users', 'email'),
-    ('users', 'created_at')
+    ('usage_ledger', 'updated_at')
 ),
 checked AS (
   SELECT
@@ -233,7 +222,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (34 expected).
+-- QUERY 2 (optional) — indexes (33 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -262,7 +251,6 @@ WITH expected (tbl, idx) AS (
     ('flow_versions', 'flow_versions_flow_version_uq'),
     ('flow_versions', 'flow_versions_org_idx'),
     ('flows', 'flows_org_idx'),
-    ('memberships', 'memberships_org_user_uq'),
     ('metrics', 'metrics_org_idx'),
     ('raw_events', 'raw_events_conn_received_idx'),
     ('source_streams', 'source_streams_conn_cfg_uq'),
