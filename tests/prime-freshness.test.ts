@@ -192,6 +192,14 @@ describe("primeStream freshness gate (Defect #1)", () => {
   });
 
   it("F.8: an exhausted budget yields the same honesty (note, not failure); a healthy claim refreshes", async () => {
+    // Pin the clock BEFORE spending: the sliding window carries the previous
+    // minute's spend forward, so an unpinned real-clock loop that straddled a
+    // boundary would split the spend across two buckets and change which
+    // claim denies. (Under the old fixed window this flake was permissive —
+    // a straddle under-charged; under the sliding window it would be
+    // restrictive, firing on the later allowed-assertions.)
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-07-01T12:00:30Z"));
     // Spend the whole interactive budget for this connection's minute window —
     // against the operation a Sheets poll actually claims. Not `"*"`: this
     // project's quota is per API, so Sheets (60/min per user) and Drive
@@ -212,8 +220,11 @@ describe("primeStream freshness gate (Defect #1)", () => {
     }
     expect(await liveRows()).toHaveLength(0); // nothing synced — but no error either
 
-    // Next minute: budget resets, the Test refreshes normally and says nothing.
-    vi.setSystemTime(new Date(Date.now() + 61_000));
+    // TWO minutes later — a single minute boundary is no longer an amnesty
+    // under the sliding window (the spent minute would still carry into the
+    // next one); after two, the past has fully decayed and the Test
+    // refreshes normally, saying nothing.
+    vi.setSystemTime(new Date("2026-07-01T12:02:30Z"));
     const ok = await primeStream(db, ORG, connId, CFG, { force: true });
     expect(ok.ok).toBe(true);
     if (ok.ok) {

@@ -74,7 +74,12 @@ describe("F.1 — budgets come from the catalog's declared limits", () => {
     const denied = await claimCalls(db, conn(), "emails.list", 1, NOW, "interactive");
     expect(denied.allowed).toBe(false);
     if (!denied.allowed) {
-      expect(denied.retryAfterMs).toBe(30_000); // remainder of the minute
+      // Sliding-window retry: the remainder of the minute (30s — NOW sits at
+      // :30) PLUS the time for the current window's 42 spent calls, which
+      // become the next window's carry, to decay enough to admit one more:
+      // 60000 × (1 − 41/42) ≈ 1428.6ms. The fixed window's flat 30_000 is
+      // exactly the arithmetic that permitted the 2× boundary burst.
+      expect(denied.retryAfterMs).toBe(31_429);
       expect(denied.reason).toContain("Instantly");
     }
 
@@ -93,13 +98,58 @@ describe("F.1 — budgets come from the catalog's declared limits", () => {
     expect(results.filter((r) => !r.allowed).length).toBe(10);
   });
 
-  it("the next minute window starts fresh", async () => {
-    const limit = budgetFor("instantly", "emails.list");
-    for (let i = 0; i < limit; i++) await claimCalls(db, conn(), "emails.list", 1, NOW);
-    expect((await claimCalls(db, conn(), "emails.list", 1, NOW)).allowed).toBe(false);
+  /**
+   * THE SLIDING WINDOW's three claims, replacing "the next minute starts
+   * fresh" — which is exactly the semantic the fixed window got wrong: a
+   * minute boundary is not an amnesty.
+   */
+  it("a boundary is not an amnesty: full spend at :59.9 is still spent at :00.1", async () => {
+    const limit = laneLimit("instantly", "emails.list", "background");
+    const lateInMinute = new Date(NOW.getTime() + 29_900); // :59.9 of NOW's window
+    for (let i = 0; i < limit; i++) await claimCalls(db, conn(), "emails.list", 1, lateInMinute);
 
-    const nextMinute = new Date(NOW.getTime() + 60_000);
-    expect((await claimCalls(db, conn(), "emails.list", 1, nextMinute)).allowed).toBe(true);
+    // 200ms later, across the boundary. THE sabotage assertion: the old
+    // fixed-window code ALLOWED this — 2× the provider's rate inside 200ms,
+    // the exact burst shape that trips provider-side 429s.
+    const justAfter = new Date(lateInMinute.getTime() + 200);
+    expect((await claimCalls(db, conn(), "emails.list", 1, justAfter)).allowed).toBe(false);
+  });
+
+  it("the carry decays: half-limit spend admits again mid-next-minute with a decayed remaining", async () => {
+    const limit = laneLimit("instantly", "emails.list", "background");
+    const half = Math.floor(limit / 2); // 15 of 31
+    for (let i = 0; i < half; i++) await claimCalls(db, conn(), "emails.list", 1, NOW);
+
+    const midNext = new Date(NOW.getTime() + 60_000); // :30 of the next window
+    const r = await claimCalls(db, conn(), "emails.list", 1, midNext);
+    expect(r.allowed).toBe(true);
+    if (r.allowed) {
+      // carry = ceil(15 × 0.5) = 8; remaining = 31 − 1 (this claim) − 8.
+      expect(r.remaining).toBe(limit - 1 - Math.ceil(half * 0.5));
+    }
+  });
+
+  it("two minutes later the past has fully decayed", async () => {
+    const limit = laneLimit("instantly", "emails.list", "background");
+    for (let i = 0; i < limit; i++) await claimCalls(db, conn(), "emails.list", 1, NOW);
+    const r = await claimCalls(db, conn(), "emails.list", 1, new Date(NOW.getTime() + 120_000));
+    expect(r.allowed).toBe(true);
+    if (r.allowed) expect(r.remaining).toBe(limit - 1);
+  });
+
+  it("retryAfterMs is an admission time, not a guess: claiming at exactly that instant succeeds", async () => {
+    const limit = laneLimit("instantly", "emails.list", "background");
+    const lateInMinute = new Date(NOW.getTime() + 29_900);
+    for (let i = 0; i < limit; i++) await claimCalls(db, conn(), "emails.list", 1, lateInMinute);
+
+    const denied = await claimCalls(db, conn(), "emails.list", 1, new Date(lateInMinute.getTime() + 200));
+    expect(denied.allowed).toBe(false);
+    if (!denied.allowed) {
+      const retryAt = new Date(lateInMinute.getTime() + 200 + denied.retryAfterMs);
+      // The formula and the admission check must agree — this fails if either
+      // drifts from the other.
+      expect((await claimCalls(db, conn(), "emails.list", 1, retryAt)).allowed).toBe(true);
+    }
   });
 
   it("budgets are per operation and per connection (no cross-contamination)", async () => {

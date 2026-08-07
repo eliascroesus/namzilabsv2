@@ -149,6 +149,74 @@ function windowStart(now: Date): Date {
   return new Date(Math.floor(now.getTime() / 60_000) * 60_000);
 }
 
+/**
+ * THE SLIDING WINDOW. Fixed minute buckets alone permit a 2× burst: a
+ * connection could spend its full allowance at :59.9 and again at :00.1 —
+ * 2× the provider's published rate inside 200ms, which is precisely the
+ * shape that trips provider-side 429s (for Google, against the Cloud-project
+ * quota every customer shares). The classic two-bucket approximation
+ * (Cloudflare's) closes it for the cost of ONE extra unique-index probe:
+ *
+ *   effective = current_count + ceil(prev_count × overlap)
+ *
+ * where `overlap` is the fraction of the previous minute still inside the
+ * trailing 60 seconds. The estimate assumes the previous window's calls were
+ * evenly spread — the standard, deliberately conservative approximation.
+ * The prev-row probe rides `usage_ledger_bucket_uq` (an equality lookup on
+ * all three key columns) and `USAGE_COUNTER_DAYS` retention guarantees the
+ * previous minute's row is never swept out from under the reader.
+ *
+ * Refunds still touch only the CURRENT row — the previous window's
+ * contribution is unrefundable by construction, which is exactly why
+ * `settlePollCalls` insists on settling into the window the claim was
+ * charged to.
+ */
+function overlapAt(now: Date): number {
+  return (60_000 - (now.getTime() - windowStart(now).getTime())) / 60_000;
+}
+
+/** One unique-index probe of a bucket's spent calls; 0 when the row is absent. */
+async function bucketCalls(db: DB, connectionId: string, operation: string, start: Date): Promise<number> {
+  const [row] = await db
+    .select({ calls: usageLedger.calls })
+    .from(usageLedger)
+    .where(and(eq(usageLedger.connectionId, connectionId), eq(usageLedger.operation, operation), eq(usageLedger.windowStart, start)));
+  return Number(row?.calls ?? 0);
+}
+
+/**
+ * When does the sliding estimate readmit a claim of `cost`?
+ *
+ * Unlike the fixed window's "remainder of the minute", the honest answer can
+ * be SHORTER (a small previous-window carry decays quickly) or LONGER (heavy
+ * current-window spend leaks into the next minute as ITS carry). Two cases:
+ *
+ *  - The current window alone still has headroom: admission happens inside
+ *    THIS window, at the moment the previous window's carry has decayed to
+ *    fit — solve ceil(prev × (60s − e)/60s) ≤ headroom for elapsed e.
+ *  - The current window alone is over budget: wait for the boundary, after
+ *    which the current bucket BECOMES the carry, and wait again until that
+ *    carry decays under the limit.
+ *
+ * Integer headrooms make the ceil safe: x ≤ headroom ⟺ ceil(x) ≤ headroom,
+ * and Math.ceil on the wait itself only rounds the admission LATER, never
+ * earlier — so "claim again at exactly retryAfterMs" is always admitted,
+ * which the property test pins.
+ */
+function slidingRetryMs(a: { limit: number; usedBefore: number; cost: number; prev: number; elapsedMs: number }): number {
+  const { limit, usedBefore, cost, prev, elapsedMs } = a;
+  const headroom = limit - usedBefore - cost;
+  let wait: number;
+  if (headroom >= 0 && prev > 0) {
+    wait = 60_000 * (1 - headroom / prev) - elapsedMs;
+  } else {
+    const toBoundary = 60_000 - elapsedMs;
+    const decay = usedBefore > 0 ? Math.max(0, 60_000 * (1 - Math.max(0, limit - cost) / usedBefore)) : 0;
+    wait = toBoundary + decay;
+  }
+  return Math.max(1_000, Math.ceil(wait));
+}
+
 /** Increment one bucket and report the running total. */
 async function chargeBucket(
   db: DB,
@@ -223,20 +291,30 @@ export async function claimCalls(
   lane: CallLane = "background",
 ): Promise<ClaimResult> {
   const start = windowStart(now);
-  const retryAfterMs = Math.max(1_000, start.getTime() + 60_000 - now.getTime());
+  const elapsedMs = now.getTime() - start.getTime();
+  const overlap = overlapAt(now);
+  const prevStart = new Date(start.getTime() - 60_000);
   const providerName = catalogEntry(conn.source)?.name ?? conn.source;
 
   const limit = laneLimit(conn.source, operation, lane);
   const used = await chargeBucket(db, { orgId: conn.orgId, connectionId: conn.id, provider: conn.source }, operation, cost, start);
-  if (used > limit) {
+  // The sliding half: what the previous minute still contributes to the
+  // trailing 60 seconds. See overlapAt.
+  const prev = await bucketCalls(db, conn.id, operation, prevStart);
+  const carry = Math.ceil(prev * overlap);
+  if (used + carry > limit) {
     // Over budget: give the tokens back so the counter reflects reality, and
     // record the throttle for the ledger's audit trail.
     await releaseBucket(db, conn.id, operation, cost, start, true);
-    return { allowed: false, retryAfterMs, reason: `Respecting ${providerName}'s rate limit` };
+    return {
+      allowed: false,
+      retryAfterMs: slidingRetryMs({ limit, usedBefore: used - cost, cost, prev, elapsedMs }),
+      reason: `Respecting ${providerName}'s rate limit`,
+    };
   }
 
   const fleetLimit = fleetLaneLimit(conn.source, operation, lane);
-  if (fleetLimit == null) return { allowed: true, remaining: Math.max(0, limit - used) };
+  if (fleetLimit == null) return { allowed: true, remaining: Math.max(0, limit - used - carry) };
 
   const fleetUsed = await chargeBucket(
     db,
@@ -245,7 +323,9 @@ export async function claimCalls(
     cost,
     start,
   );
-  if (fleetUsed > fleetLimit) {
+  const fleetPrev = await bucketCalls(db, FLEET_CONNECTION_ID, operation, prevStart);
+  const fleetCarry = Math.ceil(fleetPrev * overlap);
+  if (fleetUsed + fleetCarry > fleetLimit) {
     await releaseBucket(db, FLEET_CONNECTION_ID, operation, cost, start, true);
     // Unwind the connection's own charge too. Without this a customer burns
     // their personal budget on calls they were never allowed to make, and can
@@ -255,7 +335,7 @@ export async function claimCalls(
     await releaseBucket(db, conn.id, operation, cost, start, false);
     return {
       allowed: false,
-      retryAfterMs,
+      retryAfterMs: slidingRetryMs({ limit: fleetLimit, usedBefore: fleetUsed - cost, cost, prev: fleetPrev, elapsedMs }),
       // Says whose limit it is. The per-connection message would tell someone
       // who has done nothing that THEIR account is at its rate limit, and send
       // them looking for a problem that is not on their side.
@@ -263,7 +343,7 @@ export async function claimCalls(
     };
   }
 
-  return { allowed: true, remaining: Math.max(0, Math.min(limit - used, fleetLimit - fleetUsed)) };
+  return { allowed: true, remaining: Math.max(0, Math.min(limit - used - carry, fleetLimit - fleetUsed - fleetCarry)) };
 }
 
 /**
