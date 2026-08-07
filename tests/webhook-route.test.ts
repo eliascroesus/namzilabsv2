@@ -169,16 +169,22 @@ describe("a stream-scoped webhook rings the bell without delivering anything", (
     return { "calendly-webhook-signature": `t=${t},v1=${v1}` };
   };
 
-  it("sweeps the connection on an authenticated payload", async () => {
+  it("sweeps the connection on an authenticated payload — through the queue that ALWAYS runs", async () => {
     const id = await seed({ source: "calendly", secret: "cal_secret" });
     const body = { event: "invitee.created" };
 
     const res = await post(id, body, sign("cal_secret", body));
 
     expect(res.status).toBe(202);
-    const swept = sent.filter((e) => e.name === "ingest/reconcile.requested");
+    // sync/connection.requested, NOT ingest/reconcile.requested. The
+    // reconcile worker is singleton-skip, so the old event vanished whenever
+    // this connection's sweep was mid-flight — the doorbell rang into a void.
+    // The sync queue queues per connection and always runs (the sender rule
+    // in inngest/client.ts).
+    const swept = sent.filter((e) => e.name === "sync/connection.requested");
     expect(swept).toHaveLength(1);
-    expect(swept[0].data).toMatchObject({ connectionId: id, jitterMs: 0 });
+    expect(swept[0].data).toMatchObject({ connectionId: id, mode: "incremental" });
+    expect(sent.filter((e) => e.name === "ingest/reconcile.requested")).toHaveLength(0);
   });
 
   /**
@@ -209,7 +215,7 @@ describe("a stream-scoped webhook rings the bell without delivering anything", (
     const res = await post(id, { event: "invitee.created" });
 
     expect(res.status).toBe(401);
-    expect(sent.filter((e) => e.name === "ingest/reconcile.requested")).toHaveLength(0);
+    expect(sent.filter((e) => e.name === "sync/connection.requested")).toHaveLength(0);
   });
 
   it("does not sweep when the secret cannot be read", async () => {

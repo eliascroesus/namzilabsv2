@@ -149,12 +149,19 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
    */
   if (isStreamScoped(conn.source)) {
     await promoteToBaseCadence(db, conn.id).catch(() => {});
+    // sync/connection.requested, NOT ingest/reconcile.requested — and the
+    // difference is whether the doorbell can be SILENTLY DROPPED. The
+    // reconcile worker is singleton-skip (correct for a cron that
+    // re-dispatches every tick), so a webhook landing while this
+    // connection's sweep was mid-flight used to vanish: the one delivery
+    // the user could see happen did nothing, up to a full sweep interval.
+    // That also violated the sender rule client.ts documents — user-initiated
+    // work rides the sync queue, which QUEUES per connection and always
+    // runs, under the connection lease. An incremental sync from the stored
+    // cursors is exactly one page per stream when little changed.
     await inngest.send({
-      name: "ingest/reconcile.requested",
-      // No jitter: a doorbell is one connection reacting to one event, not the
-      // cron's herd. The spread exists to de-synchronize a fan-out, and adding
-      // it here would only delay the thing the user just did.
-      data: { connectionId: conn.id, orgId: conn.orgId, priority: 0, jitterMs: 0 },
+      name: "sync/connection.requested",
+      data: { connectionId: conn.id, mode: "incremental" },
     });
     return NextResponse.json({ ok: true, swept: "connection" }, { status: 202 });
   }
