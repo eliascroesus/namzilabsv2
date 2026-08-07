@@ -84,7 +84,7 @@ const TABLES: Record<string, Classification> = {
   },
   events: {
     kind: "gap",
-    why: "customer data, soft-deleted only, so tombstones accumulate forever. Reclamation is a DELETE and stays one: hash-partitioning by org_id would not turn it into a partition drop, because dropping a partition discards a tenant rather than a time range — Finding 7, 30d after deleted_at proposed",
+    why: "customer data. LIVE rows are never pruned (the gap, stated). TOMBSTONES older than 30d on non-disabled connections ARE now hard-deleted nightly (storage-lifecycle eventTombstones tier) — 30d because upsertEvents un-deletes on reappearance and Calendly's is the widest retire window that can legitimately resurrect a row; disabled connections' tombstones are the reconnect-restore set and are kept. Same partially-pruned-gap classification as raw_events.",
   },
   dead_letter: {
     kind: "gap",

@@ -1,5 +1,5 @@
 import { and, eq, gt, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
-import { connections, deadLetter, deliveryLog, rawEvents, testRuns, usageLedger } from "@/db/schema";
+import { connections, deadLetter, deliveryLog, events, rawEvents, testRuns, usageLedger } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 /**
@@ -15,11 +15,13 @@ import type { DB } from "@/db/types";
  * - `usage_ledger`: one row per (connection, operation, minute-window). Two
  *   tiers — see USAGE_COUNTER_DAYS / USAGE_EVIDENCE_DAYS below.
  *
- * NOT swept here: raw_events (replay source of truth — its archive policy is
- * a separate, deliberate decision) and events (customer data, soft-deleted
- * only). Both are still open questions; note that hash-partitioning by org_id
- * would NOT turn either into a partition drop, because dropping a partition
- * discards a tenant rather than a time range.
+ * Also swept, narrowly: raw_events for connections disabled 30+ days (see
+ * RAW_EVENT_DAYS) and `events` TOMBSTONES older than TOMBSTONE_DAYS on
+ * non-disabled connections (see TOMBSTONE_DAYS). Live `events` rows are
+ * customer data and are never touched here; active-connection raws remain an
+ * open gap by design. Hash-partitioning by org_id would NOT turn either into
+ * a partition drop, because dropping a partition discards a tenant rather
+ * than a time range.
  *
  * WHY THIS FILE HAS A DRAIN LOOP AND DIDN'T BEFORE. The original pass ran one
  * bounded select + delete per table per night: 5,000 rows removed, once a day.
@@ -139,6 +141,33 @@ const USAGE_EVIDENCE_DAYS = 90;
  */
 const RAW_EVENT_DAYS = 30;
 
+/**
+ * How long an `events` TOMBSTONE (a soft-deleted row) is kept before hard
+ * deletion. Live rows are never touched by anything in this file.
+ *
+ * Thirty days, and the number is a derivation, not a preference: it must
+ * exceed the WIDEST window any retire path can re-cover, because
+ * `upsertEvents` clears `deleted_at` when a record reappears — the tombstone
+ * is the dedup anchor. Purge sooner and a legitimate resurrection becomes a
+ * fresh INSERT instead of a restore, which quietly loses:
+ *  - `received_at` first-seen (the restamp fallback the date-column feature
+ *    depends on — see schema.ts's restamp_requested_at derivation);
+ *  - `preserveOccurredAt` anchoring for sheet mirrors (the re-insert takes a
+ *    new synthesized date instead of the frozen original).
+ * Calendly's declared window is the widest re-coverage (30 days back / 90
+ * forward — a meeting tombstoned by a cancellation can legitimately reappear
+ * within it); Close's overlap is five minutes. Thirty days clears every one.
+ *
+ * DISABLED connections' tombstones are excluded entirely, whatever their
+ * age: `restoreConnectionEvents` un-deletes ALL of a connection's tombstones
+ * on reconnect, unqualified — they ARE the restore set, and purging them
+ * would make reconnect silently restore a partial dataset. The disconnect
+ * confirmation already tells the user their data is kept; this keeps that
+ * true. (A staged disabled-connection purge is a separate, later decision —
+ * same posture as active-connection raws.)
+ */
+const TOMBSTONE_DAYS = 30;
+
 /** No unresolved dead letter points at this raw payload. */
 const noUnresolvedDeadLetter = () =>
   sql`not exists (select 1 from ${deadLetter} where ${deadLetter.rawEventId} = ${rawEvents.id} and ${deadLetter.resolvedAt} is null)`;
@@ -174,6 +203,8 @@ export type RetentionBacklog = {
   usageLedger: UsageLedgerTiers;
   /** Verbatim provider payloads past RAW_EVENT_DAYS with no unresolved dead letter. */
   rawEvents: number;
+  /** Soft-deleted `events` rows past TOMBSTONE_DAYS on non-disabled connections. */
+  eventTombstones: number;
 };
 
 export type RetentionResult = RetentionBacklog & {
@@ -196,6 +227,7 @@ type PruneOpts = {
   usageCounterDays?: number;
   usageEvidenceDays?: number;
   rawEventDays?: number;
+  tombstoneDays?: number;
   now?: Date;
   /**
    * Report what would be removed and delete nothing. The counts are exact
@@ -221,7 +253,7 @@ type RunBudget = { deadline: number; nowMs: () => number };
  */
 async function drain(
   db: DB,
-  table: typeof deliveryLog | typeof testRuns | typeof usageLedger | typeof rawEvents,
+  table: typeof deliveryLog | typeof testRuns | typeof usageLedger | typeof rawEvents | typeof events,
   where: SQL,
   budget: RunBudget,
   batchSize: number,
@@ -233,8 +265,18 @@ async function drain(
     const rows = await db.select({ id: table.id }).from(table).where(where).limit(batchSize);
     if (rows.length === 0) return { removed, truncated: false };
 
-    await db.delete(table).where(inArray(table.id, rows.map((r) => r.id)));
-    removed += rows.length;
+    // The DELETE RE-ASSERTS the predicate rather than trusting the ids alone.
+    // Between the select and the delete a row can stop qualifying — for the
+    // events tier that is not theoretical: `upsertEvents` clears `deleted_at`
+    // when a record reappears at the provider, so an id selected as a
+    // tombstone can be a LIVE CUSTOMER ROW by the time this statement runs.
+    // For the other four tables the predicate is monotonic (age only) and the
+    // extra conjunct is free. `removed` counts the ids that still qualified.
+    const del = await db
+      .delete(table)
+      .where(and(inArray(table.id, rows.map((r) => r.id)), where)!)
+      .returning({ id: table.id });
+    removed += del.length;
 
     // A short page means the predicate is now empty: nothing is left to drain,
     // and re-querying to confirm would cost a round trip to learn nothing.
@@ -245,7 +287,7 @@ async function drain(
 
 async function countWhere(
   db: DB,
-  table: typeof deliveryLog | typeof testRuns | typeof usageLedger | typeof rawEvents,
+  table: typeof deliveryLog | typeof testRuns | typeof usageLedger | typeof rawEvents | typeof events,
   where: SQL,
 ): Promise<number> {
   const [row] = await db.select({ c: sql<number>`count(*)::int` }).from(table).where(where);
@@ -274,6 +316,16 @@ function predicates(now: Date, opts: PruneOpts) {
       connectionDisabledSince(ago(opts.rawEventDays ?? RAW_EVENT_DAYS)),
       noUnresolvedDeadLetter(),
     )!,
+    eventTombstones: and(
+      isNotNull(events.deletedAt),
+      lt(events.deletedAt, ago(opts.tombstoneDays ?? TOMBSTONE_DAYS)),
+      // NEVER a disabled connection's tombstones: restoreConnectionEvents
+      // un-deletes ALL of a connection's tombstones on reconnect,
+      // unqualified — they ARE the restore set. See TOMBSTONE_DAYS.
+      sql`exists (select 1 from ${connections}
+          where ${connections.id} = ${events.connectionId}
+          and ${connections.status} <> 'disabled')`,
+    )!,
   };
 }
 
@@ -300,7 +352,16 @@ export async function pruneOperationalTables(db: DB, opts: PruneOpts = {}): Prom
     // comment above this block is the contract. One more await costs one round
     // trip; a fifth concurrent read invalidates MIN_POOL_MAX.
     const raws = await countWhere(db, rawEvents, p.rawEvents);
-    return { deliveryLog: dl, testRuns: tr, usageLedger: { counters, evidence }, rawEvents: raws, truncated: false, inspected: true };
+    const tombstones = await countWhere(db, events, p.eventTombstones);
+    return {
+      deliveryLog: dl,
+      testRuns: tr,
+      usageLedger: { counters, evidence },
+      rawEvents: raws,
+      eventTombstones: tombstones,
+      truncated: false,
+      inspected: true,
+    };
   }
 
   const nowMs = opts.nowMs ?? Date.now;
@@ -317,6 +378,10 @@ export async function pruneOperationalTables(db: DB, opts: PruneOpts = {}): Prom
   // so if the deadline stops the run anywhere, stopping it after the raws have
   // drained loses the least. Evidence rows stay last for the mirror reason.
   const raws = await drain(db, rawEvents, p.rawEvents, budget, batch);
+  // Tombstones second: after raws it is the biggest first-night backlog, and
+  // every row it removes shrinks the largest table's dead weight — the whole
+  // reason `events_deleted_idx` was built (0014).
+  const tombstones = await drain(db, events, p.eventTombstones, budget, batch);
   const dl = await drain(db, deliveryLog, p.deliveryLog, budget, batch);
   const tr = await drain(db, testRuns, p.testRuns, budget, batch);
   const counters = await drain(db, usageLedger, p.usageCounters, budget, batch);
@@ -327,7 +392,9 @@ export async function pruneOperationalTables(db: DB, opts: PruneOpts = {}): Prom
     testRuns: tr.removed,
     usageLedger: { counters: counters.removed, evidence: evidence.removed },
     rawEvents: raws.removed,
-    truncated: raws.truncated || dl.truncated || tr.truncated || counters.truncated || evidence.truncated,
+    eventTombstones: tombstones.removed,
+    truncated:
+      raws.truncated || tombstones.truncated || dl.truncated || tr.truncated || counters.truncated || evidence.truncated,
     inspected: false,
   };
 }
@@ -379,5 +446,6 @@ export async function retentionBacklog(
     countWhere(db, usageLedger, p.usageEvidence),
   ]);
   const raws = await countWhere(db, rawEvents, p.rawEvents);
-  return { deliveryLog: dl, testRuns: tr, usageLedger: { counters, evidence }, rawEvents: raws };
+  const tombstones = await countWhere(db, events, p.eventTombstones);
+  return { deliveryLog: dl, testRuns: tr, usageLedger: { counters, evidence }, rawEvents: raws, eventTombstones: tombstones };
 }

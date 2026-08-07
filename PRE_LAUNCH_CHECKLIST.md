@@ -1077,26 +1077,35 @@ further is removed.
 pruned only once their connection has been **disabled 30+ days** —
 `disabled_at` is the clock, never age alone, because the pending
 `WEBHOOK_EVENT_TIME_LIVE` restamp and Reprocess both re-derive from these
-payloads), `events` tombstones, and `dead_letter` (whose resolved rows are only
-ever cleared by connection deletion). All three are recorded as known gaps in
-`tests/retention-coverage.test.ts`, which fails if a new table is added without
-a retention decision.
+payloads), `events` LIVE rows plus any DISABLED connection's tombstones (the
+reconnect-restore set), and `dead_letter` (whose resolved rows are only ever
+cleared by connection deletion). `events` tombstones older than 30 days on
+non-disabled connections ARE pruned by this same gate (the `eventTombstones`
+tier — 30 days because a reappearing record un-deletes its tombstone, and
+Calendly's is the widest window that can legitimately resurrect one). All
+remaining gaps are recorded in `tests/retention-coverage.test.ts`, which fails
+if a new table is added without a retention decision.
 
 ---
 
-## 8. Enable the compiled engine per flow (optional, after item 5)
+## 8. Enable the compiled engine (optional; env-gated, Test surface first)
 
 **Why:** the compiled path (filter pushdown into SQL) is built, proven
-parity-identical, and OFF by default. It is opt-in per flow via
-`EngineCtx.compile`. Nothing breaks if it is never enabled — it is a
-performance improvement, not a correctness fix.
+parity-identical, and OFF by default. Nothing breaks if it is never enabled —
+it is a performance improvement, not a correctness fix.
 
-**Precondition (hard):** item 5 has run AND a `reprocessConnection` replay has
-re-normalized the org's connections. Legacy pre-normalization rows store
-un-normalized date-shaped strings; the JS engine normalizes those on read while
-the compiled path compares stored values, so even `equals`/`contains` diverge
-until the replay. Both the divergence and its repair are proven in
-`tests/engine-parity.test.ts`.
+**How (the DB_DRIVER two-flag pattern — src/lib/flow/compile/flags.ts):**
+1. Set `ENGINE_COMPILE_TEST="1"` and soak: only node Tests compile (a human
+   is watching, nothing persists, and the JS engine re-applies every folded
+   rule, so a compiler bug costs work, never a wrong answer).
+2. After the soak, set `ENGINE_COMPILE="1"` — materialization compiles too.
+   Either flag reverts instantly by unsetting it.
+
+**Precondition:** item 5 — SATISFIED for all current data ("DONE BY WIPE
+2026-07-29"; every row written since is normalized at ingest). The legacy
+divergence and its repair remain proven in `tests/engine-parity.test.ts`; the
+rule bites again only if pre-normalization rows ever re-enter (e.g. a
+restored branch), in which case run a `reprocessConnection` replay first.
 
 **PASS:** dashboard numbers are unchanged after enabling (they must be —
 folded filters still run in JS, so the pushdown can only reduce rows loaded).
@@ -1141,15 +1150,14 @@ own budget share (≤50%), `backfill_status`/`backfill_progress` on
 `source_streams`, and a Test that reports "importing, N% done" through the
 existing F.8 `sourceNote` seam rather than erroring.
 
-### 9b. Compiled-engine flag — post-launch, per flow, default OFF
+### 9b. Compiled-engine PER-FLOW flag — post-launch refinement of item 8
 
-**Trigger:** deliberate opt-in per flow, after checklist item 5 AND a
-`reprocessConnection` replay for that org.
-
-**Status:** built and parity-proven; `EngineCtx.compile` has no caller, so the
-path is unreachable in production. That is the intended default. Wiring it
-means adding per-flow storage for the flag and a UI to set it — post-launch
-work, gated on the parity suite staying green.
+**Status:** the GLOBAL env flags now exist and are wired
+(`ENGINE_COMPILE_TEST` / `ENGINE_COMPILE`, src/lib/flow/compile/flags.ts —
+item 8 has the rollout order). What remains post-launch is the finer grain:
+per-flow storage for the flag and a UI to set it, so one problematic flow can
+opt out without turning the fleet off. Gated on the parity suite staying
+green, as ever.
 
 ### 9c. Close per-object scoping — ✅ ANSWERED: NO. Not deferred, decided.
 

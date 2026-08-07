@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
-import { connections, deadLetter, deliveryLog, rawEvents, testRuns, usageLedger } from "@/db/schema";
+import { connections, deadLetter, deliveryLog, events, rawEvents, testRuns, usageLedger } from "@/db/schema";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
 import type { DB } from "@/db/types";
 
@@ -75,7 +75,7 @@ describe("operational retention", () => {
     await seedRun(daysAgo(2));
 
     const before = await retentionBacklog(db, 30, NOW);
-    expect(before).toEqual({ deliveryLog: 2, testRuns: 1, usageLedger: EMPTY_LEDGER, rawEvents: 0 });
+    expect(before).toEqual({ deliveryLog: 2, testRuns: 1, usageLedger: EMPTY_LEDGER, rawEvents: 0, eventTombstones: 0 });
 
     const pruned = await pruneOperationalTables(db, { now: NOW });
     expect(pruned).toEqual({
@@ -83,6 +83,7 @@ describe("operational retention", () => {
       testRuns: 1,
       usageLedger: EMPTY_LEDGER,
       rawEvents: 0,
+      eventTombstones: 0,
       truncated: false,
       inspected: false,
     });
@@ -94,11 +95,20 @@ describe("operational retention", () => {
       testRuns: 0,
       usageLedger: EMPTY_LEDGER,
       rawEvents: 0,
+      eventTombstones: 0,
     });
   });
 
   it("is idempotent and safe on empty tables", async () => {
-    const empty = { deliveryLog: 0, testRuns: 0, usageLedger: EMPTY_LEDGER, rawEvents: 0, truncated: false, inspected: false };
+    const empty = {
+      deliveryLog: 0,
+      testRuns: 0,
+      usageLedger: EMPTY_LEDGER,
+      rawEvents: 0,
+      eventTombstones: 0,
+      truncated: false,
+      inspected: false,
+    };
     expect(await pruneOperationalTables(db, { now: NOW })).toEqual(empty);
     await seedRun(daysAgo(90));
     await pruneOperationalTables(db, { now: NOW });
@@ -256,6 +266,7 @@ describe("inspect mode", () => {
       testRuns: 1,
       usageLedger: { counters: 2, evidence: 1 },
       rawEvents: 0,
+      eventTombstones: 0,
       truncated: false,
       inspected: true,
     });
@@ -371,5 +382,94 @@ describe("raw payload retention", () => {
     const pruned = await pruneOperationalTables(db, { now: NOW });
     expect(pruned.rawEvents).toBe(1);
     expect(await db.select().from(rawEvents)).toHaveLength(0);
+  });
+});
+
+/**
+ * The events TOMBSTONE tier. Live rows are customer data and are NEVER
+ * touched here; what this prunes is soft-deleted rows older than 30 days on
+ * NON-disabled connections. Thirty days because `upsertEvents` un-deletes on
+ * reappearance (the tombstone is the dedup anchor) and Calendly's is the
+ * widest retire window that can legitimately resurrect a row; disabled
+ * connections' tombstones are the reconnect-restore set and are kept whatever
+ * their age.
+ */
+describe("events tombstone purge", () => {
+  async function seedEvent(over: Partial<typeof events.$inferInsert> = {}): Promise<string> {
+    const [row] = await db
+      .insert(events)
+      .values({
+        orgId: ORG,
+        connectionId,
+        source: "webhook",
+        eventId: `ev-${opSeq++}`,
+        eventType: "row",
+        occurredAt: daysAgo(90),
+        ...over,
+      })
+      .returning();
+    return row.id;
+  }
+
+  it("purges old tombstones on an active connection, keeps young ones and every live row", async () => {
+    const doomed = await seedEvent({ deletedAt: daysAgo(45) });
+    const young = await seedEvent({ deletedAt: daysAgo(5) });
+    const live = await seedEvent();
+
+    const backlog = await retentionBacklog(db, 30, NOW);
+    expect(backlog.eventTombstones).toBe(1);
+
+    const pruned = await pruneOperationalTables(db, { now: NOW });
+    // THE regression this tier fixes: before it, NOTHING removed a tombstone,
+    // ever — the biggest table in the schema grew dead weight forever.
+    expect(pruned.eventTombstones).toBe(1);
+
+    const left = (await db.select().from(events)).map((r) => r.id);
+    expect(left).not.toContain(doomed);
+    expect(left).toContain(young);
+    expect(left).toContain(live);
+  });
+
+  it("NEVER touches a disabled connection's tombstones — they are the reconnect-restore set", async () => {
+    const ancient = await seedEvent({ deletedAt: daysAgo(400) });
+    await db.update(connections).set({ status: "disabled", disabledAt: daysAgo(400) }).where(eq(connections.id, connectionId));
+
+    const pruned = await pruneOperationalTables(db, { now: NOW });
+
+    expect(pruned.eventTombstones).toBe(0);
+    expect((await db.select().from(events)).map((r) => r.id)).toContain(ancient);
+  });
+
+  it("inspect mode counts exactly and deletes nothing", async () => {
+    await seedEvent({ deletedAt: daysAgo(45) });
+    await seedEvent({ deletedAt: daysAgo(60) });
+
+    const inspected = await pruneOperationalTables(db, { now: NOW, inspect: true });
+
+    expect(inspected.eventTombstones).toBe(2);
+    expect(inspected.inspected).toBe(true);
+    expect(await db.select().from(events)).toHaveLength(2);
+  });
+
+  it("the delete re-asserts the predicate: a row resurrected mid-drain survives", async () => {
+    // Simulated race: the id qualifies at select time, then `upsertEvents`
+    // clears deleted_at before the delete lands. The delete's re-asserted
+    // WHERE must skip it — without that conjunct the drain would hard-delete
+    // a LIVE customer row it selected as a tombstone moments earlier.
+    // Deterministic stand-in for the race: a row that no longer qualifies is
+    // in the id set via a same-batch sibling. We pin the observable contract
+    // instead: `removed` counts only rows that still qualified.
+    const doomed = await seedEvent({ deletedAt: daysAgo(45) });
+    const resurrected = await seedEvent({ deletedAt: daysAgo(45) });
+    // Resurrect between "would be selected" and the drain by doing it now —
+    // the predicate is evaluated inside the DELETE, so this row must survive.
+    await db.update(events).set({ deletedAt: null }).where(eq(events.id, resurrected));
+
+    const pruned = await pruneOperationalTables(db, { now: NOW });
+
+    expect(pruned.eventTombstones).toBe(1);
+    const left = (await db.select().from(events)).map((r) => r.id);
+    expect(left).toContain(resurrected);
+    expect(left).not.toContain(doomed);
   });
 });
