@@ -470,6 +470,47 @@ describe("running a slice", () => {
     expect(await runnableJobsByProvider(db, 1, NOW)).toHaveLength(1);
   });
 
+  it("rotates fairly: a job that just ran a slice yields the provider slot to its sibling", async () => {
+    // Two TENANTS, one provider. Under the old `createdAt asc` ordering the
+    // first-created job was re-picked every tick until terminal — one 90-day
+    // import monopolized the provider for every other tenant for its whole
+    // duration.
+    const { job: jobA } = await ask(90); // tenant A, created first
+    const connB = await seedConnection(db, { orgId: "org_other", source: "close" });
+    const [streamB] = await db
+      .insert(sourceStreams)
+      .values({ orgId: "org_other", connectionId: connB, configHash: "hash-b", config: {} })
+      .returning();
+    const { job: jobB } = await requestBackfill(
+      db,
+      { id: streamB.id, orgId: "org_other", connectionId: connB, configHash: "hash-b" },
+      "close",
+      back(90),
+    );
+
+    // ONE clock for everything: created_at is stamped by the database's real
+    // now(), so the progress stamps must be real-clock too — mixing the
+    // file's July NOW fixture in here would sort a "recent" checkpoint
+    // before a real-clock creation.
+    const t0 = new Date();
+
+    // Nobody has progressed: oldest-created goes first (A).
+    expect((await runnableJobsByProvider(db, 1, t0))[0].job.id).toBe(jobA.id);
+
+    // A runs a slice (checkpointJob stamps lastProgressAt)…
+    await startJob(db, jobA.id, t0);
+    await checkpointJob(db, jobA.id, { checkpoint: "c1", oldestSeen: back(10), rowsImported: 5 }, new Date(t0.getTime() + 1_000));
+
+    // …and the next tick picks B. THE regression: old code picked A again,
+    // every tick, forever.
+    expect((await runnableJobsByProvider(db, 1, t0))[0].job.id).toBe(jobB.id);
+
+    // B progresses more recently than A → the slot rotates back to A.
+    await startJob(db, jobB.id, t0);
+    await checkpointJob(db, jobB.id, { checkpoint: "c1", oldestSeen: back(10), rowsImported: 5 }, new Date(t0.getTime() + 2_000));
+    expect((await runnableJobsByProvider(db, 1, t0))[0].job.id).toBe(jobA.id);
+  });
+
   it("ends cleanly when the connection was disconnected", async () => {
     fakeClose([[{ id: "a", occurredAt: back(20) }]]);
     const { job } = await ask(90);

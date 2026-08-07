@@ -296,7 +296,8 @@ export async function finishJob(
 }
 
 /**
- * Up to `limit` runnable jobs, AT MOST ONE PER PROVIDER, oldest first.
+ * Up to `limit` runnable jobs, AT MOST ONE PER PROVIDER, least-recently-
+ * progressed first.
  *
  * Skips connections that are disabled or deferred: a backfill against a
  * disconnected integration is work nobody asked for against credentials nobody
@@ -311,9 +312,21 @@ export async function finishJob(
  * forgiving. The per-connection lease does not help: those are different
  * connections.
  *
- * The worker enforces it again through its own concurrency key. Both, because
- * this one bounds what is DISPATCHED and that one bounds what RUNS, and a retry
- * or a redelivery can put work in flight this never emitted.
+ * THE ORDER IS LOAD-BEARING, same as `activeStreams`' (streams.ts). This used
+ * to be `createdAt asc`, which made "one per provider" mean "the
+ * oldest-created import owns the provider until it terminates": a running job
+ * stays in the candidate set, so the tenant who clicked first was re-picked
+ * every tick and a 90-day import blocked every other tenant's for its whole
+ * duration. `checkpointJob` stamps `lastProgressAt` on every slice, so
+ * least-recently-progressed-first makes the job that just ran a slice rotate
+ * to the BACK of its provider's queue — tenants' imports interleave
+ * five-minute ticks instead of queuing behind the longest one. The coalesce
+ * makes never-run jobs (all three timestamps absent except creation) sort by
+ * age; `nulls first` is belt-and-braces; `id` keeps ties deterministic.
+ *
+ * The worker enforces one-per-provider again through its own concurrency key.
+ * Both, because this one bounds what is DISPATCHED and that one bounds what
+ * RUNS, and a retry or a redelivery can put work in flight this never emitted.
  */
 export async function runnableJobsByProvider(
   db: DB,
@@ -331,7 +344,11 @@ export async function runnableJobsByProvider(
         or(sql`${connections.pausedUntil} is null`, lt(connections.pausedUntil, now)),
       ),
     )
-    .orderBy(asc(backfillJobs.createdAt));
+    .orderBy(
+      sql`coalesce(${backfillJobs.lastProgressAt}, ${backfillJobs.startedAt}, ${backfillJobs.createdAt}) asc nulls first`,
+      asc(backfillJobs.createdAt),
+      asc(backfillJobs.id),
+    );
 
   const picked: Array<{ job: BackfillJob; provider: string }> = [];
   const seen = new Set<string>();
