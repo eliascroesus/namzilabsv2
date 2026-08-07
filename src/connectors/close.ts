@@ -35,7 +35,23 @@ const API = "https://api.close.com/api/v1";
  * `scripts/verify-close-pagination.ts` compares them rather than picking one.
  */
 const EVENT_LOG_LIMIT = 50;
-/** Pages walked per poll() call; deeper windows resume next sweep via the stored continuation. */
+/**
+ * MEMORY ceiling on pages per poll() — no longer the throughput governor.
+ *
+ * This was 4, and 4 was the connection's real throughput ceiling: ~200 events
+ * per 10-minute sweep against a workspace that can easily emit more, on the
+ * provider whose event log DELETES ITSELF at 30 days — the silent-data-loss
+ * shape the close-lag invariant watches for. The real governors are now the
+ * ledger budget the runner passes in (`PollArgs.budget.maxCalls`, from the
+ * claim's `remaining`) and its wall-clock deadline; this constant only bounds
+ * how many records one poll() may accumulate in memory before returning
+ * (40 × 50 = 2,000 — the same ceiling Calendar's 8 × 250 walk has always
+ * had). Deeper windows resume next sweep via the stored continuation, as
+ * always. Absent a budget (legacy callers, tests) the walk stops at the OLD
+ * default below.
+ */
+const MAX_PAGES_PER_POLL = 40;
+/** The pre-budget default, kept for callers that pass no budget. */
 const PAGES_PER_POLL = 4;
 /**
  * Re-read cushion below the high-water mark.
@@ -518,8 +534,21 @@ export const closeConnector: Connector = {
      */
     const bound = target;
 
+    // Budget-driven paging: the ledger's headroom (never below 1 — the claim
+    // that authorized this poll bought one call) capped by the memory
+    // ceiling; the wall-clock deadline is checked between pages. No budget =
+    // the pre-budget default, so legacy callers are byte-identical.
+    const pageCap = args.budget ? Math.min(MAX_PAGES_PER_POLL, Math.max(1, args.budget.maxCalls)) : PAGES_PER_POLL;
+    const nowMs = args.budget?.nowMs ?? Date.now;
+    const deadlineMs = args.budget?.deadlineMs;
+
     let pages = 0;
-    while (pages < PAGES_PER_POLL) {
+    while (pages < pageCap) {
+      if (pages > 0 && deadlineMs != null && nowMs() >= deadlineMs) {
+        // Out of clock mid-walk: same exit as running out of pages — the
+        // continuation below carries the walk into the next sweep.
+        break;
+      }
       const params = new URLSearchParams({ _limit: String(EVENT_LOG_LIMIT) });
       // THE FIELD THIS ENDPOINT ACTUALLY FILTERS ON. Sent as `date_created__gte`
       // for the life of this connector until now, which Close accepts and
@@ -709,13 +738,16 @@ export const closeConnector: Connector = {
    * the signature without this is fixing a lock on a door nobody is knocking at.
    *
    * RE-ACTIVATE, NEVER RE-CREATE — and this is the sharp edge. `POST /webhook/`
-   * mints a NEW `signature_key`, and `VerifyWebhookResult` has no field to carry
-   * a secret back, so a re-creating implementation would leave the connection
-   * holding the OLD key against a NEW subscription and every delivery would fail
-   * again, silently, exactly as before. Sendblue can re-create safely because its
-   * secret is one we mint; Close's is one we are given. So a missing subscription
-   * is REPORTED rather than replaced — replacing it needs a secret to be written,
-   * which belongs to `createConnection`, not to a sweep-time health check.
+   * mints a NEW `signature_key`, and for most of this connector's life
+   * `VerifyWebhookResult` had no field to carry a secret back, so a
+   * re-creating implementation would have left the connection holding the OLD
+   * key against a NEW subscription with every delivery failing silently.
+   * That field now EXISTS (`signingSecret`, added for Calendly, which has no
+   * re-activate verb and can only self-heal by re-creating) and reconcile
+   * persists it — but Close stays re-activate-only BY CHOICE: re-activation
+   * preserves the existing key, which is strictly better wherever the
+   * provider offers the verb. Sendblue can re-create freely because its
+   * secret is one we mint; Close's is one we are given.
    *
    * The re-activation verb is `PUT /api/v1/webhook/{id}/` with a `status` field,
    * which Close's update documentation demonstrates directly — its own cURL

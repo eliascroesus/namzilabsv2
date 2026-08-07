@@ -5,7 +5,7 @@ import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { processRawEvent, upsertEvents } from "@/ingestion/pipeline";
-import { activeStreams, importProgressNote, syncStream, type PrimeStreamResult } from "@/lib/sync/streams";
+import { activeStreams, importProgressNote, syncStream, SWEEP_MAX_PAGES, SYNC_BUDGET_MS, type PrimeStreamResult, type SyncBudget } from "@/lib/sync/streams";
 import { awaitConnectionSyncLock, releaseConnectionSyncLock, tryConnectionSyncLock } from "@/lib/sync/locks";
 import { applyObservedRateLimit, claimCalls, isPaused, recordObservedLimit, settlePollCalls } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
@@ -213,6 +213,9 @@ type ConnRow = typeof connections.$inferSelect;
 async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<SyncResult> {
   const connector = getConnector(conn.source)!;
   const streams = (await activeStreams(db, conn.id)).filter((s) => s.status !== "disabled");
+  // One wall-clock budget for this sync-unit, same as the sweep's (O1).
+  const nowMs = Date.now;
+  const budget: SyncBudget = { deadlineMs: nowMs() + SYNC_BUDGET_MS, nowMs };
 
   if (mode === "incremental") {
     let inserted = 0;
@@ -221,8 +224,13 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
     let upserted = 0;
     let incomplete = false;
     for (const stream of streams) {
+      if (budget.nowMs() >= budget.deadlineMs) {
+        // Out of clock: honest truncation, LRU ordering resumes the tail.
+        incomplete = true;
+        break;
+      }
       try {
-        const r = await syncStream(db, conn, stream, 5);
+        const r = await syncStream(db, conn, stream, SWEEP_MAX_PAGES, "background", budget);
         inserted += r.inserted;
         updated += r.updated;
         softDeleted += r.softDeleted;
@@ -475,7 +483,13 @@ async function pollAll(
    * when a row was written — the same split `syncStream` makes.
    */
   let dateFieldState: StreamRow["dateFieldState"] | undefined;
+  // The full re-sync's own wall clock: PAGE_CAP bounds memory in `seen`, but
+  // the honest stop for a long walk is the deadline — a walk cut short keeps
+  // `complete` false, so nothing is retired on the strength of a prefix.
+  const nowMs = Date.now;
+  const deadlineMs = nowMs() + SYNC_BUDGET_MS;
   for (let page = 0; page < PAGE_CAP; page++) {
+    if (page > 0 && nowMs() >= deadlineMs) break;
     // One claim buys ONE request; the settle below corrects for connectors
     // that page internally. Charged at the claim instant, not the settle
     // instant, so a page straddling a minute boundary cannot refund out of
@@ -486,7 +500,12 @@ async function pollAll(
       deferred = { reason: claim.reason, retryAfterMs: claim.retryAfterMs };
       break;
     }
-    const res = await connector.poll!({ ...base, cursor });
+    // O1: bound the connector's internal walk BEFORE it spends.
+    const res = await connector.poll!({
+      ...base,
+      cursor,
+      budget: { maxCalls: 1 + Math.max(0, claim.remaining), deadlineMs, nowMs },
+    });
     // The claim bought one call; the connector may have made several inside
     // it (Calendar walks up to 8 pages per poll). Settle so the NEXT claim —
     // and the fleet bucket every Google customer shares — sees the truth.

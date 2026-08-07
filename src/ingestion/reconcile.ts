@@ -4,12 +4,13 @@ import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
 import { isStreamScoped } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
+import { encrypt, getEncryptionKey } from "@/lib/crypto";
 import { applyObservedRateLimit, claimCalls, isPaused, pauseConnection, recordObservedLimit, recordProviderError, recordSuccess, settlePollCalls, tripBreaker } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { HttpError } from "@/lib/http-client";
 import { withConnectionSyncLock } from "@/lib/sync/locks";
 import { upsertEvents } from "./pipeline";
-import { activeStreams, syncStream } from "@/lib/sync/streams";
+import { activeStreams, syncStream, SWEEP_MAX_PAGES, SYNC_BUDGET_MS, type SyncBudget } from "@/lib/sync/streams";
 import { applyCadence, decideCadence } from "@/lib/sync/cadence";
 import { connectionRefusedRecently } from "@/lib/webhooks/rejections";
 
@@ -187,9 +188,19 @@ async function pauseForRateLimit(db: DB, conn: typeof connections.$inferSelect, 
  * error on the stream row and never blocks the others. Connection-scoped
  * sources keep the single connection-level cursor.
  */
-export async function reconcileConnection(db: DB, connectionId: string): Promise<ReconcileResult> {
+export async function reconcileConnection(
+  db: DB,
+  connectionId: string,
+  opts: { nowMs?: () => number } = {},
+): Promise<ReconcileResult> {
   const [conn] = await db.select().from(connections).where(eq(connections.id, connectionId)).limit(1);
   if (!conn) throw new Error(`connection ${connectionId} not found`);
+
+  // One wall-clock budget for this whole sweep-unit, checked between streams
+  // and handed down to every page walk it authorizes (see SYNC_BUDGET_MS).
+  // `nowMs` is injectable for tests; production always runs the real clock.
+  const nowMs = opts.nowMs ?? Date.now;
+  const sweepBudget: SyncBudget = { deadlineMs: nowMs() + SYNC_BUDGET_MS, nowMs };
 
   /**
    * Has this endpoint refused a delivery inside the memory window?
@@ -303,6 +314,30 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
       // The GET always happens; the PUT only on a re-activation. Settling the
       // real number is the half the settle bug got wrong.
       await settlePollCalls(db, conn, healthOp, { providerCalls: v.reregistered ? 2 : 1 }, 1, healthClaimedAt);
+      /**
+       * PERSIST FIRST, verdict second. A re-CREATED subscription (Calendly —
+       * no re-activate verb exists there) minted a NEW signing key; if this
+       * write is skipped, every future delivery fails against the old key,
+       * silently — the exact trap that kept Close re-activate-only until
+       * VerifyWebhookResult grew this field.
+       */
+      if (v.signingSecret) {
+        await db
+          .update(connections)
+          .set({
+            signingSecretEncrypted: encrypt(v.signingSecret, getEncryptionKey()),
+            ...(v.externalId ? { config: { ...(conn.config ?? {}), webhookExternalId: v.externalId } } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(connections.id, conn.id));
+      }
+      if (v.unsupported) {
+        // The provider's PLAN excludes webhooks. Leaving `webhook` undefined
+        // is the SkipHealthCheck posture reached through a verdict: no
+        // lastError, no red strip, and the cadence floor never widens on the
+        // strength of an instant path the plan does not include.
+        throw new SkipHealthCheck();
+      }
       webhook = v.healthy ? (v.reregistered ? "reregistered" : "ok") : "failed";
       if (!v.healthy) {
         await db
@@ -333,6 +368,19 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
   const poll = connector.poll.bind(connector);
 
   if (isStreamScoped(conn.source)) {
+    /**
+     * C.1 FOR STREAMS — the same lease the connection-scoped branch has held
+     * since 0012, finally held here too. Without it this branch was the one
+     * stream writer with no mutual exclusion: the sweep, a "Sync now"
+     * (runSync holds the lease), a backfill slice (holds it) and an inline
+     * Test could poll the same stream concurrently on the http driver —
+     * duplicate provider spend and interleaved cursor writes, exactly what
+     * the lease exists to prevent. `withStreamWriteLock` does not cover it:
+     * advisory locks are no-ops until DB_DRIVER=pool, and the race is live
+     * TODAY. No deadlock risk: syncStream never takes the connection lease
+     * internally.
+     */
+    const swept = await withConnectionSyncLock(db, connectionId, async (): Promise<ReconcileResult> => {
     const streams = (await activeStreams(db, connectionId)).filter((s) => s.status !== "disabled");
     let inserted = 0;
     let updated = 0;
@@ -354,12 +402,21 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
     let deferred: { reason: string; retryAfterMs: number } | undefined;
     const changedStreamHashes: string[] = [];
     for (const stream of streams) {
+      // Out of clock between streams: stop honestly. The LRU ordering of
+      // `activeStreams` rotates the unpolled tail to the front next sweep,
+      // so a cut here starves nothing.
+      if (sweepBudget.nowMs() >= sweepBudget.deadlineMs) {
+        incomplete = true;
+        break;
+      }
       try {
         // F.1: the budget is claimed per PROVIDER REQUEST inside syncStream —
         // it is the only place that knows how many pages a walk actually took.
         // Claiming once out here authorised the whole walk, so a budget of N
         // permitted N × maxPages real calls against the provider's limit.
-        const r = await syncStream(db, conn, stream, 5);
+        // SWEEP_MAX_PAGES replaced a literal 5: per-page claims + the sweep
+        // deadline are the real governors now (see its derivation).
+        const r = await syncStream(db, conn, stream, SWEEP_MAX_PAGES, "background", sweepBudget);
         if (r.deferred) {
           // Skip THIS stream, not the sweep. Rows already written still count;
           // the walk resumes from its stored cursor next time, so nothing is
@@ -442,6 +499,17 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
       });
     }
     return withCadence({ inserted, updated, softDeleted, deduped, polled: streams.length > 0, webhook, changedStreamHashes, incomplete, heldContinuation, orgId: conn.orgId, source: conn.source });
+    });
+
+    if (swept.acquired && swept.result) return swept.result;
+    // Someone else is mid-sync on this connection (a "Sync now", a backfill
+    // slice, an inline Test). Stand down — no poll, no cadence change,
+    // nothing lost: the holder is doing this work right now.
+    return withCadence({
+      inserted: 0, updated: 0, softDeleted: 0, deduped: 0,
+      polled: false, webhook, changedStreamHashes: [],
+      skipped: true, orgId: conn.orgId, source: conn.source,
+    });
   }
 
   /**
@@ -492,6 +560,11 @@ export async function reconcileConnection(db: DB, connectionId: string): Promise
         cursor,
         credentials,
         config: conn.config ?? undefined,
+        // O1: the walk is bounded BEFORE it spends — the ledger's headroom
+        // plus this sweep-unit's clock — instead of settled into overdraft
+        // after. This is what lifts Close's ceiling from 4 pages to
+        // whatever the budget actually allows.
+        budget: { maxCalls: 1 + Math.max(0, claim.remaining), deadlineMs: sweepBudget.deadlineMs, nowMs: sweepBudget.nowMs },
       }));
     } catch (e) {
       // A rate limit defers; only a FAULT trips the breaker (see

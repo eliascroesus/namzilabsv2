@@ -12,7 +12,16 @@ const CALENDAR_OP = "events.list";
 
 const API = "https://www.googleapis.com/calendar/v3/calendars";
 
-/** Pages walked per poll; Google only reveals nextSyncToken on the LAST page. */
+/**
+ * MEMORY ceiling on pages per poll (8 × 250 = 2,000 changes) — already the
+ * ceiling the other connectors were raised to meet, so it keeps its value.
+ * With a `PollArgs.budget` the walk is ADDITIONALLY bounded by the ledger's
+ * headroom and the deadline (load-bearing here more than anywhere: Calendar
+ * spends the fleet-shared Cloud-project quota, and this walk used to be able
+ * to overdraw it by up to 7 calls that were only settled after the fact).
+ * Google only reveals nextSyncToken on the LAST page, so a cut-short walk
+ * stores the pageToken continuation, exactly as before.
+ */
 const MAX_PAGES = 8; // 8 × 250 = 2000 changes per sweep
 
 /**
@@ -81,7 +90,12 @@ export const googleCalendarConnector: Connector = {
      */
     let providerCalls = 0;
 
-    for (let page = 0; page < MAX_PAGES; page++) {
+    const pageCap = args.budget ? Math.min(MAX_PAGES, Math.max(1, args.budget.maxCalls)) : MAX_PAGES;
+    const nowMs = args.budget?.nowMs ?? Date.now;
+    const deadlineMs = args.budget?.deadlineMs;
+
+    for (let page = 0; page < pageCap; page++) {
+      if (page > 0 && deadlineMs != null && nowMs() >= deadlineMs) break;
       // Page requests must repeat the original query params + pageToken.
       const pageParams = new URLSearchParams(params);
       if (pageToken) pageParams.set("pageToken", pageToken);

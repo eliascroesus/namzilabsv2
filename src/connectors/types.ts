@@ -130,6 +130,33 @@ export type PollArgs = {
    * one.
    */
   restamp?: boolean;
+  /**
+   * How much this poll() may SPEND — the missing symmetric half of
+   * `PollResult.providerCalls`. Connectors have always reported spend after
+   * the fact; nothing ever told them a ceiling beforehand, so every internal
+   * page walk was bounded by a hard-coded constant instead of by the budget
+   * actually available. The runner computes this from the ledger claim's
+   * `remaining` plus the sweep's wall-clock deadline.
+   *
+   * ABSENT = today's behavior: the connector's own constant bounds the walk.
+   * That keeps every legacy caller (testFetchLatest fixtures, direct polls in
+   * tests) exactly as it was.
+   */
+  budget?: PollBudget;
+};
+
+/**
+ * The RunBudget pattern (storage-lifecycle.ts) applied to a provider walk:
+ * a call ceiling from the rate ledger and a wall-clock deadline checked
+ * BETWEEN requests — a walk may overshoot by at most one bounded call.
+ */
+export type PollBudget = {
+  /** Max provider requests this poll() may make. Never below 1 — the claim that authorized this poll already bought one. */
+  maxCalls: number;
+  /** Absolute wall-clock deadline (epoch ms). Checked between requests. */
+  deadlineMs?: number;
+  /** Injectable clock (tests). Defaults to Date.now. */
+  nowMs?: () => number;
 };
 
 /** One choice for a dynamic flow-level field (e.g. a spreadsheet, a tab). */
@@ -413,6 +440,28 @@ export type VerifyWebhookResult = {
   reregistered: boolean;
   /** Human-readable detail when unhealthy (surfaced on the connection). */
   detail?: string;
+  /**
+   * A re-CREATED subscription's new signing secret. Present only when
+   * re-creation minted one, and the CALLER (reconcile's health check) MUST
+   * persist it — this field's absence was the documented reason Close could
+   * never re-create: a new subscription mints a new key, and with nowhere to
+   * carry it back, every later delivery would fail against the old key,
+   * silently. Calendly has no re-activate verb, so for it re-creation is the
+   * only self-heal there is — hence the field. (Close still re-activates
+   * rather than re-creates, BY CHOICE: re-activation preserves the existing
+   * key and is strictly better where the provider offers it.)
+   */
+  signingSecret?: string;
+  /** The re-created subscription's provider-side id, persisted alongside. */
+  externalId?: string;
+  /**
+   * The provider's PLAN does not include webhooks (Calendly gates them to
+   * Standard+). Not a failure: polling is the primary path and keeps
+   * working. The caller records nothing, shows no red strip, and never
+   * widens the cadence floor — the SkipHealthCheck posture, reached through
+   * a verdict instead of an exception.
+   */
+  unsupported?: boolean;
 };
 
 /**

@@ -8,7 +8,7 @@ import { getConnectionCredentials } from "@/lib/credentials";
 import { upsertEvents } from "@/ingestion/pipeline";
 import { applyObservedRateLimit, claimCalls, isPaused, recordObservedLimit, settlePollCalls, type CallLane } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
-import { awaitStreamWriteLock, withStreamWriteLock } from "./locks";
+import { awaitConnectionSyncLock, awaitStreamWriteLock, releaseConnectionSyncLock, tryConnectionSyncLock, withStreamWriteLock } from "./locks";
 import { hasStreamConfig, normalizeStreamConfig, streamConfigHash } from "./stream-hash";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
 import { defaultTargetFloor, requestBackfill, streamImportProgress } from "@/lib/backfill/jobs";
@@ -435,12 +435,39 @@ function restampRecords(
  *   cursor; `maxPages` bounds inline/first-run syncs so a huge resource can't
  *   blow a request timeout — the sweep finishes the rest on its schedule.
  */
+/**
+ * Wall-clock budget for one sweep-unit (one connection's reconcile, one
+ * runSync, one prime). Same class of bound as PRUNE_BUDGET_MS and derived the
+ * same way: sync work executes under routes declaring `maxDuration = 60`, one
+ * unit gets under half of it, and the deadline is checked BETWEEN pages and
+ * BETWEEN streams — so a run can overshoot by at most one
+ * PROVIDER_CALL_BUDGET_MS-bounded call (30s), landing worst-case ≈ 55s,
+ * inside the container. A cut-short walk stores its continuation and the LRU
+ * stream ordering rotates the unpolled tail to the front next sweep — the
+ * existing truncation semantics, no new state.
+ */
+export const SYNC_BUDGET_MS = 25_000;
+
+/** The clock a sweep-unit hands down to every page walk it authorizes. */
+export type SyncBudget = { deadlineMs: number; nowMs: () => number };
+
+/**
+ * Runner pages per stream per sweep. Was a literal 5 at both call sites —
+ * a throughput guess from before per-page claims existed. With every page
+ * individually claimed against the ledger and the SYNC_BUDGET_MS deadline
+ * checked between pages, the honest bound is "as many as budget and clock
+ * allow", and this constant is just the backstop that keeps one
+ * pathologically deep stream from eating the whole sweep-unit.
+ */
+export const SWEEP_MAX_PAGES = 20;
+
 export async function syncStream(
   db: DB,
   conn: ConnRow,
   stream: StreamRow,
   maxPages = 1,
   lane: CallLane = "background",
+  budget?: SyncBudget,
 ): Promise<StreamSyncResult> {
   const connector = getConnector(conn.source);
   if (!connector?.poll) return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0 };
@@ -458,13 +485,16 @@ export async function syncStream(
    * published limit. Claiming here is the only place that knows how many pages
    * are actually being walked.
    */
-  const claimPage = async (): Promise<Date | null> => {
+  const claimPage = async (): Promise<{ at: Date; remaining: number } | null> => {
     // Returned, not discarded: the settle-up has to be booked against the window
     // this claim was charged to. A poll that straddles a minute boundary would
     // otherwise refund out of the next window — see settlePollCalls.
+    // `remaining` rides along for O1: it sizes the connector's internal walk
+    // (PollArgs.budget.maxCalls) so the walk is bounded BEFORE it spends,
+    // instead of settled into overdraft afterwards.
     const at = new Date();
     const claim = await claimCalls(db, conn, operation, 1, at, lane);
-    if (claim.allowed) return at;
+    if (claim.allowed) return { at, remaining: claim.remaining };
     deferred = { reason: claim.reason, retryAfterMs: claim.retryAfterMs };
     return null;
   };
@@ -484,9 +514,9 @@ export async function syncStream(
    *
    * Connectors that do not report `providerCalls` are counted as one, which is
    * the pre-existing behaviour and correct for a connector that makes one call.
-   * Instantly (3 pages) and Calendly still under-report; their credentials are
-   * per-customer, so the exposure is that customer's own limit rather than a
-   * shared one, and they are left for the pass that declares their real limits.
+   * (Instantly used to under-report here — a 3-page walk billed as 1 — and now
+   * counts every request. Calendly makes one request per poll, so its default
+   * of 1 is exact; its only residual under-report is the identity-cache miss.)
    *
    * `extraCalls` re-attributes the part of that spend which went to a DIFFERENT
    * endpoint — Sheets' Drive probe against Sheets' own tab read, whose project
@@ -495,6 +525,14 @@ export async function syncStream(
   const settleUp = async (res: { providerCalls?: number; extraCalls?: Record<string, number> }, at: Date) => {
     await settlePollCalls(db, conn, operation, res, 1, at);
   };
+
+  /** The budget one poll() may spend: ledger headroom + the caller's clock. */
+  const pollBudget = (remaining: number) => ({
+    // 1 + remaining: the claim that authorized this poll already bought one.
+    maxCalls: 1 + Math.max(0, remaining),
+    deadlineMs: budget?.deadlineMs,
+    nowMs: budget?.nowMs,
+  });
 
   let cursor = stream.cursor ?? null;
   let inserted = 0;
@@ -534,8 +572,9 @@ export async function syncStream(
   const owesDetection = detectDateField && stream.dateFieldState == null;
   try {
     if (isMirrorSource(conn.source)) {
-      const claimedAt = await claimPage();
-      if (!claimedAt) return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0, incomplete: true, deferred };
+      const claim = await claimPage();
+      if (!claim) return { inserted: 0, updated: 0, deduped: 0, softDeleted: 0, incomplete: true, deferred };
+      const claimedAt = claim.at;
       // The cursor is passed as a CHANGE-DETECTION HINT, not as a resume point:
       // a mirror still re-reads the whole resource whenever it reads at all.
       // What it buys is the option not to read — see `unchanged` below.
@@ -545,6 +584,7 @@ export async function syncStream(
         credentials,
         config: stream.config ?? undefined,
         streamHash: stream.configHash,
+        budget: pollBudget(claim.remaining),
         windowFloor: stream.windowFloor ?? null,
         // The stream owns which column holds a row's event time, for the same
         // reason it owns its window: the rows are shared by every flow reading
@@ -698,17 +738,25 @@ export async function syncStream(
       cursor = nextCursor ?? null;
     } else {
       for (let page = 0; page < maxPages; page++) {
-        const claimedAt = await claimPage();
-        if (!claimedAt) {
+        // Out of clock between pages: the cursor persisted below carries the
+        // walk into the next sweep, and LRU ordering puts this stream first.
+        if (page > 0 && budget && budget.nowMs() >= budget.deadlineMs) {
           incomplete = true;
           break;
         }
+        const claim = await claimPage();
+        if (!claim) {
+          incomplete = true;
+          break;
+        }
+        const claimedAt = claim.at;
         const pageRes = await connector.poll({
           connectionId: conn.id,
           cursor,
           credentials,
           config: stream.config ?? undefined,
           streamHash: stream.configHash,
+          budget: pollBudget(claim.remaining),
           // 6.2: the STREAM owns how far back it reaches. The connector uses
           // this for the request bound and for the window it declares, so a
           // deepened import cannot be retired by its own declaration.
@@ -922,11 +970,20 @@ const PRIME_MAX_AGE_MS = 60_000;
  * around 15 pages, and crossing it makes a Test dramatically SLOWER, not more
  * complete. Anything above ~8 wants the budget raised alongside it.
  *
- * Raising this also raises the real provider request rate without the ledger
- * seeing it: `claimCalls` is claimed once per stream-sync, not per page, so a
- * budget of N means one claim authorises N requests.
+ * (The paragraph that used to close this comment — "claimCalls is claimed
+ * once per stream-sync, not per page" — has been false since the F.1 rework
+ * moved the claim inside syncStream, per page. The ledger sees every page.)
  */
 const PRIME_MAX_PAGES = 4;
+
+/**
+ * The wall clock a Test's page walk hands to the connector. Under
+ * INLINE_TEST_BUDGET_MS (8s) so a connector's INTERNAL walk (Calendar's 8
+ * pages, Instantly's budget-driven walk) self-bounds before the inline race
+ * abandons the whole Test — a walk cut short returns what it has; a walk
+ * abandoned returns nothing.
+ */
+const PRIME_BUDGET_MS = 6_000;
 
 export type PrimeStreamResult =
   | { ok: true; refreshed: boolean; note?: string }
@@ -1017,12 +1074,43 @@ export async function primeStream(
     }
   }
 
+  /**
+   * The CONNECTION lease, which the advisory-lock wait above is not (it is a
+   * no-op on the http driver). Every other stream writer holds it — the
+   * sweep, runSync, the backfill slice — so a Test that skipped it was the
+   * one path that could double-poll a stream mid-sweep. Same shape as
+   * primeConnection: a FORCED Test waits (bounded) and adopts a finished
+   * writer's read; then either kind takes the lease, and one grabbed in the
+   * gap gets said plainly rather than implying a refresh that did not
+   * happen. Only `force` waits: a non-forced prime is opportunistic
+   * freshness, and blocking a Test for 15s to maybe save a page is the wrong
+   * trade.
+   */
+  if (force) {
+    const t1 = Date.now();
+    const waited = await awaitConnectionSyncLock(db, conn.id);
+    if (waited === "free") {
+      const [fresh] = await db.select().from(sourceStreams).where(eq(sourceStreams.id, stream.id)).limit(1);
+      if (fresh?.lastPolledAt != null && fresh.lastPolledAt.getTime() >= t1 && fresh.status !== "error") {
+        return { ok: true, refreshed: true };
+      }
+    }
+  }
+  const lease = await tryConnectionSyncLock(db, conn.id);
+  if (!lease) {
+    return { ok: true, refreshed: false, note: "A sync of this source is already running — showing the data we have so far." };
+  }
+
   try {
     // F.8 — the interactive lane may claim the reserved headroom background
     // sweeps never touch, so a busy fleet doesn't block a person clicking Test.
     // Claimed per page inside syncStream, which is the only place that knows
     // how many pages this walk will actually take.
-    const res = await syncStream(db, conn, stream, maxPages, "interactive");
+    const nowMs = Date.now;
+    const res = await syncStream(db, conn, stream, maxPages, "interactive", {
+      deadlineMs: nowMs() + PRIME_BUDGET_MS,
+      nowMs,
+    });
     if (res.deferred) {
       // Which sentence is true depends on whether ANY page got through. Denied
       // on page one, nothing was re-read; denied on page three, a partial
@@ -1047,6 +1135,11 @@ export async function primeStream(
     return { ok: true, refreshed: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    // Every return above passes through here — the lease never outlives the
+    // Test that took it. Token-fenced, so a lease that expired mid-sync and
+    // was re-taken by another writer is not cleared out from under them.
+    await releaseConnectionSyncLock(db, conn.id, lease.token);
   }
 }
 

@@ -28,9 +28,15 @@ import { asObject, holdsWindowContinuation, parseDate, spanCovered, str } from "
  */
 const API_BASE = "https://api.sendblue.com";
 
-/** Pages walked per poll; offset pagination, newest-first. */
 /** How far back an initial, cursor-less sweep reaches. */
 const FIRST_SYNC_DAYS = 30;
+/**
+ * MEMORY ceiling on pages per poll (20 × 100 = 2,000 records) — the real
+ * governors are the ledger budget the runner passes (`PollArgs.budget`) and
+ * its deadline; see close.ts's MAX_PAGES_PER_POLL for the full derivation.
+ */
+const MAX_PAGES_PER_POLL = 20;
+/** The pre-budget default, kept for callers that pass no budget. */
 const PAGES_PER_POLL = 3;
 const PAGE_LIMIT = 100;
 /** Re-read cushion below the high-water mark; message_handle dedup absorbs it. */
@@ -183,7 +189,13 @@ export const sendblueConnector: Connector = {
     // Paged inside the connector, so the runner cannot claim per request — it
     // settles the ledger from this count instead.
     let providerCalls = 0;
-    for (let page = 0; page < PAGES_PER_POLL; page++) {
+    // Budget-driven paging (see close.ts): ledger headroom capped by the
+    // memory ceiling; deadline checked between pages; no budget = old default.
+    const pageCap = args.budget ? Math.min(MAX_PAGES_PER_POLL, Math.max(1, args.budget.maxCalls)) : PAGES_PER_POLL;
+    const nowMs = args.budget?.nowMs ?? Date.now;
+    const deadlineMs = args.budget?.deadlineMs;
+    for (let page = 0; page < pageCap; page++) {
+      if (page > 0 && deadlineMs != null && nowMs() >= deadlineMs) break;
       const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(offset) });
       providerCalls += 1;
       const data = await fetchJson<{ messages?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>(

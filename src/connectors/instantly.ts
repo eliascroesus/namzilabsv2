@@ -7,10 +7,15 @@ import { asObject, holdsWindowContinuation, parseDate, str } from "./field-utils
 const API = "https://api.instantly.ai/api/v2";
 
 /**
- * Page walk budget per poll. The emails list endpoint has a published budget of
- * 20 requests/minute (declared in the catalog's rateLimits and enforced by the
- * provider-gateway later): 3 pages per 10-minute sweep sits far under it.
+ * Paging bounds. The stale claim that lived here ("the emails list endpoint
+ * has a published budget of 20 requests/minute") died when the catalog was
+ * corrected to Instantly's real limit — ONE workspace-wide 6,000/min bucket.
+ * MAX_PAGES_PER_POLL is the MEMORY ceiling (20 × 50 = 1,000 records per
+ * poll); the real governors are the ledger budget the runner passes
+ * (`PollArgs.budget`) and its deadline — see close.ts for the derivation.
+ * PAGES_PER_POLL is the pre-budget default for callers that pass no budget.
  */
+const MAX_PAGES_PER_POLL = 20;
 const PAGES_PER_POLL = 3;
 const PAGE_LIMIT = 50;
 /** Rolling analytics window, and the ceiling a user can widen it to. */
@@ -432,12 +437,27 @@ async function pollRawEmails(args: PollArgs): Promise<PollResult> {
   const floor = Math.max(cur.hw != null ? (Date.parse(cur.hw) || 0) - OVERLAP_MS : 0, bound);
   const records: CanonicalEvent[] = [];
 
-  for (let page = 0; page < PAGES_PER_POLL; page++) {
+  /**
+   * COUNTED AND RETURNED FROM EVERY EXIT — the metering bug this fixes was
+   * silent for the connector's whole life: this loop makes up to three real
+   * requests and never set `providerCalls`, so `settlePollCalls` defaulted to
+   * 1 and the ledger under-billed every multi-page poll by up to 2 calls.
+   */
+  let providerCalls = 0;
+  // Budget-driven paging (see close.ts): ledger headroom capped by the memory
+  // ceiling; deadline checked between pages; no budget = old default.
+  const pageCap = args.budget ? Math.min(MAX_PAGES_PER_POLL, Math.max(1, args.budget.maxCalls)) : PAGES_PER_POLL;
+  const nowMs = args.budget?.nowMs ?? Date.now;
+  const deadlineMs = args.budget?.deadlineMs;
+
+  for (let page = 0; page < pageCap; page++) {
+    if (page > 0 && deadlineMs != null && nowMs() >= deadlineMs) break;
     const params = new URLSearchParams({ limit: String(PAGE_LIMIT), campaign_id: campaignId });
     if (cur.cont) params.set("starting_after", cur.cont);
 
     let data: { items?: Array<Record<string, unknown>>; next_starting_after?: string | null };
     try {
+      providerCalls += 1;
       data = await getJson(`${API}/emails?${params.toString()}`, args.credentials);
     } catch (e) {
       /**
@@ -465,6 +485,7 @@ async function pollRawEmails(args: PollArgs): Promise<PollResult> {
           records,
           nextCursor: serializeWindowCursor({ hw: cur.hw, cont: null, maxSeen: null }),
           incomplete: true,
+          providerCalls,
         };
       }
       throw e;
@@ -497,11 +518,11 @@ async function pollRawEmails(args: PollArgs): Promise<PollResult> {
      * page budget bounds it.
      */
     if (!next || pageAllBelowFloor) {
-      return { records, nextCursor: serializeWindowCursor({ hw: cur.maxSeen ?? cur.hw, cont: null, maxSeen: null }) };
+      return { records, nextCursor: serializeWindowCursor({ hw: cur.maxSeen ?? cur.hw, cont: null, maxSeen: null }), providerCalls };
     }
     cur.cont = next;
   }
-  return { records, nextCursor: serializeWindowCursor(cur) };
+  return { records, nextCursor: serializeWindowCursor(cur), providerCalls };
 }
 
 /** Map one v2 email object to a canonical event. ue_type: 1 = sent, 2 = reply. */
