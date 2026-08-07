@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
+import { CopyField } from "@/components/copy-field";
 import { inviteMemberAction, revokeInviteAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,13 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v 
  * had no way in short of the WorkOS admin dashboard. WorkOS stays the source
  * of truth (identity mirrors were dropped in migration 0022); this page reads
  * it live and writes through its invitation API, which sends the email too.
+ *
+ * Each pending invitation also shows its accept link for hand-delivery
+ * (Slack, text) — same link as the email, hosted and expired by WorkOS.
+ * Email-bound on purpose: a WorkOS invitation admits only its addressee, so a
+ * leaked link is inert. An "anyone with the link joins" token was considered
+ * and deliberately not built — it would need its own table, a public /join
+ * route, and member caps, for no need the personal link doesn't cover.
  */
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { orgId, userId, auth } = await requireOrg();
@@ -49,7 +57,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {invited && (
           <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
             <p>
-              Invitation sent to <b>{invited}</b> — they&rsquo;ll get an email with a link to join this workspace.
+              Invitation created for <b>{invited}</b> — they&rsquo;ll get an email with a join link. Or copy the
+              same link under <b>Pending invitations</b> below and send it to them yourself.
             </p>
             <Link href="/dashboard/settings" aria-label="Dismiss" className="font-semibold text-green-500 hover:text-green-800">
               ✕
@@ -95,7 +104,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </button>
           </form>
           <p className="mt-2 text-xs text-neutral-500">
-            They&rsquo;ll receive an email from WorkOS with a link to join. Invites expire automatically.
+            An email with a join link goes out automatically. Rather send it yourself? The same link appears
+            under <b>Pending invitations</b> the moment you press Send — copy it into Slack, a text, anywhere.
+            Invites expire automatically.
           </p>
         </section>
 
@@ -104,21 +115,36 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">Pending invitations</h2>
             <div className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
               {pending.map((inv) => (
-                <div key={inv.id} className="flex items-center justify-between px-4 py-3 text-sm">
-                  <span className="text-neutral-800">
-                    {inv.email}
-                    {inv.expiresAt && (
-                      <span className="ml-2 text-xs text-neutral-400">
-                        expires {new Date(inv.expiresAt).toLocaleDateString()}
-                      </span>
-                    )}
-                  </span>
-                  <form action={revokeInviteAction}>
-                    <input type="hidden" name="invitationId" value={inv.id} />
-                    <button type="submit" className="text-sm font-medium text-red-600 hover:underline">
-                      Revoke
-                    </button>
-                  </form>
+                <div key={inv.id} className="px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-800">
+                      {inv.email}
+                      {inv.expiresAt && (
+                        <span className="ml-2 text-xs text-neutral-400">
+                          expires {new Date(inv.expiresAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </span>
+                    <form action={revokeInviteAction}>
+                      <input type="hidden" name="invitationId" value={inv.id} />
+                      <button type="submit" className="text-sm font-medium text-red-600 hover:underline">
+                        Revoke
+                      </button>
+                    </form>
+                  </div>
+                  {/* The link WorkOS emailed, surfaced for hand-delivery. It was
+                      always in this list response (`acceptInvitationUrl`) and was
+                      simply never rendered — which made "invite over Slack" look
+                      like a missing feature instead of a missing <CopyField>.
+                      Not `isUrl`: that flag exists to catch an unset APP_BASE_URL
+                      on OUR urls; this one is WorkOS-hosted and never malformed. */}
+                  <div className="mt-2">
+                    <CopyField
+                      label="Invite link — send it any way you like"
+                      value={inv.acceptInvitationUrl}
+                      hint={`The link is personal: it only admits ${inv.email}. Revoke kills it instantly.`}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
