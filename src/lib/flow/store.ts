@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
+import { CapError, flowCap } from "@/lib/limits";
 import { parseGraph, type FlowGraph } from "./types";
 import { validateGraph } from "./validate";
 
@@ -13,6 +14,14 @@ export type FlowVersion = typeof flowVersions.$inferSelect;
  */
 
 export async function createFlow(db: DB, orgId: string, name = "Untitled flow"): Promise<Flow> {
+  // Cap in the single writer — see src/lib/limits.ts for why counts-at-create
+  // is the right strength here (blast-radius bound, not billing).
+  const [{ c: existing }] = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(flows)
+    .where(eq(flows.orgId, orgId));
+  const cap = flowCap();
+  if (Number(existing) >= cap) throw new CapError("flows", cap);
   const [row] = await db
     .insert(flows)
     .values({ orgId, name, draftGraph: { nodes: [], edges: [] } })

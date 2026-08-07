@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
+import { integrationsErrorMessage } from "./error-messages";
 import { connectionRecordCounts, listConnections, webhookUrlFor } from "@/lib/connections";
 import { CONNECTOR_CATALOG, catalogEntry, type ConnectorCatalogEntry } from "@/connectors/catalog";
 import { ConnectionRow } from "./ConnectionRow";
@@ -8,8 +10,23 @@ import { eventTimeNote, readEventTime } from "@/lib/webhooks/event-time";
 
 export const dynamic = "force-dynamic";
 
-export default async function IntegrationsPage() {
+/**
+ * Serverless duration budget: `connectApiKeyAction` runs under this segment
+ * and does real provider work inline — `createConnection` registers the
+ * webhook with the provider (one bounded provider call) before returning.
+ * The platform default (10s Hobby) can kill it between the DB write and the
+ * registration, leaving a connection with no instant path. 60 is the Hobby
+ * ceiling; pinned by tests/timeout-budgets.test.ts.
+ */
+export const maxDuration = 60;
+
+type SP = Record<string, string | string[] | undefined>;
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
+
+export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { orgId, userId, auth } = await requireOrg();
+  const sp = await searchParams;
+  const errorCode = one(sp.error);
   const connected = await listConnections(orgId).catch(() => []);
   // Best-effort: a failed count must not take down the page, and the delete
   // warning falls back to naming no number rather than naming a wrong one.
@@ -32,6 +49,19 @@ export default async function IntegrationsPage() {
           Connect a tool and its data flows into your unified dashboard. Connect an account, then
           preview the latest records to confirm it&rsquo;s live.
         </p>
+
+        {errorCode && (
+          <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p>
+              {integrationsErrorMessage(errorCode)} <span className="text-xs text-red-400">({errorCode})</span>
+            </p>
+            {/* Dismissal without client JS: dropping the query param re-renders
+                the page clean (this segment is force-dynamic). */}
+            <Link href="/integrations" aria-label="Dismiss" className="font-semibold text-red-400 hover:text-red-700">
+              ✕
+            </Link>
+          </div>
+        )}
 
         {connected.length > 0 && (
           <section className="mt-8">

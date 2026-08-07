@@ -9,25 +9,37 @@ import {
   disconnectAction,
   importHistoryAction,
   reconnectAction,
+  replayDeadLetterAction,
   syncNewAction,
   fullResyncAction,
   reprocessAction,
 } from "@/app/integrations/actions";
+import { getReadDb } from "@/db/client";
+import { unresolvedDeadLetters } from "@/lib/dead-letter";
 import type { CanonicalEvent } from "@/connectors/types";
 import { eventTimeChoice, eventTimeNote, readEventTime } from "@/lib/webhooks/event-time";
 import { EventTimePicker } from "./EventTimePicker";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Serverless duration budget: `?preview=1` runs `previewLatest` — a REAL
+ * provider call (bounded at PROVIDER_CALL_BUDGET_MS) — during render, and the
+ * sync controls' server actions run under this segment too. The platform
+ * default (10s Hobby) kills the render mid-call. 60 is the Hobby ceiling;
+ * pinned by tests/timeout-budgets.test.ts.
+ */
+export const maxDuration = 60;
+
 export default async function ConnectionPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ preview?: string }>;
+  searchParams: Promise<{ preview?: string; replay?: string }>;
 }) {
   const { id } = await params;
-  const { preview } = await searchParams;
+  const { preview, replay } = await searchParams;
   const { orgId, userId, auth } = await requireOrg();
 
   const conn = await getConnection(orgId, id);
@@ -37,6 +49,11 @@ export default async function ConnectionPage({
   const signingSecret = getSigningSecret(conn);
   const webhookUrl = webhookUrlFor(conn.id);
   const eventTime = readEventTime(conn.config);
+  // The DLQ door: the payloads that exhausted retries, visible where the
+  // ConnectionRow's "delivery status →" link has always promised they'd be.
+  // Best-effort read — a failed listing must not take down the page that
+  // hosts the fix.
+  const deadLetters = await unresolvedDeadLetters(getReadDb(), orgId, conn.id).catch(() => []);
 
   // "Preview latest records" — the connect-time trust builder.
   let previewRows: CanonicalEvent[] | null = null;
@@ -172,6 +189,79 @@ export default async function ConnectionPage({
               <p className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{previewError}</p>
             )}
             {previewRows && <PreviewTable rows={previewRows} />}
+          </section>
+        )}
+
+        {/* Delivery issues — the dead-letter queue's door. Rendered only when
+            rows exist: a healthy connection should not carry an empty "issues"
+            section implying trouble. */}
+        {(deadLetters.length > 0 || replay) && (
+          <section className="mt-10">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Delivery issues</h2>
+            {replay === "failed" && (
+              <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                That replay failed again — the row stays here, nothing was lost. The error below is updated.
+              </p>
+            )}
+            {replay === "ok" && (
+              <p className="mb-3 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                Replayed. The payload was reprocessed from its stored raw body.
+              </p>
+            )}
+            {deadLetters.length === 0 ? (
+              <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-500">
+                No unresolved delivery issues.
+              </p>
+            ) : (
+              <>
+                <p className="mb-2 text-sm text-neutral-500">
+                  These payloads were received and safely stored, but failed processing after every retry. Replaying
+                  reprocesses the stored payload — nothing is re-fetched from the provider.
+                </p>
+                <div className="overflow-x-auto rounded-md border border-neutral-200">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Received</th>
+                        <th className="px-3 py-2 font-medium">Error</th>
+                        <th className="px-3 py-2 font-medium">Attempts</th>
+                        <th className="px-3 py-2 font-medium" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {deadLetters.map((row) => (
+                        <tr key={row.id}>
+                          <td className="whitespace-nowrap px-3 py-2 text-neutral-500" title={new Date(row.createdAt).toLocaleString()}>
+                            {new Date(row.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="max-w-md px-3 py-2 text-red-700" title={row.error}>
+                            {row.error.length > 120 ? `${row.error.slice(0, 120)}…` : row.error}
+                          </td>
+                          <td className="px-3 py-2 text-neutral-500">{row.attempts}</td>
+                          <td className="px-3 py-2 text-right">
+                            {row.rawEventId ? (
+                              <form action={replayDeadLetterAction}>
+                                <input type="hidden" name="connectionId" value={conn.id} />
+                                <input type="hidden" name="rawEventId" value={row.rawEventId} />
+                                <button type="submit" className="text-sm font-medium text-blue-600 hover:underline">
+                                  Replay
+                                </button>
+                              </form>
+                            ) : (
+                              // A row with no stored raw body predates raw capture
+                              // for its path; there is nothing to reprocess from.
+                              <span className="text-xs text-neutral-400" title="No stored payload to reprocess">
+                                not replayable
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </section>
         )}
 

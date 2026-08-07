@@ -21,6 +21,13 @@ export type FlowResultRow = {
   outputNodeId: string;
   tile: unknown;
   status: string;
+  /**
+   * What broke, when status is "error" — materializeFlow stores the failing
+   * node's message on the row. A tile that shows a red pill and nothing else
+   * tells the customer their number is broken while withholding the one fact
+   * they could act on.
+   */
+  error: string | null;
   computedAt: Date | null;
   /**
    * Phase 8 — set when a stream this number was computed from is still reaching
@@ -51,7 +58,9 @@ export function FlowTile({ row }: { row: FlowResultRow }) {
   return (
     <div className="rounded-lg border border-neutral-200 p-5">
       <div className="flex items-start justify-between">
-        <h3 className="font-medium text-neutral-800">{t.name ?? "Metric"}</h3>
+        {/* A row whose tile jsonb is null has never computed successfully, so
+            there is no stored name — the output id is the only honest handle. */}
+        <h3 className="font-medium text-neutral-800">{t.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
         <div className="flex items-center gap-2">
           <Freshness status={row.status} />
           <form action={refreshFlowAction}>
@@ -79,6 +88,18 @@ export function FlowTile({ row }: { row: FlowResultRow }) {
           <p className="mt-2 text-4xl font-semibold">{fmt(t.value, t)}</p>
           {t.target != null && <TargetBar value={t.value ?? 0} target={t.target} tile={t} />}
         </>
+      )}
+
+      {/* The red pill alone says "broken" while withholding WHY. The stored
+          message names the failing node's error — truncated here, complete in
+          the title attribute (the same trick the timestamp below uses). */}
+      {row.status === "error" && row.error && (
+        <p className="mt-2 text-sm text-red-700" title={row.error}>
+          {row.error.length > 200 ? `${row.error.slice(0, 200)}…` : row.error}{" "}
+          <Link href={`/dashboard/flows/${row.flowId}`} className="underline">
+            Fix in the editor →
+          </Link>
+        </p>
       )}
 
       {/* Phase 8 — a number computed over an import that is still running is

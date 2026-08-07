@@ -73,7 +73,9 @@ major providers actually behave:
    NOTHING`, so at-least-once delivery collapses to exactly-once (`src/ingestion/pipeline.ts`)
 5. **Retries w/ exponential backoff** — Inngest, `retries: 5` (`src/inngest/functions/process-event.ts`)
 6. **Dead-letter queue** — exhausted events land in `dead_letter`, never dropped,
-   and are replayable (`/api/replay`)
+   and are replayable: each connection's page lists its unresolved rows with a
+   Replay button (`/connections/[id]`), and `/api/replay` is the same code
+   path for API callers
 7. **Reconciliation / backfill** — a 10-minute cron re-polls each connection and
    dedups, catching anything a webhook missed (`src/ingestion/reconcile.ts`)
 
@@ -140,7 +142,7 @@ Generate an encryption key: `openssl rand -base64 32`.
 
 ```bash
 pnpm typecheck   # tsc --noEmit
-pnpm test        # 27 tests against a real Postgres (PGlite) — proves dedup,
+pnpm test        # 1,000+ tests against a real Postgres (PGlite) — proves dedup,
                  # idempotency, DLQ + replay, reconciliation, signatures, crypto
 pnpm build       # production build
 ```

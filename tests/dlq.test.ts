@@ -3,6 +3,7 @@ import { eq, isNull } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { storeRawEvent } from "@/ingestion/raw-store";
 import { deadLetterRawEvent, replayRawEvent } from "@/ingestion/pipeline";
+import { unresolvedDeadLetters, unresolvedDeadLetterCountsByConnection } from "@/lib/dead-letter";
 import { deadLetter, deliveryLog, connections, events } from "@/db/schema";
 import type { DB } from "@/db/types";
 
@@ -125,5 +126,53 @@ describe("dead-letter queue + replay", () => {
     // A caller from a different org must not be able to replay this event.
     await expect(replayRawEvent(db, raw.id, "org_b")).rejects.toThrow(/forbidden/);
     expect(await db.select().from(events)).toHaveLength(0);
+  });
+});
+
+/**
+ * The DLQ's read surface — the door the red dashboard count never had. The
+ * replay behavior above is the mechanism; these pin that the LISTS the pages
+ * render are org-scoped, connection-scoped and unresolved-only, so the door
+ * can never show a neighbour's failures or a failure already fixed.
+ */
+describe("dead-letter read surface", () => {
+  it("lists only the caller's unresolved rows for the named connection", async () => {
+    const mine = await seedConnection(db, { orgId: "org_a", name: "Mine" });
+    const sibling = await seedConnection(db, { orgId: "org_a", name: "Sibling" });
+    const theirs = await seedConnection(db, { orgId: "org_b", name: "Theirs" });
+    await db.insert(deadLetter).values([
+      { orgId: "org_a", connectionId: mine, error: "mine-unresolved", attempts: 3 },
+      { orgId: "org_a", connectionId: mine, error: "mine-resolved", attempts: 3, resolvedAt: new Date() },
+      { orgId: "org_a", connectionId: sibling, error: "sibling-row", attempts: 1 },
+      { orgId: "org_b", connectionId: theirs, error: "foreign-row", attempts: 1 },
+    ]);
+
+    const rows = await unresolvedDeadLetters(db, "org_a", mine);
+
+    // Sabotage pins: drop the org predicate → foreign-row appears for a
+    // forged connection id; drop resolvedAt → the fixed row reappears; drop
+    // the connection predicate → the sibling's row leaks into this page.
+    expect(rows).toHaveLength(1);
+    expect(rows[0].error).toBe("mine-unresolved");
+  });
+
+  it("counts by connection with names, org-scoped, unresolved only", async () => {
+    const a = await seedConnection(db, { orgId: "org_a", name: "Webhook A" });
+    const b = await seedConnection(db, { orgId: "org_a", name: "Webhook B" });
+    const foreign = await seedConnection(db, { orgId: "org_b", name: "Foreign" });
+    await db.insert(deadLetter).values([
+      { orgId: "org_a", connectionId: a, error: "x", attempts: 1 },
+      { orgId: "org_a", connectionId: a, error: "y", attempts: 1 },
+      { orgId: "org_a", connectionId: b, error: "z", attempts: 1 },
+      { orgId: "org_a", connectionId: b, error: "fixed", attempts: 1, resolvedAt: new Date() },
+      { orgId: "org_b", connectionId: foreign, error: "not-yours", attempts: 1 },
+    ]);
+
+    const counts = await unresolvedDeadLetterCountsByConnection(db, "org_a");
+
+    expect(counts).toEqual([
+      { connectionId: a, name: "Webhook A", count: 2 },
+      { connectionId: b, name: "Webhook B", count: 1 },
+    ]);
   });
 });

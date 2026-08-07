@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { getOrgContext } from "@/lib/auth";
 import { exchangeGoogleCode } from "@/lib/google-oauth";
 import { createConnection } from "@/lib/connections";
+import { CapError } from "@/lib/limits";
 import { parseOAuthState, isValidOAuthState, OAUTH_STATE_COOKIE } from "@/lib/oauth-state";
 
 export const runtime = "nodejs";
@@ -49,7 +50,13 @@ export async function GET(req: Request) {
       config: {},
     });
     return clearStateCookie(NextResponse.redirect(new URL(`/connections/${conn.id}`, req.url)));
-  } catch {
-    return clearStateCookie(NextResponse.redirect(new URL("/integrations?error=oauth_exchange", req.url)));
+  } catch (err) {
+    // A cap hit is not an OAuth failure — mapping everything to
+    // oauth_exchange would tell a capped workspace that Google broke.
+    // Full literal URLs, not `error=${code}`: tests/integrations-errors.test.ts
+    // greps this source for `error=` codes to guarantee each has human copy,
+    // and a template variable would hide a code from that net.
+    const dest = err instanceof CapError ? "/integrations?error=connection_limit" : "/integrations?error=oauth_exchange";
+    return clearStateCookie(NextResponse.redirect(new URL(dest, req.url)));
   }
 }

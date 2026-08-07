@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import { safeEqual } from "@/lib/signatures";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -34,7 +35,26 @@ const REQUIRED = ["DATABASE_URL", "ENCRYPTION_KEY"] as const;
  */
 const REQUIRED_FOR_BACKGROUND = ["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY", "APP_BASE_URL"] as const;
 
-export async function GET() {
+/**
+ * The full `checks` object is for the OPERATOR, not the internet. This route
+ * sits outside the auth proxy on purpose (an uptime monitor has no session),
+ * and it used to hand every anonymous caller the list of configured env vars
+ * BY NAME plus the raw database error string — which can carry the Neon
+ * hostname. Status alone leaks nothing an attacker can use; the detail is
+ * gated behind a shared-secret header the monitor sends.
+ *
+ * Fail CLOSED: when HEALTH_CHECK_TOKEN is unset, nobody gets detail — a
+ * missing secret must degrade to less disclosure, never more. Compared with
+ * the same length-guarded timing-safe idiom every webhook signature uses.
+ */
+function authorizedForDetail(req: Request): boolean {
+  const token = process.env.HEALTH_CHECK_TOKEN;
+  if (!token) return false;
+  const presented = req.headers.get("x-health-token") ?? req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  return presented.length > 0 && safeEqual(presented, token);
+}
+
+export async function GET(req: Request) {
   const checks: Record<string, unknown> = {};
 
   let database: "ok" | "unreachable" = "unreachable";
@@ -59,13 +79,16 @@ export async function GET() {
   }
 
   const healthy = database === "ok" && missingRequired.length === 0;
+  const status = healthy ? (missingBackground.length > 0 ? "degraded" : "ok") : "unhealthy";
+  const httpStatus = healthy ? 200 : 503;
+  // The HTTP status and the status STRING are always derived from the full
+  // picture and always public — a monitor without the token still tells up
+  // from down. Only the WHY is gated.
+  if (!authorizedForDetail(req)) {
+    return NextResponse.json({ status }, { status: httpStatus });
+  }
   return NextResponse.json(
-    {
-      status: healthy ? (missingBackground.length > 0 ? "degraded" : "ok") : "unhealthy",
-      service: "namzilabs",
-      time: new Date().toISOString(),
-      checks,
-    },
-    { status: healthy ? 200 : 503 },
+    { status, service: "namzilabs", time: new Date().toISOString(), checks },
+    { status: httpStatus },
   );
 }

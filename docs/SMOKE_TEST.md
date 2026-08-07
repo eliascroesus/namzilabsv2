@@ -42,7 +42,7 @@ migrations applied by hand (`drizzle/HAND_APPLY.md` → Neon SQL Editor), WorkOS
 - [ ] The webhook event from step 2 shows a completed `process-inbound-event` run.
 - [ ] Trigger **Re-sync now** on a poll-capable connection → a `reconcile-one-connection` run completes.
 - [ ] Confirm the `reconcile-connections` cron is scheduled (every 10 min) and its last run succeeded.
-- [ ] Force a failure (e.g. temporarily bad connector config) → after retries it lands in the **dead-letter queue** on `/dashboard`; **Re-sync / replay** clears it.
+- [ ] Force a failure (e.g. temporarily bad connector config) → after retries the dashboard shows a red **dead-letter** link naming the connection; following it, the connection page's **Delivery issues** section lists the row and **Replay** clears it.
 
 ## 4. Google Sheets (OAuth + poll-primary)
 

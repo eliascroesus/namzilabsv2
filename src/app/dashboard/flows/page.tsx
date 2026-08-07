@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { getReadDb } from "@/db/client";
@@ -8,30 +9,37 @@ import { FlowRow } from "./FlowRow";
 export const dynamic = "force-dynamic";
 
 /**
- * Serverless duration budget.
- *
- * Vercel's default is 10s on Hobby and 15s on Pro. Neither is survivable for
- * this route: a sync issues a provider call (bounded at PROVIDER_CALL_BUDGET_MS
- * in src/lib/http-client.ts) plus ten or more Neon round trips, each of which is
- * its own HTTPS request on the http driver. Under the default the container is
- * killed mid-run — Inngest sees a failure, and the test_runs row is stranded at
- * `running` because it is stamped before the work starts.
- *
- * 60 is the Hobby ceiling and is valid on Pro too; raise to 300 on Pro if a
- * first sync ever needs it. Whatever this is, it MUST stay above the HTTP
- * budget in src/lib/http-client.ts — tests/http-client.test.ts pins that.
+ * Serverless duration budget. This segment governs ONLY the flows list and
+ * `createFlowAction` — a server action runs under the page the user is ON,
+ * so the canvas's Test path, option pickers and Publish are governed by
+ * `flows/[id]/page.tsx`'s declaration, not this one. (An earlier comment
+ * here claimed otherwise, and the timeout test pinned this file while the
+ * canvas ran on the platform default — the exact outage the pin exists to
+ * prevent.) Kept because it costs nothing and createFlowAction does DB work.
  */
 export const maxDuration = 60;
 
 
-export default async function FlowsPage() {
+type SP = Record<string, string | string[] | undefined>;
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
+
+export default async function FlowsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { orgId, userId, auth } = await requireOrg();
+  const sp = await searchParams;
   const flows = await listFlows(getReadDb(), orgId).catch(() => []);
 
   return (
     <>
       <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
       <main className="mx-auto max-w-4xl px-6 py-10">
+        {one(sp.error) === "flow_limit" && (
+          <div className="mb-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <p>This workspace has reached its flow limit, so nothing was created. Contact us and we&rsquo;ll raise it.</p>
+            <Link href="/dashboard/flows" aria-label="Dismiss" className="font-semibold text-red-400 hover:text-red-700">
+              ✕
+            </Link>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Metric flows</h1>

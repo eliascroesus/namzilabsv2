@@ -17,6 +17,8 @@ import { promoteToBaseCadence } from "@/lib/sync/cadence";
 import { activeStreams } from "@/lib/sync/streams";
 import { defaultTargetFloor, requestBackfill } from "@/lib/backfill/jobs";
 import { getDb } from "@/db/client";
+import { CapError } from "@/lib/limits";
+import { replayRawEvent } from "@/ingestion/pipeline";
 import { setEventTime, type EventTimeChoice } from "@/lib/webhooks/event-time";
 
 /**
@@ -37,14 +39,49 @@ export async function connectApiKeyAction(formData: FormData): Promise<void> {
   }
   const name = String(formData.get("name") ?? "").trim() || entry.name;
 
-  const conn = await createConnection({
-    orgId,
-    source,
-    name,
-    authType: source === "webhook" ? "secret" : "apiKey",
-    credentials,
-  });
+  let conn;
+  try {
+    conn = await createConnection({
+      orgId,
+      source,
+      name,
+      authType: source === "webhook" ? "secret" : "apiKey",
+      credentials,
+    });
+  } catch (e) {
+    // The cap is a friendly banner, not a stack trace — same surface as the
+    // OAuth error codes (integrations/error-messages.ts).
+    if (e instanceof CapError) redirect("/integrations?error=connection_limit");
+    throw e;
+  }
   redirect(`/connections/${conn.id}`);
+}
+
+/**
+ * Replay one dead-lettered payload from the connection page.
+ *
+ * THIN CALLER of the SAME implementation `/api/replay` uses: `replayRawEvent`
+ * owns the tenant wall (it verifies the raw event belongs to this org),
+ * reprocesses from the stored raw body (no provider call), resolves the DLQ
+ * row on success, and un-parks a connection an old bug left in `error`.
+ * Two doors, one code path — the API stays for the documented surface, this
+ * is the button the docs always claimed existed.
+ */
+export async function replayDeadLetterAction(formData: FormData): Promise<void> {
+  const { orgId } = await requireOrg();
+  const rawEventId = String(formData.get("rawEventId") ?? "");
+  const connectionId = String(formData.get("connectionId") ?? "");
+  if (!rawEventId || !connectionId) throw new Error("missing replay target");
+  let ok = true;
+  try {
+    await replayRawEvent(getDb(), rawEventId, orgId);
+  } catch {
+    // The failure detail is already recorded where it belongs: processing
+    // re-parks the row with the fresh error, which the page renders.
+    ok = false;
+  }
+  revalidatePath(`/connections/${connectionId}`);
+  redirect(`/connections/${connectionId}?replay=${ok ? "ok" : "failed"}`);
 }
 
 /** Rename a connection from the Integrations list (inline edit). */

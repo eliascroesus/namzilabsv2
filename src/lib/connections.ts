@@ -1,8 +1,9 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { connections, sourceStreams } from "@/db/schema";
+import { CapError, connectionCap } from "@/lib/limits";
 import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
 import { getConnector } from "@/connectors/registry";
 import { catalogEntry } from "@/connectors/catalog";
@@ -46,6 +47,16 @@ export type CreateConnectionInput = {
 export async function createConnection(input: CreateConnectionInput): Promise<Connection> {
   const db = getDb();
   const key = getEncryptionKey();
+  // The cap lives HERE, in the single writer, so every caller — the connect
+  // form, the Google OAuth callback, and whatever comes next — is covered
+  // without each having to remember. Disabled rows count on purpose: they
+  // keep their data and reconnect for free, so they still hold the quota.
+  const [{ c: existing }] = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(connections)
+    .where(eq(connections.orgId, input.orgId));
+  const cap = connectionCap();
+  if (Number(existing) >= cap) throw new CapError("connections", cap);
   const [created] = await db
     .insert(connections)
     .values({

@@ -9,6 +9,7 @@ import { requireOrg } from "@/lib/auth";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { dateColumnChoice, dateColumnNote, dateColumnSettings, setDateColumn, type DateColumnChoice } from "@/lib/sync/date-column";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow } from "@/lib/flow/store";
+import { CapError } from "@/lib/limits";
 import { sampleAppFields } from "@/lib/flow/engine";
 import { materializeFlow } from "@/lib/flow/materialize";
 import { parseGraph } from "@/lib/flow/types";
@@ -23,7 +24,14 @@ import { inngest } from "@/inngest/client";
 
 export async function createFlowAction(): Promise<void> {
   const { orgId } = await requireOrg();
-  const flow = await createFlow(getDb(), orgId, "Untitled flow");
+  let flow;
+  try {
+    flow = await createFlow(getDb(), orgId, "Untitled flow");
+  } catch (e) {
+    // The cap is a friendly banner on the list page, not a crashed action.
+    if (e instanceof CapError) redirect("/dashboard/flows?error=flow_limit");
+    throw e;
+  }
   redirect(`/dashboard/flows/${flow.id}`);
 }
 
@@ -68,8 +76,10 @@ export type { NodeTestDTO } from "@/lib/flow/test-run";
 
 /**
  * How long a Test may run in-request before it is handed to the lane. Sits
- * comfortably inside the page segment's `maxDuration` (60s) with room for the
- * handoff itself — the point is to return fast, not to use the whole budget.
+ * comfortably inside the CANVAS segment's `maxDuration` (60s, declared in
+ * src/app/dashboard/flows/[id]/page.tsx — the page these actions actually
+ * POST to) with room for the handoff itself — the point is to return fast,
+ * not to use the whole budget.
  */
 const INLINE_TEST_BUDGET_MS = 8_000;
 

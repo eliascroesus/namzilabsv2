@@ -11,6 +11,18 @@ import { Sidebar } from "@/components/sidebar";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Serverless duration budget — THIS is the segment that governs the canvas's
+ * server actions. A server action invoked from a client component POSTs to
+ * the page the user is ON, so the inline Test path, the provider-hitting
+ * option pickers and Publish (inline materialize) all run under THIS page's
+ * config — not flows/page.tsx's, which the timeout test used to pin by
+ * mistake while this file ran on the platform default (10s Hobby): exactly
+ * the mid-call kill the budget exists to prevent. 60 is the Hobby ceiling;
+ * must stay above PROVIDER_CALL_BUDGET_MS (tests/timeout-budgets.test.ts).
+ */
+export const maxDuration = 60;
+
 export default async function FlowEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { orgId } = await requireOrg();

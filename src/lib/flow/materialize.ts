@@ -147,6 +147,38 @@ export async function markStaleForSource(
 }
 
 /**
+ * The dashboard's tile read: every materialized result whose flow is still
+ * published (the join guards orphans), WITH the stored error so a broken tile
+ * can say why.
+ *
+ * THROWS TO THE CALLER, deliberately — this used to live inline on the
+ * dashboard page behind a bare `catch {}` whose rationale ("flow_results may
+ * not exist before migration 0002") died years of migrations ago. What that
+ * catch actually did in production was render "No metrics yet." over a
+ * customer's real published tiles whenever this one query hit a transient
+ * failure — the empty state as a lie. The page turns a rejection into its
+ * load-error banner; nothing below the page gets to decide that silence is
+ * acceptable.
+ */
+export async function publishedFlowTiles(db: DB, orgId: string) {
+  return db
+    .select({
+      flowId: flowResults.flowId,
+      outputNodeId: flowResults.outputNodeId,
+      tile: flowResults.tile,
+      status: flowResults.status,
+      error: flowResults.error,
+      computedAt: flowResults.computedAt,
+      // Which streams this number was computed from, recorded at materialize
+      // time. Needed to answer "is any of it still importing".
+      provenance: flowResults.provenance,
+    })
+    .from(flowResults)
+    .innerJoin(flows, eq(flows.id, flowResults.flowId))
+    .where(and(eq(flowResults.orgId, orgId), eq(flows.status, "published")));
+}
+
+/**
  * G.4 — the cheap freshness beacon the dashboard polls. One aggregate over the
  * org's flow_results (a handful of rows): any recompute, staleness flip, tile
  * add/remove or error changes the string. Clients poll this (visibility-gated,

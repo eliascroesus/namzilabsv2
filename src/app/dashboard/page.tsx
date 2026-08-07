@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
-import { connections, deadLetter, events, flowResults, flows } from "@/db/schema";
+import { connections, events, flows } from "@/db/schema";
+import { unresolvedDeadLetterCountsByConnection } from "@/lib/dead-letter";
 import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
+import { publishedFlowTiles } from "@/lib/flow/materialize";
 import { listMetrics, type Metric } from "@/lib/metrics/store";
 import { parseDefinition } from "@/lib/metrics/types";
 import {
@@ -21,6 +24,15 @@ import { resolveRange, RANGE_OPTIONS } from "@/lib/metrics/range";
 import type { ImportCoverage } from "@/connectors/types";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Serverless duration budget: the tile "Refresh" button's server action runs
+ * `materializeFlow` INLINE under this segment's config — a full flow compute
+ * over up to APP_LOAD_CEILING rows — and the platform default (10s Hobby)
+ * kills it mid-write. 60 is the Hobby ceiling; pinned by
+ * tests/timeout-budgets.test.ts.
+ */
+export const maxDuration = 60;
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
@@ -60,27 +72,32 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   let metrics: Metric[] = [];
   let sources: string[] = [];
   let recentEvents: (typeof events.$inferSelect)[] = [];
-  let dlqCount = 0;
+  let dlqByConnection: Array<{ connectionId: string; name: string; count: number }> = [];
   let connCount = 0;
+  let flowCount = 0;
   let loadError: string | null = null;
 
   try {
-    [metrics, sources, recentEvents, dlqCount, connCount] = await Promise.all([
+    [metrics, sources, recentEvents, dlqByConnection, connCount, flowCount] = await Promise.all([
       listMetrics(orgId),
       distinctSources(db, orgId),
       // Live rows only (query convention: every events read filters deleted_at,
       // src/db/schema.ts). receivedAt ordering is intentional for an activity
       // feed; the top-6 sort over one org's live rows is bounded and cheap.
       db.select().from(events).where(and(eq(events.orgId, orgId), isNull(events.deletedAt))).orderBy(desc(events.receivedAt)).limit(6),
-      db
-        .select({ c: sql<number>`count(*)::int` })
-        .from(deadLetter)
-        .where(and(eq(deadLetter.orgId, orgId), isNull(deadLetter.resolvedAt)))
-        .then((r) => Number(r[0]?.c ?? 0)),
+      // Per-connection, not a scalar: the red number links to the page with
+      // the Replay button instead of being a dead end.
+      unresolvedDeadLetterCountsByConnection(db, orgId),
       db
         .select({ c: sql<number>`count(*)::int` })
         .from(connections)
         .where(eq(connections.orgId, orgId))
+        .then((r) => Number(r[0]?.c ?? 0)),
+      // Drives the onboarding checklist's "build your first flow" checkmark.
+      db
+        .select({ c: sql<number>`count(*)::int` })
+        .from(flows)
+        .where(eq(flows.orgId, orgId))
         .then((r) => Number(r[0]?.c ?? 0)),
     ]);
   } catch (err) {
@@ -104,21 +121,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // Published-flow tiles come from stored (materialized) results — no live recompute.
   let flowTiles: FlowResultRow[] = [];
   try {
-    const rows = await db
-      .select({
-        flowId: flowResults.flowId,
-        outputNodeId: flowResults.outputNodeId,
-        tile: flowResults.tile,
-        status: flowResults.status,
-        computedAt: flowResults.computedAt,
-        // Which streams this number was computed from, recorded at materialize
-        // time. Needed to answer "is any of it still importing".
-        provenance: flowResults.provenance,
-      })
-      .from(flowResults)
-      // Only render results for flows that are still published (guards orphans).
-      .innerJoin(flows, eq(flows.id, flowResults.flowId))
-      .where(and(eq(flowResults.orgId, orgId), eq(flows.status, "published")));
+    const rows = await publishedFlowTiles(db, orgId);
 
     /**
      * Phase 8 — import state is joined HERE, at read time, and deliberately not
@@ -153,8 +156,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     } catch {
       // No badge rather than no dashboard.
     }
-  } catch {
-    // flow_results may not exist before migration 0002 is applied; ignore.
+  } catch (err) {
+    // A failed tile read is a LOAD ERROR, never an empty state. The bare
+    // catch that used to live here ("flow_results may not exist before
+    // migration 0002") outlived its rationale by nineteen migrations and
+    // spent that time converting transient DB failures into "No metrics
+    // yet." over a customer's real published tiles. `??=` keeps the first
+    // failure's message when the earlier Promise.all already set one.
+    loadError ??= err instanceof Error ? err.message : String(err);
   }
   const hasTiles = tiles.length > 0 || flowTiles.length > 0;
 
@@ -211,34 +220,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
         {loadError && (
           <div className="mt-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
-            Database not reachable ({loadError}). Set <code>DATABASE_URL</code> to view live data.
+            Some dashboard data could not be loaded ({loadError}). Refresh to retry — your data is intact.
           </div>
         )}
 
-        {/* Metric tiles: materialized flow outputs + legacy metrics */}
-        {!hasTiles ? (
-          <div className="mt-8 rounded-lg border border-dashed border-neutral-300 p-10 text-center">
-            <p className="text-neutral-600">No metrics yet.</p>
-            <p className="mt-1 text-sm text-neutral-500">
-              {connCount === 0 ? (
-                <>
-                  First,{" "}
-                  <Link href="/integrations" className="text-blue-600 hover:underline">
-                    connect an integration
-                  </Link>
-                  . Then build your first metric.
-                </>
-              ) : (
-                <>
-                  Build your first metric visually, e.g. &ldquo;Booked leads this week&rdquo;.{" "}
-                  <Link href="/dashboard/flows" className="text-blue-600 hover:underline">
-                    New flow
-                  </Link>
-                </>
-              )}
-            </p>
-          </div>
-        ) : (
+        {/* Metric tiles: materialized flow outputs + legacy metrics. The
+            checklist renders only when the empty state is REAL — behind a
+            load error the honest message is the banner above, never a
+            "get started" card implying the workspace is empty. */}
+        {!hasTiles && !loadError ? (
+          <OnboardingChecklist hasConnection={connCount > 0} hasFlow={flowCount > 0} hasPublished={flowTiles.length > 0} />
+        ) : !hasTiles ? null : (
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {flowTiles.map((row) => (
               <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} />
@@ -255,7 +247,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Recent activity</h2>
             <span className="text-xs text-neutral-500">
               {connCount} connection{connCount === 1 ? "" : "s"} ·{" "}
-              {dlqCount > 0 ? <span className="text-red-600">{dlqCount} in dead-letter</span> : "no failures"}
+              {dlqByConnection.length > 0 ? (
+                // Each count links to the connection page that hosts the
+                // Replay button — a red number with no door was the old shape.
+                dlqByConnection.map((d, i) => (
+                  <span key={d.connectionId}>
+                    {i > 0 && ", "}
+                    <Link href={`/connections/${d.connectionId}`} className="text-red-600 hover:underline">
+                      {d.count} in dead-letter on {d.name} →
+                    </Link>
+                  </span>
+                ))
+              ) : (
+                "no failures"
+              )}
             </span>
           </div>
           {recentEvents.length === 0 ? (

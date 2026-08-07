@@ -23,14 +23,28 @@ import { fetchJson, PROVIDER_CALL_BUDGET_MS } from "@/lib/http-client";
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
-/** Routes that can do real work and therefore must declare a duration. */
+/** Routes that can do real work and therefore must declare a duration.
+ *
+ * PAGE segments are here because a server action invoked from a client
+ * component POSTs to the page the user is ON — so the segment that must
+ * declare the budget is the one hosting the interaction, not the one whose
+ * actions file exports the function. This list once pinned flows/page.tsx
+ * for the Test path while the canvas (flows/[id]) ran on the platform
+ * default: the test passed while the outage class it guards was live. */
 const WORK_ROUTES = [
   "src/app/api/inngest/route.ts",
   "src/app/api/webhooks/[connectionId]/route.ts",
   "src/app/api/replay/route.ts",
-  // Server actions inherit their page segment's duration; this one governs the
-  // inline Test path and the provider-hitting option pickers.
+  // The flows LIST: createFlowAction only.
   "src/app/dashboard/flows/page.tsx",
+  // The CANVAS: inline Test, provider-hitting option pickers, Publish.
+  "src/app/dashboard/flows/[id]/page.tsx",
+  // Tile Refresh runs materializeFlow inline under this segment.
+  "src/app/dashboard/page.tsx",
+  // ?preview=1 makes a real provider call during render; sync controls too.
+  "src/app/connections/[id]/page.tsx",
+  // connectApiKeyAction registers the provider webhook inline.
+  "src/app/integrations/page.tsx",
 ];
 
 function declaredMaxDuration(path: string): number | null {
