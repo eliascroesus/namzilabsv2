@@ -168,6 +168,16 @@ Three things to know before it moves:
   Also needs domain verification in Google Cloud, which is a human step.
 - **The compiled query engine flag.** Checklist item 8 describes it; no flag
   exists in the code yet.
+- **Client-side error tracking (Sentry et al.) — deferred, on purpose.** At
+  invite-only scale the real failure classes are covered without it: Vercel
+  function logs (server/route errors), Inngest run history (background
+  failures), the DLQ page (payload failures, now visible with a Replay
+  button), and the nightly invariant scan (silent ABSENCE of work — the class
+  Sentry never sees), which now emails its findings (src/lib/alerts.ts).
+  Sentry's unique value is client-side JS capture and cross-request tracing,
+  against a real config + bundle cost. Revisit triggers, either one: (a) a
+  customer reports a client-side bug Vercel logs cannot reconstruct, or (b)
+  tenant count makes log-reading reactive instead of proactive.
 
 ---
 

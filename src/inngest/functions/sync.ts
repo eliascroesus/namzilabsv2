@@ -3,6 +3,7 @@ import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { runSync, reprocessConnection, syncChanged } from "@/lib/sync/resync";
 import { markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
+import { sendOpsAlert } from "@/lib/alerts";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
 import { getJob, runnableJobsByProvider } from "@/lib/backfill/jobs";
 import { scanInvariants } from "@/lib/health/invariants";
@@ -159,6 +160,13 @@ export const pruneStorage = inngest.createFunction(
       // A ceiling stopped the sweep with rows still past retention. Harmless
       // once; night after night it means ingest has outpaced the sweep.
       console.warn(`[storage-prune-truncated] ${JSON.stringify(retained)}`);
+      // Its own step, so a retry of a LATER step cannot re-send the email.
+      await step.run("alert-prune-truncated", () =>
+        sendOpsAlert(
+          "[namzilabs] storage prune truncated — retention not keeping up",
+          JSON.stringify(retained, null, 2),
+        ),
+      );
     }
     // H.6 capacity signal: what is STILL past retention after this run. A
     // non-zero backlog that persists night after night means pruning is not
@@ -201,6 +209,14 @@ export const pruneStorage = inngest.createFunction(
       // log search finds. Same shape as `[instantly-probe]` and
       // `[mirror-drift]`, so one grep covers every "look at this" signal.
       console.warn(`[invariant-scan] ${JSON.stringify(invariants)}`);
+      // THE ALERT the scan was built for: `anyFindings` exists so "a caller
+      // can alert without re-deriving it" (invariants.ts) — and for its whole
+      // life the caller only logged. Its own step: memoized on retry, so the
+      // email cannot be re-sent by a later step failing. Fail-soft inside, so
+      // a mail hiccup cannot fail the scan.
+      await step.run("alert-invariant-findings", () =>
+        sendOpsAlert("[namzilabs] nightly invariant scan: findings", JSON.stringify(invariants, null, 2)),
+      );
     }
     return { settledTestRuns: settled, ...retained, backlog, invariants, webhookEventTime: eventTime };
   },

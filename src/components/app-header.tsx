@@ -68,6 +68,9 @@ export async function AppHeader({
             <Link href="/integrations" className="hover:text-neutral-900">
               Integrations
             </Link>
+            <Link href="/dashboard/settings" className="hover:text-neutral-900">
+              Settings
+            </Link>
           </nav>
         </div>
         <div className="flex items-center gap-4">
