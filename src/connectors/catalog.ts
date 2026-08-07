@@ -121,6 +121,15 @@ export type ConnectorCatalogEntry = {
   fleetLimits?: Record<string, { requestsPerMinute: number }>;
   /** Whether we auto-create the provider webhook subscription on connect. */
   autoWebhook: boolean;
+  /**
+   * The webhook is an ENHANCEMENT the provider may refuse (plan gating —
+   * Calendly limits subscriptions to Standard+), and refusing it must not
+   * break the connection: `createConnection` logs and continues instead of
+   * marking status "error", and the sweep's health check maps the provider's
+   * plan refusal to "no signal" rather than "failed". Polling is primary
+   * either way.
+   */
+  webhookOptional?: boolean;
   credentialFields: CredentialField[];
   /**
    * Flow-level resource settings (the Get data step's Configure section) — the ONLY
@@ -158,12 +167,17 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     name: "Calendly",
     description: "Booked and canceled meetings, no-shows and routing forms.",
     connect: "apiKey",
-    // Poll-based (reliable reconciliation). The scope below makes it stream-scoped, so
-    // each flow pulls exactly the meetings it wants; instant per-stream webhooks are a
-    // later enhancement.
-    instant: false,
+    // HYBRID: the poll stays primary (reliable reconciliation, per-stream
+    // attribution), and the webhook is the instant DOORBELL — a signed
+    // delivery proves something changed and triggers an immediate
+    // incremental sync through the queue that always runs. Registration is
+    // org-scoped (one subscription covers every stream) and PLAN-GATED
+    // (Standard+), hence webhookOptional: a free-plan connect degrades to
+    // poll-only with no error and no red strip.
+    instant: true,
     poll: true,
-    autoWebhook: false,
+    autoWebhook: true,
+    webhookOptional: true,
     credentialFields: [{ key: "accessToken", label: "Personal Access Token", placeholder: "eyJ..." }],
     // Calendly publishes 60 requests/minute (120 on Enterprise). One account-wide
     // bucket in practice, declared per endpoint so any one can be raised alone.

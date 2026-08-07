@@ -444,8 +444,12 @@ describe("Calendly is stream-scoped (scope config lives on the flow node)", () =
     // event_type parameter) and is labelled storage-only in its hint.
     expect(entry.flowFields?.map((f) => f.key)).toEqual(["scope", "groupUri", "status", "meetingType"]);
     expect((entry as { configFields?: unknown }).configFields).toBeUndefined();
-    // Poll-based reconciliation, no connect-time webhook.
-    expect(entry.autoWebhook).toBe(false);
+    // HYBRID since O7: the poll stays primary (this whole suite is about it),
+    // and the org-scoped webhook is an OPTIONAL doorbell — plan-gated, so a
+    // registration refusal degrades to poll-only instead of erroring.
+    expect(entry.poll).toBe(true);
+    expect(entry.autoWebhook).toBe(true);
+    expect(entry.webhookOptional).toBe(true);
   });
 
   it("tags event ids with the stream hash so overlapping scopes stay distinct", async () => {

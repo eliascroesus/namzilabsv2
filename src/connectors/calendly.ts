@@ -7,9 +7,13 @@ import type {
   PollResult,
   ListOptionsArgs,
   SourceOption,
+  RegisterWebhookArgs,
+  RegisterWebhookResult,
+  VerifyWebhookArgs,
+  VerifyWebhookResult,
 } from "./types";
 import { hmacSha256Hex, safeEqual, timestampFreshness } from "@/lib/signatures";
-import { fetchJson } from "@/lib/http-client";
+import { fetchJson, HttpError } from "@/lib/http-client";
 import { asObject, parseDate, str } from "./field-utils";
 
 const API = "https://api.calendly.com";
@@ -133,6 +137,80 @@ export const calendlyConnector: Connector = {
 
   async poll(args: PollArgs): Promise<PollResult> {
     return pollScheduledEvents(args, args.cursor);
+  },
+
+  /**
+   * One ORG-scoped subscription covering every event type we map — org scope
+   * so one registration serves all of a connection's streams, whatever their
+   * per-flow scope. Calendly returns `signing_key` exactly once, at creation
+   * (Close's shape); `createConnection` stores it encrypted and the webhook
+   * route verifies every delivery against it.
+   *
+   * Webhooks are plan-gated (Standard+). A 4xx here is NOT a broken
+   * connection — polling is the primary path and unaffected — which is why
+   * the catalog marks Calendly `webhookOptional` and `createConnection`
+   * degrades instead of erroring.
+   */
+  async registerWebhook(args: RegisterWebhookArgs): Promise<RegisterWebhookResult> {
+    const token = token_(args.credentials);
+    const me = await identity(token, args.connectionId);
+    const res = await fetchJson<{ resource: { uri: string; signing_key?: string } }>(`${API}/webhook_subscriptions`, {
+      method: "POST",
+      headers: { ...authHeader(token), "content-type": "application/json" },
+      body: JSON.stringify({
+        url: args.webhookUrl,
+        organization: me.organization,
+        scope: "organization",
+        events: Object.keys(EVENT_TYPE_MAP),
+      }),
+    });
+    return { signingSecret: res.resource.signing_key, externalId: res.resource.uri };
+  },
+
+  /**
+   * D.6 for Calendly. Active subscription at our URL → healthy. Missing and
+   * the endpoint is not refusing deliveries → RE-CREATE and hand the new
+   * signing key back for the caller to persist (`VerifyWebhookResult`
+   * gained the field for exactly this: Calendly has no re-activate verb, so
+   * re-creation is the only self-heal, and a re-created subscription's key
+   * is new). Missing while deliveries were recently rejected → report only,
+   * same guard as Close: re-subscribing an endpoint that is refusing
+   * deliveries manufactures more refusals. Plan-gated 4xx → `unsupported`,
+   * which the caller treats as "no health signal", never as failure.
+   */
+  async verifyWebhookSubscription(args: VerifyWebhookArgs): Promise<VerifyWebhookResult> {
+    const token = token_(args.credentials);
+    try {
+      const me = await identity(token, args.connectionId);
+      const params = new URLSearchParams({ organization: me.organization, scope: "organization", count: "100" });
+      const list = await fetchJson<{ collection: Array<{ uri: string; callback_url: string; state: string }> }>(
+        `${API}/webhook_subscriptions?${params.toString()}`,
+        { headers: authHeader(token) },
+      );
+      const mine = list.collection.find((s) => s.callback_url === args.webhookUrl);
+      if (mine && mine.state === "active") return { healthy: true, reregistered: false };
+
+      if (args.recentlyRejecting) {
+        return {
+          healthy: false,
+          reregistered: false,
+          detail: "Calendly subscription missing, and recent deliveries were refused — fix the endpoint before re-subscribing.",
+        };
+      }
+      const created = await this.registerWebhook!({
+        connectionId: args.connectionId,
+        webhookUrl: args.webhookUrl,
+        credentials: args.credentials ?? {},
+      });
+      return { healthy: true, reregistered: true, signingSecret: created.signingSecret, externalId: created.externalId };
+    } catch (e) {
+      // Plan gating surfaces as 4xx on the subscriptions endpoints. Not a
+      // failure: the poll path is primary and untouched.
+      if (e instanceof HttpError && (e.status === 401 || e.status === 402 || e.status === 403)) {
+        return { healthy: false, reregistered: false, unsupported: true, detail: "Calendly webhooks need a Standard+ plan; polling continues." };
+      }
+      return { healthy: false, reregistered: false, detail: e instanceof Error ? e.message : String(e) };
+    }
   },
 
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {

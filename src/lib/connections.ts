@@ -88,10 +88,20 @@ export async function createConnection(input: CreateConnectionInput): Promise<Co
       signingSecret = res.signingSecret;
       externalId = res.externalId;
     } catch (err) {
-      await db
-        .update(connections)
-        .set({ status: "error", lastError: `webhook registration failed: ${msg(err)}`, updatedAt: new Date() })
-        .where(eq(connections.id, created.id));
+      if (entry.webhookOptional) {
+        // Plan-gated enhancement (Calendly: Standard+ only). A refusal must
+        // not break the connection — the poll path is primary and untouched.
+        // No minted-secret fallback either: a secret WE invent can never
+        // verify the provider's HMAC, so with none stored the webhook route
+        // correctly 401s the deliveries that will never come. The sweep's
+        // health check re-attempts registration when the plan allows it.
+        console.warn(`[connect] optional webhook registration failed for ${created.id}: ${msg(err)}`);
+      } else {
+        await db
+          .update(connections)
+          .set({ status: "error", lastError: `webhook registration failed: ${msg(err)}`, updatedAt: new Date() })
+          .where(eq(connections.id, created.id));
+      }
     }
   } else if (entry?.instant) {
     signingSecret = randomSecret();
