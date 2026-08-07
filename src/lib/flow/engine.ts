@@ -715,36 +715,56 @@ function datasetExec(nodeType: string, nodeId: string, records: FlowRecord[], re
   // Ordering the dataset differently is not an option: `execApp` relies on
   // newest-first so dedupe keeps the most recent copy. So only the SAMPLE is
   // re-ordered — most recent first, then whatever is coming up soonest.
-  const preview = previewOrder(stamped);
+  const preview = topPreview(stamped, 3);
   return {
     status: "ok",
     nodeType,
     shape: { kind: "dataset", records: stamped },
     recordsIn,
     recordsOut: count,
-    sample: preview.slice(0, 3),
+    sample: preview,
     outputSchema: inferSchema(stamped),
   };
 }
 
 /**
- * Records ordered the way a human reads "latest": what just happened, newest
- * first — and only then what is coming up, soonest first.
+ * The top-k records ordered the way a human reads "latest": what just
+ * happened, newest first — and only then what is coming up, soonest first.
+ * (A plain newest-first order puts the furthest-future record at the top,
+ * which is the least recognisable row a preview could show.)
  *
- * A plain newest-first sort puts the furthest-future record at the top, which is
- * the least recognisable row a preview could show. Copies the array; the dataset
- * keeps its own order, which `execApp` depends on for dedupe.
+ * A SELECTION, not a sort — this used to copy and fully sort the dataset
+ * (O(n log n) over up to APP_LOAD_CEILING records, per dataset node) to
+ * display THREE rows. One scan keeping the best k is behavior-identical
+ * under one condition the loop below preserves deliberately: an incumbent is
+ * displaced only on STRICT improvement, so ties keep the earliest-
+ * encountered record — the same answer V8's stable sort gave, where ties
+ * resolved to input order (the SQL's `occurred_at DESC, id DESC` at the app
+ * node, the upstream order elsewhere). A `>=`-style displacement would
+ * silently reverse tie order; the seeded equivalence test pins this.
  */
-function previewOrder(records: FlowRecord[], now = Date.now()): FlowRecord[] {
+function topPreview(records: FlowRecord[], k: number, now = Date.now()): FlowRecord[] {
   const at = (r: FlowRecord) => Date.parse(r.occurredAt) || 0;
-  return [...records].sort((a, b) => {
+  const cmp = (a: FlowRecord, b: FlowRecord): number => {
     const ta = at(a);
     const tb = at(b);
     const aFuture = ta > now;
     const bFuture = tb > now;
     if (aFuture !== bFuture) return aFuture ? 1 : -1; // already happened wins
     return aFuture ? ta - tb : tb - ta; // upcoming: soonest first; past: newest first
-  });
+  };
+  const top: FlowRecord[] = [];
+  for (const r of records) {
+    // Find the insertion point among at most k incumbents: strictly better
+    // than the one it displaces, never equal.
+    let i = top.length;
+    while (i > 0 && cmp(r, top[i - 1]) < 0) i--;
+    if (i < k) {
+      top.splice(i, 0, r);
+      if (top.length > k) top.pop();
+    }
+  }
+  return top;
 }
 
 /** Exported for the E.2 parity suite: the JS side is the ORACLE the

@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { connections, testRuns } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { runFlow, type NodeExec } from "./engine";
+import { compileEnabled } from "./compile/flags";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
@@ -190,7 +191,10 @@ export async function executeNodeTest(db: DB, orgId: string, graph: unknown, nod
     if (missing) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: missing };
     const primed = await primeStreamsForTest(db, orgId, g, nodeId);
     if (primed.error) return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: primed.error };
-    const res = await runFlow({ db, orgId }, g, { untilNodeId: nodeId });
+    // E.4: the Test surface is the pushdown's soak seam (compile/flags.ts) —
+    // a human is watching, nothing persists, and the JS engine re-applies
+    // every folded rule anyway.
+    const res = await runFlow({ db, orgId, compile: compileEnabled("test") }, g, { untilNodeId: nodeId });
     const inNodeId = g.edges.find((e) => e.target === nodeId)?.source;
     const inExec = inNodeId ? res.nodes.get(inNodeId) : undefined;
     const inputSample = inExec && inExec.status === "ok" ? inExec.sample : [];

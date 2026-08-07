@@ -239,6 +239,35 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
     }
   });
 
+  /**
+   * TIE SEMANTICS pin for the preview's top-k selection. The old full sort
+   * was V8-stable, so equal occurred_at resolved to input order — the SQL's
+   * `occurred_at DESC, id DESC` at the app node. The selection scan must
+   * displace an incumbent only on STRICT improvement to give the identical
+   * answer; a `>=`-style displacement would silently reverse tie order.
+   */
+  it("preview ties keep dataset order (strict-improvement selection ≡ stable sort)", async () => {
+    // Three rows sharing one instant, one newer row. Dataset order is
+    // occurred_at DESC, id DESC; the tied trio's relative order in the sample
+    // must match the dataset's, whatever it is.
+    await ev({ eventType: "booked", subject: "tie-1", daysAgo: 2 });
+    await ev({ eventType: "booked", subject: "tie-2", daysAgo: 2 });
+    await ev({ eventType: "booked", subject: "tie-3", daysAgo: 2 });
+    await ev({ eventType: "booked", subject: "newest", daysAgo: 1 });
+
+    const res = await runFlow(
+      { db, orgId: ORG },
+      G([N("a", "app", { connectionId: CONN }), N("agg", "aggregate", { aggregation: "count" }), N("o", "output", {})], [E("a", "agg"), E("agg", "o")]),
+    );
+    const app = res.nodes.get("a")!;
+    if (app.status !== "ok" || app.shape.kind !== "dataset") throw new Error("app step failed");
+
+    const datasetTies = app.shape.records.filter((r) => r.subject?.startsWith("tie-")).map((r) => r.subject);
+    expect(app.sample[0].subject).toBe("newest");
+    // The two tied rows that made the top-3 appear in DATASET order.
+    expect(app.sample.slice(1).map((r) => r.subject)).toEqual(datasetTies.slice(0, 2));
+  });
+
   it("sampleAppFields lists a step's real data fields from its synced events", async () => {
     await ev({ eventType: "row_added", subject: "a@b.com", properties: { Email: "a@b.com", Plan: "pro" } });
     await ev({ eventType: "row_added", subject: "c@d.com", properties: { Email: "c@d.com", Plan: "free" } });

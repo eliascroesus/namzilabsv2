@@ -3,6 +3,7 @@ import { backfillJobs, connections, flowResults, flows, flowVersions } from "@/d
 import type { DB } from "@/db/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import { runFlow, buildTile, type CompileProvenance } from "./engine";
+import { compileEnabled } from "./compile/flags";
 import { getPublishedVersion } from "./store";
 import { parseGraph, type TileSpec } from "./types";
 import { streamRefsOfGraph } from "@/lib/sync/streams";
@@ -22,7 +23,11 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
     // number, stored with the number itself.
     const provenance: CompileProvenance[] = [];
     const asOf = new Date();
-    const { nodes, outputs } = await runFlow({ db, orgId, provenance }, graph);
+    // E.4: compile is env-gated (default off) — see compile/flags.ts. This is
+    // the call site that made `EngineCtx.compile` reachable in production at
+    // all; before it, the parity-proven pushdown had exactly zero callers and
+    // the provenance label `engine: "compiled"` below was dead code.
+    const { nodes, outputs } = await runFlow({ db, orgId, provenance, compile: compileEnabled("materialize") }, graph);
 
     // Tiles come from Output nodes (legacy flows) and/or endpoint metrics chosen at
     // Review & publish (new flows) — one tile per enabled metric.

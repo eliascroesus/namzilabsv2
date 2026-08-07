@@ -244,27 +244,60 @@ export function normalizeDateValue(value: unknown, fieldName = ""): string | nul
 
 const MAX_DEPTH = 4;
 
+/**
+ * COPY-ON-WRITE, and that is a memory decision, not a style one. This walk
+ * runs on the engine's read path over every loaded row (records.ts) — up to
+ * APP_LOAD_CEILING of them per node — and it used to allocate a fresh object
+ * tree for every row even when every value passed through untouched, which
+ * is the overwhelmingly common case: writer-written rows were normalized at
+ * ingest, so re-normalizing them changes nothing. Returning the INPUT
+ * IDENTITY when no child was rewritten deletes one full copy of `properties`
+ * per row on that path. Sharing is safe: the flow engine has zero mutation
+ * sites over records (verified — the only property writes anywhere are
+ * datasetExec's stamps, which spread `properties` into a new object first),
+ * and the normalization OUTPUTS are byte-identical either way, which is what
+ * the parity suite pins.
+ */
 function walkValue(v: unknown, key: string, depth: number): unknown {
   if (typeof v === "string" || typeof v === "number") return normalizeDateValue(v, key) ?? v;
   if (v == null || depth >= MAX_DEPTH) return v;
-  if (Array.isArray(v)) return v.map((x) => walkValue(x, key, depth + 1));
+  if (Array.isArray(v)) {
+    let out: unknown[] | null = null;
+    for (let i = 0; i < v.length; i++) {
+      const next = walkValue(v[i], key, depth + 1);
+      if (next !== v[i] && out === null) out = v.slice(0, i);
+      if (out !== null) out.push(next);
+    }
+    return out ?? v;
+  }
   if (typeof v === "object") return walkObject(v as Record<string, unknown>, depth + 1);
   return v;
 }
 
 function walkObject(obj: Record<string, unknown>, depth: number): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
+  let out: Record<string, unknown> | null = null;
   for (const [k, v] of Object.entries(obj)) {
     // "__"-prefixed keys are internal engine stamps (per-step counts) — never touched.
-    out[k] = k.startsWith("__") ? v : walkValue(v, k, depth);
+    const next = k.startsWith("__") ? v : walkValue(v, k, depth);
+    if (next !== v && out === null) {
+      // First rewrite: materialize the copy, replaying the untouched prefix.
+      out = {};
+      for (const [pk, pv] of Object.entries(obj)) {
+        if (pk === k) break;
+        out[pk] = pv;
+      }
+    }
+    if (out !== null) out[k] = next;
   }
-  return out;
+  return out ?? obj;
 }
 
 /**
- * Return a copy of an event's `properties` with every confidently-detected date
- * value rewritten to its canonical form (nested objects/arrays included, to a
- * sane depth). Idempotent; everything else passes through byte-identical.
+ * An event's `properties` with every confidently-detected date value
+ * rewritten to its canonical form (nested objects/arrays included, to a sane
+ * depth). Idempotent; everything else passes through byte-identical — and
+ * when NOTHING needed rewriting, the return is the input object itself
+ * (copy-on-write above), so the clean path allocates nothing.
  */
 export function normalizeDatesDeep(props: Record<string, unknown> | null | undefined): Record<string, unknown> {
   if (props == null) return {};
