@@ -40,6 +40,8 @@ export function ConnectionRow({
   webhookSetup,
   eventTimeNote,
   records,
+  pausedNote,
+  lastError,
 }: {
   id: string;
   name: string;
@@ -47,6 +49,16 @@ export function ConnectionRow({
   status: string;
   webhookUrl?: string;
   webhookSetup?: string;
+  /**
+   * Set while the connection is deferred (breaker window or exhausted rate
+   * budget): why, and roughly when it retries by itself. Preformatted by the
+   * server. Without this, a paused source is indistinguishable on this list
+   * from a healthy one — the pause was only visible one click deeper, on a
+   * page nothing pointed at.
+   */
+  pausedNote?: string;
+  /** The stored failure, shown only when the row is in `error` and NOT merely paused. */
+  lastError?: string;
   /**
    * Live records synced from this connection, for the delete warning.
    *
@@ -310,6 +322,14 @@ export function ConnectionRow({
         <DeleteButton name={name} onClick={() => setDeleting(true)} />
       </span>
       </div>
+      {/* Same promise as the connection page's amber banner (F.3/F.6): a pause
+          is never a dead end, so the list says when it resolves itself. An
+          `error` row keeps its red dot; this line adds the WHY beside it. */}
+      {(pausedNote || lastError) && (
+        <p className={`-mt-1 px-4 pb-2.5 text-xs ${pausedNote ? "text-amber-700" : "text-red-600"}`}>
+          {pausedNote ? <>Paused, retrying automatically. {pausedNote}</> : lastError}
+        </p>
+      )}
       {showHook && webhookUrl && (
         <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-3">
           {webhookSetup && <p className="mb-2 text-xs text-neutral-600">{webhookSetup}</p>}

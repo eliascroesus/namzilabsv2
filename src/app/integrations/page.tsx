@@ -65,9 +65,18 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
         {connected.length > 0 && (
           <section className="mt-8">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+            <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-neutral-500">
               Your connections
             </h2>
+            {/* The two removal buttons keep two different promises, and this is
+                where that difference is said BEFORE anyone is inside a confirm
+                dialog: disconnect keeps everything and reverses; the trash is
+                immediate and total. Matches disableConnection /
+                deleteConnectionPermanently — if those change, change this. */}
+            <p className="mb-3 text-xs text-neutral-500">
+              Disconnecting a source pauses it and keeps all its data — reconnect any time and everything comes back.
+              Deleting one (the trash icon) permanently removes it and everything synced from it, immediately.
+            </p>
             <div className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
               {connected.map((c) => (
                 <ConnectionRow
@@ -76,6 +85,17 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                   name={c.name}
                   source={c.source}
                   status={c.status}
+                  // F.3/F.6 surfaced on the LIST, not only the detail page: a
+                  // paused source looked simply "connected" here while it sat
+                  // out a breaker window, and the one page users actually visit
+                  // said nothing. Preformatted on the server so the client row
+                  // renders one stable string (no hydration-time re-clocking).
+                  pausedNote={
+                    c.pausedUntil && c.pausedUntil.getTime() > Date.now()
+                      ? `${c.pausedReason ?? "Waiting before the next attempt."} Retries automatically around ${c.pausedUntil.toLocaleTimeString()} — nothing is lost.`
+                      : undefined
+                  }
+                  lastError={c.status === "error" ? (c.lastError ?? undefined) : undefined}
                   // Webhook-capable sources carry their inbound URL right here.
                   // It used to live only on the connection page, which meant a
                   // Custom Webhook — a connector that is nothing BUT its URL —
