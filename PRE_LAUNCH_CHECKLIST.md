@@ -1193,18 +1193,19 @@ already stored.
 
 ## Pending — will be added here when built
 
-- **Close `canonicalType`: which event types get names** — OPEN PRODUCT
-  QUESTION, awaiting a decision. The SECTION 7c census showed types being stored
-  raw that look more useful to a sales team than one of the six currently mapped
-  (`task.completed` appeared **zero** times in 500 events), including
-  `activity.call.answered`, `activity.call.completed` and four meeting types.
-  **This is naming, not fetching:** every one of these rows is already stored and
-  already filterable by its raw `objectType.action`, so there is no API cost and
-  no migration. The one real cost is that renaming changes `eventType` for NEW
-  rows only — a flow filtering the old name silently stops matching — so any
-  change ships with a `reprocessConnection` replay, which re-derives from stored
-  raw payloads. Candidate list and shares are in the session notes; pick, then
-  build.
+- **Close `canonicalType`: which event types get names** — RESOLVED, and the
+  answer was to never rename anything. Naming became presentation-only:
+  `eventTypeLabels` on the catalog entry + a humanize fallback
+  (`eventTypeLabel` in `src/connectors/catalog.ts`) put human names on every
+  surface a person reads — the Record type dropdown, the Test tab's record
+  cards, the metrics and funnel builders — while the STORED strings stay
+  exactly what they are, forever. That dissolves the entire cost column this
+  entry used to carry: no `reprocessConnection` replay, no flow filter
+  silently zeroed, no old-rows/new-rows split, and the unbounded raw
+  fallthrough (`activity.email_thread.updated`, `custom_object.*`) reads
+  cleanly without anyone maintaining a list. The close.ts cross-source rule
+  (Close's meeting vocabulary must not merge with Calendly's) survives at the
+  display layer and is pinned by `tests/event-type-labels.test.ts`.
 - **Index rollout at scale**: if `events` has grown large (>10⁷ rows) before
   launch, apply new index migrations manually with `CREATE INDEX CONCURRENTLY`
   instead of the transactional migration runner. Not needed at current size.

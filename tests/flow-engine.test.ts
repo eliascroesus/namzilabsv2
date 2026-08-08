@@ -462,3 +462,54 @@ describe("read filters — a setting the provider cannot act on", () => {
     expect(await countWith({ ...CAL, meetingType: "30 Minute Meeting" })).toBe(1);
   });
 });
+
+/**
+ * Close's Pipeline read filter — same contract as Calendly's meetingType, on a
+ * CONNECTION-scoped source (stream_hash null). The pin that matters: only
+ * opportunity records carry a pipeline_id, so setting the filter hides every
+ * other record type — which is exactly what the Configure hint promises, and
+ * what a wrong pipeline id shows as an honest 0 rather than an error.
+ */
+describe("Close pipeline read filter", () => {
+  const seedClose = async () => {
+    await db.insert(connections).values({ id: CONN, orgId: ORG, source: "close", name: "Close", status: "active", authType: "apiKey" });
+    const rows = [
+      { id: "o1", type: "opportunity_created", data: { pipeline_id: "pipe_a", status_label: "Demo" } },
+      { id: "o2", type: "opportunity_created", data: { pipeline_id: "pipe_a", status_label: "Won" } },
+      { id: "o3", type: "opportunity_created", data: { pipeline_id: "pipe_b", status_label: "Demo" } },
+      { id: "s1", type: "sms_sent", data: { to: "+1555" } }, // no pipeline_id — not an opportunity
+    ];
+    for (const r of rows) {
+      await db.insert(events).values({
+        eventId: `close:${CONN}:${r.id}`,
+        orgId: ORG,
+        connectionId: CONN,
+        source: "close",
+        streamHash: null,
+        eventType: r.type,
+        occurredAt: new Date(Date.now() - 86_400_000),
+        properties: { object_type: r.type === "sms_sent" ? "activity.sms" : "opportunity", action: "created", data: r.data },
+      });
+    }
+  };
+
+  const countWith = async (sourceConfig: Record<string, unknown>) => {
+    const res = await runFlow(
+      { db, orgId: ORG },
+      G(
+        [N("a", "app", { connectionId: CONN, source: "close", sourceConfig }), N("agg", "aggregate", { aggregation: "count" }), N("o", "output", {})],
+        [E("a", "agg"), E("agg", "o")],
+      ),
+    );
+    return res.nodes.get("a")!.recordsOut;
+  };
+
+  it("narrows to one pipeline's opportunities; unset reads everything; wrong id reads 0", async () => {
+    await seedClose();
+    expect(await countWith({})).toBe(4);
+    expect(await countWith({ pipelineId: "pipe_a" })).toBe(2);
+    expect(await countWith({ pipelineId: "pipe_b" })).toBe(1);
+    // Non-opportunity records drop out while the filter is set — the hint's promise.
+    expect(await countWith({ pipelineId: "nope" })).toBe(0);
+  });
+});

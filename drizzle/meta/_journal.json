@@ -155,6 +155,13 @@
       "when": 1786056857196,
       "tag": "0022_drop_identity_mirrors",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1786152140094,
+      "tag": "0023_conn_type_live_idx",
+      "breakpoints": true
     }
   ]
 }

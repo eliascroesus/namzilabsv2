@@ -1,0 +1,1 @@
+CREATE INDEX "events_conn_type_live_idx" ON "events" USING btree ("connection_id","event_type") WHERE deleted_at is null;

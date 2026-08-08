@@ -6,7 +6,7 @@ import type { NodeTestDTO } from "@/app/dashboard/flows/actions";
 
 // ---------- Shared editor types ----------
 
-export type ConnMeta = { id: string; name: string; source: string; eventTypes: string[]; syncStatus?: string };
+export type ConnMeta = { id: string; name: string; source: string; syncStatus?: string };
 
 export type NodeData = {
   config: Record<string, unknown>;

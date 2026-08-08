@@ -1,10 +1,8 @@
 import { notFound } from "next/navigation";
-import { and, eq, isNull } from "drizzle-orm";
 import { requireOrg } from "@/lib/auth";
 import { getDb } from "@/db/client";
 import { getFlow } from "@/lib/flow/store";
 import { listConnections } from "@/lib/connections";
-import { events } from "@/db/schema";
 import { parseGraph } from "@/lib/flow/types";
 import { FlowCanvas, type ConnMeta } from "@/components/flow/flow-canvas";
 import { Sidebar } from "@/components/sidebar";
@@ -30,25 +28,15 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
   const flow = await getFlow(getDb(), orgId, id);
   if (!flow) notFound();
 
-  const db = getDb();
   const conns = await listConnections(orgId).catch(() => []);
-  const typeRows = await db
-    .selectDistinct({ connectionId: events.connectionId, eventType: events.eventType })
-    .from(events)
-    .where(and(eq(events.orgId, orgId), isNull(events.deletedAt)))
-    .catch(() => [] as { connectionId: string; eventType: string }[]);
-
-  const typesByConn = new Map<string, string[]>();
-  for (const r of typeRows) {
-    if (!typesByConn.has(r.connectionId)) typesByConn.set(r.connectionId, []);
-    typesByConn.get(r.connectionId)!.push(r.eventType);
-  }
-
+  // Record types are NOT loaded here: the Configure panel fetches them fresh
+  // per connection on open (listRecordTypesAction). The page-render snapshot
+  // this used to take went stale the moment a Test synced anything, and cost
+  // an org-wide distinct scan on every editor load.
   const connections: ConnMeta[] = conns.map((c) => ({
     id: c.id,
     name: c.name,
     source: c.source,
-    eventTypes: (typesByConn.get(c.id) ?? []).sort(),
     syncStatus: c.syncStatus,
   }));
 

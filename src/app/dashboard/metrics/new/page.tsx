@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
+import { eventTypeLabel } from "@/connectors/catalog";
 import { AppHeader } from "@/components/app-header";
 import { getDb } from "@/db/client";
 import { computeAggregate, queryEvents, distinctSources, distinctEventTypes } from "@/lib/metrics/compute";
@@ -112,7 +113,14 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
               <Select name="source" value={one(sp.source)} options={["", ...sources]} labels={{ "": "All sources" }} />
             </Row>
             <Row label="Event type">
-              <Select name="eventType" value={one(sp.eventType)} options={["", ...eventTypes]} labels={{ "": "Any" }} />
+              {/* Values stay the stored strings (the definition matches them
+                  with `=`); only the labels are humanized. */}
+              <Select
+                name="eventType"
+                value={one(sp.eventType)}
+                options={["", ...eventTypes]}
+                labels={{ "": "Any", ...Object.fromEntries(eventTypes.map((t) => [t, eventTypeLabel(one(sp.source) || null, t)])) }}
+              />
             </Row>
           </div>
           <div className="grid grid-cols-2 gap-4">

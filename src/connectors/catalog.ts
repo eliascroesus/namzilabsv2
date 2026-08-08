@@ -157,6 +157,16 @@ export type ConnectorCatalogEntry = {
    * working — which is why this is a display list and not a drop at ingest.
    */
   hiddenFields?: readonly string[];
+  /**
+   * Display names for stored `eventType` values — presentation ONLY.
+   *
+   * The stored strings are load-bearing (flow configs, Filter rules, metric
+   * definitions all match them with `=`), so they are never renamed; this map
+   * is how a raw vocabulary gets a human face without a replay and without
+   * silently zeroing anyone's saved filter. Unmapped types fall through to
+   * `eventTypeLabel`'s humanizer.
+   */
+  eventTypeLabels?: Record<string, string>;
   /** Manual webhook setup note shown on the connection page when not auto. */
   webhookSetup?: string;
 };
@@ -276,6 +286,54 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
      */
     autoWebhook: true,
     credentialFields: [{ key: "apiKey", label: "API Key", placeholder: "api_..." }],
+    /**
+     * readFilter-ONLY, deliberately — and it must stay that way. Server-side
+     * type/pipeline filtering of Close's event log is a measured NO (the
+     * numbers live above `canonicalType` in close.ts: one object_type+action
+     * pair per request means a cursor per choice and ~6x the requests in
+     * steady state). So the picker is a WHERE clause over the one shared
+     * sync, and — because readFilter keys never enter stream identity —
+     * `isStreamScoped("close")` stays false and Close keeps its
+     * connection-scoped sync, webhook ingest and Test priming untouched.
+     *
+     * The filter path is the raw event envelope: Close events store
+     * `properties = {object_type, action, data: {...}}`, and an opportunity's
+     * `data` carries `pipeline_id`. Verified against real synced events with
+     * the census query in scripts/verify-close-pipeline-fields.sql; only
+     * opportunity records carry one, which is what the hint says out loud.
+     */
+    flowFields: [
+      {
+        key: "pipelineId",
+        label: "Pipeline",
+        dynamic: true,
+        placeholder: "All pipelines",
+        hint: "Shows only opportunity records in this pipeline — other record types don't carry one, so they're hidden while this is set. Close can't filter its event log by pipeline, so the same events sync either way; this narrows what you see and takes effect immediately.",
+        readFilter: { paths: ["properties.data.pipeline_id"] },
+      },
+    ],
+    /**
+     * Display names for the stored type strings — presentation ONLY, the
+     * stored values never change (renaming stored types silently zeroes every
+     * flow filtering on the old name; a label can't break anything). Kept
+     * deliberately apart from Calendly's vocabulary: a Close activity logged
+     * for a meeting and the Calendly booking of that same meeting are
+     * different rows, and shared naming would invite counting one thing
+     * twice (see the docstring above `canonicalType` in close.ts).
+     */
+    eventTypeLabels: {
+      sms_sent: "SMS sent",
+      email_sent: "Email sent",
+      call_logged: "Call logged",
+      call_connected: "Call connected",
+      call_completed: "Call completed",
+      meeting_scheduled: "Meeting scheduled",
+      meeting_logged: "Meeting logged",
+      meeting_held: "Meeting held",
+      lead_created: "Lead created",
+      opportunity_created: "Opportunity created",
+      task_completed: "Task completed",
+    },
   },
   {
     source: "instantly",
@@ -481,9 +539,21 @@ export function catalogEntry(source: string): ConnectorCatalogEntry | undefined 
   return CONNECTOR_CATALOG.find((c) => c.source === source);
 }
 
-/** Sources whose resource lives on the flow (streams), not on the connection. */
+/**
+ * Sources whose resource lives on the flow (streams), not on the connection.
+ *
+ * "Has a flowField" is NOT the definition, and the difference is load-bearing:
+ * a readFilter-only field narrows the READ, never the fetch, so it must not
+ * make a source stream-scoped. If it did, every gate keyed on this answer
+ * would strand the source — Test would demand a "resource" the source doesn't
+ * have (test-run.ts), runSync would walk zero streams (resync.ts), the
+ * webhook route would degrade to doorbell-only and store nothing, and the
+ * legacy-ghost retire would read the whole dataset as orphaned. Close is the
+ * case that makes this real: its Pipeline picker is a WHERE clause over one
+ * shared event-log sync, and the account stays the resource.
+ */
 export function isStreamScoped(source: string | null | undefined): boolean {
-  return (catalogEntry(source ?? "")?.flowFields?.length ?? 0) > 0;
+  return (catalogEntry(source ?? "")?.flowFields ?? []).some((f) => (f.readFilter?.paths.length ?? 0) === 0);
 }
 
 /**
@@ -516,4 +586,32 @@ export function syncGuarantee(source: string | null | undefined): SyncGuarantee 
 /** Mirror sources re-read the whole resource every sweep (stored == source). */
 export function isMirrorSource(source: string | null | undefined): boolean {
   return syncGuarantee(source) === "mirror";
+}
+
+/**
+ * Display name for a stored eventType. NEVER touches stored values — every
+ * surface that shows a type to a person goes through here; every surface that
+ * stores or matches one uses the raw string.
+ *
+ * Null source is the org-wide dropdowns (metrics/funnels), where the type
+ * string arrives without its connection: first declared match wins, which is
+ * safe while the label-collision test forbids two sources declaring the same
+ * key with different labels (tests/event-type-labels.test.ts).
+ */
+export function eventTypeLabel(source: string | null | undefined, eventType: string): string {
+  const entry = source ? catalogEntry(source) : undefined;
+  const mapped =
+    entry?.eventTypeLabels?.[eventType] ??
+    (entry ? undefined : CONNECTOR_CATALOG.find((c) => c.eventTypeLabels?.[eventType])?.eventTypeLabels?.[eventType]);
+  if (mapped) return mapped;
+  // Humanize a raw provider pair: "activity.email_thread.updated" →
+  // "Email thread updated". The "activity." prefix is Close's namespace for
+  // most of its event log and carries no meaning a person needs.
+  const words = eventType
+    .split(".")
+    .filter((p) => p !== "activity")
+    .join(" ")
+    .replace(/_/g, " ")
+    .trim();
+  return words ? words[0].toUpperCase() + words.slice(1) : eventType;
 }

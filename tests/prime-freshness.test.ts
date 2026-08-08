@@ -256,8 +256,10 @@ describe("primeStream freshness gate (Defect #1)", () => {
  * The gap `primeStream` could not cover, and what it cost.
  *
  * `primeStreamsForTest` only primed a step whose `sourceConfig` was non-empty.
- * Sendblue and Close have no flowFields — the account IS the resource — so their
- * steps carry an empty config and the refresh was skipped entirely. Test then ran
+ * Sendblue has no flowFields and Close's are readFilter-only (a WHERE over the
+ * shared sync, excluded from stream identity) — either way the account IS the
+ * resource, so their steps carry an empty EFFECTIVE config and the refresh was
+ * skipped entirely. Test then ran
  * the flow over whatever storage held and printed "0 loaded · No records
  * returned": identical to a genuinely empty source, with no request made and so
  * nothing to diagnose. It also made connector fixes look inert, since changing a

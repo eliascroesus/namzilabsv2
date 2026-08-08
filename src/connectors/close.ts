@@ -414,6 +414,26 @@ export const closeConnector: Connector = {
    */
   holdsContinuation: holdsWindowContinuation,
 
+  /**
+   * The Pipeline picker in the Get data step. ONE bounded request: an org has
+   * a handful of pipelines, so `GET /pipeline/` is a single small page and a
+   * pagination walk would be machinery for a shape the resource doesn't have
+   * (contrast Calendly's MAX_OPTION_PAGES, listing resources that DO grow).
+   * `_fields` keeps the payload to exactly what the picker renders. Errors
+   * propagate — the options action turns them into the panel's free-text
+   * degradation rather than a dead dropdown.
+   */
+  async listOptions(key, args) {
+    if (key !== "pipelineId") return [];
+    const data = await fetchJson<{ data?: Array<Record<string, unknown>> }>(`${API}/pipeline/?_fields=id,name`, {
+      headers: { authorization: basicAuth(apiKey_(args.credentials)) },
+    });
+    return (data.data ?? [])
+      .map((p) => ({ value: str(p["id"]) ?? "", label: str(p["name"]) ?? str(p["id"]) ?? "Unnamed pipeline" }))
+      .filter((o) => o.value)
+      .sort((a, b) => a.label.localeCompare(b.label));
+  },
+
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
     if (!secret) return false;
     const hash = headers["close-sig-hash"];

@@ -15,10 +15,9 @@ import { materializeFlow } from "@/lib/flow/materialize";
 import { parseGraph } from "@/lib/flow/types";
 import { createTestRun, executeAndSettleTestRun, getTestRun, type NodeTestDTO, type TestRunState } from "@/lib/flow/test-run";
 import { ensureStreamsForGraph, primeStream, pruneOrphanStreams } from "@/lib/sync/streams";
-import { getConnectionCredentials } from "@/lib/credentials";
-import { getConnector } from "@/connectors/registry";
 import { hasStreamConfig } from "@/lib/sync/stream-hash";
-import { isStreamScoped } from "@/connectors/catalog";
+import { listSourceOptions } from "@/lib/flow/source-options";
+import { distinctConnectionEventTypes } from "@/lib/metrics/compute";
 import type { SourceOption } from "@/connectors/types";
 import { inngest } from "@/inngest/client";
 
@@ -186,19 +185,24 @@ export async function listSourceOptionsAction(
 ): Promise<{ ok: true; options: SourceOption[] } | { ok: false; error: string }> {
   const { orgId } = await requireOrg();
   try {
-    const db = getDb();
-    const [conn] = await db
-      .select()
-      .from(connections)
-      .where(and(eq(connections.id, connectionId), eq(connections.orgId, orgId)))
-      .limit(1);
-    if (!conn) return { ok: false, error: "Connection not found." };
-    if (!isStreamScoped(conn.source)) return { ok: true, options: [] };
-    const connector = getConnector(conn.source);
-    if (!connector?.listOptions) return { ok: true, options: [] };
-    const credentials = await getConnectionCredentials(db, conn);
-    const options = await connector.listOptions(key, { connectionId, credentials, config });
-    return { ok: true, options };
+    return await listSourceOptions(getDb(), orgId, connectionId, key, config);
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * The Record type dropdown's options: distinct live types of ONE connection,
+ * fetched when the Configure panel opens. This used to be a snapshot taken
+ * when the editor page rendered — records synced by the very Test the user
+ * just ran wouldn't appear in the dropdown until a full browser reload.
+ */
+export async function listRecordTypesAction(
+  connectionId: string,
+): Promise<{ ok: true; types: string[] } | { ok: false; error: string }> {
+  const { orgId } = await requireOrg();
+  try {
+    return { ok: true, types: await distinctConnectionEventTypes(getDb(), orgId, connectionId) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

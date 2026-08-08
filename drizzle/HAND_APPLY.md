@@ -600,3 +600,47 @@ WHERE table_schema = 'public'
 
 `scripts/schema-audit.sql` was regenerated: 15 tables, and
 `memberships_org_user_uq` is gone from the expected-index list.
+
+## 0023 — `events_conn_type_live_idx` (the Record type picker's index)
+
+**Pure DDL, ordering relaxed** (0020's precedent): the code is correct
+without it, just slower. Apply before real traffic grows the events table.
+
+One index, nothing altered. The flow editor's Record type dropdown now asks a
+fresh per-connection question on every Configure-panel open — "which distinct
+event types does THIS connection hold, live rows only" — instead of riding a
+stale org-wide snapshot taken at page render. `events_org_type_idx` leads
+with `org_id` and is not partial on `deleted_at`, so it cannot serve that
+shape alone; without this index every panel open aggregates the connection's
+whole live history.
+
+```sql
+CREATE INDEX IF NOT EXISTS "events_conn_type_live_idx"
+  ON "events" USING btree ("connection_id", "event_type")
+  WHERE deleted_at is null;
+```
+
+On a large events table, prefer the non-blocking variant (own statement, and
+re-check validity after — same caveat as 0014/0020):
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "events_conn_type_live_idx"
+  ON "events" USING btree ("connection_id", "event_type")
+  WHERE deleted_at is null;
+```
+
+Verify (expect 1, 0):
+
+```sql
+SELECT
+  (SELECT count(*) FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname = 'events_conn_type_live_idx')                    AS created_should_be_1,
+  (SELECT count(*) FROM pg_index
+    WHERE NOT indisvalid
+      AND indexrelid::regclass::text = 'events_conn_type_live_idx')   AS invalid_should_be_0;
+```
+
+Numbering note: 0016 remains reserved by the unmerged `batch5/retention-purge`
+branch (see the notes under 0015/0017); the snapshot-chain warning there still
+applies at merge time.

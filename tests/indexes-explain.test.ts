@@ -124,6 +124,18 @@ describe("B.1 indexes are chosen by the planner", () => {
     expect(plan).not.toContain("Seq Scan");
   });
 
+  it("record-type listing (one connection's distinct live types) uses events_conn_type_live_idx", async () => {
+    // Exact shape of distinctConnectionEventTypes (compute.ts) — the Configure
+    // panel runs this on every open, so it must not aggregate the connection's
+    // whole live history off a seq scan or the org-wide index.
+    const plan = await explain(
+      sql`select distinct event_type from events
+          where org_id = ${ORG} and connection_id = ${connB} and deleted_at is null`,
+    );
+    expect(plan).toContain("events_conn_type_live_idx");
+    expect(plan).not.toContain("Seq Scan");
+  });
+
   it("whole-connection read (no stream chosen) still runs on a live index, not a seq scan", async () => {
     const plan = await explain(
       sql`select * from events

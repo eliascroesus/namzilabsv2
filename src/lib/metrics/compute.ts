@@ -223,6 +223,21 @@ export async function distinctSources(db: DB, orgId: string): Promise<string[]> 
   return rows.map((r) => r.source).sort();
 }
 
+/**
+ * Distinct live event types of ONE connection (org-walled) — the Configure
+ * panel's Record type options, fetched fresh on panel open instead of the
+ * stale page-render snapshot it used to ride. Backed by
+ * events_conn_type_live_idx; without that index this is an aggregate over the
+ * connection's whole live history per panel open.
+ */
+export async function distinctConnectionEventTypes(db: DB, orgId: string, connectionId: string): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ eventType: events.eventType })
+    .from(events)
+    .where(sql`${events.orgId} = ${orgId} and ${events.connectionId} = ${connectionId} and ${events.deletedAt} is null`);
+  return rows.map((r) => r.eventType).sort();
+}
+
 /** Distinct event types present (optionally within a source). */
 export async function distinctEventTypes(db: DB, orgId: string, source?: string | null): Promise<string[]> {
   const conds: SQL[] = [sql`${events.orgId} = ${orgId}`, sql`${events.deletedAt} is null`];

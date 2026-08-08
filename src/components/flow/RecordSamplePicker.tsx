@@ -1,5 +1,7 @@
 "use client";
 
+import { eventTypeLabel } from "@/connectors/catalog";
+
 type Rec = {
   source?: string;
   eventType?: string;
@@ -45,7 +47,10 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
       {records.map((r, i) => {
         const rec = (r ?? {}) as Rec;
         const selected = i === selectedIndex;
-        const title = `${rec.source ?? ""} · ${rec.eventType ?? ""}${rec.subject ? ` · ${rec.subject}` : ""}`;
+        // Human label on the card title only; the expanded field rows below
+        // keep raw values — that is the record's data, and the browser stays
+        // honest about what a Filter step would actually match.
+        const title = `${rec.source ?? ""} · ${rec.eventType ? eventTypeLabel(rec.source ?? null, rec.eventType) : ""}${rec.subject ? ` · ${rec.subject}` : ""}`;
         return (
           <details
             key={i}

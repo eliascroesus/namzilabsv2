@@ -222,7 +222,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (33 expected).
+-- QUERY 2 (optional) — indexes (34 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -241,6 +241,7 @@ WITH expected (tbl, idx) AS (
     ('delivery_log', 'delivery_log_created_idx'),
     ('events', 'events_event_id_uq'),
     ('events', 'events_org_type_idx'),
+    ('events', 'events_conn_type_live_idx'),
     ('events', 'events_conn_stream_live_idx'),
     ('events', 'events_org_live_occurred_idx'),
     ('events', 'events_conn_gen_live_idx'),

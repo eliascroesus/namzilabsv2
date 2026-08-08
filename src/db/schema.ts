@@ -187,6 +187,11 @@ export const events = pgTable(
     uniqueIndex("events_event_id_uq").on(t.eventId),
     // Only index carrying event_type (distinct-type dropdowns, type filters).
     index("events_org_type_idx").on(t.orgId, t.eventType),
+    // Per-connection record-type listing (the Configure panel fetches ONE
+    // connection's distinct live types on open). events_org_type_idx leads
+    // with org_id and is not partial, so it cannot serve this shape alone —
+    // without this, every panel open aggregates the org's whole live set.
+    index("events_conn_type_live_idx").on(t.connectionId, t.eventType).where(sql`deleted_at is null`),
     // B.1 partial composites over LIVE rows — every production reader filters
     // deleted_at IS NULL. EXPLAIN-verified in tests/indexes-explain.test.ts.
     // The old single-purpose indexes (occurred_at), (connection_id) and

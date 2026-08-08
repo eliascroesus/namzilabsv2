@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { closeConnector } from "@/connectors/close";
+import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
+import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import type { CanonicalEvent } from "@/connectors/types";
 
 /**
@@ -980,5 +982,68 @@ describe("the webhook and the poll describe the same event identically", () => {
     // And it is not the string "undefined", which collapsed every id-less
     // record onto a single row.
     expect(fromWebhook.eventId).not.toContain("undefined");
+  });
+});
+
+/**
+ * The Pipeline picker's two contracts, pinned together because each is only
+ * safe in the other's presence:
+ *
+ * 1. `listOptions("pipelineId")` lists the account's pipelines — ONE bounded
+ *    request, options sorted for a dropdown.
+ * 2. The catalog field is readFilter-ONLY, so Close stays connection-scoped.
+ *    This is the assertion that guards the six gates keyed on
+ *    `isStreamScoped`: flip it and Close's Test demands a "resource" it
+ *    doesn't have, `runSync` walks zero streams, the webhook route degrades
+ *    to a doorbell that stores nothing, and the legacy-ghost retire reads the
+ *    whole dataset (gen ≥ 1, null stream_hash) as orphaned.
+ */
+describe("Close pipeline picker", () => {
+  it("lists pipelines from ONE bounded request, sorted by name, ids as values", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        urls.push(String(input));
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: { get: () => null },
+          json: async () => ({ data: [{ id: "pipe_b", name: "Sales B" }, { id: "pipe_a", name: "Acquisition" }, { id: "", name: "ghost" }] }),
+          text: async () => "",
+        } as unknown as Response;
+      }),
+    );
+    const options = await closeConnector.listOptions!("pipelineId", { connectionId: "c1", credentials: { apiKey: "k" } });
+    expect(options).toEqual([
+      { value: "pipe_a", label: "Acquisition" },
+      { value: "pipe_b", label: "Sales B" },
+    ]);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain("/pipeline/");
+    expect(urls[0]).toContain("_fields=id,name");
+  });
+
+  it("returns [] for a key it does not own, and lets HTTP errors propagate", async () => {
+    expect(await closeConnector.listOptions!("spreadsheetId", { connectionId: "c1", credentials: { apiKey: "k" } })).toEqual([]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 500, statusText: "boom", headers: { get: () => null }, text: async () => "x", json: async () => ({}) }) as unknown as Response),
+    );
+    // The options action turns this into the panel's free-text degradation;
+    // swallowing it here would render a permanently empty dropdown instead.
+    await expect(closeConnector.listOptions!("pipelineId", { connectionId: "c1", credentials: { apiKey: "k" } })).rejects.toThrow();
+  });
+
+  it("stays connection-scoped: readFilter-only fields never flip the scope or the stream identity", () => {
+    const field = catalogEntry("close")!.flowFields!.find((f) => f.key === "pipelineId")!;
+    expect(field.readFilter?.paths).toEqual(["properties.data.pipeline_id"]);
+    // The new truth replacing the old "Close has no flowFields" prose pin.
+    expect(isStreamScoped("close")).toBe(false);
+    // A chosen pipeline reads the SAME rows the sync wrote — no fork, no
+    // fresh cursor, no "0 records until its own scan catches up".
+    expect(streamConfigHash({ pipelineId: "pipe_a" }, "close")).toBe(streamConfigHash({}, "close"));
+    expect(hasStreamConfig({ pipelineId: "pipe_a" }, "close")).toBe(false);
   });
 });

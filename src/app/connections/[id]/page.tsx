@@ -4,7 +4,7 @@ import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { getConnection, getSigningSecret, previewLatest, webhookUrlFor } from "@/lib/connections";
 import { CopyField } from "@/components/copy-field";
-import { catalogEntry, syncGuarantee } from "@/connectors/catalog";
+import { catalogEntry, isStreamScoped, syncGuarantee } from "@/connectors/catalog";
 import {
   disconnectAction,
   importHistoryAction,
@@ -171,8 +171,12 @@ export default async function ConnectionPage({
         )}
 
         {/* Preview latest records (connection-scoped sources only — stream-scoped
-            sources preview inside the flow's Get data step, where the resource is). */}
-        {!entry?.flowFields?.length && (
+            sources preview inside the flow's Get data step, where the resource is).
+            Gated on SCOPE, not flowFields presence: Close carries a readFilter-only
+            flowField and is still connection-scoped — the old presence check
+            silently removed this section, its one connect-time "is data flowing"
+            answer, the day that field appeared. */}
+        {!isStreamScoped(conn.source) && (
           <section className="mt-8">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Latest records</h2>
@@ -292,7 +296,12 @@ export default async function ConnectionPage({
                 label="Reprocess"
                 hint="Re-run normalization from stored raw events. No provider calls."
               />
-              {entry?.poll && entry?.flowFields && entry.flowFields.length > 0 && (
+              {/* Backfill walks STREAMS (importHistoryAction iterates
+                  activeStreams), so the button belongs to stream-scoped
+                  sources only — on Close it would render and silently do
+                  nothing, since a connection-scoped source has no stream
+                  rows to deepen. */}
+              {entry?.poll && isStreamScoped(conn.source) && (
                 <SyncControl
                   action={importHistoryAction}
                   id={conn.id}

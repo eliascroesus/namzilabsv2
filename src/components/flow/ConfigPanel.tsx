@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { catalogEntry, type FlowConfigField } from "@/connectors/catalog";
-import { listAppFieldsAction, listSourceOptionsAction, streamDateColumnAction, type AppFieldDTO } from "@/app/dashboard/flows/actions";
+import { catalogEntry, eventTypeLabel, type FlowConfigField } from "@/connectors/catalog";
+import {
+  listAppFieldsAction,
+  listRecordTypesAction,
+  listSourceOptionsAction,
+  streamDateColumnAction,
+  type AppFieldDTO,
+} from "@/app/dashboard/flows/actions";
 import type { DateColumnChoice } from "@/lib/sync/date-column";
 import type { SourceOption } from "@/connectors/types";
 import {
@@ -418,17 +424,8 @@ function NodeConfig({
                 (booked / canceled / no_show), while a connector's own flowFields
                 may offer the PROVIDER's event type — Calendly calls its meeting
                 templates "event types". Two dropdowns reading "event" in one
-                panel are indistinguishable. The list is built from types already
-                ingested, so a source that has never synced shows only "All". */}
-            <Field label="Record type">
-              <Select
-                value={typeof cfg.eventType === "string" ? (cfg.eventType as string) : "__none"}
-                width={W}
-                placeholder="Choose a record type…"
-                options={[{ value: "", label: "All record types" }, ...(conn?.eventTypes ?? []).map((t) => ({ value: t, label: t }))]}
-                onChange={(v) => onChange({ eventType: v })}
-              />
-            </Field>
+                panel are indistinguishable. */}
+            <RecordTypeField conn={conn} cfg={cfg} onChange={onChange} />
 
             <DedupeSection cfg={cfg} fallbackGroups={selfGroups} onChange={onChange} />
           </>
@@ -881,6 +878,72 @@ function CategoryEditor({ cfg, groups, onChange }: { cfg: Record<string, unknown
 const sourceLabelCache = new Map<string, string>();
 
 /**
+ * Session cache of a connection's distinct record types, so re-opening a
+ * panel renders instantly with the last known list while the fresh one loads.
+ */
+const recordTypeCache = new Map<string, string[]>();
+
+/**
+ * The Record type dropdown. Options are fetched when the panel opens — the
+ * old list was a snapshot taken when the editor PAGE rendered, so a type
+ * synced by the very Test the user just ran wouldn't appear until a full
+ * browser reload, and the panel read "All record types" as if the source had
+ * no data.
+ *
+ * Values stay the stored type strings; only labels go through
+ * `eventTypeLabel`. The raw string rides along as the option hint so a user
+ * matching against a Filter step or the API can still see the real value. A
+ * saved value missing from the fresh list stays selectable — deselecting
+ * someone's filter because a fetch was slow would silently widen their data.
+ */
+function RecordTypeField({
+  conn,
+  cfg,
+  onChange,
+}: {
+  conn: ConnMeta;
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const [types, setTypes] = useState<string[]>(() => recordTypeCache.get(conn.id) ?? []);
+  useEffect(() => {
+    setTypes(recordTypeCache.get(conn.id) ?? []);
+    let live = true;
+    void listRecordTypesAction(conn.id).then((r) => {
+      if (!live || !r.ok) return; // on error: keep cache/current value, never a dead field
+      recordTypeCache.set(conn.id, r.types);
+      setTypes(r.types);
+    });
+    return () => {
+      live = false;
+    };
+  }, [conn.id]);
+
+  const current = typeof cfg.eventType === "string" ? (cfg.eventType as string) : "";
+  const listed = current && !types.includes(current) ? [current, ...types] : types;
+  return (
+    <Field label="Record type">
+      <Select
+        // "" is "All record types" — a real, selected answer. The old code
+        // mapped null to "__none", which matched no option and showed the
+        // "Choose…" placeholder as if the step were unconfigured.
+        value={current}
+        width={W}
+        placeholder="Choose a record type…"
+        options={[
+          { value: "", label: "All record types" },
+          ...listed.map((t) => {
+            const label = eventTypeLabel(conn.source, t);
+            return { value: t, label, hint: label === t ? undefined : t };
+          }),
+        ]}
+        onChange={(v) => onChange({ eventType: v })}
+      />
+    </Field>
+  );
+}
+
+/**
  * Which column holds a row's event time.
  *
  * NOT part of `sourceConfig`, and that is the whole design. `occurred_at` is a
@@ -1042,17 +1105,29 @@ function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigFi
         ? options
         : [{ value, label: value }, ...options]
     : options;
+  // A read filter's unset state is a real answer ("All pipelines"), not a
+  // missing one — so it gets a selectable "" option, which also makes the
+  // choice REVERSIBLE. Without it, the only way back from a picked pipeline
+  // was switching the Account away and back, which resets the whole step.
+  // Resource selectors (a spreadsheet, a calendar) keep no such option: for
+  // them, empty genuinely means "not configured yet".
+  const clearable = !!field.readFilter && !field.required;
+  const withClear = clearable ? [{ value: "", label: field.placeholder ?? `All ${field.label.toLowerCase()}s` }, ...withCurrent] : withCurrent;
 
   return (
     <Field label={field.label}>
       <Select
         value={value}
-        options={withCurrent}
+        options={withClear}
         onChange={set}
         width={W}
         searchable
         placeholder={field.dynamic && state.status === "loading" ? "Loading…" : `Choose a ${field.label.toLowerCase()}…`}
       />
+      {/* The catalog writes a hint for exactly the fields whose behavior isn't
+          guessable (a pipeline filter hides non-opportunity records). It was
+          declared on four sources and rendered nowhere. */}
+      {field.hint && <p className="mt-1 text-xs text-neutral-500">{field.hint}</p>}
     </Field>
   );
 }
@@ -1248,7 +1323,8 @@ function BeforeAfter({ before, after }: { before: unknown[]; after: unknown[] })
 
 function sampleLine(r: unknown): string {
   const rec = r as { source?: string; eventType?: string; subject?: string; value?: unknown };
-  return `${rec.source ?? ""} · ${rec.eventType ?? ""}${rec.subject ? ` · ${rec.subject}` : ""}${rec.value != null ? ` · ${String(rec.value)}` : ""}`;
+  const type = rec.eventType ? eventTypeLabel(rec.source ?? null, rec.eventType) : "";
+  return `${rec.source ?? ""} · ${type}${rec.subject ? ` · ${rec.subject}` : ""}${rec.value != null ? ` · ${String(rec.value)}` : ""}`;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
