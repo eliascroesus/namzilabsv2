@@ -257,7 +257,11 @@ export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, input
   const bOk = (handles?.includes("b") ?? inputCount >= 2) || cfg.bFixed != null;
   const missingAB = !aOk || !bOk;
   if (type === "app") {
-    if (!cfg.connectionId && !cfg.source) return true;
+    // No account = not set up, even when `source` is present (templates
+    // preset the source so labels read right before an account is picked).
+    // Without this, a source-only step silently read EVERY connection of
+    // that source in the org — blended workspaces, double-counted dials.
+    if (!cfg.connectionId) return true;
     // Stream-scoped sources also need their flow-level resource chosen (which sheet…).
     const flowFields = catalogEntry(String(cfg.source ?? ""))?.flowFields ?? [];
     const sc = (cfg.sourceConfig ?? {}) as Record<string, unknown>;

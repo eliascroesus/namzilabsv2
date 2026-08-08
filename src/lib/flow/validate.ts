@@ -62,8 +62,11 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
     if (node.type === "app") {
       if (ins.length > 0) issues.push({ nodeId: node.id, message: "App nodes can't have an input." });
       const cfg = AppConfigSchema.safeParse(node.data.config ?? {});
-      if (!cfg.success || (!cfg.data.connectionId && !cfg.data.source)) {
-        issues.push({ nodeId: node.id, message: "App node needs a connected account or a source." });
+      // An account, not merely a source: a source-only step reads every
+      // connection of that source in the org — publishing that blends
+      // workspaces and double-counts a twice-connected account.
+      if (!cfg.success || !cfg.data.connectionId) {
+        issues.push({ nodeId: node.id, message: "Get data needs an account — open the step and choose one." });
       }
       continue;
     }

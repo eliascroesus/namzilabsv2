@@ -65,19 +65,31 @@ describe("eventTypeLabel", () => {
     expect(eventTypeLabel("close", "activity.whatsapp_message.created")).toBe("WhatsApp message created");
   });
 
-  it("null-source lookup is safe: no two sources declare the same key with different labels", () => {
-    // The org-wide dropdowns (metrics/funnels) look a type up WITHOUT its
-    // source and take the first declared match. That is only honest while
-    // this invariant holds — break it and one source's label silently
-    // describes another source's data.
-    const seen = new Map<string, { source: string; label: string }>();
-    for (const entry of CONNECTOR_CATALOG) {
-      for (const [key, label] of Object.entries(entry.eventTypeLabels ?? {})) {
-        const prior = seen.get(key);
-        if (prior) expect(`${key}: ${prior.label} (${prior.source})`).toBe(`${key}: ${label} (${entry.source})`);
-        seen.set(key, { source: entry.source, label });
-      }
-    }
+  it("null-source lookup never guesses: agreement wins, disagreement falls back to the humanizer", () => {
+    // Two sources CAN share a stored key with different meanings — Close's
+    // email_sent counts inbound + drafts, Instantly's is a true send. Each
+    // declares its own truth per-source; an org-wide dropdown that can't
+    // know the source must not pick a side.
+    expect(eventTypeLabel("close", "email_sent")).toBe("Email logged (sent or received)");
+    expect(eventTypeLabel("instantly", "email_sent")).toBe("Email sent");
+    // Unbound: declarations disagree → neutral humanized form, no source's
+    // semantics claimed. (Humanize("email_sent") happens to read "Email
+    // sent"; the pin is that it is the HUMANIZER's output, not a pick —
+    // sabotage: make the unbound lookup take the first declared match and
+    // this returns Close's parenthesized label.)
+    expect(eventTypeLabel(null, "email_sent")).toBe("Email sent");
+    // Agreement across all declarers → the shared label is safe to use.
+    const declarers = CONNECTOR_CATALOG.filter((c) => c.eventTypeLabels?.["call_logged"]);
+    expect(declarers).toHaveLength(1);
+    expect(eventTypeLabel(null, "call_logged")).toBe("Call logged");
+  });
+
+  it("null-source hiding works: org-wide pickers drop every source's declared noise", () => {
+    // Sabotage: restore `catalogEntry(source ?? "")` (no null fallback) and
+    // the funnels/metrics pickers offer every .deleted cascade again.
+    expect(eventTypeOptions(null, ["activity.note.updated", "activity.email.deleted", "call_logged"], null).map((o) => o.value)).toEqual([
+      "call_logged",
+    ]);
   });
 
   /**

@@ -708,6 +708,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      // A modal owns the screen: undoing the graph BEHIND Review & publish
+      // can delete the very endpoint whose card is being edited.
+      if (reviewOpen || library.open || pendingDelete) return;
       const el = document.activeElement as HTMLElement | null;
       const tag = el?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
@@ -717,7 +720,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [undo, redo]);
+  }, [undo, redo, reviewOpen, library.open, pendingDelete]);
 
   const publish = useCallback(async () => {
     setPublishing(true);
@@ -855,7 +858,14 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     setPublishError(null);
     // Pre-publish honesty: a Filter with no conditions passes everything —
     // legal (legacy pass-throughs), but worth saying before it ships.
-    const passThrough = nodes.filter((n) => n.type === "filter" && isPassThroughFilter(n.data.config)).map((n) => nodeTitle("filter", n.data));
+    // Branch heads are excluded: an Always-run / Fallback lane's head is a
+    // rules-less filter BY DESIGN (the mode lives on the hub), and a fallback
+    // does NOT pass every record — warning about it would be false.
+    const pathsIds = new Set(nodes.filter((n) => n.type === "paths").map((n) => n.id));
+    const branchHeadIds = new Set(edges.filter((e) => pathsIds.has(e.source)).map((e) => e.target));
+    const passThrough = nodes
+      .filter((n) => n.type === "filter" && !branchHeadIds.has(n.id) && isPassThroughFilter(n.data.config))
+      .map((n) => nodeTitle("filter", n.data));
     setPublishWarning(passThrough.length > 0 ? `${passThrough.join(", ")}: no conditions set — every record passes through.` : null);
     setReviewOpen(true);
   }, [endpoints, name, nodes]);

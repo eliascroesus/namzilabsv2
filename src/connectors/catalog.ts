@@ -409,6 +409,17 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     connect: "apiKey",
     instant: true,
     poll: true,
+    /**
+     * Instantly's `email_sent` IS a true send (its webhook and per-email walk
+     * only emit it for actual sends) — unlike Close's, which counts inbound
+     * and drafts. Same stored key, different meanings: each source declares
+     * its own truth, and the unbound lookup (eventTypeLabel with null source)
+     * falls back to the neutral humanizer when declarations disagree.
+     */
+    eventTypeLabels: {
+      email_sent: "Email sent",
+      reply: "Reply received",
+    },
     // Analytics-first: the primary streams read provider-COMPUTED totals, which
     // is a different guarantee from mirroring records. See docs/DATA_MODEL.md.
     sync: "derived-mirror",
@@ -671,18 +682,15 @@ export function isMirrorSource(source: string | null | undefined): boolean {
  */
 const LABEL_ACRONYMS: Record<string, string> = { sms: "SMS", whatsapp: "WhatsApp" };
 
-export function eventTypeLabel(source: string | null | undefined, eventType: string): string {
-  const entry = source ? catalogEntry(source) : undefined;
-  const mapped =
-    entry?.eventTypeLabels?.[eventType] ??
-    (entry ? undefined : CONNECTOR_CATALOG.find((c) => c.eventTypeLabels?.[eventType])?.eventTypeLabels?.[eventType]);
-  if (mapped) return mapped;
-  // Humanize a raw provider pair: "activity.email_thread.updated" →
-  // "Email thread updated". The "activity." prefix is Close's namespace for
-  // most of its event log and carries no meaning a person needs — but ONLY
-  // as the LEADING segment: `custom_fields.activity.created` is the custom
-  // fields OF activities, and deleting the word that says so once mislabeled
-  // it as plain "Custom fields created".
+/**
+ * Humanize a raw provider pair: "activity.email_thread.updated" →
+ * "Email thread updated". The "activity." prefix is Close's namespace for
+ * most of its event log and carries no meaning a person needs — but ONLY
+ * as the LEADING segment: `custom_fields.activity.created` is the custom
+ * fields OF activities, and deleting the word that says so once mislabeled
+ * it as plain "Custom fields created".
+ */
+function humanizeEventType(eventType: string): string {
   const segments = eventType.split(".");
   if (segments[0] === "activity") segments.shift();
   const words = segments
@@ -697,6 +705,25 @@ export function eventTypeLabel(source: string | null | undefined, eventType: str
   return sentence.charAt(0).toUpperCase() + sentence.slice(1);
 }
 
+export function eventTypeLabel(source: string | null | undefined, eventType: string): string {
+  if (source) {
+    return catalogEntry(source)?.eventTypeLabels?.[eventType] ?? humanizeEventType(eventType);
+  }
+  // Unbound lookup (org-wide dropdowns): a declared label is only usable when
+  // every source that declares this key AGREES. Two sources can share a
+  // stored key with different meanings — Close's `email_sent` counts inbound
+  // and drafts, Instantly's is a true send — and picking either label would
+  // describe the other source's rows wrongly on a surface that mixes both.
+  // Disagreement falls back to the neutral humanizer, pinned by test.
+  const declared = new Set<string>();
+  for (const c of CONNECTOR_CATALOG) {
+    const l = c.eventTypeLabels?.[eventType];
+    if (l) declared.add(l);
+  }
+  if (declared.size === 1) return [...declared][0];
+  return humanizeEventType(eventType);
+}
+
 /**
  * Whether a stored eventType is hidden from PICKERS for this source.
  *
@@ -707,14 +734,22 @@ export function eventTypeLabel(source: string | null | undefined, eventType: str
  * deletions, keystroke-rate note updates, and the workspace-admin plane
  * (custom field definitions, imports, memberships…).
  */
-export function isHiddenEventType(source: string | null | undefined, eventType: string): boolean {
-  const h = catalogEntry(source ?? "")?.hiddenEventTypes;
+function hiddenBy(h: ConnectorCatalogEntry["hiddenEventTypes"], eventType: string): boolean {
   if (!h) return false;
   return (
     (h.exact?.includes(eventType) ?? false) ||
     (h.prefixes?.some((p) => eventType.startsWith(p)) ?? false) ||
     (h.suffixes?.some((s) => eventType.endsWith(s)) ?? false)
   );
+}
+
+export function isHiddenEventType(source: string | null | undefined, eventType: string): boolean {
+  if (source) return hiddenBy(catalogEntry(source)?.hiddenEventTypes, eventType);
+  // Unbound (org-wide pickers): noise is noise regardless of which source's
+  // list a mixed dropdown was built from — without this fallback, the
+  // funnels/metrics pickers still offered every `.deleted` cascade and
+  // admin-plane type the hiding existed to remove.
+  return CONNECTOR_CATALOG.some((c) => hiddenBy(c.hiddenEventTypes, eventType));
 }
 
 /**

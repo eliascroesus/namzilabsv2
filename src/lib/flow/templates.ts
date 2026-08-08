@@ -100,7 +100,15 @@ function noShowRateCalendly(connectionId: string | null): FlowGraph {
       { id: "countn->rate:a", source: "countn", target: "rate", targetHandle: "a" },
       { id: "countb->rate:b", source: "countb", target: "rate", targetHandle: "b" },
     ],
-    metrics: [{ nodeId: "rate", enabled: true, name: "No-show rate", viz: "number", format: "percent", precision: 1 }],
+    // The count nodes are structural terminals (their only outgoing edges are
+    // a/b number references, which the layout drops), so Review & publish
+    // would otherwise seed them as ENABLED metrics named after the steps.
+    // Pre-seeding them disabled keeps them one checkbox away, not shipped.
+    metrics: [
+      { nodeId: "rate", enabled: true, name: "No-show rate", viz: "number", format: "percent", precision: 1 },
+      { nodeId: "countb", enabled: false, name: "Meetings booked", viz: "number", format: "number", precision: 0 },
+      { nodeId: "countn", enabled: false, name: "No-shows", viz: "number", format: "number", precision: 0 },
+    ],
   });
 }
 

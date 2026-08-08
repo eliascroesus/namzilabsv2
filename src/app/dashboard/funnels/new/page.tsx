@@ -78,10 +78,10 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
               <select name={`stage${i}_eventType`} defaultValue={one(sp[`stage${i}_eventType`])}
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm">
                 <option value="">event type…</option>
-                {/* Stage source is a separate dropdown, so curation runs
-                    unbound (first declared match) — values stay raw, this
-                    stage's saved value stays selectable even if hidden. */}
-                {eventTypeOptions(null, eventTypes, one(sp[`stage${i}_eventType`]) || null).map((o) => (
+                {/* Bound to the stage's chosen source when one is picked —
+                    per-source labels are exact; unbound they fall back to the
+                    neutral humanizer on any cross-source disagreement. */}
+                {eventTypeOptions(one(sp[`stage${i}_source`]) || null, eventTypes, one(sp[`stage${i}_eventType`]) || null).map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>

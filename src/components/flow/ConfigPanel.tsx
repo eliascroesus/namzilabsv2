@@ -398,8 +398,18 @@ function NodeConfig({
             onChange={(v) => {
               const c = connections.find((x) => x.id === v);
               // A different account invalidates the resource selection (its spreadsheet
-              // ids, calendars… belong to the old account), so sourceConfig resets.
-              onChange({ connectionId: c?.id ?? null, connectionName: c?.name ?? null, source: c?.source ?? null, eventType: null, sourceConfig: {} });
+              // ids, calendars… belong to the old account), so sourceConfig resets —
+              // UNLESS the new account is the SAME source (a template preset the
+              // source and record type before any account existed; wiping them on
+              // the pick would gut the template's wiring).
+              const sameSource = c?.source != null && c.source === cfg.source;
+              onChange({
+                connectionId: c?.id ?? null,
+                connectionName: c?.name ?? null,
+                source: c?.source ?? null,
+                eventType: sameSource ? (cfg.eventType ?? null) : null,
+                sourceConfig: sameSource ? ((cfg.sourceConfig as Record<string, unknown>) ?? {}) : {},
+              });
             }}
           />
           {connections.length === 0 && (
@@ -1076,15 +1086,24 @@ function TimeBetweenFields({
   groups: DataGroup[];
   onChange: (p: Record<string, unknown>) => void;
 }) {
-  const [types, setTypes] = useState<string[]>([]);
+  // Types PER SOURCE, not one blind union: a per-source lookup gets the
+  // exact curated label ("Email logged (sent or received)" for Close's
+  // email_sent, "Email sent" for Instantly's), where an unbound lookup must
+  // fall back to the neutral humanizer whenever two sources disagree.
+  const [bySource, setBySource] = useState<Array<{ source: string; types: string[] }>>([]);
   const connIds = connections.map((c) => c.id).join(" ");
   useEffect(() => {
     let live = true;
     void Promise.all(connections.map((c) => listRecordTypesAction(c.id))).then((results) => {
       if (!live) return;
-      const union = new Set<string>();
-      for (const r of results) if (r.ok) for (const t of r.types) union.add(t);
-      setTypes([...union]);
+      const map = new Map<string, Set<string>>();
+      results.forEach((r, i) => {
+        if (!r.ok) return;
+        const src = connections[i]?.source ?? "";
+        if (!map.has(src)) map.set(src, new Set());
+        for (const t of r.types) map.get(src)!.add(t);
+      });
+      setBySource([...map.entries()].map(([source, set]) => ({ source, types: [...set] })));
     });
     return () => {
       live = false;
@@ -1094,18 +1113,30 @@ function TimeBetweenFields({
 
   const from = String(cfg.fromType ?? "");
   const to = String(cfg.toType ?? "");
-  const typeSelect = (label: string, value: string, key: "fromType" | "toType") => (
-    <Field label={label}>
-      <Select
-        value={value}
-        width={W}
-        searchable
-        placeholder="Choose a record type…"
-        options={eventTypeOptions(null, types, value || null)}
-        onChange={(v) => onChange({ [key]: v })}
-      />
-    </Field>
-  );
+  const typeSelect = (label: string, value: string, key: "fromType" | "toType") => {
+    const merged = new Map<string, { value: string; label: string; hint?: string }>();
+    for (const s of bySource) {
+      for (const o of eventTypeOptions(s.source, s.types, null)) {
+        if (!merged.has(o.value)) merged.set(o.value, o);
+      }
+    }
+    if (value && !merged.has(value)) {
+      merged.set(value, { value, label: eventTypeLabel(null, value), hint: value });
+    }
+    const options = [...merged.values()].sort((a, b) => a.label.localeCompare(b.label));
+    return (
+      <Field label={label}>
+        <Select
+          value={value}
+          width={W}
+          searchable
+          placeholder="Choose a record type…"
+          options={options}
+          onChange={(v) => onChange({ [key]: v })}
+        />
+      </Field>
+    );
+  };
 
   return (
     <div className="space-y-4">

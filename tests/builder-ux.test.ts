@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { validateGraph } from "@/lib/flow/validate";
 import { parseGraph, NODE_LABELS, NODE_TYPES } from "@/lib/flow/types";
 import { defaultConfig, NODE_META } from "@/components/flow/node-meta";
-import { isPassThroughFilter } from "@/components/flow/graph-utils";
+import { isPassThroughFilter, nodeNeedsSetup } from "@/components/flow/graph-utils";
 import { FLOW_TEMPLATES } from "@/lib/flow/templates";
 
 /**
@@ -66,9 +66,35 @@ describe("every shipped template validates clean", () => {
     for (const t of FLOW_TEMPLATES) {
       const g = t.build("00000000-0000-0000-0000-000000000000");
       expect({ template: t.id, issues: validateGraph(g) }).toEqual({ template: t.id, issues: [] });
-      // Every template pre-seeds at least one enabled, human-named metric.
-      expect(g.metrics.length).toBeGreaterThan(0);
-      expect(g.metrics.every((m) => m.enabled && m.name.length > 3)).toBe(true);
+      // At least one enabled metric, every pre-seeded one human-named — a
+      // template may deliberately pre-seed DISABLED specs for structural
+      // terminals (no-show rate's count nodes) so they don't auto-publish.
+      expect(g.metrics.some((m) => m.enabled)).toBe(true);
+      expect(g.metrics.every((m) => m.name.length > 3)).toBe(true);
     }
+  });
+});
+
+describe("an account is required, not just a source", () => {
+  const APP_NO_CONN = { connectionId: null, source: "close", eventType: "lead_created", sourceConfig: {} };
+
+  it("nodeNeedsSetup flags a source-only Get data step", () => {
+    // Sabotage: restore the `!connectionId && !source` check and a template
+    // built without a prefilled account looks Ready while silently reading
+    // EVERY connection of that source in the org — blended workspaces.
+    expect(nodeNeedsSetup("app", APP_NO_CONN, 0)).toBe(true);
+    expect(nodeNeedsSetup("app", { ...APP_NO_CONN, connectionId: "c1" }, 0)).toBe(false);
+  });
+
+  it("publish blocks a source-only Get data step, in plain English", () => {
+    const g = parseGraph({
+      nodes: [
+        { id: "a", type: "app", data: { config: APP_NO_CONN } },
+        { id: "m", type: "formula", data: { config: { op: "count" } } },
+      ],
+      edges: [{ id: "a->m", source: "a", target: "m" }],
+      metrics: [{ nodeId: "m", enabled: true, name: "Count" }],
+    });
+    expect(validateGraph(g).some((i) => i.message === "Get data needs an account — open the step and choose one.")).toBe(true);
   });
 });
