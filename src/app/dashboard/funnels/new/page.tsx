@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
-import { eventTypeLabel } from "@/connectors/catalog";
+import { eventTypeOptions } from "@/connectors/catalog";
 import { AppHeader } from "@/components/app-header";
 import { getDb } from "@/db/client";
 import { computeFunnel, distinctSources, distinctEventTypes } from "@/lib/metrics/compute";
@@ -78,10 +78,11 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
               <select name={`stage${i}_eventType`} defaultValue={one(sp[`stage${i}_eventType`])}
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm">
                 <option value="">event type…</option>
-                {/* Stage source is a separate dropdown, so the label lookup
-                    runs unbound (first declared match) — values stay raw. */}
-                {eventTypes.map((t) => (
-                  <option key={t} value={t}>{eventTypeLabel(null, t)}</option>
+                {/* Stage source is a separate dropdown, so curation runs
+                    unbound (first declared match) — values stay raw, this
+                    stage's saved value stays selectable even if hidden. */}
+                {eventTypeOptions(null, eventTypes, one(sp[`stage${i}_eventType`]) || null).map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
               <select name={`stage${i}_source`} defaultValue={one(sp[`stage${i}_source`])}

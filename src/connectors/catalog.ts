@@ -167,6 +167,17 @@ export type ConnectorCatalogEntry = {
    * `eventTypeLabel`'s humanizer.
    */
   eventTypeLabels?: Record<string, string>;
+  /**
+   * Stored eventTypes PICKERS should not offer (see isHiddenEventType).
+   * Display-only by contract: nothing at ingest, query, or filter level may
+   * ever consult this — a hidden type is stored, filterable, and remains
+   * selectable where it is already the saved value.
+   */
+  hiddenEventTypes?: {
+    exact?: readonly string[];
+    prefixes?: readonly string[];
+    suffixes?: readonly string[];
+  };
   /** Manual webhook setup note shown on the connection page when not auto. */
   webhookSetup?: string;
 };
@@ -322,17 +333,73 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
      * twice (see the docstring above `canonicalType` in close.ts).
      */
     eventTypeLabels: {
-      sms_sent: "SMS sent",
-      email_sent: "Email sent",
+      /**
+       * TRUTH IN LABELS, verified against Close's docs (see the census notes
+       * above `canonicalType` in close.ts):
+       * - Close's `created` action on email/SMS fires for synced INBOUND
+       *   messages and outbox/drafts too — so the mapped `email_sent` /
+       *   `sms_sent` are logged-either-direction counts, and say so. The
+       *   true send signal is the `.sent` action, which is stored raw and
+       *   wears the plain name here.
+       * - `task_completed` is a DEAD key (Close emits `task.SUBTYPE.*`);
+       *   the real completion signal is `activity.task_completed.created`.
+       * - `activity.created.created` is Close's "Created" timeline activity
+       *   — the same fact as `lead_created`, arriving twice; labeled so a
+       *   saved reference renders honestly, and hidden from pickers.
+       */
+      sms_sent: "SMS logged (sent or received)",
+      email_sent: "Email logged (sent or received)",
+      "activity.sms.sent": "SMS sent",
+      "activity.email.sent": "Email sent",
       call_logged: "Call logged",
       call_connected: "Call connected",
       call_completed: "Call completed",
       meeting_scheduled: "Meeting scheduled",
       meeting_logged: "Meeting logged",
       meeting_held: "Meeting held",
+      "activity.meeting.started": "Meeting started",
+      "activity.meeting.canceled": "Meeting canceled",
       lead_created: "Lead created",
+      "activity.created.created": "Lead created (timeline)",
       opportunity_created: "Opportunity created",
-      task_completed: "Task completed",
+      task_completed: "Task completed (legacy)",
+      "activity.task_completed.created": "Task completed",
+      "activity.lead_status_change.created": "Lead status changed",
+      "activity.opportunity_status_change.created": "Opportunity status changed",
+      "task.missed_call.created": "Missed-call task created",
+      "activity.form_submission.created": "Form submitted",
+    },
+    /**
+     * What no analytics picker should offer (display-only; see
+     * isHiddenEventType). Three planes: cascade/deletion churn (`.deleted`
+     * fires on every child when a lead is deleted), edit noise
+     * (`activity.note.updated` fires WHILE TYPING a note), and the
+     * workspace-admin plane a sales metric can never be about. Plus
+     * `activity.created.created`, which double-counts `lead_created`.
+     */
+    hiddenEventTypes: {
+      exact: ["activity.note.updated", "activity.email.updated", "activity.created.created"],
+      prefixes: [
+        "activity.email_thread.",
+        "activity.lead_merge.",
+        "custom_fields.",
+        "custom_activity_type",
+        "custom_object_type",
+        "status.lead",
+        "status.opportunity",
+        "saved_search",
+        "import.",
+        "export.",
+        "bulk_action.",
+        "membership.",
+        "sequence.",
+        "email_template",
+        "sms_template",
+        "comment",
+        "phone_number",
+        "group.",
+      ],
+      suffixes: [".deleted"],
     },
   },
   {
@@ -598,6 +665,12 @@ export function isMirrorSource(source: string | null | undefined): boolean {
  * safe while the label-collision test forbids two sources declaring the same
  * key with different labels (tests/event-type-labels.test.ts).
  */
+/**
+ * Words the humanizer must not sentence-case. Applied at ANY word position:
+ * "activity.sms.updated" reads "SMS updated", not "Sms updated".
+ */
+const LABEL_ACRONYMS: Record<string, string> = { sms: "SMS", whatsapp: "WhatsApp" };
+
 export function eventTypeLabel(source: string | null | undefined, eventType: string): string {
   const entry = source ? catalogEntry(source) : undefined;
   const mapped =
@@ -606,12 +679,65 @@ export function eventTypeLabel(source: string | null | undefined, eventType: str
   if (mapped) return mapped;
   // Humanize a raw provider pair: "activity.email_thread.updated" →
   // "Email thread updated". The "activity." prefix is Close's namespace for
-  // most of its event log and carries no meaning a person needs.
-  const words = eventType
-    .split(".")
-    .filter((p) => p !== "activity")
+  // most of its event log and carries no meaning a person needs — but ONLY
+  // as the LEADING segment: `custom_fields.activity.created` is the custom
+  // fields OF activities, and deleting the word that says so once mislabeled
+  // it as plain "Custom fields created".
+  const segments = eventType.split(".");
+  if (segments[0] === "activity") segments.shift();
+  const words = segments
     .join(" ")
     .replace(/_/g, " ")
-    .trim();
-  return words ? words[0].toUpperCase() + words.slice(1) : eventType;
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => LABEL_ACRONYMS[w] ?? w);
+  if (words.length === 0) return eventType;
+  const sentence = words.join(" ");
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}
+
+/**
+ * Whether a stored eventType is hidden from PICKERS for this source.
+ *
+ * Display-only, always: hidden types stay stored, stay filterable by exact
+ * string, and stay selectable wherever they are already the saved value —
+ * `eventTypeOptions` enforces that last part. Hiding exists because Close's
+ * event log carries planes no analytics dropdown should offer: cascade
+ * deletions, keystroke-rate note updates, and the workspace-admin plane
+ * (custom field definitions, imports, memberships…).
+ */
+export function isHiddenEventType(source: string | null | undefined, eventType: string): boolean {
+  const h = catalogEntry(source ?? "")?.hiddenEventTypes;
+  if (!h) return false;
+  return (
+    (h.exact?.includes(eventType) ?? false) ||
+    (h.prefixes?.some((p) => eventType.startsWith(p)) ?? false) ||
+    (h.suffixes?.some((s) => eventType.endsWith(s)) ?? false)
+  );
+}
+
+/**
+ * The one options builder every event-type picker goes through: hidden types
+ * filtered out, the CURRENT value always retained (even hidden, even absent
+ * from the fresh list — deselecting someone's saved filter because a fetch
+ * was slow or a type was later hidden would silently widen their data), raw
+ * string as the hint when the label differs, and sorted by LABEL — stored-
+ * string order scatters related labels ("activity.email.sent" and
+ * "email_sent" landed a full alphabet apart, which is how a collision went
+ * unnoticed).
+ */
+export function eventTypeOptions(
+  source: string | null | undefined,
+  types: readonly string[],
+  current?: string | null,
+): Array<{ value: string; label: string; hint?: string }> {
+  const values = new Set(types.filter((t) => !isHiddenEventType(source, t)));
+  if (current) values.add(current);
+  return [...values]
+    .map((t) => {
+      const label = eventTypeLabel(source, t);
+      return { value: t, label, hint: label === t ? undefined : t };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
 }

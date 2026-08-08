@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
-import { eventTypeLabel } from "@/connectors/catalog";
+import { eventTypeOptions } from "@/connectors/catalog";
 import { AppHeader } from "@/components/app-header";
 import { getDb } from "@/db/client";
 import { computeAggregate, queryEvents, distinctSources, distinctEventTypes } from "@/lib/metrics/compute";
@@ -114,13 +114,19 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
             </Row>
             <Row label="Event type">
               {/* Values stay the stored strings (the definition matches them
-                  with `=`); only the labels are humanized. */}
-              <Select
-                name="eventType"
-                value={one(sp.eventType)}
-                options={["", ...eventTypes]}
-                labels={{ "": "Any", ...Object.fromEntries(eventTypes.map((t) => [t, eventTypeLabel(one(sp.source) || null, t)])) }}
-              />
+                  with `=`); eventTypeOptions curates: hidden noise dropped,
+                  a saved value kept, labels humanized, sorted by label. */}
+              {(() => {
+                const opts = eventTypeOptions(one(sp.source) || null, eventTypes, one(sp.eventType) || null);
+                return (
+                  <Select
+                    name="eventType"
+                    value={one(sp.eventType)}
+                    options={["", ...opts.map((o) => o.value)]}
+                    labels={{ "": "Any", ...Object.fromEntries(opts.map((o) => [o.value, o.label])) }}
+                  />
+                );
+              })()}
             </Row>
           </div>
           <div className="grid grid-cols-2 gap-4">

@@ -333,9 +333,29 @@ function laterDate(a: string | null, b: string | null): string | null {
  *
  * `activity.meeting.updated` stays unmapped ON PURPOSE: a reschedule and a typo
  * correction are the same event, so no honest name exists for it.
- * `task.completed` stays mapped despite 0/500 — a census of one workspace says
- * that workspace does not use tasks, not that nobody does, and an unused mapping
- * costs nothing.
+ *
+ * `task.completed` is a DEAD KEY — the 0/500 census result was never about
+ * workspace habits. Close's docs name task objects `task.SUBTYPE`
+ * (`task.lead`, `task.outbound_call`, …), so the pair we build is
+ * `task.lead.completed` and can never equal `task.completed`. The real
+ * "a task got done" signal is `activity.task_completed.created`, labeled in
+ * the catalog. The dead entry stays: stored strings are frozen, it is inert,
+ * and removing it buys nothing.
+ *
+ * SEMANTICS THE NAMES DON'T SAY (Close docs, verified Aug 2026 — the labels
+ * in catalog.ts carry the honest versions):
+ * - `activity.email.created` / `activity.sms.created` fire for synced
+ *   INBOUND messages and outbox/drafts too — `email_sent`/`sms_sent` are
+ *   logged-either-direction counts. The true send is the `.sent` action,
+ *   stored raw and labeled "Email sent"/"SMS sent".
+ * - `activity.call.created` fires at DIAL time (also for inbound calls and
+ *   manual logs — filter `data.direction = "outbound"` for dials; a manual
+ *   log's honest moment is `data.activity_at`). Disposition and duration
+ *   arrive on LATER events, not on created.
+ * - `answered`/`completed` fire only for calls made through Close's own
+ *   VoIP. A workspace dialing through an external phone system emits only
+ *   `created` — `call_connected = 0` can mean "can't see", not "never
+ *   connects".
  */
 function canonicalType(objectType: string, action: string): string {
   const key = `${objectType}.${action}`;

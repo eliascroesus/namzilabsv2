@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { catalogEntry, eventTypeLabel, type FlowConfigField } from "@/connectors/catalog";
+import { catalogEntry, eventTypeLabel, eventTypeOptions, type FlowConfigField } from "@/connectors/catalog";
 import {
   listAppFieldsAction,
   listRecordTypesAction,
@@ -920,7 +920,6 @@ function RecordTypeField({
   }, [conn.id]);
 
   const current = typeof cfg.eventType === "string" ? (cfg.eventType as string) : "";
-  const listed = current && !types.includes(current) ? [current, ...types] : types;
   return (
     <Field label="Record type">
       <Select
@@ -930,13 +929,10 @@ function RecordTypeField({
         value={current}
         width={W}
         placeholder="Choose a record type…"
-        options={[
-          { value: "", label: "All record types" },
-          ...listed.map((t) => {
-            const label = eventTypeLabel(conn.source, t);
-            return { value: t, label, hint: label === t ? undefined : t };
-          }),
-        ]}
+        // eventTypeOptions owns curation: hidden noise dropped, the saved
+        // value always retained, labels humanized with the raw string as
+        // hint, sorted by label.
+        options={[{ value: "", label: "All record types" }, ...eventTypeOptions(conn.source, types, current || null)]}
         onChange={(v) => onChange({ eventType: v })}
       />
     </Field>
