@@ -22,6 +22,10 @@ export const NODE_TYPES = [
   "group",
   "formula",
   "time",
+  // Time between pairs two record types per key (a lead and its first call)
+  // and emits one record per match carrying the gap as a real numeric field —
+  // the primitive that makes speed-to-lead computable. New graphs only.
+  "time_between",
   // "calculate" is the legacy merged node; it remains in the engine so existing
   // flows keep loading/running unchanged (hidden from the picker).
   "calculate",
@@ -137,7 +141,7 @@ export type AppConfig = z.infer<typeof AppConfigSchema>;
 // zod strips it from any stored config on parse, so old graphs are unaffected.)
 
 // ---------- Aggregate ----------
-export const AGGREGATIONS = ["count", "count_distinct", "sum", "avg", "min", "max"] as const;
+export const AGGREGATIONS = ["count", "count_distinct", "sum", "avg", "median", "min", "max"] as const;
 export const TIME_UNITS = ["day", "week", "month", "quarter", "year"] as const;
 
 const GroupBySchema = z
@@ -194,6 +198,26 @@ export const TimeConfigSchema = z.object({
 });
 export type TimeConfig = z.infer<typeof TimeConfigSchema>;
 
+// ---------- Time between ----------
+export const TIME_BETWEEN_UNITS = ["seconds", "minutes", "hours", "days"] as const;
+/**
+ * Pairs two record types PER KEY and measures the gap. For each distinct
+ * value of `keyField`: take the earliest `fromType` record, then the first
+ * `toType` record at-or-after it (`mode: "first"`) or the latest (`"last"`);
+ * unmatched keys emit nothing. The result is one record per match with the
+ * duration as a plain number in `unit` — which is the entire trick: the
+ * engine's aggregates already know how to average a number, they just never
+ * had a duration to chew on (dates are not numbers anywhere else).
+ */
+export const TimeBetweenConfigSchema = z.object({
+  keyField: z.string().default(""),
+  fromType: z.string().default(""),
+  toType: z.string().default(""),
+  mode: z.enum(["first", "last"]).default("first"),
+  unit: z.enum(TIME_BETWEEN_UNITS).default("minutes"),
+});
+export type TimeBetweenConfig = z.infer<typeof TimeBetweenConfigSchema>;
+
 // ---------- Formula / Calculate ----------
 /**
  * The unified Calculate step. The first nine ops compare TWO NUMBERS (its a/b
@@ -216,12 +240,13 @@ export const FORMULA_OPS = [
   "count_distinct",
   "sum",
   "avg",
+  "median",
   "min",
   "max",
 ] as const;
 
 /** Ops that aggregate the incoming records (vs. comparing two numbers). */
-export const DATASET_FORMULA_OPS = ["count", "count_distinct", "sum", "avg", "min", "max"] as const;
+export const DATASET_FORMULA_OPS = ["count", "count_distinct", "sum", "avg", "median", "min", "max"] as const;
 export function isDatasetFormulaOp(op: unknown): boolean {
   return (DATASET_FORMULA_OPS as readonly string[]).includes(String(op ?? ""));
 }

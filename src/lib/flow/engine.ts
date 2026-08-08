@@ -14,6 +14,7 @@ import {
   OutputConfigSchema,
   type AppConfig,
   TimeConfigSchema,
+  TimeBetweenConfigSchema,
   FormulaConfigSchema,
   GroupConfigSchema,
   CalculateConfigSchema,
@@ -173,6 +174,8 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
         return execFilter(node, inputs);
       case "time":
         return execTime(node, inputs);
+      case "time_between":
+        return execTimeBetween(node, inputs);
       case "unite":
         return execUnite(node, inputs);
       case "paths":
@@ -418,6 +421,94 @@ function execTime(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     return t != null && t >= start && t <= end;
   });
   return datasetExec("time", node.id, passed, input.records.length);
+}
+
+// ---------- Time between ----------
+const TIME_BETWEEN_UNIT_MS: Record<string, number> = {
+  seconds: 1_000,
+  minutes: 60_000,
+  hours: 3_600_000,
+  days: 86_400_000,
+};
+
+/**
+ * The pairing primitive nothing else in the engine has: per distinct
+ * `keyField` value, the earliest `fromType` record is matched with its
+ * `toType` record (mode "first" = first at-or-after the from moment;
+ * "last" = the latest one), and ONE record per match is emitted carrying
+ * the gap as a plain number (`properties.duration`, in `unit`).
+ *
+ * Three load-bearing choices:
+ * - The duration is a NUMBER, not a date pair: the existing avg/median/min/
+ *   max never learned to read timestamps, and they don't have to — a
+ *   downstream Calculate over `properties.duration` just works.
+ * - "First at-or-after": a call BEFORE the lead existed (a re-imported
+ *   history overlap, a mismatched key) must never count as the response to
+ *   it. Unmatched keys emit NOTHING — a lead never called has no duration,
+ *   and emitting 0 would drag every average toward a lie.
+ * - `occurredAt` = the FROM record's moment, so date-range filters and the
+ *   dashboard's time reference read as "leads created in this window",
+ *   which is the question speed-to-lead answers.
+ */
+function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = TimeBetweenConfigSchema.parse(node.data.config ?? {});
+  const input = requireDataset(inputs, "Time between");
+  if (!cfg.keyField || !cfg.fromType || !cfg.toType) {
+    throw new Error("Time between needs a matching field and both record types picked.");
+  }
+  const unitMs = TIME_BETWEEN_UNIT_MS[cfg.unit] ?? 60_000;
+
+  type Pair = { fromAt: number | null; toAts: number[] };
+  const byKey = new Map<string, Pair>();
+  for (const r of input.records) {
+    const keyRaw = getField(r, cfg.keyField);
+    const key = typeof keyRaw === "string" ? keyRaw : keyRaw != null ? String(keyRaw) : "";
+    if (!key) continue; // no key, no honest match
+    const at = dateMs(getField(r, "occurredAt"));
+    if (at == null) continue;
+    let pair = byKey.get(key);
+    if (!pair) {
+      pair = { fromAt: null, toAts: [] };
+      byKey.set(key, pair);
+    }
+    if (r.eventType === cfg.fromType) pair.fromAt = pair.fromAt == null ? at : Math.min(pair.fromAt, at);
+    // A record can be BOTH when fromType === toType — legal, means "gap
+    // between the first two occurrences", so no else-if.
+    if (r.eventType === cfg.toType) pair.toAts.push(at);
+  }
+
+  const out: FlowRecord[] = [];
+  for (const [key, pair] of byKey) {
+    if (pair.fromAt == null) continue;
+    const from = pair.fromAt;
+    // Loop, not spread/filter chains — same stack-bound discipline as
+    // computeAgg's min/max (a spread over an unbounded collection throws at
+    // ~150k args). Same-type pairing measures to the NEXT occurrence.
+    let toAt: number | null = null;
+    for (const t of pair.toAts) {
+      const eligible = cfg.fromType === cfg.toType ? t > from : t >= from;
+      if (!eligible) continue;
+      if (toAt == null || (cfg.mode === "first" ? t < toAt : t > toAt)) toAt = t;
+    }
+    if (toAt == null) continue;
+    out.push({
+      id: `tb:${node.id}:${key}`,
+      source: "flow",
+      eventType: "time_between",
+      subject: key,
+      occurredAt: new Date(from).toISOString(),
+      value: null,
+      currency: null,
+      connectionId: "",
+      properties: {
+        key,
+        from_at: new Date(from).toISOString(),
+        to_at: new Date(toAt).toISOString(),
+        duration: (toAt - from) / unitMs,
+      },
+    });
+  }
+  return datasetExec("time_between", node.id, out, input.records.length);
 }
 
 // ---------- Unite ----------
@@ -878,6 +969,15 @@ function computeAgg(records: FlowRecord[], aggregation: string, field: string, d
       if (nums.length === 0) return 0;
       if (aggregation === "sum") return round(nums.reduce((a, b) => a + b, 0));
       if (aggregation === "avg") return round(nums.reduce((a, b) => a + b, 0) / nums.length);
+      if (aggregation === "median") {
+        // Sort a copy — same memory bound as the materialized nums array
+        // itself. Even count averages the two middles (the conventional
+        // answer, and the one that keeps median(2,4) = 3 rather than a
+        // coin-flip between them).
+        const sorted = [...nums].sort((a, b) => a - b);
+        const mid = sorted.length >> 1;
+        return round(sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2);
+      }
       /**
        * A LOOP, NOT A SPREAD, and not as a micro-optimisation.
        *

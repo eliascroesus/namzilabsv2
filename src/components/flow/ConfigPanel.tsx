@@ -14,6 +14,7 @@ import type { SourceOption } from "@/connectors/types";
 import {
   AGGREGATIONS,
   TIME_UNITS,
+  TIME_BETWEEN_UNITS,
   VIZ_TYPES,
   TIME_PRESETS,
   FORMULA_OPS,
@@ -44,7 +45,7 @@ const BTN_BASE = "rounded-xl px-4 py-3 text-sm font-semibold transition-all acti
 const BTN_PRIMARY = `${BTN_BASE} bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700 disabled:cursor-default disabled:bg-neutral-200 disabled:text-neutral-400 disabled:shadow-none`;
 const BTN_SECONDARY = `${BTN_BASE} border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50`;
 
-const AGG_LABELS: Record<string, string> = { count: "Count of records", count_distinct: "Count of distinct values", sum: "Sum of a field", avg: "Average of a field", min: "Minimum of a field", max: "Maximum of a field" };
+const AGG_LABELS: Record<string, string> = { count: "Count of records", count_distinct: "Count of distinct values", sum: "Sum of a field", avg: "Average of a field", median: "Median of a field", min: "Minimum of a field", max: "Maximum of a field" };
 const FORMULA_LABELS: Record<string, string> = {
   add: "+  Add",
   subtract: "−  Subtract",
@@ -59,6 +60,7 @@ const FORMULA_LABELS: Record<string, string> = {
   count_distinct: "#  Count unique values",
   sum: "Σ  Sum",
   avg: "x̄  Average",
+  median: "x̃  Median (middle value)",
   min: "↓  Minimum (lowest value)",
   max: "↑  Maximum (highest value)",
 };
@@ -517,6 +519,10 @@ function NodeConfig({
         )}
       </div>
     );
+  }
+
+  if (type === "time_between") {
+    return <TimeBetweenFields cfg={cfg} connections={connections} groups={groups} onChange={onChange} />;
   }
 
   if (type === "formula") {
@@ -1026,6 +1032,97 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
       </p>
       <p className="mt-1 text-xs text-gray-600">{note}</p>
     </Field>
+  );
+}
+
+/**
+ * Time between's Configure: which field ties the two events to the same
+ * thing (a lead id), and which two record types bound the measurement.
+ *
+ * The type dropdowns union every connection's live record types: the step
+ * reads whatever flows in (often two Get-data lanes through a Combine), and
+ * the panel has no ancestor map — offering the org's whole vocabulary keeps
+ * the picker useful before anything is tested, and the curated
+ * eventTypeOptions keeps it readable. Types are DB-only lookups (no
+ * provider calls), cached per session like record types.
+ */
+function TimeBetweenFields({
+  cfg,
+  connections,
+  groups,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  connections: ConnMeta[];
+  groups: DataGroup[];
+  onChange: (p: Record<string, unknown>) => void;
+}) {
+  const [types, setTypes] = useState<string[]>([]);
+  const connIds = connections.map((c) => c.id).join(" ");
+  useEffect(() => {
+    let live = true;
+    void Promise.all(connections.map((c) => listRecordTypesAction(c.id))).then((results) => {
+      if (!live) return;
+      const union = new Set<string>();
+      for (const r of results) if (r.ok) for (const t of r.types) union.add(t);
+      setTypes([...union]);
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connIds]);
+
+  const from = String(cfg.fromType ?? "");
+  const to = String(cfg.toType ?? "");
+  const typeSelect = (label: string, value: string, key: "fromType" | "toType") => (
+    <Field label={label}>
+      <Select
+        value={value}
+        width={W}
+        searchable
+        placeholder="Choose a record type…"
+        options={eventTypeOptions(null, types, value || null)}
+        onChange={(v) => onChange({ [key]: v })}
+      />
+    </Field>
+  );
+
+  return (
+    <div className="space-y-4">
+      <Field label="Match records by">
+        <FieldInput value={String(cfg.keyField ?? "")} groups={groups} onChange={(v) => onChange({ keyField: v })} />
+        <p className="mt-1 text-xs text-neutral-500">
+          The field both records share — the thing that makes them the same story (a lead id, an email).
+        </p>
+      </Field>
+      {typeSelect("From (the starting event)", from, "fromType")}
+      {typeSelect("To (the event that ends the clock)", to, "toType")}
+      <Field label="Which ending to measure to">
+        <Select
+          value={String(cfg.mode ?? "first")}
+          width={W}
+          options={[
+            { value: "first", label: "The first one after the start" },
+            { value: "last", label: "The last one" },
+          ]}
+          onChange={(v) => onChange({ mode: v })}
+        />
+      </Field>
+      <Field label="Show the time in">
+        <Select
+          value={String(cfg.unit ?? "minutes")}
+          width={W}
+          options={TIME_BETWEEN_UNITS.map((u) => ({ value: u, label: title(u) }))}
+          onChange={(v) => onChange({ unit: v })}
+        />
+      </Field>
+      <p className="rounded-md border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-600">
+        Each match becomes one record with a <b>duration</b> field — add a Calculate step after this to take the
+        average or median. Records with no match are left out (a lead never called has no response time), and a
+        manually-logged event is timed at the moment it was logged, not when it happened.
+      </p>
+    </div>
   );
 }
 

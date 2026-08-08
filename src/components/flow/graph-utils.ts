@@ -259,6 +259,9 @@ export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, input
     return missingAB;
   }
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? missingAB : inputCount === 0;
+  if (type === "time_between") {
+    return inputCount === 0 || !String(cfg.keyField ?? "").trim() || !String(cfg.fromType ?? "").trim() || !String(cfg.toType ?? "").trim();
+  }
   if (type === "output") return inputCount === 0 || !String(cfg.name ?? "").trim();
   return inputCount === 0;
 }

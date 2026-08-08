@@ -490,9 +490,24 @@ from an analytics API — their product computes them from message history, whic
 is the same history this connector already polls. So Sendblue is the mirror image
 of Instantly: there, per-email rows are 37.9K against the tightest rate bucket in
 the catalog and provider-computed analytics are the only sane read; here the
-whole account is on the order of a thousand messages and every dashboard tile is
-a Filter + Calculate away. Adding an analytics stream would add a second source
-of truth for numbers we can already derive.
+whole account is on the order of a thousand messages and every count or rate is
+a Filter + Calculate away — and the two duration metrics (speed to dial, rep
+response time) are a **Time between + Calculate** away, since they pair two
+events per conversation rather than counting one. Adding an analytics stream
+would add a second source of truth for numbers we can already derive.
+
+### Time between: the pairing step
+
+Cross-record durations (speed to lead, response time) were not expressible
+until the `time_between` node existed: nothing else in the engine reads two
+records at once, and timestamps are not numbers anywhere in the aggregate
+machinery. The node pairs two record types per key (`keyField`, e.g. the
+lead id both events carry), takes the earliest `fromType` and the first
+`toType` at-or-after it, and emits ONE record per match whose
+`properties.duration` is a plain number in the chosen unit — so a downstream
+Calculate (average, median, min, max) works with zero special cases.
+Unmatched keys emit nothing: a lead never called has no response time, and a
+zero would drag every average toward a lie.
 
 The connector's own response parsing is still **unverified against the live API**
 (`API_BASE`, the message-list envelope and the date field are all assumptions —

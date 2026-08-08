@@ -23,6 +23,15 @@ const PATHS: Record<string, React.ReactNode> = {
       <path d="M12 8v4l3 2" />
     </>
   ),
+  // Time between: two moments and the span connecting them.
+  time_between: (
+    <>
+      <circle cx="5.5" cy="12" r="2" />
+      <circle cx="18.5" cy="12" r="2" />
+      <path d="M7.5 12h9" />
+      <path d="M14.5 9.5l2.5 2.5-2.5 2.5" />
+    </>
+  ),
   paths: (
     <>
       <circle cx="6" cy="12" r="2" />
@@ -87,6 +96,7 @@ export const NODE_ACCENT: Record<string, string> = {
   formula: "#8B5CF6", // violet — Calculation
   calculate: "#8B5CF6", // violet — Calculation (legacy)
   time: "#F59E0B", // amber — Conditions (date)
+  time_between: "#14B8A6", // teal — Calculation (pairing)
   group: "#F97316", // orange — Calculation (legacy)
   output: "#0F172A", // slate — Dashboard
 };

@@ -102,6 +102,7 @@ function isNumberProducer(n: FNode): boolean {
 function setupHint(type: string, cfg: Record<string, unknown>, inputCount: number): string {
   if (type === "app") return cfg.connectionId ? "Choose what data to pull." : "Choose an account to load data.";
   if (type === "unite") return "Pick the lanes to bring together.";
+  if (type === "time_between") return "Pick the matching field and the two record types.";
   if (type === "formula") return isDatasetFormulaOp(cfg.op ?? "percentage") ? "Connect an input." : "Pick or type a First and Second number.";
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? "Pick a First and Second number." : "Connect an input.";
   if (type === "output") return inputCount === 0 ? "Connect an input." : "Name this metric.";

@@ -1,4 +1,4 @@
-import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, CalculateConfigSchema, FormulaConfigSchema, NODE_TYPES, isDatasetFormulaOp, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
+import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, CalculateConfigSchema, FormulaConfigSchema, TimeBetweenConfigSchema, NODE_TYPES, isDatasetFormulaOp, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
 
 export type ValidationIssue = { nodeId?: string; message: string };
 
@@ -11,11 +11,11 @@ function mappedRuleGaps(filters: FilterConfig | undefined): number {
 type ShapeKind = "dataset" | "value" | "none";
 
 /** Nodes that emit a record set. */
-const DATASET_PRODUCERS = new Set(["app", "filter", "time", "paths", "unite"]);
+const DATASET_PRODUCERS = new Set(["app", "filter", "time", "time_between", "paths", "unite"]);
 /** Nodes that emit a computed value/series/grouped. */
 const VALUE_PRODUCERS = new Set(["formula", "group", "calculate"]);
 /** Nodes that consume record sets. */
-const DATASET_CONSUMERS = new Set(["filter", "time", "group", "paths", "unite"]);
+const DATASET_CONSUMERS = new Set(["filter", "time", "time_between", "group", "paths", "unite"]);
 
 function outputKind(node: FlowNode): ShapeKind {
   if (DATASET_PRODUCERS.has(node.type)) return "dataset";
@@ -120,6 +120,13 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
       const cfg = FilterConfigSchema.safeParse(node.data.config ?? {});
       if (cfg.success && mappedRuleGaps(cfg.data) > 0) {
         issues.push({ nodeId: node.id, message: "A condition compares against a field, but no field is chosen." });
+      }
+    }
+
+    if (node.type === "time_between") {
+      const cfg = TimeBetweenConfigSchema.safeParse(node.data.config ?? {});
+      if (!cfg.success || !cfg.data.keyField || !cfg.data.fromType || !cfg.data.toType) {
+        issues.push({ nodeId: node.id, message: "Time between needs a matching field and both record types picked." });
       }
     }
 

@@ -13,7 +13,11 @@ export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: 
   paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", keywords: "split branch route condition paths" },
   // The one Calculation step: it aggregates records into a number (count/sum/avg/…,
   // the former Count node) OR compares two numbers (rate, ratio, % change).
-  formula: { label: "Calculate", blurb: "Count, sum, or compare — rate, ratio, % change", stage: "Calculation", keywords: "calculate count sum average total maximum minimum distinct compare rate ratio percentage change difference formula divide aggregate number" },
+  formula: { label: "Calculate", blurb: "Count, sum, or compare — rate, ratio, % change", stage: "Calculation", keywords: "calculate count sum average total maximum minimum distinct compare rate ratio percentage change difference formula divide aggregate number median" },
+  // The pairing step: per key (a lead), measure from one event to another
+  // (its first call). Emits one record per match with the gap as a number,
+  // so a Calculate right after can average or take the median.
+  time_between: { label: "Time between", blurb: "Measure how long from one event to another, per record", stage: "Calculation", keywords: "speed to lead time between duration gap first call response elapsed how long pair match" },
   // Output is replaced by "Review & publish" (metrics are chosen there). Kept so old
   // flows with an Output node still render + run; hidden from the picker.
   output: { label: "Show on dashboard", blurb: "Save the metric as a dashboard tile", stage: "Dashboard", keywords: "dashboard tile metric result output show", hidden: true },
@@ -40,6 +44,8 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
       return { dateField: "occurredAt", mode: "preset", preset: "last_30_days", days: 30 };
     case "formula":
       return { op: "percentage" };
+    case "time_between":
+      return { keyField: "", fromType: "", toType: "", mode: "first", unit: "minutes" };
     case "unite":
       return {};
     case "group":
@@ -90,6 +96,8 @@ export function datasetCalcExpression(op: string, fieldLabel: string): string {
       return `Sum of ${fieldLabel}`;
     case "avg":
       return `Average of ${fieldLabel}`;
+    case "median":
+      return `Median of ${fieldLabel}`;
     case "min":
       return `Lowest ${fieldLabel}`;
     case "max":
@@ -135,6 +143,8 @@ export function resultLabel(type: string, test: { recordsIn: number; recordsOut:
       return `${recordsOut} passed`;
     case "time":
       return `${recordsOut} kept`;
+    case "time_between":
+      return `${recordsOut} matched`;
     case "unite":
       return `${recordsOut} united`;
     case "paths":
