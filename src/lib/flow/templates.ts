@@ -83,6 +83,75 @@ function speedToLeadClose(connectionId: string | null): FlowGraph {
   });
 }
 
+/** No-show rate: what share of booked Calendly meetings ended in a no-show. */
+function noShowRateCalendly(connectionId: string | null): FlowGraph {
+  const conn = { connectionId, source: "calendly", sourceConfig: { scope: "organization" } };
+  return parseGraph({
+    nodes: [
+      { id: "booked", type: "app", data: { label: "Meetings booked", config: { ...conn, eventType: "booked" } } },
+      { id: "noshow", type: "app", data: { label: "No-shows", config: { ...conn, eventType: "no_show" } } },
+      { id: "countb", type: "formula", data: { label: "Booked count", config: { op: "count", field: "value", distinctField: "subject" } } },
+      { id: "countn", type: "formula", data: { label: "No-show count", config: { op: "count", field: "value", distinctField: "subject" } } },
+      { id: "rate", type: "formula", data: { label: "No-show rate", config: { op: "percentage" } } },
+    ],
+    edges: [
+      { id: "booked->countb", source: "booked", target: "countb" },
+      { id: "noshow->countn", source: "noshow", target: "countn" },
+      { id: "countn->rate:a", source: "countn", target: "rate", targetHandle: "a" },
+      { id: "countb->rate:b", source: "countb", target: "rate", targetHandle: "b" },
+    ],
+    metrics: [{ nodeId: "rate", enabled: true, name: "No-show rate", viz: "number", format: "percent", precision: 1 }],
+  });
+}
+
+/** Bookings this month: one number, windowed by the filter's date range. */
+function bookingsThisMonthCalendly(connectionId: string | null): FlowGraph {
+  const conn = { connectionId, source: "calendly", sourceConfig: { scope: "organization" } };
+  return parseGraph({
+    nodes: [
+      { id: "booked", type: "app", data: { label: "Meetings booked", config: { ...conn, eventType: "booked" } } },
+      {
+        id: "window",
+        type: "filter",
+        data: {
+          label: "This month only",
+          config: { combinator: "and", rules: [], dateRange: { enabled: true, dateField: "occurredAt", mode: "preset", preset: "this_month" } },
+        },
+      },
+      { id: "count", type: "formula", data: { label: "Bookings", config: { op: "count", field: "value", distinctField: "subject" } } },
+    ],
+    edges: [
+      { id: "booked->window", source: "booked", target: "window" },
+      { id: "window->count", source: "window", target: "count" },
+    ],
+    metrics: [{ nodeId: "count", enabled: true, name: "Bookings this month", viz: "number", format: "number", precision: 0 }],
+  });
+}
+
+/** Outbound calls per day: dial volume as a daily bar chart. */
+function outboundCallsPerDayClose(connectionId: string | null): FlowGraph {
+  const conn = { connectionId, source: "close" };
+  return parseGraph({
+    nodes: [
+      { id: "calls", type: "app", data: { label: "Calls dialed", config: { ...conn, eventType: "call_logged", sourceConfig: {} } } },
+      {
+        id: "outbound",
+        type: "filter",
+        data: {
+          label: "Outbound only",
+          config: { combinator: "and", rules: [{ field: "properties.data.direction", op: "equals", value: "outbound", valueKind: "fixed" }] },
+        },
+      },
+      { id: "perday", type: "formula", data: { label: "Calls per day", config: { op: "count", field: "value", distinctField: "subject", groupBy: { type: "time", unit: "day" } } } },
+    ],
+    edges: [
+      { id: "calls->outbound", source: "calls", target: "outbound" },
+      { id: "outbound->perday", source: "outbound", target: "perday" },
+    ],
+    metrics: [{ nodeId: "perday", enabled: true, name: "Outbound calls per day", viz: "bar", format: "number", precision: 0 }],
+  });
+}
+
 export const FLOW_TEMPLATES: FlowTemplate[] = [
   {
     id: "speed-to-lead-close",
@@ -91,6 +160,27 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
       "How fast your team calls new leads: minutes from a lead being created to its first outbound call, median across leads. Switch the last step to Average with one dropdown if you prefer.",
     source: "close",
     build: speedToLeadClose,
+  },
+  {
+    id: "no-show-rate-calendly",
+    name: "No-show rate (Calendly)",
+    description: "What share of booked meetings ended in a no-show — booked and no-show counts, divided.",
+    source: "calendly",
+    build: noShowRateCalendly,
+  },
+  {
+    id: "bookings-this-month-calendly",
+    name: "Bookings this month (Calendly)",
+    description: "One number: meetings booked since the 1st. The date window lives on the Filter step.",
+    source: "calendly",
+    build: bookingsThisMonthCalendly,
+  },
+  {
+    id: "outbound-calls-per-day-close",
+    name: "Outbound calls per day (Close)",
+    description: "Dial volume as a daily bar chart — inbound calls filtered out.",
+    source: "close",
+    build: outboundCallsPerDayClose,
   },
 ];
 

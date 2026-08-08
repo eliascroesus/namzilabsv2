@@ -32,6 +32,24 @@ export const NODE_TYPES = [
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
+/**
+ * Plain-English step names — the ONLY vocabulary user-facing messages may
+ * use for a node type. Lives here (not in components) so lib-level
+ * validation can speak it; node-meta's picker labels stay in sync by test.
+ */
+export const NODE_LABELS: Record<NodeType, string> = {
+  app: "Get data",
+  filter: "Filter records",
+  output: "Show on dashboard",
+  paths: "Split into paths",
+  unite: "Combine data",
+  group: "Group into categories",
+  formula: "Calculate",
+  time: "Date range",
+  time_between: "Time between",
+  calculate: "Calculate a number",
+};
+
 // ---------- Filter ----------
 export const FLOW_FILTER_OPS = [
   "equals",

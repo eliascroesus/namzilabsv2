@@ -124,6 +124,7 @@ export function ConfigPanel({
   onChange,
   onRename,
   onTest,
+  onTestUpstream,
   onAddNext,
   animClass = "flow-pop-in",
   branch,
@@ -145,6 +146,8 @@ export function ConfigPanel({
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
   onTest: () => void;
+  /** Runs the previous step's test — the cure for an empty field picker. */
+  onTestUpstream?: () => void;
   onAddNext: (anchor?: { x: number; y: number; leftX?: number }) => void;
   animClass?: string;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
@@ -228,6 +231,7 @@ export function ConfigPanel({
                 datasetCandidates={datasetCandidates}
                 branch={branch}
                 onChange={onChange}
+                onTestUpstream={onTestUpstream}
                 onSetInput={onSetInput}
                 onSetSources={onSetSources}
                 onAddBranch={onAddBranch}
@@ -356,6 +360,7 @@ function NodeConfig({
   datasetCandidates,
   branch,
   onChange,
+  onTestUpstream,
   onSetInput,
   onSetSources,
   onAddBranch,
@@ -371,6 +376,7 @@ function NodeConfig({
   datasetCandidates: StepRef[];
   branch: BranchCtx | null;
   onChange: (patch: Record<string, unknown>) => void;
+  onTestUpstream?: () => void;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
   onAddBranch: () => void;
@@ -475,6 +481,19 @@ function NodeConfig({
         {bmode === "custom" ? (
           <div className="space-y-2.5">
             <SectionLabel>Only continue if…</SectionLabel>
+            {/* THE first-flow wall: fields only exist after the previous step
+                is tested, and nothing used to say so — the picker just sat
+                empty. Say it, and hand over the one-click cure. */}
+            {groups.every((g) => g.fields.length === 0) && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+                <span>No fields yet — fields appear after the previous step is tested.</span>
+                {onTestUpstream && (
+                  <button type="button" onClick={onTestUpstream} className="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium hover:bg-amber-100">
+                    Test previous step
+                  </button>
+                )}
+              </div>
+            )}
             <ConditionEditor value={fc} groups={groups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />
           </div>
         ) : (
@@ -598,7 +617,7 @@ function NodeConfig({
     const laneIds = inputs.map((i) => i.nodeId);
     return (
       <div className="space-y-4">
-        <p className="text-xs text-neutral-500">Joins lanes into one line — later steps see data from all of them.</p>
+        <p className="text-xs text-neutral-500">Brings branches and other data steps back together — later steps see records from all of them.</p>
         <div>
           <p className="mb-1 text-xs font-medium text-neutral-600">Lanes</p>
           <div className="space-y-1.5">
@@ -628,7 +647,7 @@ function NodeConfig({
                 <span className="text-sm leading-none">+</span> Add a lane
               </button>
             )}
-            {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-xs text-neutral-400">Add data steps first.</p>}
+            {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-xs text-neutral-400">Add a Get data step first, then combine it here.</p>}
           </div>
         </div>
       </div>

@@ -164,7 +164,7 @@ export function DataBrowser({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {!anyFields && (
-            <p className="px-2 py-6 text-center text-xs text-neutral-400">No data yet. Test an earlier step to bring its fields here.</p>
+            <p className="px-2 py-6 text-center text-xs text-neutral-400">No fields yet — fields appear after the previous step is tested.</p>
           )}
 
           {/* Drilled-in view: children of the current container field. */}

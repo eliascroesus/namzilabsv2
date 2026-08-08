@@ -66,6 +66,7 @@ import {
   structuralEdges,
   terminalIds,
   type ConnMeta,
+  isPassThroughFilter,
   type FieldGroup,
   type FNode,
   type Graph,
@@ -828,12 +829,33 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const openReview = useCallback(() => {
     setMetrics((prev) => {
       const byId = new Map(prev.map((m) => [m.nodeId, m]));
-      return endpoints.map((ep) => byId.get(ep.nodeId) ?? { nodeId: ep.nodeId, enabled: true, name: ep.title, viz: "number", format: "number", currency: "USD", precision: 0, target: null, timeUnit: "month" });
+      // Default names a person would keep: the flow's own name when there is
+      // one result, "flow — step" when branches produce several. The old
+      // default was the node type ("Calculate"), which shipped tiles
+      // literally called Calculate.
+      const defaultName = (ep: Endpoint) => (endpoints.length === 1 ? name || ep.title : `${name || "Flow"} — ${ep.title}`);
+      return endpoints.map((ep) => byId.get(ep.nodeId) ?? { nodeId: ep.nodeId, enabled: true, name: defaultName(ep), viz: "number", format: "number", currency: "USD", precision: 0, target: null, timeUnit: "month" });
     });
     setPublishError(null);
-    setPublishWarning(null);
+    // Pre-publish honesty: a Filter with no conditions passes everything —
+    // legal (legacy pass-throughs), but worth saying before it ships.
+    const passThrough = nodes.filter((n) => n.type === "filter" && isPassThroughFilter(n.data.config)).map((n) => nodeTitle("filter", n.data));
+    setPublishWarning(passThrough.length > 0 ? `${passThrough.join(", ")}: no conditions set — every record passes through.` : null);
     setReviewOpen(true);
-  }, [endpoints]);
+  }, [endpoints, name, nodes]);
+
+  // Each endpoint's last tested value — the Review modal's preview. Reads the
+  // same fields resultLabel does: a computed value first, then a tile value.
+  const endpointPreviews = useMemo<Record<string, number | null>>(() => {
+    const out: Record<string, number | null> = {};
+    for (const ep of endpoints) {
+      const n = nodes.find((x) => x.id === ep.nodeId);
+      const t = n?.data.lastTest;
+      const tileVal = (t?.tile as { value?: unknown } | undefined)?.value;
+      out[ep.nodeId] = n?.data.dirty ? null : t?.status === "ok" ? (typeof t.value === "number" ? t.value : typeof tileVal === "number" ? tileVal : null) : null;
+    }
+    return out;
+  }, [endpoints, nodes]);
   // The metric's "Time reference" choices (which value says WHEN each record
   // happened). ONLY date fields are offered: the backend canonicalizes every
   // date-looking value at ingest (normalize-dates), so a real timestamp column
@@ -964,7 +986,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         </div>
       </header>
 
-      {publishError && <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">Can&rsquo;t publish: {publishError}</div>}
+      {publishError && !reviewOpen && <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">Can&rsquo;t publish: {publishError}</div>}
       {publishWarning && (
         <div className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
           <span>{publishWarning}</span>
@@ -1044,6 +1066,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                   onChange: (patch) => updateConfig(selected.id, patch),
                   onRename: (v) => renameNode(selected.id, v),
                   onTest: () => testNode(selected.id),
+                  onTestUpstream: (() => {
+                    const up = edges.find((e) => e.target === selected.id && e.targetHandle == null)?.source;
+                    return up ? () => testNode(up) : undefined;
+                  })(),
                   onAddNext: () => continueFromNode(selected.id),
                   onSetInput: (handle, sourceId) => setFormulaInput(selected.id, handle, sourceId),
                   onSetSources: (ids) => setUniteSources(selected.id, ids),
@@ -1071,6 +1097,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         <ReviewPublishModal
           endpoints={endpoints}
           metrics={metrics}
+          previews={endpointPreviews}
           timeFieldOptions={timeFieldOptions}
           publishing={publishing}
           error={publishError}

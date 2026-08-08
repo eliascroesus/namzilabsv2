@@ -52,6 +52,17 @@ export type LibraryCtx = { fromNodeId?: string; sourceHandle?: string | null; on
 
 // ---------- Pure graph algorithms ----------
 
+/**
+ * A Filter that filters nothing: no rules and no enabled date range. Legal —
+ * legacy combine/formatter nodes migrate to exactly this shape, so it must
+ * never go red — but worth saying out loud before it publishes.
+ */
+export function isPassThroughFilter(cfg: Record<string, unknown>): boolean {
+  const rules = Array.isArray(cfg.rules) ? cfg.rules : [];
+  const dateRange = (cfg.dateRange ?? {}) as { enabled?: unknown };
+  return rules.length === 0 && dateRange.enabled !== true;
+}
+
 /** A step that compares two numbers (its a/b inputs are data references, not chain links).
  * A Calculate running a dataset aggregation (count/sum/…) is NOT a compare step — its
  * chain edge is its record input. */

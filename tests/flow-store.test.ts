@@ -171,7 +171,9 @@ describe("graph validation", () => {
   });
   it("flags a graph with no metric to publish (no Output node, no metrics)", () => {
     const g = parseGraph({ nodes: [N("a", "app", { connectionId: CONN })], edges: [] });
-    expect(validateGraph(g).some((i) => /metric to publish/.test(i.message))).toBe(true);
+    // The copy speaks the UI's language ("Turn on… in Review & publish"),
+    // pinned exactly in tests/builder-ux.test.ts.
+    expect(validateGraph(g).some((i) => /Turn on at least one result/.test(i.message))).toBe(true);
   });
   it("accepts an endpoint metric instead of an Output node", () => {
     const g = parseGraph({

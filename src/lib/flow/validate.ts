@@ -1,4 +1,4 @@
-import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, CalculateConfigSchema, FormulaConfigSchema, TimeBetweenConfigSchema, NODE_TYPES, isDatasetFormulaOp, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
+import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, CalculateConfigSchema, FormulaConfigSchema, TimeBetweenConfigSchema, NODE_TYPES, NODE_LABELS, isDatasetFormulaOp, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
 
 export type ValidationIssue = { nodeId?: string; message: string };
 
@@ -32,7 +32,7 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
 
-  if (graph.nodes.length === 0) return [{ message: "The flow is empty. Add an App and an Output node." }];
+  if (graph.nodes.length === 0) return [{ message: "This flow is empty. Add a Get data step to start." }];
 
   for (const n of graph.nodes) {
     if (!(NODE_TYPES as readonly string[]).includes(n.type)) {
@@ -69,11 +69,11 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
     }
 
     if (DATASET_CONSUMERS.has(node.type)) {
-      if (ins.length === 0) issues.push({ nodeId: node.id, message: `${cap(node.type)} node needs a connected input.` });
+      if (ins.length === 0) issues.push({ nodeId: node.id, message: `${stepName(node.type)} needs a step before it.` });
       for (const srcId of ins) {
         const src = byId.get(srcId);
         if (src && outputKind(src) !== "dataset") {
-          issues.push({ nodeId: node.id, message: `${cap(node.type)} needs records as input.` });
+          issues.push({ nodeId: node.id, message: `${stepName(node.type)} needs records flowing into it — connect it after a data step.` });
         }
       }
     }
@@ -99,7 +99,7 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
         // Binary Calculate: each named input (a/b) is either one wired step's number
         // OR a typed-in literal. A plain (no-handle) edge is the step's position in
         // the line — always allowed.
-        if (ins.length === 0) issues.push({ nodeId: node.id, message: `${cap(node.type)} node needs a connected number.` });
+        if (ins.length === 0) issues.push({ nodeId: node.id, message: `${stepName(node.type)} needs a number to work with — wire in an earlier step or type one.` });
         const aFixed = fCfg.success ? fCfg.data.aFixed : null;
         const bFixed = fCfg.success ? fCfg.data.bFixed : null;
         const aCount = fEdges.filter((e) => e.targetHandle === "a").length;
@@ -180,10 +180,15 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
   const hasOutput = graph.nodes.some((n) => n.type === "output");
   const hasMetric = graph.metrics.some((m) => m.enabled);
   if (!hasOutput && !hasMetric) {
-    issues.push({ message: "Choose at least one metric to publish (Review & publish)." });
+    issues.push({ message: "Turn on at least one result in Review & publish." });
   }
 
   return issues;
+}
+
+/** Plain-English step name for messages — never a raw node type. */
+function stepName(type: string): string {
+  return NODE_LABELS[type as keyof typeof NODE_LABELS] ?? cap(type);
 }
 
 function cap(s: string): string {

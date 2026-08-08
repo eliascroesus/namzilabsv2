@@ -2,15 +2,22 @@
 
 import type { MetricSpecT } from "./graph-utils";
 import { Select } from "./controls";
+import { formatMetricValue } from "@/lib/format";
 
+/**
+ * Only what the dashboard tile HONESTLY renders. "Line" and "Table" used to
+ * be offered here with no renderer behind them — a promise the tile broke by
+ * silently drawing bars. The zod enum keeps every legacy value valid, and a
+ * saved legacy choice stays selectable below so nobody's spec is silently
+ * rewritten.
+ */
 const VIZ_OPTIONS = [
   { value: "number", label: "Single number" },
-  { value: "line", label: "Line chart" },
   { value: "bar", label: "Bar chart" },
   { value: "category", label: "Category breakdown" },
-  { value: "table", label: "Table" },
-  { value: "progress", label: "Progress bar" },
+  { value: "progress", label: "Progress toward goal" },
 ];
+const LEGACY_VIZ_LABELS: Record<string, string> = { line: "Line chart (draws bars)", table: "Table (draws bars)", funnel: "Funnel (draws bars)" };
 const FORMAT_OPTIONS = [
   { value: "number", label: "Number" },
   { value: "percent", label: "Percentage" },
@@ -35,6 +42,7 @@ export type Endpoint = { nodeId: string; title: string };
 export function ReviewPublishModal({
   endpoints,
   metrics,
+  previews,
   timeFieldOptions,
   publishing,
   error,
@@ -46,6 +54,8 @@ export function ReviewPublishModal({
 }: {
   endpoints: Endpoint[];
   metrics: MetricSpecT[];
+  /** Each endpoint's last tested value, unformatted — null when untested. */
+  previews: Record<string, number | null>;
   timeFieldOptions: Array<{ value: string; label: string; hint?: string }>;
   publishing: boolean;
   error: string | null;
@@ -76,7 +86,7 @@ export function ReviewPublishModal({
         </div>
 
         <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-neutral-50/60 p-4">
-          {endpoints.length === 0 && <p className="text-sm text-neutral-500">This flow has no endpoints yet. Add a Calculate step, then come back.</p>}
+          {endpoints.length === 0 && <p className="text-sm text-neutral-500">This flow has no result step yet. Add a Calculate step, then come back.</p>}
           {endpoints.map((ep) => {
             const m = byId.get(ep.nodeId);
             if (!m) return null;
@@ -95,10 +105,25 @@ export function ReviewPublishModal({
                       <span className="mb-1 block text-xs font-medium text-neutral-600">Metric name</span>
                       <input value={m.name} onChange={(e) => set(ep.nodeId, { name: e.target.value })} placeholder="e.g. Show-up rate" className={inputCls} />
                     </label>
+                    {/* The number this tile will show, formatted EXACTLY as the
+                        dashboard will format it — the first time a user sees
+                        their metric must not be after publishing. */}
+                    <p className="text-xs text-neutral-500">
+                      {previews[ep.nodeId] != null ? (
+                        <>Preview: <b className="text-neutral-800">{formatMetricValue(previews[ep.nodeId], m)}</b></>
+                      ) : (
+                        <>Test the last step to see a preview.</>
+                      )}
+                    </p>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Show as</span>
-                        <Select value={m.viz} width={210} options={VIZ_OPTIONS} onChange={(v) => set(ep.nodeId, { viz: v })} />
+                        <Select
+                          value={m.viz}
+                          width={210}
+                          options={VIZ_OPTIONS.some((o) => o.value === m.viz) ? VIZ_OPTIONS : [...VIZ_OPTIONS, { value: m.viz, label: LEGACY_VIZ_LABELS[m.viz] ?? m.viz }]}
+                          onChange={(v) => set(ep.nodeId, { viz: v })}
+                        />
                       </div>
                       <div>
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Format</span>

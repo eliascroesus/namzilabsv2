@@ -8,7 +8,7 @@ export type Stage = (typeof STAGES)[number];
 /** Plain-English node metadata. Labels read like instructions, not jargon. */
 export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: Stage; keywords: string; hidden?: boolean }> = {
   app: { label: "Get data", blurb: "Pull records from a connected app", stage: "Data", keywords: "integration source connect data app get duplicates dedupe" },
-  unite: { label: "Unite data", blurb: "Join lanes back into one line", stage: "Data", keywords: "unite merge join together branches lanes sources union bring back" },
+  unite: { label: "Combine data", blurb: "Bring branches and other sources back together", stage: "Data", keywords: "unite combine merge join together branches lanes sources union bring back" },
   filter: { label: "Filter records", blurb: "Keep only the records you want", stage: "Conditions", keywords: "condition where keep only match date range filter" },
   paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", keywords: "split branch route condition paths" },
   // The one Calculation step: it aggregates records into a number (count/sum/avg/…,
@@ -43,7 +43,11 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
     case "time":
       return { dateField: "occurredAt", mode: "preset", preset: "last_30_days", days: 30 };
     case "formula":
-      return { op: "percentage" };
+      // Count, not percentage: "how many X" is the first metric everyone
+      // builds, and the old default landed them in a two-number compare
+      // asking for a Numerator. Stored configs are untouched (the zod
+      // default still reads "percentage" for legacy graphs missing `op`).
+      return { op: "count", field: "value", distinctField: "subject", groupBy: null };
     case "time_between":
       return { keyField: "", fromType: "", toType: "", mode: "first", unit: "minutes" };
     case "unite":
