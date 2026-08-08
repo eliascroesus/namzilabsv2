@@ -703,6 +703,22 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     setEdges(next.edges);
   }, [snapshot, setNodes, setEdges]);
 
+  // ⌘Z / ⌘⇧Z (Ctrl on Windows) — the toolbar buttons' keyboard twins. Same
+  // typing guard as Backspace: never steal undo from a focused input.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      const el = document.activeElement as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || el?.isContentEditable) return;
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
   const publish = useCallback(async () => {
     setPublishing(true);
     setPublishError(null);

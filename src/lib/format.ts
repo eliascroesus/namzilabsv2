@@ -20,3 +20,16 @@ export function formatMetricValue(
   const n = value.toLocaleString(undefined, { maximumFractionDigits: p });
   return opts.unit ? `${n} ${opts.unit}` : n;
 }
+
+/** "4 minutes ago" / "2 hours ago" / a date past a week — for freshness lines. */
+export function relativeTime(then: Date, now: Date = new Date()): string {
+  const ms = now.getTime() - then.getTime();
+  if (ms < 60_000) return "just now";
+  const min = Math.floor(ms / 60_000);
+  if (min < 60) return `${min} minute${min === 1 ? "" : "s"} ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} hour${h === 1 ? "" : "s"} ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d} day${d === 1 ? "" : "s"} ago`;
+  return then.toLocaleDateString();
+}

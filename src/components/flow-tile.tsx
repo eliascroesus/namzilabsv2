@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatMetricValue } from "@/lib/format";
+import { formatMetricValue, relativeTime } from "@/lib/format";
 import { refreshFlowAction } from "@/app/dashboard/flows/actions";
 import type { ImportCoverage } from "@/connectors/types";
 
@@ -103,7 +103,7 @@ export function FlowTile({ row }: { row: FlowResultRow }) {
           true. A stale tile's timestamp shows exactly how far behind it is. */}
       {row.computedAt && (
         <p className="mt-3 text-xs text-neutral-400" title={new Date(row.computedAt).toLocaleString()}>
-          Data as of {new Date(row.computedAt).toLocaleString()}
+          Updated {relativeTime(new Date(row.computedAt))}
         </p>
       )}
     </div>
@@ -111,13 +111,16 @@ export function FlowTile({ row }: { row: FlowResultRow }) {
 }
 
 function Freshness({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    fresh: "bg-green-100 text-green-700",
-    stale: "bg-amber-100 text-amber-700",
-    computing: "bg-blue-100 text-blue-700",
-    error: "bg-red-100 text-red-700",
+  // Plain English, not internal states — "stale" reads as broken to a
+  // customer when it means "a refresh is on its way".
+  const meta: Record<string, { cls: string; label: string }> = {
+    fresh: { cls: "bg-green-100 text-green-700", label: "Up to date" },
+    stale: { cls: "bg-amber-100 text-amber-700", label: "Refreshing soon" },
+    computing: { cls: "bg-blue-100 text-blue-700", label: "Computing…" },
+    error: { cls: "bg-red-100 text-red-700", label: "Error" },
   };
-  return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${map[status] ?? "bg-neutral-100 text-neutral-600"}`}>{status}</span>;
+  const m = meta[status] ?? { cls: "bg-neutral-100 text-neutral-600", label: status };
+  return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${m.cls}`}>{m.label}</span>;
 }
 
 function TargetBar({ value, target, tile }: { value: number; target: number; tile: Tile }) {

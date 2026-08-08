@@ -141,6 +141,9 @@ export function ReviewPublishModal({
                           options={[{ value: "", label: "None" }, ...timeFieldOptions]}
                           onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
                         />
+                        {timeFieldOptions.length === 0 && (
+                          <p className="mt-1 text-[11px] text-neutral-400">Date fields appear after steps are tested.</p>
+                        )}
                       </div>
                       {(m.viz === "line" || m.viz === "bar") && m.timeField && (
                         <div>

@@ -8,7 +8,7 @@ import { connections } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { dateColumnChoice, dateColumnNote, dateColumnSettings, setDateColumn, type DateColumnChoice } from "@/lib/sync/date-column";
-import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow } from "@/lib/flow/store";
+import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow, getFlow } from "@/lib/flow/store";
 import { flowTemplate } from "@/lib/flow/templates";
 import { CapError } from "@/lib/limits";
 import { sampleAppFields } from "@/lib/flow/engine";
@@ -71,6 +71,26 @@ export async function createFlowFromTemplateAction(formData: FormData): Promise<
     // stream hiccup must never fail the create; the sweep will catch up
   }
   redirect(`/dashboard/flows/${flow.id}`);
+}
+
+/**
+ * Copy a flow: same draft graph, fresh name, draft status. The one honest
+ * subtlety is the cap — a duplicate is a create and counts like one.
+ */
+export async function duplicateFlowAction(id: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const { orgId } = await requireOrg();
+  const db = getDb();
+  const src = await getFlow(db, orgId, id);
+  if (!src) return { ok: false, error: "Flow not found." };
+  let copy;
+  try {
+    copy = await createFlow(db, orgId, `${src.name} (copy)`);
+  } catch (e) {
+    if (e instanceof CapError) return { ok: false, error: e.message };
+    throw e;
+  }
+  await saveDraft(db, orgId, copy.id, src.draftGraph);
+  return { ok: true, id: copy.id };
 }
 
 export async function saveDraftAction(

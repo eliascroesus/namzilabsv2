@@ -119,7 +119,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             {data.stepNo != null ? `${data.stepNo}. ` : ""}
             {nodeTitle(t, data)}
           </span>
-          {bodyLine && <span className={`block truncate text-xs ${bodyLine.cls}`}>{bodyLine.text}</span>}
+          {bodyLine && <span className={`block truncate text-xs ${bodyLine.cls}`} title={bodyLine.text}>{bodyLine.text}</span>}
           {sourceLine && <span className="block truncate text-xs text-amber-700" title={sourceLine}>{sourceLine}</span>}
         </span>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>

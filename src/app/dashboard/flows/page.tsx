@@ -5,7 +5,7 @@ import { getReadDb } from "@/db/client";
 import { listFlows } from "@/lib/flow/store";
 import { FLOW_TEMPLATES } from "@/lib/flow/templates";
 import { createFlowAction, createFlowFromTemplateAction } from "./actions";
-import { FlowRow } from "./FlowRow";
+import { FlowList } from "./FlowRow";
 
 export const dynamic = "force-dynamic";
 
@@ -85,11 +85,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
             </p>
           </div>
         ) : (
-          <div className="mt-8 divide-y divide-neutral-100 rounded-md border border-neutral-200">
-            {flows.map((f) => (
-              <FlowRow key={f.id} id={f.id} name={f.name} status={f.status} updatedAt={new Date(f.updatedAt).toISOString()} />
-            ))}
-          </div>
+          <FlowList flows={flows.map((f) => ({ id: f.id, name: f.name, status: f.status, updatedAt: new Date(f.updatedAt).toISOString() }))} />
         )}
       </main>
     </>

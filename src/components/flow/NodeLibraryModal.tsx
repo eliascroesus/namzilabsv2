@@ -45,8 +45,14 @@ export function NodeLibraryModal({
     const m = NODE_META[t];
     return `${m.label} ${m.blurb} ${m.keywords} ${m.stage}`.toLowerCase().includes(query);
   };
-  // A single flat list in stage order — no section headers.
-  const items = STAGES.flatMap((stage) => ALL_TYPES.filter((t) => NODE_META[t].stage === stage && !NODE_META[t].hidden && matches(t)));
+  // Grouped by stage, with headers; a stage with nothing visible (Dashboard,
+  // whose Output step became Review & publish) simply doesn't render — an
+  // empty section header would advertise a step that doesn't exist.
+  const sections = STAGES.map((stage) => ({
+    stage,
+    items: ALL_TYPES.filter((t) => NODE_META[t].stage === stage && !NODE_META[t].hidden && matches(t)),
+  })).filter((s) => s.items.length > 0);
+  const items = sections.flatMap((s) => s.items);
 
   const centered = !anchor && !anchorSelector;
 
@@ -148,18 +154,23 @@ export function NodeLibraryModal({
             <p className="p-8 text-center text-sm text-neutral-500">No matching steps.</p>
           ) : (
             <div className="flex flex-col gap-0.5">
-              {items.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => onPick(t)}
-                  className="group flex items-center gap-3.5 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-neutral-100"
-                >
-                  <NodeIcon type={t} size={40} />
-                  <span className="min-w-0">
-                    <span className="block text-[15px] font-semibold leading-tight text-neutral-900">{NODE_META[t].label}</span>
-                    <span className="mt-0.5 block truncate text-[13px] leading-tight text-neutral-500">{NODE_META[t].blurb}</span>
-                  </span>
-                </button>
+              {sections.map((sec) => (
+                <div key={sec.stage}>
+                  <p className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{sec.stage}</p>
+                  {sec.items.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => onPick(t)}
+                      className="group flex w-full items-center gap-3.5 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-neutral-100"
+                    >
+                      <NodeIcon type={t} size={40} />
+                      <span className="min-w-0">
+                        <span className="block text-[15px] font-semibold leading-tight text-neutral-900">{NODE_META[t].label}</span>
+                        <span className="mt-0.5 block truncate text-[13px] leading-tight text-neutral-500">{NODE_META[t].blurb}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           )}

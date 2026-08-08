@@ -76,6 +76,9 @@ export function nodeTitle(type: NodeType, data: NodeData): string {
 export function formulaHandleLabels(op: string): { a: string; b: string } {
   switch (op) {
     case "percentage":
+      // "38 percent of what?" — the labels answer the question the way a
+      // person asks it, not the way a fraction is typeset.
+      return { a: "Count this", b: "Out of this" };
     case "ratio":
     case "divide":
       return { a: "Numerator", b: "Denominator" };
