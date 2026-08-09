@@ -172,6 +172,17 @@ export type ConnectorCatalogEntry = {
    */
   hiddenFields?: readonly string[];
   /**
+   * The handful of fields most flows are actually built on, in the order a
+   * person looks for them — floated to the top of the field picker.
+   *
+   * A Close call record carries ~480 fields. Every one is real and every one
+   * stays reachable (search spans everything, and the rest are one click
+   * away), but a list that opens on `data.address_id` makes the user hunt for
+   * `data.direction`. This is display ranking ONLY: nothing is dropped, and
+   * an unlisted field is still perfectly pickable.
+   */
+  commonFields?: readonly string[];
+  /**
    * Display names for stored `eventType` values — presentation ONLY.
    *
    * The stored strings are load-bearing (flow configs, Filter rules, metric
@@ -339,6 +350,29 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
         showWhenEventTypePrefix: ["opportunity"],
         readFilter: { paths: ["properties.data.pipeline_id"] },
       },
+    ],
+    /**
+     * What a sales team builds Close metrics from — dial outcome, who and
+     * which lead, deal value, timing. Ordered as someone reasons about a
+     * call: what kind, how it went, how long, whose it was.
+     */
+    commonFields: [
+      "properties.data.direction",
+      "properties.data.disposition",
+      "properties.data.duration",
+      "properties.data.status",
+      "properties.data.status_label",
+      "properties.data.lead_name",
+      "properties.data.contact_name",
+      "properties.data.user_name",
+      "properties.lead_id",
+      "properties.data.pipeline_id",
+      "properties.data.value",
+      "properties.data.value_formatted",
+      "properties.data.activity_at",
+      "properties.data.date_created",
+      "properties.object_type",
+      "properties.action",
     ],
     /**
      * Display names for the stored type strings — presentation ONLY, the

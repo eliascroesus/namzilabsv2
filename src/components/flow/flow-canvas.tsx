@@ -66,6 +66,7 @@ import {
   structuralEdges,
   terminalIds,
   type ConnMeta,
+  appAncestors,
   isPassThroughFilter,
   type FieldGroup,
   type FNode,
@@ -73,6 +74,7 @@ import {
   type InputDescriptor,
   type LibraryCtx,
   type MetricSpecT,
+  type UpstreamTypes,
 } from "./graph-utils";
 import type { DataGroup } from "./controls/types";
 import { formatSample } from "./controls/field-utils";
@@ -845,6 +847,26 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     () => nodes.filter((n) => terminals.has(n.id) && n.type !== "output").map((n) => ({ nodeId: n.id, title: nodeTitle(String(n.type) as NodeType, n.data) })),
     [nodes, terminals],
   );
+  /**
+   * What KINDS of record reach the selected step, straight from the Get data
+   * steps above it — the honest answer to "what can I measure between?", and
+   * the reason a Time between step offers "1. Leads created · Lead created"
+   * rather than a blind list of every type in the workspace.
+   */
+  const upstreamRecordTypes = useMemo<UpstreamTypes>(() => {
+    if (!selected) return [];
+    return appAncestors(selected, nodes, edges).map((n) => {
+      const cfg = (n.data.config ?? {}) as { eventType?: unknown; source?: unknown; connectionId?: unknown };
+      return {
+        stepNo: stepNoById.get(n.id),
+        title: nodeTitle("app", n.data),
+        source: typeof cfg.source === "string" ? cfg.source : undefined,
+        connectionId: typeof cfg.connectionId === "string" ? cfg.connectionId : undefined,
+        eventType: typeof cfg.eventType === "string" && cfg.eventType ? cfg.eventType : null,
+      };
+    });
+  }, [selected, nodes, edges, stepNoById]);
+
   const openReview = useCallback(() => {
     setMetrics((prev) => {
       const byId = new Map(prev.map((m) => [m.nodeId, m]));
@@ -1083,6 +1105,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                   stepNo: stepNoById.get(selected.id),
                   connections,
                   fieldGroups,
+                  upstreamRecordTypes,
                   inputs: selectedInputs,
                   inputCount: edges.filter((e) => e.target === selected.id).length,
                   testing: testingId === selected.id,

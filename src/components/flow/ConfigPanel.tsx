@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { catalogEntry, eventTypeLabel, eventTypeOptions, fieldAppliesToEventType, type FlowConfigField } from "@/connectors/catalog";
 import {
   listAppFieldsAction,
@@ -21,7 +21,7 @@ import {
   isDatasetFormulaOp,
   type NodeType,
 } from "@/lib/flow/types";
-import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
+import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor, UpstreamTypes } from "./graph-utils";
 import { computeNodeStatus, STD_META } from "./graph-utils";
 import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { RecordSamplePicker } from "./RecordSamplePicker";
@@ -116,6 +116,7 @@ export function ConfigPanel({
   stepNo,
   connections,
   fieldGroups,
+  upstreamRecordTypes,
   inputs,
   inputCount,
   testing,
@@ -137,6 +138,8 @@ export function ConfigPanel({
   stepNo?: number;
   connections: ConnMeta[];
   fieldGroups: FieldGroup[];
+  /** Which Get data steps feed this one, and what record kind each reads. */
+  upstreamRecordTypes: UpstreamTypes;
   inputs: InputDescriptor[];
   inputCount: number;
   testing: boolean;
@@ -224,6 +227,7 @@ export function ConfigPanel({
                 type={type}
                 cfg={cfg}
                 connections={connections}
+                upstreamRecordTypes={upstreamRecordTypes}
                 groups={groups}
                 selfGroups={selfGroups}
                 inputs={inputs}
@@ -353,6 +357,7 @@ function NodeConfig({
   type,
   cfg,
   connections,
+  upstreamRecordTypes,
   groups,
   selfGroups,
   inputs,
@@ -369,6 +374,7 @@ function NodeConfig({
   type: NodeType;
   cfg: Record<string, unknown>;
   connections: ConnMeta[];
+  upstreamRecordTypes: UpstreamTypes;
   groups: DataGroup[];
   selfGroups: DataGroup[];
   inputs: InputDescriptor[];
@@ -555,7 +561,7 @@ function NodeConfig({
   }
 
   if (type === "time_between") {
-    return <TimeBetweenFields cfg={cfg} connections={connections} groups={groups} onChange={onChange} />;
+    return <TimeBetweenFields cfg={cfg} connections={connections} upstream={upstreamRecordTypes} groups={groups} onChange={onChange} />;
   }
 
   if (type === "formula") {
@@ -1095,11 +1101,13 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
 function TimeBetweenFields({
   cfg,
   connections,
+  upstream,
   groups,
   onChange,
 }: {
   cfg: Record<string, unknown>;
   connections: ConnMeta[];
+  upstream: UpstreamTypes;
   groups: DataGroup[];
   onChange: (p: Record<string, unknown>) => void;
 }) {
@@ -1130,17 +1138,51 @@ function TimeBetweenFields({
 
   const from = String(cfg.fromType ?? "");
   const to = String(cfg.toType ?? "");
-  const typeSelect = (label: string, value: string, key: "fromType" | "toType") => {
-    const merged = new Map<string, { value: string; label: string; hint?: string }>();
-    for (const s of bySource) {
-      for (const o of eventTypeOptions(s.source, s.types, null)) {
-        if (!merged.has(o.value)) merged.set(o.value, o);
+
+  /**
+   * What this step can actually measure between, named by where it comes
+   * from. The steps above declare their record kind, so the honest list is
+   * theirs — "1. Leads created · Lead created" tells the user which box on
+   * the canvas they're pointing at, the way Zapier names the step a field
+   * came from. Only a step reading "All record types" is unknowable; then we
+   * fall back to that connection's whole vocabulary, grouped by source.
+   */
+  const options = useMemo(() => {
+    const out: Array<{ value: string; label: string; hint?: string; group?: string }> = [];
+    const seen = new Set<string>();
+    for (const up of upstream) {
+      if (!up.eventType) continue;
+      if (seen.has(up.eventType)) continue;
+      seen.add(up.eventType);
+      out.push({
+        value: up.eventType,
+        label: eventTypeLabel(up.source ?? null, up.eventType),
+        hint: up.eventType,
+        group: `${up.stepNo != null ? `${up.stepNo}. ` : ""}${up.title}`,
+      });
+    }
+    // Any upstream step reading everything means the list above can't be
+    // complete — offer the full vocabulary rather than a confident half-list.
+    const anyUnknown = upstream.length === 0 || upstream.some((u) => !u.eventType);
+    if (anyUnknown) {
+      for (const s of bySource) {
+        for (const o of eventTypeOptions(s.source, s.types, null)) {
+          if (seen.has(o.value)) continue;
+          seen.add(o.value);
+          out.push({ ...o, group: catalogEntry(s.source)?.name ?? s.source });
+        }
       }
     }
-    if (value && !merged.has(value)) {
-      merged.set(value, { value, label: eventTypeLabel(null, value), hint: value });
-    }
-    const options = [...merged.values()].sort((a, b) => a.label.localeCompare(b.label));
+    return out;
+  }, [upstream, bySource]);
+
+  const typeSelect = (label: string, value: string, key: "fromType" | "toType") => {
+    // A saved value the current wiring no longer offers stays selectable —
+    // rewiring a flow must never silently blank a configured step.
+    const withCurrent =
+      value && !options.some((o: { value: string }) => o.value === value)
+        ? [...options, { value, label: eventTypeLabel(null, value), hint: value as string | undefined, group: "Saved" }]
+        : options;
     return (
       <Field label={label}>
         <Select
@@ -1148,7 +1190,7 @@ function TimeBetweenFields({
           width={W}
           searchable
           placeholder="Choose a record type…"
-          options={options}
+          options={withCurrent}
           onChange={(v) => onChange({ [key]: v })}
         />
       </Field>

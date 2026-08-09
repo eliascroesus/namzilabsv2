@@ -61,6 +61,9 @@ export function DataBrowser({
   // Which step groups are expanded. Collapsed by default so the user first sees every
   // available step (a lone group auto-expands, below); a search reveals matches.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Which long lists the user chose to see in full, keyed by group (or drill
+  // trail). Reset with the flyout, like every other transient browse state.
+  const [showAll, setShowAll] = useState<Set<string>>(new Set());
   const [flyoutWidth, setFlyoutWidth] = useState(savedFlyoutWidth);
 
   const setOpen = (o: boolean) => {
@@ -69,6 +72,7 @@ export function DataBrowser({
       setQ("");
       setDrill(null);
       setExpanded(new Set());
+      setShowAll(new Set());
     }
   };
   const toggleGroup = (id: string) =>
@@ -106,6 +110,27 @@ export function DataBrowser({
     onPick(makeFieldRef(group, field));
     setOpen(false);
   };
+
+  /**
+   * A long list opens at its most useful end and says how much more there
+   * is. Search is unaffected — it always spans every field, so nothing here
+   * can hide an answer, only defer it by one click.
+   */
+  const VISIBLE = 25;
+  const CAP_AFTER = 30;
+  const capped = (key: string, fields: DataField[], searching: boolean) => {
+    if (searching || showAll.has(key) || fields.length <= CAP_AFTER) return { shown: fields, hidden: 0 };
+    return { shown: fields.slice(0, VISIBLE), hidden: fields.length - VISIBLE };
+  };
+  const ShowAllRow = ({ k, hidden }: { k: string; hidden: number }) => (
+    <button
+      type="button"
+      onClick={() => setShowAll((prev) => new Set(prev).add(k))}
+      className="mt-1 w-full rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-indigo-600 hover:bg-indigo-50"
+    >
+      Show all {hidden + VISIBLE} fields
+    </button>
+  );
 
   const anyFields = useMemo(() => groups.some((g) => g.fields.length > 0), [groups]);
   // A single available step is auto-expanded (nothing to choose between); with more
@@ -173,9 +198,11 @@ export function DataBrowser({
               {(() => {
                 const kids = filterFields(childFields(drillField), q);
                 if (kids.length === 0) return <p className="px-2 py-4 text-center text-xs text-neutral-400">Nothing inside this field.</p>;
+                const key = `${drill.groupId}:${drill.trail.map((t) => t.path).join(">")}`;
+                const { shown, hidden } = capped(key, kids, q.trim().length > 0);
                 return (
                   <div className="space-y-1">
-                    {kids.map((f) => (
+                    {shown.map((f) => (
                       <FieldRow
                         key={f.path}
                         field={f}
@@ -183,6 +210,7 @@ export function DataBrowser({
                         onDrill={() => setDrill({ groupId: drill.groupId, trail: [...drill.trail, f] })}
                       />
                     ))}
+                    {hidden > 0 && <ShowAllRow k={key} hidden={hidden} />}
                   </div>
                 );
               })()}
@@ -214,13 +242,17 @@ export function DataBrowser({
                     <span className="min-w-0 flex-1 truncate text-xs font-semibold text-neutral-700">{g.title}</span>
                     <span className="shrink-0 text-[10px] text-neutral-400">{g.fields.length}</span>
                   </button>
-                  {isOpen && (
-                    <div className="mt-1 space-y-1 pl-2.5">
-                      {fields.map((f) => (
-                        <FieldRow key={f.path} field={f} onPick={() => pick(g, f)} onDrill={() => setDrill({ groupId: g.stepId, trail: [f] })} />
-                      ))}
-                    </div>
-                  )}
+                  {isOpen && (() => {
+                    const { shown, hidden } = capped(g.stepId, fields, searching);
+                    return (
+                      <div className="mt-1 space-y-1 pl-2.5">
+                        {shown.map((f) => (
+                          <FieldRow key={f.path} field={f} onPick={() => pick(g, f)} onDrill={() => setDrill({ groupId: g.stepId, trail: [f] })} />
+                        ))}
+                        {hidden > 0 && <ShowAllRow k={g.stepId} hidden={hidden} />}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
