@@ -498,7 +498,12 @@ const TIME_BETWEEN_UNIT_MS: Record<string, number> = {
  * "last" = the latest one), and ONE record per match is emitted carrying
  * the gap as a plain number (`properties.duration`, in `unit`).
  *
- * Three load-bearing choices:
+ * Four load-bearing choices:
+ * - Conditions, not record types: the start and end are `FilterConfig`s run
+ *   through the same `evalRules` every other step uses, so "the first
+ *   OUTBOUND call" is sayable and no raw column is addressed by name.
+ * - The output IS the start record with the gap added — every dataset step
+ *   preserves what flows through it.
  * - The duration is a NUMBER, not a date pair: the existing avg/median/min/
  *   max never learned to read timestamps, and they don't have to — a
  *   downstream Calculate over `properties.duration` just works.
@@ -513,12 +518,12 @@ const TIME_BETWEEN_UNIT_MS: Record<string, number> = {
 function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = TimeBetweenConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Time between");
-  if (!cfg.keyField || !cfg.fromType || !cfg.toType) {
-    throw new Error("Time between needs a matching field and both record types picked.");
+  if (!cfg.keyField || cfg.start.rules.length === 0 || cfg.end.rules.length === 0) {
+    throw new Error("Time between needs a matching field, plus a condition for the start and the end.");
   }
   const unitMs = TIME_BETWEEN_UNIT_MS[cfg.unit] ?? 60_000;
 
-  type Pair = { fromAt: number | null; toAts: number[] };
+  type Pair = { start: FlowRecord | null; startAt: number | null; ends: Array<{ at: number; id: string }> };
   const byKey = new Map<string, Pair>();
   for (const r of input.records) {
     const keyRaw = getField(r, cfg.keyField);
@@ -528,42 +533,48 @@ function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     if (at == null) continue;
     let pair = byKey.get(key);
     if (!pair) {
-      pair = { fromAt: null, toAts: [] };
+      pair = { start: null, startAt: null, ends: [] };
       byKey.set(key, pair);
     }
-    if (r.eventType === cfg.fromType) pair.fromAt = pair.fromAt == null ? at : Math.min(pair.fromAt, at);
-    // A record can be BOTH when fromType === toType — legal, means "gap
-    // between the first two occurrences", so no else-if.
-    if (r.eventType === cfg.toType) pair.toAts.push(at);
+    // The SAME predicate Filter, Paths and Group evaluate. A record can match
+    // both conditions — legal, and it means "the gap to the next one".
+    if (evalRules(r, cfg.start) && (pair.startAt == null || at < pair.startAt)) {
+      pair.startAt = at;
+      pair.start = r;
+    }
+    if (evalRules(r, cfg.end)) pair.ends.push({ at, id: r.id });
   }
 
   const out: FlowRecord[] = [];
   for (const [key, pair] of byKey) {
-    if (pair.fromAt == null) continue;
-    const from = pair.fromAt;
+    if (pair.start == null || pair.startAt == null) continue;
+    const from = pair.startAt;
     // Loop, not spread/filter chains — same stack-bound discipline as
-    // computeAgg's min/max (a spread over an unbounded collection throws at
-    // ~150k args). Same-type pairing measures to the NEXT occurrence.
+    // computeAgg's min/max. Excluded by IDENTITY, not by type: the start
+    // record can never be its own end, but a genuinely distinct record at
+    // the same instant is a real zero-length gap.
     let toAt: number | null = null;
-    for (const t of pair.toAts) {
-      const eligible = cfg.fromType === cfg.toType ? t > from : t >= from;
-      if (!eligible) continue;
-      if (toAt == null || (cfg.mode === "first" ? t < toAt : t > toAt)) toAt = t;
+    for (const e of pair.ends) {
+      if (e.id === pair.start.id || e.at < from) continue;
+      if (toAt == null || (cfg.mode === "first" ? e.at < toAt : e.at > toAt)) toAt = e.at;
     }
     if (toAt == null) continue;
     out.push({
-      id: `tb:${node.id}:${key}`,
-      source: "flow",
-      eventType: "time_between",
-      subject: key,
-      occurredAt: new Date(from).toISOString(),
-      value: null,
-      currency: null,
-      connectionId: "",
+      // THE OUTPUT IS THE START RECORD, ANNOTATED — not a fabricated one.
+      // Every other dataset step preserves the fields flowing through it;
+      // this one used to emit {key, from_at, to_at, duration} and silently
+      // destroy every lead and call field downstream. Now a later Filter can
+      // still read properties.lead_id, and the step obeys the same law as
+      // its peers.
+      ...pair.start,
       properties: {
+        ...pair.start.properties,
         key,
         from_at: new Date(from).toISOString(),
         to_at: new Date(toAt).toISOString(),
+        // Named for the unit picked, so the field says what it measures.
+        [`duration_${cfg.unit}`]: (toAt - from) / unitMs,
+        // Stable alias: saved Calculate steps and templates point here.
         duration: (toAt - from) / unitMs,
       },
     });

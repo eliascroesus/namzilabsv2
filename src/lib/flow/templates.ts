@@ -63,7 +63,13 @@ function speedToLeadClose(connectionId: string | null): FlowGraph {
         type: "time_between",
         data: {
           label: "Time to first call",
-          config: { keyField: "properties.lead_id", fromType: "lead_created", toType: "call_logged", mode: "first", unit: "minutes" },
+          config: {
+            keyField: "properties.lead_id",
+            start: { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "lead_created", valueKind: "fixed" }] },
+            end: { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "call_logged", valueKind: "fixed" }] },
+            mode: "first",
+            unit: "minutes",
+          },
         },
       },
       {

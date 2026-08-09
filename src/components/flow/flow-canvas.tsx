@@ -67,14 +67,12 @@ import {
   structuralEdges,
   terminalIds,
   type ConnMeta,
-  appAncestors,
   type FieldGroup,
   type FNode,
   type Graph,
   type InputDescriptor,
   type LibraryCtx,
   type MetricSpecT,
-  type UpstreamTypes,
 } from "./graph-utils";
 import type { DataGroup } from "./controls/types";
 import { formatSample } from "./controls/field-utils";
@@ -106,7 +104,7 @@ function isNumberProducer(n: FNode): boolean {
 function setupHint(type: string, cfg: Record<string, unknown>, inputCount: number): string {
   if (type === "app") return cfg.connectionId ? "Choose what data to pull." : "Choose an account to load data.";
   if (type === "unite") return "Pick the lanes to bring together.";
-  if (type === "time_between") return "Pick the matching field and the two record types.";
+  if (type === "time_between") return "Pick the matching field and the start/end conditions.";
   if (type === "formula") return isDatasetFormulaOp(cfg.op ?? "percentage") ? "Connect an input." : "Pick or type a First and Second number.";
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? "Pick a First and Second number." : "Connect an input.";
   if (type === "output") return inputCount === 0 ? "Connect an input." : "Name this metric.";
@@ -845,25 +843,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     () => nodes.filter((n) => terminals.has(n.id) && n.type !== "output").map((n) => ({ nodeId: n.id, title: nodeTitle(String(n.type) as NodeType, n.data) })),
     [nodes, terminals],
   );
-  /**
-   * What KINDS of record reach the selected step, straight from the Get data
-   * steps above it — the honest answer to "what can I measure between?", and
-   * the reason a Time between step offers "1. Leads created · Lead created"
-   * rather than a blind list of every type in the workspace.
-   */
-  const upstreamRecordTypes = useMemo<UpstreamTypes>(() => {
-    if (!selected) return [];
-    return appAncestors(selected, nodes, edges).map((n) => {
-      const cfg = (n.data.config ?? {}) as { eventType?: unknown; source?: unknown; connectionId?: unknown };
-      return {
-        stepNo: stepNoById.get(n.id),
-        title: nodeTitle("app", n.data),
-        source: typeof cfg.source === "string" ? cfg.source : undefined,
-        connectionId: typeof cfg.connectionId === "string" ? cfg.connectionId : undefined,
-        eventType: typeof cfg.eventType === "string" && cfg.eventType ? cfg.eventType : null,
-      };
-    });
-  }, [selected, nodes, edges, stepNoById]);
 
   const openReview = useCallback(() => {
     setMetrics((prev) => {
@@ -1093,7 +1072,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                   stepNo: stepNoById.get(selected.id),
                   connections,
                   fieldGroups,
-                  upstreamRecordTypes,
                   inputs: selectedInputs,
                   inputCount: edges.filter((e) => e.target === selected.id).length,
                   testing: testingId === selected.id,

@@ -42,19 +42,6 @@ export type FieldGroup = {
   fields: PickField[];
 };
 
-/**
- * The Get data steps feeding a step, and which record kind each one reads.
- * `eventType: null` means that step reads "All record types", so what flows
- * from it is unknowable without looking at the data.
- */
-export type UpstreamTypes = Array<{
-  stepNo?: number;
-  title: string;
-  source?: string;
-  connectionId?: string;
-  eventType: string | null;
-}>;
-
 export type MetricSpecT = { nodeId: string; enabled: boolean; name: string; viz: string; format: string; unit?: string; currency?: string; precision: number; target: number | null; timeField?: string; timeUnit?: string };
 export type Graph = {
   nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>;
@@ -277,7 +264,8 @@ export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, input
   }
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? missingAB : inputCount === 0;
   if (type === "time_between") {
-    return inputCount === 0 || !String(cfg.keyField ?? "").trim() || !String(cfg.fromType ?? "").trim() || !String(cfg.toType ?? "").trim();
+    const rules = (k: string) => ((cfg[k] as { rules?: unknown[] } | undefined)?.rules ?? []).length;
+    return inputCount === 0 || !String(cfg.keyField ?? "").trim() || rules("start") === 0 || rules("end") === 0;
   }
   if (type === "output") return inputCount === 0 || !String(cfg.name ?? "").trim();
   return inputCount === 0;
@@ -468,31 +456,6 @@ function chosenSample(node: FNode, sampleIndexOf?: (n: FNode) => number): unknow
   const sample = (node.data.lastTest?.sample ?? []) as unknown[];
   const idx = sampleIndexOf ? sampleIndexOf(node) : 0;
   return sample[idx] ?? sample[0];
-}
-
-/**
- * EVERY App source feeding a node, in step order — the answer to "what
- * records actually arrive here".
- *
- * `nearestAppAncestor` stops at the first one, which is right for resolving a
- * sample record but wrong for a step fed by several lanes: a Time between
- * sits under a Combine joining leads AND calls, and both are its subject.
- */
-export function appAncestors(start: FNode, nodes: FNode[], edges: Edge[]): FNode[] {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const seen = new Set<string>([start.id]);
-  const out: FNode[] = [];
-  const stack = edges.filter((e) => e.target === start.id).map((e) => e.source);
-  while (stack.length) {
-    const id = stack.pop()!;
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const n = byId.get(id);
-    if (!n) continue;
-    if (n.type === "app") out.push(n);
-    for (const e of edges) if (e.target === id) stack.push(e.source);
-  }
-  return out;
 }
 
 /** Walk upstream from a node to the nearest App source (itself if it is one). */

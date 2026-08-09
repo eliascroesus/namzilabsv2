@@ -501,13 +501,23 @@ would add a second source of truth for numbers we can already derive.
 Cross-record durations (speed to lead, response time) were not expressible
 until the `time_between` node existed: nothing else in the engine reads two
 records at once, and timestamps are not numbers anywhere in the aggregate
-machinery. The node pairs two record types per key (`keyField`, e.g. the
-lead id both events carry), takes the earliest `fromType` and the first
-`toType` at-or-after it, and emits ONE record per match whose
-`properties.duration` is a plain number in the chosen unit — so a downstream
-Calculate (average, median, min, max) works with zero special cases.
-Unmatched keys emit nothing: a lead never called has no response time, and a
-zero would drag every average toward a lie.
+machinery.
+
+It is an ordinary step in every other respect. The start and the end are
+CONDITIONS — the same `FilterConfig` shape Filter, Paths and Group use, run
+through the same `evalRules` — so "the first outbound call" is sayable and
+no raw column is addressed by name. Per distinct `keyField` value (the lead
+id both records carry) it takes the earliest matching start, then the first
+matching end at-or-after it, and emits ONE record: **the start record
+itself**, annotated with `key`, `from_at`, `to_at` and
+`duration_<unit>` (plus a stable `duration` alias). Preserving the incoming
+fields is the point — every other dataset step does, and a downstream
+Filter on `properties.lead_id` has to keep working.
+
+Unmatched keys emit nothing: a lead never called has no response time, and
+a zero would drag every average toward a lie. The start record is excluded
+from being its own end by identity, so the same condition on both sides
+means "the gap to the next occurrence".
 
 The connector's own response parsing is still **unverified against the live API**
 (`API_BASE`, the message-list envelope and the date field are all assumptions —

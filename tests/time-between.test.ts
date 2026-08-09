@@ -51,10 +51,12 @@ async function ev(o: { eventType: string; leadId?: string | null; atMin: number;
 
 const N = (id: string, type: string, config: unknown, label?: string) => ({ id, type, data: { config, ...(label ? { label } : {}) } });
 const E = (s: string, t: string) => ({ id: `${s}->${t}`, source: s, target: t });
+/** One equals-rule per side — exactly what the old fromType/toType meant. */
+const typeRule = (t: string) => ({ combinator: "and", rules: [{ field: "eventType", op: "equals", value: t, valueKind: "fixed" }] });
 const TB = (over: Record<string, unknown> = {}) => ({
   keyField: "properties.lead_id",
-  fromType: "lead_created",
-  toType: "call_logged",
+  start: typeRule("lead_created"),
+  end: typeRule("call_logged"),
   mode: "first",
   unit: "minutes",
   ...over,
@@ -83,7 +85,9 @@ describe("time_between semantics", () => {
     await ev({ eventType: "call_logged", leadId: "L2", atMin: 35 });
 
     const out = await matches();
-    const byKey = new Map(out.map((r) => [r.subject, r.properties.duration]));
+    // Keyed by properties.key — `subject` is now the START record's own
+    // subject, because the output IS that record rather than a synthetic one.
+    const byKey = new Map(out.map((r) => [r.properties.key, r.properties.duration]));
     expect(byKey.get("L1")).toBe(10);
     expect(byKey.get("L2")).toBe(30);
   });
@@ -107,7 +111,7 @@ describe("time_between semantics", () => {
     await ev({ eventType: "call_logged", leadId: "L_orphan_call", atMin: 5 }); // no lead side
 
     const out = await matches();
-    expect(out.map((r) => r.subject)).toEqual(["L1"]);
+    expect(out.map((r) => r.properties.key)).toEqual(["L1"]);
   });
 
   it("duplicate FROM events use the earliest; records without the key are dropped", async () => {
@@ -189,13 +193,17 @@ describe("median aggregate", () => {
 });
 
 describe("guards around the node", () => {
-  it("validate blocks publish until the matching field and both types are picked", () => {
+  it("validate blocks publish until the matching field and both conditions are set", () => {
     const g = parseGraph({
-      nodes: [N("a", "app", { connectionId: CONN, source: "close" }), N("t", "time_between", TB({ toType: "" })), N("m", "formula", { op: "count" })],
+      nodes: [
+        N("a", "app", { connectionId: CONN, source: "close" }),
+        N("t", "time_between", TB({ end: { combinator: "and", rules: [] } })),
+        N("m", "formula", { op: "count" }),
+      ],
       edges: [E("a", "t"), E("t", "m")],
     });
     const issues = validateGraph(g);
-    expect(issues.some((i) => i.message === "Time between needs a matching field and both record types picked.")).toBe(true);
+    expect(issues.some((i) => i.message === "Time between needs a matching field, plus a condition for the start and the end.")).toBe(true);
   });
 
   it("pushdown never folds a filter that sits AFTER a time_between", () => {
@@ -252,5 +260,84 @@ describe("Speed to lead (Close) template", () => {
 
     const gap = res.nodes.get("gap")! as NodeExecOk;
     expect(gap.recordsOut).toBe(2); // L3 emitted nothing
+  });
+});
+
+/**
+ * The node now obeys the same law as every other dataset step: it preserves
+ * what flows through it. It used to emit a fabricated record holding only
+ * {key, from_at, to_at, duration}, silently destroying every lead and call
+ * field downstream — with nothing on screen saying so.
+ */
+describe("Time between is built like the other nodes", () => {
+  it("the output IS the start record, annotated — downstream fields survive", async () => {
+    await ev({ eventType: "lead_created", leadId: "L1", atMin: 0 });
+    await ev({ eventType: "call_logged", leadId: "L1", atMin: 10 });
+
+    const out = await matches();
+    expect(out).toHaveLength(1);
+    // Sabotage: rebuild the fabricated record and every one of these fails —
+    // which is exactly what made a later Filter on lead_id match nothing.
+    expect(out[0].source).toBe("close");
+    expect(out[0].connectionId).toBe(CONN);
+    expect(out[0].eventType).toBe("lead_created");
+    expect(out[0].properties.lead_id).toBe("L1");
+  });
+
+  it("names the duration for the unit picked, and keeps the stable alias", async () => {
+    await ev({ eventType: "lead_created", leadId: "L1", atMin: 0 });
+    await ev({ eventType: "call_logged", leadId: "L1", atMin: 120 });
+
+    const out = await matches({ unit: "hours" });
+    expect(out[0].properties.duration_hours).toBe(2);
+    expect(out[0].properties.duration).toBe(2);
+  });
+
+  it("takes conditions, not record types — 'the first OUTBOUND call' in one step", async () => {
+    await ev({ eventType: "lead_created", leadId: "L1", atMin: 0 });
+    await ev({ eventType: "call_logged", leadId: "L1", atMin: 2, direction: "inbound" });
+    await ev({ eventType: "call_logged", leadId: "L1", atMin: 20, direction: "outbound" });
+
+    const out = await matches({
+      end: {
+        combinator: "and",
+        rules: [
+          { field: "eventType", op: "equals", value: "call_logged", valueKind: "fixed" },
+          { field: "properties.data.direction", op: "equals", value: "outbound", valueKind: "fixed" },
+        ],
+      },
+    });
+    expect(out[0].properties.duration).toBe(20); // not 2 — the inbound call is excluded IN the step
+  });
+
+  it("the start record is never its own end (identity, not type)", async () => {
+    // Same condition on both sides = "gap to the next occurrence".
+    await ev({ eventType: "lead_created", leadId: "L1", atMin: 0 });
+    await ev({ eventType: "lead_created", leadId: "L1", atMin: 45 });
+
+    const out = await matches({ end: typeRule("lead_created") });
+    expect(out).toHaveLength(1);
+    expect(out[0].properties.duration).toBe(45);
+  });
+
+  it("a saved fromType/toType flow computes the identical number after migrating", async () => {
+    await ev({ eventType: "lead_created", leadId: "L1", atMin: 0 });
+    await ev({ eventType: "call_logged", leadId: "L1", atMin: 30 });
+
+    // Raw legacy JSON, exactly as it sits in a published flow_version.
+    const g = parseGraph({
+      nodes: [
+        N("a", "app", { connectionId: CONN, source: "close" }),
+        N("t", "time_between", { keyField: "properties.lead_id", fromType: "lead_created", toType: "call_logged", mode: "first", unit: "minutes" }),
+      ],
+      edges: [E("a", "t")],
+    });
+    const res = await runFlow({ db, orgId: ORG }, g);
+    const exec = res.nodes.get("t")! as NodeExecOk;
+    expect(exec.status).toBe("ok");
+    const shape = exec.shape;
+    if (shape.kind !== "dataset") throw new Error("expected dataset");
+    // Sabotage: delete the migration branch and the step reports "needs a condition".
+    expect(shape.records[0].properties.duration).toBe(30);
   });
 });

@@ -230,8 +230,20 @@ export const TIME_BETWEEN_UNITS = ["seconds", "minutes", "hours", "days"] as con
  */
 export const TimeBetweenConfigSchema = z.object({
   keyField: z.string().default(""),
-  fromType: z.string().default(""),
-  toType: z.string().default(""),
+  /**
+   * Which records start the clock, and which stop it — the SAME condition
+   * model Filter, Paths and Group use, evaluated by the same `evalRules`.
+   *
+   * This was two bespoke record-type dropdowns comparing `eventType`
+   * directly, the last place in the engine that addressed data by raw column
+   * instead of by picked variable. Conditions also make things sayable that
+   * a type list never could: "the first OUTBOUND call", "moved to Won".
+   *
+   * Named start/end, not from/to: `from`/`to` already mean ISO date bounds
+   * in TimeConfigSchema and FilterDateRangeSchema.
+   */
+  start: FilterConfigSchema.default({ combinator: "and", rules: [] }),
+  end: FilterConfigSchema.default({ combinator: "and", rules: [] }),
   mode: z.enum(["first", "last"]).default("first"),
   unit: z.enum(TIME_BETWEEN_UNITS).default("minutes"),
 });
@@ -467,6 +479,29 @@ function migrateLegacyGraph(raw: unknown): unknown {
       changed = true;
       if (type === "combine" && typeof n.id === "string") combineIds.add(n.id);
       return { ...n, type: "filter", data: { ...(n.data ?? {}), config: { combinator: "and", rules: [] } } };
+    }
+    /**
+     * Time between used to name two record TYPES; it now takes the same
+     * conditions every other step takes. One equals-rule per side is exactly
+     * what the old fields meant, so a saved flow keeps computing the
+     * identical number — pinned by test.
+     */
+    if (type === "time_between") {
+      const c = (n.data?.config ?? {}) as Record<string, unknown>;
+      if ("fromType" in c || "toType" in c) {
+        changed = true;
+        const typeRule = (t: unknown) => ({
+          combinator: "and" as const,
+          rules: typeof t === "string" && t ? [{ field: "eventType", op: "equals" as const, value: t, valueKind: "fixed" as const }] : [],
+        });
+        return {
+          ...n,
+          data: {
+            ...(n.data ?? {}),
+            config: { keyField: c.keyField ?? "", start: typeRule(c.fromType), end: typeRule(c.toType), mode: c.mode ?? "first", unit: c.unit ?? "minutes" },
+          },
+        };
+      }
     }
     /**
      * Drop a source setting that belongs to a record kind this step no longer

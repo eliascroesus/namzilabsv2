@@ -24,7 +24,7 @@ import {
   isDatasetFormulaOp,
   type NodeType,
 } from "@/lib/flow/types";
-import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor, UpstreamTypes } from "./graph-utils";
+import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
 import { computeNodeStatus, STD_META } from "./graph-utils";
 import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { RecordSamplePicker } from "./RecordSamplePicker";
@@ -119,7 +119,6 @@ export function ConfigPanel({
   stepNo,
   connections,
   fieldGroups,
-  upstreamRecordTypes,
   inputs,
   inputCount,
   testing,
@@ -141,8 +140,6 @@ export function ConfigPanel({
   stepNo?: number;
   connections: ConnMeta[];
   fieldGroups: FieldGroup[];
-  /** Which Get data steps feed this one, and what record kind each reads. */
-  upstreamRecordTypes: UpstreamTypes;
   inputs: InputDescriptor[];
   inputCount: number;
   testing: boolean;
@@ -240,7 +237,6 @@ export function ConfigPanel({
                 type={type}
                 cfg={cfg}
                 connections={connections}
-                upstreamRecordTypes={upstreamRecordTypes}
                 groups={groups}
                 selfGroups={selfGroups}
                 inputs={inputs}
@@ -370,7 +366,6 @@ function NodeConfig({
   type,
   cfg,
   connections,
-  upstreamRecordTypes,
   groups,
   selfGroups,
   inputs,
@@ -387,7 +382,6 @@ function NodeConfig({
   type: NodeType;
   cfg: Record<string, unknown>;
   connections: ConnMeta[];
-  upstreamRecordTypes: UpstreamTypes;
   groups: DataGroup[];
   selfGroups: DataGroup[];
   inputs: InputDescriptor[];
@@ -562,7 +556,7 @@ function NodeConfig({
   }
 
   if (type === "time_between") {
-    return <TimeBetweenFields cfg={cfg} connections={connections} upstream={upstreamRecordTypes} groups={groups} onChange={onChange} />;
+    return <TimeBetweenFields cfg={cfg} groups={groups} onChange={onChange} />;
   }
 
   if (type === "formula") {
@@ -1131,112 +1125,39 @@ function ImportStatusLine({ connectionId }: { connectionId: string }) {
  * eventTypeOptions keeps it readable. Types are DB-only lookups (no
  * provider calls), cached per session like record types.
  */
+/**
+ * Time between's Configure — the SAME controls as every other step.
+ *
+ * It used to have two bespoke record-type dropdowns that compared
+ * `eventType` directly, the one place in the builder that addressed data by
+ * raw column instead of by picked variable. Now the start and the end are
+ * ordinary conditions, so anything you can filter on you can also time
+ * from: "the first OUTBOUND call", "moved to Won".
+ */
 function TimeBetweenFields({
   cfg,
-  connections,
-  upstream,
   groups,
   onChange,
 }: {
   cfg: Record<string, unknown>;
-  connections: ConnMeta[];
-  upstream: UpstreamTypes;
   groups: DataGroup[];
   onChange: (p: Record<string, unknown>) => void;
 }) {
-  // Types PER SOURCE, not one blind union: a per-source lookup gets the
-  // exact curated label ("Email logged (sent or received)" for Close's
-  // email_sent, "Email sent" for Instantly's), where an unbound lookup must
-  // fall back to the neutral humanizer whenever two sources disagree.
-  const [bySource, setBySource] = useState<Array<{ source: string; types: string[] }>>([]);
-  const connIds = connections.map((c) => c.id).join(" ");
-  useEffect(() => {
-    let live = true;
-    void Promise.all(connections.map((c) => listRecordTypesAction(c.id))).then((results) => {
-      if (!live) return;
-      const map = new Map<string, Set<string>>();
-      results.forEach((r, i) => {
-        if (!r.ok) return;
-        const src = connections[i]?.source ?? "";
-        if (!map.has(src)) map.set(src, new Set());
-        for (const t of r.types) map.get(src)!.add(t);
-      });
-      setBySource([...map.entries()].map(([source, set]) => ({ source, types: [...set] })));
-    });
-    return () => {
-      live = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connIds]);
-
-  const from = String(cfg.fromType ?? "");
-  const to = String(cfg.toType ?? "");
-
-  /**
-   * What this step can actually measure between, named by where it comes
-   * from. The steps above declare their record kind, so the honest list is
-   * theirs — "1. Leads created · Lead created" tells the user which box on
-   * the canvas they're pointing at, the way Zapier names the step a field
-   * came from. Only a step reading "All record types" is unknowable; then we
-   * fall back to that connection's whole vocabulary, grouped by source.
-   */
-  const options = useMemo(() => {
-    const out: Array<{ value: string; label: string; hint?: string; group?: string }> = [];
-    const seen = new Set<string>();
-    for (const up of upstream) {
-      if (!up.eventType) continue;
-      if (seen.has(up.eventType)) continue;
-      seen.add(up.eventType);
-      out.push({
-        value: up.eventType,
-        label: eventTypeLabel(up.source ?? null, up.eventType),
-        hint: up.eventType,
-        group: `${up.stepNo != null ? `${up.stepNo}. ` : ""}${up.title}`,
-      });
-    }
-    // Any upstream step reading everything means the list above can't be
-    // complete — offer the full vocabulary rather than a confident half-list.
-    const anyUnknown = upstream.length === 0 || upstream.some((u) => !u.eventType);
-    if (anyUnknown) {
-      for (const s of bySource) {
-        for (const o of eventTypeOptions(s.source, s.types, null)) {
-          if (seen.has(o.value)) continue;
-          seen.add(o.value);
-          out.push({ ...o, group: catalogEntry(s.source)?.name ?? s.source });
-        }
-      }
-    }
-    return out;
-  }, [upstream, bySource]);
-
-  const typeSelect = (label: string, value: string, key: "fromType" | "toType") => {
-    // A saved value the current wiring no longer offers stays selectable —
-    // rewiring a flow must never silently blank a configured step.
-    const withCurrent =
-      value && !options.some((o: { value: string }) => o.value === value)
-        ? [...options, { value, label: eventTypeLabel(null, value), hint: value as string | undefined, group: "Saved" }]
-        : options;
-    return (
-      <Field label={label}>
-        <Select
-          value={value}
-          width={W}
-          searchable
-          placeholder="Choose a record type…"
-          options={withCurrent}
-          onChange={(v) => onChange({ [key]: v })}
-        />
-      </Field>
-    );
-  };
-
+  // Same normalisation the Filter panel uses — one shape in, one shape out.
+  const side = (k: "start" | "end") => asFilterConfig((cfg[k] ?? {}) as Record<string, unknown>);
   return (
     <div className="space-y-4">
       <Field label="Match records by">
         <FieldInput value={String(cfg.keyField ?? "")} groups={groups} onChange={(v) => onChange({ keyField: v })} />
       </Field>
-      {typeSelect("From (the starting event)", from, "fromType")}
-      {typeSelect("To (the event that ends the clock)", to, "toType")}
+      <div className="space-y-2.5">
+        <SectionLabel>Start the clock on…</SectionLabel>
+        <ConditionEditor value={side("start")} groups={groups} onChange={(v) => onChange({ start: { combinator: v.combinator, rules: v.rules } })} />
+      </div>
+      <div className="space-y-2.5">
+        <SectionLabel>Stop the clock on…</SectionLabel>
+        <ConditionEditor value={side("end")} groups={groups} onChange={(v) => onChange({ end: { combinator: v.combinator, rules: v.rules } })} />
+      </div>
       <Field label="Which ending to measure to">
         <Select
           value={String(cfg.mode ?? "first")}

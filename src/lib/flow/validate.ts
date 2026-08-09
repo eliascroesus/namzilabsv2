@@ -136,8 +136,8 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
 
     if (node.type === "time_between") {
       const cfg = TimeBetweenConfigSchema.safeParse(node.data.config ?? {});
-      if (!cfg.success || !cfg.data.keyField || !cfg.data.fromType || !cfg.data.toType) {
-        issues.push({ nodeId: node.id, message: "Time between needs a matching field and both record types picked." });
+      if (!cfg.success || !cfg.data.keyField || cfg.data.start.rules.length === 0 || cfg.data.end.rules.length === 0) {
+        issues.push({ nodeId: node.id, message: "Time between needs a matching field, plus a condition for the start and the end." });
       }
     }
 

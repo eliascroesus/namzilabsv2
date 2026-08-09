@@ -49,7 +49,7 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
       // default still reads "percentage" for legacy graphs missing `op`).
       return { op: "count", field: "value", distinctField: "subject", groupBy: null };
     case "time_between":
-      return { keyField: "", fromType: "", toType: "", mode: "first", unit: "minutes" };
+      return { keyField: "", start: { combinator: "and", rules: [] }, end: { combinator: "and", rules: [] }, mode: "first", unit: "minutes" };
     case "unite":
       return {};
     case "group":
