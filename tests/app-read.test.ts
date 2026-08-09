@@ -210,3 +210,112 @@ describe("record-kind gating", () => {
     expect(records).toHaveLength(1);
   });
 });
+
+/**
+ * A ticked "Remove duplicates" that removes nothing looks exactly like one
+ * that found no duplicates. That is not hypothetical: the field picker on a
+ * Get data step lists every path ever seen anywhere on the connection, so a
+ * Close CALLS step offers `data.number` — which belongs to Close's
+ * phone-number object, not to any call — and matching on it removed zero
+ * rows in silence, with the existing E.7 warning unable to fire because the
+ * field IS in the registry, just never on this record type.
+ */
+describe("dedupe says what it actually did", () => {
+  const dedupeOn = async (field: string) => {
+    const g = parseGraph({ nodes: [N("a", "app", { connectionId: CONN, source: "close", dedupe: true, dedupeField: field })], edges: [] });
+    const res = await runFlow({ db, orgId: ORG }, g);
+    return (res.nodes.get("a")! as NodeExecOk).dedupe;
+  };
+
+  beforeEach(async () => {
+    // Three Close-shaped calls: two to the same number, none carrying the
+    // `data.number` field the picker offered.
+    for (const [i, phone] of ["+1914", "+1914", "+1475"].entries()) {
+      await db.insert(events).values({
+        eventId: `dd:${i}`,
+        orgId: ORG,
+        connectionId: CONN,
+        source: "close",
+        eventType: "call_logged",
+        subject: phone,
+        occurredAt: new Date(T0 + i * 60_000),
+        properties: { data: { phone } },
+      });
+    }
+  });
+
+  it("a field that exists on no record reports a no-op instead of looking successful", async () => {
+    // Sabotage: return a bare array from dedupeRecords and this is undefined —
+    // the step reports "3 loaded", the box stays ticked, and nothing anywhere
+    // says the field matched nothing.
+    expect(await dedupeOn("properties.data.number")).toEqual({ field: "properties.data.number", loaded: 3, matched: 0, removed: 0 });
+  });
+
+  it("a field that does exist reports what it removed", async () => {
+    expect(await dedupeOn("properties.data.phone")).toEqual({ field: "properties.data.phone", loaded: 3, matched: 3, removed: 1 });
+  });
+
+  it("a field present on only some records reports the gap, because those all survive", async () => {
+    await db.insert(events).values({
+      eventId: "dd:3",
+      orgId: ORG,
+      connectionId: CONN,
+      source: "close",
+      eventType: "call_logged",
+      subject: "+1914",
+      occurredAt: new Date(T0 + 3 * 60_000),
+      properties: {}, // no data.phone — an empty key always passes
+    });
+    expect(await dedupeOn("properties.data.phone")).toEqual({ field: "properties.data.phone", loaded: 4, matched: 3, removed: 1 });
+  });
+});
+
+/**
+ * Why the answer to "stop double dials skewing speed to lead" is to turn
+ * dedupe OFF, not to fix the field: dedupe keeps the NEWEST record per key,
+ * and Time between wants the FIRST call. They pull in opposite directions.
+ */
+describe("dedupe on the calls step would corrupt speed to lead", () => {
+  it("keeping the newest dial replaces first-call with last-call", async () => {
+    const mk = async (id: string, type: string, atMin: number) => {
+      await db.insert(events).values({
+        eventId: id,
+        orgId: ORG,
+        connectionId: CONN,
+        source: "close",
+        eventType: type,
+        subject: "+1914",
+        occurredAt: new Date(T0 + atMin * 60_000),
+        properties: { lead_id: "L1", data: { phone: "+1914" } },
+      });
+    };
+    await mk("l1", "lead_created", 0);
+    await mk("c1", "call_logged", 5); // the first dial — the answer
+    await mk("c2", "call_logged", 90); // a double dial
+
+    const run = async (dedupe: boolean) => {
+      const g = parseGraph({
+        nodes: [
+          N("leads", "app", { connectionId: CONN, source: "close", eventType: "lead_created" }),
+          N("calls", "app", { connectionId: CONN, source: "close", eventType: "call_logged", dedupe, dedupeField: "properties.data.phone" }),
+          N("u", "unite", {}),
+          N("t", "time_between", { keyField: "properties.lead_id", startField: "occurredAt", startStep: "leads", endField: "occurredAt", endStep: "calls" }),
+        ],
+        edges: [
+          { id: "e1", source: "leads", target: "u" },
+          { id: "e2", source: "calls", target: "u" },
+          { id: "e3", source: "u", target: "t" },
+        ],
+      });
+      const res = await runFlow({ db, orgId: ORG }, g);
+      const shape = (res.nodes.get("t")! as NodeExecOk).shape;
+      if (shape.kind !== "dataset") throw new Error("expected dataset");
+      return (shape.records[0].properties.time_between as Record<string, number>).minutes;
+    };
+
+    // Time between already ignores the second dial. Dedupe deletes the first
+    // one instead, and the metric silently reports 18x slower.
+    expect(await run(false)).toBe(5);
+    expect(await run(true)).toBe(90);
+  });
+});

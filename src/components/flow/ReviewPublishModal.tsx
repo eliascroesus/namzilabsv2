@@ -20,10 +20,18 @@ const VIZ_OPTIONS = [
 const LEGACY_VIZ_LABELS: Record<string, string> = { line: "Line chart (draws bars)", table: "Table (draws bars)", funnel: "Funnel (draws bars)" };
 const FORMAT_OPTIONS = [
   { value: "number", label: "Number" },
-  { value: "duration", label: "Length of time" },
   { value: "percent", label: "Percentage" },
   { value: "currency", label: "Currency" },
 ];
+/**
+ * A length of time is declared by the STEP that measures it, which is also
+ * where the unit it counts and the way it reads are chosen. Offering it here
+ * as well let a metric be marked a duration with no unit behind it, which
+ * silently meant minutes. It stays listed for a metric that already is one,
+ * so the dropdown shows what it is, but it cannot be picked into.
+ */
+const DURATION_OPTION = { value: "duration", label: "Length of time (set on the step)", disabled: true };
+const formatOptionsFor = (format: string) => (format === "duration" ? [...FORMAT_OPTIONS, DURATION_OPTION] : FORMAT_OPTIONS);
 const TIME_UNIT_OPTIONS = [
   { value: "day", label: "By day" },
   { value: "week", label: "By week" },
@@ -121,7 +129,7 @@ export function ReviewPublishModal({
                       </div>
                       <div>
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Format</span>
-                        <Select value={m.format} width={210} options={FORMAT_OPTIONS} onChange={(v) => set(ep.nodeId, { format: v })} />
+                        <Select value={m.format} width={210} options={formatOptionsFor(m.format)} onChange={(v) => set(ep.nodeId, { format: v })} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">

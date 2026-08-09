@@ -48,6 +48,14 @@ export type NodeTestDTO = {
    * number is trusted — a wrong answer nobody questions is worse than an error.
    */
   dedupeWarning?: string;
+  /**
+   * What "Remove duplicates" actually did, measured on the run: how many of
+   * the loaded records the chosen field resolved on, and how many were
+   * removed. `matched: 0` is the silent no-op — the field exists nowhere in
+   * this step's data — which the E.7 warning above cannot catch, because the
+   * field IS in the connection's registry, just never on THIS record type.
+   */
+  dedupe?: { field: string; loaded: number; matched: number; removed: number };
 };
 
 /** Shape one engine result into the compact DTO the editor renders. */
@@ -63,6 +71,7 @@ function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTest
     outputSchema: exec.outputSchema,
     tile: exec.tile,
     value: exec.shape.kind === "scalar" ? exec.shape.value : undefined,
+    dedupe: exec.dedupe,
   };
 }
 

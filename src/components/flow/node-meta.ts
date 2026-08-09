@@ -1,5 +1,5 @@
 import { formatDuration } from "@/lib/format";
-import { type NodeType } from "@/lib/flow/types";
+import { durationValueUnit, type NodeType } from "@/lib/flow/types";
 import type { NodeData } from "./graph-utils";
 
 /** The four visible stages a metric flows through, in order. */
@@ -171,7 +171,9 @@ export function resultLabel(
       // gets thousands separators and two decimals at most.
       const n = value ?? (typeof tileVal === "number" ? tileVal : null);
       if (n == null) return `${val}`;
-      if (cfg.resultKind === "duration") return formatDuration(n, String(cfg.durationUnit ?? "minutes"));
+      if (cfg.resultKind === "duration") {
+        return formatDuration(n, durationValueUnit(String(cfg.field ?? ""), String(cfg.durationUnit ?? "minutes")), String(cfg.durationDisplay ?? "auto"));
+      }
       return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
     }
     default:

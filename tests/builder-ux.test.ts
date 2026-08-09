@@ -120,24 +120,83 @@ describe("an account is required, not just a source", () => {
  * number; a length of time is said the way people say it.
  */
 describe("a length of time is shown as one", () => {
-  it("formats a duration from whatever unit the numbers are in", async () => {
-    const { formatDuration, formatMetricValue } = await import("@/lib/format");
-    expect(formatDuration(285.195783, "minutes")).toBe("4h 45m");
-    expect(formatDuration(0.5, "minutes")).toBe("30s");
-    expect(formatDuration(90, "seconds")).toBe("1m 30s");
-    expect(formatDuration(50, "hours")).toBe("2d 2h");
-    // The published tile goes through the same path.
-    expect(formatMetricValue(285.195783, { format: "duration", unit: "minutes" })).toBe("4h 45m");
+  it("the reading changes; the length of time never does", async () => {
+    const { formatDuration } = await import("@/lib/format");
+    // 285.195783 minutes is ONE duration. Sabotage: fold the display choice
+    // back into the value unit and these disagree — "4h 45m" under minutes,
+    // "4m 45s" under seconds — which is the bug this pins.
+    const v = 285.195783;
+    expect(formatDuration(v, "minutes", "auto")).toBe("4h 45m");
+    expect(formatDuration(v, "minutes", "hours")).toBe("4h 45m 12s");
+    expect(formatDuration(v, "minutes", "minutes")).toBe("285m 12s");
+    expect(formatDuration(v, "minutes", "seconds")).toBe("17,112s");
+    expect(formatDuration(v, "minutes", "days")).toBe("0d 4h 45m 12s");
+  });
+
+  it("a short gap reads the way it was asked for, zeros included", async () => {
+    const { formatDuration } = await import("@/lib/format");
+    // 4 minutes 30 seconds, the founder's own example.
+    expect(formatDuration(270, "seconds", "hours")).toBe("0h 4m 30s");
+    expect(formatDuration(270, "seconds", "minutes")).toBe("4m 30s");
+    expect(formatDuration(270, "seconds", "seconds")).toBe("270s");
+    expect(formatDuration(4.5, "minutes", "hours")).toBe("0h 4m 30s"); // same duration, other unit
+  });
+
+  it("the value unit comes from the field, so it cannot be answered wrong", async () => {
+    const { durationValueUnit, fieldNamesItsUnit } = await import("@/lib/flow/types");
+    expect(durationValueUnit("properties.time_between.minutes", "seconds")).toBe("minutes");
+    expect(durationValueUnit("properties.time_between.hours", "seconds")).toBe("hours");
+    expect(fieldNamesItsUnit("properties.time_between.seconds")).toBe(true);
+    // A field that does NOT say keeps the stored answer, and the panel asks.
+    expect(durationValueUnit("properties.data.duration", "seconds")).toBe("seconds");
+    expect(fieldNamesItsUnit("properties.data.duration")).toBe(false);
+  });
+
+  it("an unrecognised unit says so instead of quietly meaning minutes", async () => {
+    const { formatDuration } = await import("@/lib/format");
+    expect(formatDuration(285, "fortnights")).toBe("—");
   });
 
   it("the builder's own result line follows the step's choice", async () => {
     const { resultLabel } = await import("@/components/flow/node-meta");
     const test = { recordsIn: 10, recordsOut: 1, value: 285.195783 };
+    const cfg = { resultKind: "duration", field: "properties.time_between.minutes" };
     // Sabotage: print String(value) as it used to and this reads 285.195783.
-    expect(resultLabel("formula", test, { resultKind: "duration", durationUnit: "minutes" })).toBe("4h 45m");
+    expect(resultLabel("formula", test, cfg)).toBe("4h 45m");
+    expect(resultLabel("formula", test, { ...cfg, durationDisplay: "seconds" })).toBe("17,112s");
     // A plain number still reads as a number — just not as a raw float.
     expect(resultLabel("formula", test, { resultKind: "number" })).toBe("285.2");
     expect(resultLabel("formula", { recordsIn: 9, recordsOut: 1, value: 12000 })).toBe("12,000");
+  });
+
+  it("the published tile reads the same as the builder", async () => {
+    const { formatMetricValue } = await import("@/lib/format");
+    const { resultLabel } = await import("@/components/flow/node-meta");
+    const cfg = { resultKind: "duration", field: "properties.time_between.minutes", durationDisplay: "hours" };
+    // Sabotage: drop durationDisplay from TileSpec/MetricSpec and the tile
+    // renders "4h 45m" while the builder renders "4h 45m 12s" — two answers
+    // for one number, on two screens.
+    expect(formatMetricValue(285.195783, { format: "duration", unit: "minutes", durationDisplay: "hours" })).toBe(
+      resultLabel("formula", { recordsIn: 1, recordsOut: 1, value: 285.195783 }, cfg),
+    );
+  });
+
+  it("a hand-built duration flow publishes a duration tile, not a bare 285", async () => {
+    const { seedMetricFormat } = await import("@/lib/flow/types");
+    // Sabotage: hardcode format "number" as the seeding used to and the
+    // published tile reads "285" for a step the builder shows as "4h 45m".
+    expect(seedMetricFormat({ resultKind: "duration", field: "properties.time_between.minutes", durationDisplay: "hours" })).toEqual({
+      format: "duration",
+      unit: "minutes",
+      durationDisplay: "hours",
+    });
+    // A field that does not name its unit falls back to what the step was told.
+    expect(seedMetricFormat({ resultKind: "duration", field: "properties.data.duration", durationUnit: "seconds" })).toEqual({
+      format: "duration",
+      unit: "seconds",
+      durationDisplay: "auto",
+    });
+    expect(seedMetricFormat({ op: "count" })).toEqual({ format: "number" });
   });
 
   it("choosing a length of time drops the trend split, which cannot be one", async () => {

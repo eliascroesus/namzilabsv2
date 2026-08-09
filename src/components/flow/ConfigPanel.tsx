@@ -17,6 +17,7 @@ import {
   AGGREGATIONS,
   aggregationInputs,
   DURATION_UNITS,
+  fieldNamesItsUnit,
   TIME_UNITS,
   VIZ_TYPES,
   TIME_PRESETS,
@@ -615,18 +616,38 @@ function NodeConfig({
                 <FieldInput value={String(cfg.distinctField ?? "subject")} groups={groups} onChange={(v) => onChange({ distinctField: v })} />
               </Field>
             )}
-            {/* A duration says what unit the numbers are in, and is shown as
-                a length of time ("4h 45m"). A plain number can be split into
-                a trend instead. One choice decides which question is asked. */}
+            {/* A duration asks only how to READ it. What unit the numbers are
+                counted in comes from the field — `time_between.minutes` says
+                so itself — and is asked for only when the field stays silent.
+                They used to be one dropdown, so changing it reported a
+                different length of time for the same number. */}
             {String(cfg.resultKind ?? "number") === "duration" ? (
-              <Field label="The numbers are in">
-                <Select
-                  value={String(cfg.durationUnit ?? "minutes")}
-                  width={W}
-                  options={DURATION_UNITS.map((u) => ({ value: u, label: title(u) }))}
-                  onChange={(v) => onChange({ durationUnit: v })}
-                />
-              </Field>
+              <>
+                {!fieldNamesItsUnit(String(cfg.field ?? "")) && (
+                  <Field label="The numbers are in">
+                    <Select
+                      value={String(cfg.durationUnit ?? "minutes")}
+                      width={W}
+                      options={DURATION_UNITS.map((u) => ({ value: u, label: title(u) }))}
+                      onChange={(v) => onChange({ durationUnit: v })}
+                    />
+                  </Field>
+                )}
+                <Field label="Show it as">
+                  <Select
+                    value={String(cfg.durationDisplay ?? "auto")}
+                    width={W}
+                    options={[
+                      { value: "auto", label: "Whatever reads best" },
+                      { value: "seconds", label: "Seconds" },
+                      { value: "minutes", label: "Minutes and seconds" },
+                      { value: "hours", label: "Hours, minutes and seconds" },
+                      { value: "days", label: "Days, hours, minutes and seconds" },
+                    ]}
+                    onChange={(v) => onChange({ durationDisplay: v })}
+                  />
+                </Field>
+              </>
             ) : (
               <>
                 <Field label="Split over time?">
@@ -1239,6 +1260,38 @@ function MomentInput({
   );
 }
 
+/**
+ * What "Remove duplicates" actually did, in one sentence, every time.
+ *
+ * A ticked box that removes nothing looks exactly like a ticked box that
+ * found no duplicates, and the existing E.7 warning cannot tell them apart:
+ * it fires on a field with too FEW distinct values, but a field that appears
+ * on no record at all has none, so it stays silent. That is how matching
+ * Close calls on `data.number` — a field belonging to Close's phone-number
+ * object, offered because the picker lists every field on the connection —
+ * removed zero rows with nothing on screen saying so.
+ */
+function DedupeOutcome({ d }: { d: { field: string; loaded: number; matched: number; removed: number } }) {
+  const name = d.field.replace(/^properties\./, "");
+  if (d.matched === 0) {
+    return (
+      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+        Nothing was removed: <span className="font-medium">{name}</span> is empty on all {d.loaded.toLocaleString()} records here, so there was nothing to match on. Pick a
+        field these records actually carry.
+      </p>
+    );
+  }
+  const partial = d.matched < d.loaded ? ` ${(d.loaded - d.matched).toLocaleString()} records had no ${name} and were all kept.` : "";
+  return (
+    <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-600">
+      {d.removed === 0
+        ? `No duplicates found — every ${name} was different.`
+        : `Removed ${d.removed.toLocaleString()} duplicate${d.removed === 1 ? "" : "s"}, keeping the most recent of each ${name}.`}
+      {partial}
+    </p>
+  );
+}
+
 function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigField; conn: ConnMeta; cfg: Record<string, unknown>; onChange: (p: Record<string, unknown>) => void }) {
   const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
   const value = String(sourceConfig[field.key] ?? "");
@@ -1497,6 +1550,7 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
       {t.dedupeWarning && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{t.dedupeWarning}</p>
       )}
+      {t.dedupe && <DedupeOutcome d={t.dedupe} />}
       <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-base font-semibold text-neutral-900">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />

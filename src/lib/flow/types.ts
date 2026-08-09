@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DURATION_DISPLAYS } from "@/lib/format";
 import { catalogEntry, fieldAppliesToEventType } from "@/connectors/catalog";
 
 /**
@@ -187,7 +188,10 @@ export const OutputConfigSchema = z.object({
   description: z.string().optional(),
   viz: z.enum(VIZ_TYPES).default("number"),
   format: z.enum(["number", "percent", "currency", "duration"]).default("number"),
+  /** For a duration: the unit the NUMBER is counted in (never a display choice). */
   unit: z.string().optional(),
+  /** For a duration: how finely to break it down when read. */
+  durationDisplay: z.enum(DURATION_DISPLAYS).default("auto"),
   currency: z.string().default("USD"),
   precision: z.number().int().min(0).max(6).default(0),
   target: z.number().nullable().default(null),
@@ -308,15 +312,58 @@ export function isDatasetFormulaOp(op: unknown): boolean {
  * rest of its configuration follows from the answer.
  */
 export const RESULT_KINDS = ["number", "duration"] as const;
-/** Units a duration result can be shown in. */
+/** The units a duration NUMBER can be counted in. A fact about the data. */
 export const DURATION_UNITS = ["seconds", "minutes", "hours", "days"] as const;
+
+/**
+ * What unit a field's numbers are counted in, read off the field itself.
+ *
+ * Time between publishes its gap as `properties.time_between.<unit>`, so the
+ * field NAMES its unit and there is nothing to ask and nothing to get wrong.
+ * `stored` is the fallback for a field that does not say — the only case
+ * where the step has to ask the person.
+ */
+export function durationValueUnit(field: string, stored: string): string {
+  const last = String(field).split(".").pop() ?? "";
+  return (DURATION_UNITS as readonly string[]).includes(last) ? last : stored;
+}
+
+/**
+ * The presentation a step's own config implies for its published tile.
+ *
+ * A hand-built speed-to-lead read "4h 45m" in the builder and published a
+ * tile reading "285": the seeding hardcoded format "number" and never looked
+ * at the step, so only the Close template — which ships its metric
+ * pre-seeded — ever got this right.
+ */
+export function seedMetricFormat(cfg: Record<string, unknown>): { format: "number" | "duration"; unit?: string; durationDisplay?: string } {
+  if (cfg.resultKind !== "duration") return { format: "number" };
+  return {
+    format: "duration",
+    unit: durationValueUnit(String(cfg.field ?? ""), String(cfg.durationUnit ?? "minutes")),
+    durationDisplay: String(cfg.durationDisplay ?? "auto"),
+  };
+}
+
+/** True when the field names its own unit, so the step must not ask. */
+export function fieldNamesItsUnit(field: string): boolean {
+  return durationValueUnit(field, "") !== "";
+}
 
 export const FormulaConfigSchema = z.object({
   op: z.enum(FORMULA_OPS).default("percentage"),
   /** Number (default, unchanged for every saved config) or a length of time. */
   resultKind: z.enum(RESULT_KINDS).default("number"),
-  /** Which unit the incoming values are IN, when the result is a duration. */
+  /**
+   * The unit the incoming numbers are counted in. Only consulted when the
+   * field does not name its own unit — see `durationValueUnit`.
+   */
   durationUnit: z.enum(DURATION_UNITS).default("minutes"),
+  /**
+   * How finely to break the length of time down for reading. Never changes
+   * the duration itself; "auto" picks the two units that carry information.
+   */
+  durationDisplay: z.enum(DURATION_DISPLAYS).default("auto"),
   /** Typed-in literal numbers for the A/B inputs — used when no step is wired in. */
   aFixed: z.number().nullable().optional(),
   bFixed: z.number().nullable().optional(),
@@ -431,7 +478,10 @@ export const MetricSpecSchema = z.object({
   name: z.string().default("Untitled metric"),
   viz: z.enum(VIZ_TYPES).default("number"),
   format: z.enum(["number", "percent", "currency", "duration"]).default("number"),
+  /** For a duration: the unit the NUMBER is counted in (never a display choice). */
   unit: z.string().optional(),
+  /** For a duration: how finely to break it down when read. */
+  durationDisplay: z.enum(DURATION_DISPLAYS).default("auto"),
   currency: z.string().default("USD"),
   precision: z.number().int().min(0).max(6).default(0),
   target: z.number().nullable().default(null),
@@ -668,6 +718,7 @@ export type TileSpec = {
   description?: string;
   viz: (typeof VIZ_TYPES)[number];
   format: "number" | "percent" | "currency" | "duration";
+  durationDisplay?: string;
   unit?: string;
   currency?: string;
   precision: number;

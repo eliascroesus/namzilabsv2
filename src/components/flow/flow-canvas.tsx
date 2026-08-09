@@ -4,7 +4,7 @@ import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, useNodesState, useEdgesState, useReactFlow, type Edge } from "@xyflow/react";
-import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
+import { isDatasetFormulaOp, seedMetricFormat, type NodeType } from "@/lib/flow/types";
 import { isBinaryCalc, outputShapeOf, producesDataset, producesNumber } from "@/lib/flow/shapes";
 import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 
@@ -856,7 +856,30 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       // default was the node type ("Calculate"), which shipped tiles
       // literally called Calculate.
       const defaultName = (ep: Endpoint) => (endpoints.length === 1 ? name || ep.title : `${name || "Flow"} — ${ep.title}`);
-      return endpoints.map((ep) => byId.get(ep.nodeId) ?? { nodeId: ep.nodeId, enabled: true, name: defaultName(ep), viz: "number", format: "number", currency: "USD", precision: 0, target: null, timeUnit: "month" });
+      /**
+       * A step that says it measures a length of time publishes a tile that
+       * says so too. This used to hardcode format "number", so a hand-built
+       * speed-to-lead reading "4h 45m" in the builder published a tile
+       * reading "285" — the builder and the dashboard disagreeing about the
+       * same number, which only the Close template escaped because it ships
+       * its metric pre-seeded.
+       */
+      const byNodeId = new Map(nodes.map((n) => [n.id, n]));
+      const seedFormat = (ep: Endpoint) => seedMetricFormat((byNodeId.get(ep.nodeId)?.data.config ?? {}) as Record<string, unknown>);
+      return endpoints.map(
+        (ep) =>
+          byId.get(ep.nodeId) ?? {
+            nodeId: ep.nodeId,
+            enabled: true,
+            name: defaultName(ep),
+            viz: "number",
+            currency: "USD",
+            precision: 0,
+            target: null,
+            timeUnit: "month",
+            ...seedFormat(ep),
+          },
+      );
     });
     setPublishError(null);
     setPublishWarning(null);

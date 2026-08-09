@@ -75,6 +75,8 @@ export type NodeExecOk = {
   nodeType: string;
   /** E.4: the read hit the safety ceiling — surfaced, never silent. */
   truncated?: boolean;
+  /** What "Remove duplicates" actually did on this run, measured rather than predicted. */
+  dedupe?: DedupeReport;
   shape: Shape;
   /** Extra outputs keyed by source-handle id (Paths uses this). */
   outputs?: Record<string, Shape>;
@@ -427,8 +429,14 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
   // Remove duplicates at the source — the FIRST thing that happens, before any
   // later step runs, so a duplicate never costs downstream work. Records are
   // newest-first here, so "keep the first seen" keeps the most recent copy.
-  if (cfg.dedupe) records = dedupeRecords(records, cfg.dedupeField || "subject");
-  const exec = datasetExec("app", node.id, records, rows.length);
+  let dedupe: DedupeReport | undefined;
+  if (cfg.dedupe) {
+    const field = cfg.dedupeField || "subject";
+    const res = dedupeRecords(records, field);
+    records = res.records;
+    dedupe = { field, loaded: res.loaded, matched: res.matched, removed: res.removed };
+  }
+  const exec = dedupe ? { ...datasetExec("app", node.id, records, rows.length), dedupe } : datasetExec("app", node.id, records, rows.length);
   // Never silently truncate: if the ceiling was actually hit, the node says so.
   if (rows.length >= APP_LOAD_CEILING && exec.status === "ok") {
     return { ...exec, truncated: true } as NodeExec;
@@ -436,21 +444,34 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
   return exec;
 }
 
-/** Keep one record per identity value (the newest); empty identities always pass. */
-function dedupeRecords(records: FlowRecord[], field: string): FlowRecord[] {
+/**
+ * Keep one record per identity value (the newest); empty identities always pass.
+ *
+ * It also COUNTS how many records the field actually resolved on, and that
+ * count is the point. A dedupe field that exists nowhere in the data removes
+ * nothing, raises nothing and looks identical to a dedupe that found no
+ * duplicates — which is how a Close user matched calls on `data.number`, a
+ * field belonging to a different Close object entirely, and got a silent
+ * no-op with the box ticked.
+ */
+export type DedupeReport = { field: string; loaded: number; matched: number; removed: number };
+
+function dedupeRecords(records: FlowRecord[], field: string): { records: FlowRecord[]; loaded: number; matched: number; removed: number } {
   const seen = new Set<string>();
   const out: FlowRecord[] = [];
+  let matched = 0;
   for (const r of records) {
     const key = String(getField(r, field) ?? "").trim();
     if (key === "") {
       out.push(r);
       continue;
     }
+    matched++;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(r);
   }
-  return out;
+  return { records: out, loaded: records.length, matched, removed: records.length - out.length };
 }
 
 // ---------- Filter ----------
@@ -789,6 +810,7 @@ export type TilePresentation = {
   viz: TileSpec["viz"];
   format: TileSpec["format"];
   unit?: string;
+  durationDisplay?: string;
   currency?: string;
   precision: number;
   target: number | null;
@@ -806,6 +828,7 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
     viz: spec.viz,
     format: spec.format,
     unit: spec.unit,
+    durationDisplay: spec.durationDisplay,
     currency: spec.currency,
     precision: spec.precision,
     target: spec.target,
