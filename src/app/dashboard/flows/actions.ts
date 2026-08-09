@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { getDb, getReadDb } from "@/db/client";
 import { connections } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
@@ -19,6 +19,7 @@ import { ensureStreamsForGraph, primeStream, pruneOrphanStreams } from "@/lib/sy
 import { hasStreamConfig } from "@/lib/sync/stream-hash";
 import { listSourceOptions } from "@/lib/flow/source-options";
 import { distinctConnectionEventTypes } from "@/lib/metrics/compute";
+import { connectionImportStatus, type ImportStatus } from "@/lib/sync/import-status";
 import type { SourceOption } from "@/connectors/types";
 import { inngest } from "@/inngest/client";
 
@@ -247,6 +248,22 @@ export async function listSourceOptionsAction(
     return await listSourceOptions(getDb(), orgId, connectionId, key, config);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Whether this account is still pulling history — the question a builder
+ * needs answered before trusting a number ("is 190 all of them, or all of
+ * them SO FAR?"). Stored state only: no provider call, so the panel can ask
+ * whenever it opens.
+ */
+export async function importStatusAction(connectionId: string): Promise<ImportStatus> {
+  const { orgId } = await requireOrg();
+  try {
+    return await connectionImportStatus(getReadDb(), orgId, connectionId);
+  } catch {
+    // A progress line must never be the reason a panel fails to open.
+    return { state: "unknown" };
   }
 }
 

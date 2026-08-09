@@ -42,6 +42,7 @@ export function ConnectionRow({
   records,
   pausedNote,
   lastError,
+  importNote,
 }: {
   id: string;
   name: string;
@@ -59,6 +60,13 @@ export function ConnectionRow({
   pausedNote?: string;
   /** The stored failure, shown only when the row is in `error` and NOT merely paused. */
   lastError?: string;
+  /**
+   * Set only while this source is still pulling history — so a customer can
+   * tell "that's all of it" from "that's all of it SO FAR" before building a
+   * metric on it. Absent means either finished or no evidence either way;
+   * neither claims completion.
+   */
+  importNote?: string;
   /**
    * Live records synced from this connection, for the delete warning.
    *
@@ -325,6 +333,9 @@ export function ConnectionRow({
       {/* Same promise as the connection page's amber banner (F.3/F.6): a pause
           is never a dead end, so the list says when it resolves itself. An
           `error` row keeps its red dot; this line adds the WHY beside it. */}
+      {importNote && !pausedNote && !lastError && (
+        <p className="-mt-1 px-4 pb-2.5 text-xs text-amber-700">{importNote}</p>
+      )}
       {(pausedNote || lastError) && (
         <p className={`-mt-1 px-4 pb-2.5 text-xs ${pausedNote ? "text-amber-700" : "text-red-600"}`}>
           {pausedNote ? <>Paused, retrying automatically. {pausedNote}</> : lastError}

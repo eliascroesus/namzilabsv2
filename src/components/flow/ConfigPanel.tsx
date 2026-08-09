@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { catalogEntry, eventTypeLabel, eventTypeOptions, fieldAppliesToEventType, type FlowConfigField } from "@/connectors/catalog";
 import {
+  importStatusAction,
   listAppFieldsAction,
   listRecordTypesAction,
   listSourceOptionsAction,
@@ -10,6 +11,7 @@ import {
   type AppFieldDTO,
 } from "@/app/dashboard/flows/actions";
 import type { DateColumnChoice } from "@/lib/sync/date-column";
+import type { ImportStatus } from "@/lib/sync/import-status";
 import type { SourceOption } from "@/connectors/types";
 import {
   AGGREGATIONS,
@@ -423,6 +425,7 @@ function NodeConfig({
               No connected accounts yet. Connect one in <a className="underline" href="/integrations">Integrations</a>.
             </p>
           )}
+          {conn && <ImportStatusLine connectionId={conn.id} />}
         </Field>
 
         {/* What to pull — set per flow. Stream-scoped sources (Sheets, Calendar,
@@ -1085,6 +1088,38 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
       <p className="mt-1 text-xs text-gray-600">{note}</p>
     </Field>
   );
+}
+
+/**
+ * "Is more data still coming?" — answered under the Account picker, because
+ * a number built while history is still loading is a number that will move.
+ * Silent when there is nothing honest to say (see ImportStatus.unknown).
+ */
+const importStatusCache = new Map<string, ImportStatus>();
+function ImportStatusLine({ connectionId }: { connectionId: string }) {
+  const [status, setStatus] = useState<ImportStatus | null>(() => importStatusCache.get(connectionId) ?? null);
+  useEffect(() => {
+    setStatus(importStatusCache.get(connectionId) ?? null);
+    let live = true;
+    void importStatusAction(connectionId).then((s) => {
+      if (!live) return;
+      importStatusCache.set(connectionId, s);
+      setStatus(s);
+    });
+    return () => {
+      live = false;
+    };
+  }, [connectionId]);
+
+  if (!status || status.state === "unknown") return null;
+  if (status.state === "importing") {
+    return (
+      <p className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+        {status.note ?? "Still importing history — these numbers can still grow."}
+      </p>
+    );
+  }
+  return <p className="mt-1.5 text-xs text-green-700">History imported — this is everything.</p>;
 }
 
 /**

@@ -9,6 +9,7 @@ import type {
   RegisterWebhookResult,
   VerifyWebhookArgs,
   VerifyWebhookResult,
+  ImportCoverage,
 } from "./types";
 import { createHmac } from "node:crypto";
 import { safeEqual, timestampFreshness } from "@/lib/signatures";
@@ -194,6 +195,26 @@ export function parseCloseCursor(cursor: string | null): CloseCursor {
 }
 
 /**
+ * How far the FIRST import has got, read from the stored cursor alone — no
+ * provider call, nothing to schedule, safe to ask on every page render.
+ *
+ * Returns null the moment there is nothing honest to report: no cursor (never
+ * polled — that is "unknown", not "done"), or `hw` set, which means a window
+ * has fully drained and the connection is in steady state. Reporting there
+ * would print "covering 0 of 1 days" about a routine five-minute overlap.
+ *
+ * The denominator counts from the floor PINNED IN THE CURSOR at the walk's
+ * start, not from a freshly computed `now - 30d` — so the target the bar is
+ * measured against cannot creep forward underneath a walk that is paging
+ * backwards through it.
+ */
+export function closeImportProgress(cursorRaw: string | null, now = Date.now()): ImportCoverage | null {
+  const c = parseCloseCursor(cursorRaw);
+  if (!cursorRaw || c.hw || !c.floor) return null;
+  return coverage(c, new Date(c.floor), now);
+}
+
+/**
  * JSON while a walk is in flight, the plain high-water string once it is not.
  *
  * An UNFINISHED FIRST SYNC counts as in flight even with no continuation, and
@@ -238,14 +259,14 @@ function serializeCloseCursor(c: CloseCursor): string | null {
  * history rather than an error, so they are kept and simply do not count toward
  * a fraction they would make nonsense of.
  */
-function coverage(c: CloseCursor, target: Date): { coveredMs: number; targetMs: number } {
+function coverage(c: CloseCursor, target: Date, now = Date.now()): { coveredMs: number; targetMs: number } {
   const floorMs = target.getTime();
   const loMs = c.covLo ? Date.parse(c.covLo) || 0 : 0;
   // Only the part of the ingested span that lies inside the window being
   // reported on. `spanCovered` still does the measuring, so the "nothing
   // ingested yet reads as 0, never as complete" rule stays in one place.
   const lo = loMs > 0 && loMs < floorMs ? new Date(floorMs).toISOString() : (c.covLo ?? null);
-  return spanCovered(lo, c.covHi ?? null, floorMs);
+  return spanCovered(lo, c.covHi ?? null, floorMs, now);
 }
 
 /** Earlier of two provider date strings (by parsed time; unparseable loses). */

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
+import { getReadDb } from "@/db/client";
+import { connectionImportStatus, type ImportStatus } from "@/lib/sync/import-status";
 import { AppHeader } from "@/components/app-header";
 import { integrationsErrorMessage } from "./error-messages";
 import { connectionRecordCounts, listConnections, webhookUrlFor } from "@/lib/connections";
@@ -31,6 +33,16 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   // Best-effort: a failed count must not take down the page, and the delete
   // warning falls back to naming no number rather than naming a wrong one.
   const records = await connectionRecordCounts(orgId).catch(() => ({}) as Record<string, number>);
+  // "Is history still loading?" per connection, from stored state only (no
+  // provider calls). Best-effort like the counts: a progress line must never
+  // be the reason this page fails to render.
+  const importStatuses = new Map<string, ImportStatus>(
+    await Promise.all(
+      connected
+        .filter((c) => c.status !== "disabled")
+        .map(async (c) => [c.id, await connectionImportStatus(getReadDb(), orgId, c.id).catch(() => ({ state: "unknown" as const }))] as const),
+    ),
+  );
   // Disconnected connections still exist (their rows and data survive so they
   // can be reconnected), but they are not CONNECTED — counting them would tell
   // someone a source is live when nothing is syncing from it.
@@ -106,6 +118,11 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                   // reads a documented timestamp field of its own.
                   eventTimeNote={c.source === "webhook" ? eventTimeNote(readEventTime(c.config)) : undefined}
                   records={records[c.id]}
+                  importNote={
+                    importStatuses.get(c.id)?.state === "importing"
+                      ? (importStatuses.get(c.id)?.note ?? "Still importing history.")
+                      : undefined
+                  }
                 />
               ))}
             </div>
