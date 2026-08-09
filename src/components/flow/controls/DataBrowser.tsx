@@ -119,25 +119,16 @@ export function DataBrowser({
   const VISIBLE = 25;
   const CAP_AFTER = 30;
   const capped = (key: string, fields: DataField[], searching: boolean) => {
-    if (searching || showAll.has(key) || fields.length <= CAP_AFTER) return { shown: fields, hidden: 0, empty: 0 };
-    // Empty-in-every-record fields are already sorted to the back (see
-    // prepareGroups), so the cap hides them first — which is the whole point.
-    let empty = 0;
-    for (let i = VISIBLE; i < fields.length; i++) if (fields[i].populated === 0) empty++;
-    return { shown: fields.slice(0, VISIBLE), hidden: fields.length - VISIBLE, empty };
+    if (searching || showAll.has(key) || fields.length <= CAP_AFTER) return { shown: fields, hidden: 0 };
+    return { shown: fields.slice(0, VISIBLE), hidden: fields.length - VISIBLE };
   };
-  const ShowAllRow = ({ k, hidden, empty }: { k: string; hidden: number; empty: number }) => (
+  const ShowAllRow = ({ k, hidden }: { k: string; hidden: number }) => (
     <button
       type="button"
       onClick={() => setShowAll((prev) => new Set(prev).add(k))}
       className="mt-1 w-full rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-indigo-600 hover:bg-indigo-50"
     >
       Show all {hidden + VISIBLE} fields
-      {/* Providers send every optional column whether the account fills it or
-          not, so most of a long tail is genuinely nothing. Saying so is the
-          difference between "there is more" and "there is more, and this is
-          why you have not seen it". */}
-      {empty > 0 ? <span className="font-normal text-neutral-400"> · {empty} are empty in every record</span> : null}
     </button>
   );
 
@@ -208,7 +199,7 @@ export function DataBrowser({
                 const kids = filterFields(childFields(drillField, 300), q);
                 if (kids.length === 0) return <p className="px-2 py-4 text-center text-xs text-neutral-400">Nothing inside this field.</p>;
                 const key = `${drill.groupId}:${drill.trail.map((t) => t.path).join(">")}`;
-                const { shown, hidden, empty } = capped(key, kids, q.trim().length > 0);
+                const { shown, hidden } = capped(key, kids, q.trim().length > 0);
                 return (
                   <div className="space-y-1">
                     {shown.map((f) => (
@@ -219,7 +210,7 @@ export function DataBrowser({
                         onDrill={() => setDrill({ groupId: drill.groupId, trail: [...drill.trail, f] })}
                       />
                     ))}
-                    {hidden > 0 && <ShowAllRow k={key} hidden={hidden} empty={empty} />}
+                    {hidden > 0 && <ShowAllRow k={key} hidden={hidden} />}
                   </div>
                 );
               })()}
@@ -252,13 +243,13 @@ export function DataBrowser({
                     <span className="shrink-0 text-[10px] text-neutral-400">{g.fields.length}</span>
                   </button>
                   {isOpen && (() => {
-                    const { shown, hidden, empty } = capped(g.stepId, fields, searching);
+                    const { shown, hidden } = capped(g.stepId, fields, searching);
                     return (
                       <div className="mt-1 space-y-1 pl-2.5">
                         {shown.map((f) => (
                           <FieldRow key={f.path} field={f} onPick={() => pick(g, f)} onDrill={() => setDrill({ groupId: g.stepId, trail: [f] })} />
                         ))}
-                        {hidden > 0 && <ShowAllRow k={g.stepId} hidden={hidden} empty={empty} />}
+                        {hidden > 0 && <ShowAllRow k={g.stepId} hidden={hidden} />}
                       </div>
                     );
                   })()}

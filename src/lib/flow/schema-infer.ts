@@ -67,8 +67,15 @@ const MAX_DEPTH = 4;
 /** A ceiling so one pathological payload cannot bloat the saved graph. */
 const MAX_PATHS = 600;
 
-/** Did the provider actually send something here? `0` and `false` did. */
-function isEmptyValue(v: unknown): boolean {
+/**
+ * Did the provider actually send something here? `0` and `false` did.
+ *
+ * Shared with the field registry's write path for the same reason
+ * `buildFieldInfo` is shared: if the two disagreed about what counts as a
+ * value, a field could be "empty" to the picker and "populated" to the
+ * registry, and only one of them would be right.
+ */
+export function isEmptyValue(v: unknown): boolean {
   if (v == null) return true;
   if (typeof v === "string") return v.trim() === "";
   if (Array.isArray(v)) return v.length === 0;
@@ -77,7 +84,7 @@ function isEmptyValue(v: unknown): boolean {
 }
 
 /** Long text is a sample, not a payload — the schema is persisted in the graph. */
-function trimExample(v: unknown): unknown {
+export function trimExample(v: unknown): unknown {
   return typeof v === "string" && v.length > 300 ? `${v.slice(0, 300)}…` : v;
 }
 

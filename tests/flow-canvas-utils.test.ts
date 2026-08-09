@@ -1,3 +1,4 @@
+import type { FieldInfo } from "@/lib/flow/schema-infer";
 import { describe, it, expect } from "vitest";
 import type { Edge } from "@xyflow/react";
 import {
@@ -60,7 +61,7 @@ describe("resolveSampleField", () => {
 });
 
 describe("buildFieldGroups (variable picker)", () => {
-  const schema = [
+  const schema: FieldInfo[] = [
     { path: "subject", label: "Subject", type: "text" },
     { path: "plan", label: "plan", type: "text" },
     { path: "properties.seats", label: "seats", type: "number" },
@@ -192,7 +193,7 @@ describe("buildFieldGroups — connector-declared hidden fields", () => {
       properties: { summary: "setting call", kind: "calendar#event", htmlLink: "https://…", guests_accepted: 2 },
     },
   ];
-  const schema = [
+  const schema: FieldInfo[] = [
     { path: "properties.summary", label: "summary", type: "text" },
     { path: "properties.kind", label: "kind", type: "text" },
     { path: "properties.htmlLink", label: "htmlLink", type: "text" },

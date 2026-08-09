@@ -1,3 +1,4 @@
+import { isEmptyValue } from "@/lib/flow/schema-infer";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { streamFields } from "@/db/schema";
 import type { DB } from "@/db/types";
@@ -74,7 +75,13 @@ export async function recordFields(db: DB, scope: RegistryScope, records: Canoni
     for (const [path, value] of flatten(rec.properties ?? {})) {
       const entry = seen.get(path) ?? { type: classify(value), distinct: new Set<string>(), count: 0, sample: value };
       entry.count += 1;
-      if (value != null && entry.distinct.size < CARDINALITY_CEILING) entry.distinct.add(String(value));
+      // A BLANK CELL IS NOT A VALUE. This was `value != null`, so "" counted
+      // as one distinct value and a column the account never fills scored
+      // cardinality 1 — offered in every picker forever. `String(value)` has
+      // the same blind spot for {} and [], which collapse to
+      // "[object Object]" and "". One judgement about what a value is, shared
+      // with the picker (see schema-infer's isEmptyValue).
+      if (!isEmptyValue(value) && entry.distinct.size < CARDINALITY_CEILING) entry.distinct.add(String(value));
       // A non-null type wins over "null" so an occasional empty cell doesn't
       // brand the whole field as null-typed.
       if (entry.type === "null") entry.type = classify(value);

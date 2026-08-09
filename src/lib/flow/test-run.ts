@@ -1,7 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { connections, testRuns } from "@/db/schema";
 import type { DB } from "@/db/types";
-import { runFlow, type NodeExec } from "./engine";
+import { appFieldUnion, runFlow, type NodeExec } from "./engine";
+import type { FieldInfo } from "./schema-infer";
 import { compileEnabled } from "./compile/flags";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
@@ -29,7 +30,7 @@ export type NodeTestDTO = {
   sample: unknown[];
   /** Sample of the primary input (before) — for the before/after test preview. */
   inputSample: unknown[];
-  outputSchema: Array<{ path: string; label: string; type: string; example?: unknown; container?: boolean; populated?: number }>;
+  outputSchema: FieldInfo[];
   error?: string;
   tile?: unknown;
   /** The computed number, when the step produces a single number (Count/Calculate). */
@@ -212,10 +213,80 @@ export async function executeNodeTest(db: DB, orgId: string, graph: unknown, nod
     if (primed.notes.length > 0) dto.sourceNote = primed.notes.join(" ");
     const warning = await dedupeWarningForNode(db, orgId, g, nodeId);
     if (warning) dto.dedupeWarning = warning;
+    /**
+     * The picker's list is a fact about the APP, not about this one run.
+     *
+     * Only the tested node's DTO travels back, and every downstream picker
+     * reads the APP node's stored outputSchema — filters and windows
+     * contribute nothing but their own Output flags, and a Combine is skipped
+     * entirely (see buildFieldGroups). So widening it HERE is what reaches
+     * the Filter, the Calculate and the Time between below it.
+     *
+     * On the test path and not in execApp on purpose: execApp also runs on
+     * every materialize, and the materializer never reads outputSchema.
+     */
+    const tested = g.nodes.find((n) => n.id === nodeId);
+    if (tested?.type === "app" && dto.status === "ok") {
+      try {
+        dto.outputSchema = await appFieldUnion({ db, orgId }, tested.data.config, dto.outputSchema, savedFieldPaths(g));
+      } catch {
+        // A picker must never fail because a diagnostic table is unavailable.
+      }
+    }
     return dto;
   } catch (e) {
     return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/** Config keys that hold a single field path. */
+const PATH_KEYS = [
+  "field",
+  "valueField",
+  "distinctField",
+  "breakdownField",
+  "dateField",
+  "keyField",
+  "startField",
+  "endField",
+  "dedupeField",
+] as const;
+
+/**
+ * Every field path any step in this graph has SAVED.
+ *
+ * These are exempt from the emptiness rule. A field can be empty in the data
+ * and still be the one a published metric is built on — and a picker missing
+ * its own value is worse than a picker with one dead row in it: the pill goes
+ * amber claiming the source is missing, the operator list silently degrades
+ * to textual, and a Filter's picker is pick-only so it cannot even be chosen
+ * again. Graph-wide rather than per-branch because descendants are a subset
+ * of all nodes and a graph is a handful of steps.
+ */
+function savedFieldPaths(g: FlowGraph): Set<string> {
+  const out = new Set<string>();
+  const add = (v: unknown) => {
+    if (typeof v === "string" && v && !v.startsWith("__")) out.add(v);
+  };
+  const addRules = (c: unknown) => {
+    for (const r of ((c as { rules?: unknown[] } | undefined)?.rules ?? []) as Array<Record<string, unknown>>) {
+      add(r.field);
+      add(r.valueField);
+    }
+  };
+  for (const n of g.nodes) {
+    const cfg = (n.data.config ?? {}) as Record<string, unknown>;
+    for (const k of PATH_KEYS) add(cfg[k]);
+    add((cfg.dateRange as { dateField?: unknown } | undefined)?.dateField);
+    add((cfg.groupBy as { field?: unknown } | undefined)?.field);
+    addRules(cfg);
+    addRules(cfg.start);
+    addRules(cfg.end);
+    for (const p of (cfg.paths ?? []) as Array<Record<string, unknown>>) addRules(p.filters);
+    for (const c of (cfg.categories ?? []) as Array<Record<string, unknown>>) addRules(c.filters);
+  }
+  for (const m of g.metrics ?? []) add(m.timeField);
+  return out;
 }
 
 export type TestRunState = {

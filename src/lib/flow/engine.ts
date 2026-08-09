@@ -4,7 +4,7 @@ import type { DB } from "@/db/types";
 import { eventToRecord, getField, toNumber, STANDARD_FIELDS, type FlowRecord } from "./records";
 import { planPushdown } from "./compile/pushdown";
 import { compileRule } from "./compile/operators";
-import { inferSchema, buildFieldInfo, type FieldInfo } from "./schema-infer";
+import { inferSchema, buildFieldInfo, isEmptyValue, trimExample, type FieldInfo } from "./schema-infer";
 import { listRegisteredFields } from "@/lib/schema-registry/registry";
 import { fieldAppliesToEventType, readFilterFields } from "@/connectors/catalog";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
@@ -306,7 +306,7 @@ export async function sampleAppFields(ctx: EngineCtx, config: unknown, limit = 1
  * the request (no connection chosen, or nothing registered yet) so the caller
  * falls back to the scan.
  */
-async function registeredAppFields(ctx: EngineCtx, cfg: AppConfig): Promise<FieldInfo[] | null> {
+async function registeredAppFields(ctx: EngineCtx, cfg: AppConfig, pinned: ReadonlySet<string> = new Set()): Promise<FieldInfo[] | null> {
   if (!cfg.connectionId) return null;
   try {
     const source = await appSource(ctx, cfg);
@@ -321,25 +321,90 @@ async function registeredAppFields(ctx: EngineCtx, cfg: AppConfig): Promise<Fiel
     // in the registry (it tracks `properties`), so they come from the same
     // constant the scan path uses.
     const out: FieldInfo[] = STANDARD_FIELDS.map((f) => buildFieldInfo(f, f, undefined));
-    const saved = typeof cfg.dedupeField === "string" ? cfg.dedupeField.replace(/^properties\./, "") : "";
+    // Paths a saved step already points at are exempt from every emptiness
+    // rule below. A picker missing its own value reads as broken: the pill
+    // goes amber with "this field's source is missing", the operator list
+    // degrades to textual, and a Filter's picker is pick-only, so there is no
+    // way to choose it again.
+    const pins = new Set<string>();
+    for (const p of pinned) pins.add(p.replace(/^properties\./, ""));
+    if (typeof cfg.dedupeField === "string" && cfg.dedupeField) pins.add(cfg.dedupeField.replace(/^properties\./, ""));
+
     for (const f of [...fields].sort((a, b) => a.fieldPath.localeCompare(b.fieldPath))) {
       if (f.fieldPath.startsWith("__")) continue; // internal engine keys are never fields
-      // A path that has never once held a value, across everything ever synced
-      // on this connection — a provider column this account does not use. It
-      // is offered nowhere, EXCEPT when it is already the saved choice, so a
-      // configured step never shows a picker missing its own value.
-      if (f.approxCardinality === 0 && f.fieldPath !== saved) continue;
       // The registry stores the example wrapped (`{ value: … }`) so a jsonb
       // column can hold a bare scalar; unwrap before inferring, or every field
       // types as "object" and the picker shows the wrong icon for all of them.
       const example = (f.sample as { value?: unknown } | null)?.value;
-      out.push(buildFieldInfo(`properties.${f.fieldPath}`, f.fieldPath, example));
+      if (!pins.has(f.fieldPath)) {
+        // Never once held a value across everything ever synced on this
+        // connection — a provider column this account does not use.
+        if (f.approxCardinality === 0) continue;
+        // A row written before the writer knew "" is not a value. Exactly one
+        // distinct value ever recorded, and that one value is blank, IS
+        // "never held a value": under the old rule a column that ever held a
+        // real value alongside a blank would have counted TWO distinct
+        // strings. The upsert's greatest() can only raise a cardinality, so
+        // this read is the only repair short of a backfill.
+        if (f.approxCardinality === 1 && isEmptyValue(example)) continue;
+      }
+      out.push(buildFieldInfo(`properties.${f.fieldPath}`, f.fieldPath, trimExample(example)));
     }
     return out;
   } catch {
     // The picker must never fail because a diagnostic table is unavailable.
     return null;
   }
+}
+
+/** Runaway guard only — a real Close connection is ~750 registry paths plus <=600 scanned. */
+const MAX_UNION_FIELDS = 2_000;
+
+/**
+ * Every field this step's APP has ever carried a value for, merged with what
+ * this run actually loaded.
+ *
+ * ONE RULE: a path is offered iff at least one record from this app has ever
+ * carried a value for it. "This app" is the CONNECTION, deliberately not the
+ * record type — so a Filter fed by a Calls step offers data.pipeline_id
+ * exactly like the Get data step above it, because both are asking "what does
+ * this app have". That breadth is the chosen answer, not an accident: the
+ * registry has no event_type column, and narrowing to the record type is what
+ * made pipeline vanish from a picker that had been offering it.
+ *
+ * The run's own records win where both know a path — they carry a real
+ * example and a real populated count. The registry contributes the rest, and
+ * is the ONLY thing allowed to call a field empty, because it is the only
+ * app-wide answer; a 200-record sample is a sample, and a sample is never
+ * grounds for hiding.
+ */
+export async function appFieldUnion(
+  ctx: EngineCtx,
+  config: unknown,
+  loaded: FieldInfo[],
+  pinned: ReadonlySet<string> = new Set(),
+): Promise<FieldInfo[]> {
+  const cfg = AppConfigSchema.parse(config ?? {});
+  const registered = await registeredAppFields(ctx, cfg, pinned);
+  // No app-wide answer (no connection chosen, nothing registered yet, or the
+  // table is unavailable). The step's own records are then the only evidence
+  // there is — never an empty picker.
+  if (!registered) return loaded;
+
+  const known = new Set(registered.map((f) => f.path));
+  const out: FieldInfo[] = [];
+  const taken = new Set<string>();
+  // Record-derived fields first, so a Calls step still OPENS on call fields
+  // with real samples; the app's other fields sit behind them, searchable.
+  for (const f of loaded) {
+    if (f.populated === 0 && !known.has(f.path) && !pinned.has(f.path)) continue;
+    taken.add(f.path);
+    // `populated: 0` means "empty everywhere" to the picker, and the registry
+    // has just said otherwise. Publish no count rather than a false zero.
+    out.push(f.populated === 0 ? { ...f, populated: undefined } : f);
+  }
+  for (const f of registered) if (!taken.has(f.path)) out.push(f);
+  return out.length > MAX_UNION_FIELDS ? out.slice(0, MAX_UNION_FIELDS) : out;
 }
 
 async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promise<NodeExec> {

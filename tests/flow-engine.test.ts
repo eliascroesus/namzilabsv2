@@ -522,3 +522,106 @@ describe("Close pipeline read filter", () => {
     expect(await countWith({ pipelineId: "pipe_a" }, null)).toBe(4); // "All record types"
   });
 });
+
+/**
+ * ONE RULE for the variable picker: a field is offered iff at least one
+ * record from this APP has ever carried a value for it.
+ *
+ * "This app" is the CONNECTION, not the record type. That breadth is the
+ * point — narrowing to the record type is what made a Close pipeline field
+ * vanish from a picker that had been offering it, on a connection where 594
+ * opportunity records carry one.
+ */
+describe("a step's field list is what the app has, not what this run loaded", () => {
+  // executeNodeTest reads the connection (source resolution + priming), which
+  // the plain runFlow tests above do not need.
+  beforeEach(async () => {
+    await db.insert(connections).values({ id: CONN, orgId: ORG, source: "webhook", name: "Webhook", status: "active", authType: "none" });
+  });
+
+  const testApp = async (config: Record<string, unknown>, extraNodes: unknown[] = [], extraEdges: unknown[] = []) => {
+    const { executeNodeTest } = await import("@/lib/flow/test-run");
+    const g = {
+      nodes: [{ id: "a", type: "app", position: { x: 0, y: 0 }, data: { config: { connectionId: CONN, source: "webhook", ...config } } }, ...extraNodes],
+      edges: extraEdges,
+    };
+    return executeNodeTest(db, ORG, g, "a");
+  };
+
+  it("a field the app HAS but this record type does not is still offered", async () => {
+    // The registry saw a pipeline on an opportunity; only calls are loaded.
+    await recordFields(db, { orgId: ORG, connectionId: CONN, streamHash: null }, [
+      { eventId: "o1", eventType: "opportunity", occurredAt: new Date(), properties: { pipeline_id: "pipe_7XAom" } },
+    ]);
+    await ev({ eventType: "call_logged", subject: "+1914", properties: { direction: "outbound" } });
+
+    const dto = await testApp({ eventType: "call_logged" });
+    expect(dto.status).toBe("ok");
+    // Sabotage: return the run's own inferSchema unmerged and pipeline_id
+    // disappears from the Get data step and from every Filter below it — the
+    // exact "you removed the pipeline thing" report.
+    expect(dto.outputSchema.map((f) => f.path)).toContain("properties.pipeline_id");
+    expect(dto.outputSchema.map((f) => f.path)).toContain("properties.direction");
+  });
+
+  it("a field the app has NEVER filled is offered nowhere", async () => {
+    await recordFields(db, { orgId: ORG, connectionId: CONN, streamHash: null }, [
+      { eventId: "r1", eventType: "row", occurredAt: new Date(), properties: { Email: "a@b.com", Unused: null } },
+    ]);
+    await ev({ eventType: "row_added", subject: "a@b.com", properties: { Email: "a@b.com" } });
+
+    const dto = await testApp({});
+    // Sabotage: skip the cardinality gate and the picker reopens on every
+    // column the account has never once used.
+    expect(dto.outputSchema.map((f) => f.path)).not.toContain("properties.Unused");
+    expect(dto.outputSchema.map((f) => f.path)).toContain("properties.Email");
+  });
+
+  it("a field a saved step points at is never dropped for being empty", async () => {
+    await recordFields(db, { orgId: ORG, connectionId: CONN, streamHash: null }, [
+      { eventId: "r1", eventType: "row", occurredAt: new Date(), properties: { Email: "a@b.com", Unused: null } },
+    ]);
+    await ev({ eventType: "row_added", subject: "a@b.com", properties: { Email: "a@b.com" } });
+
+    // Sabotage: drop savedFieldPaths and this saved rule goes amber with
+    // "this field's source is missing" — and ConditionEditor is pick-only, so
+    // there is no way to choose it again.
+    const dto = await testApp({}, [
+      { id: "f", type: "filter", position: { x: 0, y: 1 }, data: { config: { combinator: "and", rules: [{ field: "properties.Unused", op: "equals", value: "x", valueKind: "fixed" }] } } },
+    ], [{ id: "e", source: "a", target: "f" }]);
+    expect(dto.outputSchema.map((f) => f.path)).toContain("properties.Unused");
+  });
+
+  it("a connection with nothing registered still gets a picker", async () => {
+    await ev({ eventType: "row_added", subject: "a@b.com", properties: { OnlyInEvents: "x" } });
+    const dto = await testApp({});
+    // Sabotage: return the registry's empty answer instead of falling back and
+    // a brand-new connection's first Test opens an empty picker.
+    expect(dto.outputSchema.map((f) => f.path)).toContain("properties.OnlyInEvents");
+  });
+
+  it("the Filter below sees the same list — that is the whole point of widening here", async () => {
+    const { buildFieldGroups } = await import("@/components/flow/graph-utils");
+    await recordFields(db, { orgId: ORG, connectionId: CONN, streamHash: null }, [
+      { eventId: "o1", eventType: "opportunity", occurredAt: new Date(), properties: { pipeline_id: "pipe_7XAom" } },
+    ]);
+    await ev({ eventType: "call_logged", subject: "+1914", properties: { direction: "outbound" } });
+    const dto = await testApp({ eventType: "call_logged" });
+
+    const nodes = [
+      { id: "a", type: "app", position: { x: 0, y: 0 }, data: { config: { connectionId: CONN, source: "webhook" }, lastTest: dto } },
+      { id: "f", type: "filter", position: { x: 0, y: 1 }, data: { config: { combinator: "and", rules: [] }, lastTest: { status: "ok", recordsIn: 1, recordsOut: 1, sample: [{}], outputSchema: [] } } },
+    ];
+    const groups = buildFieldGroups({
+      selectedId: "f",
+      nodes: nodes as never[],
+      edges: [{ id: "e", source: "a", target: "f" }] as never[],
+      stepNoById: new Map([["a", 1], ["f", 2]]),
+      titleOf: (n) => String(n.type),
+    });
+    // Sabotage: widen anywhere downstream pickers do not read (execApp only,
+    // or the tested node's own schema) and the Get data step is wide while the
+    // Filter under it is narrow — two pickers disagreeing about one dataset.
+    expect(groups.flatMap((g) => g.fields.map((x) => x.path))).toContain("properties.pipeline_id");
+  });
+});

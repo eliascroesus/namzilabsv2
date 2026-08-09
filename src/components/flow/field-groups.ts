@@ -51,24 +51,25 @@ export function rankFields<T extends { path: string }>(source: string | undefine
  * else — the two disagreed because only one of them had the flat list.
  */
 export function prepareGroups(groups: DataGroup[]): DataGroup[] {
-  return groups.map((g) => ({ ...g, fields: emptyLast(rankFields(g.source, flattenFields(g.fields))) }));
+  return groups.map((g) => ({ ...g, fields: dropEmpty(rankFields(g.source, flattenFields(g.fields))) }));
 }
 
 /**
- * Fields with no value in ANY record of this step go to the back.
+ * A field with no value on ANY record is not offered at all.
  *
- * Providers ship every optional column whether or not an account uses one, so
- * a Close step opens on ~100 fields that are null on all 187 records — real
- * paths, but nothing to build a metric from. They are moved, never dropped:
- * search still finds them, "Show all" still lists them, and a column that
- * starts filling next month simply moves back up on the next test. Dropping
- * them would break a saved flow's field reference the first quiet month.
+ * It used to be sorted to the back, which still opened a Close step on 93
+ * fields where 33 resolve to nothing on every record — the list was no
+ * shorter, only reordered. Removing is safe because nothing executes against
+ * this schema: the engine resolves every path at runtime through `getField`,
+ * so a hidden field can never change a number. And a path any step has SAVED
+ * never arrives here marked empty — it is pinned upstream, in
+ * `appFieldUnion`, precisely so a picker is never missing its own value.
+ *
+ * `populated !== 0`, not `!populated`: a drilled-in child built by
+ * `childFields` carries no count at all and must survive.
  */
-export function emptyLast<T extends { populated?: number }>(fields: T[]): T[] {
-  const has: T[] = [];
-  const none: T[] = [];
-  for (const f of fields) (f.populated === 0 ? none : has).push(f);
-  return none.length === 0 ? fields : [...has, ...none];
+function dropEmpty<T extends { populated?: number }>(fields: T[]): T[] {
+  return fields.some((f) => f.populated === 0) ? fields.filter((f) => f.populated !== 0) : fields;
 }
 
 export function toDataGroups(fieldGroups: FieldGroup[]): DataGroup[] {

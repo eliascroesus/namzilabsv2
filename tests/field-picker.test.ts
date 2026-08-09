@@ -216,15 +216,38 @@ describe("the schema describes the whole sample, not one record", () => {
     expect(by.get("properties.data.note")).toBe(0);
   });
 
-  it("keeps empty fields reachable — they move to the back, they are never dropped", async () => {
+  it("a field with no value on any record is not offered at all", async () => {
     const { inferSchema } = await import("@/lib/flow/schema-infer");
-    const { emptyLast } = await import("@/components/flow/field-groups");
+    const { toDataGroups } = await import("@/components/flow/field-groups");
     const schema = inferSchema([rec({ data: { direction: "outbound", address_id: null } })] as never[]);
-    const ordered = emptyLast(schema.filter((s) => s.path.startsWith("properties.")));
-    // Still present — a saved Filter pointing at it must keep resolving, and a
-    // column that starts filling next month simply moves back up.
-    expect(ordered.map((s) => s.path)).toContain("properties.data.address_id");
-    expect(ordered[ordered.length - 1].path).toBe("properties.data.address_id");
+    const [g] = toDataGroups([{ from: "Get data", nodeId: "a", fields: schema.map((f) => ({ ...f, example: f.example })) }] as never[]);
+    // Sabotage: sort the empties to the back instead of removing them and the
+    // step still opens on a list of 93 where 33 resolve to nothing on every
+    // record — no shorter, only reordered.
+    expect(g.fields.map((x) => x.path)).not.toContain("properties.data.address_id");
+    expect(g.fields.map((x) => x.path)).toContain("properties.data.direction");
+  });
+
+  it("the count the picker shows is the reduced count", async () => {
+    const { toDataGroups } = await import("@/components/flow/field-groups");
+    const fields = [
+      ...Array.from({ length: 60 }, (_, i) => ({ path: `properties.has_${i}`, label: `has_${i}`, type: "text", example: "x", populated: 3 })),
+      ...Array.from({ length: 33 }, (_, i) => ({ path: `properties.none_${i}`, label: `none_${i}`, type: "unknown", populated: 0 })),
+    ];
+    const [g] = toDataGroups([{ from: "Get data", nodeId: "a", fields }] as never[]);
+    // The group header and the "Show all N fields" row both render
+    // g.fields.length, which is the number the user reads.
+    expect(g.fields).toHaveLength(60);
+  });
+
+  it("a drilled-in child survives the drop — it has no count of its own", async () => {
+    const { toDataGroups } = await import("@/components/flow/field-groups");
+    const [g] = toDataGroups([
+      { from: "Get data", nodeId: "a", fields: [{ path: "properties.data", label: "data", type: "object", example: { direction: "outbound" }, container: true, populated: 4 }] },
+    ] as never[]);
+    // Sabotage: filter on !f.populated instead of f.populated !== 0 and every
+    // nested field vanishes, because childFields attaches no count at all.
+    expect(g.fields.map((x) => x.path)).toContain("properties.data.direction");
   });
 
   it("walks nested objects but stops before a payload can bloat the saved graph", async () => {

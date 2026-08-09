@@ -168,3 +168,56 @@ describe("the untested picker skips columns that have never held a value", () =>
     expect(await paths("properties.recording_url")).toContain("properties.recording_url");
   });
 });
+
+/**
+ * "Has this field ever held a value" is the one question the picker asks the
+ * registry. A blank cell is not a value — and the write path used to think it
+ * was, so a column an account never fills scored one distinct value and was
+ * offered forever.
+ */
+describe("a blank is not a value", () => {
+  const paths = async (extra: Record<string, unknown> = {}) => {
+    const { sampleAppFields } = await import("@/lib/flow/engine");
+    return (await sampleAppFields({ db, orgId: "org_reg" }, { connectionId: connId, source: "webhook", ...extra })).map((f) => f.path);
+  };
+
+  it("a column blank on every record is not offered", async () => {
+    await recordFields(db, { orgId: "org_reg", connectionId: connId, streamHash: null }, [
+      ev({ phone: "+1914", note: "" }),
+      ev({ phone: "+1475", note: "   " }),
+    ]);
+    // Sabotage: go back to `value != null` on the distinct add and "" scores
+    // one distinct value, so the column is offered forever.
+    expect(await paths()).not.toContain("properties.note");
+    expect(await paths()).toContain("properties.phone");
+  });
+
+  it("an empty object and an empty array are not values either", async () => {
+    await recordFields(db, { orgId: "org_reg", connectionId: connId, streamHash: null }, [ev({ phone: "+1914", meta: {}, tags: [] })]);
+    // Sabotage: String(value) turns {} into "[object Object]" and [] into "",
+    // both of which counted — the write path's other two blind spots.
+    const p = await paths();
+    expect(p).not.toContain("properties.meta");
+    expect(p).not.toContain("properties.tags");
+  });
+
+  it("a row written before the fix is repaired on read", async () => {
+    await db.insert(streamFields).values({
+      orgId: "org_reg",
+      connectionId: connId,
+      streamHash: null,
+      fieldPath: "legacy_blank",
+      inferredType: "string",
+      approxCardinality: 1,
+      seenCount: 40,
+      sample: { value: "" },
+    });
+    await recordFields(db, { orgId: "org_reg", connectionId: connId, streamHash: null }, [ev({ phone: "+1914" })]);
+    // Sabotage: drop the read-time repair and every row written before the
+    // write-path fix keeps its phantom value forever — the upsert's
+    // greatest() can only ever raise a cardinality, never lower one.
+    expect(await paths()).not.toContain("properties.legacy_blank");
+    // ...unless a step already points at it, in which case it always shows.
+    expect(await paths({ dedupe: true, dedupeField: "properties.legacy_blank" })).toContain("properties.legacy_blank");
+  });
+});
