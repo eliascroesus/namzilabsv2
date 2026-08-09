@@ -1,6 +1,7 @@
 import type { Node, Edge } from "@xyflow/react";
 import { STANDARD_FIELDS, getField, type FlowRecord } from "@/lib/flow/records";
 import { isDatasetFormulaOp } from "@/lib/flow/types";
+import { isBinaryCalc } from "@/lib/flow/shapes";
 import { catalogEntry } from "@/connectors/catalog";
 import type { NodeTestDTO } from "@/app/dashboard/flows/actions";
 
@@ -69,8 +70,7 @@ export type LibraryCtx = { fromNodeId?: string; sourceHandle?: string | null; on
  * A Calculate running a dataset aggregation (count/sum/…) is NOT a compare step — its
  * chain edge is its record input. */
 export function isCompareNode(n: FNode): boolean {
-  if (n.type === "formula") return !isDatasetFormulaOp((n.data.config as { op?: unknown }).op ?? "percentage");
-  return n.type === "calculate" && String((n.data.config as { mode?: unknown }).mode ?? "") === "compare";
+  return isBinaryCalc(String(n.type), (n.data.config ?? {}) as Record<string, unknown>);
 }
 
 /**

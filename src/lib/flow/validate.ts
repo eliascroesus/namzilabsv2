@@ -1,3 +1,4 @@
+import { consumesDataset, outputShapeOf, type ShapeKind } from "./shapes";
 import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, CalculateConfigSchema, FormulaConfigSchema, TimeBetweenConfigSchema, NODE_TYPES, NODE_LABELS, isDatasetFormulaOp, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
 
 export type ValidationIssue = { nodeId?: string; message: string };
@@ -8,19 +9,25 @@ function mappedRuleGaps(filters: FilterConfig | undefined): number {
   return filters.rules.filter((r) => r.valueKind === "field" && !(r.valueField ?? "").trim()).length;
 }
 
-type ShapeKind = "dataset" | "value" | "none";
+/**
+ * Can this step's output fill a Compare slot?
+ *
+ * The validator used to know three shapes where the engine has four, so a
+ * Calculate split over time validated clean and then threw "This input
+ * isn't a single number" at runtime — a crash used as an error message.
+ * A trend and a breakdown are many numbers; say so, and say what to do.
+ */
+function numberSlotIssue(src: FlowNode): string | null {
+  const shape = outputShapeOf(src.type, (src.data.config ?? {}) as Record<string, unknown>);
+  if (shape === "scalar" || shape === "dataset") return null;
+  if (shape === "series") return `${stepName(src.type)} produces a trend over time, not a single number — turn its time split off, or point at a different step.`;
+  if (shape === "grouped") return `${stepName(src.type)} produces one number per group, not a single number — point at a different step.`;
+  return "A Calculate input must be an earlier step's number.";
+}
 
-/** Nodes that emit a record set. */
-const DATASET_PRODUCERS = new Set(["app", "filter", "time", "time_between", "paths", "unite"]);
-/** Nodes that emit a computed value/series/grouped. */
-const VALUE_PRODUCERS = new Set(["formula", "group", "calculate"]);
-/** Nodes that consume record sets. */
-const DATASET_CONSUMERS = new Set(["filter", "time", "time_between", "group", "paths", "unite"]);
-
+/** One classifier, shared with the engine and the canvas (see shapes.ts). */
 function outputKind(node: FlowNode): ShapeKind {
-  if (DATASET_PRODUCERS.has(node.type)) return "dataset";
-  if (VALUE_PRODUCERS.has(node.type)) return "value";
-  return "none";
+  return outputShapeOf(node.type, (node.data.config ?? {}) as Record<string, unknown>);
 }
 
 /**
@@ -71,7 +78,7 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
       continue;
     }
 
-    if (DATASET_CONSUMERS.has(node.type)) {
+    if (consumesDataset(node.type)) {
       if (ins.length === 0) issues.push({ nodeId: node.id, message: `${stepName(node.type)} needs a step before it.` });
       for (const srcId of ins) {
         const src = byId.get(srcId);
@@ -112,8 +119,9 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
         }
         for (const e of fEdges) {
           const src = byId.get(e.source);
-          if (src && (e.targetHandle === "a" || e.targetHandle === "b") && outputKind(src) === "none") {
-            issues.push({ nodeId: node.id, message: "A Calculate input must be an earlier step's number." });
+          if (src && (e.targetHandle === "a" || e.targetHandle === "b")) {
+            const issue = numberSlotIssue(src);
+            if (issue) issues.push({ nodeId: node.id, message: issue });
           }
         }
       }
@@ -147,8 +155,9 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
         }
         for (const e of cEdges) {
           const src = byId.get(e.source);
-          if (src && (e.targetHandle === "a" || e.targetHandle === "b") && outputKind(src) === "none") {
-            issues.push({ nodeId: node.id, message: "A Compare input must be an earlier step's number." });
+          if (src && (e.targetHandle === "a" || e.targetHandle === "b")) {
+            const issue = numberSlotIssue(src);
+            if (issue) issues.push({ nodeId: node.id, message: issue });
           }
         }
       } else {

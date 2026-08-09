@@ -2,7 +2,8 @@
 
 import { useState, type CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
+import { type NodeType } from "@/lib/flow/types";
+import { isBinaryCalc } from "@/lib/flow/shapes";
 import type { FNode, NodeData } from "./graph-utils";
 import { STATUS_META, nodeTitle, pathHandles, resultLabel, type NodeStatus } from "./node-meta";
 import { NodeIcon } from "./icons";
@@ -76,7 +77,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const test = data.lastTest;
   const isPaths = t === "paths";
   const isCompare =
-    (t === "formula" && !isDatasetFormulaOp(data.config.op ?? "percentage")) ||
+    isBinaryCalc(t, data.config as Record<string, unknown>) ||
     (t === "calculate" && String(data.config.mode ?? "") === "compare");
   const border = selected ? "border-blue-400 ring-2 ring-blue-500" : sm.border;
   const freeHandles = (data.freeHandles as Array<{ id: string; label: string }> | undefined) ?? [];

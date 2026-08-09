@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, useNodesState, useEdgesState, useReactFlow, type Edge } from "@xyflow/react";
 import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
+import { isBinaryCalc, producesDataset, producesNumber } from "@/lib/flow/shapes";
 import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 
 /**
@@ -86,18 +87,19 @@ import { ReviewPublishModal, type Endpoint } from "./ReviewPublishModal";
 
 export type { ConnMeta };
 
-const DATASET_PRODUCERS = new Set(["app", "filter", "time", "paths", "unite"]);
 const rid = () => `e_${Math.random().toString(36).slice(2, 9)}`;
 
-/** A step that yields a single number, usable as a First/Second number in Compare. */
+/**
+ * A step that yields a single number, usable as a First/Second number in
+ * Compare — answered by the shared classifier, not a private list.
+ *
+ * The old version said yes to ANY Calculate, so one split over time was
+ * offered as a number and then failed at run time; and the private
+ * DATASET_PRODUCERS beside it had never heard of Time between, so that step
+ * could not be combined with anything.
+ */
 function isNumberProducer(n: FNode): boolean {
-  const t = String(n.type);
-  if (t === "formula") return true;
-  if (t === "calculate") {
-    const m = String((n.data.config as { mode?: unknown }).mode ?? "number");
-    return m === "number" || m === "compare";
-  }
-  return false;
+  return producesNumber(String(n.type), (n.data.config ?? {}) as Record<string, unknown>);
 }
 
 /** Short "what to do next" hint shown inside a step that needs setup. */
@@ -161,11 +163,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     // numbers they compare can never move them (references are data, not position).
     for (const n of initialGraph.nodes) {
       const raw = n as { id: string; type: string; data?: { config?: unknown } };
-      const cfg = (raw.data?.config ?? {}) as { mode?: unknown; op?: unknown };
-      const isCompare =
-        (raw.type === "formula" && !isDatasetFormulaOp(cfg.op ?? "percentage")) ||
-        (raw.type === "calculate" && String(cfg.mode ?? "") === "compare");
-      if (!isCompare) continue;
+      const cfg = (raw.data?.config ?? {}) as Record<string, unknown>;
+      if (!isBinaryCalc(String(raw.type), cfg)) continue;
       const ins = es.filter((e) => e.target === raw.id);
       if (ins.length === 0 || ins.some((e) => e.targetHandle == null)) continue;
       const anchor = ins.find((e) => e.targetHandle === "a") ?? ins[0];
@@ -806,7 +805,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     const toItem = (n: FNode): StepRef => ({ id: n.id, title: nodeTitle(String(n.type) as NodeType, n.data), stepNo: stepNoById.get(n.id) });
     return {
       dataset: nodes
-        .filter((n) => n.id !== selected.id && !desc.has(n.id) && ends.has(n.id) && DATASET_PRODUCERS.has(String(n.type)) && n.type !== "paths")
+        .filter((n) => n.id !== selected.id && !desc.has(n.id) && ends.has(n.id) && producesDataset(String(n.type)) && n.type !== "paths")
         .map(toItem),
     };
   }, [selected, nodes, edges, stepNoById]);
@@ -818,7 +817,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     if (!selected) return [];
     const desc = descendantsOf(selected.id, edges);
     const avail = nodes
-      .filter((n) => n.id !== selected.id && !desc.has(n.id) && n.type !== "paths" && n.type !== "unite" && (isNumberProducer(n) || DATASET_PRODUCERS.has(String(n.type))))
+      .filter((n) => n.id !== selected.id && !desc.has(n.id) && n.type !== "paths" && n.type !== "unite" && (isNumberProducer(n) || producesDataset(String(n.type))))
       .sort((a, b) => (stepNoById.get(a.id) ?? 0) - (stepNoById.get(b.id) ?? 0));
     return avail.map((n) => {
       const app = nearestAppAncestor(n, nodes, edges);
