@@ -165,6 +165,32 @@ describe("record-kind gating", () => {
     expect(cfg.sourceConfig).toEqual({ pipelineId: "pipe_a" });
   });
 
+  it("filters stage moves by pipeline too — the rows were already there", async () => {
+    // activity.opportunity_status_change carries data.new_pipeline_id and is
+    // already synced; it simply never matched the gate, because the stored
+    // type does not start with "opportunity". This is what answers "how many
+    // entered Demo Booked in the B2C pipeline".
+    for (const [id, pipe, stage] of [
+      ["m1", "pipe_a", "Demo Booked"],
+      ["m2", "pipe_b", "Demo Booked"],
+    ]) {
+      await db.insert(events).values({
+        eventId: `close:${CONN}:${id}`,
+        orgId: ORG,
+        connectionId: CONN,
+        source: "close",
+        eventType: "activity.opportunity_status_change.created",
+        occurredAt: new Date(T0),
+        properties: { object_type: "activity.opportunity_status_change", action: "created", data: { new_pipeline_id: pipe, new_status_label: stage } },
+      });
+    }
+    const records = await readApp({
+      eventType: "activity.opportunity_status_change.created",
+      sourceConfig: { pipelineId: "pipe_a" },
+    });
+    expect(records).toHaveLength(1);
+  });
+
   it("still filters opportunities by pipeline — the gate narrows, it does not disable", async () => {
     for (const [id, pipe] of [
       ["o1", "pipe_a"],

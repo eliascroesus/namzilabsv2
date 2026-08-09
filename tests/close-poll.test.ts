@@ -1038,7 +1038,9 @@ describe("Close pipeline picker", () => {
 
   it("stays connection-scoped: readFilter-only fields never flip the scope or the stream identity", () => {
     const field = catalogEntry("close")!.flowFields!.find((f) => f.key === "pipelineId")!;
-    expect(field.readFilter?.paths).toEqual(["properties.data.pipeline_id"]);
+    // Two paths: the opportunity's own pipeline, and the pipeline a stage
+    // move happened in (activity.opportunity_status_change).
+    expect(field.readFilter?.paths).toEqual(["properties.data.pipeline_id", "properties.data.new_pipeline_id"]);
     // The new truth replacing the old "Close has no flowFields" prose pin.
     expect(isStreamScoped("close")).toBe(false);
     // A chosen pipeline reads the SAME rows the sync wrote — no fork, no

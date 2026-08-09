@@ -1,7 +1,7 @@
 import type { Node, Edge } from "@xyflow/react";
 import { STANDARD_FIELDS, getField, type FlowRecord } from "@/lib/flow/records";
 import { isDatasetFormulaOp } from "@/lib/flow/types";
-import { isBinaryCalc } from "@/lib/flow/shapes";
+import { isBinaryCalc, producesDataset } from "@/lib/flow/shapes";
 import { catalogEntry } from "@/connectors/catalog";
 import type { NodeTestDTO } from "@/app/dashboard/flows/actions";
 
@@ -406,6 +406,15 @@ export function buildFieldGroups(opts: {
       // competes with the step's real columns.
       const outNum: PickField = { path: `__count_${sn.id}`, label: "Output number", type: "number", example: sn.data.lastTest.recordsOut };
       const isPassThrough = sn.type === "filter" || sn.type === "time";
+      /**
+       * A step that computes a NUMBER has no per-record variables to offer,
+       * and offering one anyway was a lie the picker told: a Calculate that
+       * produced 38 advertised an "Output number" field whose sample read 1
+       * and which resolved to nothing at all downstream, because no record
+       * ever carries it. Its number is picked in the Compare slots, where it
+       * is real. So a value step contributes no fields.
+       */
+      if (!producesDataset(String(sn.type))) continue;
 
       // Fields this source declares as plumbing — constant on every row, or an
       // exact restatement of another field. Hidden from the picker only; the data

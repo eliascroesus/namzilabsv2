@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, useNodesState, useEdgesState, useReactFlow, type Edge } from "@xyflow/react";
 import { isDatasetFormulaOp, type NodeType } from "@/lib/flow/types";
-import { isBinaryCalc, producesDataset, producesNumber } from "@/lib/flow/shapes";
+import { isBinaryCalc, outputShapeOf, producesDataset, producesNumber } from "@/lib/flow/shapes";
 import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 
 /**
@@ -819,7 +819,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       .sort((a, b) => (stepNoById.get(a.id) ?? 0) - (stepNoById.get(b.id) ?? 0));
     return avail.map((n) => {
       const app = nearestAppAncestor(n, nodes, edges);
-      const scalar = isNumberProducer(n);
+      // A step's OWN number: a value step's result, or a dataset step's
+      // record count. `producesNumber` says yes to both (both can fill a
+      // Compare slot), so the label/sample split has to ask the sharper
+      // question — otherwise a Get data step reads "Result" with no value.
+      const scalar = outputShapeOf(String(n.type), (n.data.config ?? {}) as Record<string, unknown>) === "scalar";
       const t = n.data.lastTest;
       const tile = t?.status === "ok" ? (t.tile as { value?: unknown } | undefined) : undefined;
       const sample = scalar ? t?.value ?? tile?.value : t?.status === "ok" ? t.recordsOut : undefined;

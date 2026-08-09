@@ -344,11 +344,22 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
         label: "Pipeline",
         dynamic: true,
         placeholder: "All pipelines",
-        // Close models pipelines on OPPORTUNITIES. A lead, a call and an
-        // email carry no pipeline at all, so offering this on those steps
-        // could only ever produce an unexplained empty result.
-        showWhenEventTypePrefix: ["opportunity"],
-        readFilter: { paths: ["properties.data.pipeline_id"] },
+        /**
+         * Close models pipelines on OPPORTUNITIES — a lead, a call and an
+         * email carry no pipeline at all, so offering this on those steps
+         * could only ever produce an unexplained empty result.
+         *
+         * Two record kinds qualify, both verified against Close's documented
+         * response schemas: the opportunity itself (`data.pipeline_id`) and
+         * its status-change activity, which names the pipeline a stage move
+         * happened in (`data.new_pipeline_id`). The second is what answers
+         * "how many entered Demo Booked in this pipeline" — and those rows
+         * are already synced, they were simply never filterable because the
+         * stored type is `activity.opportunity_status_change.created`, which
+         * does not start with "opportunity".
+         */
+        showWhenEventTypePrefix: ["opportunity", "activity.opportunity_status_change"],
+        readFilter: { paths: ["properties.data.pipeline_id", "properties.data.new_pipeline_id"] },
       },
     ],
     /**

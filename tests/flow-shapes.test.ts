@@ -131,3 +131,49 @@ describe("publish blocks a many-numbers input instead of crashing on it", () => 
     expect(validateGraph(g).some((i) => /produces a trend over time/.test(i.message))).toBe(true);
   });
 });
+
+
+/**
+ * A step that computes a number has no per-record variables — and the field
+ * picker used to claim otherwise: a Calculate that produced 38 advertised an
+ * "Output number" field whose sample read 1 and which resolved to nothing at
+ * all, because no record ever carries it. Its number lives in the Compare
+ * slots, where it is real.
+ */
+describe("the field picker only offers variables that exist", () => {
+  it("a value-producing step contributes no pickable fields", async () => {
+    const { buildFieldGroups } = await import("@/components/flow/graph-utils");
+    const tested = (id: string, type: string, config: Record<string, unknown>, schema: unknown[] = []) => ({
+      id,
+      type,
+      position: { x: 0, y: 0 },
+      data: {
+        config,
+        lastTest: { status: "ok", recordsIn: 3, recordsOut: 1, value: 38, sample: [{}], outputSchema: schema },
+      },
+    });
+    const nodes = [
+      tested("a", "app", { connectionId: CONN, source: "close" }, [{ path: "properties.lead_id", label: "lead_id", type: "text" }]),
+      tested("calc", "formula", { op: "count" }),
+      tested("f", "filter", { combinator: "and", rules: [] }),
+    ] as never[];
+    const edges = [
+      { id: "e1", source: "a", target: "calc" },
+      { id: "e2", source: "calc", target: "f" },
+    ] as never[];
+
+    const groups = buildFieldGroups({
+      selectedId: "f",
+      nodes,
+      edges,
+      stepNoById: new Map([["a", 1], ["calc", 2], ["f", 3]]),
+      titleOf: (n) => String(n.type),
+    });
+    // Sabotage: put the phantom __count_<id> back and a group titled after
+    // the Calculate shows up offering a field worth 1 that resolves to
+    // nothing.
+    expect(groups.some((g) => g.fields.some((x) => x.path === "__count_calc"))).toBe(false);
+    // The dataset step above it still contributes its real columns.
+    expect(groups.some((g) => g.fields.some((x) => x.path === "properties.lead_id"))).toBe(true);
+  });
+});
