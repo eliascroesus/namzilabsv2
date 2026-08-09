@@ -59,14 +59,8 @@ export function formatSample(v: unknown, max = 40): string | null {
 }
 
 /**
- * Expand a container field into its child fields, computed from the field's own
- * sample value (object keys or array indices). Bounded so a huge array/object can't
- * blow up the browser. Child paths extend the parent path so `getField`/`walkPath`
- * resolve them at runtime.
- */
-/**
  * Every field a step produces, nested ones included, as ONE flat list —
- * "Data › Direction" beside "Lead id", the way Zapier lists them.
+ * `data.direction` beside `lead_id`.
  *
  * The browser used to show only the top level, which for a Close call is 23
  * rows where `data` is a single container hiding the 68 fields anyone
@@ -80,21 +74,34 @@ export function formatSample(v: unknown, max = 40): string | null {
  */
 export function flattenFields(fields: DataField[], maxDepth = 3, maxTotal = 1_000): DataField[] {
   const out: DataField[] = [];
-  const walk = (list: DataField[], depth: number, parentLabel: string) => {
+  // A nested row is labelled with the RAW dotted path it resolves by —
+  // `data.direction`, not "Data › Direction". The top level keeps the label
+  // it was given (which is already raw for provider fields, and the
+  // canonical name for the seven spine fields). Two reasons this is the
+  // rule: the string in the list is then identical to the string the input
+  // box shows after you pick it, and it is identical to what the engine
+  // resolves — so what you read is what runs.
+  const rawLabel = (path: string) => (path.startsWith("properties.") ? path.slice("properties.".length) : path);
+  const walk = (list: DataField[], depth: number) => {
     for (const f of list) {
       if (out.length >= maxTotal) return;
-      const label = parentLabel ? `${parentLabel} › ${f.label}` : f.label;
-      out.push({ ...f, label });
+      out.push(depth === 1 ? f : { ...f, label: rawLabel(f.path) });
       // A generous child limit here on purpose: the default 30 exists to keep
       // ONE drill screen sane, and using it for the flat list would silently
       // drop the 38th key of a 68-key object from search results.
-      if (f.container && depth < maxDepth) walk(childFields(f, 300), depth + 1, label);
+      if (f.container && depth < maxDepth) walk(childFields(f, 300), depth + 1);
     }
   };
-  walk(fields, 1, "");
+  walk(fields, 1);
   return out;
 }
 
+/**
+ * Expand a container field into its child fields, computed from the field's own
+ * sample value (object keys or array indices). Bounded so a huge array/object can't
+ * blow up the browser. Child paths extend the parent path so `getField`/`walkPath`
+ * resolve them at runtime.
+ */
 export function childFields(field: DataField, limit = 30): DataField[] {
   const v = field.sample;
   if (Array.isArray(v)) {

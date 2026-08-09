@@ -266,6 +266,25 @@ export const FORMULA_OPS = [
 
 /** Ops that aggregate the incoming records (vs. comparing two numbers). */
 export const DATASET_FORMULA_OPS = ["count", "count_distinct", "sum", "avg", "median", "min", "max"] as const;
+
+/** Ops that read a NUMBER out of each record — every one needs a field picked. */
+export const NUMERIC_FIELD_OPS = ["sum", "avg", "median", "min", "max"] as const;
+
+/**
+ * Which field pickers an aggregation needs on screen.
+ *
+ * ONE definition because there were four, hand-rolled, and three of them
+ * were wrong: `median` was missing from every numeric list (so choosing it
+ * offered no field and silently aggregated the default `value` — null on
+ * paired records, i.e. a confident 0), and both category panels offered
+ * `count_distinct` with nowhere to say what "distinct" meant.
+ */
+export function aggregationInputs(op: string): { numberField: boolean; distinctField: boolean } {
+  return {
+    numberField: (NUMERIC_FIELD_OPS as readonly string[]).includes(op),
+    distinctField: op === "count_distinct",
+  };
+}
 export function isDatasetFormulaOp(op: unknown): boolean {
   return (DATASET_FORMULA_OPS as readonly string[]).includes(String(op ?? ""));
 }

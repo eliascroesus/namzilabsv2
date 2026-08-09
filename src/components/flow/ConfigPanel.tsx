@@ -15,6 +15,7 @@ import type { ImportStatus } from "@/lib/sync/import-status";
 import type { SourceOption } from "@/connectors/types";
 import {
   AGGREGATIONS,
+  aggregationInputs,
   TIME_UNITS,
   TIME_BETWEEN_UNITS,
   VIZ_TYPES,
@@ -30,7 +31,7 @@ import { RecordSamplePicker } from "./RecordSamplePicker";
 import { DataIcon, NodeIcon } from "./icons";
 import { Select, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
 import type { DataGroup } from "./controls/types";
-import { toDataGroups } from "./field-groups";
+import { prepareGroups, toDataGroups } from "./field-groups";
 import { asFilterConfig } from "./panel-mappers";
 
 /** A reference to an earlier step, offered as a labeled pill for multi-input wiring. */
@@ -186,9 +187,16 @@ export function ConfigPanel({
     selfT?.status === "ok" && (selfT.outputSchema ?? []).length > 0
       ? (selfT.outputSchema ?? []).filter((f) => !f.path.startsWith("__")).map((f) => ({ path: f.path, label: f.label, type: f.type, sample: f.example, container: f.container }))
       : Object.entries(STD_META).map(([path, m]) => ({ path, label: m.label, type: m.type }));
-  const selfGroups: DataGroup[] = [
-    { stepId: "self", stepNo, source: type === "app" ? String((cfg as { source?: unknown }).source ?? "") : undefined, title: "This step’s fields", fields: selfFields },
-  ];
+  // Through the same preparation as every other group, so a nested field is
+  // findable here too and reads by the same raw name.
+  const selfGroups: DataGroup[] = useMemo(
+    () =>
+      prepareGroups([
+        { stepId: "self", stepNo, source: type === "app" ? String((cfg as { source?: unknown }).source ?? "") : undefined, title: "This step’s fields", fields: selfFields },
+      ]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stepNo, type, JSON.stringify(selfFields)],
+  );
 
   return (
     <aside data-config-panel className={`absolute inset-y-0 right-0 z-20 m-4 flex w-[452px] flex-col overflow-hidden rounded-2xl bg-neutral-50 flow-shadow ${animClass}`}>
@@ -507,19 +515,6 @@ function NodeConfig({
         {bmode === "custom" ? (
           <div className="space-y-2.5">
             <SectionLabel>Only continue if…</SectionLabel>
-            {/* THE first-flow wall: fields only exist after the previous step
-                is tested, and nothing used to say so — the picker just sat
-                empty. Say it, and hand over the one-click cure. */}
-            {groups.every((g) => g.fields.length === 0) && (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
-                <span>No fields yet — fields appear after the previous step is tested.</span>
-                {onTestUpstream && (
-                  <button type="button" onClick={onTestUpstream} className="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium hover:bg-amber-100">
-                    Test previous step
-                  </button>
-                )}
-              </div>
-            )}
             <ConditionEditor value={fc} groups={groups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />
           </div>
         ) : (
@@ -579,7 +574,8 @@ function NodeConfig({
     const aFixed = typeof cfg.aFixed === "number" ? cfg.aFixed : null;
     const bFixed = typeof cfg.bFixed === "number" ? cfg.bFixed : null;
     const gb = (cfg.groupBy as { type?: string; unit?: string } | null) ?? null;
-    const fieldPath = String((op === "count_distinct" ? cfg.distinctField : cfg.field) ?? (op === "count_distinct" ? "subject" : "value"));
+    const useDistinct = aggregationInputs(op).distinctField;
+    const fieldPath = String((useDistinct ? cfg.distinctField : cfg.field) ?? (useDistinct ? "subject" : "value"));
     const fieldLabel = groups.flatMap((g) => g.fields).find((f) => f.path === fieldPath)?.label ?? humanizeKey(fieldPath);
     const setOp = (v: string) => {
       onChange({ op: v });
@@ -604,12 +600,12 @@ function NodeConfig({
         </div>
         {datasetOp ? (
           <>
-            {(op === "sum" || op === "avg" || op === "min" || op === "max") && (
+            {aggregationInputs(op).numberField && (
               <Field label="Field to calculate">
                 <FieldInput value={String(cfg.field ?? "value")} groups={groups} onChange={(v) => onChange({ field: v })} placeholder="Pick the number field…" />
               </Field>
             )}
-            {op === "count_distinct" && (
+            {aggregationInputs(op).distinctField && (
               <Field label="Count unique values of">
                 <FieldInput value={String(cfg.distinctField ?? "subject")} groups={groups} onChange={(v) => onChange({ distinctField: v })} />
               </Field>
@@ -645,7 +641,7 @@ function NodeConfig({
       <div className="space-y-4">
         <p className="text-xs text-neutral-500">Brings branches and other data steps back together — later steps see records from all of them.</p>
         <div>
-          <p className="mb-1 text-xs font-medium text-neutral-600">Lanes</p>
+          <p className="mb-1 text-xs font-medium text-neutral-600">Steps to combine</p>
           <div className="space-y-1.5">
             {inputs.map((inp, idx) => (
               <div key={idx} className="flex items-center gap-2">
@@ -670,7 +666,7 @@ function NodeConfig({
                 }}
                 className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-xs text-neutral-600 hover:border-neutral-400 hover:text-neutral-800"
               >
-                <span className="text-sm leading-none">+</span> Add a lane
+                <span className="text-sm leading-none">+</span> Add another step
               </button>
             )}
             {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-xs text-neutral-400">Add a Get data step first, then combine it here.</p>}
@@ -719,7 +715,8 @@ function NodeConfig({
         <Field label="Value per group">
           <Select value={agg} width={W} options={[{ value: "count", label: "Count" }, { value: "sum", label: "Sum of a field" }, { value: "count_distinct", label: "Count distinct" }]} onChange={(v) => onChange({ aggregation: v })} />
         </Field>
-        {agg === "sum" && <Field label="Sum field"><FieldInput value={(cfg.valueField as string) ?? "value"} groups={groups} onChange={(v) => onChange({ valueField: v })} /></Field>}
+        {aggregationInputs(agg).numberField && <Field label="Sum field"><FieldInput value={(cfg.valueField as string) ?? "value"} groups={groups} onChange={(v) => onChange({ valueField: v })} /></Field>}
+        {aggregationInputs(agg).distinctField && <Field label="Distinct by"><FieldInput value={(cfg.distinctField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ distinctField: v })} /></Field>}
       </div>
     );
   }
@@ -767,8 +764,8 @@ function CalcNumber({ cfg, groups, onChange }: { cfg: Record<string, unknown>; g
       <Field label="Calculation">
         <Select value={agg} width={W} options={AGGREGATIONS.map((a) => ({ value: a, label: AGG_LABELS[a] ?? title(a) }))} onChange={(v) => onChange({ aggregation: v })} />
       </Field>
-      {(agg === "sum" || agg === "avg" || agg === "min" || agg === "max") && <Field label="Number field"><FieldInput value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
-      {agg === "count_distinct" && <Field label="Distinct by"><FieldInput value={(cfg.distinctField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ distinctField: v })} /></Field>}
+      {aggregationInputs(agg).numberField && <Field label="Number field"><FieldInput value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
+      {aggregationInputs(agg).distinctField && <Field label="Distinct by"><FieldInput value={(cfg.distinctField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ distinctField: v })} /></Field>}
       <Field label="Split over time?">
         <Select
           value={gb?.type === "time" ? "time" : "none"}
@@ -796,7 +793,8 @@ function CalcBreakdown({ cfg, groups, onChange }: { cfg: Record<string, unknown>
       <Field label="Value per group">
         <Select value={agg} width={W} options={[{ value: "count", label: "Count" }, { value: "sum", label: "Sum of a field" }, { value: "count_distinct", label: "Count distinct" }]} onChange={(v) => onChange({ aggregation: v })} />
       </Field>
-      {agg === "sum" && <Field label="Sum field"><FieldInput value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
+      {aggregationInputs(agg).numberField && <Field label="Sum field"><FieldInput value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
+      {aggregationInputs(agg).distinctField && <Field label="Distinct by"><FieldInput value={(cfg.distinctField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ distinctField: v })} /></Field>}
     </>
   );
 }
@@ -1236,9 +1234,6 @@ function TimeBetweenFields({
     <div className="space-y-4">
       <Field label="Match records by">
         <FieldInput value={String(cfg.keyField ?? "")} groups={groups} onChange={(v) => onChange({ keyField: v })} />
-        <p className="mt-1 text-xs text-neutral-500">
-          The field both records share — the thing that makes them the same story (a lead id, an email).
-        </p>
       </Field>
       {typeSelect("From (the starting event)", from, "fromType")}
       {typeSelect("To (the event that ends the clock)", to, "toType")}
@@ -1261,11 +1256,6 @@ function TimeBetweenFields({
           onChange={(v) => onChange({ unit: v })}
         />
       </Field>
-      <p className="rounded-md border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-600">
-        Each match becomes one record with a <b>duration</b> field — add a Calculate step after this to take the
-        average or median. Records with no match are left out (a lead never called has no response time), and a
-        manually-logged event is timed at the moment it was logged, not when it happened.
-      </p>
     </div>
   );
 }
@@ -1361,10 +1351,6 @@ function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigFi
         searchable
         placeholder={field.dynamic && state.status === "loading" ? "Loading…" : `Choose a ${field.label.toLowerCase()}…`}
       />
-      {/* The catalog writes a hint for exactly the fields whose behavior isn't
-          guessable (a pipeline filter hides non-opportunity records). It was
-          declared on four sources and rendered nowhere. */}
-      {field.hint && <p className="mt-1 text-xs text-neutral-500">{field.hint}</p>}
     </Field>
   );
 }
@@ -1411,14 +1397,14 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
   const loaded = [...custom, ...std];
   const groups: DataGroup[] =
     loaded.length > 0
-      ? [
+      ? prepareGroups([
           {
             stepId: "self",
             source: (typeof cfg.source === "string" && cfg.source) || undefined,
             title: "This step’s data",
             fields: loaded.map((f) => ({ path: f.path, label: f.label, type: f.type, sample: f.example, container: f.container })),
           },
-        ]
+        ])
       : fallbackGroups;
 
   return (

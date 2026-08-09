@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { validateGraph } from "@/lib/flow/validate";
-import { parseGraph, NODE_LABELS, NODE_TYPES } from "@/lib/flow/types";
+import { parseGraph, aggregationInputs, AGGREGATIONS, NODE_LABELS, NODE_TYPES } from "@/lib/flow/types";
 import { defaultConfig, NODE_META } from "@/components/flow/node-meta";
-import { isPassThroughFilter, nodeNeedsSetup } from "@/components/flow/graph-utils";
+import { nodeNeedsSetup } from "@/components/flow/graph-utils";
 import { FLOW_TEMPLATES } from "@/lib/flow/templates";
 
 /**
@@ -44,20 +44,35 @@ describe("validation speaks plain English", () => {
   });
 });
 
+describe("aggregation inputs — one predicate, four panels", () => {
+  it("every op that reads a number out of a record offers a field picker", () => {
+    // Sabotage: drop `median` from NUMERIC_FIELD_OPS and the speed-to-lead
+    // panel hides the very field it is configured with, so the flagship
+    // metric silently aggregates a null column to 0.
+    for (const op of ["sum", "avg", "median", "min", "max"]) {
+      expect({ op, ...aggregationInputs(op) }).toEqual({ op, numberField: true, distinctField: false });
+    }
+  });
+
+  it("count_distinct asks what 'distinct' means, and count asks nothing", () => {
+    expect(aggregationInputs("count_distinct")).toEqual({ numberField: false, distinctField: true });
+    expect(aggregationInputs("count")).toEqual({ numberField: false, distinctField: false });
+  });
+
+  it("every declared aggregation is classified — a new one can't slip through unasked", () => {
+    for (const op of AGGREGATIONS) {
+      const i = aggregationInputs(op);
+      const known = op === "count" ? !i.numberField && !i.distinctField : i.numberField !== i.distinctField;
+      expect({ op, known }).toEqual({ op, known: true });
+    }
+  });
+});
+
 describe("Calculate defaults to counting", () => {
   it("a fresh Calculate counts records — the first metric everyone builds", () => {
     // Sabotage: restore { op: "percentage" } and a new Calculate lands on
     // "Needs setup — Pick or type a First and Second number".
     expect(defaultConfig("formula").op).toBe("count");
-  });
-});
-
-describe("pass-through Filter detector", () => {
-  it("no rules + no date range = passes everything (worth a warning, never an error)", () => {
-    expect(isPassThroughFilter({ combinator: "and", rules: [] })).toBe(true);
-    expect(isPassThroughFilter({ rules: [], dateRange: { enabled: false } })).toBe(true);
-    expect(isPassThroughFilter({ rules: [{ field: "subject", op: "equals", value: "x" }] })).toBe(false);
-    expect(isPassThroughFilter({ rules: [], dateRange: { enabled: true } })).toBe(false);
   });
 });
 

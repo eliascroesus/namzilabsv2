@@ -153,7 +153,7 @@ export function resultLabel(type: string, test: { recordsIn: number; recordsOut:
     case "time_between":
       return `${recordsOut} matched`;
     case "unite":
-      return `${recordsOut} united`;
+      return `${recordsOut} combined`;
     case "paths":
       return `${recordsOut} routed`;
     case "group":

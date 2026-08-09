@@ -67,7 +67,6 @@ import {
   terminalIds,
   type ConnMeta,
   appAncestors,
-  isPassThroughFilter,
   type FieldGroup,
   type FNode,
   type Graph,
@@ -878,17 +877,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       return endpoints.map((ep) => byId.get(ep.nodeId) ?? { nodeId: ep.nodeId, enabled: true, name: defaultName(ep), viz: "number", format: "number", currency: "USD", precision: 0, target: null, timeUnit: "month" });
     });
     setPublishError(null);
-    // Pre-publish honesty: a Filter with no conditions passes everything —
-    // legal (legacy pass-throughs), but worth saying before it ships.
-    // Branch heads are excluded: an Always-run / Fallback lane's head is a
-    // rules-less filter BY DESIGN (the mode lives on the hub), and a fallback
-    // does NOT pass every record — warning about it would be false.
-    const pathsIds = new Set(nodes.filter((n) => n.type === "paths").map((n) => n.id));
-    const branchHeadIds = new Set(edges.filter((e) => pathsIds.has(e.source)).map((e) => e.target));
-    const passThrough = nodes
-      .filter((n) => n.type === "filter" && !branchHeadIds.has(n.id) && isPassThroughFilter(n.data.config))
-      .map((n) => nodeTitle("filter", n.data));
-    setPublishWarning(passThrough.length > 0 ? `${passThrough.join(", ")}: no conditions set — every record passes through.` : null);
+    setPublishWarning(null);
     setReviewOpen(true);
   }, [endpoints, name, nodes]);
 

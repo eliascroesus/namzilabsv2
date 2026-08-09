@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rankFields, toDataGroups } from "@/components/flow/field-groups";
+import { prepareGroups, rankFields, toDataGroups } from "@/components/flow/field-groups";
 import { filterFields, flattenFields } from "@/components/flow/controls/field-utils";
 import { catalogEntry } from "@/connectors/catalog";
 import type { FieldGroup } from "@/components/flow/graph-utils";
@@ -70,6 +70,13 @@ describe("rankFields", () => {
       "properties.data.address_id",
     ]);
   });
+
+  it("toDataGroups flattens too — one preparation, so every consumer sees the same list", () => {
+    const groups: FieldGroup[] = [
+      { from: "1. Calls", stepNo: 1, appSource: "close", fields: [{ path: "properties.data", label: "data", container: true, example: { direction: "outbound" } }] },
+    ];
+    expect(toDataGroups(groups)[0].fields.map((x) => x.path)).toContain("properties.data.direction");
+  });
 });
 
 
@@ -94,12 +101,27 @@ describe("flattenFields", () => {
     { path: "subject", label: "Subject / person", type: "text", sample: "+1555" },
   ];
 
-  it("brings nested fields into the list, named by where they came from", () => {
+  it("brings nested fields into the list, labelled with their RAW path", () => {
     const flat = flattenFields(callRecord());
     const direction = flat.find((f) => f.path === "properties.data.direction");
     expect(direction).toBeTruthy();
-    expect(direction!.label).toBe("Data › Direction");
+    // Raw — not "Data › Direction", not "Direction". The string in the list is
+    // the string the engine resolves and the string the input box shows back.
+    expect(direction!.label).toBe("data.direction");
     expect(direction!.sample).toBe("outbound");
+    expect(flat.find((f) => f.path === "properties.data.contact.name")!.label).toBe("data.contact.name");
+  });
+
+  it("the list and the input box agree on every nested field", () => {
+    // THE complaint: the picker said one thing ("Data › Direction") and the
+    // box you picked into said another ("Direction"). FieldInput resolves the
+    // chosen path against the SAME prepared groups, so they must be
+    // byte-identical. Sabotage: humanize the child label and this fails.
+    const [g] = prepareGroups([{ stepId: "s", title: "Calls", source: "close", fields: callRecord() }]);
+    const row = g.fields.find((f) => f.path === "properties.data.direction")!;
+    const shownInInput = g.fields.find((f) => f.path === "properties.data.direction")?.label;
+    expect(shownInInput).toBe(row.label);
+    expect(row.label).toBe("data.direction");
   });
 
   it("search finds a nested field — the exact thing that returned nothing", () => {

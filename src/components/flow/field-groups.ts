@@ -1,4 +1,5 @@
 import { catalogEntry } from "@/connectors/catalog";
+import { flattenFields } from "./controls/field-utils";
 import type { FieldGroup } from "./graph-utils";
 import type { DataGroup } from "./controls/types";
 
@@ -44,16 +45,25 @@ export function rankFields<T extends { path: string }>(source: string | undefine
   return [...first.map((x) => x.f), ...rest];
 }
 
+/**
+ * Flatten and rank a group's fields ONCE, where the group is built.
+ *
+ * Doing it in the browser instead meant the list showed a nested field the
+ * input box could not find, so picking `data.direction` displayed something
+ * else — the two disagreed because only one of them had the flat list.
+ */
+export function prepareGroups(groups: DataGroup[]): DataGroup[] {
+  return groups.map((g) => ({ ...g, fields: rankFields(g.source, flattenFields(g.fields)) }));
+}
+
 export function toDataGroups(fieldGroups: FieldGroup[]): DataGroup[] {
-  return fieldGroups.map((g, i) => ({
+  const out: DataGroup[] = fieldGroups.map((g, i) => ({
     stepId: `g${i}:${g.stepNo ?? "sys"}:${g.from}`,
     stepNo: g.stepNo,
     source: g.appSource,
     title: g.from,
     system: g.system,
-    fields: rankFields(
-      g.appSource,
-      g.fields.map((f) => ({ path: f.path, label: f.label, type: f.type, sample: f.example, container: f.container })),
-    ),
+    fields: g.fields.map((f) => ({ path: f.path, label: f.label, type: f.type, sample: f.example, container: f.container })),
   }));
+  return prepareGroups(out);
 }

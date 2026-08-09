@@ -105,16 +105,9 @@ export function ReviewPublishModal({
                       <span className="mb-1 block text-xs font-medium text-neutral-600">Metric name</span>
                       <input value={m.name} onChange={(e) => set(ep.nodeId, { name: e.target.value })} placeholder="e.g. Show-up rate" className={inputCls} />
                     </label>
-                    {/* The number this tile will show, formatted EXACTLY as the
-                        dashboard will format it — the first time a user sees
-                        their metric must not be after publishing. */}
-                    <p className="text-xs text-neutral-500">
-                      {previews[ep.nodeId] != null ? (
-                        <>Preview: <b className="text-neutral-800">{formatMetricValue(previews[ep.nodeId], m)}</b></>
-                      ) : (
-                        <>Test the last step to see a preview.</>
-                      )}
-                    </p>
+                    {previews[ep.nodeId] != null && (
+                      <p className="text-xs font-medium text-neutral-700">{formatMetricValue(previews[ep.nodeId], m)}</p>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Show as</span>
@@ -141,9 +134,6 @@ export function ReviewPublishModal({
                           options={[{ value: "", label: "None" }, ...timeFieldOptions]}
                           onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
                         />
-                        {timeFieldOptions.length === 0 && (
-                          <p className="mt-1 text-[11px] text-neutral-400">Date fields appear after steps are tested.</p>
-                        )}
                       </div>
                       {(m.viz === "line" || m.viz === "bar") && m.timeField && (
                         <div>

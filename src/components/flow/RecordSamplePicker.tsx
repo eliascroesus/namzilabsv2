@@ -1,7 +1,6 @@
 "use client";
 
 import { eventTypeLabel } from "@/connectors/catalog";
-import { humanizeKey } from "./controls";
 
 type Rec = {
   source?: string;
@@ -23,16 +22,16 @@ const STANDARD: Array<[string, keyof Rec]> = [
   ["Occurred at", "occurredAt"],
 ];
 
-function fields(rec: Rec): Array<{ label: string; raw?: string; value: string }> {
-  const out: Array<{ label: string; raw?: string; value: string }> = [];
+function fields(rec: Rec): Array<{ label: string; value: string }> {
+  const out: Array<{ label: string; value: string }> = [];
   for (const [label, key] of STANDARD) {
     const v = rec[key];
     if (v != null && v !== "") out.push({ label, value: String(v) });
   }
+  // Raw keys: this is the record's data, and it has to read as the same
+  // string a Filter step would match on.
   for (const [k, v] of Object.entries(rec.properties ?? {})) {
-    // Humanized for reading; the raw path rides along for anyone matching
-    // against a Filter step (rendered as the row's title/tooltip).
-    if (v != null && v !== "") out.push({ label: humanizeKey(k), raw: k, value: typeof v === "object" ? JSON.stringify(v) : String(v) });
+    if (v != null && v !== "") out.push({ label: k, value: typeof v === "object" ? JSON.stringify(v) : String(v) });
   }
   return out;
 }
@@ -73,8 +72,8 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
             <div className="border-t border-neutral-100 bg-white/70 px-2.5 py-2">
               <dl className="space-y-1">
                 {fields(rec).map((f) => (
-                  <div key={f.raw ?? f.label} className="flex justify-between gap-2 text-[11px]">
-                    <dt className="shrink-0 text-neutral-400" title={f.raw}>{f.label}</dt>
+                  <div key={f.label} className="flex justify-between gap-2 text-[11px]">
+                    <dt className="shrink-0 text-neutral-400">{f.label}</dt>
                     <dd className="min-w-0 truncate text-right font-medium text-neutral-700">{f.value}</dd>
                   </div>
                 ))}
