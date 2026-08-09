@@ -78,6 +78,17 @@ describe("outputShapeOf", () => {
     expect(producesNumber("group", {})).toBe(false);
   });
 
+  it("one malformed key never re-labels the step", () => {
+    // These read the deciding key directly for a reason: a whole-config
+    // safeParse fails on ANY bad key and then returns the DEFAULTS, so a
+    // trend whose `field` was mid-edit came back "scalar" — the very
+    // misclassification this file exists to prevent, through the back door.
+    expect(outputShapeOf("formula", { op: "count", groupBy: { type: "time", unit: "day" }, field: 123 })).toBe("series");
+    expect(outputShapeOf("calculate", { mode: "breakdown", groupBy: 7 })).toBe("grouped");
+    expect(isBinaryCalc("calculate", { mode: "compare", precision: "two" })).toBe(true);
+    expect(producesNumber("formula", { op: "count", groupBy: { type: "time", unit: "day" }, aFixed: "x" })).toBe(false);
+  });
+
   it("names the compare configuration once", () => {
     expect(isBinaryCalc("formula", { op: "percentage" })).toBe(true);
     expect(isBinaryCalc("formula", { op: "count" })).toBe(false);

@@ -186,7 +186,7 @@ export const OutputConfigSchema = z.object({
   name: z.string().default("Untitled metric"),
   description: z.string().optional(),
   viz: z.enum(VIZ_TYPES).default("number"),
-  format: z.enum(["number", "percent", "currency"]).default("number"),
+  format: z.enum(["number", "percent", "currency", "duration"]).default("number"),
   unit: z.string().optional(),
   currency: z.string().default("USD"),
   precision: z.number().int().min(0).max(6).default(0),
@@ -218,34 +218,34 @@ export const TimeConfigSchema = z.object({
 export type TimeConfig = z.infer<typeof TimeConfigSchema>;
 
 // ---------- Time between ----------
-export const TIME_BETWEEN_UNITS = ["seconds", "minutes", "hours", "days"] as const;
 /**
- * Pairs two record types PER KEY and measures the gap. For each distinct
- * value of `keyField`: take the earliest `fromType` record, then the first
- * `toType` record at-or-after it (`mode: "first"`) or the latest (`"last"`);
- * unmatched keys emit nothing. The result is one record per match with the
- * duration as a plain number in `unit` — which is the entire trick: the
- * engine's aggregates already know how to average a number, they just never
- * had a duration to chew on (dates are not numbers anywhere else).
+ * Measures the gap between two moments, per key — and it is configured the
+ * way every other step is: by PICKING VARIABLES.
+ *
+ * `startField`/`endField` are field paths holding a moment. `startStep`/
+ * `endStep` are the id of the step whose records carry that moment, which is
+ * what makes the flagship shape expressible: after a Combine, leads and calls
+ * BOTH carry `occurredAt`, so the path alone cannot say which is which. The
+ * picker already groups fields by the step that produced them, so choosing
+ * "Step 1 › occurredAt" as the start and "Step 2 › occurredAt" as the stop is
+ * the whole configuration. An empty step means "any record that has it",
+ * which is also the within-one-record case (created_at → answered_at).
+ *
+ * What this replaced, twice over: two bespoke record-type dropdowns that
+ * compared `eventType` by raw column, then two full Filter-style condition
+ * builders. Both made the one step in the builder that did not work like the
+ * others.
+ *
+ * The output carries the gap as PLAIN NUMBERS in four units, so a downstream
+ * Calculate can average or take a median of it — the aggregates already knew
+ * how to read a number, they had just never been handed a duration.
  */
 export const TimeBetweenConfigSchema = z.object({
   keyField: z.string().default(""),
-  /**
-   * Which records start the clock, and which stop it — the SAME condition
-   * model Filter, Paths and Group use, evaluated by the same `evalRules`.
-   *
-   * This was two bespoke record-type dropdowns comparing `eventType`
-   * directly, the last place in the engine that addressed data by raw column
-   * instead of by picked variable. Conditions also make things sayable that
-   * a type list never could: "the first OUTBOUND call", "moved to Won".
-   *
-   * Named start/end, not from/to: `from`/`to` already mean ISO date bounds
-   * in TimeConfigSchema and FilterDateRangeSchema.
-   */
-  start: FilterConfigSchema.default({ combinator: "and", rules: [] }),
-  end: FilterConfigSchema.default({ combinator: "and", rules: [] }),
-  mode: z.enum(["first", "last"]).default("first"),
-  unit: z.enum(TIME_BETWEEN_UNITS).default("minutes"),
+  startField: z.string().default(""),
+  startStep: z.string().default(""),
+  endField: z.string().default(""),
+  endStep: z.string().default(""),
 });
 export type TimeBetweenConfig = z.infer<typeof TimeBetweenConfigSchema>;
 
@@ -301,8 +301,22 @@ export function isDatasetFormulaOp(op: unknown): boolean {
   return (DATASET_FORMULA_OPS as readonly string[]).includes(String(op ?? ""));
 }
 
+/**
+ * What a Calculate step is measuring. A bare number and a length of time
+ * are read differently by a human — "285.195783" as a speed-to-lead is
+ * meaningless until it says minutes — so the step asks up front and the
+ * rest of its configuration follows from the answer.
+ */
+export const RESULT_KINDS = ["number", "duration"] as const;
+/** Units a duration result can be shown in. */
+export const DURATION_UNITS = ["seconds", "minutes", "hours", "days"] as const;
+
 export const FormulaConfigSchema = z.object({
   op: z.enum(FORMULA_OPS).default("percentage"),
+  /** Number (default, unchanged for every saved config) or a length of time. */
+  resultKind: z.enum(RESULT_KINDS).default("number"),
+  /** Which unit the incoming values are IN, when the result is a duration. */
+  durationUnit: z.enum(DURATION_UNITS).default("minutes"),
   /** Typed-in literal numbers for the A/B inputs — used when no step is wired in. */
   aFixed: z.number().nullable().optional(),
   bFixed: z.number().nullable().optional(),
@@ -416,7 +430,7 @@ export const MetricSpecSchema = z.object({
   enabled: z.boolean().default(true),
   name: z.string().default("Untitled metric"),
   viz: z.enum(VIZ_TYPES).default("number"),
-  format: z.enum(["number", "percent", "currency"]).default("number"),
+  format: z.enum(["number", "percent", "currency", "duration"]).default("number"),
   unit: z.string().optional(),
   currency: z.string().default("USD"),
   precision: z.number().int().min(0).max(6).default(0),
@@ -454,6 +468,15 @@ function migrateLegacyGraph(raw: unknown): unknown {
   type RawNode = { id?: unknown; type?: unknown; data?: { config?: unknown; [k: string]: unknown }; [k: string]: unknown };
   const combineIds = new Set<string>();
   let changed = false;
+  /** Which app step reads which record type — how a legacy Time between recovers its lanes. */
+  const appByEventType = new Map<string, string>();
+  for (const n of g.nodes as RawNode[]) {
+    if (n?.type !== "app" || typeof n.id !== "string") continue;
+    const et = (n.data?.config as { eventType?: unknown } | undefined)?.eventType;
+    if (typeof et === "string" && et && !appByEventType.has(et)) appByEventType.set(et, n.id);
+  }
+  /** Migrated Time between nodes → the unit their old `properties.duration` was in. */
+  const migratedTimeBetween = new Map<string, string>();
 
   const nodes = (g.nodes as RawNode[]).map((n) => {
     const type = n?.type;
@@ -481,24 +504,46 @@ function migrateLegacyGraph(raw: unknown): unknown {
       return { ...n, type: "filter", data: { ...(n.data ?? {}), config: { combinator: "and", rules: [] } } };
     }
     /**
-     * Time between used to name two record TYPES; it now takes the same
-     * conditions every other step takes. One equals-rule per side is exactly
-     * what the old fields meant, so a saved flow keeps computing the
-     * identical number — pinned by test.
+     * Time between is configured by picking variables now, so both older
+     * shapes — two record-type names, then two Filter-style rule sets — have
+     * to name a step and a time field instead.
+     *
+     * Both old shapes said "records of type X start the clock". The step that
+     * READS type X is the app node configured for it, so the lane is
+     * recoverable from the graph itself rather than guessed. If no app node
+     * claims that type, the step is left needing setup and says so, which is
+     * the honest outcome — better than silently timing the wrong records.
      */
     if (type === "time_between") {
       const c = (n.data?.config ?? {}) as Record<string, unknown>;
-      if ("fromType" in c || "toType" in c) {
+      const legacyType = (side: "from" | "start"): string => {
+        if (side === "from") return typeof c.fromType === "string" ? c.fromType : "";
+        const rules = (c.start as { rules?: Array<Record<string, unknown>> } | undefined)?.rules ?? [];
+        const r = rules.find((x) => x.field === "eventType" && x.op === "equals");
+        return typeof r?.value === "string" ? r.value : "";
+      };
+      const legacyEndType = (): string => {
+        if (typeof c.toType === "string") return c.toType;
+        const rules = (c.end as { rules?: Array<Record<string, unknown>> } | undefined)?.rules ?? [];
+        const r = rules.find((x) => x.field === "eventType" && x.op === "equals");
+        return typeof r?.value === "string" ? r.value : "";
+      };
+      if ("fromType" in c || "toType" in c || "start" in c || "end" in c || "mode" in c || "unit" in c) {
         changed = true;
-        const typeRule = (t: unknown) => ({
-          combinator: "and" as const,
-          rules: typeof t === "string" && t ? [{ field: "eventType", op: "equals" as const, value: t, valueKind: "fixed" as const }] : [],
-        });
+        const from = legacyType("fromType" in c ? "from" : "start");
+        const to = legacyEndType();
+        if (typeof n.id === "string") migratedTimeBetween.set(n.id, typeof c.unit === "string" ? c.unit : "minutes");
         return {
           ...n,
           data: {
             ...(n.data ?? {}),
-            config: { keyField: c.keyField ?? "", start: typeRule(c.fromType), end: typeRule(c.toType), mode: c.mode ?? "first", unit: c.unit ?? "minutes" },
+            config: {
+              keyField: c.keyField ?? "",
+              startField: from ? "occurredAt" : "",
+              startStep: appByEventType.get(from) ?? "",
+              endField: to ? "occurredAt" : "",
+              endStep: appByEventType.get(to) ?? "",
+            },
           },
         };
       }
@@ -533,11 +578,57 @@ function migrateLegacyGraph(raw: unknown): unknown {
 
   if (!changed) return raw;
 
-  type RawEdge = { target?: unknown; targetHandle?: unknown };
+  type RawEdge = { source?: unknown; target?: unknown; targetHandle?: unknown };
   const edges = Array.isArray(g.edges)
     ? (g.edges as RawEdge[]).filter((e) => !(e?.targetHandle === "src" && typeof e?.target === "string" && combineIds.has(e.target)))
     : g.edges;
-  return { ...g, nodes, edges };
+  return { ...g, nodes: repointDurationRefs(nodes, edges, migratedTimeBetween), edges };
+}
+
+/**
+ * A migrated Time between publishes its gap at `properties.time_between.<unit>`;
+ * it used to publish `properties.duration`. Any saved step BELOW it that
+ * aggregated the old name has to follow, or it silently averages a field that
+ * no longer exists and the tile reads 0 with no error.
+ *
+ * Only steps actually downstream are touched, and that restriction is the
+ * whole point: `properties.duration` is a real Close call-duration column, so
+ * a blanket rename would corrupt a genuine reference somewhere else in the
+ * graph.
+ */
+function repointDurationRefs(
+  nodes: Array<{ id?: unknown; type?: unknown; data?: { config?: unknown; [k: string]: unknown }; [k: string]: unknown }>,
+  edges: unknown,
+  migrated: Map<string, string>,
+): unknown[] {
+  if (migrated.size === 0) return nodes;
+  const es = Array.isArray(edges) ? (edges as Array<{ source?: unknown; target?: unknown }>) : [];
+  const below = new Map<string, string>(); // node id → the unit to repoint to
+  const queue = [...migrated.entries()];
+  while (queue.length > 0) {
+    const [id, unit] = queue.pop()!;
+    for (const e of es) {
+      if (e.source !== id || typeof e.target !== "string" || below.has(e.target)) continue;
+      below.set(e.target, unit);
+      queue.push([e.target, unit]);
+    }
+  }
+  if (below.size === 0) return nodes;
+  return nodes.map((n) => {
+    const unit = typeof n.id === "string" ? below.get(n.id) : undefined;
+    if (!unit) return n;
+    const cfg = (n.data?.config ?? {}) as Record<string, unknown>;
+    const stale = new Set(["properties.duration", `properties.duration_${unit}`]);
+    const next = { ...cfg };
+    let hit = false;
+    for (const k of ["field", "distinctField"]) {
+      if (typeof next[k] === "string" && stale.has(next[k] as string)) {
+        next[k] = `properties.time_between.${unit}`;
+        hit = true;
+      }
+    }
+    return hit ? { ...n, data: { ...(n.data ?? {}), config: next } } : n;
+  });
 }
 
 export function parseGraph(value: unknown): FlowGraph {
@@ -576,7 +667,7 @@ export type TileSpec = {
   name: string;
   description?: string;
   viz: (typeof VIZ_TYPES)[number];
-  format: "number" | "percent" | "currency";
+  format: "number" | "percent" | "currency" | "duration";
   unit?: string;
   currency?: string;
   precision: number;

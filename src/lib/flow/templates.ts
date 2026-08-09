@@ -65,17 +65,20 @@ function speedToLeadClose(connectionId: string | null): FlowGraph {
           label: "Time to first call",
           config: {
             keyField: "properties.lead_id",
-            start: { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "lead_created", valueKind: "fixed" }] },
-            end: { combinator: "and", rules: [{ field: "eventType", op: "equals", value: "call_logged", valueKind: "fixed" }] },
-            mode: "first",
-            unit: "minutes",
+            // The two Get data steps ARE the two lanes: leads start the clock,
+            // calls stop it. Both carry `occurredAt`, so the step id is what
+            // tells them apart.
+            startField: "occurredAt",
+            startStep: "leads",
+            endField: "occurredAt",
+            endStep: "calls",
           },
         },
       },
       {
         id: "median",
         type: "formula",
-        data: { label: "Speed to lead", config: { op: "median", field: "properties.duration", distinctField: "subject" } },
+        data: { label: "Speed to lead", config: { op: "median", field: "properties.time_between.minutes", resultKind: "duration", durationUnit: "minutes", distinctField: "subject" } },
       },
     ],
     edges: [
@@ -85,7 +88,7 @@ function speedToLeadClose(connectionId: string | null): FlowGraph {
       { id: "combine->gap", source: "combine", target: "gap" },
       { id: "gap->median", source: "gap", target: "median" },
     ],
-    metrics: [{ nodeId: "median", enabled: true, name: "Speed to lead (median minutes)", viz: "number", format: "number", precision: 0 }],
+    metrics: [{ nodeId: "median", enabled: true, name: "Speed to lead", viz: "number", format: "duration", unit: "minutes", precision: 0 }],
   });
 }
 

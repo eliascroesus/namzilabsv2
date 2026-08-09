@@ -16,8 +16,8 @@ import type { SourceOption } from "@/connectors/types";
 import {
   AGGREGATIONS,
   aggregationInputs,
+  DURATION_UNITS,
   TIME_UNITS,
-  TIME_BETWEEN_UNITS,
   VIZ_TYPES,
   TIME_PRESETS,
   FORMULA_OPS,
@@ -31,7 +31,7 @@ import { RecordSamplePicker } from "./RecordSamplePicker";
 import { DataIcon, NodeIcon } from "./icons";
 import { Select, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
 import type { DataGroup } from "./controls/types";
-import { prepareGroups, toDataGroups } from "./field-groups";
+import { prepareGroups, toDataGroups, momentGroups } from "./field-groups";
 import { asFilterConfig } from "./panel-mappers";
 
 /** A reference to an earlier step, offered as a labeled pill for multi-input wiring. */
@@ -594,6 +594,17 @@ function NodeConfig({
         </div>
         {datasetOp ? (
           <>
+            <Field label="What are you calculating?">
+              <Select
+                value={String(cfg.resultKind ?? "number")}
+                width={W}
+                options={[
+                  { value: "number", label: "A number" },
+                  { value: "duration", label: "A length of time" },
+                ]}
+                onChange={(v) => onChange({ resultKind: v, ...(v === "duration" ? { groupBy: null } : {}) })}
+              />
+            </Field>
             {aggregationInputs(op).numberField && (
               <Field label="Field to calculate">
                 <FieldInput value={String(cfg.field ?? "value")} groups={groups} onChange={(v) => onChange({ field: v })} placeholder="Pick the number field…" />
@@ -604,18 +615,34 @@ function NodeConfig({
                 <FieldInput value={String(cfg.distinctField ?? "subject")} groups={groups} onChange={(v) => onChange({ distinctField: v })} />
               </Field>
             )}
-            <Field label="Split over time?">
-              <Select
-                value={gb?.type === "time" ? "time" : "none"}
-                width={W}
-                options={[{ value: "none", label: "No — one total number" }, { value: "time", label: "Yes — a trend over time" }]}
-                onChange={(m) => onChange({ groupBy: m === "time" ? { type: "time", unit: "day" } : null })}
-              />
-            </Field>
-            {gb?.type === "time" && (
-              <Field label="Period">
-                <Select value={gb.unit ?? "day"} width={W} options={TIME_UNITS.map((u) => ({ value: u, label: title(u) }))} onChange={(v) => onChange({ groupBy: { type: "time", unit: v } })} />
+            {/* A duration says what unit the numbers are in, and is shown as
+                a length of time ("4h 45m"). A plain number can be split into
+                a trend instead. One choice decides which question is asked. */}
+            {String(cfg.resultKind ?? "number") === "duration" ? (
+              <Field label="The numbers are in">
+                <Select
+                  value={String(cfg.durationUnit ?? "minutes")}
+                  width={W}
+                  options={DURATION_UNITS.map((u) => ({ value: u, label: title(u) }))}
+                  onChange={(v) => onChange({ durationUnit: v })}
+                />
               </Field>
+            ) : (
+              <>
+                <Field label="Split over time?">
+                  <Select
+                    value={gb?.type === "time" ? "time" : "none"}
+                    width={W}
+                    options={[{ value: "none", label: "No — one total number" }, { value: "time", label: "Yes — a trend over time" }]}
+                    onChange={(m) => onChange({ groupBy: m === "time" ? { type: "time", unit: "day" } : null })}
+                  />
+                </Field>
+                {gb?.type === "time" && (
+                  <Field label="Period">
+                    <Select value={gb.unit ?? "day"} width={W} options={TIME_UNITS.map((u) => ({ value: u, label: title(u) }))} onChange={(v) => onChange({ groupBy: { type: "time", unit: v } })} />
+                  </Field>
+                )}
+              </>
             )}
           </>
         ) : (
@@ -1115,24 +1142,17 @@ function ImportStatusLine({ connectionId }: { connectionId: string }) {
 }
 
 /**
- * Time between's Configure: which field ties the two events to the same
- * thing (a lead id), and which two record types bound the measurement.
+ * Time between's Configure — the SAME controls as every other step: pick the
+ * moment that starts the clock, pick the moment that stops it.
  *
- * The type dropdowns union every connection's live record types: the step
- * reads whatever flows in (often two Get-data lanes through a Combine), and
- * the panel has no ancestor map — offering the org's whole vocabulary keeps
- * the picker useful before anything is tested, and the curated
- * eventTypeOptions keeps it readable. Types are DB-only lookups (no
- * provider calls), cached per session like record types.
- */
-/**
- * Time between's Configure — the SAME controls as every other step.
+ * It has now shed two bespoke designs. First two record-type dropdowns that
+ * compared `eventType` by raw column; then two full Filter-style rule
+ * builders, which made the simplest question in the product look like the
+ * hardest. Both were the one step that did not work like the others.
  *
- * It used to have two bespoke record-type dropdowns that compared
- * `eventType` directly, the one place in the builder that addressed data by
- * raw column instead of by picked variable. Now the start and the end are
- * ordinary conditions, so anything you can filter on you can also time
- * from: "the first OUTBOUND call", "moved to Won".
+ * Only moments and numbers are offered, because those are the only things a
+ * clock can be started on — a picker showing 480 Close fields when four of
+ * them are dates is the same "where is my data" problem from the other end.
  */
 function TimeBetweenFields({
   cfg,
@@ -1143,41 +1163,79 @@ function TimeBetweenFields({
   groups: DataGroup[];
   onChange: (p: Record<string, unknown>) => void;
 }) {
-  // Same normalisation the Filter panel uses — one shape in, one shape out.
-  const side = (k: "start" | "end") => asFilterConfig((cfg[k] ?? {}) as Record<string, unknown>);
+  const timeGroups = useMemo(() => momentGroups(groups), [groups]);
   return (
     <div className="space-y-4">
       <Field label="Match records by">
         <FieldInput value={String(cfg.keyField ?? "")} groups={groups} onChange={(v) => onChange({ keyField: v })} />
       </Field>
-      <div className="space-y-2.5">
-        <SectionLabel>Start the clock on…</SectionLabel>
-        <ConditionEditor value={side("start")} groups={groups} onChange={(v) => onChange({ start: { combinator: v.combinator, rules: v.rules } })} />
-      </div>
-      <div className="space-y-2.5">
-        <SectionLabel>Stop the clock on…</SectionLabel>
-        <ConditionEditor value={side("end")} groups={groups} onChange={(v) => onChange({ end: { combinator: v.combinator, rules: v.rules } })} />
-      </div>
-      <Field label="Which ending to measure to">
-        <Select
-          value={String(cfg.mode ?? "first")}
-          width={W}
-          options={[
-            { value: "first", label: "The first one after the start" },
-            { value: "last", label: "The last one" },
-          ]}
-          onChange={(v) => onChange({ mode: v })}
+      <Field label="Start the clock on">
+        <MomentInput
+          path={String(cfg.startField ?? "")}
+          stepId={String(cfg.startStep ?? "")}
+          groups={timeGroups}
+          onChange={(startField, startStep) => onChange({ startField, startStep })}
         />
       </Field>
-      <Field label="Show the time in">
-        <Select
-          value={String(cfg.unit ?? "minutes")}
-          width={W}
-          options={TIME_BETWEEN_UNITS.map((u) => ({ value: u, label: title(u) }))}
-          onChange={(v) => onChange({ unit: v })}
+      <Field label="Stop the clock on">
+        <MomentInput
+          path={String(cfg.endField ?? "")}
+          stepId={String(cfg.endStep ?? "")}
+          groups={timeGroups}
+          onChange={(endField, endStep) => onChange({ endField, endStep })}
         />
       </Field>
     </div>
+  );
+}
+
+/**
+ * A picked moment: the field path AND the step that produced it.
+ *
+ * The step is not decoration. After a Combine, leads and calls both carry
+ * `occurredAt`, so "Step 1 › occurredAt" and "Step 2 › occurredAt" are the
+ * same path and different data — the group the row was picked from is the
+ * only thing that tells them apart, and the engine matches records by the
+ * same step stamp.
+ */
+function MomentInput({
+  path,
+  stepId,
+  groups,
+  onChange,
+}: {
+  path: string;
+  stepId: string;
+  groups: DataGroup[];
+  onChange: (path: string, stepId: string) => void;
+}) {
+  const group = groups.find((g) => g.stepId === stepId);
+  const label = path ? group?.fields.find((f) => f.path === path)?.label ?? path : null;
+  const from = group ? `${group.stepNo ? `${group.stepNo}. ` : ""}${group.title}` : null;
+  return (
+    <DataBrowser
+      groups={groups}
+      onPick={(ref) => onChange(ref.fieldPath, ref.producerStepId)}
+      trigger={({ toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          className="relative w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 pr-9 text-left text-sm transition-colors hover:border-neutral-400 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100"
+        >
+          {label ? (
+            <span className="block truncate text-neutral-800">
+              {from ? <span className="text-neutral-400">{from} › </span> : null}
+              {label}
+            </span>
+          ) : (
+            <span className="block truncate text-neutral-400">Choose a time…</span>
+          )}
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400" aria-hidden>
+            ▾
+          </span>
+        </button>
+      )}
+    />
   );
 }
 
@@ -1439,7 +1497,7 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
       {t.dedupeWarning && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{t.dedupeWarning}</p>
       )}
-      <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-base font-semibold text-neutral-900">{resultLabel(type, t)}</p>
+      <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-base font-semibold text-neutral-900">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
       ) : (

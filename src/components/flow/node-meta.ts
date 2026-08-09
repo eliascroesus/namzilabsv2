@@ -1,3 +1,4 @@
+import { formatDuration } from "@/lib/format";
 import { type NodeType } from "@/lib/flow/types";
 import type { NodeData } from "./graph-utils";
 
@@ -49,7 +50,7 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
       // default still reads "percentage" for legacy graphs missing `op`).
       return { op: "count", field: "value", distinctField: "subject", groupBy: null };
     case "time_between":
-      return { keyField: "", start: { combinator: "and", rules: [] }, end: { combinator: "and", rules: [] }, mode: "first", unit: "minutes" };
+      return { keyField: "", startField: "", startStep: "", endField: "", endStep: "" };
     case "unite":
       return {};
     case "group":
@@ -139,7 +140,11 @@ export function formulaExpression(op: string, aName: string, bName: string): str
 }
 
 /** Minimal wording for a successful test result — just the number + a short verb. */
-export function resultLabel(type: string, test: { recordsIn: number; recordsOut: number; tile?: unknown; value?: number }): string {
+export function resultLabel(
+  type: string,
+  test: { recordsIn: number; recordsOut: number; tile?: unknown; value?: number },
+  cfg: Record<string, unknown> = {},
+): string {
   const { recordsOut, tile, value } = test;
   const tileVal = (tile as { value?: unknown } | undefined)?.value;
   const val = value != null ? String(value) : tileVal != null ? String(tileVal) : String(recordsOut);
@@ -160,8 +165,15 @@ export function resultLabel(type: string, test: { recordsIn: number; recordsOut:
       return `${recordsOut} groups`;
     case "formula":
     case "calculate":
-    case "output":
-      return `${val}`;
+    case "output": {
+      // A speed-to-lead read "285.195783". A raw float is not an answer:
+      // a step measuring a length of time says "4h 45m", and anything else
+      // gets thousands separators and two decimals at most.
+      const n = value ?? (typeof tileVal === "number" ? tileVal : null);
+      if (n == null) return `${val}`;
+      if (cfg.resultKind === "duration") return formatDuration(n, String(cfg.durationUnit ?? "minutes"));
+      return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+    }
     default:
       return `${recordsOut}`;
   }

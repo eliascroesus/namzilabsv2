@@ -5,9 +5,7 @@ import type { DataGroup } from "./controls/types";
 
 /**
  * Adapt the builder's upstream field provenance (graph-utils `FieldGroup`) into the
- * control system's `DataGroup` shape. The synthetic `stepId` is stable within a render
- * (it drives only in-panel stale detection); condition/mapping values persist plain
- * field paths, never this id, so it is safe that it is not a real node id.
+ * control system's `DataGroup` shape.
  */
 /**
  * Put the fields people actually build on first (catalog `commonFields`),
@@ -58,7 +56,11 @@ export function prepareGroups(groups: DataGroup[]): DataGroup[] {
 
 export function toDataGroups(fieldGroups: FieldGroup[]): DataGroup[] {
   const out: DataGroup[] = fieldGroups.map((g, i) => ({
-    stepId: `g${i}:${g.stepNo ?? "sys"}:${g.from}`,
+    // The REAL node id when there is one. Time between persists which step a
+    // picked moment came from, so this had to stop being a render-local
+    // string; the synthetic form survives only for system groups that no node
+    // produces.
+    stepId: g.nodeId ?? `g${i}:${g.stepNo ?? "sys"}:${g.from}`,
     stepNo: g.stepNo,
     source: g.appSource,
     title: g.from,
@@ -67,3 +69,19 @@ export function toDataGroups(fieldGroups: FieldGroup[]): DataGroup[] {
   }));
   return prepareGroups(out);
 }
+
+/**
+ * Dates and numbers only — the two kinds of value a clock can read. A step's
+ * own "Output number" (`__count_<id>`) is excluded: it is a record COUNT, not
+ * a moment, and a picker listing it next to a timestamp invites a metric that
+ * measures the gap between two tallies.
+ */
+export function momentGroups(groups: DataGroup[]): DataGroup[] {
+  const out: DataGroup[] = [];
+  for (const g of groups) {
+    const fields = g.fields.filter((f) => (f.type === "date" || f.type === "number") && !f.path.startsWith("__"));
+    if (fields.length > 0) out.push({ ...g, fields });
+  }
+  return out;
+}
+

@@ -33,6 +33,8 @@ export type Filters = { combinator: string; rules: Rule[] };
 export type PickField = { path: string; label: string; type?: string; example?: unknown; container?: boolean };
 export type FieldGroup = {
   from: string;
+  /** The step that produces these fields. Time between persists it, so it must be the real node id. */
+  nodeId?: string;
   stepNo?: number;
   system?: boolean;
   /** Source app key of this group's nearest App ancestor (drives icon + brand colour). */
@@ -264,8 +266,8 @@ export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, input
   }
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? missingAB : inputCount === 0;
   if (type === "time_between") {
-    const rules = (k: string) => ((cfg[k] as { rules?: unknown[] } | undefined)?.rules ?? []).length;
-    return inputCount === 0 || !String(cfg.keyField ?? "").trim() || rules("start") === 0 || rules("end") === 0;
+    const set = (k: string) => String(cfg[k] ?? "").trim().length > 0;
+    return inputCount === 0 || !set("keyField") || !set("startField") || !set("endField");
   }
   if (type === "output") return inputCount === 0 || !String(cfg.name ?? "").trim();
   return inputCount === 0;
@@ -449,6 +451,7 @@ export function buildFieldGroups(opts: {
 
       groups.push({
         from: titleOf(sn),
+        nodeId: sid,
         stepNo: stepNoById.get(sid),
         appSource: app ? String((app.data.config as { source?: unknown }).source ?? "") : undefined,
         sampleRecord: isPassThrough ? undefined : appChosen ?? upChosen,

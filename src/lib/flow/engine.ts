@@ -484,44 +484,36 @@ function execTime(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
 }
 
 // ---------- Time between ----------
-const TIME_BETWEEN_UNIT_MS: Record<string, number> = {
-  seconds: 1_000,
-  minutes: 60_000,
-  hours: 3_600_000,
-  days: 86_400_000,
-};
-
 /**
  * The pairing primitive nothing else in the engine has: per distinct
- * `keyField` value, the earliest `fromType` record is matched with its
- * `toType` record (mode "first" = first at-or-after the from moment;
- * "last" = the latest one), and ONE record per match is emitted carrying
- * the gap as a plain number (`properties.duration`, in `unit`).
+ * `keyField` value, the earliest start moment is matched with the first stop
+ * moment at-or-after it, and ONE record per match is emitted carrying the gap
+ * as plain numbers under `properties.time_between`.
  *
- * Four load-bearing choices:
- * - Conditions, not record types: the start and end are `FilterConfig`s run
- *   through the same `evalRules` every other step uses, so "the first
- *   OUTBOUND call" is sayable and no raw column is addressed by name.
- * - The output IS the start record with the gap added — every dataset step
- *   preserves what flows through it.
- * - The duration is a NUMBER, not a date pair: the existing avg/median/min/
- *   max never learned to read timestamps, and they don't have to — a
- *   downstream Calculate over `properties.duration` just works.
- * - "First at-or-after": a call BEFORE the lead existed (a re-imported
- *   history overlap, a mismatched key) must never count as the response to
- *   it. Unmatched keys emit NOTHING — a lead never called has no duration,
- *   and emitting 0 would drag every average toward a lie.
- * - `occurredAt` = the FROM record's moment, so date-range filters and the
- *   dashboard's time reference read as "leads created in this window",
- *   which is the question speed-to-lead answers.
+ * Three load-bearing choices:
+ * - Picked variables, not a bespoke config: which moment starts the clock is a
+ *   field path plus the step that produced it, chosen from the same data
+ *   browser as everything else. See TimeBetweenConfigSchema for why the step
+ *   is part of the choice.
+ * - The gap is a NUMBER, not a date pair: the existing avg/median/min/max never
+ *   learned to read timestamps, and they don't have to.
+ * - "First at-or-after": a call BEFORE the lead existed (a re-imported history
+ *   overlap, a mismatched key) must never count as the response to it.
+ *   Unmatched keys emit NOTHING — a lead never called has no duration, and
+ *   emitting 0 would drag every average toward a lie.
  */
 function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = TimeBetweenConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Time between");
-  if (!cfg.keyField || cfg.start.rules.length === 0 || cfg.end.rules.length === 0) {
-    throw new Error("Time between needs a matching field, plus a condition for the start and the end.");
+  if (!cfg.keyField || !cfg.startField || !cfg.endField) {
+    throw new Error("Time between needs a matching field, a start time and a stop time.");
   }
-  const unitMs = TIME_BETWEEN_UNIT_MS[cfg.unit] ?? 60_000;
+  // Which lane a record came from. Every dataset step stamps `__count_<id>` on
+  // what it emits (see datasetExec) and those stamps travel, so after a Combine
+  // a record still says which Get data produced it. That is what lets both
+  // sides pick `occurredAt` and still mean different records. No step chosen =
+  // any record carrying the field, which is also the one-record case.
+  const fromLane = (r: FlowRecord, stepId: string) => !stepId || getField(r, `properties.__count_${stepId}`) !== undefined;
 
   type Pair = { start: FlowRecord | null; startAt: number | null; ends: Array<{ at: number; id: string }> };
   const byKey = new Map<string, Pair>();
@@ -529,20 +521,22 @@ function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     const keyRaw = getField(r, cfg.keyField);
     const key = typeof keyRaw === "string" ? keyRaw : keyRaw != null ? String(keyRaw) : "";
     if (!key) continue; // no key, no honest match
-    const at = dateMs(getField(r, "occurredAt"));
-    if (at == null) continue;
     let pair = byKey.get(key);
     if (!pair) {
       pair = { start: null, startAt: null, ends: [] };
       byKey.set(key, pair);
     }
-    // The SAME predicate Filter, Paths and Group evaluate. A record can match
-    // both conditions — legal, and it means "the gap to the next one".
-    if (evalRules(r, cfg.start) && (pair.startAt == null || at < pair.startAt)) {
-      pair.startAt = at;
-      pair.start = r;
+    if (fromLane(r, cfg.startStep)) {
+      const at = dateMs(getField(r, cfg.startField));
+      if (at != null && (pair.startAt == null || at < pair.startAt)) {
+        pair.startAt = at;
+        pair.start = r;
+      }
     }
-    if (evalRules(r, cfg.end)) pair.ends.push({ at, id: r.id });
+    if (fromLane(r, cfg.endStep)) {
+      const at = dateMs(getField(r, cfg.endField));
+      if (at != null) pair.ends.push({ at, id: r.id });
+    }
   }
 
   const out: FlowRecord[] = [];
@@ -550,32 +544,44 @@ function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     if (pair.start == null || pair.startAt == null) continue;
     const from = pair.startAt;
     // Loop, not spread/filter chains — same stack-bound discipline as
-    // computeAgg's min/max. Excluded by IDENTITY, not by type: the start
-    // record can never be its own end, but a genuinely distinct record at
-    // the same instant is a real zero-length gap.
+    // computeAgg's min/max. A record is excluded from being its own end only
+    // when both sides read the SAME field, where it would be a zero-length
+    // self-pair; reading two different fields off one record (created →
+    // answered) is the whole point of leaving the step unset.
+    const sameSide = cfg.startField === cfg.endField;
     let toAt: number | null = null;
     for (const e of pair.ends) {
-      if (e.id === pair.start.id || e.at < from) continue;
-      if (toAt == null || (cfg.mode === "first" ? e.at < toAt : e.at > toAt)) toAt = e.at;
+      if (e.at < from || (sameSide && e.id === pair.start.id)) continue;
+      if (toAt == null || e.at < toAt) toAt = e.at;
     }
     if (toAt == null) continue;
+    const gap = toAt - from;
     out.push({
-      // THE OUTPUT IS THE START RECORD, ANNOTATED — not a fabricated one.
-      // Every other dataset step preserves the fields flowing through it;
-      // this one used to emit {key, from_at, to_at, duration} and silently
-      // destroy every lead and call field downstream. Now a later Filter can
-      // still read properties.lead_id, and the step obeys the same law as
-      // its peers.
+      // THE OUTPUT IS THE START RECORD, ANNOTATED — not a fabricated one, so a
+      // later Filter can still read properties.lead_id.
       ...pair.start,
+      // The pairing key, not the start record's own subject. `subject` is the
+      // default of every count-distinct in the product, and on a paired record
+      // the thing being counted is the key — a Close lead row carries
+      // subject: null, which would have made "how many leads got called" read 0.
+      subject: key,
       properties: {
         ...pair.start.properties,
-        key,
-        from_at: new Date(from).toISOString(),
-        to_at: new Date(toAt).toISOString(),
-        // Named for the unit picked, so the field says what it measures.
-        [`duration_${cfg.unit}`]: (toAt - from) / unitMs,
-        // Stable alias: saved Calculate steps and templates point here.
-        duration: (toAt - from) / unitMs,
+        // Namespaced, and that is not cosmetic: these used to be written as
+        // bare `duration`/`key`/`from_at`/`to_at`, which OVERWROTE a source
+        // column of the same name. A Sheets column or a Close call's own
+        // `duration` is exactly the data this step gets pointed at.
+        time_between: {
+          key,
+          from_at: new Date(from).toISOString(),
+          to_at: new Date(toAt).toISOString(),
+          // Four units as plain numbers: pick the one that reads well and hand
+          // it to a Calculate, which already knows how to average a number.
+          seconds: gap / 1_000,
+          minutes: gap / 60_000,
+          hours: gap / 3_600_000,
+          days: gap / 86_400_000,
+        },
       },
     });
   }

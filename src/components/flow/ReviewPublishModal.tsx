@@ -20,6 +20,7 @@ const VIZ_OPTIONS = [
 const LEGACY_VIZ_LABELS: Record<string, string> = { line: "Line chart (draws bars)", table: "Table (draws bars)", funnel: "Funnel (draws bars)" };
 const FORMAT_OPTIONS = [
   { value: "number", label: "Number" },
+  { value: "duration", label: "Length of time" },
   { value: "percent", label: "Percentage" },
   { value: "currency", label: "Currency" },
 ];

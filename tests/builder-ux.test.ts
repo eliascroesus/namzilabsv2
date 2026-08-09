@@ -113,3 +113,70 @@ describe("an account is required, not just a source", () => {
     expect(validateGraph(g).some((i) => i.message === "Get data needs an account — open the step and choose one.")).toBe(true);
   });
 });
+
+/**
+ * A speed-to-lead that read "285.195783" is the reason the Calculate step now
+ * asks what it is measuring before it asks anything else. A number is a
+ * number; a length of time is said the way people say it.
+ */
+describe("a length of time is shown as one", () => {
+  it("formats a duration from whatever unit the numbers are in", async () => {
+    const { formatDuration, formatMetricValue } = await import("@/lib/format");
+    expect(formatDuration(285.195783, "minutes")).toBe("4h 45m");
+    expect(formatDuration(0.5, "minutes")).toBe("30s");
+    expect(formatDuration(90, "seconds")).toBe("1m 30s");
+    expect(formatDuration(50, "hours")).toBe("2d 2h");
+    // The published tile goes through the same path.
+    expect(formatMetricValue(285.195783, { format: "duration", unit: "minutes" })).toBe("4h 45m");
+  });
+
+  it("the builder's own result line follows the step's choice", async () => {
+    const { resultLabel } = await import("@/components/flow/node-meta");
+    const test = { recordsIn: 10, recordsOut: 1, value: 285.195783 };
+    // Sabotage: print String(value) as it used to and this reads 285.195783.
+    expect(resultLabel("formula", test, { resultKind: "duration", durationUnit: "minutes" })).toBe("4h 45m");
+    // A plain number still reads as a number — just not as a raw float.
+    expect(resultLabel("formula", test, { resultKind: "number" })).toBe("285.2");
+    expect(resultLabel("formula", { recordsIn: 9, recordsOut: 1, value: 12000 })).toBe("12,000");
+  });
+
+  it("choosing a length of time drops the trend split, which cannot be one", async () => {
+    // A duration Calculate is a single number by construction; leaving a stale
+    // groupBy behind would classify it a series and block publish with advice
+    // about a control the panel no longer shows.
+    const { outputShapeOf } = await import("@/lib/flow/shapes");
+    expect(outputShapeOf("formula", { op: "median", resultKind: "duration", groupBy: null })).toBe("scalar");
+  });
+});
+
+
+/**
+ * Time between offers moments, not the whole record. A Close step carries
+ * ~480 fields and four of them are timestamps; listing all 480 is the same
+ * "where is my data" problem from the other end.
+ */
+describe("the clock picker offers only things a clock can read", () => {
+  it("keeps dates and numbers, drops text, drops the step's own record count", async () => {
+    const { momentGroups } = await import("@/components/flow/field-groups");
+    const groups = [
+      {
+        stepId: "leads",
+        stepNo: 1,
+        title: "Get data",
+        fields: [
+          { path: "occurredAt", label: "occurredAt", type: "date" },
+          { path: "properties.data.date_created", label: "data.date_created", type: "date" },
+          { path: "value", label: "value", type: "number" },
+          { path: "properties.lead_id", label: "lead_id", type: "text" },
+          // Sabotage: keep __count_ and the picker offers "Output number" as a
+          // moment — the gap between two tallies, which is not a duration.
+          { path: "__count_leads", label: "Output number", type: "number" },
+        ],
+      },
+      { stepId: "sys", title: "Nothing timely", fields: [{ path: "subject", label: "subject", type: "text" }] },
+    ];
+    const out = momentGroups(groups);
+    expect(out.map((g) => g.stepId)).toEqual(["leads"]); // the all-text group vanishes entirely
+    expect(out[0].fields.map((f) => f.path)).toEqual(["occurredAt", "properties.data.date_created", "value"]);
+  });
+});

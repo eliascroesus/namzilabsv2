@@ -89,7 +89,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       : status === "setup" && data.issue
         ? { text: data.issue, cls: "text-neutral-400" }
         : status === "ready" && test?.status === "ok"
-          ? { text: resultLabel(t, test), cls: "text-neutral-500" }
+          ? { text: resultLabel(t, test, data.config as Record<string, unknown>), cls: "text-neutral-500" }
           : null;
 
   // A second line, only when the source itself has something to say — today

@@ -1,4 +1,4 @@
-import { CalculateConfigSchema, FormulaConfigSchema, isDatasetFormulaOp } from "./types";
+import { isDatasetFormulaOp } from "./types";
 
 /**
  * WHAT A STEP PRODUCES — the one place that answers it.
@@ -35,22 +35,31 @@ function groupedShape(groupBy: unknown): ShapeKind {
   return "scalar";
 }
 
+/**
+ * Read the one key that decides the shape, straight off the config.
+ *
+ * NOT through the schema: a `safeParse` fails on ANY malformed key and then
+ * hands back the DEFAULTS, so a Calculate split over time whose `field` was
+ * mid-edit got classified "scalar" — the exact misclassification this file
+ * was written to end, arriving through the back door.
+ */
+const str = (cfg: Record<string, unknown>, key: string, fallback: string): string => {
+  const v = cfg[key];
+  return typeof v === "string" && v ? v : fallback;
+};
+
 export function outputShapeOf(type: string, cfg: Record<string, unknown> = {}): ShapeKind {
   if (producesDataset(type)) return "dataset";
   if (type === "formula") {
-    const parsed = FormulaConfigSchema.safeParse(cfg);
-    const c = parsed.success ? parsed.data : null;
-    if (!c || !isDatasetFormulaOp(c.op)) return "scalar"; // comparing two numbers
-    return groupedShape(c.groupBy);
+    if (!isDatasetFormulaOp(str(cfg, "op", "percentage"))) return "scalar"; // comparing two numbers
+    return groupedShape(cfg.groupBy);
   }
   if (type === "group") return "grouped";
   if (type === "calculate") {
-    const parsed = CalculateConfigSchema.safeParse(cfg);
-    const c = parsed.success ? parsed.data : null;
-    const mode = c?.mode ?? "number";
+    const mode = str(cfg, "mode", "number");
     if (mode === "compare") return "scalar";
     if (mode === "breakdown") return "grouped";
-    return groupedShape(c?.groupBy);
+    return groupedShape(cfg.groupBy);
   }
   // `output` passes its input through and is the only shape-polymorphic step;
   // it publishes a tile rather than a value anyone can wire into.
@@ -63,14 +72,8 @@ export function outputShapeOf(type: string, cfg: Record<string, unknown> = {}): 
  * places, which is most of why the step felt like two different nodes.
  */
 export function isBinaryCalc(type: string, cfg: Record<string, unknown> = {}): boolean {
-  if (type === "formula") {
-    const parsed = FormulaConfigSchema.safeParse(cfg);
-    return !isDatasetFormulaOp(parsed.success ? parsed.data.op : "percentage");
-  }
-  if (type === "calculate") {
-    const parsed = CalculateConfigSchema.safeParse(cfg);
-    return (parsed.success ? parsed.data.mode : "number") === "compare";
-  }
+  if (type === "formula") return !isDatasetFormulaOp(str(cfg, "op", "percentage"));
+  if (type === "calculate") return str(cfg, "mode", "number") === "compare";
   return false;
 }
 
