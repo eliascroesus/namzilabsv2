@@ -4,7 +4,8 @@ import { useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNo
 import { Popover } from "./Popover";
 import { SourceBadge } from "./Pill";
 import type { DataField, DataGroup, FieldRef } from "./types";
-import { childFields, filterFields, formatSample, makeFieldRef } from "./field-utils";
+import { childFields, filterFields, flattenFields, formatSample, makeFieldRef } from "./field-utils";
+import { rankFields } from "../field-groups";
 
 /** Remembered across opens within the session (persists a drag-resize). */
 let savedFlyoutWidth = 340;
@@ -132,6 +133,20 @@ export function DataBrowser({
     </button>
   );
 
+  /**
+   * Every group's fields, nested ones INCLUDED and ranked useful-first. This
+   * is what the list, the counts and the search all read from — the top-level
+   * array alone made a Close step look like it had 23 fields when it has
+   * hundreds, and made searching for one of them come up empty.
+   */
+  const flatByGroup = useMemo(() => {
+    const m = new Map<string, DataField[]>();
+    if (!open) return m;
+    for (const g of groups) m.set(g.stepId, rankFields(g.source, flattenFields(g.fields)));
+    return m;
+  }, [open, groups]);
+  const fieldsOf = (g: DataGroup) => flatByGroup.get(g.stepId) ?? g.fields;
+
   const anyFields = useMemo(() => groups.some((g) => g.fields.length > 0), [groups]);
   // A single available step is auto-expanded (nothing to choose between); with more
   // than one, they stay collapsed so the user picks the step first.
@@ -196,7 +211,7 @@ export function DataBrowser({
           {drill && drillGroup && drillField && (
             <>
               {(() => {
-                const kids = filterFields(childFields(drillField), q);
+                const kids = filterFields(childFields(drillField, 300), q);
                 if (kids.length === 0) return <p className="px-2 py-4 text-center text-xs text-neutral-400">Nothing inside this field.</p>;
                 const key = `${drill.groupId}:${drill.trail.map((t) => t.path).join(">")}`;
                 const { shown, hidden } = capped(key, kids, q.trim().length > 0);
@@ -221,7 +236,7 @@ export function DataBrowser({
           {!drill &&
             anyFields &&
             groups.map((g) => {
-              const fields = filterFields(g.fields, q);
+              const fields = filterFields(fieldsOf(g), q);
               const searching = q.trim().length > 0;
               if (searching && fields.length === 0) return null;
               const isOpen = searching || soleGroup || expanded.has(g.stepId);
@@ -240,7 +255,7 @@ export function DataBrowser({
                     )}
                     {g.stepNo != null && <span className="text-[11px] font-semibold text-neutral-400">{g.stepNo}.</span>}
                     <span className="min-w-0 flex-1 truncate text-xs font-semibold text-neutral-700">{g.title}</span>
-                    <span className="shrink-0 text-[10px] text-neutral-400">{g.fields.length}</span>
+                    <span className="shrink-0 text-[10px] text-neutral-400">{fieldsOf(g).length}</span>
                   </button>
                   {isOpen && (() => {
                     const { shown, hidden } = capped(g.stepId, fields, searching);
@@ -258,7 +273,7 @@ export function DataBrowser({
             })}
 
           {/* Search with no matches anywhere. */}
-          {!drill && anyFields && q.trim() && groups.every((g) => filterFields(g.fields, q).length === 0) && (
+          {!drill && anyFields && q.trim() && groups.every((g) => filterFields(fieldsOf(g), q).length === 0) && (
             <p className="px-2 py-4 text-center text-xs text-neutral-400">No fields match “{q.trim()}”.</p>
           )}
         </div>

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { catalogEntry, fieldAppliesToEventType } from "@/connectors/catalog";
 
 /**
  * All node types in the builder. Three former types no longer exist and are
@@ -448,10 +449,36 @@ function migrateLegacyGraph(raw: unknown): unknown {
       if (type === "combine" && typeof n.id === "string") combineIds.add(n.id);
       return { ...n, type: "filter", data: { ...(n.data ?? {}), config: { combinator: "and", rules: [] } } };
     }
+    /**
+     * Drop a source setting that belongs to a record kind this step no longer
+     * reads — a Close Pipeline still stored after the step was switched to
+     * leads, or to "All record types".
+     *
+     * The engine already ignores such a value (`readFilterConds`), so this
+     * changes no number. What it fixes is the gap between what the graph SAYS
+     * and what it does: the panel correctly hides a control that cannot
+     * apply, which left the stale value invisible and unclearable, and a
+     * config that quietly means something other than it reads is how the next
+     * confusing "0 loaded" gets built.
+     */
+    if (type === "app") {
+      const cfg = (n.data?.config ?? {}) as { source?: unknown; eventType?: unknown; sourceConfig?: unknown };
+      const sc = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
+      const source = typeof cfg.source === "string" ? cfg.source : "";
+      if (!source || Object.keys(sc).length === 0) return n;
+      const eventType = typeof cfg.eventType === "string" ? cfg.eventType : null;
+      const stale = (catalogEntry(source)?.flowFields ?? []).filter((f) => f.key in sc && !fieldAppliesToEventType(f, eventType));
+      if (stale.length === 0) return n;
+      changed = true;
+      const sourceConfig = { ...sc };
+      for (const f of stale) delete sourceConfig[f.key];
+      return { ...n, data: { ...(n.data ?? {}), config: { ...cfg, sourceConfig } } };
+    }
     return n;
   });
 
   if (!changed) return raw;
+
   type RawEdge = { target?: unknown; targetHandle?: unknown };
   const edges = Array.isArray(g.edges)
     ? (g.edges as RawEdge[]).filter((e) => !(e?.targetHandle === "src" && typeof e?.target === "string" && combineIds.has(e.target)))

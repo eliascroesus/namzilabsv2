@@ -138,6 +138,33 @@ describe("record-kind gating", () => {
     expect(records).toHaveLength(1);
   });
 
+  it("a stale gated value is DROPPED when the graph loads, so the config matches what runs", () => {
+    // The engine already ignores it, but leaving it stored means the saved
+    // graph says one thing and computes another — and the panel correctly
+    // hides the control, so the value is invisible AND unclearable.
+    // Sabotage: remove the app branch from migrateLegacyGraph and the key
+    // survives the round trip.
+    const g = parseGraph({
+      nodes: [
+        N("a", "app", { connectionId: CONN, source: "close", eventType: "lead_created", sourceConfig: { pipelineId: "pipe_a" } }),
+      ],
+      edges: [],
+    });
+    const cfg = g.nodes[0].data.config as { sourceConfig: Record<string, unknown> };
+    expect(cfg.sourceConfig).toEqual({});
+  });
+
+  it("a value that DOES apply survives the load untouched", () => {
+    const g = parseGraph({
+      nodes: [
+        N("a", "app", { connectionId: CONN, source: "close", eventType: "opportunity_created", sourceConfig: { pipelineId: "pipe_a" } }),
+      ],
+      edges: [],
+    });
+    const cfg = g.nodes[0].data.config as { sourceConfig: Record<string, unknown> };
+    expect(cfg.sourceConfig).toEqual({ pipelineId: "pipe_a" });
+  });
+
   it("still filters opportunities by pipeline — the gate narrows, it does not disable", async () => {
     for (const [id, pipe] of [
       ["o1", "pipe_a"],

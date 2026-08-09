@@ -64,6 +64,37 @@ export function formatSample(v: unknown, max = 40): string | null {
  * blow up the browser. Child paths extend the parent path so `getField`/`walkPath`
  * resolve them at runtime.
  */
+/**
+ * Every field a step produces, nested ones included, as ONE flat list —
+ * "Data › Direction" beside "Lead id", the way Zapier lists them.
+ *
+ * The browser used to show only the top level, which for a Close call is 23
+ * rows where `data` is a single container hiding the 68 fields anyone
+ * actually filters on. Worse, search only ever looked at the level you were
+ * standing on: typing "direction" found NOTHING while a Direction field sat
+ * one click away. That reads as data being withheld, and it may as well have
+ * been.
+ *
+ * Containers stay in the list (they still drill) — flattening adds their
+ * contents, it never hides the parent.
+ */
+export function flattenFields(fields: DataField[], maxDepth = 3, maxTotal = 1_000): DataField[] {
+  const out: DataField[] = [];
+  const walk = (list: DataField[], depth: number, parentLabel: string) => {
+    for (const f of list) {
+      if (out.length >= maxTotal) return;
+      const label = parentLabel ? `${parentLabel} › ${f.label}` : f.label;
+      out.push({ ...f, label });
+      // A generous child limit here on purpose: the default 30 exists to keep
+      // ONE drill screen sane, and using it for the flat list would silently
+      // drop the 38th key of a 68-key object from search results.
+      if (f.container && depth < maxDepth) walk(childFields(f, 300), depth + 1, label);
+    }
+  };
+  walk(fields, 1, "");
+  return out;
+}
+
 export function childFields(field: DataField, limit = 30): DataField[] {
   const v = field.sample;
   if (Array.isArray(v)) {

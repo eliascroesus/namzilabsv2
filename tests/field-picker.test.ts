@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { rankFields, toDataGroups } from "@/components/flow/field-groups";
+import { filterFields, flattenFields } from "@/components/flow/controls/field-utils";
 import { catalogEntry } from "@/connectors/catalog";
 import type { FieldGroup } from "@/components/flow/graph-utils";
+import type { DataField } from "@/components/flow/controls/types";
 
 /**
  * The field picker's job on a real Close record — which carries ~480 fields.
@@ -67,5 +69,75 @@ describe("rankFields", () => {
       "properties.data.direction",
       "properties.data.address_id",
     ]);
+  });
+});
+
+
+/**
+ * THE REPORTED BUG. A Close call step lists 23 top-level fields, and every
+ * field a person filters on (`direction`, `duration`, `disposition`) lives
+ * inside the `data` object behind a drill-in. The browser searched only the
+ * level it was standing on, so typing "direction" found nothing while the
+ * Field input above it literally read "Direction" — data that looked
+ * withheld.
+ */
+describe("flattenFields", () => {
+  const callRecord = (): DataField[] => [
+    { path: "properties.lead_id", label: "Lead id", type: "text", sample: "lead_1" },
+    {
+      path: "properties.data",
+      label: "Data",
+      type: "object",
+      container: true,
+      sample: { direction: "outbound", duration: 42, contact: { name: "Ana" } },
+    },
+    { path: "subject", label: "Subject / person", type: "text", sample: "+1555" },
+  ];
+
+  it("brings nested fields into the list, named by where they came from", () => {
+    const flat = flattenFields(callRecord());
+    const direction = flat.find((f) => f.path === "properties.data.direction");
+    expect(direction).toBeTruthy();
+    expect(direction!.label).toBe("Data › Direction");
+    expect(direction!.sample).toBe("outbound");
+  });
+
+  it("search finds a nested field — the exact thing that returned nothing", () => {
+    // Sabotage: search the top-level array instead of the flattened one and
+    // this is empty, which is precisely what the customer saw.
+    expect(filterFields(flattenFields(callRecord()), "direction").map((f) => f.path)).toEqual([
+      "properties.data.direction",
+    ]);
+    expect(filterFields(callRecord(), "direction")).toHaveLength(0);
+  });
+
+  it("keeps the container itself — flattening ADDS the contents, it never hides the parent", () => {
+    const flat = flattenFields(callRecord());
+    expect(flat.some((f) => f.path === "properties.data" && f.container)).toBe(true);
+  });
+
+  it("descends more than one level, and stops at the depth cap", () => {
+    expect(flattenFields(callRecord()).some((f) => f.path === "properties.data.contact.name")).toBe(true);
+    // Depth 1 = top level only: no children at all.
+    expect(flattenFields(callRecord(), 1).some((f) => f.path.startsWith("properties.data."))).toBe(false);
+  });
+
+  it("honours the total cap so a pathological record can't hang the picker", () => {
+    const wide: DataField[] = [
+      { path: "properties.data", label: "Data", container: true, sample: Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`k${i}`, i])) },
+    ];
+    expect(flattenFields(wide, 3, 50)).toHaveLength(50);
+  });
+});
+
+describe("the spine survives the 25-row cap", () => {
+  it("occurredAt ranks into the head even when a source has hundreds of fields", () => {
+    // buildFieldGroups appends the canonical fields LAST, so on a Close step
+    // `occurredAt` — the default of every date picker — sat at index ~478 and
+    // fell outside the visible 25. Sabotage: drop SPINE_FIELDS from
+    // rankFields and this lands past 25.
+    const many = Array.from({ length: 480 }, (_, i) => ({ path: `properties.data.f${String(i).padStart(3, "0")}`, label: `F${i}` }));
+    const ranked = rankFields("close", [...many, { path: "occurredAt", label: "Occurred at" }]);
+    expect(ranked.findIndex((f) => f.path === "occurredAt")).toBeLessThan(25);
   });
 });

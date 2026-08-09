@@ -21,6 +21,7 @@ export {
   humanizeKey,
   formatSample,
   childFields,
+  flattenFields,
   makeFieldRef,
   resolveRef,
   fieldRefIsStale,

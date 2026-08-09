@@ -1,5 +1,5 @@
-import { and, eq } from "drizzle-orm";
-import { connections, sourceStreams, syncState } from "@/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
+import { backfillJobs, connections, sourceStreams, syncState } from "@/db/schema";
 import { closeImportProgress } from "@/connectors/close";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
 import { isStreamScoped } from "@/connectors/catalog";
@@ -12,16 +12,22 @@ import type { DB } from "@/db/types";
  * from STORED STATE ONLY. No provider call, so it is safe to ask on every
  * page render and in a panel that opens constantly.
  *
- * Three states, and the third is the honest one that a naive version gets
- * wrong: `unknown` means we have no evidence either way, and it must say
- * NOTHING rather than claim completion. A connection with no backfill job and
- * no cursor has not "finished importing" — it has never been asked to import.
+ * THE RULE THIS FILE EXISTS TO KEEP: only positive evidence may produce
+ * "done". Absence of an import is not proof of a finished one — a mirror
+ * source never gets a backfill job at all, a stream that has never been
+ * polled has no job either, and reading either as "History imported — this
+ * is everything" is the strongest claim in the product made on no evidence.
+ * Those cases are `unknown`, and `unknown` says nothing.
+ *
+ * A third case earns a warning rather than silence: an import that ENDED
+ * without finishing (row ceiling hit, connection disconnected mid-run,
+ * repeated failures). That is not "importing" and definitely not "done".
  *
  * Deliberately NOT built on `connections.syncStatus`: that column is a
  * transient in-flight flag (set to "importing" at the top of every sweep,
- * incremental included, and back to "live" at the end even when the connector
- * reported the window incomplete). It cannot distinguish "first window still
- * paging" from "steady state", which is the entire question here.
+ * incremental included, and back to "live" at the end even when the
+ * connector reported the window incomplete). It cannot distinguish "first
+ * window still paging" from "steady state", which is the entire question.
  */
 export type ImportStatus = {
   state: "importing" | "done" | "unknown";
@@ -31,49 +37,119 @@ export type ImportStatus = {
 };
 
 const UNKNOWN: ImportStatus = { state: "unknown" };
+const DONE: ImportStatus = { state: "done", note: "History imported." };
+/** Terminal but incomplete — the honest middle the old version called "done". */
+const STOPPED: ImportStatus = {
+  state: "unknown",
+  note: "History import didn't finish — older records may be missing. Import more history from the connection page.",
+};
 
-export async function connectionImportStatus(db: DB, orgId: string, connectionId: string): Promise<ImportStatus> {
-  const [conn] = await db
+/** Mid-walk cursors are stored as JSON; a drained one collapses to a date string. */
+function cursorSaysImporting(raw: string): boolean {
+  if (!raw.startsWith("{")) return false; // bare high-water mark = a window drained
+  try {
+    const parsed = JSON.parse(raw) as { hw?: unknown };
+    return !parsed.hw; // no high-water mark yet ⇒ the FIRST window is still walking
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Statuses for many connections in a fixed number of queries — four, whether
+ * the workspace has two connections or fifty. The per-connection version
+ * below is a thin wrapper, so the integrations list cannot drift into an
+ * N+1 by calling the "simple" one in a loop.
+ */
+export async function connectionImportStatuses(db: DB, orgId: string, connectionIds: string[]): Promise<Map<string, ImportStatus>> {
+  const out = new Map<string, ImportStatus>();
+  if (connectionIds.length === 0) return out;
+
+  const conns = await db
     .select({ id: connections.id, source: connections.source })
     .from(connections)
-    .where(and(eq(connections.id, connectionId), eq(connections.orgId, orgId)))
-    .limit(1);
-  if (!conn) return UNKNOWN;
+    .where(and(eq(connections.orgId, orgId), inArray(connections.id, connectionIds)));
+  if (conns.length === 0) return out;
 
-  if (isStreamScoped(conn.source)) {
-    // Stream sources import through the backfill lane: an open job IS the
-    // import, and its reached/target floors ARE the percentage.
+  const streamScoped = conns.filter((c) => isStreamScoped(c.source));
+  const connScoped = conns.filter((c) => !isStreamScoped(c.source));
+
+  if (streamScoped.length > 0) {
+    const ids = streamScoped.map((c) => c.id);
     const streams = await db
-      .select({ configHash: sourceStreams.configHash })
+      .select({ connectionId: sourceStreams.connectionId, configHash: sourceStreams.configHash })
       .from(sourceStreams)
-      .where(and(eq(sourceStreams.orgId, orgId), eq(sourceStreams.connectionId, connectionId)));
-    if (streams.length === 0) return UNKNOWN;
-    const progress = await importProgressByStreamRef(
-      db,
-      orgId,
-      streams.map((s) => ({ connectionId, configHash: s.configHash })),
-    );
-    if (progress.size === 0) return { state: "done", note: "History imported." };
-    // Several streams importing at once: report the LEAST covered, because
-    // the connection is only as finished as its furthest-behind resource.
-    let worst: ImportCoverage | null = null;
-    for (const c of progress.values()) {
-      const share = c.targetMs > 0 ? c.coveredMs / c.targetMs : 1;
-      const worstShare = worst && worst.targetMs > 0 ? worst.coveredMs / worst.targetMs : 1;
-      if (!worst || share < worstShare) worst = c;
+      .where(and(eq(sourceStreams.orgId, orgId), inArray(sourceStreams.connectionId, ids)));
+    const open = await importProgressByStreamRef(db, orgId, streams);
+    const jobs = await db
+      .select({ connectionId: backfillJobs.connectionId, status: backfillJobs.status })
+      .from(backfillJobs)
+      .where(and(eq(backfillJobs.orgId, orgId), inArray(backfillJobs.connectionId, ids)));
+
+    const hashesBy = new Map<string, string[]>();
+    for (const s of streams) hashesBy.set(s.connectionId, [...(hashesBy.get(s.connectionId) ?? []), s.configHash]);
+
+    for (const c of streamScoped) {
+      // The connection is only as finished as its furthest-behind stream.
+      let worst: ImportCoverage | null = null;
+      for (const hash of hashesBy.get(c.id) ?? []) {
+        const cov = open.get(`${c.id}:${hash}`);
+        if (!cov) continue;
+        const share = cov.targetMs > 0 ? cov.coveredMs / cov.targetMs : 1;
+        const worstShare = worst && worst.targetMs > 0 ? worst.coveredMs / worst.targetMs : 1;
+        if (!worst || share < worstShare) worst = cov;
+      }
+      if (worst) {
+        out.set(c.id, { state: "importing", coverage: worst, note: importProgressNote(worst) });
+        continue;
+      }
+      const mine = jobs.filter((j) => j.connectionId === c.id);
+      if (mine.length === 0) {
+        out.set(c.id, UNKNOWN); // mirrors and never-polled streams — no evidence either way
+      } else if (mine.some((j) => j.status === "partial" || j.status === "failed")) {
+        out.set(c.id, STOPPED);
+      } else if (mine.some((j) => j.status === "complete")) {
+        out.set(c.id, DONE);
+      } else {
+        out.set(c.id, UNKNOWN);
+      }
     }
-    return { state: "importing", coverage: worst ?? undefined, note: importProgressNote(worst ?? undefined) };
   }
 
-  // Connection-scoped (Close): the walk's own cursor is the record of it.
-  // sync_state is keyed by connection; the org wall is the lookup above.
-  const [state] = await db.select({ cursor: syncState.cursor }).from(syncState).where(eq(syncState.connectionId, connectionId)).limit(1);
-  const raw = state?.cursor ?? null;
-  if (!raw) return UNKNOWN; // never polled — not the same as finished
-  const coverage = conn.source === "close" ? closeImportProgress(raw) : null;
-  if (coverage) return { state: "importing", coverage, note: importProgressNote(coverage) };
-  // A cursor exists and reports no first-window progress ⇒ a window has
-  // drained. Sendblue stores no coverage fields, so it lands here too — which
-  // is right: a cursor it wrote means it has been reading.
-  return { state: "done", note: "History imported." };
+  if (connScoped.length > 0) {
+    const ids = connScoped.map((c) => c.id);
+    // sync_state is keyed by connection; the org wall is the lookup above.
+    const rows = await db
+      .select({ connectionId: syncState.connectionId, cursor: syncState.cursor })
+      .from(syncState)
+      .where(inArray(syncState.connectionId, ids));
+    const cursorBy = new Map(rows.map((r) => [r.connectionId, r.cursor]));
+
+    for (const c of connScoped) {
+      const raw = cursorBy.get(c.id) ?? null;
+      if (!raw) {
+        out.set(c.id, UNKNOWN); // never polled is not the same as finished
+        continue;
+      }
+      // Close is the one source whose cursor carries measured coverage.
+      const coverage = c.source === "close" ? closeImportProgress(raw) : null;
+      if (coverage) {
+        out.set(c.id, { state: "importing", coverage, note: importProgressNote(coverage) });
+      } else if (cursorSaysImporting(raw)) {
+        // Every other paging source (Sendblue) stores the same JSON-while-
+        // walking shape but no coverage fields: we can say THAT it is still
+        // on its first window, just not how far in.
+        out.set(c.id, { state: "importing", note: "Still importing history — these numbers can still grow." });
+      } else {
+        out.set(c.id, DONE);
+      }
+    }
+  }
+
+  return out;
+}
+
+export async function connectionImportStatus(db: DB, orgId: string, connectionId: string): Promise<ImportStatus> {
+  const map = await connectionImportStatuses(db, orgId, [connectionId]);
+  return map.get(connectionId) ?? UNKNOWN;
 }

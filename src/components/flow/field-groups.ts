@@ -17,9 +17,20 @@ import type { DataGroup } from "./controls/types";
  * fields, so an alphabetical list opens on `data.address_id` while the
  * question the user came to answer is about `data.direction`.
  */
+/**
+ * The canonical fields EVERY step carries, floated ahead of a source's own.
+ *
+ * `buildFieldGroups` appends these last (after every custom field), so on a
+ * source with hundreds of fields the step's own timestamp — the default of
+ * every date picker in the product — fell off the end of the list. A picker
+ * whose currently-selected value isn't visible in its own open list is the
+ * clearest possible way to look broken.
+ */
+const SPINE_FIELDS = ["subject", "occurredAt", "value", "eventType", "source"] as const;
+
 export function rankFields<T extends { path: string }>(source: string | undefined, fields: T[]): T[] {
-  const common = catalogEntry(source ?? "")?.commonFields;
-  if (!common || common.length === 0 || fields.length === 0) return fields;
+  const common = [...SPINE_FIELDS, ...(catalogEntry(source ?? "")?.commonFields ?? [])];
+  if (common.length === 0 || fields.length === 0) return fields;
   const rank = new Map(common.map((p, i) => [p, i]));
   const first: Array<{ at: number; f: T }> = [];
   const rest: T[] = [];

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { backfillJobs, sourceStreams, syncState } from "@/db/schema";
 import { closeImportProgress } from "@/connectors/close";
-import { connectionImportStatus } from "@/lib/sync/import-status";
+import { connectionImportStatus, connectionImportStatuses } from "@/lib/sync/import-status";
 import type { DB } from "@/db/types";
 
 /**
@@ -115,6 +115,64 @@ describe("connectionImportStatus", () => {
 
     await db.update(backfillJobs).set({ status: "complete" });
     expect((await connectionImportStatus(db, ORG, id)).state).toBe("done");
+  });
+
+  it("an import that ENDED without finishing never claims completion", async () => {
+    // The strongest claim in the product ("History imported — this is
+    // everything") was being made for a run that hit its row ceiling or died
+    // mid-import. Sabotage: treat "no open job" as done and this says done.
+    const id = await seedConnection(db, { orgId: ORG, source: "calendly" });
+    const [stream] = await db
+      .insert(sourceStreams)
+      .values({ orgId: ORG, connectionId: id, configHash: "h", config: {}, status: "active" })
+      .returning({ id: sourceStreams.id });
+    await db.insert(backfillJobs).values({
+      orgId: ORG,
+      connectionId: id,
+      streamId: stream.id,
+      streamHash: "h",
+      status: "partial",
+      targetFloor: new Date(Date.now() - 90 * DAY),
+      reachedFloor: new Date(Date.now() - 30 * DAY),
+      rowCeiling: 25_000,
+    });
+
+    const status = await connectionImportStatus(db, ORG, id);
+    expect(status.state).not.toBe("done");
+    expect(status.note).toMatch(/didn't finish/);
+  });
+
+  it("a stream source with NO job at all stays silent — mirrors never get one", async () => {
+    // Sheets is a mirror: it re-reads the whole resource every sweep and is
+    // never given a backfill job. "No job" is no evidence, not completion.
+    const id = await seedConnection(db, { orgId: ORG, source: "gsheets" });
+    await db.insert(sourceStreams).values({ orgId: ORG, connectionId: id, configHash: "h", config: {}, status: "active" });
+    const status = await connectionImportStatus(db, ORG, id);
+    expect(status.state).toBe("unknown");
+    expect(status.note).toBeUndefined();
+  });
+
+  it("a non-Close paging source mid-first-walk reads importing, not done", async () => {
+    // Sendblue stores the same JSON-while-walking cursor but no coverage
+    // fields. We can say THAT it is still on its first window even without a
+    // percentage; the old code read it as finished — backwards.
+    const id = await seedConnection(db, { orgId: ORG, source: "sendblue" });
+    await db.insert(syncState).values({ connectionId: id, cursor: JSON.stringify({ hw: null, cont: "c1" }) });
+    const status = await connectionImportStatus(db, ORG, id);
+    expect(status.state).toBe("importing");
+    expect(status.coverage).toBeUndefined(); // honest: no percentage to give
+  });
+
+  it("answers many connections at once, org-walled", async () => {
+    const mine = await seedConnection(db, { orgId: ORG, source: "close" });
+    const alsoMine = await seedConnection(db, { orgId: ORG, source: "close" });
+    const foreign = await seedConnection(db, { orgId: "org_other", source: "close" });
+    await db.insert(syncState).values({ connectionId: mine, cursor: new Date().toISOString() });
+
+    const map = await connectionImportStatuses(db, ORG, [mine, alsoMine, foreign]);
+    expect(map.get(mine)?.state).toBe("done");
+    expect(map.get(alsoMine)?.state).toBe("unknown");
+    expect(map.has(foreign)).toBe(false); // another workspace is not ours to report on
   });
 
   it("is org-walled: another workspace's connection reads unknown, never its progress", async () => {

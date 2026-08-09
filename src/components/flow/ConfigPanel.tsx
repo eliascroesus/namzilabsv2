@@ -166,7 +166,10 @@ export function ConfigPanel({
   const sm = STATUS_META[status];
   const err = node.data.lastTest?.status === "error" ? node.data.lastTest.error : null;
   const tested = status === "ready";
-  const groups = toDataGroups(fieldGroups);
+  // Memoized: the field browser flattens these into a list that can run to
+  // hundreds of entries, and a fresh array identity every render would
+  // re-flatten on every keystroke in the panel.
+  const groups = useMemo(() => toDataGroups(fieldGroups), [fieldGroups]);
 
   // Two tabs: set the step up, then test it. Remounts per step (keyed on id), so a
   // freshly-opened step always starts on Configure.
@@ -1111,15 +1114,12 @@ function ImportStatusLine({ connectionId }: { connectionId: string }) {
     };
   }, [connectionId]);
 
-  if (!status || status.state === "unknown") return null;
-  if (status.state === "importing") {
-    return (
-      <p className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-        {status.note ?? "Still importing history — these numbers can still grow."}
-      </p>
-    );
-  }
-  return <p className="mt-1.5 text-xs text-green-700">History imported — this is everything.</p>;
+  if (!status) return null;
+  if (status.state === "done") return <p className="mt-1.5 text-xs text-green-700">History imported — this is everything.</p>;
+  // Importing, or an import that ended without finishing. "unknown" with no
+  // note is the no-evidence case and stays silent rather than guessing.
+  if (!status.note) return null;
+  return <p className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{status.note}</p>;
 }
 
 /**
