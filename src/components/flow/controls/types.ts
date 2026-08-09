@@ -1,5 +1,13 @@
 /** One selectable field from an earlier step (human name + type + real sample). */
-export type DataField = { path: string; label: string; type?: string; sample?: unknown; container?: boolean };
+export type DataField = {
+  path: string;
+  label: string;
+  type?: string;
+  sample?: unknown;
+  container?: boolean;
+  /** How many of this step's records carried a value here; 0 = empty in all of them. */
+  populated?: number;
+};
 
 /** A group of fields from one earlier step, shown in the Insert-data browser. */
 export type DataGroup = {

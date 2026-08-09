@@ -321,8 +321,14 @@ async function registeredAppFields(ctx: EngineCtx, cfg: AppConfig): Promise<Fiel
     // in the registry (it tracks `properties`), so they come from the same
     // constant the scan path uses.
     const out: FieldInfo[] = STANDARD_FIELDS.map((f) => buildFieldInfo(f, f, undefined));
+    const saved = typeof cfg.dedupeField === "string" ? cfg.dedupeField.replace(/^properties\./, "") : "";
     for (const f of [...fields].sort((a, b) => a.fieldPath.localeCompare(b.fieldPath))) {
       if (f.fieldPath.startsWith("__")) continue; // internal engine keys are never fields
+      // A path that has never once held a value, across everything ever synced
+      // on this connection — a provider column this account does not use. It
+      // is offered nowhere, EXCEPT when it is already the saved choice, so a
+      // configured step never shows a picker missing its own value.
+      if (f.approxCardinality === 0 && f.fieldPath !== saved) continue;
       // The registry stores the example wrapped (`{ value: … }`) so a jsonb
       // column can hold a bare scalar; unwrap before inferring, or every field
       // types as "object" and the picker shows the wrong icon for all of them.

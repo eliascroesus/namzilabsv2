@@ -464,7 +464,7 @@ function NodeConfig({
                 panel are indistinguishable. */}
             <RecordTypeField conn={conn} cfg={cfg} onChange={onChange} />
 
-            <DedupeSection cfg={cfg} fallbackGroups={selfGroups} onChange={onChange} />
+            <DedupeSection cfg={cfg} tested={selfGroups.length > 0} fallbackGroups={selfGroups} onChange={onChange} />
           </>
         )}
       </div>
@@ -1395,7 +1395,16 @@ function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigFi
  * needed first. Custom columns come first; canonical fields that carry data
  * follow, humanised.
  */
-function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, unknown>; fallbackGroups: DataGroup[]; onChange: (p: Record<string, unknown>) => void }) {
+/**
+ * `tested` decides where the field list comes from, and that is the whole
+ * fix: the registry knows every path ever seen on the CONNECTION and cannot
+ * tell record types apart (no event_type column), so a Close "Call logged"
+ * step was offered 746 fields including data.pipeline_id from opportunities
+ * and object_type = "activity.email_thread" from email threads. Once the step
+ * has run, its own records are the only honest answer — and they are what
+ * every step below it already shows.
+ */
+function DedupeSection({ cfg, tested, fallbackGroups, onChange }: { cfg: Record<string, unknown>; tested: boolean; fallbackGroups: DataGroup[]; onChange: (p: Record<string, unknown>) => void }) {
   const on = !!cfg.dedupe;
   const sig = JSON.stringify([cfg.connectionId ?? null, cfg.source ?? null, cfg.eventType ?? null, cfg.sourceConfig ?? {}]);
   const [state, setState] = useState<{ sig: string | null; status: "idle" | "loading" | "ok" | "error"; fields: AppFieldDTO[] }>({ sig: null, status: "idle", fields: [] });
@@ -1428,7 +1437,7 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
     .map((f) => ({ ...f, label: STD_META[f.path]?.label ?? f.label, type: STD_META[f.path]?.type ?? f.type }));
   const loaded = [...custom, ...std];
   const groups: DataGroup[] =
-    loaded.length > 0
+    !tested && loaded.length > 0
       ? prepareGroups([
           {
             stepId: "self",

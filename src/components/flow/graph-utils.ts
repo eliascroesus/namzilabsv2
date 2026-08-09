@@ -30,7 +30,7 @@ export type FNode = Node<NodeData>;
 export type Rule = { field: string; op: string; value: string; value2?: string; valueKind?: "fixed" | "field"; valueField?: string };
 export type Filters = { combinator: string; rules: Rule[] };
 
-export type PickField = { path: string; label: string; type?: string; example?: unknown; container?: boolean };
+export type PickField = { path: string; label: string; type?: string; example?: unknown; container?: boolean; populated?: number };
 export type FieldGroup = {
   from: string;
   /** The step that produces these fields. Time between persists it, so it must be the real node id. */
@@ -443,7 +443,7 @@ export function buildFieldGroups(opts: {
           if (stdSet.has(f.path)) {
             if (ex != null && ex !== "") std.push({ path: f.path, label: STD_META[f.path]?.label ?? f.label, type: STD_META[f.path]?.type ?? f.type, example: ex });
           } else {
-            custom.push({ path: f.path, label: f.label, type: f.type, example: ex, container: f.container });
+            custom.push({ path: f.path, label: f.label, type: f.type, example: ex, container: f.container, populated: f.populated });
           }
         }
         fields = [...custom, ...std, outNum];

@@ -29,7 +29,7 @@ export type NodeTestDTO = {
   sample: unknown[];
   /** Sample of the primary input (before) — for the before/after test preview. */
   inputSample: unknown[];
-  outputSchema: Array<{ path: string; label: string; type: string; example?: unknown; container?: boolean }>;
+  outputSchema: Array<{ path: string; label: string; type: string; example?: unknown; container?: boolean; populated?: number }>;
   error?: string;
   tile?: unknown;
   /** The computed number, when the step produces a single number (Count/Calculate). */

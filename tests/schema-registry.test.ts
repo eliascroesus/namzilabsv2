@@ -140,3 +140,31 @@ describe("flatten is depth-bounded", () => {
     expect(paths).toEqual(["a", "b.c", "d.e.f"]);
   });
 });
+
+/**
+ * The registry answers the picker on a step that has never been tested. A
+ * provider ships every optional column whether the account fills it or not,
+ * so it must not offer a path that has never once held a value.
+ */
+describe("the untested picker skips columns that have never held a value", () => {
+  it("drops never-populated paths, but never the one already chosen", async () => {
+    const { sampleAppFields } = await import("@/lib/flow/engine");
+    await recordFields(db, { orgId: "org_reg", connectionId: connId, streamHash: null }, [
+      ev({ phone: "+1914", recording_url: null, address_id: null }),
+      ev({ phone: "+1475", recording_url: null, address_id: null }),
+    ]);
+
+    const paths = async (dedupeField?: string) =>
+      (await sampleAppFields({ db, orgId: "org_reg" }, { connectionId: connId, source: "webhook", ...(dedupeField ? { dedupe: true, dedupeField } : {}) })).map((f) => f.path);
+
+    const offered = await paths();
+    expect(offered).toContain("properties.phone");
+    // Sabotage: keep approxCardinality-0 rows and the picker opens on columns
+    // this account has never used — 87 of 491 on a real Close connection.
+    expect(offered).not.toContain("properties.recording_url");
+
+    // A step already configured on one of them must still see its own value,
+    // or the picker looks broken the moment it opens.
+    expect(await paths("properties.recording_url")).toContain("properties.recording_url");
+  });
+});

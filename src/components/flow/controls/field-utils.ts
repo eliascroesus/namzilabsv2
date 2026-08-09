@@ -82,9 +82,16 @@ export function flattenFields(fields: DataField[], maxDepth = 3, maxTotal = 1_00
   // box shows after you pick it, and it is identical to what the engine
   // resolves — so what you read is what runs.
   const rawLabel = (path: string) => (path.startsWith("properties.") ? path.slice("properties.".length) : path);
+  // The schema now carries nested paths itself, so a container's children are
+  // usually already in the list. Expanding it again would show every one of
+  // them twice; the walk below still runs for arrays and for schemas built
+  // from a bare sample, which have no nested rows of their own.
+  const emitted = new Set(fields.map((f) => f.path));
   const walk = (list: DataField[], depth: number) => {
     for (const f of list) {
       if (out.length >= maxTotal) return;
+      if (depth > 1 && emitted.has(f.path)) continue;
+      emitted.add(f.path);
       out.push(depth === 1 ? f : { ...f, label: rawLabel(f.path) });
       // A generous child limit here on purpose: the default 30 exists to keep
       // ONE drill screen sane, and using it for the flat list would silently

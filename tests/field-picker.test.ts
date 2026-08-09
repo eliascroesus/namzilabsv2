@@ -163,3 +163,86 @@ describe("the spine survives the 25-row cap", () => {
     expect(ranked.findIndex((f) => f.path === "occurredAt")).toBeLessThan(25);
   });
 });
+
+/**
+ * The picker offers the fields this step's records actually carry — unioned
+ * across all of them, not read off whichever preview record happens to be
+ * selected, and with the never-filled columns pushed out of the way.
+ */
+describe("the schema describes the whole sample, not one record", () => {
+  const rec = (props: Record<string, unknown>) => ({
+    id: "r",
+    source: "close",
+    connectionId: "c",
+    eventType: "call_logged",
+    subject: "s",
+    occurredAt: new Date("2026-08-01T00:00:00Z"),
+    value: null,
+    currency: null,
+    properties: props,
+  });
+
+  it("a field on SOME records is offered, not dropped because the preview lacks it", async () => {
+    const { inferSchema } = await import("@/lib/flow/schema-infer");
+    // Sabotage: read nested paths off one sample record, as the browser used
+    // to, and `data.direction` disappears whenever the previewed call is the
+    // one Close did not stamp — the "data is being gatekept" complaint.
+    const schema = inferSchema([
+      rec({ data: { phone: "+1914" } }),
+      rec({ data: { phone: "+1475", direction: "outbound" } }),
+    ] as never[]);
+    const paths = schema.map((s) => s.path);
+    expect(paths).toContain("properties.data.direction");
+    expect(paths).toContain("properties.data.phone");
+  });
+
+  it("counts how many records actually carried a value; 0 and false are values", async () => {
+    const { inferSchema } = await import("@/lib/flow/schema-infer");
+    const schema = inferSchema([
+      rec({ data: { direction: "outbound", duration: 0, answered: false, recording_url: null, tags: [], note: "  " } }),
+      rec({ data: { direction: null, duration: 0, answered: false, recording_url: "", tags: [], note: "" } }),
+    ] as never[]);
+    const by = new Map(schema.map((s) => [s.path, s.populated]));
+    expect(by.get("properties.data.direction")).toBe(1);
+    // A call that lasted 0 seconds and was not answered is the whole point of
+    // the metric — falsy is not empty.
+    expect(by.get("properties.data.duration")).toBe(2);
+    expect(by.get("properties.data.answered")).toBe(2);
+    // Sabotage: drop the populated count and none of these can be told apart
+    // from a real field, which is what fills a Close picker with ~100 columns
+    // the account never uses.
+    expect(by.get("properties.data.recording_url")).toBe(0);
+    expect(by.get("properties.data.tags")).toBe(0);
+    expect(by.get("properties.data.note")).toBe(0);
+  });
+
+  it("keeps empty fields reachable — they move to the back, they are never dropped", async () => {
+    const { inferSchema } = await import("@/lib/flow/schema-infer");
+    const { emptyLast } = await import("@/components/flow/field-groups");
+    const schema = inferSchema([rec({ data: { direction: "outbound", address_id: null } })] as never[]);
+    const ordered = emptyLast(schema.filter((s) => s.path.startsWith("properties.")));
+    // Still present — a saved Filter pointing at it must keep resolving, and a
+    // column that starts filling next month simply moves back up.
+    expect(ordered.map((s) => s.path)).toContain("properties.data.address_id");
+    expect(ordered[ordered.length - 1].path).toBe("properties.data.address_id");
+  });
+
+  it("walks nested objects but stops before a payload can bloat the saved graph", async () => {
+    const { inferSchema } = await import("@/lib/flow/schema-infer");
+    const schema = inferSchema([rec({ a: { b: { c: { d: { e: "deep" } } } } })] as never[]);
+    const paths = schema.map((s) => s.path);
+    expect(paths).toContain("properties.a.b.c"); // depth 4 reached
+    expect(paths).not.toContain("properties.a.b.c.d.e"); // and no further
+  });
+
+  it("does not list a nested field twice now that the schema carries it", async () => {
+    // Sabotage: drop the dedupe guard in flattenFields and every nested row
+    // appears twice — once from the schema, once re-derived from the sample.
+    const rows: DataField[] = [
+      { path: "properties.data", label: "data", type: "object", sample: { direction: "outbound" }, container: true },
+      { path: "properties.data.direction", label: "data.direction", type: "text", sample: "outbound" },
+    ];
+    const flat = flattenFields(rows);
+    expect(flat.filter((x) => x.path === "properties.data.direction")).toHaveLength(1);
+  });
+});
