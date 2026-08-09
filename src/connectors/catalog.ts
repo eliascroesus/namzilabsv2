@@ -23,6 +23,20 @@ export type FlowConfigField = {
   dependsOn?: string[];
   /** Only render this field when another field currently equals `equals`. */
   showWhen?: { key: string; equals: string };
+  /**
+   * Only offer this field when the step's Record type starts with one of
+   * these prefixes — for settings that exist on ONE KIND of record.
+   *
+   * Close's pipeline is the case: only opportunity events carry a
+   * `pipeline_id`, so choosing a pipeline on a "Leads created" step matched
+   * nothing and the step read `0 loaded` with no explanation. A setting that
+   * cannot apply must not be offered, and — see `readFilterConds` — must not
+   * apply even when an older saved config still holds a value for it.
+   *
+   * Empty Record type ("All record types") never matches: across mixed kinds
+   * the filter would silently hide every record that has no such field.
+   */
+  showWhenEventTypePrefix?: readonly string[];
   options?: { value: string; label: string }[];
   /**
    * This field narrows the stored READ, not the provider request — and is
@@ -319,7 +333,10 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
         label: "Pipeline",
         dynamic: true,
         placeholder: "All pipelines",
-        hint: "Shows only opportunity records in this pipeline — other record types don't carry one, so they're hidden while this is set. Close can't filter its event log by pipeline, so the same events sync either way; this narrows what you see and takes effect immediately.",
+        // Close models pipelines on OPPORTUNITIES. A lead, a call and an
+        // email carry no pipeline at all, so offering this on those steps
+        // could only ever produce an unexplained empty result.
+        showWhenEventTypePrefix: ["opportunity"],
         readFilter: { paths: ["properties.data.pipeline_id"] },
       },
     ],
@@ -640,6 +657,22 @@ export function isStreamScoped(source: string | null | undefined): boolean {
  */
 export function readFilterFields(source: string | null | undefined): FlowConfigField[] {
   return (catalogEntry(source ?? "")?.flowFields ?? []).filter((f) => (f.readFilter?.paths.length ?? 0) > 0);
+}
+
+/**
+ * Does this field apply to a step reading `eventType`?
+ *
+ * ONE definition, used by both halves that must agree: the panel (which
+ * offers the field) and the engine (which applies it). If they ever
+ * disagreed, a saved value would keep filtering a step whose UI no longer
+ * shows the control — the exact silent zero this gate exists to prevent.
+ */
+export function fieldAppliesToEventType(field: FlowConfigField, eventType: string | null | undefined): boolean {
+  const prefixes = field.showWhenEventTypePrefix;
+  if (!prefixes || prefixes.length === 0) return true;
+  const t = (eventType ?? "").trim();
+  if (!t) return false; // "All record types" spans kinds that have no such field
+  return prefixes.some((p) => t.startsWith(p));
 }
 
 /**

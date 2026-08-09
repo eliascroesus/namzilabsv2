@@ -49,12 +49,22 @@ async function aggregateOver(aggregation: "min" | "max" | "avg"): Promise<number
     occurredAt: new Date(2026, 0, 1).toISOString(),
     properties: { amount: i + 1 },
   }));
+  // The reader pages, so this stub answers ONCE with everything and then
+  // reports exhaustion — a driver that ignores our LIMIT, which is also the
+  // harshest input for the loader: 200k rows arriving in a single page.
+  let served = false;
   const ctx = {
     db: {
       select: () => ({
         from: () => ({
           where: () => ({
-            orderBy: () => ({ limit: async () => records.map((r) => ({ ...r, properties: r.properties })) }),
+            orderBy: () => ({
+              limit: async () => {
+                if (served) return [];
+                served = true;
+                return records.map((r) => ({ ...r, properties: r.properties }));
+              },
+            }),
           }),
         }),
       }),

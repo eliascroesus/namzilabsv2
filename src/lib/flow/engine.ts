@@ -6,7 +6,7 @@ import { planPushdown } from "./compile/pushdown";
 import { compileRule } from "./compile/operators";
 import { inferSchema, buildFieldInfo, type FieldInfo } from "./schema-infer";
 import { listRegisteredFields } from "@/lib/schema-registry/registry";
-import { readFilterFields } from "@/connectors/catalog";
+import { fieldAppliesToEventType, readFilterFields } from "@/connectors/catalog";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import {
   AppConfigSchema,
@@ -112,6 +112,18 @@ export type RunResult = {
  * truncation on the node, never silently swallowed.
  */
 const APP_LOAD_CEILING = 500_000;
+
+/**
+ * Rows per read. The ceiling bounds MEMORY; this bounds one RESPONSE.
+ *
+ * A single 500k-row select returns every column of every row in one HTTP
+ * response on the Neon driver, and a Close step reading "All record types"
+ * pulls email-thread payloads carrying hundreds of fields each — enough for
+ * one response to fail outright, which is exactly what a customer saw. Pages
+ * keep each response small; the ceiling and the visible truncation are
+ * unchanged.
+ */
+const APP_LOAD_BATCH = 2_000;
 
 export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNodeId?: string } = {}): Promise<RunResult> {
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -241,6 +253,11 @@ function appConds(orgId: string, cfg: AppConfig, source: string | null): SQL[] {
 function readFilterConds(cfg: AppConfig, source: string | null): SQL[] {
   const out: SQL[] = [];
   for (const field of readFilterFields(source)) {
+    // A filter that cannot apply to this step's record kind is IGNORED, not
+    // applied — a published flow whose Record type changed away from
+    // opportunities still carries its old pipelineId, and honouring it would
+    // hide every row while looking correctly configured.
+    if (!fieldAppliesToEventType(field, cfg.eventType)) continue;
     const raw = (cfg.sourceConfig as Record<string, unknown> | undefined)?.[field.key];
     const value = typeof raw === "string" ? raw.trim() : "";
     if (!value) continue;
@@ -333,26 +350,69 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
     }
   }
 
-  const query = ctx.db
-    .select()
-    .from(events)
-    .where(and(...conds))
-    // E.3: a deterministic TOTAL order — occurred_at alone leaves ties, and an
-    // unstable order makes "the newest duplicate" (and any cap) arbitrary.
-    .orderBy(desc(events.occurredAt), desc(events.id))
-    .limit(APP_LOAD_CEILING);
+  const rows: (typeof events.$inferSelect)[] = [];
+  // The statement SHAPE is the same for every page (only the keyset bound
+  // moves), so provenance records the first one — with the real total below.
+  let statement = { sql: "", params: [] as unknown[] };
+  let cursor: { occurredAt: Date; id: string } | null = null;
 
-  const rows = await query;
+  while (rows.length < APP_LOAD_CEILING) {
+    const take = Math.min(APP_LOAD_BATCH, APP_LOAD_CEILING - rows.length);
+    // KEYSET, and the composite matters: `occurred_at < X` alone drops every
+    // row that ties with the page's last timestamp, and `<=` repeats them.
+    // Ties are common (bulk imports stamp identical seconds), so this is the
+    // difference between a correct page boundary and silently wrong numbers.
+    const page = cursor
+      ? and(
+          ...conds,
+          sql`(${events.occurredAt} < ${cursor.occurredAt} or (${events.occurredAt} = ${cursor.occurredAt} and ${events.id} < ${cursor.id}))`,
+        )
+      : and(...conds);
+    const query = ctx.db
+      .select()
+      .from(events)
+      .where(page)
+      // E.3: a deterministic TOTAL order — occurred_at alone leaves ties, and an
+      // unstable order makes "the newest duplicate" (and any cap) arbitrary.
+      .orderBy(desc(events.occurredAt), desc(events.id))
+      .limit(take);
+
+    if (!statement.sql) {
+      try {
+        const q = (query as unknown as { toSQL: () => { sql: string; params: unknown[] } }).toSQL();
+        statement = { sql: q.sql, params: q.params };
+      } catch {
+        // Provenance is diagnostic; never fail a run to record it.
+      }
+    }
+
+    let batch: (typeof events.$inferSelect)[];
+    try {
+      batch = await query;
+    } catch (e) {
+      // The driver's own text is a wall of SQL with no advice in it. Say what
+      // to DO, then keep the cause — this wrapper exists because a customer
+      // hit an unexplained failure loading every record type at once, and the
+      // next occurrence has to name itself.
+      const cause = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        `Couldn't load this step's records — the read failed partway through${rows.length > 0 ? ` (after ${rows.length.toLocaleString()} records)` : ""}. Narrowing the Record type usually fixes it. Cause: ${cause.slice(0, 200)}`,
+      );
+    }
+
+    // A LOOP, not `push(...batch)`: a spread passes every element as its own
+    // argument and blows the stack somewhere past ~125k (the same defect
+    // documented above computeAgg's min/max). Pages are small today, but the
+    // rule here is that no spread ever meets a collection whose size is
+    // decided elsewhere — a stubbed reader that ignores our LIMIT is enough
+    // to prove it.
+    for (const r of batch) rows.push(r);
+    if (batch.length < take) break; // short page = end of the result set
+    const last = batch[batch.length - 1];
+    cursor = { occurredAt: last.occurredAt instanceof Date ? last.occurredAt : new Date(last.occurredAt), id: last.id };
+  }
 
   if (ctx.provenance) {
-    // E.5: capture the ACTUAL statement, not a reconstruction of it.
-    let statement = { sql: "", params: [] as unknown[] };
-    try {
-      const q = (query as unknown as { toSQL: () => { sql: string; params: unknown[] } }).toSQL();
-      statement = { sql: q.sql, params: q.params };
-    } catch {
-      // Provenance is diagnostic; never fail a run to record it.
-    }
     ctx.provenance.push({
       appNodeId: node.id,
       foldedFilterNodeIds: folded,

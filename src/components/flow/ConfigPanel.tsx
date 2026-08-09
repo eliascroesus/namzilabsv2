@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { catalogEntry, eventTypeLabel, eventTypeOptions, type FlowConfigField } from "@/connectors/catalog";
+import { catalogEntry, eventTypeLabel, eventTypeOptions, fieldAppliesToEventType, type FlowConfigField } from "@/connectors/catalog";
 import {
   listAppFieldsAction,
   listRecordTypesAction,
@@ -425,8 +425,12 @@ function NodeConfig({
           <>
             {(catalogEntry(conn.source)?.flowFields ?? [])
               .filter((f) => {
-                // A field can be gated on another field's current value (Calendly's Group
-                // only shows once scope = A specific group).
+                // Two gates. A field can depend on another field's value
+                // (Calendly's Group appears once scope = a specific group),
+                // and a field can belong to ONE record kind (Close's Pipeline
+                // exists only on opportunities — offering it elsewhere was a
+                // guaranteed "0 loaded").
+                if (!fieldAppliesToEventType(f, typeof cfg.eventType === "string" ? cfg.eventType : null)) return false;
                 if (!f.showWhen) return true;
                 const sc = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
                 return String(sc[f.showWhen.key] ?? "") === f.showWhen.equals;
@@ -968,7 +972,20 @@ function RecordTypeField({
         // value always retained, labels humanized with the raw string as
         // hint, sorted by label.
         options={[{ value: "", label: "All record types" }, ...eventTypeOptions(conn.source, types, current || null)]}
-        onChange={(v) => onChange({ eventType: v })}
+        onChange={(v) => {
+          // Drop any setting that belongs to the kind of record we just left
+          // (a Pipeline chosen for opportunities means nothing on leads). The
+          // engine ignores such a value anyway; clearing it keeps the saved
+          // config honest about what the step is actually doing.
+          const sc = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
+          const stale = (catalogEntry(conn.source)?.flowFields ?? []).filter(
+            (f) => f.key in sc && !fieldAppliesToEventType(f, v),
+          );
+          if (stale.length === 0) return onChange({ eventType: v });
+          const next = { ...sc };
+          for (const f of stale) delete next[f.key];
+          onChange({ eventType: v, sourceConfig: next });
+        }}
       />
     </Field>
   );

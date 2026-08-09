@@ -464,11 +464,11 @@ describe("read filters — a setting the provider cannot act on", () => {
 });
 
 /**
- * Close's Pipeline read filter — same contract as Calendly's meetingType, on a
- * CONNECTION-scoped source (stream_hash null). The pin that matters: only
- * opportunity records carry a pipeline_id, so setting the filter hides every
- * other record type — which is exactly what the Configure hint promises, and
- * what a wrong pipeline id shows as an honest 0 rather than an error.
+ * Close's Pipeline read filter on a CONNECTION-scoped source (stream_hash
+ * null). Two halves that only make sense together: within opportunity
+ * records it narrows exactly as Calendly's meetingType does, and OUTSIDE
+ * them it does not apply at all — pipelines exist only on opportunities, and
+ * a filter that cannot match must never be the reason a step reads zero.
  */
 describe("Close pipeline read filter", () => {
   const seedClose = async () => {
@@ -493,23 +493,32 @@ describe("Close pipeline read filter", () => {
     }
   };
 
-  const countWith = async (sourceConfig: Record<string, unknown>) => {
+  const countWith = async (sourceConfig: Record<string, unknown>, eventType: string | null = "opportunity_created") => {
     const res = await runFlow(
       { db, orgId: ORG },
       G(
-        [N("a", "app", { connectionId: CONN, source: "close", sourceConfig }), N("agg", "aggregate", { aggregation: "count" }), N("o", "output", {})],
+        [N("a", "app", { connectionId: CONN, source: "close", eventType, sourceConfig }), N("agg", "aggregate", { aggregation: "count" }), N("o", "output", {})],
         [E("a", "agg"), E("agg", "o")],
       ),
     );
     return res.nodes.get("a")!.recordsOut;
   };
 
-  it("narrows to one pipeline's opportunities; unset reads everything; wrong id reads 0", async () => {
+  it("narrows an opportunity step to one pipeline; wrong id reads 0", async () => {
     await seedClose();
-    expect(await countWith({})).toBe(4);
+    expect(await countWith({})).toBe(3); // every opportunity
     expect(await countWith({ pipelineId: "pipe_a" })).toBe(2);
     expect(await countWith({ pipelineId: "pipe_b" })).toBe(1);
-    // Non-opportunity records drop out while the filter is set — the hint's promise.
     expect(await countWith({ pipelineId: "nope" })).toBe(0);
+  });
+
+  it("does NOT apply to a step reading records that have no pipeline", async () => {
+    await seedClose();
+    // The reported bug: a pipeline chosen while the step read opportunities,
+    // left behind after switching to leads/SMS, filtered on a field those
+    // records don't carry — "0 loaded", no explanation. Sabotage: drop the
+    // gate in readFilterConds and both of these collapse to 0.
+    expect(await countWith({ pipelineId: "pipe_a" }, "sms_sent")).toBe(1);
+    expect(await countWith({ pipelineId: "pipe_a" }, null)).toBe(4); // "All record types"
   });
 });
