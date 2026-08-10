@@ -1271,8 +1271,9 @@ function MomentInput({
  * object, offered because the picker lists every field on the connection —
  * removed zero rows with nothing on screen saying so.
  */
-function DedupeOutcome({ d }: { d: { field: string; loaded: number; matched: number; removed: number } }) {
+function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: string; loaded: number; matched: number; removed: number } }) {
   const name = d.field.replace(/^properties\./, "");
+  const orderName = (d.orderField ?? "occurredAt").replace(/^properties\./, "");
   if (d.matched === 0) {
     return (
       <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
@@ -1286,7 +1287,7 @@ function DedupeOutcome({ d }: { d: { field: string; loaded: number; matched: num
     <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-600">
       {d.removed === 0
         ? `No duplicates found — every ${name} was different.`
-        : `Removed ${d.removed.toLocaleString()} duplicate${d.removed === 1 ? "" : "s"}, keeping the most recent of each ${name}.`}
+        : `Removed ${d.removed.toLocaleString()} record${d.removed === 1 ? "" : "s"}, keeping the ${d.keep === "earliest" ? "earliest" : "latest"} ${orderName} of each ${name}.`}
       {partial}
     </p>
   );
@@ -1445,26 +1446,63 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
         <span className={`flex h-4 w-4 items-center justify-center rounded border ${on ? "border-neutral-800 bg-neutral-800 text-white" : "border-neutral-300"}`}>
           {on ? "✓" : ""}
         </span>
-        Remove duplicates
+        Keep one record per…
       </button>
       {on ? (
         <>
-          <Field label="Match duplicates by">
-            <FieldInput value={(cfg.dedupeField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ dedupeField: v })} placeholder="Pick the field that identifies a duplicate…" />
+          {/* WHICH ONE SURVIVES IS ASKED, IN THE SAME BREATH AS THE ORDER IT
+              SURVIVES BY. The old copy said "the newest is kept" in grey below
+              a control called "Match duplicates by" — so someone wanting the
+              first call to each lead ticked the box, got the last one, and
+              read a 24-hour speed-to-lead. Two dropdowns side by side cannot
+              be read backwards. */}
+          <Field label="Keep one record per">
+            <FieldInput value={(cfg.dedupeField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ dedupeField: v })} placeholder="Pick what identifies one thing…" />
+          </Field>
+          <Field label="Keep the one with the">
+            <div className="flex gap-2">
+              <Select
+                value={String(cfg.dedupeKeep ?? "latest")}
+                width={130}
+                options={keepDirectionOptions(orderFieldType(groups, String(cfg.dedupeOrderField ?? "occurredAt")))}
+                onChange={(v) => onChange({ dedupeKeep: v })}
+              />
+              <div className="flex-1">
+                <FieldInput
+                  value={String(cfg.dedupeOrderField ?? "occurredAt")}
+                  groups={groups}
+                  onChange={(v) => onChange({ dedupeOrderField: v })}
+                  placeholder="Pick the field that orders them…"
+                />
+              </div>
+            </div>
           </Field>
           {state.status === "loading" && <p className="text-xs text-neutral-400">Loading your fields…</p>}
           {state.status === "ok" && loaded.length === 0 && (
             <p className="text-xs text-amber-700">No synced records yet — sync or test this step to see its fields.</p>
           )}
-          <p className="text-xs text-neutral-400">
-            Records sharing the same value count as one — the newest is kept, the rest are dropped before anything else runs.
-          </p>
         </>
       ) : (
-        <p className="text-xs text-neutral-400">Drop records that appear more than once, right as they load.</p>
+        <p className="text-xs text-neutral-400">Collapse records that share a value down to one, right as they load.</p>
       )}
     </div>
   );
+}
+
+/**
+ * "Earliest/latest" for a moment, "smallest/largest" for a plain number.
+ * The words have to match the field beside them or the sentence stops reading
+ * as one — "the one with the earliest Duration" is not English.
+ */
+function keepDirectionOptions(fieldType: string | undefined): Array<{ value: string; label: string }> {
+  return fieldType === "number"
+    ? [{ value: "earliest", label: "Smallest" }, { value: "latest", label: "Largest" }]
+    : [{ value: "earliest", label: "Earliest" }, { value: "latest", label: "Latest" }];
+}
+
+function orderFieldType(groups: DataGroup[], path: string): string | undefined {
+  for (const g of groups) for (const f of g.fields) if (f.path === path) return f.type;
+  return undefined;
 }
 
 const DATE_PRESETS: Array<{ value: string; label: string }> = TIME_PRESETS.map((p) => ({ value: p, label: title(p) }));

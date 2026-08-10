@@ -136,6 +136,10 @@ export const FilterConfigSchema = z.object({
 });
 export type FilterConfig = z.infer<typeof FilterConfigSchema>;
 
+/** Which record survives when several share an identity. Always stated, never inferred. */
+export const KEEP_DIRECTIONS = ["earliest", "latest"] as const;
+export type KeepDirection = (typeof KEEP_DIRECTIONS)[number];
+
 // ---------- App ----------
 export const AppConfigSchema = z.object({
   connectionId: z.string().nullable().default(null),
@@ -148,13 +152,22 @@ export const AppConfigSchema = z.object({
    */
   sourceConfig: z.record(z.string(), z.unknown()).default({}),
   /**
-   * Remove duplicates at the source: the FIRST thing that happens to loaded
-   * records, before any later step runs. Records sharing the same `dedupeField`
-   * value collapse to the newest one; records with an empty value always pass
-   * (they can't be duplicates of anything). Replaces the old Combine node.
+   * Keep one record per identity value, at the source — the FIRST thing that
+   * happens to loaded records, before any later step runs. Records with an
+   * empty value always pass (they can't be duplicates of anything).
+   *
+   * WHICH ONE SURVIVES IS ASKED, NOT ASSUMED. This used to keep whichever
+   * record came first out of the database, which happened to be the newest —
+   * a sort order that was invisible, unstated and unaskable. A user wanting
+   * "the first call to each lead" ticked the box and silently got the last
+   * one, and their speed-to-lead read 24 hours instead of 5 minutes. The
+   * defaults below reproduce the old behaviour exactly; the difference is
+   * that both halves are now on screen next to each other.
    */
   dedupe: z.boolean().default(false),
   dedupeField: z.string().default("subject"),
+  dedupeKeep: z.enum(KEEP_DIRECTIONS).default("latest"),
+  dedupeOrderField: z.string().default("occurredAt"),
 });
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 // (identityField, an M1 leftover nothing read, was removed from AppConfigSchema —

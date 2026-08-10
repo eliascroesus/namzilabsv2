@@ -248,11 +248,11 @@ describe("dedupe says what it actually did", () => {
     // Sabotage: return a bare array from dedupeRecords and this is undefined —
     // the step reports "3 loaded", the box stays ticked, and nothing anywhere
     // says the field matched nothing.
-    expect(await dedupeOn("properties.data.number")).toEqual({ field: "properties.data.number", loaded: 3, matched: 0, removed: 0 });
+    expect(await dedupeOn("properties.data.number")).toMatchObject({ field: "properties.data.number", loaded: 3, matched: 0, removed: 0 });
   });
 
   it("a field that does exist reports what it removed", async () => {
-    expect(await dedupeOn("properties.data.phone")).toEqual({ field: "properties.data.phone", loaded: 3, matched: 3, removed: 1 });
+    expect(await dedupeOn("properties.data.phone")).toMatchObject({ field: "properties.data.phone", loaded: 3, matched: 3, removed: 1 });
   });
 
   it("a field present on only some records reports the gap, because those all survive", async () => {
@@ -266,7 +266,7 @@ describe("dedupe says what it actually did", () => {
       occurredAt: new Date(T0 + 3 * 60_000),
       properties: {}, // no data.phone — an empty key always passes
     });
-    expect(await dedupeOn("properties.data.phone")).toEqual({ field: "properties.data.phone", loaded: 4, matched: 3, removed: 1 });
+    expect(await dedupeOn("properties.data.phone")).toMatchObject({ field: "properties.data.phone", loaded: 4, matched: 3, removed: 1 });
   });
 });
 

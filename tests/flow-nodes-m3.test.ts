@@ -379,3 +379,123 @@ describe("Paths node", () => {
     expect(r.nodes.get("f2")!.recordsOut).toBe(2);
   });
 });
+
+/**
+ * WHICH DUPLICATE SURVIVES IS ASKED, NOT INHERITED FROM THE LOAD ORDER.
+ *
+ * "Keep one per lead" used to mean "keep whichever the database handed over
+ * first", which happened to be the newest — a sort order living in a
+ * different function, never shown and never askable. A founder wanting the
+ * FIRST call to each lead ticked the box, got the last one, and their
+ * speed-to-lead read 24 hours instead of 5 minutes.
+ */
+describe("keep one per group states its own order", () => {
+  const threeCalls = async () => {
+    await ev({ eventType: "call", subject: "+1914", daysAgo: 5, properties: { v: "first" } });
+    await ev({ eventType: "call", subject: "+1914", daysAgo: 2, properties: { v: "middle" } });
+    await ev({ eventType: "call", subject: "+1914", daysAgo: 1, properties: { v: "last" } });
+  };
+  const keptValue = async (over: Record<string, unknown>) => {
+    const g = G([N("a", "app", { connectionId: CONN, dedupe: true, dedupeField: "subject", ...over })], []);
+    const r = await run(g);
+    const sample = (r.nodes.get("a") as { sample: Array<{ properties: Record<string, unknown> }> }).sample;
+    return sample[0].properties.v;
+  };
+
+  it("earliest keeps the FIRST record — the thing dedupe could never say", async () => {
+    await threeCalls();
+    // Sabotage: go back to keep-first-seen on a newest-first stream and this
+    // returns "last". That single line is the 1,446-minute speed-to-lead.
+    expect(await keptValue({ dedupeKeep: "earliest", dedupeOrderField: "occurredAt" })).toBe("first");
+  });
+
+  it("latest is the default, so no existing flow's number moves", async () => {
+    await threeCalls();
+    expect(await keptValue({})).toBe("last");
+    expect(await keptValue({ dedupeKeep: "latest", dedupeOrderField: "occurredAt" })).toBe("last");
+  });
+
+  it("orders by any field, not just when the record happened", async () => {
+    await ev({ eventType: "call", subject: "+1914", daysAgo: 1, properties: { dur: 30, v: "short" } });
+    await ev({ eventType: "call", subject: "+1914", daysAgo: 5, properties: { dur: 900, v: "long" } });
+    // Sabotage: read occurredAt regardless of the chosen field and the longest
+    // call is unreachable — you can only ever order by when it happened.
+    expect(await keptValue({ dedupeKeep: "latest", dedupeOrderField: "properties.dur" })).toBe("long");
+    expect(await keptValue({ dedupeKeep: "earliest", dedupeOrderField: "properties.dur" })).toBe("short");
+  });
+
+  it("the survivor is emitted where its group first appeared — the stream is not reordered", async () => {
+    // Sabotage: emit at the winner's own position and the dataset comes back
+    // in a different order than it loaded, which quietly changes the preview,
+    // the "latest 3 records" contract, and anything downstream reading order.
+    await ev({ eventType: "call", subject: "b", daysAgo: 1 });
+    await ev({ eventType: "call", subject: "a", daysAgo: 2 });
+    await ev({ eventType: "call", subject: "a", daysAgo: 9 });
+    const g = G([N("x", "app", { connectionId: CONN, dedupe: true, dedupeField: "subject", dedupeKeep: "earliest" })], []);
+    const shape = (await run(g)).nodes.get("x") as { sample: Array<{ subject: string | null }> };
+    expect(shape.sample.map((s) => s.subject)).toEqual(["b", "a"]); // newest-first, as loaded
+  });
+
+  it("a record with no orderable value never beats one that has it", async () => {
+    await ev({ eventType: "call", subject: "+1914", daysAgo: 3, properties: { dur: 60, v: "has" } });
+    await ev({ eventType: "call", subject: "+1914", daysAgo: 1, properties: { v: "none" } });
+    // Sabotage: treat a missing value as 0 and "none" wins every "earliest"
+    // comparison, so the answer is decided by absent data.
+    expect(await keptValue({ dedupeKeep: "earliest", dedupeOrderField: "properties.dur" })).toBe("has");
+    expect(await keptValue({ dedupeKeep: "latest", dedupeOrderField: "properties.dur" })).toBe("has");
+  });
+
+  it("the receipt says which direction it actually used", async () => {
+    await threeCalls();
+    const g = G([N("a", "app", { connectionId: CONN, dedupe: true, dedupeField: "subject", dedupeKeep: "earliest" })], []);
+    const rep = (await run(g)).nodes.get("a") as { dedupe?: { keep: string; removed: number; orderField: string } };
+    expect(rep.dedupe).toMatchObject({ keep: "earliest", orderField: "occurredAt", removed: 2 });
+  });
+});
+
+/**
+ * The proof that nobody's published number moves: the new comparator, on its
+ * defaults, reproduces the old keep-first-seen-on-a-newest-first-stream
+ * algorithm exactly — including how it broke ties.
+ */
+describe("the rewrite is behaviour-identical on its defaults", () => {
+  it("matches the old algorithm over 500 records with heavy duplication and ties", async () => {
+    const { keepOnePerGroup } = await import("@/lib/flow/engine");
+    const T0 = Date.parse("2026-01-01T00:00:00Z");
+    // Deterministic pseudo-random: 40 groups over 500 records, and timestamps
+    // drawn from only 25 distinct values so ties are everywhere.
+    let seed = 7;
+    const rnd = (n: number) => (seed = (seed * 1103515245 + 12345) % 2147483648) % n;
+    const records = Array.from({ length: 500 }, (_, i) => ({
+      id: `r${i}`,
+      source: "close",
+      connectionId: "c",
+      eventType: "call",
+      subject: `g${rnd(40)}`,
+      occurredAt: new Date(T0 + rnd(25) * 3_600_000),
+      value: null,
+      currency: null,
+      properties: {},
+    }));
+    // Newest-first, exactly as execApp loads them.
+    records.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime() || (a.id < b.id ? 1 : -1));
+
+    const old = (() => {
+      const seen = new Set<string>();
+      const out: typeof records = [];
+      for (const r of records) {
+        const k = String(r.subject ?? "").trim();
+        if (k === "") { out.push(r); continue; }
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push(r);
+      }
+      return out.map((r) => r.id);
+    })();
+
+    const next = keepOnePerGroup(records as never[], { groupField: "subject", keep: "latest", orderField: "occurredAt" }).records.map((r) => r.id);
+    // Sabotage: use `>=` instead of `>` in the comparator and ties flip to the
+    // last-encountered record, diverging from every published number.
+    expect(next).toEqual(old);
+  });
+});

@@ -31,6 +31,7 @@ import {
   type Series,
   type Grouped,
   type TileSpec,
+  type KeepDirection,
 } from "./types";
 
 export type EngineCtx = {
@@ -497,15 +498,14 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
   }
 
   let records = rows.map(eventToRecord);
-  // Remove duplicates at the source — the FIRST thing that happens, before any
-  // later step runs, so a duplicate never costs downstream work. Records are
-  // newest-first here, so "keep the first seen" keeps the most recent copy.
+  // Keep one per identity at the source — the FIRST thing that happens, before
+  // any later step runs, so a duplicate never costs downstream work.
   let dedupe: DedupeReport | undefined;
   if (cfg.dedupe) {
     const field = cfg.dedupeField || "subject";
-    const res = dedupeRecords(records, field);
+    const res = keepOnePerGroup(records, { groupField: field, keep: cfg.dedupeKeep, orderField: cfg.dedupeOrderField });
     records = res.records;
-    dedupe = { field, loaded: res.loaded, matched: res.matched, removed: res.removed };
+    dedupe = { field, keep: cfg.dedupeKeep, orderField: cfg.dedupeOrderField, ...res.report };
   }
   const exec = dedupe ? { ...datasetExec("app", node.id, records, rows.length), dedupe } : datasetExec("app", node.id, records, rows.length);
   // Never silently truncate: if the ceiling was actually hit, the node says so.
@@ -516,33 +516,69 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
 }
 
 /**
- * Keep one record per identity value (the newest); empty identities always pass.
+ * Keep one record per identity value; empty identities always pass.
  *
- * It also COUNTS how many records the field actually resolved on, and that
- * count is the point. A dedupe field that exists nowhere in the data removes
- * nothing, raises nothing and looks identical to a dedupe that found no
- * duplicates — which is how a Close user matched calls on `data.number`, a
- * field belonging to a different Close object entirely, and got a silent
- * no-op with the box ticked.
+ * WHICH ONE SURVIVES IS COMPARED, NOT INHERITED. This used to keep whichever
+ * record it saw first and rely on `execApp` loading newest-first — a sort
+ * order that lived in a different function, was never shown to anyone, and
+ * could not be asked for. Someone who wanted the FIRST call to each lead
+ * ticked the box, got the last one, and read a 24-hour speed-to-lead. Now the
+ * ordering field and the direction are both arguments, so the answer is
+ * whatever the panel says it is.
+ *
+ * It also COUNTS how many records the group field actually resolved on. A
+ * field that exists nowhere in the data removes nothing, raises nothing, and
+ * looks identical to a dedupe that found no duplicates — which is how a Close
+ * user matched calls on `data.number`, a field belonging to a different Close
+ * object entirely, and got a silent no-op with the box ticked.
  */
-export type DedupeReport = { field: string; loaded: number; matched: number; removed: number };
+export type DedupeReport = { field: string; keep: KeepDirection; orderField: string; loaded: number; matched: number; removed: number };
 
-function dedupeRecords(records: FlowRecord[], field: string): { records: FlowRecord[]; loaded: number; matched: number; removed: number } {
-  const seen = new Set<string>();
-  const out: FlowRecord[] = [];
+export function keepOnePerGroup(
+  records: FlowRecord[],
+  cfg: { groupField: string; keep: KeepDirection; orderField: string },
+): { records: FlowRecord[]; report: { loaded: number; matched: number; removed: number } } {
+  // Position is kept so the survivor is emitted where its group FIRST appeared.
+  // The dataset's order is load-bearing downstream (topPreview, the newest-first
+  // contract execApp documents), so choosing a different record must not also
+  // reorder the stream.
+  const best = new Map<string, { rec: FlowRecord; at: number | null; pos: number }>();
+  const passthrough: Array<{ rec: FlowRecord; pos: number }> = [];
   let matched = 0;
-  for (const r of records) {
-    const key = String(getField(r, field) ?? "").trim();
+  records.forEach((r, pos) => {
+    const key = String(getField(r, cfg.groupField) ?? "").trim();
     if (key === "") {
-      out.push(r);
-      continue;
+      // No identity, so it cannot be a duplicate of anything.
+      passthrough.push({ rec: r, pos });
+      return;
     }
     matched++;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(r);
-  }
-  return { records: out, loaded: records.length, matched, removed: records.length - out.length };
+    const at = orderValue(r, cfg.orderField);
+    const cur = best.get(key);
+    if (!cur) {
+      best.set(key, { rec: r, at, pos });
+      return;
+    }
+    // A record with no orderable value never beats one that has it; a group
+    // where nothing is orderable keeps the first it saw.
+    if (at == null) return;
+    // Strictly better only. `>=` here would reverse tie order, and a tie is
+    // exactly what the old load-order rule already decided.
+    const better = cur.at == null || (cfg.keep === "latest" ? at > cur.at : at < cur.at);
+    if (better) best.set(key, { rec: r, at, pos: cur.pos });
+  });
+
+  const merged = [...passthrough, ...[...best.values()].map((b) => ({ rec: b.rec, pos: b.pos }))];
+  merged.sort((a, b) => a.pos - b.pos);
+  const out = merged.map((m) => m.rec);
+  return { records: out, report: { loaded: records.length, matched, removed: records.length - out.length } };
+}
+
+/** A field's value as something orderable: a moment, or a plain number. */
+function orderValue(r: FlowRecord, field: string): number | null {
+  const v = getField(r, field);
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  return dateMs(v);
 }
 
 // ---------- Filter ----------
