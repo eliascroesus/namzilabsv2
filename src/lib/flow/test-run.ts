@@ -63,6 +63,11 @@ export type NodeTestDTO = {
    * never matched used to vanish without a number anywhere.
    */
   pairing?: { keys: number; started: number; matched: number; noStop: number; stopBeforeStart: number };
+  /**
+   * The read hit the safety ceiling. The engine has always set this and the
+   * DTO always dropped it, so a capped count was reported as a complete total.
+   */
+  truncated?: boolean;
 };
 
 /** Shape one engine result into the compact DTO the editor renders. */
@@ -80,6 +85,7 @@ function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTest
     value: exec.shape.kind === "scalar" ? exec.shape.value : undefined,
     dedupe: exec.dedupe,
     pairing: exec.pairing,
+    truncated: exec.truncated,
   };
 }
 

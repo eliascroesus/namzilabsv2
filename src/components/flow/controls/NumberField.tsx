@@ -1,0 +1,65 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+const INPUT =
+  "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm transition-colors placeholder:text-neutral-400 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100";
+
+/**
+ * A number input that can be cleared without emitting a non-number.
+ *
+ * The plain `<input type="number">` it replaces did `Number(e.target.value)`,
+ * and `Number("")` is `NaN`. Clearing the Decimals box in Review & publish
+ * therefore wrote NaN into the metric spec, which fails the graph's schema —
+ * so the autosave of that edit and of EVERY edit after it silently failed,
+ * announced only as the word "Save failed" in grey twelve-point text styled
+ * exactly like "Saved". The work was gone until someone happened to refill
+ * the box.
+ *
+ * The text lives here, locally, and only a finite number is ever handed
+ * upward. An empty box is either null (when the caller allows it) or simply
+ * nothing at all — never NaN.
+ */
+export function NumberField({
+  value,
+  onChange,
+  min,
+  allowNull = false,
+  placeholder,
+  className,
+}: {
+  value: number | null | undefined;
+  onChange: (n: number | null) => void;
+  min?: number;
+  allowNull?: boolean;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [text, setText] = useState(value == null ? "" : String(value));
+  useEffect(() => {
+    setText(value == null ? "" : String(value));
+  }, [value]);
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={text}
+      placeholder={placeholder}
+      onChange={(e) => {
+        const t = e.target.value;
+        if (!/^-?\d*\.?\d*$/.test(t)) return;
+        setText(t);
+        if (t === "" || t === "-" || t === ".") {
+          if (allowNull) onChange(null);
+          return;
+        }
+        const n = Number(t);
+        if (Number.isFinite(n)) onChange(min != null ? Math.max(min, n) : n);
+      }}
+      onBlur={() => {
+        if (text.trim() === "" && !allowNull) setText(value == null ? "" : String(value));
+      }}
+      className={`${INPUT} ${className ?? ""}`}
+    />
+  );
+}

@@ -179,6 +179,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
   const [publishState, setPublishState] = useState<{ status: string; version: number | null }>({ status, version: publishedVersion });
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishIssues, setPublishIssues] = useState<Array<{ nodeId?: string; message: string }>>([]);
   const [publishWarning, setPublishWarning] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -200,9 +201,23 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     return {
       nodes: nodes.map((n) => ({ id: n.id, type: String(n.type), position: n.position, data: { config: n.data.config, label: n.data.label, lastTest: n.data.lastTest ?? undefined } })),
       edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null })),
-      metrics,
+      // A non-finite number fails the graph schema, which fails the autosave
+      // of this edit and every edit after it. The inputs can no longer produce
+      // one; this is the belt, so no future input can either.
+      metrics: metrics.map((m) => ({
+        ...m,
+        precision: Number.isFinite(m.precision) ? m.precision : 0,
+        target: m.target != null && Number.isFinite(m.target) ? m.target : null,
+      })),
     };
   }, [nodes, edges, metrics]);
+
+  /** Save immediately, for the Retry the failure banner offers. */
+  const saveNow = useCallback(async () => {
+    setSaveState("saving");
+    const r = await saveDraftAction(flowId, toGraph());
+    setSaveState(r.ok ? "saved" : "error");
+  }, [flowId, toGraph]);
 
   // Autosave the draft (debounced). Never affects the published version.
   const firstRun = useRef(true);
@@ -723,6 +738,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const publish = useCallback(async () => {
     setPublishing(true);
     setPublishError(null);
+    setPublishIssues([]);
     setPublishWarning(null);
     await saveDraftAction(flowId, toGraph());
     const r = await publishFlowAction(flowId);
@@ -732,6 +748,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       else setReviewOpen(false);
     } else {
       setPublishError(r.error);
+      setPublishIssues(r.issues ?? []);
     }
     setPublishing(false);
   }, [flowId, toGraph]);
@@ -1012,9 +1029,21 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             onChange={(e) => onRename(e.target.value)}
             className="rounded border border-transparent px-2 py-1 text-sm font-medium hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
           />
-          <span className="text-xs text-neutral-400">
-            {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed" : "Unsaved"}
-          </span>
+          {saveState === "error" ? (
+            // It used to say "Save failed" in the same grey twelve-point as
+            // "Saved", so losing every edit since the last good one looked
+            // identical to everything being fine.
+            <span className="flex items-center gap-2 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700">
+              Not saved — your changes are only in this tab
+              <button type="button" onClick={saveNow} className="underline underline-offset-2 hover:no-underline">
+                Retry
+              </button>
+            </span>
+          ) : (
+            <span className="text-xs text-neutral-400">
+              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Unsaved"}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <ToolButton onClick={undo}>Undo</ToolButton>
@@ -1028,7 +1057,31 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         </div>
       </header>
 
-      {publishError && !reviewOpen && <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">Can&rsquo;t publish: {publishError}</div>}
+      {publishError && !reviewOpen && (
+        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+          <p>{publishError}</p>
+          {/* One line per issue, each pointing at the step that caused it. The
+              whole list used to be joined into a single string with no step
+              named, prefixed twice: "Can't publish: Cannot publish: A; B; C". */}
+          <ul className="mt-1 space-y-0.5">
+            {publishIssues.map((iss, i) => (
+              <li key={i}>
+                {iss.nodeId ? (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedId(iss.nodeId!); setPublishError(null); }}
+                    className="text-left underline underline-offset-2 hover:no-underline"
+                  >
+                    {iss.message}
+                  </button>
+                ) : (
+                  iss.message
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {publishWarning && (
         <div className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
           <span>{publishWarning}</span>

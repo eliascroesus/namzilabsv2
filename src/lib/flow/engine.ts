@@ -1,4 +1,5 @@
 import { and, desc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
+import { ZodError } from "zod";
 import { connections, events } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { eventToRecord, getField, toNumber, STANDARD_FIELDS, type FlowRecord } from "./records";
@@ -209,8 +210,29 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
         return err(`The "${node.type}" node isn't available yet.`);
     }
   } catch (e) {
-    return err(e instanceof Error ? e.message : String(e));
+    return err(configErrorMessage(e));
   }
+}
+
+/**
+ * A step's error, in a sentence.
+ *
+ * A `ZodError`'s `.message` in zod v4 IS the JSON issues array, and it went
+ * straight onto the node card and into the Test panel. The most ordinary state
+ * in the whole builder produced it: click "+ Add condition", don't fill the
+ * field in yet, hit Test, and read `[{"code":"too_small","minimum":1,...`.
+ */
+function configErrorMessage(e: unknown): string {
+  if (e instanceof ZodError) {
+    const issue = e.issues[0];
+    const path = (issue?.path ?? []).map(String);
+    if (path[0] === "rules") return "A condition on this step has no field chosen yet.";
+    if (path.includes("categories")) return "A category on this step is missing something — open it and finish the row.";
+    if (path.includes("paths")) return "A branch on this step is missing something — open it and finish the row.";
+    const where = path.length > 0 ? ` (${path.join(".")})` : "";
+    return `This step isn't set up yet${where}.`;
+  }
+  return e instanceof Error ? e.message : String(e);
 }
 
 // ---------- App ----------

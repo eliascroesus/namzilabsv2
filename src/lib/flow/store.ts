@@ -3,7 +3,7 @@ import { flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { CapError, flowCap } from "@/lib/limits";
 import { parseGraph, type FlowGraph } from "./types";
-import { validateGraph } from "./validate";
+import { validateGraph, type ValidationIssue } from "./validate";
 
 export type Flow = typeof flows.$inferSelect;
 export type FlowVersion = typeof flowVersions.$inferSelect;
@@ -67,15 +67,27 @@ export async function deleteFlow(db: DB, orgId: string, id: string): Promise<voi
  * dashboard only reads published versions, so this is the single moment a flow's
  * dashboard output can change.
  */
+/**
+ * Publish refused, and it knows which steps refused it.
+ *
+ * Every issue carries a nodeId and every one of them used to be thrown away
+ * into a single joined string, so the user read "Can't publish: Cannot
+ * publish: A; B; C" — doubly prefixed, and pointing at nothing on the canvas.
+ */
+export class PublishBlocked extends Error {
+  constructor(readonly issues: ValidationIssue[]) {
+    super(`Cannot publish: ${issues.map((i) => i.message).join("; ")}`);
+    this.name = "PublishBlocked";
+  }
+}
+
 export async function publishFlow(db: DB, orgId: string, id: string): Promise<{ version: number }> {
   const flow = await getFlow(db, orgId, id);
   if (!flow) throw new Error("flow not found");
 
   const graph = parseGraph(flow.draftGraph);
   const issues = validateGraph(graph);
-  if (issues.length > 0) {
-    throw new Error(`Cannot publish: ${issues.map((i) => i.message).join("; ")}`);
-  }
+  if (issues.length > 0) throw new PublishBlocked(issues);
 
   const [{ maxV }] = await db
     .select({ maxV: sql<number>`coalesce(max(${flowVersions.version}), 0)::int` })

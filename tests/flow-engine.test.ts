@@ -625,3 +625,27 @@ describe("a step's field list is what the app has, not what this run loaded", ()
     expect(groups.flatMap((g) => g.fields.map((x) => x.path))).toContain("properties.pipeline_id");
   });
 });
+
+/**
+ * A ZodError's `.message` in zod v4 IS the JSON issues array, and it went
+ * straight onto the node card. The most ordinary half-built state in the
+ * product produced it: add a condition, don't fill the field in, hit Test.
+ */
+describe("a step's error is a sentence, never the parser's internals", () => {
+  it("an unfinished condition reads as English", async () => {
+    await ev({ eventType: "row_added", subject: "a@b.com" });
+    const g = parseGraph({
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN } } },
+        { id: "f", type: "filter", data: { config: { combinator: "and", rules: [{ field: "", op: "equals", value: "x", valueKind: "fixed" }] } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "f" }],
+    });
+    const exec = (await runFlow({ db, orgId: ORG }, g)).nodes.get("f")!;
+    expect(exec.status).toBe("error");
+    // Sabotage: return e.message from the ZodError and the card shows
+    // [{"code":"too_small","minimum":1,...}] to a non-technical user.
+    expect((exec as { error: string }).error).toBe("A condition on this step has no field chosen yet.");
+    expect((exec as { error: string }).error).not.toMatch(/[[{]/);
+  });
+});

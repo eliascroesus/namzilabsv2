@@ -1,5 +1,6 @@
 "use server";
 
+import { PublishBlocked } from "@/lib/flow/store";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
@@ -331,7 +332,7 @@ export async function refreshFlowAction(formData: FormData): Promise<void> {
 
 export async function publishFlowAction(
   id: string,
-): Promise<{ ok: true; version: number; warning?: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; version: number; warning?: string } | { ok: false; error: string; issues?: Array<{ nodeId?: string; message: string }> }> {
   const { orgId } = await requireOrg();
 
   // Publishing (validate + immutable version snapshot) is the only step that can
@@ -340,6 +341,9 @@ export async function publishFlowAction(
   try {
     ({ version } = await publishFlow(getDb(), orgId, id));
   } catch (e) {
+    // Each issue keeps its nodeId so the editor can ring the step that caused
+    // it, instead of concatenating everything into one unattributable line.
+    if (e instanceof PublishBlocked) return { ok: false, error: "This flow isn't ready to publish yet.", issues: e.issues };
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 

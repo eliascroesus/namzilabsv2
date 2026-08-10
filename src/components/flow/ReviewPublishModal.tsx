@@ -3,6 +3,7 @@
 import type { MetricSpecT } from "./graph-utils";
 import { Select } from "./controls";
 import { formatMetricValue } from "@/lib/format";
+import { NumberField } from "./controls/NumberField";
 
 /**
  * Only what the dashboard tile HONESTLY renders. "Line" and "Table" used to
@@ -154,18 +155,22 @@ export function ReviewPublishModal({
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Decimals</span>
-                        <input type="number" value={m.precision} onChange={(e) => set(ep.nodeId, { precision: Number(e.target.value) })} className={inputCls} />
+                        {/* Not <input type="number">: Number("") is NaN, and a
+                            NaN here fails the graph schema, so clearing this
+                            box silently killed the autosave of this edit and
+                            every edit after it. */}
+                        <NumberField value={m.precision} min={0} onChange={(n) => set(ep.nodeId, { precision: n ?? 0 })} />
                       </label>
                       <label className="block">
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Goal / target</span>
                         {/* The goal is in the metric's own format: % for percentages, $ for currency. */}
                         <div className="relative">
                           {m.format === "currency" && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400">$</span>}
-                          <input
-                            type="number"
-                            value={m.target ?? ""}
-                            onChange={(e) => set(ep.nodeId, { target: e.target.value === "" ? null : Number(e.target.value) })}
-                            className={`${inputCls} ${m.format === "currency" ? "pl-6" : ""} ${m.format === "percent" ? "pr-7" : ""}`}
+                          <NumberField
+                            value={m.target}
+                            allowNull
+                            onChange={(n) => set(ep.nodeId, { target: n })}
+                            className={`${m.format === "currency" ? "pl-6" : ""} ${m.format === "percent" ? "pr-7" : ""}`}
                           />
                           {m.format === "percent" && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400">%</span>}
                         </div>

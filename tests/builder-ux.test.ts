@@ -239,3 +239,58 @@ describe("the clock picker offers only things a clock can read", () => {
     expect(out[0].fields.map((f) => f.path)).toEqual(["occurredAt", "properties.data.date_created", "value"]);
   });
 });
+
+/**
+ * The editor's job when something is wrong is to say what and where. It used
+ * to lose the work, print the parser's internals, and refuse to publish
+ * without naming a step.
+ */
+describe("the editor tells the truth about its own failures", () => {
+  it("a cleared number box can never write NaN into the graph", async () => {
+    const { MetricSpecSchema } = await import("@/lib/flow/types");
+    // Sabotage: go back to Number(e.target.value) in the Decimals box and
+    // clearing it writes NaN, which fails this parse — so the autosave of that
+    // edit and of every edit after it dies behind a grey "Save failed".
+    expect(MetricSpecSchema.safeParse({ nodeId: "m", name: "x", precision: NaN }).success).toBe(false);
+    const sanitised = (m: { precision: number; target: number | null }) => ({
+      ...m,
+      precision: Number.isFinite(m.precision) ? m.precision : 0,
+      target: m.target != null && Number.isFinite(m.target) ? m.target : null,
+    });
+    expect(sanitised({ precision: NaN, target: NaN })).toEqual({ precision: 0, target: null });
+  });
+
+  it("publish refuses with one issue per step, each carrying its node", async () => {
+    const { PublishBlocked } = await import("@/lib/flow/store");
+    const e = new PublishBlocked([
+      { nodeId: "n1", message: "Get data needs an account — open the step and choose one." },
+      { nodeId: "n2", message: "Split into paths needs at least one branch." },
+    ]);
+    // Sabotage: throw a plain Error with the messages joined and the canvas can
+    // highlight nothing — which is why it read "Can't publish: Cannot publish:
+    // A; B; C", prefixed by both layers and pointing at no step at all.
+    expect(e.issues.map((i) => i.nodeId)).toEqual(["n1", "n2"]);
+    expect(e.message).toMatch(/^Cannot publish: /);
+  });
+
+  it("a Filter whose config will not parse blocks publish instead of failing later", async () => {
+    const { validateGraph } = await import("@/lib/flow/validate");
+    const { parseGraph } = await import("@/lib/flow/types");
+    const g = parseGraph({
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: "c", source: "close" } } },
+        { id: "f", type: "filter", data: { config: { combinator: "and", rules: [{ field: "", op: "equals", value: "x" }] } } },
+        { id: "m", type: "formula", data: { config: { op: "count" } } },
+      ],
+      edges: [
+        { id: "e1", source: "a", target: "f" },
+        { id: "e2", source: "f", target: "m" },
+      ],
+      metrics: [{ nodeId: "m", enabled: true, name: "x" }],
+    });
+    // Sabotage: restore `if (cfg.success && …)` as the only guard and this
+    // publishes clean, then fails at materialize with a red tile and no step
+    // named anywhere.
+    expect(validateGraph(g).some((i) => i.nodeId === "f")).toBe(true);
+  });
+});

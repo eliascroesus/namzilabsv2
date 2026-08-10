@@ -152,6 +152,10 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
 
     if (node.type === "filter") {
       const cfg = FilterConfigSchema.safeParse(node.data.config ?? {});
+      // A config that will not parse used to raise NOTHING — every guard here
+      // was `if (cfg.success && …)`, so the flow published and then failed at
+      // materialize with a red tile and no step named.
+      if (!cfg.success) issues.push({ nodeId: node.id, message: "This Filter isn't finished — open it and complete its conditions." });
       if (cfg.success && mappedRuleGaps(cfg.data) > 0) {
         issues.push({ nodeId: node.id, message: "A condition compares against a field, but no field is chosen." });
       }
@@ -208,15 +212,17 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
 
     if (node.type === "group") {
       const cfg = GroupConfigSchema.safeParse(node.data.config ?? {});
-      if (cfg.success && cfg.data.mode === "categories" && cfg.data.categories.length === 0) {
-        issues.push({ nodeId: node.id, message: "Group node needs at least one category." });
+      if (!cfg.success) {
+        issues.push({ nodeId: node.id, message: "This Group step isn't finished — open it and complete its categories." });
+      } else if (cfg.success && cfg.data.mode === "categories" && cfg.data.categories.length === 0) {
+        issues.push({ nodeId: node.id, message: "Group needs at least one category." });
       } else if (cfg.success && cfg.data.mode === "categories" && cfg.data.categories.reduce((a, c) => a + mappedRuleGaps(c.filters), 0) > 0) {
         issues.push({ nodeId: node.id, message: "A category condition compares against a field, but no field is chosen." });
       }
     }
 
     if (node.type === "output" && ins.length === 0) {
-      issues.push({ nodeId: node.id, message: "Output node needs a connected input." });
+      issues.push({ nodeId: node.id, message: "Show on dashboard needs a connected input." });
     }
   }
 

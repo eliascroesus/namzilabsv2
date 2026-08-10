@@ -27,6 +27,7 @@ import {
 } from "@/lib/flow/types";
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
 import { computeNodeStatus, STD_META } from "./graph-utils";
+import { NumberField } from "./controls/NumberField";
 import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
 import { RecordSamplePicker } from "./RecordSamplePicker";
 import { DataIcon, NodeIcon } from "./icons";
@@ -84,37 +85,6 @@ const title = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUppe
  * Empty input never snaps back to a forced value (the old `Number(x) || 1` bug), and
  * `min` is only applied to committed numbers — not while typing.
  */
-function NumberField({ value, onChange, min, allowNull = false, placeholder, className }: { value: number | null | undefined; onChange: (n: number | null) => void; min?: number; allowNull?: boolean; placeholder?: string; className?: string }) {
-  const [text, setText] = useState(value == null ? "" : String(value));
-  useEffect(() => {
-    setText(value == null ? "" : String(value));
-  }, [value]);
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={text}
-      placeholder={placeholder}
-      onChange={(e) => {
-        const t = e.target.value;
-        if (!/^-?\d*\.?\d*$/.test(t)) return;
-        setText(t);
-        if (t === "" || t === "-" || t === ".") {
-          if (allowNull) onChange(null);
-          return;
-        }
-        const n = Number(t);
-        if (Number.isFinite(n)) onChange(min != null ? Math.max(min, n) : n);
-      }}
-      onBlur={() => {
-        if (text.trim() === "" && !allowNull) setText(value == null ? "" : String(value));
-      }}
-      className={`${INPUT} ${className ?? ""}`}
-    />
-  );
-}
-
-
 export function ConfigPanel({
   node,
   stepNo,
@@ -1622,6 +1592,11 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
       )}
       {t.dedupe && <DedupeOutcome d={t.dedupe} />}
       {t.pairing && <PairingOutcome p={t.pairing} />}
+      {t.truncated && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+          Only the newest 500,000 records were read, so this number is a floor, not a total. Narrow the step with a date range to measure a complete period.
+        </p>
+      )}
       <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-base font-semibold text-neutral-900">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
