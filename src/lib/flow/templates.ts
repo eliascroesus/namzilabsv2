@@ -97,7 +97,7 @@ function noShowRateCalendly(connectionId: string | null): FlowGraph {
   const conn = { connectionId, source: "calendly", sourceConfig: { scope: "organization" } };
   return parseGraph({
     nodes: [
-      { id: "booked", type: "app", data: { label: "Meetings booked", config: { ...conn, eventType: "booked" } } },
+      { id: "booked", type: "app", data: { label: "Meetings", config: { ...conn, eventType: "booked" } } },
       { id: "noshow", type: "app", data: { label: "No-shows", config: { ...conn, eventType: "no_show" } } },
       { id: "countb", type: "formula", data: { label: "Booked count", config: { op: "count", field: "value", distinctField: "subject" } } },
       { id: "countn", type: "formula", data: { label: "No-show count", config: { op: "count", field: "value", distinctField: "subject" } } },
@@ -121,7 +121,18 @@ function noShowRateCalendly(connectionId: string | null): FlowGraph {
   });
 }
 
-/** Bookings this month: one number, windowed by the filter's date range. */
+/**
+ * Meetings HAPPENING this month, windowed by the filter's date range.
+ *
+ * It was called "Bookings this month" and it never counted bookings. A
+ * Calendly record's `occurredAt` is the meeting's START TIME, not when it was
+ * booked (see the connector's mapping), so windowing on it answers "how many
+ * meetings are on the calendar this month" — a real and useful question, and
+ * not the one the name asked. Booking date lives at `properties.booked_at`;
+ * counting on that is a different template, and it carries a caveat, because
+ * Calendly is synced over a start-time window, so a meeting booked in August
+ * for a date already past may not be stored at all.
+ */
 function bookingsThisMonthCalendly(connectionId: string | null): FlowGraph {
   const conn = { connectionId, source: "calendly", sourceConfig: { scope: "organization" } };
   return parseGraph({
@@ -131,17 +142,17 @@ function bookingsThisMonthCalendly(connectionId: string | null): FlowGraph {
         id: "window",
         type: "filter",
         data: {
-          label: "This month only",
+          label: "Happening this month",
           config: { combinator: "and", rules: [], dateRange: { enabled: true, dateField: "occurredAt", mode: "preset", preset: "this_month" } },
         },
       },
-      { id: "count", type: "formula", data: { label: "Bookings", config: { op: "count", field: "value", distinctField: "subject" } } },
+      { id: "count", type: "formula", data: { label: "Meetings", config: { op: "count", field: "value", distinctField: "subject" } } },
     ],
     edges: [
       { id: "booked->window", source: "booked", target: "window" },
       { id: "window->count", source: "window", target: "count" },
     ],
-    metrics: [{ nodeId: "count", enabled: true, name: "Bookings this month", viz: "number", format: "number", precision: 0 }],
+    metrics: [{ nodeId: "count", enabled: true, name: "Meetings this month", viz: "number", format: "number", precision: 0 }],
   });
 }
 
@@ -187,8 +198,9 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
   },
   {
     id: "bookings-this-month-calendly",
-    name: "Bookings this month (Calendly)",
-    description: "One number: meetings booked since the 1st. The date window lives on the Filter step.",
+    name: "Meetings this month (Calendly)",
+    description:
+      "One number: meetings taking place this month. Calendly dates records by when the meeting starts, so this counts what is on the calendar — for meetings booked this month, window on booked_at instead.",
     source: "calendly",
     build: bookingsThisMonthCalendly,
   },

@@ -1563,12 +1563,42 @@ function DateRangeSection({ cfg, groups, onChange }: { cfg: Record<string, unkno
                   <Field label="To"><input type="date" value={dr.to ?? ""} onChange={(e) => set({ to: e.target.value })} className={INPUT} /></Field>
                 </div>
               )}
+              {/* THE WINDOW SAYS WHAT IT INCLUDES. A date range is the one
+                  control whose meaning cannot be read off its own inputs:
+                  "to 31 Aug" could reasonably mean midnight or midnight-plus-
+                  a-day, and it silently meant the first. Printing the resolved
+                  window is a permanent answer to "did this change?" that no
+                  one-off announcement can be. */}
+              <p className="text-xs text-neutral-400">{describeWindow(mode, dr)}</p>
             </div>
           )}
         </div>
       )}
     </div>
   );
+}
+
+/**
+ * The resolved window, in words. Presets that are still running say so — a
+ * period that ends at "now" compared against a finished one always reads low,
+ * which is what makes a week-over-week built from `this_week` and `last_week`
+ * structurally negative on every day except Sunday.
+ */
+const RUNNING_PRESETS = new Set(["today", "this_week", "this_month"]);
+
+function describeWindow(mode: string, dr: { preset?: string; days?: number; from?: string; to?: string }): string {
+  if (mode === "rolling") return `Includes the last ${dr.days ?? 30} days, up to right now (UTC).`;
+  if (mode === "between") {
+    if (!dr.from && !dr.to) return "Pick both dates to set the window.";
+    const from = dr.from ? `${dr.from} 00:00` : "the earliest record";
+    const to = dr.to ? `${dr.to} 23:59` : "right now";
+    return `Includes ${from} through ${to} (UTC) — the whole of the last day.`;
+  }
+  const preset = dr.preset ?? "last_30_days";
+  if (RUNNING_PRESETS.has(preset)) {
+    return "This period is still running, so it holds fewer records than a finished one. Comparing it to a completed period always reads low.";
+  }
+  return "Includes whole days, ending at the last complete one (UTC).";
 }
 
 /** Shown only after a successful manual test (never auto-computed). */

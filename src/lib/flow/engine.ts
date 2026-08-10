@@ -1344,7 +1344,27 @@ function groupByCategories(records: FlowRecord[], cfg: GroupConfig): Array<{ lab
 // ---------- time windows ----------
 function timeWindow(cfg: { mode: string; preset: string; from?: string; to?: string; days: number }): { start: number; end: number } {
   const now = Date.now();
-  if (cfg.mode === "between") return { start: dateMs(cfg.from ?? "") ?? 0, end: dateMs(cfg.to ?? "") ?? now };
+  if (cfg.mode === "between") {
+    /**
+     * A DATE-ONLY "To" MEANS THE WHOLE OF THAT DAY.
+     *
+     * The control is <input type="date">, so "To: 31 Aug" arrived as
+     * "2026-08-31" and parsed to midnight — excluding almost everything that
+     * happened on the last day of the range. Every custom-range metric was
+     * short by up to a day, silently, and the shorter the range the larger the
+     * error: a one-day range measured nothing at all.
+     *
+     * Guarded on the date-only shape, so a hand-typed ISO datetime keeps the
+     * exact instant it names.
+     */
+    const to = cfg.to ?? "";
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(to.trim());
+    const parsedTo = dateMs(to);
+    return {
+      start: dateMs(cfg.from ?? "") ?? 0,
+      end: parsedTo == null ? now : dateOnly ? parsedTo + 86_399_999 : parsedTo,
+    };
+  }
   if (cfg.mode === "rolling") return { start: now - cfg.days * 86_400_000, end: now };
 
   const d = new Date();

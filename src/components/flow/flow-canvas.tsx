@@ -1195,6 +1195,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           metrics={metrics}
           previews={endpointPreviews}
           timeFieldOptions={timeFieldOptions}
+          hasCustomRange={nodes.some((n) => (n.data.config as { dateRange?: { enabled?: boolean; mode?: string } }).dateRange?.enabled && (n.data.config as { dateRange?: { mode?: string } }).dateRange?.mode === "between")}
           publishing={publishing}
           error={publishError}
           warning={publishWarning}

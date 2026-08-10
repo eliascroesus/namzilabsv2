@@ -54,6 +54,7 @@ export function ReviewPublishModal({
   metrics,
   previews,
   timeFieldOptions,
+  hasCustomRange,
   publishing,
   error,
   warning,
@@ -67,6 +68,8 @@ export function ReviewPublishModal({
   /** Each endpoint's last tested value, unformatted — null when untested. */
   previews: Record<string, number | null>;
   timeFieldOptions: Array<{ value: string; label: string; hint?: string }>;
+  /** True when any step in this flow uses a "between two dates" window. */
+  hasCustomRange: boolean;
   publishing: boolean;
   error: string | null;
   warning: string | null;
@@ -97,6 +100,13 @@ export function ReviewPublishModal({
 
         <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-neutral-50/60 p-4">
           {endpoints.length === 0 && <p className="text-sm text-neutral-500">This flow has no result step yet. Add a Calculate step, then come back.</p>}
+          {/* The one change in the reliability pass that MOVES a number, said
+              at the moment of consequence rather than in a release note. */}
+          {hasCustomRange && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+              A custom date range now includes the whole of its “To” day. It used to stop at midnight, so this number may rise by up to a day&rsquo;s worth of records.
+            </p>
+          )}
           {endpoints.map((ep) => {
             const m = byId.get(ep.nodeId);
             if (!m) return null;

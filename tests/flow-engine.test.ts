@@ -725,3 +725,47 @@ describe("semantics that used to differ from what a person would assume", () => 
     expect(FILTER_OP_LABELS.is_one_of).toMatch(/comma-separated/);
   });
 });
+
+/**
+ * A custom range excluded its own last day. The control is <input type="date">,
+ * so "To: 31 Aug" arrived as "2026-08-31" and parsed to midnight — every
+ * custom-range metric was short by up to a day, and the shorter the range the
+ * larger the error. A one-day range measured almost nothing.
+ */
+describe("a date range includes the day it names", () => {
+  const inWindow = async (from: string, to: string) => {
+    const g = parseGraph({
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN } } },
+        { id: "f", type: "filter", data: { config: { combinator: "and", rules: [], dateRange: { enabled: true, dateField: "occurredAt", mode: "between", from, to } } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "f" }],
+    });
+    return (await runFlow({ db, orgId: ORG }, g)).nodes.get("f")!.recordsOut;
+  };
+
+  it("a record late on the To date is inside the window", async () => {
+    await db.insert(events).values({
+      eventId: "late", orgId: ORG, connectionId: CONN, source: "webhook", eventType: "call",
+      subject: "x", occurredAt: new Date("2026-08-31T14:00:00Z"), properties: {},
+    });
+    // Sabotage: parse the To date as midnight and this is 0 — a whole day of
+    // work missing from every custom-range number, with nothing to show it.
+    expect(await inWindow("2026-08-01", "2026-08-31")).toBe(1);
+    // A single-day range now actually measures that day.
+    expect(await inWindow("2026-08-31", "2026-08-31")).toBe(1);
+    // And the day after is still outside it.
+    expect(await inWindow("2026-08-01", "2026-08-30")).toBe(0);
+  });
+
+  it("a hand-typed instant keeps the exact moment it names", async () => {
+    await db.insert(events).values({
+      eventId: "pm", orgId: ORG, connectionId: CONN, source: "webhook", eventType: "call",
+      subject: "y", occurredAt: new Date("2026-08-31T18:00:00Z"), properties: {},
+    });
+    // Sabotage: extend every To by a day and "to 2026-08-31T12:00:00Z" silently
+    // gains twelve hours, so an exact window stops being exact.
+    expect(await inWindow("2026-08-01", "2026-08-31T12:00:00Z")).toBe(0);
+    expect(await inWindow("2026-08-01", "2026-08-31T23:00:00Z")).toBe(1);
+  });
+});
