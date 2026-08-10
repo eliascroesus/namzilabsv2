@@ -1226,7 +1226,7 @@ function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series
   const field = cfg.groupBy.field;
   const groups = new Map<string, FlowRecord[]>();
   for (const r of records) {
-    const key = String(getField(r, field) ?? "—");
+    const key = groupKey(getField(r, field));
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
@@ -1321,7 +1321,7 @@ function computeAgg(records: FlowRecord[], aggregation: string, field: string, d
 function groupByField(records: FlowRecord[], cfg: GroupConfig): Array<{ label: string; value: number }> {
   const groups = new Map<string, FlowRecord[]>();
   for (const r of records) {
-    const key = String(getField(r, cfg.field) ?? "—");
+    const key = groupKey(getField(r, cfg.field));
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
@@ -1386,8 +1386,23 @@ function requireDataset(inputs: ResolvedInput[], nodeName: string): Dataset {
   const input = inputs[0];
   if (!input) throw new Error(`${nodeName} needs a connected input.`);
   if (input.shape.kind !== "dataset") throw new Error(`${nodeName} expects records, not a ${input.shape.kind}.`);
+  // Reading inputs[0] and ignoring the rest silently discarded whole lanes,
+  // and WHICH lane survived depended on the order the edges happened to be
+  // created in. A step that reads one stream must say so rather than choose.
+  if (inputs.length > 1) {
+    throw new Error(`${nodeName} reads records from one step, but ${inputs.length} are wired into it. Add a Combine data step to bring them together first.`);
+  }
   return input.shape;
 }
+/**
+ * A group's label. Records with no value used to become a category literally
+ * named "—", indistinguishable from a real one — and they merged with any
+ * record whose value WAS the string "—".
+ */
+function groupKey(v: unknown): string {
+  return v == null || v === "" ? "(not set)" : String(v);
+}
+
 function num(v: unknown): number | null {
   return toNumber(v);
 }
@@ -1397,8 +1412,27 @@ function round(n: number): number {
 function splitList(v: string): string[] {
   return v.split(",").map((s) => s.trim());
 }
+/**
+ * A moment, or nothing.
+ *
+ * This was `Date.parse(String(v))`, which reads a bare number as a YEAR:
+ * `Date.parse("42")` is the year 2042 and `Date.parse("1994")` is 1994. So a
+ * numeric field offered as a start time — a call's duration in seconds, a
+ * count, an amount — produced a plausible multi-century gap instead of
+ * refusing. A number here is an epoch or it is not a moment at all.
+ */
+const EPOCH_SECONDS_FLOOR = 1e9; // ~2001 in seconds; below this a number is not a timestamp
+const EPOCH_MS_FLOOR = 1e11; // ~1973 in ms
+
 function dateMs(v: unknown): number | null {
   if (v == null || v === "") return null;
+  const asNumber = typeof v === "number" ? v : typeof v === "string" && /^-?\d+$/.test(v.trim()) ? Number(v) : null;
+  if (asNumber != null) {
+    if (!Number.isFinite(asNumber)) return null;
+    if (Math.abs(asNumber) >= EPOCH_MS_FLOOR) return asNumber;
+    if (Math.abs(asNumber) >= EPOCH_SECONDS_FLOOR) return asNumber * 1000;
+    return null; // too small to be a timestamp in either unit
+  }
   const t = Date.parse(String(v));
   return Number.isNaN(t) ? null : t;
 }

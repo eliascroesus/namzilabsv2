@@ -76,10 +76,14 @@ export type FlowFilterOp = (typeof FLOW_FILTER_OPS)[number];
 
 /** Human-readable operator names shown in the builder (never the raw keys). */
 export const FILTER_OP_LABELS: Record<FlowFilterOp, string> = {
-  equals: "Exactly matches",
-  not_equals: "Does not match",
-  contains: "Contains",
-  not_contains: "Does not contain",
+  // `equals` compares exactly; `contains` ignores case. Both were offered by
+  // one dropdown with nothing to say so, and "Outbound" vs "outbound" silently
+  // returned zero rows. The labels carry the difference; the semantics are
+  // untouched, because changing them would move every published number.
+  equals: "Exactly matches (case-sensitive)",
+  not_equals: "Does not match (case-sensitive)",
+  contains: "Contains (any case)",
+  not_contains: "Does not contain (any case)",
   starts_with: "Starts with",
   ends_with: "Ends with",
   gt: "Greater than",
@@ -88,8 +92,8 @@ export const FILTER_OP_LABELS: Record<FlowFilterOp, string> = {
   lte: "Less than or equal",
   is_empty: "Is empty",
   is_not_empty: "Is not empty",
-  is_one_of: "Is one of",
-  is_not_one_of: "Is not one of",
+  is_one_of: "Is one of (comma-separated)",
+  is_not_one_of: "Is not one of (comma-separated)",
   before: "Before (date)",
   after: "After (date)",
   between: "Between (dates)",

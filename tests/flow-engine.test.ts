@@ -649,3 +649,79 @@ describe("a step's error is a sentence, never the parser's internals", () => {
     expect((exec as { error: string }).error).not.toMatch(/[[{]/);
   });
 });
+
+/**
+ * Five places the engine read data one way and a person would read it another.
+ */
+describe("semantics that used to differ from what a person would assume", () => {
+  it("a bare number is an epoch or nothing — never a year", async () => {
+    // A duration in seconds, offered as a moment by the picker.
+    await ev({ eventType: "call", subject: "L1", properties: { lead_id: "L1", dur: 42, answered: 1_800_000_000_000 } });
+    const between = async (startField: string) => {
+      const g = parseGraph({
+        nodes: [
+          { id: "a", type: "app", data: { config: { connectionId: CONN } } },
+          { id: "t", type: "time_between", data: { config: { keyField: "properties.lead_id", startField, endField: "properties.answered" } } },
+        ],
+        edges: [{ id: "e", source: "a", target: "t" }],
+      });
+      const exec = (await runFlow({ db, orgId: ORG }, g)).nodes.get("t")!;
+      return (exec as { shape: { records: unknown[] } }).shape.records;
+    };
+    // Sabotage: Date.parse(String(v)) reads 42 as the year 2042, so a duration
+    // picked as a start time pairs happily and reports a gap measured in
+    // decades — a large, plausible, entirely fabricated number.
+    expect(await between("properties.dur")).toHaveLength(0);
+    // A real epoch, in either unit, is still a moment.
+    await ev({ eventType: "call", subject: "L2", properties: { lead_id: "L2", started: 1_700_000_000, answered: 1_800_000_000_000 } });
+    expect(await between("properties.started")).toHaveLength(1);
+  });
+
+  it("a step that reads one stream says so instead of dropping a lane", async () => {
+    await ev({ eventType: "a", subject: "x" });
+    const g = parseGraph({
+      nodes: [
+        { id: "a1", type: "app", data: { config: { connectionId: CONN, eventType: "a" } } },
+        { id: "a2", type: "app", data: { config: { connectionId: CONN, eventType: "a" } } },
+        { id: "f", type: "filter", data: { config: { combinator: "and", rules: [{ field: "subject", op: "is_not_empty", value: "", valueKind: "fixed" }] } } },
+      ],
+      edges: [
+        { id: "e1", source: "a1", target: "f" },
+        { id: "e2", source: "a2", target: "f" },
+      ],
+    });
+    const exec = (await runFlow({ db, orgId: ORG }, g)).nodes.get("f")!;
+    // Sabotage: read inputs[0] and ignore the rest, and a whole lane vanishes —
+    // with WHICH lane survives decided by the order the edges were drawn.
+    expect(exec.status).toBe("error");
+    expect((exec as { error: string }).error).toMatch(/Combine data step/);
+  });
+
+  it("records with no value form a group that says so, not one named “—”", async () => {
+    await ev({ eventType: "deal", properties: { rep: "Ana" } });
+    await ev({ eventType: "deal", properties: {} });
+    await ev({ eventType: "deal", properties: { rep: "—" } });
+    const g = parseGraph({
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN } } },
+        { id: "g", type: "group", data: { config: { mode: "field", field: "properties.rep", aggregation: "count" } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "g" }],
+    });
+    const shape = (await runFlow({ db, orgId: ORG }, g)).nodes.get("g")! as { shape: { groups: Array<{ label: string }> } };
+    const labels = shape.shape.groups.map((x) => x.label).sort();
+    // Sabotage: `?? "—"` and the unset record merges with the record whose
+    // value genuinely IS "—", into one category that reads like a real one.
+    expect(labels).toEqual(["(not set)", "Ana", "—"]);
+  });
+
+  it("operator labels say how they compare, because the engine differs", async () => {
+    const { FILTER_OP_LABELS } = await import("@/lib/flow/types");
+    // Sabotage: drop the qualifiers and `equals "Outbound"` silently returns
+    // zero rows where `contains "outbound"` returns all of them, from one
+    // dropdown with nothing to distinguish them.
+    expect(FILTER_OP_LABELS.equals).toMatch(/case-sensitive/);
+    expect(FILTER_OP_LABELS.contains).toMatch(/any case/);
+    expect(FILTER_OP_LABELS.is_one_of).toMatch(/comma-separated/);
+  });
+});
