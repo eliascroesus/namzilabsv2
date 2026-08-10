@@ -3,6 +3,29 @@ import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSche
 
 export type ValidationIssue = { nodeId?: string; message: string };
 
+/** How many Get data steps feed this node, following edges backwards. */
+function appAncestorCount(g: FlowGraph, nodeId: string): number {
+  const byId = new Map(g.nodes.map((n) => [n.id, n]));
+  const incoming = new Map<string, string[]>();
+  for (const e of g.edges) {
+    if (!incoming.has(e.target)) incoming.set(e.target, []);
+    incoming.get(e.target)!.push(e.source);
+  }
+  const seen = new Set<string>([nodeId]);
+  const stack = [nodeId];
+  const apps = new Set<string>();
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    for (const src of incoming.get(id) ?? []) {
+      if (seen.has(src)) continue;
+      seen.add(src);
+      if (byId.get(src)?.type === "app") apps.add(src);
+      stack.push(src);
+    }
+  }
+  return apps.size;
+}
+
 /** Rules whose value is mapped to a field but no field was chosen. */
 function mappedRuleGaps(filters: FilterConfig | undefined): number {
   if (!filters) return 0;
@@ -138,6 +161,14 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
       const cfg = TimeBetweenConfigSchema.safeParse(node.data.config ?? {});
       if (!cfg.success || !cfg.data.keyField || !cfg.data.startField || !cfg.data.endField) {
         issues.push({ nodeId: node.id, message: "Time between needs a matching field, a start time and a stop time." });
+      } else if ((!cfg.data.startStep || !cfg.data.endStep) && appAncestorCount(graph, node.id) > 1) {
+        // The static twin of the engine's lane guard. An empty step means "any
+        // record carrying this field", which after a Combine measures whichever
+        // record happened first — call to call, a speed-to-lead near zero, and
+        // it used to publish clean because only the three field paths were
+        // checked. More than one Get data upstream is exactly when the step
+        // cannot answer this for itself.
+        issues.push({ nodeId: node.id, message: "Time between reads records from more than one Get data step — pick the step beside the start time and the stop time." });
       }
     }
 

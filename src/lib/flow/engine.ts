@@ -78,6 +78,8 @@ export type NodeExecOk = {
   truncated?: boolean;
   /** What "Remove duplicates" actually did on this run, measured rather than predicted. */
   dedupe?: DedupeReport;
+  /** What Time between actually paired, so the dropped keys are never silent. */
+  pairing?: PairingReport;
   shape: Shape;
   /** Extra outputs keyed by source-handle id (Paths uses this). */
   outputs?: Record<string, Shape>;
@@ -630,17 +632,48 @@ function execTime(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
  *   Unmatched keys emit NOTHING — a lead never called has no duration, and
  *   emitting 0 would drag every average toward a lie.
  */
+/** What pairing actually did — the denominator a median would otherwise hide. */
+export type PairingReport = { keys: number; started: number; matched: number; noStop: number; stopBeforeStart: number };
+
 function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = TimeBetweenConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Time between");
   if (!cfg.keyField || !cfg.startField || !cfg.endField) {
     throw new Error("Time between needs a matching field, a start time and a stop time.");
   }
-  // Which lane a record came from. Every dataset step stamps `__count_<id>` on
-  // what it emits (see datasetExec) and those stamps travel, so after a Combine
-  // a record still says which Get data produced it. That is what lets both
-  // sides pick `occurredAt` and still mean different records. No step chosen =
-  // any record carrying the field, which is also the one-record case.
+  /**
+   * AN UNSET LANE ON A COMBINED STREAM IS AMBIGUOUS, AND USED TO PUBLISH CLEAN.
+   *
+   * An empty step means "any record carrying this field", which is right for
+   * the one-record case (a call's created → answered) and catastrophic after a
+   * Combine: leads and calls both carry `occurredAt`, so the clock starts on
+   * whichever record came first — measuring call → call and reporting a
+   * speed-to-lead near zero, with a green badge.
+   *
+   * Every dataset step stamps `__count_<id>` on what it emits (datasetExec)
+   * and stamps travel, so a record's stamp SET names the path it came down.
+   * More than one distinct set means lanes were combined, and an unset side is
+   * then a question the step cannot answer for itself.
+   */
+  const laneSig = (r: FlowRecord) =>
+    Object.keys(r.properties ?? {})
+      .filter((k) => k.startsWith("__count_"))
+      .sort()
+      .join(",");
+  if (!cfg.startStep || !cfg.endStep) {
+    let firstSig: string | null = null;
+    for (const r of input.records) {
+      const sig = laneSig(r);
+      if (firstSig == null) firstSig = sig;
+      else if (sig !== firstSig) {
+        throw new Error(
+          "This step is reading records from more than one earlier step, so it can't tell which ones start the clock and which ones stop it. Pick the step beside each time.",
+        );
+      }
+    }
+  }
+  // Which lane a record came from. No step chosen = any record carrying the
+  // field, which after the guard above can only be the one-record case.
   const fromLane = (r: FlowRecord, stepId: string) => !stepId || getField(r, `properties.__count_${stepId}`) !== undefined;
 
   type Pair = { start: FlowRecord | null; startAt: number | null; ends: Array<{ at: number; id: string }> };
@@ -668,8 +701,15 @@ function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   }
 
   const out: FlowRecord[] = [];
+  // The denominator is the thing a median hides. "Median speed to lead" over
+  // only the leads that were EVER called is a different question from the one
+  // the tile's name asks, and dropping the rest was silent.
+  let started = 0;
+  let noStop = 0;
+  let stopBeforeStart = 0;
   for (const [key, pair] of byKey) {
     if (pair.start == null || pair.startAt == null) continue;
+    started++;
     const from = pair.startAt;
     // Loop, not spread/filter chains — same stack-bound discipline as
     // computeAgg's min/max. A record is excluded from being its own end only
@@ -682,7 +722,11 @@ function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
       if (e.at < from || (sameSide && e.id === pair.start.id)) continue;
       if (toAt == null || e.at < toAt) toAt = e.at;
     }
-    if (toAt == null) continue;
+    if (toAt == null) {
+      if (pair.ends.length > 0) stopBeforeStart++;
+      else noStop++;
+      continue;
+    }
     const gap = toAt - from;
     out.push({
       // THE OUTPUT IS THE START RECORD, ANNOTATED — not a fabricated one, so a
@@ -713,7 +757,8 @@ function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
       },
     });
   }
-  return datasetExec("time_between", node.id, out, input.records.length);
+  const pairing: PairingReport = { keys: byKey.size, started, matched: out.length, noStop, stopBeforeStart };
+  return { ...datasetExec("time_between", node.id, out, input.records.length), pairing };
 }
 
 // ---------- Unite ----------

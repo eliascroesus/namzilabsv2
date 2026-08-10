@@ -56,7 +56,13 @@ export type NodeTestDTO = {
    * this step's data — which the E.7 warning above cannot catch, because the
    * field IS in the connection's registry, just never on THIS record type.
    */
-  dedupe?: { field: string; loaded: number; matched: number; removed: number };
+  dedupe?: { field: string; keep?: string; orderField?: string; loaded: number; matched: number; removed: number };
+  /**
+   * What Time between paired. A median over "the leads that were called" is a
+   * different question from the one the tile's name asks, and the keys that
+   * never matched used to vanish without a number anywhere.
+   */
+  pairing?: { keys: number; started: number; matched: number; noStop: number; stopBeforeStart: number };
 };
 
 /** Shape one engine result into the compact DTO the editor renders. */
@@ -73,6 +79,7 @@ function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTest
     tile: exec.tile,
     value: exec.shape.kind === "scalar" ? exec.shape.value : undefined,
     dedupe: exec.dedupe,
+    pairing: exec.pairing,
   };
 }
 

@@ -451,3 +451,105 @@ describe("saved flows survive the change", () => {
     expect(((await runFlow({ db, orgId: ORG }, g)).nodes.get("dur")! as NodeExecOk).shape).toMatchObject({ value: 42 });
   });
 });
+
+/**
+ * An unset lane means "any record carrying this field". That is right for the
+ * one-record case and catastrophic after a Combine, where leads and calls both
+ * carry `occurredAt` — the clock starts on whichever came first, so the step
+ * measures call to call and reports a speed-to-lead near zero. It used to
+ * publish clean, because only the three field paths were ever checked.
+ */
+describe("an ambiguous lane is an error, not a number", () => {
+  it("refuses to guess when records came from more than one step", async () => {
+    await ev({ eventType: "call_logged", leadId: "L1", atMin: 0 });
+    await ev({ eventType: "lead_created", leadId: "L1", atMin: 5 });
+    await ev({ eventType: "call_logged", leadId: "L1", atMin: 45 });
+
+    const g = parseGraph({
+      nodes: [
+        N("leads", "app", { connectionId: CONN, source: "close", eventType: "lead_created" }),
+        N("calls", "app", { connectionId: CONN, source: "close", eventType: "call_logged" }),
+        N("u", "unite", {}),
+        N("t", "time_between", { keyField: "properties.lead_id", startField: "occurredAt", startStep: "", endField: "occurredAt", endStep: "" }),
+      ],
+      edges: [E("leads", "u"), E("calls", "u"), E("u", "t")],
+    });
+    const exec = (await runFlow({ db, orgId: ORG }, g)).nodes.get("t")!;
+    // Sabotage: drop the lane guard and this returns 5 minutes (call -> lead),
+    // green, published, and wrong by a factor of eight.
+    expect(exec.status).toBe("error");
+    expect((exec as { error: string }).error).toMatch(/more than one earlier step/);
+  });
+
+  it("still allows the one-record case, where an unset lane is the whole point", async () => {
+    // Sabotage: require the steps unconditionally and created -> answered
+    // inside a single call row stops working.
+    await ev({
+      eventType: "call_logged",
+      leadId: "L1",
+      atMin: 0,
+      extra: { created_at: new Date(T0).toISOString(), answered_at: new Date(T0 + 3 * MIN).toISOString() },
+    });
+    const out = await matches({ startField: "properties.created_at", startStep: "", endField: "properties.answered_at", endStep: "" });
+    expect(mins(out[0])).toBe(3);
+  });
+
+  it("blocks publish for the same reason, before anything runs", () => {
+    const g = parseGraph({
+      nodes: [
+        N("leads", "app", { connectionId: CONN, source: "close", eventType: "lead_created" }),
+        N("calls", "app", { connectionId: CONN, source: "close", eventType: "call_logged" }),
+        N("u", "unite", {}),
+        N("t", "time_between", { keyField: "properties.lead_id", startField: "occurredAt", endField: "occurredAt" }),
+        N("m", "formula", { op: "count" }),
+      ],
+      edges: [E("leads", "u"), E("calls", "u"), E("u", "t"), E("t", "m")],
+      metrics: [{ nodeId: "m", enabled: true, name: "x" }],
+    });
+    // Sabotage: check only the three field paths, as validate used to, and a
+    // flow measuring call-to-call publishes with no issue at all.
+    expect(validateGraph(g).some((i) => /more than one Get data step/.test(i.message))).toBe(true);
+  });
+
+  it("one Get data step feeding it is never ambiguous", () => {
+    const g = parseGraph({
+      nodes: [
+        N("calls", "app", { connectionId: CONN, source: "close", eventType: "call_logged" }),
+        N("t", "time_between", { keyField: "id", startField: "properties.created_at", endField: "properties.answered_at" }),
+        N("m", "formula", { op: "count" }),
+      ],
+      edges: [E("calls", "t"), E("t", "m")],
+      metrics: [{ nodeId: "m", enabled: true, name: "x" }],
+    });
+    expect(validateGraph(g).some((i) => /more than one Get data step/.test(i.message))).toBe(false);
+  });
+});
+
+/**
+ * The denominator a median hides: keys that never got a stop moment emit
+ * nothing, so "median speed to lead" is quietly a median over the leads that
+ * were eventually called.
+ */
+describe("pairing publishes its denominator", () => {
+  it("counts the keys that started but never matched", async () => {
+    await ev({ eventType: "lead_created", leadId: "L1", atMin: 0 });
+    await ev({ eventType: "call_logged", leadId: "L1", atMin: 10 });
+    await ev({ eventType: "lead_created", leadId: "L_never", atMin: 0 });
+    await ev({ eventType: "lead_created", leadId: "L_before", atMin: 20 });
+    await ev({ eventType: "call_logged", leadId: "L_before", atMin: 5 }); // call predates the lead
+
+    const g = parseGraph({
+      nodes: [
+        N("leads", "app", { connectionId: CONN, source: "close", eventType: "lead_created" }),
+        N("calls", "app", { connectionId: CONN, source: "close", eventType: "call_logged" }),
+        N("u", "unite", {}),
+        N("t", "time_between", TB()),
+      ],
+      edges: [E("leads", "u"), E("calls", "u"), E("u", "t")],
+    });
+    const exec = (await runFlow({ db, orgId: ORG }, g)).nodes.get("t")! as NodeExecOk & { pairing?: Record<string, number> };
+    // Sabotage: drop the report and "how fast do we call leads" silently
+    // becomes "how fast do we call the leads we called".
+    expect(exec.pairing).toEqual({ keys: 3, started: 3, matched: 1, noStop: 1, stopBeforeStart: 1 });
+  });
+});

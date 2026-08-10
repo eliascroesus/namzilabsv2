@@ -1185,10 +1185,18 @@ function TimeBetweenFields({
   onChange: (p: Record<string, unknown>) => void;
 }) {
   const timeGroups = useMemo(() => momentGroups(groups), [groups]);
+  const keyGroups = useMemo(
+    () => groups.map((g) => ({ ...g, fields: g.fields.filter((f) => !f.path.startsWith("__")) })).filter((g) => g.fields.length > 0),
+    [groups],
+  );
   return (
     <div className="space-y-4">
       <Field label="Match records by">
-        <FieldInput value={String(cfg.keyField ?? "")} groups={groups} onChange={(v) => onChange({ keyField: v })} />
+        {/* Not the raw `groups`: they include a step's "Output number"
+            (`__count_<id>`), which is the same on every row. Picking it makes
+            every record one group, so the whole dataset collapses to a single
+            pair and reports one plausible duration. */}
+        <FieldInput value={String(cfg.keyField ?? "")} groups={keyGroups} onChange={(v) => onChange({ keyField: v })} />
       </Field>
       <Field label="Start the clock on">
         <MomentInput
@@ -1289,6 +1297,30 @@ function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: 
         ? `No duplicates found — every ${name} was different.`
         : `Removed ${d.removed.toLocaleString()} record${d.removed === 1 ? "" : "s"}, keeping the ${d.keep === "earliest" ? "earliest" : "latest"} ${orderName} of each ${name}.`}
       {partial}
+    </p>
+  );
+}
+
+/**
+ * What pairing actually did. Time between emits nothing for a key that never
+ * got a stop moment, so "median speed to lead" is quietly a median over the
+ * leads that were eventually called — a better-sounding number than the truth,
+ * with nothing on screen to say the denominator shrank.
+ */
+function PairingOutcome({ p }: { p: { keys: number; started: number; matched: number; noStop: number; stopBeforeStart: number } }) {
+  if (p.started === 0) {
+    return (
+      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+        Nothing was paired: none of the {p.keys.toLocaleString()} matched groups had a start time. Check the field picked for “Start the clock on”.
+      </p>
+    );
+  }
+  const bits = [`${p.matched.toLocaleString()} of ${p.started.toLocaleString()} matched a stop time`];
+  if (p.noStop > 0) bits.push(`${p.noStop.toLocaleString()} never got one`);
+  if (p.stopBeforeStart > 0) bits.push(`${p.stopBeforeStart.toLocaleString()} only had one before the start`);
+  return (
+    <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-600">
+      {bits.join(", ")}. The rest are not in this number.
     </p>
   );
 }
@@ -1589,6 +1621,7 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{t.dedupeWarning}</p>
       )}
       {t.dedupe && <DedupeOutcome d={t.dedupe} />}
+      {t.pairing && <PairingOutcome p={t.pairing} />}
       <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-base font-semibold text-neutral-900">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
