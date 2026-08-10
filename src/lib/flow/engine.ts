@@ -527,9 +527,9 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
   let dedupe: DedupeReport | undefined;
   if (cfg.dedupe) {
     const field = cfg.dedupeField || "subject";
-    const res = keepOnePerGroup(records, { groupField: field, keep: cfg.dedupeKeep, orderField: cfg.dedupeOrderField });
+    const res = keepOnePerGroup(records, { groupField: field, keep: cfg.dedupeKeep, orderField: cfg.dedupeOrderField || "occurredAt" });
     records = res.records;
-    dedupe = { field, keep: cfg.dedupeKeep, orderField: cfg.dedupeOrderField, ...res.report };
+    dedupe = { field, keep: cfg.dedupeKeep, orderField: cfg.dedupeOrderField || "occurredAt", ...res.report };
   }
   const exec = dedupe ? { ...datasetExec("app", node.id, records, rows.length), dedupe } : datasetExec("app", node.id, records, rows.length);
   // Never silently truncate: if the ceiling was actually hit, the node says so.
@@ -556,12 +556,12 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
  * user matched calls on `data.number`, a field belonging to a different Close
  * object entirely, and got a silent no-op with the box ticked.
  */
-export type DedupeReport = { field: string; keep: KeepDirection; orderField: string; loaded: number; matched: number; removed: number };
+export type DedupeReport = { field: string; keep: KeepDirection; orderField: string; loaded: number; matched: number; ordered: number; removed: number };
 
 export function keepOnePerGroup(
   records: FlowRecord[],
   cfg: { groupField: string; keep: KeepDirection; orderField: string },
-): { records: FlowRecord[]; report: { loaded: number; matched: number; removed: number } } {
+): { records: FlowRecord[]; report: { loaded: number; matched: number; ordered: number; removed: number } } {
   // Position is kept so the survivor is emitted where its group FIRST appeared.
   // The dataset's order is load-bearing downstream (topPreview, the newest-first
   // contract execApp documents), so choosing a different record must not also
@@ -595,13 +595,27 @@ export function keepOnePerGroup(
   const merged = [...passthrough, ...[...best.values()].map((b) => ({ rec: b.rec, pos: b.pos }))];
   merged.sort((a, b) => a.pos - b.pos);
   const out = merged.map((m) => m.rec);
-  return { records: out, report: { loaded: records.length, matched, removed: records.length - out.length } };
+  // How many records the ORDER field resolved on. Without it the receipt can
+  // assert "kept the earliest occurredAt" while every value was unorderable
+  // and the survivor was simply whichever loaded first.
+  let ordered = 0;
+  for (const b of best.values()) if (b.at != null) ordered++;
+  return { records: out, report: { loaded: records.length, matched, ordered, removed: records.length - out.length } };
 }
 
-/** A field's value as something orderable: a moment, or a plain number. */
+/**
+ * A field's value as something orderable: a plain number, or a moment.
+ *
+ * Numeric STRINGS count. A Google Sheets column, a CSV import and most webhook
+ * payloads store numbers as text, and routing those through `dateMs` returned
+ * null for every record — so ordering silently fell back to load order, which
+ * is precisely what this rewrite exists to remove, while the receipt went on
+ * asserting it had kept the earliest or latest of the chosen field.
+ */
 function orderValue(r: FlowRecord, field: string): number | null {
   const v = getField(r, field);
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
   return dateMs(v);
 }
 
@@ -733,19 +747,22 @@ function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     if (pair.start == null || pair.startAt == null) continue;
     started++;
     const from = pair.startAt;
+    const sameSide = cfg.startField === cfg.endField;
     // Loop, not spread/filter chains — same stack-bound discipline as
     // computeAgg's min/max. A record is excluded from being its own end only
     // when both sides read the SAME field, where it would be a zero-length
     // self-pair; reading two different fields off one record (created →
     // answered) is the whole point of leaving the step unset.
-    const sameSide = cfg.startField === cfg.endField;
     let toAt: number | null = null;
     for (const e of pair.ends) {
       if (e.at < from || (sameSide && e.id === pair.start.id)) continue;
       if (toAt == null || e.at < toAt) toAt = e.at;
     }
     if (toAt == null) {
-      if (pair.ends.length > 0) stopBeforeStart++;
+      // Only a genuine stop that lands BEFORE the start counts as that. A key
+      // whose single record was excluded as its own end simply never got one.
+      const realEnds = pair.ends.filter((e) => !(sameSide && e.id === pair.start!.id));
+      if (realEnds.length > 0) stopBeforeStart++;
       else noStop++;
       continue;
     }
@@ -821,7 +838,12 @@ function execPaths(node: FlowNode, inputs: ResolvedInput[], graph: FlowGraph): N
     if (isLegacyPath(p)) return p.filters ?? null;
     const edge = graph.edges.find((e) => e.source === node.id && e.sourceHandle === p.id);
     const first = edge ? nodeById.get(edge.target) : undefined;
-    return first?.type === "filter" ? FilterConfigSchema.parse(first.data.config ?? {}) : null;
+    if (first?.type !== "filter") return null;
+    // A half-filled condition in ONE lane used to throw out of execPaths and
+    // error the hub and every other lane with it. That lane's own Filter node
+    // reports the problem; the hub keeps routing.
+    const parsed = FilterConfigSchema.safeParse(first.data.config ?? {});
+    return parsed.success ? parsed.data : null;
   };
   const hasConds = (c: FilterConfig | null): c is FilterConfig => !!c && c.rules.length > 0;
 
@@ -1197,7 +1219,8 @@ export function evalRule(rec: FlowRecord, rule: Rule): boolean {
     case "between": {
       const t = dateMs(raw);
       const lo = rhsDate;
-      const hi = dateMs(rule.value2 ?? "");
+      // Same rule as the date-range window: a date-only bound covers its day.
+      const hi = endOfDayMs(rule.value2 ?? "");
       return t != null && lo != null && hi != null && t >= lo && t <= hi;
     }
     default:
@@ -1205,7 +1228,31 @@ export function evalRule(rec: FlowRecord, rule: Rule): boolean {
   }
 }
 
+/**
+ * The field this aggregation reads holds nothing, anywhere in the input.
+ *
+ * Asked ONCE over every record the step loaded, before any bucketing. That
+ * distinction is the whole point: "no revenue on Monday" is a fact about
+ * Monday and must stay a 0, while "no revenue in any of the 412 records" is
+ * someone pointing at the wrong field — and Calculate's default field is
+ * `value`, which Close never populates.
+ */
+function assertFieldHasValues(records: FlowRecord[], cfg: AggregateConfig): void {
+  if (records.length === 0) return; // an empty window is an empty window
+  if (cfg.aggregation === "count") return;
+  if (cfg.aggregation === "count_distinct") {
+    for (const r of records) {
+      const v = getField(r, cfg.distinctField);
+      if (v != null && v !== "") return;
+    }
+    throw new EmptyFieldError(cfg.distinctField, records.length, "count unique values of");
+  }
+  for (const r of records) if (num(getField(r, cfg.field)) != null) return;
+  throw new EmptyFieldError(cfg.field, records.length, cfg.aggregation);
+}
+
 function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series | Grouped {
+  assertFieldHasValues(records, cfg);
   if (!cfg.groupBy) return { kind: "scalar", value: computeAgg(records, cfg.aggregation, cfg.field, cfg.distinctField) };
   if (cfg.groupBy.type === "time") {
     const unit = cfg.groupBy.unit;
@@ -1257,9 +1304,6 @@ function computeAgg(records: FlowRecord[], aggregation: string, field: string, d
         const v = getField(r, distinctField);
         if (v != null && v !== "") set.add(String(v));
       }
-      // Records went in and nothing came out: the field is empty on all of
-      // them. See the note below — a confident 0 is the worst answer here.
-      if (set.size === 0 && records.length > 0) throw new EmptyFieldError(distinctField, records.length, "count unique values of");
       return set.size;
     }
     default: {
@@ -1275,11 +1319,15 @@ function computeAgg(records: FlowRecord[], aggregation: string, field: string, d
        *
        * Zero records is a different case and stays 0: an empty week really is
        * an empty week, and erroring there would turn every quiet Monday red.
+       *
+       * ASKED ONCE, OVER THE WHOLE INPUT — see `assertFieldHasValues`. This
+       * check briefly lived here, inside computeAgg, which runs once PER
+       * BUCKET in a trend or a breakdown: a single quiet Monday then threw and
+       * destroyed the whole chart, including the six days that were fine. A
+       * bucket of 0 is a real answer about that bucket. Only "empty in every
+       * record this step loaded" is a configuration mistake.
        */
-      if (nums.length === 0) {
-        if (records.length === 0) return 0;
-        throw new EmptyFieldError(field, records.length, aggregation);
-      }
+      if (nums.length === 0) return 0;
       if (aggregation === "sum") return round(nums.reduce((a, b) => a + b, 0));
       if (aggregation === "avg") return round(nums.reduce((a, b) => a + b, 0) / nums.length);
       if (aggregation === "median") {
@@ -1357,13 +1405,7 @@ function timeWindow(cfg: { mode: string; preset: string; from?: string; to?: str
      * Guarded on the date-only shape, so a hand-typed ISO datetime keeps the
      * exact instant it names.
      */
-    const to = cfg.to ?? "";
-    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(to.trim());
-    const parsedTo = dateMs(to);
-    return {
-      start: dateMs(cfg.from ?? "") ?? 0,
-      end: parsedTo == null ? now : dateOnly ? parsedTo + 86_399_999 : parsedTo,
-    };
+    return { start: dateMs(cfg.from ?? "") ?? 0, end: endOfDayMs(cfg.to ?? "") ?? now };
   }
   if (cfg.mode === "rolling") return { start: now - cfg.days * 86_400_000, end: now };
 
@@ -1446,15 +1488,34 @@ const EPOCH_MS_FLOOR = 1e11; // ~1973 in ms
 
 function dateMs(v: unknown): number | null {
   if (v == null || v === "") return null;
-  const asNumber = typeof v === "number" ? v : typeof v === "string" && /^-?\d+$/.test(v.trim()) ? Number(v) : null;
+  // Any bare number, decimals included. `/^-?\d+$/` let "12.5" through to
+  // Date.parse, which reads it as 5 December 2001 — so a duration or an amount
+  // with a fractional part still fabricated a moment.
+  const asNumber = typeof v === "number" ? v : typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v.trim()) ? Number(v) : null;
   if (asNumber != null) {
     if (!Number.isFinite(asNumber)) return null;
-    if (Math.abs(asNumber) >= EPOCH_MS_FLOOR) return asNumber;
-    if (Math.abs(asNumber) >= EPOCH_SECONDS_FLOOR) return asNumber * 1000;
+    // Positive only: a negative count or delta is not a pre-1970 date. Nothing
+    // in this product reads timestamps from before the epoch.
+    if (asNumber >= EPOCH_MS_FLOOR) return asNumber;
+    if (asNumber >= EPOCH_SECONDS_FLOOR) return asNumber * 1000;
     return null; // too small to be a timestamp in either unit
   }
   const t = Date.parse(String(v));
   return Number.isNaN(t) ? null : t;
+}
+
+/**
+ * The upper bound of a date range, inclusive of the day it names.
+ *
+ * Shared by the date-range window and the `between` filter operator so the two
+ * cannot drift: both are fed by <input type="date">, which produces
+ * "2026-08-31" — parsed as midnight, that excludes the whole of the day the
+ * user typed. A hand-written instant keeps the exact moment it names.
+ */
+function endOfDayMs(v: unknown): number | null {
+  const parsed = dateMs(v);
+  if (parsed == null) return null;
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? parsed + 86_399_999 : parsed;
 }
 
 function bucketKey(iso: string, unit: "day" | "week" | "month" | "quarter" | "year"): string {

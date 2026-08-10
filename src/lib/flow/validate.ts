@@ -3,8 +3,17 @@ import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSche
 
 export type ValidationIssue = { nodeId?: string; message: string };
 
-/** How many Get data steps feed this node, following edges backwards. */
-function appAncestorCount(g: FlowGraph, nodeId: string): number {
+/**
+ * Does this node read records that arrived down more than one path?
+ *
+ * The engine decides this from the __count_ stamp SETS on the records it
+ * actually got, which differ whenever lanes diverged and rejoined — including
+ * two lanes off ONE Get data step, split by a Paths hub or by different
+ * filters and recombined. Counting Get data ancestors alone said "one" for
+ * that shape, so the flow published clean and then hard-errored at
+ * materialize. Any Combine or Split upstream means the same thing.
+ */
+function readsMultipleLanes(g: FlowGraph, nodeId: string): boolean {
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
   const incoming = new Map<string, string[]>();
   for (const e of g.edges) {
@@ -14,16 +23,21 @@ function appAncestorCount(g: FlowGraph, nodeId: string): number {
   const seen = new Set<string>([nodeId]);
   const stack = [nodeId];
   const apps = new Set<string>();
+  let splitOrJoin = false;
   while (stack.length > 0) {
     const id = stack.pop()!;
+    // A node fed by more than one edge is itself a join.
+    if ((incoming.get(id) ?? []).length > 1) splitOrJoin = true;
     for (const src of incoming.get(id) ?? []) {
       if (seen.has(src)) continue;
       seen.add(src);
-      if (byId.get(src)?.type === "app") apps.add(src);
+      const t = byId.get(src)?.type;
+      if (t === "app") apps.add(src);
+      if (t === "unite" || t === "paths") splitOrJoin = true;
       stack.push(src);
     }
   }
-  return apps.size;
+  return apps.size > 1 || splitOrJoin;
 }
 
 /** Rules whose value is mapped to a field but no field was chosen. */
@@ -165,14 +179,14 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
       const cfg = TimeBetweenConfigSchema.safeParse(node.data.config ?? {});
       if (!cfg.success || !cfg.data.keyField || !cfg.data.startField || !cfg.data.endField) {
         issues.push({ nodeId: node.id, message: "Time between needs a matching field, a start time and a stop time." });
-      } else if ((!cfg.data.startStep || !cfg.data.endStep) && appAncestorCount(graph, node.id) > 1) {
+      } else if ((!cfg.data.startStep || !cfg.data.endStep) && readsMultipleLanes(graph, node.id)) {
         // The static twin of the engine's lane guard. An empty step means "any
         // record carrying this field", which after a Combine measures whichever
         // record happened first — call to call, a speed-to-lead near zero, and
         // it used to publish clean because only the three field paths were
         // checked. More than one Get data upstream is exactly when the step
         // cannot answer this for itself.
-        issues.push({ nodeId: node.id, message: "Time between reads records from more than one Get data step — pick the step beside the start time and the stop time." });
+        issues.push({ nodeId: node.id, message: "Time between reads records that arrived down more than one path — pick the step beside the start time and the stop time." });
       }
     }
 

@@ -769,3 +769,58 @@ describe("a date range includes the day it names", () => {
     expect(await inWindow("2026-08-01", "2026-08-31T23:00:00Z")).toBe(1);
   });
 });
+
+/** Corrections the adversarial review of the reliability sweep turned up. */
+describe("the sweep's own gaps", () => {
+  it("a numeric field stored as text still orders a keep-one", async () => {
+    const { keepOnePerGroup } = await import("@/lib/flow/engine");
+    const rec = (id: string, v: unknown) => ({ id, source: "gsheets", connectionId: "c", eventType: "row", subject: "k", occurredAt: new Date(), value: null, currency: null, properties: { amount: v } });
+    // Sheets, CSV and most webhooks store numbers as text. Sabotage: send
+    // strings through dateMs and every value is null, so the survivor is
+    // whichever loaded first — the load order this whole rewrite removes —
+    // while the receipt claims it kept the largest.
+    const r = keepOnePerGroup([rec("small", "10"), rec("big", "900")] as never[], { groupField: "subject", keep: "latest", orderField: "properties.amount" });
+    expect(r.records[0].id).toBe("big");
+    expect(r.report.ordered).toBe(1);
+  });
+
+  it("the receipt admits when nothing was orderable", async () => {
+    const { keepOnePerGroup } = await import("@/lib/flow/engine");
+    const rec = (id: string) => ({ id, source: "s", connectionId: "c", eventType: "e", subject: "k", occurredAt: new Date(), value: null, currency: null, properties: {} });
+    // Sabotage: drop `ordered` and the panel states as fact that it kept the
+    // earliest of a field that resolved on nothing.
+    expect(keepOnePerGroup([rec("a"), rec("b")] as never[], { groupField: "subject", keep: "earliest", orderField: "properties.nope" }).report.ordered).toBe(0);
+  });
+
+  it("a decimal numeric string is not a date either", async () => {
+    await ev({ eventType: "call", subject: "L1", properties: { lead_id: "L1", dur: "12.5", answered: 1_800_000_000_000 } });
+    const g = parseGraph({
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN } } },
+        { id: "t", type: "time_between", data: { config: { keyField: "properties.lead_id", startField: "properties.dur", endField: "properties.answered" } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "t" }],
+    });
+    // Sabotage: guard on /^-?\d+$/ and "12.5" falls through to Date.parse,
+    // which reads it as 5 December 2001 — the exact bug 1F claimed to close.
+    const shape = (await runFlow({ db, orgId: ORG }, g)).nodes.get("t")! as { shape: { records: unknown[] } };
+    expect(shape.shape.records).toHaveLength(0);
+  });
+
+  it("the `between` operator includes the day it names, like the date window", async () => {
+    await db.insert(events).values({
+      eventId: "btw", orgId: ORG, connectionId: CONN, source: "webhook", eventType: "call",
+      subject: "z", occurredAt: new Date("2026-08-31T14:00:00Z"), properties: {},
+    });
+    const g = parseGraph({
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN } } },
+        { id: "f", type: "filter", data: { config: { combinator: "and", rules: [{ field: "occurredAt", op: "between", value: "2026-08-01", value2: "2026-08-31", valueKind: "fixed" }] } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "f" }],
+    });
+    // Sabotage: use dateMs for the upper bound and the operator drops its own
+    // last day — the twin of the window bug, fed by the same date picker.
+    expect((await runFlow({ db, orgId: ORG }, g)).nodes.get("f")!.recordsOut).toBe(1);
+  });
+});

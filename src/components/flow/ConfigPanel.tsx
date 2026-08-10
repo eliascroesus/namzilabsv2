@@ -131,7 +131,7 @@ export function ConfigPanel({
 }) {
   const type = String(node.type) as NodeType;
   const cfg = node.data.config;
-  const status = computeNodeStatus({ type, cfg, inputCount, inputHandles: inputs.map((i) => i.targetHandle), lastTest: node.data.lastTest, dirty: node.data.dirty, updating: testing });
+  const status = computeNodeStatus({ type, cfg, inputCount, inputHandles: inputs.map((i) => i.targetHandle), branchMode: branch?.mode ?? null, lastTest: node.data.lastTest, dirty: node.data.dirty, updating: testing });
   const sm = STATUS_META[status];
   const err = node.data.lastTest?.status === "error" ? node.data.lastTest.error : null;
   const tested = status === "ready";
@@ -1249,7 +1249,7 @@ function MomentInput({
  * object, offered because the picker lists every field on the connection —
  * removed zero rows with nothing on screen saying so.
  */
-function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: string; loaded: number; matched: number; removed: number } }) {
+function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: string; loaded: number; matched: number; ordered?: number; removed: number } }) {
   const name = d.field.replace(/^properties\./, "");
   const orderName = (d.orderField ?? "occurredAt").replace(/^properties\./, "");
   if (d.matched === 0) {
@@ -1261,6 +1261,16 @@ function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: 
     );
   }
   const partial = d.matched < d.loaded ? ` ${(d.loaded - d.matched).toLocaleString()} records had no ${name} and were all kept.` : "";
+  // Nothing was orderable, so the survivor is whichever loaded first — saying
+  // "kept the earliest occurredAt" here would be a plain untruth.
+  if (d.removed > 0 && d.ordered === 0) {
+    return (
+      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+        Removed {d.removed.toLocaleString()} record{d.removed === 1 ? "" : "s"}, but <span className="font-medium">{orderName}</span> is empty on all of them — so which one survived was arbitrary. Pick a
+        field that orders these records.
+      </p>
+    );
+  }
   return (
     <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-600">
       {d.removed === 0
@@ -1278,6 +1288,9 @@ function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: 
  * with nothing on screen to say the denominator shrank.
  */
 function PairingOutcome({ p }: { p: { keys: number; started: number; matched: number; noStop: number; stopBeforeStart: number } }) {
+  // No records at all is a quiet week, not a mistake — the same distinction
+  // the aggregations make between an empty window and a wrong field.
+  if (p.keys === 0) return null;
   if (p.started === 0) {
     return (
       <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">

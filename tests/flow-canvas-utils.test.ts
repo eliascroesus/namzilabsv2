@@ -383,3 +383,24 @@ describe("an empty Filter is not Ready", () => {
     expect(nodeNeedsSetup("filter", { combinator: "and", rules: [{ field: "x", op: "equals", value: "y" }] }, 0)).toBe(true);
   });
 });
+
+/**
+ * A branch head set to "Always run" or "Everything else" correctly has no
+ * rules — the panel hides the condition editor entirely for those modes. The
+ * empty-Filter rule badged them "Needs setup" forever, which disables Continue
+ * and takes the Test button with it.
+ */
+describe("a non-custom branch head is already configured", () => {
+  it("always and fallback need no conditions; custom still does", async () => {
+    const { nodeNeedsSetup } = await import("@/components/flow/graph-utils");
+    const empty = { combinator: "and", rules: [] };
+    // Sabotage: ignore branchMode and these are stuck on "Needs setup" with no
+    // control on screen that could ever clear it.
+    expect(nodeNeedsSetup("filter", empty, 1, undefined, "always")).toBe(false);
+    expect(nodeNeedsSetup("filter", empty, 1, undefined, "fallback")).toBe(false);
+    expect(nodeNeedsSetup("filter", empty, 1, undefined, "custom")).toBe(true);
+    expect(nodeNeedsSetup("filter", empty, 1, undefined, null)).toBe(true);
+    // Still needs an input, whatever the mode.
+    expect(nodeNeedsSetup("filter", empty, 0, undefined, "always")).toBe(true);
+  });
+});

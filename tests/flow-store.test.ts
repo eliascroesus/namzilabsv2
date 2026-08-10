@@ -128,6 +128,47 @@ describe("materializer", () => {
     expect((rows[0].tile as { name: string }).name).toBe("Total bookings");
   });
 
+
+  /**
+   * A metric that starts failing must not simply disappear.
+   *
+   * The tidy-up deletes every stored row whose node is not in the tile list,
+   * and a failed node was never in that list — so a broken metric had its row
+   * DELETED, vanished from the dashboard with no badge and no message, and
+   * materializeFlow returned ok. The honest path only ran when EVERY tile
+   * failed, so the more metrics a flow had, the quieter the loss.
+   */
+  it("a metric that breaks keeps its row and says why, and the run reports failure", async () => {
+    await seedEvents(3, 10);
+    const flow = await createFlow(db, ORG);
+    const graph = (field: string) => ({
+      nodes: [N("a", "app", { connectionId: CONN }), N("ok", "formula", { op: "count" }), N("bad", "formula", { op: "sum", field })],
+      edges: [E("a", "ok"), E("a", "bad")],
+      metrics: [
+        { nodeId: "ok", enabled: true, name: "Count", viz: "number", format: "number" },
+        { nodeId: "bad", enabled: true, name: "Total", viz: "number", format: "number" },
+      ],
+    });
+    await saveDraft(db, ORG, flow.id, graph("value"));
+    await publishFlow(db, ORG, flow.id);
+    expect(await materializeFlow(db, ORG, flow.id)).toMatchObject({ ok: true });
+
+    // Republish pointing at a field no record carries — the metric breaks.
+    await saveDraft(db, ORG, flow.id, graph("properties.missing"));
+    await publishFlow(db, ORG, flow.id);
+    const res = await materializeFlow(db, ORG, flow.id);
+
+    // Sabotage: leave the failed node out of `keep` and its row is deleted —
+    // the tile silently disappears from the dashboard and this returns ok:true.
+    expect(res.ok).toBe(false);
+    const rows = await db.select().from(flowResults).where(eq(flowResults.flowId, flow.id));
+    expect(rows.map((r) => r.outputNodeId).sort()).toEqual(["bad", "ok"]);
+    const bad = rows.find((r) => r.outputNodeId === "bad")!;
+    expect(bad.status).toBe("error");
+    expect(bad.error).toMatch(/none of the 3 records/);
+    expect(rows.find((r) => r.outputNodeId === "ok")!.status).toBe("fresh");
+  });
+
   it("reports ok:false when a published flow cannot be computed (drives the publish warning)", async () => {
     // A REAL zero denominator. This used to seed records with no `value` at
     // all and lean on "sum of null = 0" — which is the confident-zero bug an

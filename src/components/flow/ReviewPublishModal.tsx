@@ -57,6 +57,8 @@ export function ReviewPublishModal({
   hasCustomRange,
   publishing,
   error,
+  issues,
+  onSelectNode,
   warning,
   publishedVersion,
   onChange,
@@ -72,6 +74,10 @@ export function ReviewPublishModal({
   hasCustomRange: boolean;
   publishing: boolean;
   error: string | null;
+  /** Publish issues, each naming the step that caused it. */
+  issues: Array<{ nodeId?: string; message: string }>;
+  /** Select a step on the canvas and close this modal. */
+  onSelectNode: (nodeId: string) => void;
   warning: string | null;
   publishedVersion: number | null;
   onChange: (m: MetricSpecT[]) => void;
@@ -194,7 +200,30 @@ export function ReviewPublishModal({
         </div>
 
         <div className="space-y-2 border-t border-neutral-100 p-4">
-          {error && <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">Can’t publish: {error}</p>}
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+              <p>{error}</p>
+              {/* The per-issue list used to render only in a canvas banner
+                  gated on the modal being CLOSED — and publish can only be
+                  started from this modal, which stays open when it fails. So
+                  the list existed and was never once seen. */}
+              {issues.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {issues.map((iss, i) => (
+                    <li key={i}>
+                      {iss.nodeId ? (
+                        <button type="button" onClick={() => onSelectNode(iss.nodeId!)} className="text-left underline underline-offset-2 hover:no-underline">
+                          {iss.message}
+                        </button>
+                      ) : (
+                        iss.message
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           {warning && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{warning}</p>}
           <button
             onClick={onPublish}

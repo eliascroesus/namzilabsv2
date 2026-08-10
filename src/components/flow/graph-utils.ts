@@ -241,7 +241,7 @@ export function terminalIds(nodes: FNode[], allEdges: Edge[]): Set<string> {
 }
 
 /** Whether a step still needs required setup before it can produce a result. */
-export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, inputCount: number, handles?: Array<string | null>): boolean {
+export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, inputCount: number, handles?: Array<string | null>, branchMode?: string | null): boolean {
   // A compare step needs both of its named numbers — a wired step OR a typed-in
   // literal per slot (a chain edge alone isn't enough).
   const aOk = (handles?.includes("a") ?? inputCount >= 1) || cfg.aFixed != null;
@@ -274,6 +274,13 @@ export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, input
     // A Filter with nothing to filter on passes every record and used to read
     // a green "Ready" — the most common half-built state in the product,
     // wearing the badge that means finished. A date window counts as set up.
+    //
+    // EXCEPT on a Paths branch head set to "Always run" or "Everything else",
+    // where having no rules IS the configuration: the panel hides the
+    // condition editor entirely for those modes, so a "Needs setup" badge
+    // there could never be cleared — and it disables Continue and takes the
+    // Test button with it.
+    if (branchMode && branchMode !== "custom") return inputCount === 0;
     const rules = ((cfg.rules as unknown[] | undefined) ?? []).length;
     const dated = Boolean((cfg.dateRange as { enabled?: boolean } | undefined)?.enabled);
     return inputCount === 0 || (rules === 0 && !dated);
@@ -287,12 +294,14 @@ export function computeNodeStatus(opts: {
   cfg: Record<string, unknown>;
   inputCount: number;
   inputHandles?: Array<string | null>;
+  /** For a Paths branch head: how records enter it. "always"/"fallback" need no rules. */
+  branchMode?: string | null;
   lastTest?: { status?: string } | null;
   dirty?: boolean;
   updating?: boolean;
 }): "ready" | "setup" | "untested" | "updating" | "error" {
-  const { type, cfg, inputCount, inputHandles, lastTest, dirty, updating } = opts;
-  if (nodeNeedsSetup(type, cfg, inputCount, inputHandles)) return "setup";
+  const { type, cfg, inputCount, inputHandles, branchMode, lastTest, dirty, updating } = opts;
+  if (nodeNeedsSetup(type, cfg, inputCount, inputHandles, branchMode)) return "setup";
   if (updating) return "updating";
   if (lastTest?.status === "error") return "error";
   if (!lastTest || dirty) return "untested"; // configured but needs a manual test

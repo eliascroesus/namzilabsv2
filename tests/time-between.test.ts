@@ -494,6 +494,27 @@ describe("an ambiguous lane is an error, not a number", () => {
     expect(mins(out[0])).toBe(3);
   });
 
+  it("one Get data step split and recombined is ALSO ambiguous", () => {
+    // The engine reads lane divergence from the __count_ stamps, which differ
+    // for two lanes off ONE source. Counting Get data ancestors said "one", so
+    // this shape published clean and then hard-errored at materialize.
+    const g = parseGraph({
+      nodes: [
+        N("calls", "app", { connectionId: CONN, source: "close", eventType: "call_logged" }),
+        N("in", "filter", { combinator: "and", rules: [{ field: "properties.data.direction", op: "equals", value: "inbound", valueKind: "fixed" }] }),
+        N("out", "filter", { combinator: "and", rules: [{ field: "properties.data.direction", op: "equals", value: "outbound", valueKind: "fixed" }] }),
+        N("u", "unite", {}),
+        N("t", "time_between", { keyField: "properties.lead_id", startField: "occurredAt", endField: "occurredAt" }),
+        N("m", "formula", { op: "count" }),
+      ],
+      edges: [E("calls", "in"), E("calls", "out"), E("in", "u"), E("out", "u"), E("u", "t"), E("t", "m")],
+      metrics: [{ nodeId: "m", enabled: true, name: "x" }],
+    });
+    // Sabotage: gate on the number of Get data ancestors and this reads "one",
+    // publishes, and then the engine refuses at materialize with a red tile.
+    expect(validateGraph(g).some((i) => /more than one path/.test(i.message))).toBe(true);
+  });
+
   it("blocks publish for the same reason, before anything runs", () => {
     const g = parseGraph({
       nodes: [
@@ -508,10 +529,10 @@ describe("an ambiguous lane is an error, not a number", () => {
     });
     // Sabotage: check only the three field paths, as validate used to, and a
     // flow measuring call-to-call publishes with no issue at all.
-    expect(validateGraph(g).some((i) => /more than one Get data step/.test(i.message))).toBe(true);
+    expect(validateGraph(g).some((i) => /more than one path/.test(i.message))).toBe(true);
   });
 
-  it("one Get data step feeding it is never ambiguous", () => {
+  it("a single unbranched lane is never ambiguous", () => {
     const g = parseGraph({
       nodes: [
         N("calls", "app", { connectionId: CONN, source: "close", eventType: "call_logged" }),
@@ -521,7 +542,7 @@ describe("an ambiguous lane is an error, not a number", () => {
       edges: [E("calls", "t"), E("t", "m")],
       metrics: [{ nodeId: "m", enabled: true, name: "x" }],
     });
-    expect(validateGraph(g).some((i) => /more than one Get data step/.test(i.message))).toBe(false);
+    expect(validateGraph(g).some((i) => /more than one path/.test(i.message))).toBe(false);
   });
 });
 

@@ -602,3 +602,60 @@ describe("an unconfigured branch claims nothing", () => {
     expect(hubExec.outputs?.p3.records).toHaveLength(0); // both records were claimed
   });
 });
+
+/**
+ * THE EMPTINESS QUESTION IS ASKED ONCE, OVER THE WHOLE INPUT.
+ *
+ * It briefly lived inside computeAgg, which runs once PER BUCKET in a trend or
+ * a breakdown — so one quiet day threw and destroyed the entire chart,
+ * including the six days that were fine, and a published tile flipped to error
+ * on its next recompute with nobody touching anything. A bucket of 0 is a real
+ * answer about that bucket.
+ */
+describe("a quiet bucket is a zero, not an error", () => {
+  it("a trend survives a day whose records carry no value", async () => {
+    await ev({ eventType: "deal", value: 100, daysAgo: 3 });
+    await ev({ eventType: "call", daysAgo: 2 }); // no value at all
+    await ev({ eventType: "call", daysAgo: 2 });
+    await ev({ eventType: "deal", value: 300, daysAgo: 1 });
+    const g = G(
+      [N("a", "app", { connectionId: CONN }), N("m", "formula", { op: "sum", field: "value", groupBy: { type: "time", unit: "day" } })],
+      [E("a", "m")],
+    );
+    const exec = (await run(g)).nodes.get("m")!;
+    // Sabotage: throw inside computeAgg and the whole series is gone — no
+    // chart, no total, an error on a metric that was working yesterday.
+    expect(exec.status).toBe("ok");
+    const shape = (exec as { shape: { series: Array<{ value: number }>; total: number } }).shape;
+    expect(shape.series.map((s) => s.value)).toEqual([100, 0, 300]);
+    expect(shape.total).toBe(400);
+  });
+
+  it("a breakdown survives a group whose records carry no value", async () => {
+    await ev({ eventType: "deal", value: 100, properties: { rep: "Ana" } });
+    await ev({ eventType: "call", properties: { rep: "Bo" } }); // Bo made a call, closed nothing
+    const g = G(
+      [N("a", "app", { connectionId: CONN }), N("m", "formula", { op: "sum", field: "value", groupBy: { type: "field", field: "properties.rep" } })],
+      [E("a", "m")],
+    );
+    const exec = (await run(g)).nodes.get("m")!;
+    expect(exec.status).toBe("ok");
+    const groups = (exec as { shape: { groups: Array<{ label: string; value: number }> } }).shape.groups;
+    expect(groups.find((x) => x.label === "Bo")?.value).toBe(0);
+    expect(groups.find((x) => x.label === "Ana")?.value).toBe(100);
+  });
+
+  it("but a field empty across EVERY record is still the configuration error", async () => {
+    await ev({ eventType: "call", daysAgo: 2 });
+    await ev({ eventType: "call", daysAgo: 1 });
+    const g = G(
+      [N("a", "app", { connectionId: CONN }), N("m", "formula", { op: "sum", field: "value", groupBy: { type: "time", unit: "day" } })],
+      [E("a", "m")],
+    );
+    const exec = (await run(g)).nodes.get("m")!;
+    // Sabotage: drop assertFieldHasValues and this reads a trend of zeros —
+    // the confident zero, wearing a chart.
+    expect(exec.status).toBe("error");
+    expect((exec as { error: string }).error).toMatch(/none of the 2 records/);
+  });
+});

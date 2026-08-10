@@ -56,7 +56,7 @@ export type NodeTestDTO = {
    * this step's data — which the E.7 warning above cannot catch, because the
    * field IS in the connection's registry, just never on THIS record type.
    */
-  dedupe?: { field: string; keep?: string; orderField?: string; loaded: number; matched: number; removed: number };
+  dedupe?: { field: string; keep?: string; orderField?: string; loaded: number; matched: number; ordered?: number; removed: number };
   /**
    * What Time between paired. A median over "the leads that were called" is a
    * different question from the one the tile's name asks, and the keys that

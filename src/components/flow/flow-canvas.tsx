@@ -205,9 +205,13 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       // A non-finite number fails the graph schema, which fails the autosave
       // of this edit and every edit after it. The inputs can no longer produce
       // one; this is the belt, so no future input can either.
+      // Clamped to what MetricSpecSchema actually accepts — int, 0..6. A bare
+      // Number.isFinite check let 20 and 1.5 through, and those throw inside
+      // parseGraph just as loudly as NaN did, reopening the same silent
+      // save-death this belt exists to close.
       metrics: metrics.map((m) => ({
         ...m,
-        precision: Number.isFinite(m.precision) ? m.precision : 0,
+        precision: Number.isFinite(m.precision) ? Math.min(6, Math.max(0, Math.round(m.precision))) : 0,
         target: m.target != null && Number.isFinite(m.target) ? m.target : null,
       })),
     };
@@ -973,11 +977,28 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     return m;
   }, [edges]);
 
+  /**
+   * How records enter each Paths branch head, keyed by the head's node id. A
+   * head in "always" or "everything else" mode correctly has no rules, so it
+   * must not be badged "Needs setup" — a badge it could never clear.
+   */
+  const branchModeById = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const e of edges) {
+      if (!e.sourceHandle) continue;
+      const hub = nodes.find((n) => n.id === e.source);
+      if (hub?.type !== "paths") continue;
+      const entry = ((hub.data.config as { paths?: Array<{ id: string; mode?: string }> }).paths ?? []).find((p) => p.id === e.sourceHandle);
+      if (entry) out.set(e.target, entry.mode ?? "custom");
+    }
+    return out;
+  }, [nodes, edges]);
+
   const displayNodes = useMemo(
     () =>
       nodes.map((n) => {
         const inputCount = inDegreeById.get(n.id) ?? 0;
-        const status = computeNodeStatus({ type: String(n.type), cfg: n.data.config, inputCount, inputHandles: inHandlesById.get(n.id) ?? [], lastTest: n.data.lastTest, dirty: n.data.dirty, updating: testingId === n.id });
+        const status = computeNodeStatus({ type: String(n.type), cfg: n.data.config, inputCount, inputHandles: inHandlesById.get(n.id) ?? [], branchMode: branchModeById.get(n.id) ?? null, lastTest: n.data.lastTest, dirty: n.data.dirty, updating: testingId === n.id });
         const issue = status === "setup" ? setupHint(String(n.type), n.data.config, inputCount) : undefined;
         let freeHandles: Array<{ id: string; label: string }> | undefined;
         if (n.type === "paths") {
@@ -1195,9 +1216,17 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           metrics={metrics}
           previews={endpointPreviews}
           timeFieldOptions={timeFieldOptions}
-          hasCustomRange={nodes.some((n) => (n.data.config as { dateRange?: { enabled?: boolean; mode?: string } }).dateRange?.enabled && (n.data.config as { dateRange?: { mode?: string } }).dateRange?.mode === "between")}
+          hasCustomRange={nodes.some((n) => {
+            const c = n.data.config as { dateRange?: { enabled?: boolean; mode?: string }; mode?: string };
+            // Both shapes: a Filter's dateRange, and the retired-but-still-
+            // running Date range step, which stores mode/from/to at the top level.
+            if (c.dateRange?.enabled && c.dateRange.mode === "between") return true;
+            return n.type === "time" && c.mode === "between";
+          })}
           publishing={publishing}
           error={publishError}
+          issues={publishIssues}
+          onSelectNode={(id) => { setReviewOpen(false); setSelectedId(id); }}
           warning={publishWarning}
           publishedVersion={publishState.version}
           onChange={setMetrics}

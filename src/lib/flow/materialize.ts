@@ -32,10 +32,20 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
     // Tiles come from Output nodes (legacy flows) and/or endpoint metrics chosen at
     // Review & publish (new flows) — one tile per enabled metric.
     const tiles: Array<{ nodeId: string; tile: TileSpec }> = outputs.map((o) => ({ nodeId: o.nodeId, tile: o.tile }));
+    /**
+     * Enabled metrics whose step FAILED. Tracked separately because the tidy-up
+     * at the end deletes every stored row that is not in `tiles` — so a metric
+     * that started failing had its row DELETED, vanished from the dashboard
+     * without a trace, and this function still returned ok. The more metrics a
+     * flow had, the quieter the loss: the honest path below only runs when
+     * every single tile fails.
+     */
+    const failed: Array<{ nodeId: string; error: string }> = [];
     for (const m of graph.metrics) {
       if (!m.enabled) continue;
       const ex = nodes.get(m.nodeId);
       if (ex && ex.status === "ok") tiles.push({ nodeId: m.nodeId, tile: buildTile(m, ex.shape, ex.sample) });
+      else failed.push({ nodeId: m.nodeId, error: ex && ex.status === "error" ? ex.error : "This step produced no result." });
     }
 
     if (tiles.length === 0) {
@@ -84,11 +94,21 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
     for (const t of tiles) {
       await upsertResult(db, orgId, flowId, version, t.nodeId, t.tile, "fresh", null, record);
     }
-    // Drop results for tiles that no longer exist in the published flow.
-    const keep = tiles.map((t) => t.nodeId);
+    // A metric that broke keeps its row, its last good value, and gains the
+    // reason — so the tile goes red and says why, instead of disappearing.
+    for (const f of failed) {
+      await db
+        .update(flowResults)
+        .set({ status: "error", error: f.error })
+        .where(and(eq(flowResults.flowId, flowId), eq(flowResults.outputNodeId, f.nodeId)));
+    }
+    // Drop results for tiles that no longer exist in the published flow — the
+    // failed ones are still part of it, so they are kept.
+    const keep = [...tiles.map((t) => t.nodeId), ...failed.map((f) => f.nodeId)];
     await db
       .delete(flowResults)
       .where(keep.length ? and(eq(flowResults.flowId, flowId), notInArray(flowResults.outputNodeId, keep)) : eq(flowResults.flowId, flowId));
+    if (failed.length > 0) return { ok: false, error: failed[0].error };
     return { ok: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
