@@ -364,3 +364,22 @@ describe("describeInputs (Unite + Calculate panels)", () => {
     expect(inputs[1]).toMatchObject({ nodeId: "k", targetHandle: "a", value: 2 });
   });
 });
+
+/**
+ * A Filter with nothing to filter on passes every record. It used to wear the
+ * green "Ready" badge — the most common half-built state in the product,
+ * showing the word that means finished.
+ */
+describe("an empty Filter is not Ready", () => {
+  it("needs setup with no conditions and no date window", async () => {
+    const { nodeNeedsSetup } = await import("@/components/flow/graph-utils");
+    // Sabotage: fall through to `inputCount === 0` as it used to and a step
+    // passing 100% of records reads green, with "390 passed" beneath it.
+    expect(nodeNeedsSetup("filter", { combinator: "and", rules: [] }, 1)).toBe(true);
+    expect(nodeNeedsSetup("filter", { combinator: "and", rules: [{ field: "x", op: "equals", value: "y" }] }, 1)).toBe(false);
+    // A date window is a real filter, even with no rules.
+    expect(nodeNeedsSetup("filter", { combinator: "and", rules: [], dateRange: { enabled: true } }, 1)).toBe(false);
+    // Still needs an input first.
+    expect(nodeNeedsSetup("filter", { combinator: "and", rules: [{ field: "x", op: "equals", value: "y" }] }, 0)).toBe(true);
+  });
+});

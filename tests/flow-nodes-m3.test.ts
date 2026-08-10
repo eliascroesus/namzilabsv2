@@ -550,3 +550,55 @@ describe("an aggregation over a field nothing carries is an error, not a zero", 
     expect((exec as { error: string }).error).toMatch(/count unique values of/);
   });
 });
+
+/**
+ * A branch you have added but not configured used to claim every record, so
+ * the "everything else" lane silently emptied — the one place the loss is
+ * invisible, because that branch just reports zero and looks like an answer.
+ */
+describe("an unconfigured branch claims nothing", () => {
+  const hub = (paths: Array<Record<string, unknown>>, extra: unknown[] = [], extraEdges: unknown[] = []) =>
+    G(
+      [N("a", "app", { connectionId: CONN }), N("h", "paths", { paths }), ...extra] as never[],
+      [E("a", "h"), ...extraEdges] as never[],
+    );
+
+  it("the fallback keeps the records nobody claimed", async () => {
+    await ev({ eventType: "call", properties: { dir: "in" } });
+    await ev({ eventType: "call", properties: { dir: "out" } });
+    const r = await run(
+      hub(
+        [{ id: "p1", label: "Unconfigured", mode: "custom" }, { id: "p2", label: "Rest", mode: "fallback" }],
+        [N("f1", "filter", { combinator: "and", rules: [] }), N("c", "formula", { op: "count" })],
+        [{ id: "eh", source: "h", target: "f1", sourceHandle: "p1" }, E("f1", "c")],
+      ),
+    );
+    const hubExec = r.nodes.get("h") as { outputs?: Record<string, { records: unknown[] }> };
+    // Sabotage: restore `: true` for a condition-less branch and the fallback
+    // lane goes to 0 the moment a branch is added and not yet filled in.
+    expect(hubExec.outputs?.p2.records).toHaveLength(2);
+    expect(hubExec.outputs?.p1.records).toHaveLength(2); // still visible on its own lane
+  });
+
+  it("one legacy path no longer makes every other branch legacy", async () => {
+    await ev({ eventType: "call", properties: { dir: "in" } });
+    await ev({ eventType: "call", properties: { dir: "out" } });
+    const r = await run(
+      hub(
+        [
+          { id: "p1", label: "Inbound", mode: "custom", filters: { combinator: "and", rules: [{ field: "properties.dir", op: "equals", value: "in", valueKind: "fixed" }] } },
+          { id: "p2", label: "Outbound", mode: "custom" },
+          { id: "p3", label: "Rest", mode: "fallback" },
+        ],
+        [N("f2", "filter", { combinator: "and", rules: [{ field: "properties.dir", op: "equals", value: "out", valueKind: "fixed" }] })],
+        [{ id: "eh2", source: "h", target: "f2", sourceHandle: "p2" }],
+      ),
+    );
+    const hubExec = r.nodes.get("h") as { outputs?: Record<string, { records: unknown[] }> };
+    // Sabotage: decide `legacy` once for the hub with .some() and p2 reads the
+    // hub's (absent) rules instead of its own filter step — claiming nothing,
+    // so the outbound call falls through to the fallback.
+    expect(hubExec.outputs?.p1.records).toHaveLength(1); // legacy path filters at the hub
+    expect(hubExec.outputs?.p3.records).toHaveLength(0); // both records were claimed
+  });
+});

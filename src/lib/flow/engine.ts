@@ -811,24 +811,35 @@ function execPaths(node: FlowNode, inputs: ResolvedInput[], graph: FlowGraph): N
   //  - New hubs keep each branch's conditions in that branch's own first
   //    "Path conditions" (Filter) step, read from the graph here. The hub itself
   //    holds no rules — only each branch's mode (custom / always / fallback).
-  const legacy = cfg.paths.some((p) => (p.filters?.rules?.length ?? 0) > 0);
+  // PER PATH, not once for the hub. This was `cfg.paths.some(...)`, so a
+  // single legacy path made every OTHER branch read the hub's rules — which
+  // they do not have — so they claimed nothing and the fallback swallowed
+  // everything.
+  const isLegacyPath = (p: { filters?: FilterConfig }) => (p.filters?.rules?.length ?? 0) > 0;
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
   const condsOf = (p: { id: string; filters?: FilterConfig }): FilterConfig | null => {
-    if (legacy) return p.filters ?? null;
+    if (isLegacyPath(p)) return p.filters ?? null;
     const edge = graph.edges.find((e) => e.source === node.id && e.sourceHandle === p.id);
     const first = edge ? nodeById.get(edge.target) : undefined;
     return first?.type === "filter" ? FilterConfigSchema.parse(first.data.config ?? {}) : null;
   };
   const hasConds = (c: FilterConfig | null): c is FilterConfig => !!c && c.rules.length > 0;
 
-  // Does a record continue down at least one custom branch? (Fallback = the rest.)
-  // A legacy path without hub filters never claimed records for fallback purposes; a new
-  // custom branch with no conditions yet passes everything, so it claims everything.
+  /**
+   * Does a record continue down at least one custom branch? (Fallback = the rest.)
+   *
+   * ONE RULE: a branch claims a record only if it HAS conditions and they
+   * match. A branch you have added but not configured yet used to claim
+   * everything, which silently emptied the "everything else" lane — the one
+   * place the loss is invisible, because that branch simply reports zero and
+   * looks like a true answer. An unconfigured branch still passes everything
+   * down its own lane, where you can see it.
+   */
   const customPaths = cfg.paths.filter((p) => p.mode === "custom");
   const matchedAny = (r: FlowRecord) =>
     customPaths.some((p) => {
       const c = condsOf(p);
-      return legacy ? hasConds(c) && evalRules(r, c) : hasConds(c) ? evalRules(r, c) : true;
+      return hasConds(c) && evalRules(r, c);
     });
 
   for (const p of cfg.paths) {
@@ -840,7 +851,7 @@ function execPaths(node: FlowNode, inputs: ResolvedInput[], graph: FlowGraph): N
       // Custom: a legacy hub filters here (its rules live on the hub); a new hub passes
       // everything through and the branch's own Path-conditions step narrows it.
       const c = condsOf(p);
-      outputs[p.id] = { kind: "dataset", records: legacy && hasConds(c) ? records.filter((r) => evalRules(r, c)) : records };
+      outputs[p.id] = { kind: "dataset", records: isLegacyPath(p) && hasConds(c) ? records.filter((r) => evalRules(r, c)) : records };
     }
   }
   if (cfg.fallbackId) outputs[cfg.fallbackId] = { kind: "dataset", records: records.filter((r) => !matchedAny(r)) };

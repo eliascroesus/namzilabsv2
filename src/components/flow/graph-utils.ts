@@ -270,6 +270,14 @@ export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, input
     return inputCount === 0 || !set("keyField") || !set("startField") || !set("endField");
   }
   if (type === "output") return inputCount === 0 || !String(cfg.name ?? "").trim();
+  if (type === "filter") {
+    // A Filter with nothing to filter on passes every record and used to read
+    // a green "Ready" — the most common half-built state in the product,
+    // wearing the badge that means finished. A date window counts as set up.
+    const rules = ((cfg.rules as unknown[] | undefined) ?? []).length;
+    const dated = Boolean((cfg.dateRange as { enabled?: boolean } | undefined)?.enabled);
+    return inputCount === 0 || (rules === 0 && !dated);
+  }
   return inputCount === 0;
 }
 
