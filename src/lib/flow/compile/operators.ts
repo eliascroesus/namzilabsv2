@@ -146,6 +146,19 @@ function numericRhs(rule: CompiledRule): SQL {
  * wrapped in `coalesce(..., false)`.
  */
 export function compileRule(rule: CompiledRule): SQL {
+  const base = compileRuleBase(rule);
+  // Parity twin of evalRule's both-blank guard: a field-to-field comparison
+  // where both sides are blank matches nothing. The JS engine returns false
+  // there now, and the golden suite demands the compiled path answer the same
+  // — without this, `equals` between two missing fields is `'' = ''` = true
+  // in SQL and false in JS.
+  if (rule.valueKind === "field" && rule.valueField && rule.op !== "is_empty" && rule.op !== "is_not_empty") {
+    return sql`((${fieldText(rule.field)} <> '' or ${fieldText(rule.valueField)} <> '') and ${base})`;
+  }
+  return base;
+}
+
+function compileRuleBase(rule: CompiledRule): SQL {
   const f = fieldText(rule.field);
   const v = rhsText(rule);
   const raw = fieldSql(rule.field);
@@ -195,7 +208,12 @@ function escaped(v: SQL): SQL {
 /** `splitList`: comma-separated, each element trimmed — including the empty string. */
 function listSql(rule: CompiledRule): SQL {
   if (rule.valueKind === "field" && rule.valueField) {
-    return sql`(select coalesce(array_agg(btrim(x)), array[]::text[]) from unnest(string_to_array(coalesce(${fieldSql(rule.valueField)}, ''), ',')) as x)`;
+    // ROWS of text, not one array row: `x = ANY (subquery)` compares x against
+    // each ROW the subquery returns, so a subquery yielding a single text[]
+    // value is `text = text[]` — an error the first time it runs. The old
+    // array_agg form had never been executed until the parity suite covered
+    // field-valued is_one_of.
+    return sql`(select btrim(x) from unnest(string_to_array(coalesce(${fieldSql(rule.valueField)}, ''), ',')) as x)`;
   }
   // Built as an explicit array literal rather than a bound array param, so the
   // element type is unambiguous on every driver.

@@ -269,6 +269,13 @@ export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, input
     const set = (k: string) => String(cfg[k] ?? "").trim().length > 0;
     return inputCount === 0 || !set("keyField") || !set("startField") || !set("endField");
   }
+  if (type === "cross_reference") {
+    // Two inputs AND all three answers: whose records continue, matched on
+    // what, checked against what. A partial cross-reference has no safe
+    // reading, so nothing here defaults.
+    const set = (k: string) => String(cfg[k] ?? "").trim().length > 0;
+    return inputCount < 2 || !set("keepNodeId") || !set("keyField") || !set("lookupField");
+  }
   if (type === "output") return inputCount === 0 || !String(cfg.name ?? "").trim();
   if (type === "filter") {
     // A Filter with nothing to filter on passes every record and used to read
@@ -424,7 +431,10 @@ export function buildFieldGroups(opts: {
       // to be READ and referenced ("step 1 loaded 390"), and it goes last so it never
       // competes with the step's real columns.
       const outNum: PickField = { path: `__count_${sn.id}`, label: "Output number", type: "number", example: sn.data.lastTest.recordsOut };
-      const isPassThrough = sn.type === "filter" || sn.type === "time";
+      // Cross-reference belongs here too: it decides who continues but adds no
+      // columns — its records' fields already appear under their source step's
+      // own group. Missing it would advertise every kept-lane column twice.
+      const isPassThrough = sn.type === "filter" || sn.type === "time" || sn.type === "cross_reference";
       /**
        * A step that computes a NUMBER has no per-record variables to offer,
        * and offering one anyway was a lie the picker told: a Calculate that
@@ -485,6 +495,31 @@ function chosenSample(node: FNode, sampleIndexOf?: (n: FNode) => number): unknow
   const sample = (node.data.lastTest?.sample ?? []) as unknown[];
   const idx = sampleIndexOf ? sampleIndexOf(node) : 0;
   return sample[idx] ?? sample[0];
+}
+
+/**
+ * Every node upstream of (and including) `startId` — one Cross-reference
+ * lane's picker scope. The kept side must offer only kept-lane fields and the
+ * list side only list-lane fields: offering the union re-opens the trap the
+ * step exists to close, picking a field the chosen records never carry.
+ */
+export function laneAncestorIds(startId: string, edges: Edge[]): Set<string> {
+  const incoming = new Map<string, string[]>();
+  for (const e of edges) {
+    if (!incoming.has(e.target)) incoming.set(e.target, []);
+    incoming.get(e.target)!.push(e.source);
+  }
+  const seen = new Set<string>([startId]);
+  const stack = [startId];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    for (const s of incoming.get(cur) ?? []) {
+      if (seen.has(s)) continue;
+      seen.add(s);
+      stack.push(s);
+    }
+  }
+  return seen;
 }
 
 /** Walk upstream from a node to the nearest App source (itself if it is one). */

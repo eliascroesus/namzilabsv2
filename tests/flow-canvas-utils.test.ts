@@ -6,6 +6,8 @@ import {
   buildFieldGroups,
   computeVerticalLayout,
   computeStepNumbers,
+  laneAncestorIds,
+  nodeNeedsSetup,
   resolveSampleField,
   describeInputs,
   structuralEdges,
@@ -118,6 +120,56 @@ describe("buildFieldGroups (variable picker)", () => {
     });
     expect(groups.some((g) => g.from === "unite")).toBe(false);
     expect(groups.some((g) => g.from === "app")).toBe(true);
+  });
+});
+
+describe("cross_reference in the editor's pure helpers", () => {
+  const tested = {
+    status: "ok" as const,
+    recordsIn: 2,
+    recordsOut: 1,
+    sample: [],
+    inputSample: [],
+    outputSchema: [{ path: "plan", label: "plan", type: "text" }] as FieldInfo[],
+  };
+
+  it("needs setup until BOTH inputs are wired and all three answers are given", () => {
+    // Sabotage: default any of these and a half-built join runs with a hidden
+    // side — the exact silence the step was built to end.
+    const full = { keepNodeId: "a", keyField: "k", lookupField: "l", mode: "appears" };
+    expect(nodeNeedsSetup("cross_reference", full, 2)).toBe(false);
+    expect(nodeNeedsSetup("cross_reference", full, 1)).toBe(true);
+    expect(nodeNeedsSetup("cross_reference", { ...full, keepNodeId: "" }, 2)).toBe(true);
+    expect(nodeNeedsSetup("cross_reference", { ...full, keyField: "" }, 2)).toBe(true);
+    expect(nodeNeedsSetup("cross_reference", { ...full, lookupField: "" }, 2)).toBe(true);
+  });
+
+  it("laneAncestorIds scopes one input's side, never the other lane", () => {
+    // app1 → f1 → x ← app2. The f1 lane's scope is {f1, app1}; app2 is the
+    // other side. Offering the union re-opens the mistaken-join trap.
+    const edges = [E("app1", "f1"), E("f1", "x"), E("app2", "x")];
+    expect([...laneAncestorIds("f1", edges)].sort()).toEqual(["app1", "f1"]);
+    expect([...laneAncestorIds("app2", edges)].sort()).toEqual(["app2"]);
+  });
+
+  it("advertises no columns of its own downstream — only Output / Output number", () => {
+    // Sabotage: leave cross_reference out of the pass-through set and every
+    // kept-lane column appears TWICE in downstream pickers (once under the
+    // app, once under the join).
+    const app = N("app1", "app", { lastTest: { ...tested, sample: [{ source: "gsheets", properties: { plan: "pro" } }] } });
+    const app2 = N("app2", "app", { lastTest: { ...tested, sample: [{ source: "close", properties: {} }] } });
+    const xref = N("x", "cross_reference", { lastTest: tested });
+    const after = N("f9", "filter");
+    const groups = buildFieldGroups({
+      selectedId: "f9",
+      nodes: [app, app2, xref, after],
+      edges: [E("app1", "x"), E("app2", "x"), E("x", "f9")],
+      stepNoById: new Map([["app1", 1], ["app2", 2], ["x", 3], ["f9", 4]]),
+      titleOf,
+    });
+    const xg = groups.find((g) => g.nodeId === "x");
+    expect(xg).toBeDefined();
+    expect(xg!.fields.map((f) => f.path).sort()).toEqual(["__count_x", "__passed_x"]);
   });
 });
 

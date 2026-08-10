@@ -41,6 +41,14 @@ const PATHS: Record<string, React.ReactNode> = {
       <circle cx="18" cy="17" r="1.6" />
     </>
   ),
+  // Cross-reference: two overlapping sets, the intersection filled.
+  cross_reference: (
+    <>
+      <circle cx="9" cy="12" r="6" />
+      <circle cx="15" cy="12" r="6" />
+      <path d="M12 7.2a6 6 0 010 9.6 6 6 0 010-9.6z" fill="currentColor" stroke="none" />
+    </>
+  ),
   // Unite: the mirror of paths — two lanes flowing back into one line.
   unite: (
     <>
@@ -92,6 +100,7 @@ export function NodeGlyph({ type, className = "h-4 w-4" }: { type: string; class
 export const NODE_ACCENT: Record<string, string> = {
   unite: "#0EA5E9", // sky — a Data step
   filter: "#3B82F6", // blue — Conditions
+  cross_reference: "#6366F1", // indigo — Conditions (match across sources)
   paths: "#EC4899", // pink — Conditions (split)
   formula: "#8B5CF6", // violet — Calculation
   calculate: "#8B5CF6", // violet — Calculation (legacy)

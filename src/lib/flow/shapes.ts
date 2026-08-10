@@ -16,9 +16,9 @@ import { isDatasetFormulaOp } from "./types";
 export type ShapeKind = "dataset" | "scalar" | "series" | "grouped" | "none";
 
 /** Steps that emit a record set. */
-const DATASET_PRODUCERS = new Set(["app", "filter", "time", "time_between", "paths", "unite"]);
+const DATASET_PRODUCERS = new Set(["app", "filter", "time", "time_between", "paths", "unite", "cross_reference"]);
 /** Steps that read a record set. */
-const DATASET_CONSUMERS = new Set(["filter", "time", "time_between", "group", "paths", "unite"]);
+const DATASET_CONSUMERS = new Set(["filter", "time", "time_between", "group", "paths", "unite", "cross_reference"]);
 
 export function producesDataset(type: string): boolean {
   return DATASET_PRODUCERS.has(type);

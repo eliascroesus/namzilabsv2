@@ -95,6 +95,7 @@ export function ConfigPanel({
   testing,
   numberGroups,
   datasetCandidates,
+  laneScopes,
   onChange,
   onRename,
   onTest,
@@ -116,6 +117,8 @@ export function ConfigPanel({
   testing: boolean;
   numberGroups: DataGroup[];
   datasetCandidates: StepRef[];
+  /** Cross-reference only: per-input lane scope (which steps' fields each side may offer). */
+  laneScopes?: Record<string, string[]>;
   branch: BranchCtx | null;
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
@@ -213,6 +216,7 @@ export function ConfigPanel({
                 inputs={inputs}
                 numberGroups={numberGroups}
                 datasetCandidates={datasetCandidates}
+                laneScopes={laneScopes}
                 branch={branch}
                 onChange={onChange}
                 onTestUpstream={onTestUpstream}
@@ -342,6 +346,7 @@ function NodeConfig({
   inputs,
   numberGroups,
   datasetCandidates,
+  laneScopes,
   branch,
   onChange,
   onTestUpstream,
@@ -358,6 +363,7 @@ function NodeConfig({
   inputs: InputDescriptor[];
   numberGroups: DataGroup[];
   datasetCandidates: StepRef[];
+  laneScopes?: Record<string, string[]>;
   branch: BranchCtx | null;
   onChange: (patch: Record<string, unknown>) => void;
   onTestUpstream?: () => void;
@@ -685,6 +691,20 @@ function NodeConfig({
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (type === "cross_reference") {
+    return (
+      <CrossReferenceConfig
+        cfg={cfg}
+        groups={groups}
+        inputs={inputs}
+        datasetCandidates={datasetCandidates}
+        laneScopes={laneScopes}
+        onChange={onChange}
+        onSetSources={onSetSources}
+      />
     );
   }
 
@@ -1145,6 +1165,119 @@ function ImportStatusLine({ connectionId }: { connectionId: string }) {
  * clock can be started on — a picker showing 480 Close fields when four of
  * them are dates is the same "where is my data" problem from the other end.
  */
+/**
+ * Cross-reference reads top to bottom as one sentence with no hidden side:
+ * wire two steps, say whose records continue, then match a field from each.
+ * Each field picker is scoped to ITS side's lane — offering the union would
+ * re-open the trap this step exists to close, picking a field the chosen
+ * side's records never carry.
+ */
+function CrossReferenceConfig({
+  cfg,
+  groups,
+  inputs,
+  datasetCandidates,
+  laneScopes,
+  onChange,
+  onSetSources,
+}: {
+  cfg: Record<string, unknown>;
+  groups: DataGroup[];
+  inputs: InputDescriptor[];
+  datasetCandidates: StepRef[];
+  laneScopes?: Record<string, string[]>;
+  onChange: (p: Record<string, unknown>) => void;
+  onSetSources: (ids: string[]) => void;
+}) {
+  const laneIds = inputs.map((i) => i.nodeId);
+  const keepId = String(cfg.keepNodeId ?? "");
+  const mode = String(cfg.mode ?? "appears");
+  const other = inputs.length === 2 ? inputs.find((i) => i.nodeId !== keepId) : undefined;
+  const keepPicked = inputs.some((i) => i.nodeId === keepId);
+  const scopeFor = (nodeId: string | undefined): DataGroup[] => {
+    if (!nodeId) return [];
+    const allowed = new Set(laneScopes?.[nodeId] ?? [nodeId]);
+    return groups
+      .map((g) => ({ ...g, fields: g.fields.filter((f) => !f.path.startsWith("__")) }))
+      .filter((g) => allowed.has(g.stepId) && g.fields.length > 0);
+  };
+  const stepLabel = (id: string) => {
+    const c = datasetCandidates.find((x) => x.id === id);
+    const inp = inputs.find((i) => i.nodeId === id);
+    return c ? `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` : inp?.title ?? id;
+  };
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-neutral-500">
+        Checks one step&rsquo;s records against another step&rsquo;s values — keep only the leads that are also in a spreadsheet, or only the ones that aren&rsquo;t.
+      </p>
+      <div>
+        <p className="mb-1 text-xs font-medium text-neutral-600">The two steps to check</p>
+        <div className="space-y-1.5">
+          {[0, 1].map((idx) => (
+            <Select
+              key={idx}
+              value={laneIds[idx] ?? ""}
+              width={320}
+              placeholder="Choose a step…"
+              options={datasetCandidates
+                .filter((c) => c.id === laneIds[idx] || !laneIds.includes(c.id))
+                .map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
+              onChange={(v) => {
+                const next = [...laneIds];
+                next[idx] = v;
+                // Rewiring a lane invalidates whatever was matched on it.
+                onSetSources(next.filter(Boolean).slice(0, 2));
+                onChange({ keyField: "", lookupField: "", keepNodeId: next.includes(keepId) ? keepId : "" });
+              }}
+            />
+          ))}
+        </div>
+      </div>
+      {inputs.length === 2 && (
+        <>
+          <Field label="Keep records from">
+            <Select
+              value={keepPicked ? keepId : ""}
+              width={W}
+              placeholder="Choose whose records continue…"
+              options={inputs.map((i) => ({ value: i.nodeId, label: stepLabel(i.nodeId) }))}
+              // Flipping sides swaps BOTH lanes, so both picked fields go with it.
+              onChange={(v) => onChange({ keepNodeId: v, keyField: "", lookupField: "" })}
+            />
+          </Field>
+          {keepPicked && (
+            <>
+              <Field label="Matching on its field">
+                <FieldInput value={String(cfg.keyField ?? "")} groups={scopeFor(keepId)} onChange={(v) => onChange({ keyField: v })} placeholder="Pick the field to look up…" />
+              </Field>
+              <Field label="Keep a record when its value">
+                <Select
+                  value={mode}
+                  width={W}
+                  options={[
+                    { value: "appears", label: `Appears in ${other ? stepLabel(other.nodeId) : "the other step"}` },
+                    { value: "missing", label: `Doesn't appear in ${other ? stepLabel(other.nodeId) : "the other step"}` },
+                  ]}
+                  onChange={(v) => onChange({ mode: v })}
+                />
+              </Field>
+              {other && (
+                <Field label={`In ${stepLabel(other.nodeId)}’s field`}>
+                  <FieldInput value={String(cfg.lookupField ?? "")} groups={scopeFor(other.nodeId)} onChange={(v) => onChange({ lookupField: v })} placeholder="Pick the field holding the values…" />
+                </Field>
+              )}
+              <p className="text-xs text-neutral-400">
+                Matching ignores capitalization and extra spaces. A record with a blank value can never match{mode === "appears" ? ", so it is dropped." : ", so it is kept."}
+              </p>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function TimeBetweenFields({
   cfg,
   groups,
@@ -1304,6 +1437,41 @@ function PairingOutcome({ p }: { p: { keys: number; started: number; matched: nu
   return (
     <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-600">
       {bits.join(", ")}. The rest are not in this number.
+    </p>
+  );
+}
+
+/**
+ * What Cross-reference actually did. "8 kept" against a list that supplied
+ * zero values is the silent version of the bug this step replaces — so the
+ * list size, the blanks, and where every record went are part of the answer.
+ */
+function CrossRefOutcome({ c }: { c: { mode: string; keyField: string; lookupField: string; checked: number; kept: number; dropped: number; blanks: number; listSize: number; listBlanks: number } }) {
+  const key = c.keyField.replace(/^properties\./, "");
+  const lookup = c.lookupField.replace(/^properties\./, "");
+  if (c.checked === 0) return null; // an empty window is an empty window
+  if (c.listSize === 0) {
+    // The wrong-field case throws in the engine, so reaching here means the
+    // other step genuinely had no records — an empty sheet, not a mistake.
+    return (
+      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+        The other step had no records, so there was nothing to check <span className="font-medium">{key}</span> against.
+      </p>
+    );
+  }
+  const blankNote =
+    c.blanks > 0
+      ? ` ${c.blanks.toLocaleString()} had no ${key} and ${c.mode === "appears" ? "were dropped — a blank can't match anything" : "were kept — a blank isn't in the list either"}.`
+      : "";
+  const listNote = c.listBlanks > 0 ? ` (${c.listBlanks.toLocaleString()} of its records had no ${lookup})` : "";
+  const outcome =
+    c.mode === "appears"
+      ? `${c.kept.toLocaleString()} matched and continue; ${(c.dropped - c.blanks).toLocaleString()} didn't.`
+      : `${(c.kept - c.blanks).toLocaleString()} aren't in the list and continue; ${c.dropped.toLocaleString()} are, and were dropped.`;
+  return (
+    <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-600">
+      Checked {c.checked.toLocaleString()} records against {c.listSize.toLocaleString()} values{listNote}. {outcome}
+      {blankNote}
     </p>
   );
 }
@@ -1635,6 +1803,7 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
       )}
       {t.dedupe && <DedupeOutcome d={t.dedupe} />}
       {t.pairing && <PairingOutcome p={t.pairing} />}
+      {t.crossRef && <CrossRefOutcome c={t.crossRef} />}
       {t.truncated && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
           Only the newest 500,000 records were read, so this number is a floor, not a total. Narrow the step with a date range to measure a complete period.

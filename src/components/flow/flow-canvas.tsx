@@ -62,6 +62,7 @@ import {
   describeInputs,
   descendantsOf,
   isCompareNode,
+  laneAncestorIds,
   nearestAppAncestor,
   resolveSampleField,
   structuralEdges,
@@ -104,6 +105,7 @@ function isNumberProducer(n: FNode): boolean {
 function setupHint(type: string, cfg: Record<string, unknown>, inputCount: number): string {
   if (type === "app") return cfg.connectionId ? "Choose what data to pull." : "Choose an account to load data.";
   if (type === "unite") return "Pick the lanes to bring together.";
+  if (type === "cross_reference") return inputCount < 2 ? "Wire in the two steps to check against each other." : "Pick whose records continue, and the fields to match.";
   if (type === "time_between") return "Pick the matching field and the start/end conditions.";
   if (type === "filter") return inputCount === 0 ? "Connect an input." : "Add a condition — with none, this step passes every record.";
   if (type === "formula") return isDatasetFormulaOp(cfg.op ?? "percentage") ? "Connect an input." : "Pick or type a First and Second number.";
@@ -816,9 +818,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
   // A Unite's lane candidates: only each line's FURTHEST step (computed as if this
   // unite weren't connected), so lanes always join at their ends — never mid-line.
-  // Paths hubs are never pickable (they only feed their branches).
+  // Paths hubs are never pickable (they only feed their branches). Cross-reference
+  // wires its two inputs from the same picker — its lanes are edges too.
   const candidates = useMemo(() => {
-    if (!selected || selected.type !== "unite") return { dataset: [] as StepRef[] };
+    if (!selected || (selected.type !== "unite" && selected.type !== "cross_reference")) return { dataset: [] as StepRef[] };
     const desc = descendantsOf(selected.id, edges);
     const edgesSansSelf = edges.filter((e) => e.target !== selected.id);
     const ends = terminalIds(nodes, edgesSansSelf);
@@ -829,6 +832,19 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         .map(toItem),
     };
   }, [selected, nodes, edges, stepNoById]);
+
+  // Cross-reference pickers are lane-scoped: each side may only offer fields
+  // reachable through that input. The union would re-open the trap the step
+  // closes — picking a field the chosen side's records never carry.
+  const laneScopes = useMemo<Record<string, string[]> | undefined>(() => {
+    if (!selected || selected.type !== "cross_reference") return undefined;
+    const out: Record<string, string[]> = {};
+    for (const e of edges) {
+      if (e.target !== selected.id) continue;
+      out[e.source] = [...laneAncestorIds(e.source, edges)];
+    }
+    return out;
+  }, [selected, edges]);
 
   // Number choices for a compare step, in the same data-browser shape as every other
   // input: one group per earlier step, each exposing exactly its number — a scalar
@@ -1179,6 +1195,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                   testing: testingId === selected.id,
                   numberGroups,
                   datasetCandidates: candidates.dataset,
+                  laneScopes,
                   branch,
                   onChange: (patch) => updateConfig(selected.id, patch),
                   onRename: (v) => renameNode(selected.id, v),

@@ -16,6 +16,8 @@ import {
   type AppConfig,
   TimeConfigSchema,
   TimeBetweenConfigSchema,
+  CrossReferenceConfigSchema,
+  type CrossRefMode,
   FormulaConfigSchema,
   GroupConfigSchema,
   CalculateConfigSchema,
@@ -81,6 +83,8 @@ export type NodeExecOk = {
   dedupe?: DedupeReport;
   /** What Time between actually paired, so the dropped keys are never silent. */
   pairing?: PairingReport;
+  /** What Cross-reference actually matched — the receipt for every kept/dropped record. */
+  crossRef?: CrossRefReport;
   shape: Shape;
   /** Extra outputs keyed by source-handle id (Paths uses this). */
   outputs?: Record<string, Shape>;
@@ -196,6 +200,8 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
         return execTimeBetween(node, inputs);
       case "unite":
         return execUnite(node, inputs);
+      case "cross_reference":
+        return execCrossReference(node, inputs);
       case "paths":
         return execPaths(node, inputs, graph);
       case "group":
@@ -623,6 +629,7 @@ function orderValue(r: FlowRecord, field: string): number | null {
 function execFilter(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = FilterConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Filter");
+  assertComparableFields(cfg, input.records);
   let recs = input.records;
   // Optional prominent "Date range" quick section (reuses the Time window logic).
   const dr = cfg.dateRange;
@@ -635,6 +642,34 @@ function execFilter(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   }
   const passed = recs.filter((r) => evalRules(r, cfg));
   return datasetExec("filter", node.id, passed, input.records.length);
+}
+
+/**
+ * A field-vs-field condition whose two sides never occur on the same record
+ * can never match — the classic mistaken join: Combine two apps, then compare
+ * a field from each, where every record is from ONE app and so always misses
+ * one side. Refusing with directions beats returning an empty (or, before the
+ * both-blank guard, an exactly-wrong) result with a green badge.
+ *
+ * Checked over the step's full input, before any date window, so a narrow
+ * week can't flip a valid comparison into an error. An empty input proves
+ * nothing and is left alone.
+ */
+function assertComparableFields(cfg: FilterConfig, records: FlowRecord[]): void {
+  if (records.length === 0) return;
+  const present = (r: FlowRecord, f: string) => {
+    const x = getField(r, f);
+    return x != null && String(x).trim() !== "";
+  };
+  for (const rule of cfg.rules) {
+    if (rule.valueKind !== "field" || !rule.valueField) continue;
+    if (records.some((r) => present(r, rule.field) && present(r, rule.valueField!))) continue;
+    const nice = (f: string) => f.replace(/^properties\./, "");
+    throw new Error(
+      `This condition compares "${nice(rule.field)}" with "${nice(rule.valueField)}", but no record here carries both — so it can never match. ` +
+        `If they come from different apps, use a Cross-reference step to keep records from one that appear in the other.`,
+    );
+  }
 }
 
 // ---------- Time ----------
@@ -814,6 +849,107 @@ function execUnite(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   });
   const records = datasets.flat();
   return datasetExec("unite", node.id, records, records.length);
+}
+
+// ---------- Cross-reference ----------
+/** What the match actually did, counted — never inferred from the config. */
+export type CrossRefReport = {
+  mode: CrossRefMode;
+  keyField: string;
+  lookupField: string;
+  /** Records in the kept lane that were checked. */
+  checked: number;
+  kept: number;
+  dropped: number;
+  /** Kept-lane records with no value in `keyField` — they can never match. */
+  blanks: number;
+  /** Distinct non-blank values the other step supplied to check against. */
+  listSize: number;
+  /** Reference records that had no value in `lookupField`. */
+  listBlanks: number;
+};
+
+/**
+ * A value as a MATCH KEY: trimmed and lowercased, blank collapsed to null.
+ *
+ * Case-insensitive on purpose, unlike the filter's `equals`. A join field is
+ * an identity (an email, a phone, an id), and "Anna@x.com" failing to match
+ * "anna@x.com" is a silently missing lead, not a semantic anyone chose. The
+ * panel says so in words next to the picker.
+ */
+function matchKey(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim().toLowerCase();
+  return s === "" ? null : s;
+}
+
+/**
+ * Keep records from ONE input whose key appears (or doesn't) among the OTHER
+ * input's values. The kept lane's records pass through unchanged — this step
+ * adds no columns, it only decides who continues.
+ *
+ * Blank keys can never match: in "appears" mode they are dropped (a record
+ * with no email is not "in the spreadsheet"), in "missing" mode they are kept
+ * (it is equally not absent-with-a-value), and the receipt counts them either
+ * way so neither choice is silent.
+ */
+function execCrossReference(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = CrossReferenceConfigSchema.parse(node.data.config ?? {});
+  if (inputs.length < 2) throw new Error("Cross-reference needs two connected steps: the records to keep, and the list to check them against.");
+  if (inputs.length > 2) throw new Error(`Cross-reference checks one step against one other, but ${inputs.length} are wired into it. Remove the extras.`);
+  for (const i of inputs) if (i.shape.kind !== "dataset") throw new Error("Cross-reference only accepts record inputs.");
+  if (!cfg.keepNodeId || !cfg.keyField || !cfg.lookupField) {
+    throw new Error("Cross-reference needs to know whose records to keep and which fields to match — open the step and finish the sentence.");
+  }
+  const primary = inputs.find((i) => i.sourceNodeId === cfg.keepNodeId);
+  const reference = inputs.find((i) => i.sourceNodeId !== cfg.keepNodeId);
+  if (!primary || !reference) throw new Error("The step whose records continue isn't wired into this one any more — open Cross-reference and pick it again.");
+
+  const primaryRecords = (primary.shape as Dataset).records;
+  const referenceRecords = (reference.shape as Dataset).records;
+
+  const list = new Set<string>();
+  let listBlanks = 0;
+  for (const r of referenceRecords) {
+    const k = matchKey(getField(r, cfg.lookupField));
+    if (k == null) listBlanks++;
+    else list.add(k);
+  }
+  // The 1C distinction: a reference step with NO records is an empty window
+  // (checking against an empty sheet legitimately matches nothing), while
+  // records present but the chosen field blank on every one is someone
+  // pointing at the wrong field — and must say so, not quietly keep 0 (or,
+  // in "missing" mode, keep everything).
+  if (referenceRecords.length > 0 && list.size === 0) {
+    throw new Error(
+      `Nothing to check against: "${cfg.lookupField.replace(/^properties\./, "")}" is empty on all ${referenceRecords.length.toLocaleString()} records from the other step. Pick the field that actually holds the value there.`,
+    );
+  }
+
+  const kept: FlowRecord[] = [];
+  let blanks = 0;
+  for (const r of primaryRecords) {
+    const k = matchKey(getField(r, cfg.keyField));
+    if (k == null) {
+      blanks++;
+      if (cfg.mode === "missing") kept.push(r);
+      continue;
+    }
+    if (list.has(k) === (cfg.mode === "appears")) kept.push(r);
+  }
+
+  const crossRef: CrossRefReport = {
+    mode: cfg.mode,
+    keyField: cfg.keyField,
+    lookupField: cfg.lookupField,
+    checked: primaryRecords.length,
+    kept: kept.length,
+    dropped: primaryRecords.length - kept.length,
+    blanks,
+    listSize: list.size,
+    listBlanks,
+  };
+  return { ...datasetExec("cross_reference", node.id, kept, primaryRecords.length), crossRef };
 }
 
 // ---------- Paths ----------
@@ -1181,6 +1317,13 @@ export function evalRule(rec: FlowRecord, rule: Rule): boolean {
   // Comparison value: a mapped upstream field (resolved per-record) or a literal.
   const rhsRaw: unknown = rule.valueKind === "field" && rule.valueField ? getField(rec, rule.valueField) : rule.value;
   const v = rhsRaw == null ? "" : String(rhsRaw);
+  // A field-to-field comparison where BOTH sides are blank matches nothing.
+  // `"" === ""` is how "keep Close records whose email is in the sheet" —
+  // built as Combine + a field-vs-field equals — passed exactly the records
+  // that had NEITHER field: blank is not an identity. is_empty/is_not_empty
+  // ask about one field, not a comparison, and keep their meaning. Mirrored
+  // in compileRule so the pushed-down SQL stays parity-exact.
+  if (rule.valueKind === "field" && rule.valueField && str === "" && v === "" && rule.op !== "is_empty" && rule.op !== "is_not_empty") return false;
   const rhsNum = num(rhsRaw);
   const rhsDate = dateMs(rhsRaw);
   switch (rule.op) {

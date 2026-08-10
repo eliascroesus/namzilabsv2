@@ -62,8 +62,8 @@ describe("outputShapeOf", () => {
     expect(outputShapeOf("formula", { op: "percentage" })).toBe("scalar");
   });
 
-  it("record steps are datasets, including Time between", () => {
-    for (const t of ["app", "filter", "time", "time_between", "paths", "unite"]) {
+  it("record steps are datasets, including Time between and Cross-reference", () => {
+    for (const t of ["app", "filter", "time", "time_between", "paths", "unite", "cross_reference"]) {
       expect({ t, dataset: producesDataset(t) }).toEqual({ t, dataset: true });
       expect(outputShapeOf(t, {})).toBe("dataset");
     }

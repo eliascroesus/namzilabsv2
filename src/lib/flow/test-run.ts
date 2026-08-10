@@ -64,6 +64,22 @@ export type NodeTestDTO = {
    */
   pairing?: { keys: number; started: number; matched: number; noStop: number; stopBeforeStart: number };
   /**
+   * What Cross-reference actually matched: how many records were checked,
+   * against how many values, and where the rest went — including the blanks
+   * that can never match either way.
+   */
+  crossRef?: {
+    mode: "appears" | "missing";
+    keyField: string;
+    lookupField: string;
+    checked: number;
+    kept: number;
+    dropped: number;
+    blanks: number;
+    listSize: number;
+    listBlanks: number;
+  };
+  /**
    * The read hit the safety ceiling. The engine has always set this and the
    * DTO always dropped it, so a capped count was reported as a complete total.
    */
@@ -85,6 +101,7 @@ function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTest
     value: exec.shape.kind === "scalar" ? exec.shape.value : undefined,
     dedupe: exec.dedupe,
     pairing: exec.pairing,
+    crossRef: exec.crossRef,
     truncated: exec.truncated,
   };
 }
@@ -263,6 +280,11 @@ const PATH_KEYS = [
   "startField",
   "endField",
   "dedupeField",
+  // 1A's ordering field and Cross-reference's list field hold saved paths
+  // too — a pick that vanishes from its own picker the week its data goes
+  // quiet is the exact failure this exemption exists for.
+  "dedupeOrderField",
+  "lookupField",
 ] as const;
 
 /**

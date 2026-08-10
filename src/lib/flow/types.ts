@@ -28,6 +28,12 @@ export const NODE_TYPES = [
   // and emits one record per match carrying the gap as a real numeric field —
   // the primitive that makes speed-to-lead computable. New graphs only.
   "time_between",
+  // Cross-reference is the join primitive: keep records from ONE input whose
+  // field value appears (or doesn't) among another input's values. Without it,
+  // people build the intersection as Combine + a field-vs-field Filter — which
+  // compares two fields on the SAME record, and after a Combine no record has
+  // both, so it can only ever match blanks against blanks.
+  "cross_reference",
   // "calculate" is the legacy merged node; it remains in the engine so existing
   // flows keep loading/running unchanged (hidden from the picker).
   "calculate",
@@ -49,6 +55,7 @@ export const NODE_LABELS: Record<NodeType, string> = {
   formula: "Calculate",
   time: "Date range",
   time_between: "Time between",
+  cross_reference: "Cross-reference",
   calculate: "Calculate a number",
 };
 
@@ -269,6 +276,31 @@ export const TimeBetweenConfigSchema = z.object({
   endStep: z.string().default(""),
 });
 export type TimeBetweenConfig = z.infer<typeof TimeBetweenConfigSchema>;
+
+// ---------- Cross-reference ----------
+/** Keep records that appear in the other step's list — or only those that don't. */
+const CROSS_REF_MODES = ["appears", "missing"] as const;
+export type CrossRefMode = (typeof CROSS_REF_MODES)[number];
+/**
+ * The join primitive: exactly two inputs, and the config names which one's
+ * records CONTINUE (`keepNodeId`) — the other becomes the list they are
+ * checked against. That asymmetry is the whole reason this is a step of its
+ * own rather than a mode on Combine: a symmetric "only keep matches" checkbox
+ * cannot answer "records from which side come out?", and the ambiguity is
+ * exactly what let Combine + Filter produce 8 no-email records as "matches".
+ *
+ * Every field defaults to empty so the step reads "Needs setup" until each
+ * question is answered — no hidden side, no assumed field.
+ */
+export const CrossReferenceConfigSchema = z.object({
+  /** The input node whose records continue downstream. */
+  keepNodeId: z.string().default(""),
+  /** Field on the kept records whose value is looked up. */
+  keyField: z.string().default(""),
+  /** Field on the other input's records that supplies the list of values. */
+  lookupField: z.string().default(""),
+  mode: z.enum(CROSS_REF_MODES).default("appears"),
+});
 
 // ---------- Formula / Calculate ----------
 /**

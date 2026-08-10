@@ -11,6 +11,15 @@ export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: 
   app: { label: "Get data", blurb: "Pull records from a connected app", stage: "Data", keywords: "integration source connect data app get duplicates dedupe" },
   unite: { label: "Combine data", blurb: "Bring branches and other sources back together", stage: "Data", keywords: "unite combine merge join together branches lanes sources union bring back" },
   filter: { label: "Filter records", blurb: "Keep only the records you want", stage: "Conditions", keywords: "condition where keep only match date range filter" },
+  // The join primitive. Zapier hides this inside Lookup actions; here it is a
+  // step, because "only the leads that are also in the spreadsheet" is a
+  // sentence people try to build and Combine + Filter cannot say it.
+  cross_reference: {
+    label: "Cross-reference",
+    blurb: "Keep records that appear in another source",
+    stage: "Conditions",
+    keywords: "cross reference lookup join match intersect appears exists in both sources vlookup only in list check against",
+  },
   paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", keywords: "split branch route condition paths" },
   // The one Calculation step: it aggregates records into a number (count/sum/avg/…,
   // the former Count node) OR compares two numbers (rate, ratio, % change).
@@ -53,6 +62,11 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
       return { keyField: "", startField: "", startStep: "", endField: "", endStep: "" };
     case "unite":
       return {};
+    case "cross_reference":
+      // All empty on purpose: whose records continue and which fields match
+      // are questions with no safe default — the step reads "Needs setup"
+      // until each is answered.
+      return { keepNodeId: "", keyField: "", lookupField: "", mode: "appears" };
     case "group":
       return { mode: "field", field: "source", aggregation: "count", valueField: "value", distinctField: "subject", categories: [], fallbackLabel: "Other" };
     case "paths":
@@ -159,6 +173,8 @@ export function resultLabel(
       return `${recordsOut} matched`;
     case "unite":
       return `${recordsOut} combined`;
+    case "cross_reference":
+      return `${recordsOut} kept`;
     case "paths":
       return `${recordsOut} routed`;
     case "group":

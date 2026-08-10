@@ -155,8 +155,11 @@ describe("E.4 — golden parity: compiled SQL ≡ JS engine, operator by operato
 
   it("field-to-field comparisons (valueKind: 'field') also match", async () => {
     const mismatches: string[] = [];
-    for (const op of ["equals", "not_equals", "contains", "gt", "lt"]) {
-      for (const [field, valueField] of [["name", "stage"], ["amount", "value"], ["when", "occurredAt"], ["stage", "missing"]]) {
+    // `missing vs missing` is the both-blank guard's parity case: JS now
+    // returns false there and the compiled predicate must agree — reverting
+    // either side alone fails this loop on the missing-keys/null-value rows.
+    for (const op of ["equals", "not_equals", "contains", "starts_with", "is_one_of", "gt", "lt"]) {
+      for (const [field, valueField] of [["name", "stage"], ["amount", "value"], ["when", "occurredAt"], ["stage", "missing"], ["missing", "missing2"]]) {
         const rule: CompiledRule = { field, op, value: "", valueKind: "field", valueField };
         const { js, compiled } = await bothMatch(rule);
         if (JSON.stringify(js) !== JSON.stringify(compiled)) {
@@ -165,6 +168,21 @@ describe("E.4 — golden parity: compiled SQL ≡ JS engine, operator by operato
       }
     }
     expect(mismatches).toEqual([]);
+  });
+
+  it("a field-to-field comparison where both sides are blank matches NOTHING", async () => {
+    // `'' === ''` used to be true here, which is how "keep Close records whose
+    // email is in the sheet" — built as Combine + a field-vs-field equals —
+    // "matched" exactly the records that had NEITHER field. Reverting the
+    // evalRule guard (or its compileRule twin) turns the missing/null/empty
+    // fixtures back into matches.
+    const { js, compiled } = await bothMatch({ field: "missing", op: "equals", value: "", valueKind: "field", valueField: "missing2" });
+    expect(js).toEqual([]);
+    expect(compiled).toEqual([]);
+    // A FIXED empty value keeps its meaning: equals "" still matches blanks.
+    const fixed = await bothMatch({ field: "missing", op: "equals", value: "" });
+    expect(fixed.js.length).toBeGreaterThan(0);
+    expect(fixed.js).toEqual(fixed.compiled);
   });
 
   it("an unknown operator matches nothing on both sides (no silent pass-through)", async () => {
