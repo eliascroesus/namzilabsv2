@@ -1204,6 +1204,16 @@ function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series
   };
 }
 
+/** Records arrived, the chosen field held nothing in any of them. Names the fix. */
+class EmptyFieldError extends Error {
+  constructor(field: string, count: number, what: string) {
+    const name = field.replace(/^properties\./, "") || "(no field chosen)";
+    super(
+      `Can't ${what} "${name}" — none of the ${count.toLocaleString()} records here have a value in that field. Pick the field that holds the number.`,
+    );
+  }
+}
+
 function computeAgg(records: FlowRecord[], aggregation: string, field: string, distinctField: string): number {
   switch (aggregation) {
     case "count":
@@ -1214,11 +1224,29 @@ function computeAgg(records: FlowRecord[], aggregation: string, field: string, d
         const v = getField(r, distinctField);
         if (v != null && v !== "") set.add(String(v));
       }
+      // Records went in and nothing came out: the field is empty on all of
+      // them. See the note below — a confident 0 is the worst answer here.
+      if (set.size === 0 && records.length > 0) throw new EmptyFieldError(distinctField, records.length, "count unique values of");
       return set.size;
     }
     default: {
       const nums = records.map((r) => num(getField(r, field))).filter((n): n is number => n != null);
-      if (nums.length === 0) return 0;
+      /**
+       * A CONFIDENT ZERO IS THE WORST POSSIBLE ANSWER.
+       *
+       * This returned 0 whenever nothing numeric was found, which reads as a
+       * real measurement: "Average deal value: $0" in a big bold box with a
+       * green Ready badge. The default field is `value`, and Close never
+       * populates it — so the most likely first thing anyone builds on Close
+       * produced a plausible, wrong, unquestioned number.
+       *
+       * Zero records is a different case and stays 0: an empty week really is
+       * an empty week, and erroring there would turn every quiet Monday red.
+       */
+      if (nums.length === 0) {
+        if (records.length === 0) return 0;
+        throw new EmptyFieldError(field, records.length, aggregation);
+      }
       if (aggregation === "sum") return round(nums.reduce((a, b) => a + b, 0));
       if (aggregation === "avg") return round(nums.reduce((a, b) => a + b, 0) / nums.length);
       if (aggregation === "median") {

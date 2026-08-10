@@ -131,12 +131,16 @@ describe("Formula node", () => {
   });
 
   it("errors clearly on divide by zero", async () => {
-    await ev({ eventType: "x" });
+    // A REAL zero, not an absent field. This used to lean on "sum of null
+    // values = 0", which is the confident-zero bug: an aggregation over a
+    // field no record carries now errors on its own, so it can no longer be
+    // borrowed to manufacture a denominator.
+    await ev({ eventType: "x", value: 0 });
     const g = G(
       [
         N("a", "app", { connectionId: CONN }),
         N("num", "aggregate", { aggregation: "count" }),
-        N("den", "aggregate", { aggregation: "sum", field: "value" }), // sum of null values = 0
+        N("den", "aggregate", { aggregation: "sum", field: "value" }),
         N("div", "formula", { op: "divide" }),
         N("o", "output", {}),
       ],
@@ -497,5 +501,52 @@ describe("the rewrite is behaviour-identical on its defaults", () => {
     // Sabotage: use `>=` instead of `>` in the comparator and ties flip to the
     // last-encountered record, diverging from every published number.
     expect(next).toEqual(old);
+  });
+});
+
+/**
+ * "Average deal value: $0" in a big bold box with a green badge, because the
+ * default field is `value` and Close never populates it. A confident zero is
+ * the worst possible answer: it is indistinguishable from a real measurement,
+ * so nobody questions it.
+ */
+describe("an aggregation over a field nothing carries is an error, not a zero", () => {
+  const agg = async (op: string, field: string) => {
+    const g = G([N("a", "app", { connectionId: CONN }), N("m", "formula", { op, field, distinctField: field })], [E("a", "m")]);
+    return (await run(g)).nodes.get("m")!;
+  };
+
+  it("names the field and the record count instead of returning 0", async () => {
+    await ev({ eventType: "deal", properties: { amount: 100 } });
+    await ev({ eventType: "deal", properties: { amount: 250 } });
+    // Sabotage: return 0 for an empty numeric set and this reads $0 over two
+    // real records, green, published, and never questioned.
+    const exec = await agg("avg", "value");
+    expect(exec.status).toBe("error");
+    expect((exec as { error: string }).error).toMatch(/none of the 2 records here have a value/);
+  });
+
+  it("still works the moment the right field is picked", async () => {
+    await ev({ eventType: "deal", properties: { amount: 100 } });
+    await ev({ eventType: "deal", properties: { amount: 250 } });
+    const exec = await agg("avg", "properties.amount");
+    expect(exec.status).toBe("ok");
+    expect((exec as { shape: { value: number } }).shape.value).toBe(175);
+  });
+
+  it("a legitimately empty window is still 0, not an error", async () => {
+    // Sabotage: throw on zero records too and every quiet Monday turns red.
+    const exec = await agg("avg", "value");
+    expect(exec.status).toBe("ok");
+    expect((exec as { shape: { value: number } }).shape.value).toBe(0);
+  });
+
+  it("count unique values of a field nothing carries errors too", async () => {
+    await ev({ eventType: "deal", properties: { amount: 100 } });
+    // Sabotage: return set.size and "unique leads called" reads 0 whenever the
+    // chosen field is null on every record — the same lie, one aggregation over.
+    const exec = await agg("count_distinct", "properties.missing");
+    expect(exec.status).toBe("error");
+    expect((exec as { error: string }).error).toMatch(/count unique values of/);
   });
 });

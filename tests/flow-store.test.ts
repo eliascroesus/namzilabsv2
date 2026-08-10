@@ -34,7 +34,7 @@ const validGraph = {
   edges: [E("a", "agg"), E("agg", "out")],
 };
 
-async function seedEvents(n: number) {
+async function seedEvents(n: number, value?: number) {
   for (let i = 0; i < n; i++) {
     await db.insert(events).values({
       eventId: `webhook:${randomUUID()}`,
@@ -44,6 +44,7 @@ async function seedEvents(n: number) {
       eventType: "booked",
       subject: `s${i}`,
       occurredAt: new Date(),
+      ...(value != null ? { value: String(value) } : {}),
       properties: {},
     });
   }
@@ -128,13 +129,15 @@ describe("materializer", () => {
   });
 
   it("reports ok:false when a published flow cannot be computed (drives the publish warning)", async () => {
-    await seedEvents(3);
-    // Passes validation (both formula handles connected) but divides by zero at runtime.
+    // A REAL zero denominator. This used to seed records with no `value` at
+    // all and lean on "sum of null = 0" — which is the confident-zero bug an
+    // aggregation now refuses to commit, so it can no longer be borrowed.
+    await seedEvents(3, 0);
     const graph = {
       nodes: [
         N("a", "app", { connectionId: CONN }),
         N("num", "aggregate", { aggregation: "count" }),
-        N("den", "aggregate", { aggregation: "sum", field: "value" }), // sum of null = 0
+        N("den", "aggregate", { aggregation: "sum", field: "value" }),
         N("div", "formula", { op: "divide" }),
         N("o", "output", { name: "Bad" }),
       ],
