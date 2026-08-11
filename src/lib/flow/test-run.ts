@@ -7,7 +7,6 @@ import { compileEnabled } from "./compile/flags";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
-import { dedupeWarningFor } from "@/lib/schema-registry/registry";
 import { primeStream } from "@/lib/sync/streams";
 import { primeConnection } from "@/lib/sync/resync";
 
@@ -43,20 +42,16 @@ export type NodeTestDTO = {
    */
   sourceNote?: string;
   /**
-   * E.7 guardrail: set when this step's "Match duplicates by" field has too few
-   * distinct values to identify a record, so the dedupe is silently collapsing
-   * most of the data into a plausible-looking number. Surfaced BEFORE the
-   * number is trusted — a wrong answer nobody questions is worse than an error.
-   */
-  dedupeWarning?: string;
-  /**
    * What "Remove duplicates" actually did, measured on the run: how many of
-   * the loaded records the chosen field resolved on, and how many were
-   * removed. `matched: 0` is the silent no-op — the field exists nowhere in
-   * this step's data — which the E.7 warning above cannot catch, because the
-   * field IS in the connection's registry, just never on THIS record type.
+   * the loaded records the chosen field resolved on, how many were removed,
+   * and how many distinct identities (`groups`) there were. `matched: 0` is
+   * the silent no-op — the field exists nowhere in this step's data — and a
+   * tiny `groups` relative to `matched` is the field-is-a-category collapse.
+   * Both receipts are measured on THIS run; the old registry-based E.7
+   * warning judged from connection-wide stats and could contradict the
+   * receipt rendered beside it.
    */
-  dedupe?: { field: string; keep?: string; orderField?: string; loaded: number; matched: number; ordered?: number; removed: number };
+  dedupe?: { field: string; keep?: string; orderField?: string; loaded: number; matched: number; ordered?: number; removed: number; groups?: number };
   /**
    * What Time between paired. A median over "the leads that were called" is a
    * different question from the one the tile's name asks, and the keys that
@@ -157,38 +152,6 @@ async function primeStreamsForTest(
 }
 
 /**
- * E.7: does the node being tested dedupe on a field that cannot identify a
- * record? Reads the field registry the writer maintains, so the judgement is
- * made over everything ever synced for the stream — not over the sample the
- * Test happened to load.
- *
- * Diagnostic only: any failure here returns null rather than failing the Test.
- */
-async function dedupeWarningForNode(db: DB, orgId: string, g: FlowGraph, nodeId: string): Promise<string | null> {
-  try {
-    const node = g.nodes.find((n) => n.id === nodeId);
-    if (!node || node.type !== "app") return null;
-    const cfg = (node.data.config ?? {}) as {
-      connectionId?: unknown;
-      sourceConfig?: unknown;
-      dedupe?: unknown;
-      dedupeField?: unknown;
-    };
-    if (cfg.dedupe !== true) return null;
-    const connectionId = typeof cfg.connectionId === "string" ? cfg.connectionId : null;
-    if (!connectionId) return null;
-    const field = typeof cfg.dedupeField === "string" && cfg.dedupeField ? cfg.dedupeField : "subject";
-    const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
-    const [conn] = await db.select({ source: connections.source }).from(connections).where(eq(connections.id, connectionId)).limit(1);
-    const streamHash = hasStreamConfig(sourceConfig, conn?.source) ? streamConfigHash(sourceConfig, conn?.source) : null;
-    const warning = await dedupeWarningFor(db, { orgId, connectionId, streamHash }, field);
-    return warning?.message ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * A Get-data step whose source is gone must SAY so.
  *
  * Removing an integration retires its events, so a flow still pointing at it
@@ -234,15 +197,13 @@ export async function executeNodeTest(db: DB, orgId: string, graph: unknown, nod
     // E.4: the Test surface is the pushdown's soak seam (compile/flags.ts) —
     // a human is watching, nothing persists, and the JS engine re-applies
     // every folded rule anyway.
-    const res = await runFlow({ db, orgId, compile: compileEnabled("test") }, g, { untilNodeId: nodeId });
+    const res = await runFlow({ db, orgId, compile: compileEnabled("test"), fieldPresence: true }, g, { untilNodeId: nodeId });
     const inNodeId = g.edges.find((e) => e.target === nodeId)?.source;
     const inExec = inNodeId ? res.nodes.get(inNodeId) : undefined;
     const inputSample = inExec && inExec.status === "ok" ? inExec.sample : [];
     const dto = execToDTO(res.nodes.get(nodeId), inputSample);
     // The Test computed on stored data — say so, rather than implying a refresh.
     if (primed.notes.length > 0) dto.sourceNote = primed.notes.join(" ");
-    const warning = await dedupeWarningForNode(db, orgId, g, nodeId);
-    if (warning) dto.dedupeWarning = warning;
     /**
      * The picker's list is a fact about the APP, not about this one run.
      *
@@ -258,7 +219,11 @@ export async function executeNodeTest(db: DB, orgId: string, graph: unknown, nod
     const tested = g.nodes.find((n) => n.id === nodeId);
     if (tested?.type === "app" && dto.status === "ok") {
       try {
-        dto.outputSchema = await appFieldUnion({ db, orgId }, tested.data.config, dto.outputSchema, savedFieldPaths(g));
+        // The exec's per-type presence (when the step reads one record type,
+        // fully) narrows the union to fields that type actually carries.
+        const exec = res.nodes.get(nodeId);
+        const presence = exec && exec.status === "ok" ? (exec.fieldPresence ?? null) : null;
+        dto.outputSchema = await appFieldUnion({ db, orgId }, tested.data.config, dto.outputSchema, savedFieldPaths(g), presence);
       } catch {
         // A picker must never fail because a diagnostic table is unavailable.
       }

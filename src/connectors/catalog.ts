@@ -104,6 +104,16 @@ export type ConnectorCatalogEntry = {
    */
   syncNote?: string;
   /**
+   * How far back the provider's history can reach AT ALL — said next to
+   * "History imported", because "this is everything" is true of the API and
+   * false of the account whenever the provider forgets its own past. Close is
+   * the case: its event log retains ~30 days, so a CRM with 1,083 leads
+   * yields ~400 "Lead created" events, and a lead from six weeks ago simply
+   * has no created event to import. Without this sentence, that reads as our
+   * sync losing data.
+   */
+  historyNote?: string;
+  /**
    * Provider-declared budgets per operation (from published docs), keyed
    * `"resource.verb"`. The reactive layer sizes page walks under them today;
    * the provider-gateway token buckets (workstream F) will enforce them.
@@ -298,6 +308,8 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     connect: "apiKey",
     instant: true,
     poll: true,
+    historyNote:
+      "Close's event log only reaches back about 30 days, so records created before that have no “created” event here — they appear only through their newer activity (calls, meetings, emails).",
     /**
      * NO DECLARED rateLimits, deliberately — the DEFAULT_RPM of 60/min governs,
      * and for Close that is a conservative floor rather than a guess at a

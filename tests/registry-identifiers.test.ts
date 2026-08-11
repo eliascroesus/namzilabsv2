@@ -3,7 +3,9 @@ import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { events } from "@/db/schema";
 import { upsertEvents } from "@/ingestion/pipeline";
-import { dedupeWarningFor, listRegisteredFields } from "@/lib/schema-registry/registry";
+import { listRegisteredFields } from "@/lib/schema-registry/registry";
+import { keepOnePerGroup } from "@/lib/flow/engine";
+import { eventToRecord } from "@/lib/flow/records";
 import { extractIdentifiers, normalizeEmail, normalizePhone } from "@/lib/identity/normalize";
 import type { DB } from "@/db/types";
 
@@ -106,24 +108,29 @@ describe("A.1 — the registry is maintained by the writer", () => {
   });
 });
 
-describe("E.7 — dedupe guardrail", () => {
-  it("warns when the chosen key would collapse most of the dataset", async () => {
-    // 20 records, only 2 distinct stages.
+describe("E.7 — the collapse judgement is measured on the run, not guessed from the registry", () => {
+  // The registry-based dedupeWarningFor is gone: it judged from
+  // connection-wide stats and could contradict the run receipt rendered
+  // beside it. `keepOnePerGroup` now reports the run's own distinct-identity
+  // count (`groups`), and the panel derives the warning from that.
+  it("a category key reads as few groups swallowing most records", async () => {
     await write(Array.from({ length: 20 }, (_, i) => rec(i, { stage: i % 2 === 0 ? "Won" : "Lost", email: `u${i}@x.io` })));
-
-    const warning = await dedupeWarningFor(db, { orgId: ORG, connectionId: connId, streamHash: "h1" }, "stage");
-    expect(warning).not.toBeNull();
-    expect(warning!.message).toContain("collapse about 18 of 20 records");
-    expect(warning!.message).toContain("~2 distinct values");
+    const rows = await db.select().from(events).where(eq(events.orgId, ORG));
+    const { report } = keepOnePerGroup(rows.map(eventToRecord), { groupField: "stage", keep: "latest", orderField: "occurredAt" });
+    expect(report).toMatchObject({ matched: 20, groups: 2, removed: 18 });
   });
 
-  it("stays quiet for a genuinely identifying key", async () => {
+  it("an identifying key reads as one group per record", async () => {
     await write(Array.from({ length: 20 }, (_, i) => rec(i, { stage: "Won", email: `u${i}@x.io` })));
-    expect(await dedupeWarningFor(db, { orgId: ORG, connectionId: connId, streamHash: "h1" }, "email")).toBeNull();
+    const rows = await db.select().from(events).where(eq(events.orgId, ORG));
+    const { report } = keepOnePerGroup(rows.map(eventToRecord), { groupField: "email", keep: "latest", orderField: "occurredAt" });
+    expect(report).toMatchObject({ matched: 20, groups: 20, removed: 0 });
   });
 
-  it("stays quiet for an unknown field (no data is not a warning)", async () => {
+  it("an unknown field collapses nothing — no identity is not one identity", async () => {
     await write([rec(1, { stage: "Won" })]);
-    expect(await dedupeWarningFor(db, { orgId: ORG, connectionId: connId, streamHash: "h1" }, "nope")).toBeNull();
+    const rows = await db.select().from(events).where(eq(events.orgId, ORG));
+    const { report } = keepOnePerGroup(rows.map(eventToRecord), { groupField: "nope", keep: "latest", orderField: "occurredAt" });
+    expect(report).toMatchObject({ matched: 0, groups: 0, removed: 0 });
   });
 });

@@ -524,13 +524,20 @@ describe("Close pipeline read filter", () => {
 });
 
 /**
- * ONE RULE for the variable picker: a field is offered iff at least one
- * record from this APP has ever carried a value for it.
+ * TWO REGIMES for the variable picker, split by what the step reads:
  *
- * "This app" is the CONNECTION, not the record type. That breadth is the
- * point — narrowing to the record type is what made a Close pipeline field
- * vanish from a picker that had been offering it, on a connection where 594
- * opportunity records carry one.
+ * - A SPECIFIC record type: a field is offered iff at least one record of
+ *   THAT TYPE carries a value — counted over every loaded record. A meeting's
+ *   attendee emails under a "Contact created" step is how "the backend mixes
+ *   leads together" got reported: nothing was mixed, the picker was showing a
+ *   connection-wide union with examples borrowed from other events.
+ * - "All record types": a field is offered iff at least one record from this
+ *   CONNECTION has ever carried a value. That breadth is equally the point —
+ *   hiding by a 200-record sample is what made a Close pipeline field vanish
+ *   from a picker that had been offering it ("you removed the pipeline
+ *   thing"), on a connection where 594 opportunity records carry one.
+ *
+ * Both reports were real; the record type is the line between them.
  */
 describe("a step's field list is what the app has, not what this run loaded", () => {
   // executeNodeTest reads the connection (source resolution + priming), which
@@ -548,20 +555,27 @@ describe("a step's field list is what the app has, not what this run loaded", ()
     return executeNodeTest(db, ORG, g, "a");
   };
 
-  it("a field the app HAS but this record type does not is still offered", async () => {
+  it("another record type's field is hidden on a typed step, and offered on an All-types read", async () => {
     // The registry saw a pipeline on an opportunity; only calls are loaded.
     await recordFields(db, { orgId: ORG, connectionId: CONN, streamHash: null }, [
       { eventId: "o1", eventType: "opportunity", occurredAt: new Date(), properties: { pipeline_id: "pipe_7XAom" } },
     ]);
     await ev({ eventType: "call_logged", subject: "+1914", properties: { direction: "outbound" } });
 
-    const dto = await testApp({ eventType: "call_logged" });
-    expect(dto.status).toBe("ok");
-    // Sabotage: return the run's own inferSchema unmerged and pipeline_id
-    // disappears from the Get data step and from every Filter below it — the
-    // exact "you removed the pipeline thing" report.
-    expect(dto.outputSchema.map((f) => f.path)).toContain("properties.pipeline_id");
-    expect(dto.outputSchema.map((f) => f.path)).toContain("properties.direction");
+    // Sabotage: ignore presence and the calls picker re-offers pipeline_id —
+    // a field no call carries, so a Filter on it can never match anything.
+    const typed = await testApp({ eventType: "call_logged" });
+    expect(typed.status).toBe("ok");
+    expect(typed.outputSchema.map((f) => f.path)).toContain("properties.direction");
+    expect(typed.outputSchema.map((f) => f.path)).not.toContain("properties.pipeline_id");
+
+    // Sabotage the other way: return the run's own inferSchema unmerged and
+    // pipeline_id disappears from a broad read too — the exact "you removed
+    // the pipeline thing" report.
+    const broad = await testApp({});
+    expect(broad.status).toBe("ok");
+    expect(broad.outputSchema.map((f) => f.path)).toContain("properties.pipeline_id");
+    expect(broad.outputSchema.map((f) => f.path)).toContain("properties.direction");
   });
 
   it("a field the app has NEVER filled is offered nowhere", async () => {
@@ -600,7 +614,7 @@ describe("a step's field list is what the app has, not what this run loaded", ()
     expect(dto.outputSchema.map((f) => f.path)).toContain("properties.OnlyInEvents");
   });
 
-  it("the Filter below sees the same list — that is the whole point of widening here", async () => {
+  it("the Filter below sees the same list — the union lands where downstream pickers read", async () => {
     const { buildFieldGroups } = await import("@/components/flow/graph-utils");
     await recordFields(db, { orgId: ORG, connectionId: CONN, streamHash: null }, [
       { eventId: "o1", eventType: "opportunity", occurredAt: new Date(), properties: { pipeline_id: "pipe_7XAom" } },
@@ -609,7 +623,7 @@ describe("a step's field list is what the app has, not what this run loaded", ()
     const dto = await testApp({ eventType: "call_logged" });
 
     const nodes = [
-      { id: "a", type: "app", position: { x: 0, y: 0 }, data: { config: { connectionId: CONN, source: "webhook" }, lastTest: dto } },
+      { id: "a", type: "app", position: { x: 0, y: 0 }, data: { config: { connectionId: CONN, source: "webhook", eventType: "call_logged" }, lastTest: dto } },
       { id: "f", type: "filter", position: { x: 0, y: 1 }, data: { config: { combinator: "and", rules: [] }, lastTest: { status: "ok", recordsIn: 1, recordsOut: 1, sample: [{}], outputSchema: [] } } },
     ];
     const groups = buildFieldGroups({
@@ -619,10 +633,13 @@ describe("a step's field list is what the app has, not what this run loaded", ()
       stepNoById: new Map([["a", 1], ["f", 2]]),
       titleOf: (n) => String(n.type),
     });
-    // Sabotage: widen anywhere downstream pickers do not read (execApp only,
-    // or the tested node's own schema) and the Get data step is wide while the
-    // Filter under it is narrow — two pickers disagreeing about one dataset.
-    expect(groups.flatMap((g) => g.fields.map((x) => x.path))).toContain("properties.pipeline_id");
+    // Sabotage: apply the type scoping anywhere downstream pickers do not
+    // read (execApp only, or the tested node's own schema) and the Get data
+    // step is narrow while the Filter under it is wide — two pickers
+    // disagreeing about one dataset, in either direction.
+    const paths = groups.flatMap((g) => g.fields.map((x) => x.path));
+    expect(paths).toContain("properties.direction");
+    expect(paths).not.toContain("properties.pipeline_id");
   });
 });
 

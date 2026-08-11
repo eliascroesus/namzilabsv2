@@ -104,6 +104,41 @@ export function trimExample(v: unknown): unknown {
  * many records actually carried a value, so a picker can put the ~100 columns
  * an account never fills behind the ones it does.
  */
+/**
+ * Path → how many of the given records carry a value there, over EVERY record
+ * — no sampling. inferSchema's `populated` is "of the newest 200": a fine
+ * ranking signal and a lie as a HIDING signal, because a field filled only on
+ * older records reads 0. This walk exists for the one decision that hides
+ * things — narrowing a Get data step's picker to its record type — so it must
+ * be the full truth or nothing: it returns null when the path count overflows
+ * the cap, and callers treat null as "presence unknown, hide nothing".
+ *
+ * Traversal rules match inferSchema and the registry's flatten (depth 4,
+ * arrays as leaves, isEmptyValue) — a mismatch would vouch for a different
+ * path space than the pickers offer.
+ */
+export function presenceByPath(records: FlowRecord[], cap = 4000): Map<string, number> | null {
+  const counts = new Map<string, number>();
+  let overflow = false;
+  const visit = (obj: Record<string, unknown>, prefix: string, depth: number) => {
+    for (const [k, v] of Object.entries(obj)) {
+      if (depth === 1 && k.startsWith("__")) continue;
+      const path = `${prefix}${k}`;
+      if (!counts.has(path)) {
+        if (counts.size >= cap) {
+          overflow = true;
+          continue;
+        }
+        counts.set(path, 0);
+      }
+      if (!isEmptyValue(v)) counts.set(path, counts.get(path)! + 1);
+      if (v != null && typeof v === "object" && !Array.isArray(v) && depth < MAX_DEPTH) visit(v as Record<string, unknown>, `${path}.`, depth + 1);
+    }
+  };
+  for (const r of records) visit((r.properties ?? {}) as Record<string, unknown>, "", 1);
+  return overflow ? null : counts;
+}
+
 export function inferSchema(records: FlowRecord[]): FieldInfo[] {
   const sample = records.length > SHAPE_SAMPLE ? records.slice(0, SHAPE_SAMPLE) : records;
   const out: FieldInfo[] = [];

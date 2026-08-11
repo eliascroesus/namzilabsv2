@@ -135,15 +135,16 @@ describe("test-run lifecycle (the lane's unit of work)", () => {
 });
 
 /**
- * E.7 dedupe guardrail, end to end.
+ * E.7's dedupe guardrail, reworked: the judgement is MEASURED ON THE RUN.
  *
- * The judgement comes from the field registry the WRITER maintains, so it
- * reflects everything ever synced for the stream rather than the sample this
- * Test happened to load. These cases drive the real lane path
- * (executeAndSettleTestRun → prime → run → warn), not the registry module in
- * isolation — the module was already tested and still never reached a user.
+ * The old warning came from connection-wide registry stats, so it could sit
+ * directly above a receipt saying the opposite about the same step —
+ * "would collapse 23,262 of 23,420" over "No duplicates found", both about
+ * one 402-record read. Now `dedupe.groups` (the run's distinct-identity
+ * count) travels in the receipt and the panel derives the collapse warning
+ * from it, so the two statements share one measurement and cannot disagree.
  */
-describe("dedupe guardrail reaches the Test result", () => {
+describe("the dedupe receipt carries the run's distinct-identity count", () => {
   const dedupeGraph = (field: string) => ({
     nodes: [
       {
@@ -162,29 +163,29 @@ describe("dedupe guardrail reaches the Test result", () => {
     return rows;
   };
 
-  it("warns when the dedupe field cannot identify a record", async () => {
+  it("a category field reads as a huge collapse into few groups", async () => {
+    // Sabotage: drop `groups` from the report and the panel can no longer
+    // tell "removed most records because the field is a category" from a
+    // legitimate dedupe — the exact confusion the registry warning guessed at.
     SHEET = wideSheet();
     const runId = await createTestRun(db, ORG);
     const dto = await executeAndSettleTestRun(db, ORG, runId, dedupeGraph("Booked"), "get");
 
     expect(dto.status).toBe("ok");
-    expect(dto.dedupeWarning).toBeTruthy();
-    expect(dto.dedupeWarning).toContain("Booked");
-    // The point of the warning: it names how much was thrown away.
-    expect(dto.dedupeWarning).toMatch(/collapse about 18 of 20 records/);
+    expect(dto.dedupe).toMatchObject({ field: "Booked", matched: 20, groups: 2, removed: 18 });
 
-    // And it survives the round trip through the polled run row, which is what
-    // the editor actually reads.
+    // And it survives the round trip through the polled run row, which is
+    // what the editor actually reads.
     const state = await getTestRun(db, ORG, runId);
-    expect(state?.result?.dedupeWarning).toBe(dto.dedupeWarning);
+    expect(state?.result?.dedupe).toMatchObject({ groups: 2, removed: 18 });
   });
 
-  it("stays silent for a field that genuinely identifies a record", async () => {
+  it("an identity field reads as one group per record", async () => {
     SHEET = wideSheet();
     const runId = await createTestRun(db, ORG);
     const dto = await executeAndSettleTestRun(db, ORG, runId, dedupeGraph("Name"), "get");
     expect(dto.status).toBe("ok");
-    expect(dto.dedupeWarning).toBeUndefined();
+    expect(dto.dedupe).toMatchObject({ matched: 20, groups: 20, removed: 0 });
   });
 
   it("stays silent when dedupe is off, however bad the field would be", async () => {
@@ -201,6 +202,6 @@ describe("dedupe guardrail reaches the Test result", () => {
     };
     const runId = await createTestRun(db, ORG);
     const dto = await executeAndSettleTestRun(db, ORG, runId, graphNoDedupe, "get");
-    expect(dto.dedupeWarning).toBeUndefined();
+    expect(dto.dedupe).toBeUndefined();
   });
 });

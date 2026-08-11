@@ -29,7 +29,7 @@ import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./gr
 import { computeNodeStatus, STD_META } from "./graph-utils";
 import { NumberField } from "./controls/NumberField";
 import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
-import { RecordSamplePicker } from "./RecordSamplePicker";
+import { RecordSamplePicker, recordWhen } from "./RecordSamplePicker";
 import { DataIcon, NodeIcon } from "./icons";
 import { Select, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
 import type { DataGroup } from "./controls/types";
@@ -407,7 +407,7 @@ function NodeConfig({
               No connected accounts yet. Connect one in <a className="underline" href="/integrations">Integrations</a>.
             </p>
           )}
-          {conn && <ImportStatusLine connectionId={conn.id} />}
+          {conn && <ImportStatusLine connectionId={conn.id} historyNote={catalogEntry(conn.source)?.historyNote} />}
         </Field>
 
         {/* What to pull — set per flow. Stream-scoped sources (Sheets, Calendar,
@@ -1145,7 +1145,7 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
  * Silent when there is nothing honest to say (see ImportStatus.unknown).
  */
 const importStatusCache = new Map<string, ImportStatus>();
-function ImportStatusLine({ connectionId }: { connectionId: string }) {
+function ImportStatusLine({ connectionId, historyNote }: { connectionId: string; historyNote?: string }) {
   const [status, setStatus] = useState<ImportStatus | null>(() => importStatusCache.get(connectionId) ?? null);
   useEffect(() => {
     setStatus(importStatusCache.get(connectionId) ?? null);
@@ -1161,7 +1161,18 @@ function ImportStatusLine({ connectionId }: { connectionId: string }) {
   }, [connectionId]);
 
   if (!status) return null;
-  if (status.state === "done") return <p className="mt-1.5 text-xs text-green-700">History imported — this is everything.</p>;
+  if (status.state === "done") {
+    // "This is everything" is true of the provider's API and can still be
+    // false of the ACCOUNT — Close forgets its own event log after ~30 days.
+    // Without the note, a lead the CRM shows but we never received reads as
+    // our sync losing data.
+    return (
+      <div className="mt-1.5 space-y-1">
+        <p className="text-xs text-green-700">History imported — everything the source still offers.</p>
+        {historyNote && <p className="text-xs text-neutral-500">{historyNote}</p>}
+      </div>
+    );
+  }
   // Importing, or an import that ended without finishing. "unknown" with no
   // note is the no-evidence case and stays silent rather than guessing.
   if (!status.note) return null;
@@ -1365,7 +1376,7 @@ function MomentInput({
  * object, offered because the picker lists every field on the connection —
  * removed zero rows with nothing on screen saying so.
  */
-function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: string; loaded: number; matched: number; ordered?: number; removed: number } }) {
+function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: string; loaded: number; matched: number; ordered?: number; removed: number; groups?: number } }) {
   const name = d.field.replace(/^properties\./, "");
   const orderName = (d.orderField ?? "occurredAt").replace(/^properties\./, "");
   if (d.matched === 0) {
@@ -1373,6 +1384,18 @@ function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: 
       <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
         Nothing was removed: <span className="font-medium">{name}</span> is empty on all {d.loaded.toLocaleString()} records here, so there was nothing to match on. Pick a
         field these records actually carry.
+      </p>
+    );
+  }
+  // The field is a CATEGORY, not an identity: a handful of distinct values
+  // swallowing almost every record. Measured on this run — the old warning
+  // judged from connection-wide registry stats and could sit directly above a
+  // receipt saying the opposite about the same step.
+  if (d.removed > 0 && d.groups != null && d.matched >= 100 && d.groups < d.matched * 0.05) {
+    return (
+      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+        Matching by <span className="font-medium">{name}</span> collapsed {d.removed.toLocaleString()} of {d.matched.toLocaleString()} records into just{" "}
+        {d.groups.toLocaleString()} — it looks like a category, not an identity. If you meant one record per person, pick a field that identifies one (an email or an id).
       </p>
     );
   }
@@ -1779,11 +1802,6 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
       {t.sourceNote && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{t.sourceNote}</p>
       )}
-      {/* E.7: the dedupe field can't identify a record, so this number is built
-          on a silent collapse. Said before the number is read, not after. */}
-      {t.dedupeWarning && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{t.dedupeWarning}</p>
-      )}
       {t.dedupe && <DedupeOutcome d={t.dedupe} />}
       {t.pairing && <PairingOutcome p={t.pairing} />}
       {t.crossRef && <CrossRefOutcome c={t.crossRef} />}
@@ -1819,9 +1837,10 @@ function BeforeAfter({ before, after }: { before: unknown[]; after: unknown[] })
 }
 
 function sampleLine(r: unknown): string {
-  const rec = r as { source?: string; eventType?: string; subject?: string; value?: unknown };
+  const rec = r as { source?: string; eventType?: string; subject?: string; value?: unknown; occurredAt?: string };
   const type = rec.eventType ? eventTypeLabel(rec.source ?? null, rec.eventType) : "";
-  return `${rec.source ?? ""} · ${type}${rec.subject ? ` · ${rec.subject}` : ""}${rec.value != null ? ` · ${String(rec.value)}` : ""}`;
+  const when = recordWhen(rec.occurredAt);
+  return `${rec.source ?? ""} · ${type}${rec.subject ? ` · ${rec.subject}` : ""}${rec.value != null ? ` · ${String(rec.value)}` : ""}${when ? ` · ${when}` : ""}`;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

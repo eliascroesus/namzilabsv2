@@ -37,6 +37,20 @@ function fields(rec: Rec): Array<{ label: string; value: string }> {
 }
 
 /**
+ * When it happened, at a glance — "is this data fresh?" must be answerable
+ * from the row. LOCAL time, like every other date this app renders: a call
+ * logged 7:30 PM Aug 4 CDT is stored as Aug 5 00:30 UTC, and labelling it
+ * "Aug 5" contradicts the CRM the user is comparing against — the exact
+ * "backend is mixing things up" impression this row exists to dispel.
+ */
+export function recordWhen(iso: string | undefined): string {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/**
  * Shows the latest sample records as expandable cards with every field. Picking
  * "Use this record as sample" chooses which record feeds downstream sample
  * values — it does NOT change which records the published flow processes.
@@ -67,7 +81,10 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
                 )}
                 <span className={`truncate font-medium ${selected ? "text-indigo-900" : "text-neutral-700"}`}>{title || `Record ${i + 1}`}</span>
               </span>
-              <span className="shrink-0 text-[11px] text-neutral-400">{fields(rec).length} fields</span>
+              <span className="shrink-0 text-[11px] text-neutral-400">
+                {recordWhen(rec.occurredAt) && <span className="mr-1.5">{recordWhen(rec.occurredAt)}</span>}
+                {fields(rec).length} fields
+              </span>
             </summary>
             <div className="border-t border-neutral-100 bg-white/70 px-2.5 py-2">
               <dl className="space-y-1">

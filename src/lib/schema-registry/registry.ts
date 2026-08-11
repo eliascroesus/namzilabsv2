@@ -156,30 +156,10 @@ export async function listRegisteredFields(db: DB, scope: RegistryScope): Promis
   return rows;
 }
 
-export type DedupeWarning = { field: string; approxCardinality: number; seenCount: number; message: string };
-
 /**
- * E.7 — the dedupe guardrail.
- *
- * "Match duplicates by <field>" collapses every record sharing a value. If the
- * chosen field has few distinct values relative to the record count (a status,
- * a channel, a blank column), that silently throws away most of the data and
- * the resulting number looks plausible. This turns that into a warning BEFORE
- * the number is trusted.
+ * E.7's dedupe guardrail used to live here, judged from these connection-wide
+ * stats — and it could contradict the run receipt rendered directly beneath
+ * it ("would collapse 23,262 of 23,420" above "No duplicates found", both
+ * about one 402-record step). The collapse warning is now part of the
+ * DedupeOutcome receipt itself, measured on the run (`DedupeReport.groups`).
  */
-export async function dedupeWarningFor(db: DB, scope: RegistryScope, field: string): Promise<DedupeWarning | null> {
-  const fields = await listRegisteredFields(db, scope);
-  const match = fields.find((f) => f.fieldPath === field || `properties.${f.fieldPath}` === field);
-  if (!match || match.seenCount === 0) return null;
-  // Fewer than one distinct value per 5 records is a strong smell; a
-  // genuinely-unique key (email, id) sits at ~1 distinct per record.
-  const ratio = match.approxCardinality / match.seenCount;
-  if (ratio >= 0.2 || match.approxCardinality >= CARDINALITY_CEILING) return null;
-  const collapsed = match.seenCount - match.approxCardinality;
-  return {
-    field,
-    approxCardinality: match.approxCardinality,
-    seenCount: match.seenCount,
-    message: `Matching duplicates by "${field}" would collapse about ${collapsed} of ${match.seenCount} records — it only has ~${match.approxCardinality} distinct values. Pick a field that identifies one record (an email or an id).`,
-  };
-}

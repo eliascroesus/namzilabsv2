@@ -176,9 +176,17 @@ export function hasAnyFields(groups: DataGroup[]): boolean {
   return groups.some((g) => g.fields.length > 0);
 }
 
-/** Case-insensitive filter of a group's fields by label or path (data-browser search). */
+/**
+ * Separators are noise in a field search: "lead id" must find `lead_id`, and
+ * "data emails" must find `data.emails`. Nobody knows a provider's choice of
+ * `_` vs `.` vs a space, and an exact-substring miss reads as the field not
+ * existing at all.
+ */
+const canonical = (s: string) => s.toLowerCase().replace(/[\s._-]+/g, " ");
+
+/** Case- and separator-insensitive filter of a group's fields by label or path (data-browser search). */
 export function filterFields(fields: DataField[], query: string): DataField[] {
-  const q = query.trim().toLowerCase();
+  const q = canonical(query.trim());
   if (!q) return fields;
-  return fields.filter((f) => `${f.label} ${f.path}`.toLowerCase().includes(q));
+  return fields.filter((f) => canonical(`${f.label} ${f.path}`).includes(q));
 }

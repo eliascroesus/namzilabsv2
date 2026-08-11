@@ -5,7 +5,7 @@ import type { DB } from "@/db/types";
 import { eventToRecord, getField, toNumber, STANDARD_FIELDS, type FlowRecord } from "./records";
 import { planPushdown } from "./compile/pushdown";
 import { compileRule } from "./compile/operators";
-import { inferSchema, buildFieldInfo, isEmptyValue, trimExample, type FieldInfo } from "./schema-infer";
+import { inferSchema, presenceByPath, buildFieldInfo, isEmptyValue, trimExample, type FieldInfo } from "./schema-infer";
 import { listRegisteredFields } from "@/lib/schema-registry/registry";
 import { fieldAppliesToEventType, readFilterFields } from "@/connectors/catalog";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
@@ -57,6 +57,12 @@ export type EngineCtx = {
   compile?: boolean;
   /** Collects what the compiler actually did, for E.5 provenance. */
   provenance?: CompileProvenance[];
+  /**
+   * Compute per-record-type field presence on app reads (see presenceByPath).
+   * Set by the Test path, which feeds the pickers; a materialize never reads
+   * outputSchema, so it never pays for the walk.
+   */
+  fieldPresence?: boolean;
 };
 
 /**
@@ -85,6 +91,12 @@ export type NodeExecOk = {
   pairing?: PairingReport;
   /** What Cross-reference actually matched — the receipt for every kept/dropped record. */
   crossRef?: CrossRefReport;
+  /**
+   * App steps with a specific record type: path → records carrying a value,
+   * counted over EVERY loaded record. The full truth the Test's picker may
+   * hide on — a sampled count never is (see presenceByPath).
+   */
+  fieldPresence?: Map<string, number>;
   shape: Shape;
   /** Extra outputs keyed by source-handle id (Paths uses this). */
   outputs?: Record<string, Shape>;
@@ -309,7 +321,33 @@ function readFilterConds(cfg: AppConfig, source: string | null): SQL[] {
 export async function sampleAppFields(ctx: EngineCtx, config: unknown, limit = 100): Promise<FieldInfo[]> {
   const cfg = AppConfigSchema.parse(config ?? {});
 
-  // A.1: prefer the field registry the writer maintains. It knows the UNION of
+  // A specific record type reads as ITS OWN fields, even before a test: the
+  // newest records of the type are the evidence, and fields empty on all of
+  // them are dropped. The registry — which spans every record type on the
+  // connection — only fills in when the type has no records at all. This is
+  // what keeps a meeting's attendee emails out of a "Contact created" picker,
+  // with examples that come from contacts instead of whichever event the
+  // registry sampled last. Saved dedupe paths are pinned: a picker missing
+  // its own value reads as broken.
+  if (cfg.eventType && cfg.connectionId) {
+    const rows = await ctx.db
+      .select()
+      .from(events)
+      .where(and(...appConds(ctx.orgId, cfg, await appSource(ctx, cfg))))
+      .orderBy(desc(events.occurredAt))
+      .limit(Math.max(limit, 200));
+    if (rows.length > 0) {
+      const strip = (p: string) => p.replace(/^properties\./, "");
+      const pins = new Set<string>();
+      if (typeof cfg.dedupeField === "string" && cfg.dedupeField) pins.add(strip(cfg.dedupeField));
+      if (typeof cfg.dedupeOrderField === "string" && cfg.dedupeOrderField) pins.add(strip(cfg.dedupeOrderField));
+      // `populated` here is exact over the scanned rows (<= SHAPE_SAMPLE), so
+      // it may hide; the Test then recomputes over the full record set.
+      return inferSchema(rows.map(eventToRecord)).filter((f) => !f.path.startsWith("properties.") || (f.populated ?? 0) > 0 || pins.has(strip(f.path)));
+    }
+  }
+
+  // A.1: the field registry the writer maintains. It knows the UNION of
   // fields across everything ever synced for the stream, which a 100-row scan
   // does not — a column that stopped being filled 200 rows ago is still a real
   // field of the sheet, and the scan would silently drop it from every picker.
@@ -390,35 +428,46 @@ async function registeredAppFields(ctx: EngineCtx, cfg: AppConfig, pinned: Reado
 const MAX_UNION_FIELDS = 2_000;
 
 /**
- * Every field this step's APP has ever carried a value for, merged with what
- * this run actually loaded.
+ * Every field this step offers, merged from what this run loaded and what the
+ * registry knows — in one of two regimes, decided by the evidence available:
  *
- * ONE RULE: a path is offered iff at least one record from this app has ever
- * carried a value for it. "This app" is the CONNECTION, deliberately not the
- * record type — so a Filter fed by a Calls step offers data.pipeline_id
- * exactly like the Get data step above it, because both are asking "what does
- * this app have". That breadth is the chosen answer, not an accident: the
- * registry has no event_type column, and narrowing to the record type is what
- * made pipeline vanish from a picker that had been offering it.
+ * WITH `presence` (a specific record type, fully loaded): a path is offered
+ * iff at least one record OF THIS RECORD TYPE carries a value — counted over
+ * every record, not a sample. This is what keeps a meeting's attendee emails
+ * out of a "Contact created" picker whose contacts never carry them, with
+ * example values that belong to this record type instead of whichever event
+ * the registry sampled last. The registry contributes nothing here: its
+ * breadth spans the whole connection, which is exactly the noise.
  *
- * The run's own records win where both know a path — they carry a real
- * example and a real populated count. The registry contributes the rest, and
- * is the ONLY thing allowed to call a field empty, because it is the only
- * app-wide answer; a 200-record sample is a sample, and a sample is never
- * grounds for hiding.
+ * WITHOUT presence ("All record types", a truncated read, or an overflowing
+ * shape): a path is offered iff at least one record from this CONNECTION has
+ * ever carried a value. That breadth is deliberate — pipeline fields live
+ * only on opportunity events and must still be findable from an all-types
+ * read — and the registry is the only thing allowed to call a field empty,
+ * because a 200-record sample is never grounds for hiding.
+ *
+ * In both regimes the run's own records win where both know a path (real
+ * examples, real counts), and saved paths are pinned so a picker is never
+ * missing its own value.
  */
 export async function appFieldUnion(
   ctx: EngineCtx,
   config: unknown,
   loaded: FieldInfo[],
   pinned: ReadonlySet<string> = new Set(),
+  presence: Map<string, number> | null = null,
 ): Promise<FieldInfo[]> {
   const cfg = AppConfigSchema.parse(config ?? {});
   const registered = await registeredAppFields(ctx, cfg, pinned);
+  const carried = (path: string): boolean => {
+    if (!presence) return true;
+    if (!path.startsWith("properties.")) return true; // the spine is on every record by construction
+    return (presence.get(path.slice("properties.".length)) ?? 0) > 0;
+  };
   // No app-wide answer (no connection chosen, nothing registered yet, or the
   // table is unavailable). The step's own records are then the only evidence
-  // there is — never an empty picker.
-  if (!registered) return loaded;
+  // there is — never an empty picker (though presence still prunes it).
+  if (!registered) return presence ? loaded.filter((f) => pinned.has(f.path) || carried(f.path)) : loaded;
 
   const known = new Set(registered.map((f) => f.path));
   const out: FieldInfo[] = [];
@@ -426,13 +475,26 @@ export async function appFieldUnion(
   // Record-derived fields first, so a Calls step still OPENS on call fields
   // with real samples; the app's other fields sit behind them, searchable.
   for (const f of loaded) {
-    if (f.populated === 0 && !known.has(f.path) && !pinned.has(f.path)) continue;
+    if (!pinned.has(f.path)) {
+      if (presence) {
+        // Full per-type truth: empty on every record of this type is hidden.
+        if (!carried(f.path)) continue;
+      } else if (f.populated === 0 && !known.has(f.path)) {
+        continue;
+      }
+    }
     taken.add(f.path);
-    // `populated: 0` means "empty everywhere" to the picker, and the registry
-    // has just said otherwise. Publish no count rather than a false zero.
-    out.push(f.populated === 0 ? { ...f, populated: undefined } : f);
+    // With presence, replace the sampled count with the true one; without it,
+    // a sampled 0 the registry contradicts publishes no count rather than a
+    // false zero.
+    const trueCount = presence && f.path.startsWith("properties.") ? presence.get(f.path.slice("properties.".length)) : undefined;
+    out.push(trueCount !== undefined ? { ...f, populated: trueCount } : f.populated === 0 ? { ...f, populated: undefined } : f);
   }
-  for (const f of registered) if (!taken.has(f.path)) out.push(f);
+  for (const f of registered) {
+    if (taken.has(f.path)) continue;
+    if (!pinned.has(f.path) && !carried(f.path)) continue;
+    out.push(f);
+  }
   return out.length > MAX_UNION_FIELDS ? out.slice(0, MAX_UNION_FIELDS) : out;
 }
 
@@ -526,6 +588,17 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
   }
 
   let records = rows.map(eventToRecord);
+  // Per-record-type field presence — the full truth, not the 200-record
+  // sample — computed only when this read IS the whole record type: a
+  // specific type chosen, nothing truncated, and NO folded filter chain
+  // (a pushdown restricts the rows to whatever the filters pass, and a
+  // presence counted over won-deals-only would hide the lost-reason field
+  // from the step's own picker). It is what lets the picker hide fields this
+  // record type never carries, without ever hiding on a partial count's
+  // say-so. Counted BEFORE dedupe: a field is real even if it only lives on
+  // the copies that get collapsed.
+  const fieldPresence =
+    ctx.fieldPresence && cfg.eventType && folded.length === 0 && rows.length < APP_LOAD_CEILING ? (presenceByPath(records) ?? undefined) : undefined;
   // Keep one per identity at the source — the FIRST thing that happens, before
   // any later step runs, so a duplicate never costs downstream work.
   let dedupe: DedupeReport | undefined;
@@ -535,10 +608,14 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
     records = res.records;
     dedupe = { field, keep: cfg.dedupeKeep, orderField: cfg.dedupeOrderField || "occurredAt", ...res.report };
   }
-  const exec = dedupe ? { ...datasetExec("app", node.id, records, rows.length), dedupe } : datasetExec("app", node.id, records, rows.length);
+  const exec: NodeExecOk = {
+    ...datasetExec("app", node.id, records, rows.length),
+    ...(dedupe ? { dedupe } : {}),
+    ...(fieldPresence ? { fieldPresence } : {}),
+  };
   // Never silently truncate: if the ceiling was actually hit, the node says so.
-  if (rows.length >= APP_LOAD_CEILING && exec.status === "ok") {
-    return { ...exec, truncated: true } as NodeExec;
+  if (rows.length >= APP_LOAD_CEILING) {
+    return { ...exec, truncated: true };
   }
   return exec;
 }
@@ -560,12 +637,12 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
  * user matched calls on `data.number`, a field belonging to a different Close
  * object entirely, and got a silent no-op with the box ticked.
  */
-export type DedupeReport = { field: string; keep: KeepDirection; orderField: string; loaded: number; matched: number; ordered: number; removed: number };
+export type DedupeReport = { field: string; keep: KeepDirection; orderField: string; loaded: number; matched: number; ordered: number; removed: number; groups: number };
 
 export function keepOnePerGroup(
   records: FlowRecord[],
   cfg: { groupField: string; keep: KeepDirection; orderField: string },
-): { records: FlowRecord[]; report: { loaded: number; matched: number; ordered: number; removed: number } } {
+): { records: FlowRecord[]; report: { loaded: number; matched: number; ordered: number; removed: number; groups: number } } {
   // Position is kept so the survivor is emitted where its group FIRST appeared.
   // The dataset's order is load-bearing downstream (topPreview, the newest-first
   // contract execApp documents), so choosing a different record must not also
@@ -604,7 +681,11 @@ export function keepOnePerGroup(
   // and the survivor was simply whichever loaded first.
   let ordered = 0;
   for (const b of best.values()) if (b.at != null) ordered++;
-  return { records: out, report: { loaded: records.length, matched, ordered, removed: records.length - out.length } };
+  // `groups` is the distinct-identity count this run actually saw — what the
+  // receipt uses to say "this field is a category, not an identity" from
+  // measurement, where the old registry-based warning guessed from
+  // connection-wide stats and contradicted the receipt beside it.
+  return { records: out, report: { loaded: records.length, matched, ordered, removed: records.length - out.length, groups: best.size } };
 }
 
 /**
