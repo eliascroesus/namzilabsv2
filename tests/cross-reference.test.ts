@@ -9,8 +9,8 @@ import { parseGraph } from "@/lib/flow/types";
 import type { DB } from "@/db/types";
 
 /**
- * Cross-reference — the join primitive — and the filter guard that retires
- * the shape people built without it.
+ * Combine's match mode — the join primitive — and the filter guard that
+ * retires the shape people built without it.
  *
  * The origin case, measured on production data: "keep the Close leads that
  * are in the spreadsheet" built as Combine + a field-vs-field equals. Every
@@ -64,20 +64,21 @@ async function row(email: string | null) {
 const N = (id: string, type: string, config: unknown) => ({ id, type, data: { config } });
 const E = (s: string, t: string) => ({ id: `${s}->${t}`, source: s, target: t });
 const XR = (over: Record<string, unknown> = {}) => ({
+  mode: "match",
   keepNodeId: "contacts",
   keyField: "properties.data.emails.0.email",
   lookupField: "properties.email",
-  mode: "appears",
+  matchMode: "appears",
   ...over,
 });
 
-/** The real shape: two Get data lanes into the Cross-reference. */
+/** The real shape: two Get data lanes into a matching Combine. */
 function graph(xr: Record<string, unknown> = {}, edges?: Array<{ id: string; source: string; target: string }>) {
   return parseGraph({
     nodes: [
       N("contacts", "app", { connectionId: CONN, source: "close", eventType: "contact_created" }),
       N("rows", "app", { connectionId: CONN, source: "close", eventType: "sheet_row" }),
-      N("x", "cross_reference", XR(xr)),
+      N("x", "unite", XR(xr)),
     ],
     edges: edges ?? [E("contacts", "x"), E("rows", "x")],
   });
@@ -93,11 +94,11 @@ const emails = (exec: NodeExecOk) => {
   return exec.shape.records.map((r) => ((r.properties.data as { emails?: Array<{ email?: string }> })?.emails?.[0]?.email ?? "").toLowerCase()).sort();
 };
 
-describe("cross_reference semantics", () => {
+describe("Combine match-mode semantics", () => {
   it("keeps records from the kept lane whose key appears among the other lane's values", async () => {
-    // The origin flow in miniature. Sabotage: route this through Combine + a
-    // field-vs-field equals instead and the answer is the no-email contact,
-    // not the two real matches.
+    // The origin flow in miniature. Sabotage: route this through a stacking
+    // Combine + a field-vs-field equals instead and the answer is the
+    // no-email contact, not the two real matches.
     await contact("anna@x.com");
     await contact("bob@y.com");
     await contact("carol@z.com");
@@ -125,6 +126,24 @@ describe("cross_reference semantics", () => {
     } satisfies CrossRefReport);
   });
 
+  it("a plain Combine (mode stack, and every stored {} config) still stacks all lanes", async () => {
+    // Sabotage: make match the default and every existing flow's Combine
+    // starts dropping records the moment it loads.
+    await contact("anna@x.com");
+    await row("anna@x.com");
+    const res = await runFlow({ db, orgId: ORG }, graph({ mode: "stack" }));
+    expect((res.nodes.get("x") as NodeExecOk).recordsOut).toBe(2);
+
+    const legacy = await runFlow(
+      { db, orgId: ORG },
+      parseGraph({
+        nodes: [N("contacts", "app", { connectionId: CONN, source: "close", eventType: "contact_created" }), N("rows", "app", { connectionId: CONN, source: "close", eventType: "sheet_row" }), N("x", "unite", {})],
+        edges: [E("contacts", "x"), E("rows", "x")],
+      }),
+    );
+    expect((legacy.nodes.get("x") as NodeExecOk).recordsOut).toBe(2);
+  });
+
   it("matching ignores capitalization and surrounding spaces — a join key is an identity", async () => {
     // Sabotage: compare raw strings and "Anna@X.com " is a silently missing
     // lead, indistinguishable from one genuinely absent from the sheet.
@@ -134,13 +153,13 @@ describe("cross_reference semantics", () => {
     expect((exec as NodeExecOk).recordsOut).toBe(1);
   });
 
-  it("mode 'missing' keeps the records NOT in the list — and keeps blanks, counted", async () => {
+  it("matchMode 'missing' keeps the records NOT in the list — and keeps blanks, counted", async () => {
     await contact("anna@x.com"); // in the sheet → dropped
     await contact("dave@w.com"); // not in the sheet → kept
     await contact(null); // blank: not provably present → kept, and the receipt says so
     await row("anna@x.com");
 
-    const exec = await runX({ mode: "missing" });
+    const exec = await runX({ matchMode: "missing" });
     const ok = exec as NodeExecOk;
     expect(ok.recordsOut).toBe(2);
     expect(ok.crossRef).toMatchObject({ mode: "missing", kept: 2, dropped: 1, blanks: 1 });
@@ -192,31 +211,54 @@ describe("cross_reference semantics", () => {
     // The kept step was rewired away (config points at a node that isn't an input).
     const stale = await runX({ keepNodeId: "somewhere_else" });
     expect(stale.status).toBe("error");
-    expect((stale as { error: string }).error).toContain("isn't wired into");
+    expect((stale as { error: string }).error).toContain("isn't wired into this Combine");
   });
 });
 
-describe("cross_reference static validation (the publish gate's twin)", () => {
+describe("the retired cross_reference node loads as a matching Combine", () => {
+  it("parseGraph migrates the type and maps every config key", () => {
+    // The step shipped for one release before matching moved onto Combine, so
+    // a stored graph can contain one. Sabotage: drop the migration and that
+    // flow fails schema validation on its next load.
+    const g = parseGraph({
+      nodes: [
+        N("contacts", "app", { connectionId: CONN, source: "close", eventType: "contact_created" }),
+        N("rows", "app", { connectionId: CONN, source: "close", eventType: "sheet_row" }),
+        N("x", "cross_reference", { keepNodeId: "contacts", keyField: "k", lookupField: "l", mode: "missing" }),
+      ],
+      edges: [E("contacts", "x"), E("rows", "x")],
+    });
+    const x = g.nodes.find((n) => n.id === "x")!;
+    expect(x.type).toBe("unite");
+    expect(x.data.config).toEqual({ mode: "match", keepNodeId: "contacts", keyField: "k", lookupField: "l", matchMode: "missing" });
+  });
+});
+
+describe("match-mode static validation (the publish gate's twin)", () => {
   const V = (nodes: unknown[], edges: unknown[]) => validateGraph(parseGraph({ nodes, edges }));
   const app = (id: string) => N(id, "app", { connectionId: CONN, source: "close", eventType: "x" });
 
   it("one wired input, an unfinished config, and a stale keep-step each block publish by name", () => {
-    const oneInput = V([app("a"), N("x", "cross_reference", XR())], [E("a", "x")]);
+    const oneInput = V([app("a"), N("x", "unite", XR())], [E("a", "x")]);
     expect(oneInput.some((i) => i.nodeId === "x" && i.message.includes("exactly two steps"))).toBe(true);
 
-    const unfinished = V([app("a"), app("b"), N("x", "cross_reference", XR({ lookupField: "" }))], [E("a", "x"), E("b", "x")]);
+    const unfinished = V([app("a"), app("b"), N("x", "unite", XR({ lookupField: "" }))], [E("a", "x"), E("b", "x")]);
     expect(unfinished.some((i) => i.nodeId === "x" && i.message.includes("isn't finished"))).toBe(true);
 
-    const stale = V([app("a"), app("b"), N("x", "cross_reference", XR({ keepNodeId: "gone" }))], [E("a", "x"), E("b", "x")]);
+    const stale = V([app("a"), app("b"), N("x", "unite", XR({ keepNodeId: "gone" }))], [E("a", "x"), E("b", "x")]);
     expect(stale.some((i) => i.nodeId === "x" && i.message.includes("no longer wired"))).toBe(true);
 
-    const complete = V([app("a"), app("b"), N("x", "cross_reference", XR({ keepNodeId: "a" }))], [E("a", "x"), E("b", "x")]);
+    const complete = V([app("a"), app("b"), N("x", "unite", XR({ keepNodeId: "a" }))], [E("a", "x"), E("b", "x")]);
     expect(complete.filter((i) => i.nodeId === "x")).toEqual([]);
+
+    // A stacking Combine raises none of this — {} is every existing flow.
+    const stack = V([app("a"), app("b"), N("x", "unite", {})], [E("a", "x"), E("b", "x")]);
+    expect(stack.filter((i) => i.nodeId === "x")).toEqual([]);
   });
 });
 
-describe("the pushdown chain never tunnels through a cross_reference", () => {
-  it("a Filter below the step does not fold into the kept lane's app read", () => {
+describe("the pushdown chain never tunnels through a Combine", () => {
+  it("a Filter below a matching Combine does not fold into the kept lane's app read", () => {
     // Sabotage: let the fold walk through non-filter nodes and the app read
     // pre-applies a condition meant for the JOINED set — rows the reference
     // side would have kept are gone before the check runs.
@@ -224,7 +266,7 @@ describe("the pushdown chain never tunnels through a cross_reference", () => {
       nodes: [
         N("contacts", "app", { connectionId: CONN, source: "close", eventType: "contact_created" }),
         N("rows", "app", { connectionId: CONN, source: "close", eventType: "sheet_row" }),
-        N("x", "cross_reference", XR()),
+        N("x", "unite", XR()),
         N("f", "filter", { combinator: "and", rules: [{ field: "subject", op: "equals", value: "a" }] }),
       ],
       edges: [E("contacts", "x"), E("rows", "x"), E("x", "f")],
@@ -265,10 +307,11 @@ describe("the filter guard that retires the mistaken join", () => {
   });
 
   it("a Filter comparing two fields that never co-occur refuses, and names the cure", async () => {
-    // The user's flow, verbatim: Combine two apps, compare a field from each.
-    // Sabotage: drop assertComparableFields and this "succeeds" with 1 record
-    // — the blank-blank one is gone (guard above), but 0-passed would read as
-    // "none of my leads are in the sheet", which is equally a lie.
+    // The user's original flow, verbatim: stack two apps, compare a field
+    // from each. Sabotage: drop assertComparableFields and this "succeeds"
+    // with 1 record — the blank-blank one is gone (guard above), but
+    // 0-passed would read as "none of my leads are in the sheet", which is
+    // equally a lie.
     await contact("anna@x.com");
     await contact(null);
     await row("anna@x.com");
@@ -289,7 +332,7 @@ describe("the filter guard that retires the mistaken join", () => {
     expect(f.status).toBe("error");
     const msg = (f as { error: string }).error;
     expect(msg).toContain("no record here carries both");
-    expect(msg).toContain("Cross-reference");
+    expect(msg).toContain("Only keep records that match");
   });
 
   it("the same comparison on ONE lane, where some record carries both, runs normally", async () => {

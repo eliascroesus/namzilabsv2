@@ -269,10 +269,11 @@ export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, input
     const set = (k: string) => String(cfg[k] ?? "").trim().length > 0;
     return inputCount === 0 || !set("keyField") || !set("startField") || !set("endField");
   }
-  if (type === "cross_reference") {
-    // Two inputs AND all three answers: whose records continue, matched on
-    // what, checked against what. A partial cross-reference has no safe
-    // reading, so nothing here defaults.
+  if (type === "unite") {
+    if (String(cfg.mode ?? "stack") !== "match") return inputCount === 0;
+    // Matching needs two inputs AND all three answers: whose records
+    // continue, matched on what, checked against what. A partial match has
+    // no safe reading, so nothing here defaults.
     const set = (k: string) => String(cfg[k] ?? "").trim().length > 0;
     return inputCount < 2 || !set("keepNodeId") || !set("keyField") || !set("lookupField");
   }
@@ -332,12 +333,18 @@ export function descendantsOf(start: string, edges: Edge[]): Set<string> {
  * The bridge edge that reconnects a node's predecessor to its single successor when
  * the node is removed. A multi-input junction (Unite) bridges from its FIRST lane so
  * the line downstream survives; multi-output nodes are deleted normally (null).
+ *
+ * `preferredSource` names the lane that must survive when the first one is the
+ * wrong answer: deleting a MATCHING Combine has to reconnect the kept lane —
+ * bridging blind from lane one could hand every downstream step the check
+ * list's records, silently, the moment the keep lane happened to be wired
+ * second.
  */
-export function bridgeEdgeFor(nodeId: string, edges: Edge[]): Edge | null {
+export function bridgeEdgeFor(nodeId: string, edges: Edge[], preferredSource?: string | null): Edge | null {
   const incoming = edges.filter((e) => e.target === nodeId);
   const outgoing = edges.filter((e) => e.source === nodeId);
   if (incoming.length === 0 || outgoing.length !== 1) return null;
-  const i = incoming[0];
+  const i = (preferredSource ? incoming.find((e) => e.source === preferredSource) : undefined) ?? incoming[0];
   const o = outgoing[0];
   return {
     id: `e_${Math.random().toString(36).slice(2, 9)}`,
@@ -400,21 +407,45 @@ export function buildFieldGroups(opts: {
       if (!incoming.has(e.target)) incoming.set(e.target, []);
       incoming.get(e.target)!.push(e.source);
     }
+    const byIdAll = new Map(nodes.map((n) => [n.id, n]));
     const ancestorIds = new Set<string>();
     const stack = [selectedId];
     while (stack.length) {
       const cur = stack.pop()!;
-      for (const s of incoming.get(cur) ?? []) if (!ancestorIds.has(s)) { ancestorIds.add(s); stack.push(s); }
+      // The reference lane of a matching Combine does not flow past it — its
+      // records are only a check list. Offering its fields below the Combine
+      // re-opens the mistaken-join trap: a pick that resolves on no record.
+      // The Combine's OWN panel still sees both lanes (cur === selectedId),
+      // which is where the two match fields are chosen.
+      const keep = cur === selectedId ? null : matchKeepOf(byIdAll.get(cur));
+      const sources = incoming.get(cur) ?? [];
+      // Fail OPEN when the keep reference is stale (names a node that is no
+      // longer a direct input): restricting to a lane that isn't wired in
+      // would hide EVERY lane and empty every picker downstream. The stale
+      // config is separately an error the validator and the engine both name
+      // — the picker's job is to keep showing the data that exists.
+      const keepValid = keep != null && sources.includes(keep);
+      for (const s of sources) {
+        if (keepValid && s !== keep) continue;
+        if (!ancestorIds.has(s)) {
+          ancestorIds.add(s);
+          stack.push(s);
+        }
+      }
     }
     // In flow order (step 1, 2, 3…), matching how the steps read on the canvas.
     const ordered = [...ancestorIds].sort((a, b) => (stepNoById.get(a) ?? 0) - (stepNoById.get(b) ?? 0));
     for (const sid of ordered) {
       const sn = nodes.find((n) => n.id === sid);
       if (!sn) continue;
-      // A Unite is pure plumbing — it exposes no data of its own. Its lanes' steps
-      // are ancestors too and appear as their own groups, which is what the user
-      // recognises ("1. Google Sheets", not "3. Unite data").
-      if (sn.type === "unite") continue;
+      // A stacking Unite is pure plumbing — it exposes no data of its own; its
+      // lanes' steps are ancestors too and appear as their own groups, which is
+      // what the user recognises ("1. Google Sheets", not "3. Unite data").
+      // A MATCHING one makes a decision, and its decision is readable
+      // downstream: Output (did this record survive the check) and Output
+      // number (how many did) — the same two facts every Filter exposes.
+      const matchingUnite = sn.type === "unite" && String((sn.data.config as { mode?: unknown }).mode ?? "stack") === "match";
+      if (sn.type === "unite" && !matchingUnite) continue;
       // Untested steps expose nothing yet (explicit-test model).
       if (sn.data.lastTest?.status !== "ok") continue;
       const app = nearestAppAncestor(sn, nodes, edges);
@@ -431,10 +462,7 @@ export function buildFieldGroups(opts: {
       // to be READ and referenced ("step 1 loaded 390"), and it goes last so it never
       // competes with the step's real columns.
       const outNum: PickField = { path: `__count_${sn.id}`, label: "Output number", type: "number", example: sn.data.lastTest.recordsOut };
-      // Cross-reference belongs here too: it decides who continues but adds no
-      // columns — its records' fields already appear under their source step's
-      // own group. Missing it would advertise every kept-lane column twice.
-      const isPassThrough = sn.type === "filter" || sn.type === "time" || sn.type === "cross_reference";
+      const isPassThrough = sn.type === "filter" || sn.type === "time" || matchingUnite;
       /**
        * A step that computes a NUMBER has no per-record variables to offer,
        * and offering one anyway was a lie the picker told: a Calculate that
@@ -522,6 +550,15 @@ export function laneAncestorIds(startId: string, edges: Edge[]): Set<string> {
   return seen;
 }
 
+/** The keep-lane source id of a matching Combine, else null. */
+export function matchKeepOf(n: FNode | undefined): string | null {
+  if (!n || n.type !== "unite") return null;
+  const cfg = (n.data.config ?? {}) as { mode?: unknown; keepNodeId?: unknown };
+  if (String(cfg.mode ?? "stack") !== "match") return null;
+  const keep = typeof cfg.keepNodeId === "string" ? cfg.keepNodeId : "";
+  return keep || null;
+}
+
 /** Walk upstream from a node to the nearest App source (itself if it is one). */
 export function nearestAppAncestor(start: FNode, nodes: FNode[], edges: Edge[]): FNode | undefined {
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -530,7 +567,12 @@ export function nearestAppAncestor(start: FNode, nodes: FNode[], edges: Edge[]):
   while (cur && !guard.has(cur.id)) {
     guard.add(cur.id);
     if (cur.type === "app") return cur;
-    const up = edges.find((e) => e.target === cur!.id);
+    // Through a matching Combine, the app that matters is the KEPT lane's —
+    // following the first edge blind could land on the check-list side, whose
+    // records don't flow here, and stamp its badge and samples on everything.
+    const ins = edges.filter((e) => e.target === cur!.id);
+    const keep = matchKeepOf(cur);
+    const up = (keep ? ins.find((e) => e.source === keep) : undefined) ?? ins[0];
     cur = up ? byId.get(up.source) : undefined;
   }
   return undefined;

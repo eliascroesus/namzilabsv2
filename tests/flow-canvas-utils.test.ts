@@ -40,6 +40,19 @@ describe("bridgeEdgeFor (delete & reconnect)", () => {
     expect(bridge.source).toBe("a");
     expect(bridge.target).toBe("c");
   });
+  it("deleting a matching Combine reconnects its KEPT lane, wherever it was wired", () => {
+    // Sabotage: bridge blind from incoming[0] and deleting a matching Combine
+    // whose keep lane was wired second hands every downstream step the check
+    // list's records — silently, with a well-formed graph no validator flags.
+    const edges = [E("sheetRows", "x"), E("closeLeads", "x"), E("x", "calc")];
+    const bridge = bridgeEdgeFor("x", edges, "closeLeads")!;
+    expect(bridge.source).toBe("closeLeads");
+    expect(bridge.target).toBe("calc");
+    // No preference (a stacking Combine) keeps the old first-lane rule.
+    expect(bridgeEdgeFor("x", edges)!.source).toBe("sheetRows");
+    // A preference that no longer matches any edge falls back rather than failing.
+    expect(bridgeEdgeFor("x", edges, "gone")!.source).toBe("sheetRows");
+  });
   it("returns null for multiple outputs or no input", () => {
     expect(bridgeEdgeFor("b", [E("a", "b"), E("b", "c"), E("b", "c2")])).toBeNull();
     expect(bridgeEdgeFor("b", [E("b", "c")])).toBeNull(); // no input
@@ -123,7 +136,7 @@ describe("buildFieldGroups (variable picker)", () => {
   });
 });
 
-describe("cross_reference in the editor's pure helpers", () => {
+describe("Combine's match mode in the editor's pure helpers", () => {
   const tested = {
     status: "ok" as const,
     recordsIn: 2,
@@ -133,15 +146,18 @@ describe("cross_reference in the editor's pure helpers", () => {
     outputSchema: [{ path: "plan", label: "plan", type: "text" }] as FieldInfo[],
   };
 
-  it("needs setup until BOTH inputs are wired and all three answers are given", () => {
+  it("a matching Combine needs setup until BOTH inputs are wired and all three answers are given", () => {
     // Sabotage: default any of these and a half-built join runs with a hidden
-    // side — the exact silence the step was built to end.
-    const full = { keepNodeId: "a", keyField: "k", lookupField: "l", mode: "appears" };
-    expect(nodeNeedsSetup("cross_reference", full, 2)).toBe(false);
-    expect(nodeNeedsSetup("cross_reference", full, 1)).toBe(true);
-    expect(nodeNeedsSetup("cross_reference", { ...full, keepNodeId: "" }, 2)).toBe(true);
-    expect(nodeNeedsSetup("cross_reference", { ...full, keyField: "" }, 2)).toBe(true);
-    expect(nodeNeedsSetup("cross_reference", { ...full, lookupField: "" }, 2)).toBe(true);
+    // side — the exact silence the option was built to end.
+    const full = { mode: "match", keepNodeId: "a", keyField: "k", lookupField: "l", matchMode: "appears" };
+    expect(nodeNeedsSetup("unite", full, 2)).toBe(false);
+    expect(nodeNeedsSetup("unite", full, 1)).toBe(true);
+    expect(nodeNeedsSetup("unite", { ...full, keepNodeId: "" }, 2)).toBe(true);
+    expect(nodeNeedsSetup("unite", { ...full, keyField: "" }, 2)).toBe(true);
+    expect(nodeNeedsSetup("unite", { ...full, lookupField: "" }, 2)).toBe(true);
+    // A stacking Combine (and every stored {} config) keeps its old rule.
+    expect(nodeNeedsSetup("unite", {}, 1)).toBe(false);
+    expect(nodeNeedsSetup("unite", {}, 0)).toBe(true);
   });
 
   it("laneAncestorIds scopes one input's side, never the other lane", () => {
@@ -152,24 +168,52 @@ describe("cross_reference in the editor's pure helpers", () => {
     expect([...laneAncestorIds("app2", edges)].sort()).toEqual(["app2"]);
   });
 
-  it("advertises no columns of its own downstream — only Output / Output number", () => {
-    // Sabotage: leave cross_reference out of the pass-through set and every
-    // kept-lane column appears TWICE in downstream pickers (once under the
-    // app, once under the join).
-    const app = N("app1", "app", { lastTest: { ...tested, sample: [{ source: "gsheets", properties: { plan: "pro" } }] } });
-    const app2 = N("app2", "app", { lastTest: { ...tested, sample: [{ source: "close", properties: {} }] } });
-    const xref = N("x", "cross_reference", { lastTest: tested });
+  it("below a matching Combine the check-list lane's fields are NOT offered — its records don't flow there", () => {
+    // Sabotage: walk all lanes blind and the picker below the Combine offers
+    // the reference side's columns, which resolve on no record — the exact
+    // "pick a field the data doesn't carry" trap, one step later.
+    const app = N("app1", "app", { lastTest: { ...tested, sample: [{ source: "close", properties: { plan: "pro" } }] } });
+    const app2 = N("app2", "app", { lastTest: { ...tested, sample: [{ source: "gsheets", properties: {} }] } });
+    const matchCfg = { mode: "match", keepNodeId: "app1", keyField: "plan", lookupField: "plan", matchMode: "appears" };
     const after = N("f9", "filter");
-    const groups = buildFieldGroups({
-      selectedId: "f9",
-      nodes: [app, app2, xref, after],
-      edges: [E("app1", "x"), E("app2", "x"), E("x", "f9")],
-      stepNoById: new Map([["app1", 1], ["app2", 2], ["x", 3], ["f9", 4]]),
-      titleOf,
-    });
-    const xg = groups.find((g) => g.nodeId === "x");
+    const nodes = [app, app2, N("x", "unite", { config: matchCfg, lastTest: tested }), after];
+    const edges = [E("app1", "x"), E("app2", "x"), E("x", "f9")];
+    const stepNoById = new Map([["app1", 1], ["app2", 2], ["x", 3], ["f9", 4]]);
+
+    const below = buildFieldGroups({ selectedId: "f9", nodes, edges, stepNoById, titleOf });
+    expect(below.some((g) => g.nodeId === "app1")).toBe(true);
+    expect(below.some((g) => g.nodeId === "app2")).toBe(false);
+
+    // The Combine's own decision IS readable downstream: Output (survived the
+    // check) and Output number (how many did) — like every Filter. Sabotage:
+    // skip every unite and a migrated flow whose downstream step referenced
+    // the join's Output number can never re-pick it.
+    const xg = below.find((g) => g.nodeId === "x");
     expect(xg).toBeDefined();
     expect(xg!.fields.map((f) => f.path).sort()).toEqual(["__count_x", "__passed_x"]);
+
+    // The Combine's OWN panel still sees both lanes — that is where the two
+    // match fields get picked.
+    const atCombine = buildFieldGroups({ selectedId: "x", nodes, edges, stepNoById, titleOf });
+    expect(atCombine.some((g) => g.nodeId === "app1")).toBe(true);
+    expect(atCombine.some((g) => g.nodeId === "app2")).toBe(true);
+
+    // And a STACKING Combine keeps offering both lanes below — its records
+    // genuinely flow on together — while contributing no group of its own.
+    const stacked = nodes.map((n) => (n.id === "x" ? N("x", "unite", {}) : n));
+    const belowStack = buildFieldGroups({ selectedId: "f9", nodes: stacked, edges, stepNoById, titleOf });
+    expect(belowStack.some((g) => g.nodeId === "app1")).toBe(true);
+    expect(belowStack.some((g) => g.nodeId === "app2")).toBe(true);
+    expect(belowStack.some((g) => g.nodeId === "x")).toBe(false);
+
+    // A STALE keep reference (its lane got rewired without the config
+    // following) fails OPEN. Sabotage: keep the strict skip and a stale id
+    // hides BOTH lanes — every picker below the Combine goes empty, with the
+    // kept lane's tested app sitting right there.
+    const stale = nodes.map((n) => (n.id === "x" ? N("x", "unite", { config: { ...matchCfg, keepNodeId: "gone" }, lastTest: tested }) : n));
+    const belowStale = buildFieldGroups({ selectedId: "f9", nodes: stale, edges, stepNoById, titleOf });
+    expect(belowStale.some((g) => g.nodeId === "app1")).toBe(true);
+    expect(belowStale.some((g) => g.nodeId === "app2")).toBe(true);
   });
 });
 

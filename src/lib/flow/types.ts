@@ -28,12 +28,6 @@ export const NODE_TYPES = [
   // and emits one record per match carrying the gap as a real numeric field —
   // the primitive that makes speed-to-lead computable. New graphs only.
   "time_between",
-  // Cross-reference is the join primitive: keep records from ONE input whose
-  // field value appears (or doesn't) among another input's values. Without it,
-  // people build the intersection as Combine + a field-vs-field Filter — which
-  // compares two fields on the SAME record, and after a Combine no record has
-  // both, so it can only ever match blanks against blanks.
-  "cross_reference",
   // "calculate" is the legacy merged node; it remains in the engine so existing
   // flows keep loading/running unchanged (hidden from the picker).
   "calculate",
@@ -55,7 +49,6 @@ export const NODE_LABELS: Record<NodeType, string> = {
   formula: "Calculate",
   time: "Date range",
   time_between: "Time between",
-  cross_reference: "Cross-reference",
   calculate: "Calculate a number",
 };
 
@@ -277,29 +270,33 @@ export const TimeBetweenConfigSchema = z.object({
 });
 export type TimeBetweenConfig = z.infer<typeof TimeBetweenConfigSchema>;
 
-// ---------- Cross-reference ----------
+// ---------- Combine (unite) ----------
 /** Keep records that appear in the other step's list — or only those that don't. */
 const CROSS_REF_MODES = ["appears", "missing"] as const;
 export type CrossRefMode = (typeof CROSS_REF_MODES)[number];
 /**
- * The join primitive: exactly two inputs, and the config names which one's
- * records CONTINUE (`keepNodeId`) — the other becomes the list they are
- * checked against. That asymmetry is the whole reason this is a step of its
- * own rather than a mode on Combine: a symmetric "only keep matches" checkbox
- * cannot answer "records from which side come out?", and the ambiguity is
- * exactly what let Combine + Filter produce 8 no-email records as "matches".
+ * Combine data has two modes. "stack" (the default, and what every stored
+ * `{}` config means) puts all lanes' records on one line. "match" is the join
+ * primitive: exactly two inputs, keep one side's records only when their
+ * field value appears (or doesn't) among the other side's values.
  *
- * Every field defaults to empty so the step reads "Needs setup" until each
- * question is answered — no hidden side, no assumed field.
+ * Matching names which input's records CONTINUE (`keepNodeId`) — the other
+ * becomes the list they are checked against. Naming the side is what makes a
+ * "only keep matches" option answerable at all: a symmetric checkbox cannot
+ * say which records come out, and that ambiguity is exactly what let
+ * Combine + a field-vs-field Filter pass 8 no-email records as "matches".
+ * The match fields default to empty so a matching Combine reads "Needs
+ * setup" until each question is answered — no hidden side, no assumed field.
  */
-export const CrossReferenceConfigSchema = z.object({
-  /** The input node whose records continue downstream. */
+export const UniteConfigSchema = z.object({
+  mode: z.enum(["stack", "match"]).default("stack"),
+  /** match: the input node whose records continue downstream. */
   keepNodeId: z.string().default(""),
-  /** Field on the kept records whose value is looked up. */
+  /** match: field on the kept records whose value is looked up. */
   keyField: z.string().default(""),
-  /** Field on the other input's records that supplies the list of values. */
+  /** match: field on the other input's records that supplies the list of values. */
   lookupField: z.string().default(""),
-  mode: z.enum(CROSS_REF_MODES).default("appears"),
+  matchMode: z.enum(CROSS_REF_MODES).default("appears"),
 });
 
 // ---------- Formula / Calculate ----------
@@ -601,6 +598,30 @@ function migrateLegacyGraph(raw: unknown): unknown {
       changed = true;
       if (type === "combine" && typeof n.id === "string") combineIds.add(n.id);
       return { ...n, type: "filter", data: { ...(n.data ?? {}), config: { combinator: "and", rules: [] } } };
+    }
+    /**
+     * "cross_reference" lived one release as its own step before matching
+     * became a mode on Combine data — where the person building "only the
+     * leads that are in the spreadsheet" actually looks for it. The config
+     * keys map one-to-one; nothing about the semantics moved.
+     */
+    if (type === "cross_reference") {
+      changed = true;
+      const c = (n.data?.config ?? {}) as Record<string, unknown>;
+      return {
+        ...n,
+        type: "unite",
+        data: {
+          ...(n.data ?? {}),
+          config: {
+            mode: "match",
+            keepNodeId: typeof c.keepNodeId === "string" ? c.keepNodeId : "",
+            keyField: typeof c.keyField === "string" ? c.keyField : "",
+            lookupField: typeof c.lookupField === "string" ? c.lookupField : "",
+            matchMode: c.mode === "missing" ? "missing" : "appears",
+          },
+        },
+      };
     }
     /**
      * Time between is configured by picking variables now, so both older

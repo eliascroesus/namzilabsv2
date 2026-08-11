@@ -63,6 +63,7 @@ import {
   descendantsOf,
   isCompareNode,
   laneAncestorIds,
+  matchKeepOf,
   nearestAppAncestor,
   resolveSampleField,
   structuralEdges,
@@ -104,8 +105,10 @@ function isNumberProducer(n: FNode): boolean {
 /** Short "what to do next" hint shown inside a step that needs setup. */
 function setupHint(type: string, cfg: Record<string, unknown>, inputCount: number): string {
   if (type === "app") return cfg.connectionId ? "Choose what data to pull." : "Choose an account to load data.";
-  if (type === "unite") return "Pick the lanes to bring together.";
-  if (type === "cross_reference") return inputCount < 2 ? "Wire in the two steps to check against each other." : "Pick whose records continue, and the fields to match.";
+  if (type === "unite") {
+    if (String(cfg.mode ?? "stack") !== "match") return "Pick the lanes to bring together.";
+    return inputCount < 2 ? "Wire in the two steps to check against each other." : "Pick whose records continue, and the fields to match.";
+  }
   if (type === "time_between") return "Pick the matching field and the start/end conditions.";
   if (type === "filter") return inputCount === 0 ? "Connect an input." : "Add a condition — with none, this step passes every record.";
   if (type === "formula") return isDatasetFormulaOp(cfg.op ?? "percentage") ? "Connect an input." : "Pick or type a First and Second number.";
@@ -321,6 +324,13 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         }
         return [...base, ...extraEdges];
       });
+      // Inserting a step on the KEEP lane of a matching Combine moves that
+      // lane's head — the config follows, or the Combine points at a step no
+      // longer wired into it and errors on its next run.
+      if (ctx?.onEdge && type !== "app" && type !== "paths") {
+        const old = ctx.onEdge;
+        setNodes((ns) => ns.map((n) => (n.id === old.target && matchKeepOf(n) === old.source ? { ...n, data: { ...n.data, config: { ...n.data.config, keepNodeId: id }, dirty: true } } : n)));
+      }
       setSelectedId(id);
     },
     [commit, nodes, setNodes, setEdges],
@@ -429,14 +439,27 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   /** Remove a node with exactly one chain in + one chain out, bridging prev→next. */
   const deleteAndReconnect = useCallback(
     (id: string) => {
-      const bridge = bridgeEdgeFor(id, sEdges);
+      // A matching Combine must reconnect its KEPT lane — bridging blind from
+      // the first edge could hand downstream the check list's records.
+      const bridge = bridgeEdgeFor(id, sEdges, matchKeepOf(nodes.find((n) => n.id === id)));
       if (!bridge) return deleteNode(id);
       commit();
       setEdges((es) => [...es.filter((e) => e.source !== id && e.target !== id), bridge]);
-      setNodes((ns) => ns.map((n) => (n.id === bridge.target ? { ...n, data: { ...n.data, dirty: true } } : n)).filter((n) => n.id !== id));
+      setNodes((ns) =>
+        ns
+          .map((n) => {
+            if (n.id !== bridge.target) return n;
+            // Deleting the head of a matching Combine's KEEP lane promotes
+            // the bridged predecessor into the role — otherwise the config
+            // names a step that no longer exists.
+            const repointed = matchKeepOf(n) === id ? { ...n.data.config, keepNodeId: bridge.source } : n.data.config;
+            return { ...n, data: { ...n.data, config: repointed, dirty: true } };
+          })
+          .filter((n) => n.id !== id),
+      );
       setSelectedId(null);
     },
-    [sEdges, commit, setEdges, setNodes, deleteNode],
+    [nodes, sEdges, commit, setEdges, setNodes, deleteNode],
   );
 
   // Multi-input steps are wired from the config panel (labeled pills), never by
@@ -818,10 +841,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
   // A Unite's lane candidates: only each line's FURTHEST step (computed as if this
   // unite weren't connected), so lanes always join at their ends — never mid-line.
-  // Paths hubs are never pickable (they only feed their branches). Cross-reference
-  // wires its two inputs from the same picker — its lanes are edges too.
+  // Paths hubs are never pickable (they only feed their branches).
   const candidates = useMemo(() => {
-    if (!selected || (selected.type !== "unite" && selected.type !== "cross_reference")) return { dataset: [] as StepRef[] };
+    if (!selected || selected.type !== "unite") return { dataset: [] as StepRef[] };
     const desc = descendantsOf(selected.id, edges);
     const edgesSansSelf = edges.filter((e) => e.target !== selected.id);
     const ends = terminalIds(nodes, edgesSansSelf);
@@ -833,11 +855,12 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     };
   }, [selected, nodes, edges, stepNoById]);
 
-  // Cross-reference pickers are lane-scoped: each side may only offer fields
-  // reachable through that input. The union would re-open the trap the step
-  // closes — picking a field the chosen side's records never carry.
+  // A matching Combine's field pickers are lane-scoped: each side may only
+  // offer fields reachable through that input. The union would re-open the
+  // trap matching closes — picking a field the chosen side's records never
+  // carry. Computed for every Combine; only the match UI reads it.
   const laneScopes = useMemo<Record<string, string[]> | undefined>(() => {
-    if (!selected || selected.type !== "cross_reference") return undefined;
+    if (!selected || selected.type !== "unite") return undefined;
     const out: Record<string, string[]> = {};
     for (const e of edges) {
       if (e.target !== selected.id) continue;
@@ -852,8 +875,12 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const numberGroups = useMemo<DataGroup[]>(() => {
     if (!selected) return [];
     const desc = descendantsOf(selected.id, edges);
+    // A stacking Combine is plumbing — its count is just its lanes' sum, so it
+    // is not offered. A MATCHING Combine's count is a real answer ("28 of the
+    // sheet's leads exist in Close") and fills a Compare slot like any other.
+    const plumbing = (n: FNode) => n.type === "paths" || (n.type === "unite" && String((n.data.config as { mode?: unknown }).mode ?? "stack") !== "match");
     const avail = nodes
-      .filter((n) => n.id !== selected.id && !desc.has(n.id) && n.type !== "paths" && n.type !== "unite" && (isNumberProducer(n) || producesDataset(String(n.type))))
+      .filter((n) => n.id !== selected.id && !desc.has(n.id) && !plumbing(n) && (isNumberProducer(n) || producesDataset(String(n.type))))
       .sort((a, b) => (stepNoById.get(a.id) ?? 0) - (stepNoById.get(b.id) ?? 0));
     return avail.map((n) => {
       const app = nearestAppAncestor(n, nodes, edges);

@@ -16,7 +16,7 @@ import {
   type AppConfig,
   TimeConfigSchema,
   TimeBetweenConfigSchema,
-  CrossReferenceConfigSchema,
+  UniteConfigSchema,
   type CrossRefMode,
   FormulaConfigSchema,
   GroupConfigSchema,
@@ -200,8 +200,6 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
         return execTimeBetween(node, inputs);
       case "unite":
         return execUnite(node, inputs);
-      case "cross_reference":
-        return execCrossReference(node, inputs);
       case "paths":
         return execPaths(node, inputs, graph);
       case "group":
@@ -667,7 +665,7 @@ function assertComparableFields(cfg: FilterConfig, records: FlowRecord[]): void 
     const nice = (f: string) => f.replace(/^properties\./, "");
     throw new Error(
       `This condition compares "${nice(rule.field)}" with "${nice(rule.valueField)}", but no record here carries both — so it can never match. ` +
-        `If they come from different apps, use a Cross-reference step to keep records from one that appear in the other.`,
+        `If they come from different apps, use a Combine data step with "Only keep records that match" turned on instead.`,
     );
   }
 }
@@ -842,16 +840,18 @@ function execTimeBetween(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
  * and fields. No options — it's pure flow shape.
  */
 function execUnite(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  const cfg = UniteConfigSchema.parse(node.data.config ?? {});
   if (inputs.length === 0) throw new Error("Unite needs at least one connected input.");
   const datasets = inputs.map((i) => {
     if (i.shape.kind !== "dataset") throw new Error("Unite only accepts record inputs.");
     return i.shape.records;
   });
+  if (cfg.mode === "match") return matchUnite(node, inputs, cfg);
   const records = datasets.flat();
   return datasetExec("unite", node.id, records, records.length);
 }
 
-// ---------- Cross-reference ----------
+// ---------- Combine's match mode (the join primitive) ----------
 /** What the match actually did, counted — never inferred from the config. */
 export type CrossRefReport = {
   mode: CrossRefMode;
@@ -885,7 +885,7 @@ function matchKey(v: unknown): string | null {
 
 /**
  * Keep records from ONE input whose key appears (or doesn't) among the OTHER
- * input's values. The kept lane's records pass through unchanged — this step
+ * input's values. The kept lane's records pass through unchanged — matching
  * adds no columns, it only decides who continues.
  *
  * Blank keys can never match: in "appears" mode they are dropped (a record
@@ -893,17 +893,15 @@ function matchKey(v: unknown): string | null {
  * (it is equally not absent-with-a-value), and the receipt counts them either
  * way so neither choice is silent.
  */
-function execCrossReference(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
-  const cfg = CrossReferenceConfigSchema.parse(node.data.config ?? {});
-  if (inputs.length < 2) throw new Error("Cross-reference needs two connected steps: the records to keep, and the list to check them against.");
-  if (inputs.length > 2) throw new Error(`Cross-reference checks one step against one other, but ${inputs.length} are wired into it. Remove the extras.`);
-  for (const i of inputs) if (i.shape.kind !== "dataset") throw new Error("Cross-reference only accepts record inputs.");
+function matchUnite(node: FlowNode, inputs: ResolvedInput[], cfg: { keepNodeId: string; keyField: string; lookupField: string; matchMode: CrossRefMode }): NodeExec {
+  if (inputs.length < 2) throw new Error("Matching needs two connected steps: the records to keep, and the list to check them against.");
+  if (inputs.length > 2) throw new Error(`Matching checks one step against one other, but ${inputs.length} are wired into this Combine. Remove the extras, or turn matching off.`);
   if (!cfg.keepNodeId || !cfg.keyField || !cfg.lookupField) {
-    throw new Error("Cross-reference needs to know whose records to keep and which fields to match — open the step and finish the sentence.");
+    throw new Error("Matching needs to know whose records to keep and which fields to compare — open Combine data and finish the sentence.");
   }
   const primary = inputs.find((i) => i.sourceNodeId === cfg.keepNodeId);
   const reference = inputs.find((i) => i.sourceNodeId !== cfg.keepNodeId);
-  if (!primary || !reference) throw new Error("The step whose records continue isn't wired into this one any more — open Cross-reference and pick it again.");
+  if (!primary || !reference) throw new Error("The step whose records continue isn't wired into this Combine any more — open it and pick again.");
 
   const primaryRecords = (primary.shape as Dataset).records;
   const referenceRecords = (reference.shape as Dataset).records;
@@ -932,14 +930,14 @@ function execCrossReference(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     const k = matchKey(getField(r, cfg.keyField));
     if (k == null) {
       blanks++;
-      if (cfg.mode === "missing") kept.push(r);
+      if (cfg.matchMode === "missing") kept.push(r);
       continue;
     }
-    if (list.has(k) === (cfg.mode === "appears")) kept.push(r);
+    if (list.has(k) === (cfg.matchMode === "appears")) kept.push(r);
   }
 
   const crossRef: CrossRefReport = {
-    mode: cfg.mode,
+    mode: cfg.matchMode,
     keyField: cfg.keyField,
     lookupField: cfg.lookupField,
     checked: primaryRecords.length,
@@ -949,7 +947,7 @@ function execCrossReference(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     listSize: list.size,
     listBlanks,
   };
-  return { ...datasetExec("cross_reference", node.id, kept, primaryRecords.length), crossRef };
+  return { ...datasetExec("unite", node.id, kept, primaryRecords.length), crossRef };
 }
 
 // ---------- Paths ----------

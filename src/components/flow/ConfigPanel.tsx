@@ -653,8 +653,18 @@ function NodeConfig({
   }
 
   if (type === "unite") {
-    // Unite is pure flow shape: pick which lanes flow into it. Its edges ARE the lanes.
+    // Unite is flow shape first: pick which lanes flow into it (its edges ARE
+    // the lanes) — then optionally MATCH the two lanes instead of stacking them.
     const laneIds = inputs.map((i) => i.nodeId);
+    const matching = String(cfg.mode ?? "stack") === "match";
+    // Rewiring a lane invalidates whatever was matched on it.
+    const setLanes = (ids: string[]) => {
+      onSetSources(ids);
+      if (matching) {
+        const keepId = String(cfg.keepNodeId ?? "");
+        onChange({ keyField: "", lookupField: "", keepNodeId: ids.includes(keepId) ? keepId : "" });
+      }
+    };
     return (
       <div className="space-y-4">
         <p className="text-xs text-neutral-500">Brings branches and other data steps back together — later steps see records from all of them.</p>
@@ -668,19 +678,19 @@ function NodeConfig({
                   width={320}
                   placeholder="Choose a step…"
                   options={datasetCandidates.filter((c) => c.id === inp.nodeId || !laneIds.includes(c.id)).map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
-                  onChange={(v) => onSetSources(laneIds.map((x, i) => (i === idx ? v : x)))}
+                  onChange={(v) => setLanes(laneIds.map((x, i) => (i === idx ? v : x)))}
                 />
-                <button type="button" onClick={() => onSetSources(laneIds.filter((_, i) => i !== idx))} className="shrink-0 text-xs text-neutral-400 hover:text-red-600">
+                <button type="button" onClick={() => setLanes(laneIds.filter((_, i) => i !== idx))} className="shrink-0 text-xs text-neutral-400 hover:text-red-600">
                   Remove
                 </button>
               </div>
             ))}
-            {laneIds.length < datasetCandidates.length && (
+            {laneIds.length < datasetCandidates.length && !(matching && laneIds.length >= 2) && (
               <button
                 type="button"
                 onClick={() => {
                   const avail = datasetCandidates.find((c) => !laneIds.includes(c.id));
-                  if (avail) onSetSources([...laneIds, avail.id]);
+                  if (avail) setLanes([...laneIds, avail.id]);
                 }}
                 className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-xs text-neutral-600 hover:border-neutral-400 hover:text-neutral-800"
               >
@@ -690,21 +700,27 @@ function NodeConfig({
             {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-xs text-neutral-400">Add a Get data step first, then combine it here.</p>}
           </div>
         </div>
-      </div>
-    );
-  }
 
-  if (type === "cross_reference") {
-    return (
-      <CrossReferenceConfig
-        cfg={cfg}
-        groups={groups}
-        inputs={inputs}
-        datasetCandidates={datasetCandidates}
-        laneScopes={laneScopes}
-        onChange={onChange}
-        onSetSources={onSetSources}
-      />
+        {/* The join option, where the sources come together. Off = stack everything. */}
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-neutral-200 bg-white p-3">
+          <input
+            type="checkbox"
+            checked={matching}
+            onChange={(e) => onChange(e.target.checked ? { mode: "match" } : { mode: "stack" })}
+            className="mt-0.5 h-4 w-4 accent-indigo-600"
+          />
+          <span>
+            <span className="block text-sm font-medium text-neutral-800">Only keep records that match across these steps</span>
+            <span className="mt-0.5 block text-xs text-neutral-500">Like a lookup: keep one step&rsquo;s records only when a value from them also exists in the other step.</span>
+          </span>
+        </label>
+        {matching && inputs.length !== 2 && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+            Matching compares exactly two steps — this Combine has {inputs.length} wired in.
+          </p>
+        )}
+        {matching && inputs.length === 2 && <CombineMatchFields cfg={cfg} groups={groups} inputs={inputs} datasetCandidates={datasetCandidates} laneScopes={laneScopes} onChange={onChange} />}
+      </div>
     );
   }
 
@@ -1166,20 +1182,19 @@ function ImportStatusLine({ connectionId }: { connectionId: string }) {
  * them are dates is the same "where is my data" problem from the other end.
  */
 /**
- * Cross-reference reads top to bottom as one sentence with no hidden side:
- * wire two steps, say whose records continue, then match a field from each.
- * Each field picker is scoped to ITS side's lane — offering the union would
- * re-open the trap this step exists to close, picking a field the chosen
- * side's records never carry.
+ * A matching Combine's questions, top to bottom as one sentence with no
+ * hidden side: whose records continue, matched on which of their fields,
+ * checked against which field of the other step. Each field picker is scoped
+ * to ITS side's lane — offering the union would re-open the trap matching
+ * exists to close, picking a field the chosen side's records never carry.
  */
-function CrossReferenceConfig({
+function CombineMatchFields({
   cfg,
   groups,
   inputs,
   datasetCandidates,
   laneScopes,
   onChange,
-  onSetSources,
 }: {
   cfg: Record<string, unknown>;
   groups: DataGroup[];
@@ -1187,12 +1202,10 @@ function CrossReferenceConfig({
   datasetCandidates: StepRef[];
   laneScopes?: Record<string, string[]>;
   onChange: (p: Record<string, unknown>) => void;
-  onSetSources: (ids: string[]) => void;
 }) {
-  const laneIds = inputs.map((i) => i.nodeId);
   const keepId = String(cfg.keepNodeId ?? "");
-  const mode = String(cfg.mode ?? "appears");
-  const other = inputs.length === 2 ? inputs.find((i) => i.nodeId !== keepId) : undefined;
+  const matchMode = String(cfg.matchMode ?? "appears");
+  const other = inputs.find((i) => i.nodeId !== keepId);
   const keepPicked = inputs.some((i) => i.nodeId === keepId);
   const scopeFor = (nodeId: string | undefined): DataGroup[] => {
     if (!nodeId) return [];
@@ -1208,70 +1221,40 @@ function CrossReferenceConfig({
   };
   return (
     <div className="space-y-4">
-      <p className="text-xs text-neutral-500">
-        Checks one step&rsquo;s records against another step&rsquo;s values — keep only the leads that are also in a spreadsheet, or only the ones that aren&rsquo;t.
-      </p>
-      <div>
-        <p className="mb-1 text-xs font-medium text-neutral-600">The two steps to check</p>
-        <div className="space-y-1.5">
-          {[0, 1].map((idx) => (
-            <Select
-              key={idx}
-              value={laneIds[idx] ?? ""}
-              width={320}
-              placeholder="Choose a step…"
-              options={datasetCandidates
-                .filter((c) => c.id === laneIds[idx] || !laneIds.includes(c.id))
-                .map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
-              onChange={(v) => {
-                const next = [...laneIds];
-                next[idx] = v;
-                // Rewiring a lane invalidates whatever was matched on it.
-                onSetSources(next.filter(Boolean).slice(0, 2));
-                onChange({ keyField: "", lookupField: "", keepNodeId: next.includes(keepId) ? keepId : "" });
-              }}
-            />
-          ))}
-        </div>
-      </div>
-      {inputs.length === 2 && (
+      <Field label="Keep records from">
+        <Select
+          value={keepPicked ? keepId : ""}
+          width={W}
+          placeholder="Choose whose records continue…"
+          options={inputs.map((i) => ({ value: i.nodeId, label: stepLabel(i.nodeId) }))}
+          // Flipping sides swaps BOTH lanes, so both picked fields go with it.
+          onChange={(v) => onChange({ keepNodeId: v, keyField: "", lookupField: "" })}
+        />
+      </Field>
+      {keepPicked && (
         <>
-          <Field label="Keep records from">
+          <Field label="Matching on its field">
+            <FieldInput value={String(cfg.keyField ?? "")} groups={scopeFor(keepId)} onChange={(v) => onChange({ keyField: v })} placeholder="Pick the field to look up…" />
+          </Field>
+          <Field label="Keep a record when its value">
             <Select
-              value={keepPicked ? keepId : ""}
+              value={matchMode}
               width={W}
-              placeholder="Choose whose records continue…"
-              options={inputs.map((i) => ({ value: i.nodeId, label: stepLabel(i.nodeId) }))}
-              // Flipping sides swaps BOTH lanes, so both picked fields go with it.
-              onChange={(v) => onChange({ keepNodeId: v, keyField: "", lookupField: "" })}
+              options={[
+                { value: "appears", label: `Appears in ${other ? stepLabel(other.nodeId) : "the other step"}` },
+                { value: "missing", label: `Doesn't appear in ${other ? stepLabel(other.nodeId) : "the other step"}` },
+              ]}
+              onChange={(v) => onChange({ matchMode: v })}
             />
           </Field>
-          {keepPicked && (
-            <>
-              <Field label="Matching on its field">
-                <FieldInput value={String(cfg.keyField ?? "")} groups={scopeFor(keepId)} onChange={(v) => onChange({ keyField: v })} placeholder="Pick the field to look up…" />
-              </Field>
-              <Field label="Keep a record when its value">
-                <Select
-                  value={mode}
-                  width={W}
-                  options={[
-                    { value: "appears", label: `Appears in ${other ? stepLabel(other.nodeId) : "the other step"}` },
-                    { value: "missing", label: `Doesn't appear in ${other ? stepLabel(other.nodeId) : "the other step"}` },
-                  ]}
-                  onChange={(v) => onChange({ mode: v })}
-                />
-              </Field>
-              {other && (
-                <Field label={`In ${stepLabel(other.nodeId)}’s field`}>
-                  <FieldInput value={String(cfg.lookupField ?? "")} groups={scopeFor(other.nodeId)} onChange={(v) => onChange({ lookupField: v })} placeholder="Pick the field holding the values…" />
-                </Field>
-              )}
-              <p className="text-xs text-neutral-400">
-                Matching ignores capitalization and extra spaces. A record with a blank value can never match{mode === "appears" ? ", so it is dropped." : ", so it is kept."}
-              </p>
-            </>
+          {other && (
+            <Field label={`In ${stepLabel(other.nodeId)}’s field`}>
+              <FieldInput value={String(cfg.lookupField ?? "")} groups={scopeFor(other.nodeId)} onChange={(v) => onChange({ lookupField: v })} placeholder="Pick the field holding the values…" />
+            </Field>
           )}
+          <p className="text-xs text-neutral-400">
+            Matching ignores capitalization and extra spaces. A record with a blank value can never match{matchMode === "appears" ? ", so it is dropped." : ", so it is kept."}
+          </p>
         </>
       )}
     </div>
