@@ -313,12 +313,15 @@ const MATERIALIZE_BUDGET_MS = 45_000;
  */
 const RESULT_MAX_AGE_MS = 60 * 60 * 1000;
 
-export async function expireAgedResults(db: DB, maxAgeMs = RESULT_MAX_AGE_MS): Promise<number> {
+export async function expireAgedResults(db: DB, maxAgeMs = RESULT_MAX_AGE_MS, orgId?: string): Promise<number> {
   const cutoff = new Date(Date.now() - maxAgeMs);
+  const aged = and(eq(flowResults.status, "fresh"), lt(flowResults.computedAt, cutoff));
   const rows = await db
     .update(flowResults)
     .set({ status: "stale" })
-    .where(and(eq(flowResults.status, "fresh"), lt(flowResults.computedAt, cutoff)))
+    // Org-scoped when a per-tenant caller asks (the sweep): one org's sweep
+    // must not write rows belonging to every other tenant.
+    .where(orgId ? and(aged, eq(flowResults.orgId, orgId)) : aged)
     .returning({ flowId: flowResults.flowId });
   return rows.length;
 }

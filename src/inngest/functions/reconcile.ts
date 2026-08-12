@@ -1,7 +1,7 @@
 import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { reconcileConnection, reconcileChanged, dueConnectionsForSweep } from "@/ingestion/reconcile";
-import { markStaleForSource } from "@/lib/flow/materialize";
+import { expireAgedResults, markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
 
 /**
  * C.4 — fan-out reconciliation.
@@ -99,21 +99,51 @@ export const reconcileOne = inngest.createFunction(
        * through 21:20, sweep after sweep) left every dependent tile "fresh"
        * at its 11:50 publish-time compute — the mark never landed, and
        * nothing between the send and the handler says why. A direct call has
-       * no such gap, and the 10-minute `materializeStale` cron picks stale
-       * rows up even if the recompute kick below is lost too.
+       * no such gap.
        */
       // Best-effort: the ingest work above is already committed, and a failed
-      // mark must not fail the sweep run — the ten-minute cron plus the
-      // hourly expiry bound how long a missed mark can matter.
-      const marked = await step.run("mark-stale", () =>
+      // mark must not fail the sweep run.
+      await step.run("mark-stale", () =>
         markStaleForSource(getDb(), r.orgId, r.source, connectionId, r.changedStreamHashes).catch(() => [] as string[]),
       );
-      if (marked.length > 0) {
-        await step.run("kick-recompute", () =>
-          inngest.send({ name: "flow/recompute.requested", data: { orgId: r.orgId } }),
-        );
-      }
     }
+
+    /**
+     * AND RECOMPUTE HERE TOO — for the same reason the mark moved here.
+     *
+     * Marking alone fixed half the problem: measured on production the
+     * morning after, all eight of one org's tiles were correctly stale and
+     * not one had recomputed in twenty-one hours. Every other explanation was
+     * ruled out against the live database — each stale flow resolves its
+     * published version, the stale-selection query returns them in order, and
+     * `materializeFlow` writes either "fresh" or "error" on every path — so
+     * `materializeStaleAll` was simply never being invoked. Both of its
+     * callers (the `materialize-stale` cron and the `flow/recompute.requested`
+     * handler) live on the infrastructure that already lost the staleness
+     * event, while THIS function demonstrably runs every ten minutes.
+     *
+     * Unconditional, not gated on `reconcileChanged`: rows can be marked by
+     * the webhook path or aged out by the clock, and a sweep that found no
+     * new records is exactly when those would otherwise sit. The cost when
+     * nothing is stale is one indexed SELECT. Org-scoped, budgeted, and
+     * best-effort — the tail is picked up by the next sweep, longest-stale
+     * first, and a recompute failure must never fail an ingest run.
+     *
+     * The cron and the event handler stay: this is the belt, not a
+     * replacement for the braces.
+     */
+    await step.run("refresh-tiles", async () => {
+      const db = getDb();
+      try {
+        // The clock is a data source too: "last 7 days" moves at midnight
+        // with no new records at all.
+        const expired = await expireAgedResults(db, undefined, r.orgId);
+        const { recomputed, pending } = await materializeStaleAll(db, { orgId: r.orgId });
+        return { expired, recomputed, pending };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : String(e) };
+      }
+    });
     return r;
   },
 );

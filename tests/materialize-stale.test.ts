@@ -147,6 +147,19 @@ describe("age-based expiry (the clock is a data source too)", () => {
     await db.update(flowResults).set({ status }).where(eq(flowResults.flowId, flowId));
   };
 
+  it("scopes to one org when a per-tenant caller asks — the sweep must not write other tenants' rows", async () => {
+    // The sweep calls this per connection, so an unscoped update would have
+    // one org's ten-minute tick rewriting every other tenant's results.
+    const mine = await staleFlow("org_a", "mine", back(2));
+    const theirs = await staleFlow("org_b", "theirs", back(2));
+    await setStatus(mine, "fresh");
+    await setStatus(theirs, "fresh");
+
+    expect(await expireAgedResults(db, 3_600_000, "org_a")).toBe(1);
+    expect(await statusOf(mine)).toBe("stale");
+    expect(await statusOf(theirs)).toBe("fresh");
+  });
+
   it("re-marks fresh results older than the ceiling; leaves recent, stale and error rows alone", async () => {
     const aged = await staleFlow("org_a", "aged", back(2));
     const recent = await staleFlow("org_a", "recent", new Date());
