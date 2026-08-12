@@ -184,16 +184,10 @@ export const TIME_UNITS = ["day", "week", "month", "quarter", "year"] as const;
 const GroupBySchema = z
   .discriminatedUnion("type", [
     z.object({ type: z.literal("time"), unit: z.enum(TIME_UNITS) }),
-    z.object({
-      type: z.literal("field"),
-      // Default "" (not min(1)): the editor stores the choice the moment
-      // "By a field" is picked, before a field is chosen. The engine and
-      // validate.ts both name the unfinished sentence; a parse failure here
-      // would surface as zod noise instead.
-      field: z.string().default(""),
-      /** Keep only the N largest groups. Null = every group. */
-      topN: z.number().int().min(1).max(50).nullable().default(null),
-    }),
+    // `field` tolerates "" so a draft saved while the withdrawn breakdown
+    // control was on screen still LOADS. A parse failure here is not a
+    // validation message, it is a flow that cannot be opened at all.
+    z.object({ type: z.literal("field"), field: z.string().default("") }),
   ])
   .nullable()
   .default(null);
@@ -391,18 +385,12 @@ export function durationValueUnit(field: string, stored: string): string {
  * at the step, so only the Close template — which ships its metric
  * pre-seeded — ever got this right.
  */
-export function seedMetricFormat(cfg: Record<string, unknown>): { format: "number" | "duration"; unit?: string; durationDisplay?: string; viz?: "bar" } {
-  // A step that breaks its number down by a field publishes a chart, not a
-  // single number — seeding viz "number" here made a grouped test in the
-  // builder publish a tile that silently dropped the breakdown.
-  const gb = (cfg.groupBy ?? null) as { type?: string } | null;
-  const viz = gb?.type === "field" ? { viz: "bar" as const } : {};
-  if (cfg.resultKind !== "duration") return { format: "number", ...viz };
+export function seedMetricFormat(cfg: Record<string, unknown>): { format: "number" | "duration"; unit?: string; durationDisplay?: string } {
+  if (cfg.resultKind !== "duration") return { format: "number" };
   return {
     format: "duration",
     unit: durationValueUnit(String(cfg.field ?? ""), String(cfg.durationUnit ?? "minutes")),
     durationDisplay: String(cfg.durationDisplay ?? "auto"),
-    ...viz,
   };
 }
 
@@ -794,13 +782,7 @@ export type Scalar = { kind: "scalar"; value: number; label?: string };
  * the old sum rather than to `undefined`.
  */
 export type Series = { kind: "series"; series: Array<{ bucket: string; value: number }>; total?: number };
-export type Grouped = {
-  kind: "grouped";
-  groups: Array<{ label: string; value: number }>;
-  total?: number;
-  /** Groups before a top-N cut — so "top 5 of 23" can be said, never implied away. */
-  groupCount?: number;
-};
+export type Grouped = { kind: "grouped"; groups: Array<{ label: string; value: number }>; total?: number };
 export type Shape = Dataset | Scalar | Series | Grouped;
 
 /** The saved presentation of one Output node. */
@@ -821,8 +803,5 @@ export type TileSpec = {
   value?: number;
   series?: Array<{ bucket: string; value: number }>;
   groups?: Array<{ label: string; value: number }>;
-  /** Groups before a "Show top" cut — so the tile can say "top 5 of 23" instead
-   * of presenting the survivors as the whole population. Absent on old tiles. */
-  groupCount?: number;
   sample?: FlowRecord[];
 };

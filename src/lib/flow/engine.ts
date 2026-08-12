@@ -1250,6 +1250,14 @@ function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     const input = inputs.find((i) => i.targetHandle == null && i.shape.kind === "dataset");
     if (!input) throw new Error("Calculate needs records flowing in — connect it after a data step.");
     const records = (input.shape as Dataset).records;
+    /**
+     * A field-grouping here is honoured, deliberately, even though no control
+     * writes one any more. It is NOT only a leftover of the withdrawn
+     * breakdown option: `migrateLegacyGraph` turns every stored `aggregate`
+     * node into this one, and those could always group by a field. Ignoring
+     * it would silently turn a customer's published breakdown into a single
+     * number — pinned by "produces a time series and a grouped result".
+     */
     const acfg: AggregateConfig = { aggregation: cfg.op as AggregateConfig["aggregation"], field: cfg.field, distinctField: cfg.distinctField, groupBy: cfg.groupBy };
     const shape = aggregate(records, acfg);
     const recordsOut = shape.kind === "scalar" ? 1 : shape.kind === "series" ? shape.series.length : shape.groups.length;
@@ -1352,9 +1360,6 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
     tile.value = shape.total ?? round(shape.series.reduce((a, b) => a + b.value, 0));
   } else if (shape.kind === "grouped") {
     tile.groups = shape.groups;
-    // Carried so the tile can SAY when a "Show top" cut applied — five bars
-    // with nothing else on the card read as "these are all the groups".
-    if (shape.groupCount != null) tile.groupCount = shape.groupCount;
     tile.value = shape.total ?? round(shape.groups.reduce((a, b) => a + b.value, 0));
   } else {
     tile.value = shape.records.length;
@@ -1566,23 +1571,16 @@ function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series
     };
   }
   const field = cfg.groupBy.field;
-  if (!field) throw new Error('This step is set to break its number down by a field, but no field is chosen — open it and finish "Break this down".');
   const groups = new Map<string, FlowRecord[]>();
   for (const r of records) {
     const key = groupKey(getField(r, field));
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
-  const all = [...groups.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.field, cfg.distinctField) })).sort((a, b) => b.value - a.value);
-  const topN = cfg.groupBy.topN ?? null;
   return {
     kind: "grouped",
-    // Top-N is a cut of the GROUPS, never of the records: the total below is
-    // computed over everything, so the headline can't quietly become the sum
-    // of the survivors — and groupCount says how many groups the cut hid.
-    groups: topN != null ? all.slice(0, topN) : all,
+    groups: [...groups.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.field, cfg.distinctField) })).sort((a, b) => b.value - a.value),
     total: computeAgg(records, cfg.aggregation, cfg.field, cfg.distinctField),
-    groupCount: all.length,
   };
 }
 

@@ -313,7 +313,7 @@ export function DataBrowser({
             the list entirely. Both readings have to survive this sentence. */}
         {!drill && anyFields && groups.length > 0 && (
           <p className="border-t border-neutral-100 px-3 py-2 text-[11px] leading-snug text-neutral-400">
-            Filters and combines add no columns of their own — a record&rsquo;s fields stay under the Get data step that produced them.
+            Filters and date windows add no columns of their own — their records&rsquo; fields stay under the step that produced them.
           </p>
         )}
 

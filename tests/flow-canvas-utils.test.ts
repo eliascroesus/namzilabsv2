@@ -184,13 +184,49 @@ describe("Combine's match mode in the editor's pure helpers", () => {
     expect(below.some((g) => g.nodeId === "app1")).toBe(true);
     expect(below.some((g) => g.nodeId === "app2")).toBe(false);
 
-    // The Combine's own decision IS readable downstream: Output (survived the
-    // check) and Output number (how many did) — like every Filter. Sabotage:
-    // skip every unite and a migrated flow whose downstream step referenced
-    // the join's Output number can never re-pick it.
+    // The matched population is PICKABLE downstream, by name: a matching
+    // Combine is where "the leads that are also in the spreadsheet" comes
+    // into existence, and a Time between or a Filter below it must be able
+    // to say so. Sabotage: treat it as pass-through (Output only) and the
+    // only offer is the Get data step, which reads as all 324 leads and had
+    // users believing their metric ran on records the step already dropped.
     const xg = below.find((g) => g.nodeId === "x");
     expect(xg).toBeDefined();
-    expect(xg!.fields.map((f) => f.path).sort()).toEqual(["__count_x", "__passed_x"]);
+    expect(xg!.fields.map((f) => f.path)).toContain("plan");
+    // …AND it is still a decision step: survived-the-check and how-many.
+    expect(xg!.fields.map((f) => f.path)).toEqual(expect.arrayContaining(["__passed_x", "__count_x"]));
+    // Only the KEPT lane's records — its example values come from the Close
+    // side, never the spreadsheet the records were merely checked against.
+    expect((xg!.sampleRecord as { source?: string } | undefined)?.source).toBe("close");
+
+    /**
+     * …but ONLY when the kept side is one lane. Exposing columns is what
+     * makes a step pickable as a Time between MOMENT, and a moment names the
+     * lane a record came down. Keep a STACK and the Combine stamps every
+     * record of two shapes: naming it on both sides of the clock measures
+     * call → call and publishes a plausible near-zero, which is precisely
+     * what the unset-lane guard exists to stop (it only fires when a side is
+     * BLANK, so a named multi-lane step walks straight past it).
+     * Sabotage: drop the one-lane condition and this falls back to columns.
+     */
+    const stackedKeep = [
+      app,
+      app2,
+      N("cal", "app", { lastTest: { ...tested, sample: [{ source: "close", properties: { plan: "pro" } }] } }),
+      N("stack", "unite", { config: {}, lastTest: tested }),
+      N("x", "unite", { config: { ...matchCfg, keepNodeId: "stack" }, lastTest: tested }),
+      after,
+    ];
+    const stackedEdges = [E("app1", "stack"), E("cal", "stack"), E("stack", "x"), E("app2", "x"), E("x", "f9")];
+    const belowMulti = buildFieldGroups({
+      selectedId: "f9",
+      nodes: stackedKeep,
+      edges: stackedEdges,
+      stepNoById: new Map([["app1", 1], ["cal", 2], ["stack", 3], ["app2", 4], ["x", 5], ["f9", 6]]),
+      titleOf,
+    });
+    const multi = belowMulti.find((g) => g.nodeId === "x")!;
+    expect(multi.fields.map((f) => f.path).sort()).toEqual(["__count_x", "__passed_x"]);
 
     // The Combine's OWN panel still sees both lanes — that is where the two
     // match fields get picked.

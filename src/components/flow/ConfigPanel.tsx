@@ -17,7 +17,6 @@ import {
   AGGREGATIONS,
   aggregationInputs,
   DURATION_UNITS,
-  durationValueUnit,
   fieldNamesItsUnit,
   TIME_UNITS,
   VIZ_TYPES,
@@ -26,7 +25,6 @@ import {
   isDatasetFormulaOp,
   type NodeType,
 } from "@/lib/flow/types";
-import { formatDuration } from "@/lib/format";
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
 import { computeNodeStatus, STD_META } from "./graph-utils";
 import { NumberField } from "./controls/NumberField";
@@ -581,7 +579,7 @@ function NodeConfig({
                   { value: "number", label: "A number" },
                   { value: "duration", label: "A length of time" },
                 ]}
-                onChange={(v) => onChange({ resultKind: v })}
+                onChange={(v) => onChange({ resultKind: v, ...(v === "duration" ? { groupBy: null } : {}) })}
               />
             </Field>
             {aggregationInputs(op).numberField && (
@@ -599,7 +597,7 @@ function NodeConfig({
                 so itself — and is asked for only when the field stays silent.
                 They used to be one dropdown, so changing it reported a
                 different length of time for the same number. */}
-            {String(cfg.resultKind ?? "number") === "duration" && (
+            {String(cfg.resultKind ?? "number") === "duration" ? (
               <>
                 {!fieldNamesItsUnit(String(cfg.field ?? "")) && (
                   <Field label="The numbers are in">
@@ -626,29 +624,14 @@ function NodeConfig({
                   />
                 </Field>
               </>
-            )}
-            {
+            ) : (
               <>
-                {/* 2b: the engine could always group by a field (per rep, per
-                    campaign, per source) — this dropdown was the only thing
-                    that couldn't ask for it.
-                    Durations get it too. "Median speed to lead, per closer"
-                    is the metric sales leaders actually ask for, and it was
-                    unreachable only because this control sat in the ELSE of
-                    the duration branch — the aggregation, the tile and the
-                    formatter all handled grouped durations already. */}
-                <Field label="Break this down?">
+                <Field label="Split over time?">
                   <Select
-                    value={gb?.type === "time" ? "time" : gb?.type === "field" ? "field" : "none"}
+                    value={gb?.type === "time" ? "time" : "none"}
                     width={W}
-                    options={[
-                      { value: "none", label: "No — one total number" },
-                      { value: "time", label: "Over time — a trend" },
-                      { value: "field", label: "By a field — compare groups" },
-                    ]}
-                    onChange={(m) =>
-                      onChange({ groupBy: m === "time" ? { type: "time", unit: "day" } : m === "field" ? { type: "field", field: "", topN: null } : null })
-                    }
+                    options={[{ value: "none", label: "No — one total number" }, { value: "time", label: "Yes — a trend over time" }]}
+                    onChange={(m) => onChange({ groupBy: m === "time" ? { type: "time", unit: "day" } : null })}
                   />
                 </Field>
                 {gb?.type === "time" && (
@@ -656,38 +639,8 @@ function NodeConfig({
                     <Select value={gb.unit ?? "day"} width={W} options={TIME_UNITS.map((u) => ({ value: u, label: title(u) }))} onChange={(v) => onChange({ groupBy: { type: "time", unit: v } })} />
                   </Field>
                 )}
-                {gb?.type === "field" && (
-                  <>
-                    <Field label="Break down by">
-                      <FieldInput
-                        value={String(gb.field ?? "")}
-                        groups={groups}
-                        onChange={(v) => onChange({ groupBy: { type: "field", field: v, topN: gb.topN ?? null } })}
-                        placeholder="Pick the field…"
-                      />
-                    </Field>
-                    <Field label="Show top">
-                      <div className="flex items-center gap-2">
-                        {/* Clamped to what the stored schema accepts (1–50,
-                            whole) — a typed 100 or 2.5 would save fine (configs
-                            are untyped jsonb) and then fail the parse at RUN
-                            time as zod noise, the exact 1D failure class. The
-                            min/max live on the field so the box also resyncs
-                            to the clamped value on blur. */}
-                        <NumberField
-                          value={gb.topN ?? null}
-                          allowNull
-                          min={1}
-                          max={50}
-                          onChange={(n) => onChange({ groupBy: { type: "field", field: gb.field ?? "", topN: n == null ? null : Math.round(n) } })}
-                        />
-                        <span className="text-xs text-neutral-400">Empty = every group. The total always counts everything.</span>
-                      </div>
-                    </Field>
-                  </>
-                )}
               </>
-            }
+            )}
           </>
         ) : (
           <>
@@ -1538,52 +1491,6 @@ function CrossRefOutcome({ c }: { c: { mode: string; keyField: string; lookupFie
   );
 }
 
-/** One group's value, said the way the step says its headline. */
-function groupValueLabel(n: number, cfg: Record<string, unknown>): string {
-  if (cfg.resultKind === "duration") {
-    return formatDuration(n, durationValueUnit(String(cfg.field ?? ""), String(cfg.durationUnit ?? "minutes")), String(cfg.durationDisplay ?? "auto"));
-  }
-  return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
-}
-
-/**
- * A field breakdown's groups, right in the Test panel — the same bars the
- * dashboard tile will draw, so what you publish is what you tested. Shows up
- * to 8 rows; the cut (top-N or display) is always said in words, never silent.
- */
-function BreakdownOutcome({ groups, groupCount, format }: { groups: Array<{ label: string; value: number }>; groupCount: number; format: (n: number) => string }) {
-  const SHOW = 8;
-  const shown = groups.slice(0, SHOW);
-  const max = Math.max(1, ...shown.map((g) => g.value));
-  /**
-   * One sentence, from the viewer's seat, true under BOTH possible cuts
-   * ("Show top" and this display cap): what is shown, out of how many groups
-   * the number actually spans. An if/else here once claimed "showing the top
-   * 20" above exactly 8 bars; composed notes then implied the cut groups
-   * were excluded from the metric. The same sentence the dashboard tile uses,
-   * so the two receipts about one step cannot disagree.
-   */
-  const cutNote = groupCount > shown.length ? `Showing the ${shown.length} largest of ${groupCount.toLocaleString()} groups — the total above counts them all.` : null;
-  return (
-    <div className="space-y-1.5 rounded-lg border border-neutral-200 bg-neutral-50 p-2.5">
-      {shown.map((g) => (
-        <div key={g.label}>
-          <div className="mb-0.5 flex justify-between gap-2 text-xs">
-            <span className="min-w-0 truncate text-neutral-700">{g.label}</span>
-            {/* Formatted by the STEP's own rules — a grouped duration reads
-                "5h 20m" here exactly as it will on the tile, never "320.5". */}
-            <span className="shrink-0 text-neutral-500">{format(g.value)}</span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded bg-neutral-200/70">
-            <div className="h-full rounded bg-indigo-500" style={{ width: `${Math.max((g.value / max) * 100, 2)}%` }} />
-          </div>
-        </div>
-      ))}
-      {cutNote && <p className="pt-0.5 text-[11px] text-neutral-400">{cutNote}</p>}
-    </div>
-  );
-}
-
 function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigField; conn: ConnMeta; cfg: Record<string, unknown>; onChange: (p: Record<string, unknown>) => void }) {
   const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
   const value = String(sourceConfig[field.key] ?? "");
@@ -1913,9 +1820,6 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
         </p>
       )}
       <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-base font-semibold text-neutral-900">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
-      {t.groups && t.groups.length > 0 && (
-        <BreakdownOutcome groups={t.groups} groupCount={t.groupCount ?? t.groups.length} format={(n) => groupValueLabel(n, node.data.config as Record<string, unknown>)} />
-      )}
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
       ) : (

@@ -15,7 +15,6 @@ type Tile = {
   value?: number;
   series?: Array<{ bucket: string; value: number }>;
   groups?: Array<{ label: string; value: number }>;
-  groupCount?: number;
 };
 
 export type FlowResultRow = {
@@ -73,7 +72,7 @@ export function FlowTile({ row }: { row: FlowResultRow }) {
       {t.series && t.series.length > 0 ? (
         <Sparkbars series={t.series} label={fmt(t.value, t)} tile={t} />
       ) : t.groups && t.groups.length > 0 ? (
-        <GroupBars groups={t.groups} groupCount={t.groupCount} tile={t} />
+        <GroupBars groups={t.groups} tile={t} />
       ) : (
         <>
           <p className="mt-2 text-4xl font-semibold">{fmt(t.value, t)}</p>
@@ -162,22 +161,15 @@ function Sparkbars({ series, label, tile }: { series: Array<{ bucket: string; va
   );
 }
 
-function GroupBars({ groups, groupCount, tile }: { groups: Array<{ label: string; value: number }>; groupCount?: number; tile: Tile }) {
+function GroupBars({ groups, tile }: { groups: Array<{ label: string; value: number }>; tile: Tile }) {
   const SHOW = 6;
   const shown = groups.slice(0, SHOW);
   const max = Math.max(1, ...shown.map((g) => g.value));
-  /**
-   * The headline is the metric over EVERY record — bars alone read as "these
-   * six are the whole number", and the cut-note below needs a visible total
-   * to be about. One sentence covering both possible cuts ("Show top" and
-   * this display cap) from the viewer's seat: what is shown, out of how many
-   * groups the number actually spans. Two composed notes here once implied
-   * the cut groups were excluded from the metric, which is false — the total
-   * is always computed before any cut (pinned in tests/breakdown-by-field).
-   */
-  const total = groupCount ?? groups.length;
   return (
     <>
+      {/* The metric over EVERY record. Bars alone read as "these six are the
+          whole number", and the cut-note below needs a visible total to be
+          about. */}
       {tile.value != null && <p className="mt-2 text-2xl font-semibold">{fmt(tile.value, tile)}</p>}
       <div className="mt-3 space-y-1.5">
         {shown.map((g) => (
@@ -191,9 +183,11 @@ function GroupBars({ groups, groupCount, tile }: { groups: Array<{ label: string
             </div>
           </div>
         ))}
-        {total > shown.length && (
+        {/* A cut the tile makes is a cut the tile has to admit — six bars read
+            as "all of them" when there were eleven. */}
+        {groups.length > shown.length && (
           <p className="text-xs text-neutral-400">
-            Showing the {shown.length} largest of {total} groups{tile.value != null ? " — the number above includes them all" : ""}.
+            Showing the {shown.length} largest of {groups.length} groups{tile.value != null ? " — the number above includes them all" : ""}.
           </p>
         )}
       </div>

@@ -261,13 +261,7 @@ export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, input
   if (type === "formula") {
     // A dataset Calculate (count/sum/…) just needs records flowing in through
     // its plain chain edge; a binary one needs both of its numbers.
-    if (isDatasetFormulaOp(cfg.op ?? "percentage")) {
-      if (!(handles ? handles.some((h) => h == null) : inputCount >= 1)) return true;
-      // "Break down by a field" with no field picked is half a sentence —
-      // the same rule every other partially-answered step follows.
-      const gb = (cfg.groupBy ?? null) as { type?: string; field?: string } | null;
-      return gb?.type === "field" && !String(gb.field ?? "").trim();
-    }
+    if (isDatasetFormulaOp(cfg.op ?? "percentage")) return !(handles ? handles.some((h) => h == null) : inputCount >= 1);
     return missingAB;
   }
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? missingAB : inputCount === 0;
@@ -468,7 +462,37 @@ export function buildFieldGroups(opts: {
       // to be READ and referenced ("step 1 loaded 390"), and it goes last so it never
       // competes with the step's real columns.
       const outNum: PickField = { path: `__count_${sn.id}`, label: "Output number", type: "number", example: sn.data.lastTest.recordsOut };
-      const isPassThrough = sn.type === "filter" || sn.type === "time" || matchingUnite;
+      /**
+       * A MATCHING Combine over ONE lane is not pass-through, and that is
+       * the whole point.
+       *
+       * A Filter narrows a lane that keeps its own name; a matching Combine
+       * produces a NEW, smaller population — "the 39 leads that are also in
+       * the spreadsheet" — and downstream that population is the thing the
+       * user reasons about. Listing only its Output made the picker offer the
+       * Get data step instead, which reads as "all 324 leads" and left people
+       * believing their metric was computed on records the step had already
+       * dropped. (It wasn't: lane stamps travel, so picking the Get data step
+       * resolves to the same survivors. The picker was telling the truth in a
+       * way nobody could read.)
+       *
+       * THE ONE-LANE CONDITION IS LOAD-BEARING, not tidiness. Exposing
+       * columns is what makes a step pickable as a Time between MOMENT, and a
+       * moment names the lane a record came down. Every other pickable step
+       * is single-lane by construction; a matching Combine whose kept side is
+       * itself a stack is not, and `__count_<combine>` is stamped on all of
+       * its records, so naming it on both sides of the clock reproduces
+       * exactly the call→call measurement the unset-lane guard exists to
+       * prevent — a plausible near-zero speed-to-lead that publishes clean.
+       * One app in the kept lane means one record shape, and the question
+       * cannot arise. A STACKING Combine is excluded for the same reason from
+       * the other direction: its records genuinely have two shapes, and its
+       * lanes are listed as their own steps.
+       */
+      const keptLaneApps = matchingUnite
+        ? [...laneAncestorIds(matchKeepOf(sn) ?? sn.id, edges)].filter((id) => byIdAll.get(id)?.type === "app").length
+        : 0;
+      const isPassThrough = sn.type === "filter" || sn.type === "time" || (matchingUnite && keptLaneApps !== 1);
       /**
        * A step that computes a NUMBER has no per-record variables to offer,
        * and offering one anyway was a lie the picker told: a Calculate that
@@ -507,7 +531,9 @@ export function buildFieldGroups(opts: {
             custom.push({ path: f.path, label: f.label, type: f.type, example: ex, container: f.container, populated: f.populated });
           }
         }
-        fields = [...custom, ...std, outNum];
+        // A matching Combine keeps "did this record survive the check" too —
+        // it is a decision step as well as a population.
+        fields = matchingUnite ? [...custom, ...std, outBool, outNum] : [...custom, ...std, outNum];
       }
 
       groups.push({

@@ -297,46 +297,6 @@ describe("Speed to lead (Close) template", () => {
     expect(gap.recordsOut).toBe(2); // L3 emitted nothing
   });
 
-  it("the by-status endpoint breaks the SAME duration into groups, and ships disabled", async () => {
-    /**
-     * The follow-up question every median provokes ("fast for whom?"), which
-     * the product could not express until Calculate learned to group by a
-     * field — and which durations were locked out of for one more release
-     * because the control sat in the ELSE of the duration branch.
-     *
-     * Sabotage: seed the second metric enabled and every user of this
-     * template publishes two tiles when they asked for one.
-     */
-    await ev({ eventType: "lead_created", leadId: "L1", atMin: 0, extra: { data: { status_label: "Booked for Demo" } } });
-    await ev({ eventType: "call_logged", leadId: "L1", atMin: 60, direction: "outbound" });
-    await ev({ eventType: "lead_created", leadId: "L2", atMin: 0, extra: { data: { status_label: "Opted In" } } });
-    await ev({ eventType: "call_logged", leadId: "L2", atMin: 10, direction: "outbound" });
-
-    const g = flowTemplate("speed-to-lead-close")!.build(CONN);
-    const res = await runFlow({ db, orgId: ORG }, g);
-    const byStatus = res.nodes.get("bystatus")! as NodeExecOk;
-    expect(byStatus.status).toBe("ok");
-    if (byStatus.shape.kind !== "grouped") throw new Error("expected grouped");
-    expect(byStatus.shape.groups).toEqual([
-      { label: "Booked for Demo", value: 60 },
-      { label: "Opted In", value: 10 },
-    ]);
-    // The headline stays the metric over every lead, not the top group.
-    expect(byStatus.shape.total).toBe(35);
-    // One checkbox away, never a second tile by default — and the name says
-    // WHEN the status was read: the event log stores the lead as it was at
-    // creation, so an unqualified "by status" would read as today's pipeline
-    // stage and quietly answer a different question.
-    expect(g.metrics.find((m) => m.nodeId === "bystatus")).toMatchObject({
-      enabled: false,
-      viz: "bar",
-      format: "duration",
-      name: "Speed to lead by status when created",
-    });
-    // And the single-number endpoint is untouched by its arrival.
-    expect((res.nodes.get("median")! as NodeExecOk).shape).toMatchObject({ kind: "scalar", value: 35 });
-  });
-
   it("a lane's stamp survives the steps in between — the calls lane runs through a Filter", async () => {
     // The template's stop moment names the Get data step, but those records
     // reach the Combine through an outbound Filter. Sabotage: stamp only the
