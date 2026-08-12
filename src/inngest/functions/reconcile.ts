@@ -1,6 +1,7 @@
 import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { reconcileConnection, reconcileChanged, dueConnectionsForSweep } from "@/ingestion/reconcile";
+import { markStaleForSource } from "@/lib/flow/materialize";
 
 /**
  * C.4 — fan-out reconciliation.
@@ -90,12 +91,28 @@ export const reconcileOne = inngest.createFunction(
     if (wait > 0) await step.sleep("jitter", wait);
     const r = await step.run("reconcile", () => reconcileConnection(getDb(), connectionId));
     if (reconcileChanged(r)) {
-      await step.run("notify-flows", () =>
-        inngest.send({
-          name: "flow/data.changed",
-          data: { orgId: r.orgId, source: r.source, connectionId, streamHashes: r.changedStreamHashes },
-        }),
+      /**
+       * Staleness is written HERE, in the same function that ingested the
+       * data — durable DB state, not a hope that a second event hop gets
+       * delivered and handled. This used to emit `flow/data.changed` and stop:
+       * on the production dashboard, a day of new spreadsheet rows (14:20
+       * through 21:20, sweep after sweep) left every dependent tile "fresh"
+       * at its 11:50 publish-time compute — the mark never landed, and
+       * nothing between the send and the handler says why. A direct call has
+       * no such gap, and the 10-minute `materializeStale` cron picks stale
+       * rows up even if the recompute kick below is lost too.
+       */
+      // Best-effort: the ingest work above is already committed, and a failed
+      // mark must not fail the sweep run — the ten-minute cron plus the
+      // hourly expiry bound how long a missed mark can matter.
+      const marked = await step.run("mark-stale", () =>
+        markStaleForSource(getDb(), r.orgId, r.source, connectionId, r.changedStreamHashes).catch(() => [] as string[]),
       );
+      if (marked.length > 0) {
+        await step.run("kick-recompute", () =>
+          inngest.send({ name: "flow/recompute.requested", data: { orgId: r.orgId } }),
+        );
+      }
     }
     return r;
   },

@@ -1,6 +1,9 @@
+import { eq } from "drizzle-orm";
 import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { processRawEvent, deadLetterRawEvent } from "@/ingestion/pipeline";
+import { markStaleForSource } from "@/lib/flow/materialize";
+import { rawEvents } from "@/db/schema";
 
 const MAX_RETRIES = 5;
 
@@ -35,7 +38,34 @@ export const processEvent = inngest.createFunction(
     const { rawEventId } = event.data as { rawEventId: string };
     const res = await step.run("process-raw-event", () => processRawEvent(getDb(), rawEventId));
     if (res.inserted > 0) {
-      await step.run("notify-flows", () => inngest.send({ name: "flow/data.changed", data: { rawEventId } }));
+      // Mark directly, same reasoning as reconcileOne: staleness is durable DB
+      // state written by the path that ingested the data, never contingent on
+      // a `flow/data.changed` hop being delivered. The raw row names the
+      // connection; per-event cost is identical to what the handler paid.
+      //
+      // BEST-EFFORT, never fatal: this runs AFTER the event is ingested, and
+      // `onFailure` dead-letters unconditionally — so a transient failure
+      // HERE used to be able to file a successfully-ingested event as
+      // "webhook processing failed", stamp connections.lastError, and invite
+      // a pointless replay. A missed mark costs at most one cron interval:
+      // the ten-minute sweep and the hourly expiry both pick the tile up.
+      const marked = await step.run("mark-stale", async () => {
+        try {
+          const db = getDb();
+          const [raw] = await db
+            .select({ orgId: rawEvents.orgId, source: rawEvents.source, connectionId: rawEvents.connectionId })
+            .from(rawEvents)
+            .where(eq(rawEvents.id, rawEventId))
+            .limit(1);
+          if (!raw) return null;
+          return { orgId: raw.orgId, flows: (await markStaleForSource(db, raw.orgId, raw.source, raw.connectionId)).length };
+        } catch {
+          return null;
+        }
+      });
+      if (marked && marked.flows > 0) {
+        await step.run("kick-recompute", () => inngest.send({ name: "flow/recompute.requested", data: { orgId: marked.orgId } }));
+      }
     }
     return res;
   },

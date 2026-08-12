@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
 import { backfillJobs, connections, flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
@@ -148,7 +148,16 @@ export async function markStaleForSource(
       .where(and(eq(flowVersions.flowId, f.id), eq(flowVersions.version, f.publishedVersion)))
       .limit(1);
     if (!ver) continue;
-    const graph = parseGraph(ver.graph);
+    // One unparseable stored graph must not kill staleness for every OTHER
+    // flow in the org — parseGraph is designed never to throw (migrations run
+    // inside it), but this loop is the org-wide freshness artery and a single
+    // corrupt row taking it down would freeze every tile at once.
+    let graph: ReturnType<typeof parseGraph>;
+    try {
+      graph = parseGraph(ver.graph);
+    } catch {
+      continue;
+    }
     const uses = graph.nodes.some((n) => {
       if (n.type !== "app") return false;
       const c = (n.data.config ?? {}) as { source?: string; connectionId?: string; sourceConfig?: Record<string, unknown> };
@@ -292,6 +301,28 @@ const MATERIALIZE_BUDGET_MS = 45_000;
  * At least ONE flow always runs — a budget too small to matter must degrade to
  * slow progress, not to a stall that looks like a healthy no-op.
  */
+/**
+ * A published number ages even when no data arrives: "last 7 days" slides with
+ * the clock, "this month" gains days, and data-driven staleness alone would
+ * freeze such a tile at its last data change forever. Re-mark anything fresh
+ * older than an hour so the cron behind this recomputes it — every tile's
+ * "Updated N ago" is then bounded at roughly an hour, whatever its window.
+ *
+ * Only "fresh" rows: an "error" row recomputing on a timer would re-run a
+ * known-broken flow every pass, and "stale"/"computing" are already in flight.
+ */
+const RESULT_MAX_AGE_MS = 60 * 60 * 1000;
+
+export async function expireAgedResults(db: DB, maxAgeMs = RESULT_MAX_AGE_MS): Promise<number> {
+  const cutoff = new Date(Date.now() - maxAgeMs);
+  const rows = await db
+    .update(flowResults)
+    .set({ status: "stale" })
+    .where(and(eq(flowResults.status, "fresh"), lt(flowResults.computedAt, cutoff)))
+    .returning({ flowId: flowResults.flowId });
+  return rows.length;
+}
+
 export async function materializeStaleAll(
   db: DB,
   opts: { orgId?: string; budgetMs?: number } = {},

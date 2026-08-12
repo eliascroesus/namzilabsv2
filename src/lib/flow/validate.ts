@@ -136,6 +136,11 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
         if (plain.length === 0) {
           issues.push({ nodeId: node.id, message: "Calculate needs records as input — connect it after a data step." });
         }
+        // "By a field" with no field picked would publish, then error at
+        // materialize — the static twin of the engine's own guard.
+        if (fCfg.success && fCfg.data.groupBy?.type === "field" && !fCfg.data.groupBy.field) {
+          issues.push({ nodeId: node.id, message: 'Calculate is set to break its number down by a field, but no field is chosen — open it and finish "Break this down".' });
+        }
         for (const e of plain) {
           const src = byId.get(e.source);
           if (src && outputKind(src) !== "dataset") {

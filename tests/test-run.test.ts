@@ -132,6 +132,32 @@ describe("test-run lifecycle (the lane's unit of work)", () => {
     const runId = await createTestRun(db, ORG);
     expect(await getTestRun(db, "org_other", runId)).toBeNull();
   });
+
+  it("a field breakdown travels on the DTO: groups, whole-input total, pre-cut count", async () => {
+    // 2b's test surface: without these three fields the editor shows a bare
+    // record count for a grouped Calculate — the breakdown existed only on
+    // the published tile, invisible at the moment of building it.
+    SHEET = [
+      ["Name", "Booked"],
+      ["Ana", "Yes"],
+      ["Ben", "No"],
+      ["Cy", "Yes"],
+    ];
+    const g = {
+      nodes: [
+        { id: "get", type: "app", data: { config: { connectionId: connId, source: "gsheets", sourceConfig: CFG } } },
+        { id: "calc", type: "formula", data: { config: { op: "count", groupBy: { type: "field", field: "Booked", topN: 1 } } } },
+      ],
+      edges: [{ id: "e1", source: "get", target: "calc" }],
+    };
+    const runId = await createTestRun(db, ORG);
+    const dto = await executeAndSettleTestRun(db, ORG, runId, g, "calc");
+    expect(dto.status).toBe("ok");
+    // Sabotage: cut the RECORDS instead of the groups and this total reads 2.
+    expect(dto.value).toBe(3);
+    expect(dto.groups).toEqual([{ label: "Yes", value: 2 }]);
+    expect(dto.groupCount).toBe(2);
+  });
 });
 
 /**

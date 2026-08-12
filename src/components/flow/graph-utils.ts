@@ -261,7 +261,13 @@ export function nodeNeedsSetup(type: string, cfg: Record<string, unknown>, input
   if (type === "formula") {
     // A dataset Calculate (count/sum/…) just needs records flowing in through
     // its plain chain edge; a binary one needs both of its numbers.
-    if (isDatasetFormulaOp(cfg.op ?? "percentage")) return !(handles ? handles.some((h) => h == null) : inputCount >= 1);
+    if (isDatasetFormulaOp(cfg.op ?? "percentage")) {
+      if (!(handles ? handles.some((h) => h == null) : inputCount >= 1)) return true;
+      // "Break down by a field" with no field picked is half a sentence —
+      // the same rule every other partially-answered step follows.
+      const gb = (cfg.groupBy ?? null) as { type?: string; field?: string } | null;
+      return gb?.type === "field" && !String(gb.field ?? "").trim();
+    }
     return missingAB;
   }
   if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? missingAB : inputCount === 0;

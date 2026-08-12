@@ -4,7 +4,7 @@ import { useMemo, useState, type PointerEvent as ReactPointerEvent, type ReactNo
 import { Popover } from "./Popover";
 import { SourceBadge } from "./Pill";
 import type { DataField, DataGroup, FieldRef } from "./types";
-import { childFields, filterFields, formatSample, makeFieldRef } from "./field-utils";
+import { childFields, filterFields, formatSample, makeFieldRef, FIELD_TYPE_FILTERS, type FieldTypeFilter } from "./field-utils";
 
 /** Remembered across opens within the session (persists a drag-resize). */
 let savedFlyoutWidth = 340;
@@ -56,6 +56,9 @@ export function DataBrowser({
 }) {
   const [open, setOpenRaw] = useState(false);
   const [q, setQ] = useState("");
+  // Narrow the list to one kind of value (text / numbers / dates). Transient
+  // browse state like the search — reset when the flyout closes.
+  const [typeFilter, setTypeFilter] = useState<FieldTypeFilter>("all");
   // Drill state: which step, and the trail of container fields we've descended into.
   const [drill, setDrill] = useState<{ groupId: string; trail: DataField[] } | null>(null);
   // Which step groups are expanded. Collapsed by default so the user first sees every
@@ -70,6 +73,7 @@ export function DataBrowser({
     setOpenRaw(o);
     if (!o) {
       setQ("");
+      setTypeFilter("all");
       setDrill(null);
       setExpanded(new Set());
       setShowAll(new Set());
@@ -160,14 +164,30 @@ export function DataBrowser({
         {/* Left-edge resize handle. */}
         <div onPointerDown={startResize} title="Drag to resize" className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-ew-resize transition-colors hover:bg-indigo-200/70" />
 
-        <div className="border-b border-neutral-100 p-2.5">
+        <div className="space-y-2 border-b border-neutral-100 p-2.5">
           <input
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search fields…"
+            placeholder="Search names or values…"
             className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-100"
           />
+          {/* One kind of value at a time — "which date field?" shouldn't mean
+              scrolling past forty text fields to compare three dates. */}
+          <div className="flex gap-1">
+            {FIELD_TYPE_FILTERS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTypeFilter(t.key)}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  typeFilter === t.key ? "bg-indigo-600 text-white" : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Drill breadcrumb */}
@@ -196,10 +216,24 @@ export function DataBrowser({
           {drill && drillGroup && drillField && (
             <>
               {(() => {
-                const kids = filterFields(childFields(drillField, 300), q);
-                if (kids.length === 0) return <p className="px-2 py-4 text-center text-xs text-neutral-400">Nothing inside this field.</p>;
+                const allKids = childFields(drillField, 300);
+                const kids = filterFields(allKids, q, typeFilter);
+                if (kids.length === 0) {
+                  // "Nothing inside this field." must mean EMPTY — when a chip
+                  // or the search hid children that exist, say that instead
+                  // (same wording family as the top-level empty state): a
+                  // false statement of emptiness one chip away from visible
+                  // contents reads as data loss.
+                  const msg =
+                    allKids.length === 0
+                      ? "Nothing inside this field."
+                      : q.trim()
+                        ? `No fields in here match “${q.trim()}”${typeFilter !== "all" ? " with that type" : ""}.`
+                        : "No fields of that type in here.";
+                  return <p className="px-2 py-4 text-center text-xs text-neutral-400">{msg}</p>;
+                }
                 const key = `${drill.groupId}:${drill.trail.map((t) => t.path).join(">")}`;
-                const { shown, hidden } = capped(key, kids, q.trim().length > 0);
+                const { shown, hidden } = capped(key, kids, q.trim().length > 0 || typeFilter !== "all");
                 return (
                   <div className="space-y-1">
                     {shown.map((f) => (
@@ -221,8 +255,10 @@ export function DataBrowser({
           {!drill &&
             anyFields &&
             groups.map((g) => {
-              const fields = filterFields(g.fields, q);
-              const searching = q.trim().length > 0;
+              const fields = filterFields(g.fields, q, typeFilter);
+              // An active type chip behaves like a search: groups auto-expand
+              // to their matches and empty ones step aside.
+              const searching = q.trim().length > 0 || typeFilter !== "all";
               if (searching && fields.length === 0) return null;
               const isOpen = searching || soleGroup || expanded.has(g.stepId);
               return (
@@ -240,7 +276,9 @@ export function DataBrowser({
                     )}
                     {g.stepNo != null && <span className="text-[11px] font-semibold text-neutral-400">{g.stepNo}.</span>}
                     <span className="min-w-0 flex-1 truncate text-xs font-semibold text-neutral-700">{g.title}</span>
-                    <span className="shrink-0 text-[10px] text-neutral-400">{g.fields.length}</span>
+                    {/* While filtering, the count is the MATCHES — a "62" over
+                        three visible rows reads as 59 fields being hidden. */}
+                    <span className="shrink-0 text-[10px] text-neutral-400">{searching ? fields.length : g.fields.length}</span>
                   </button>
                   {isOpen && (() => {
                     const { shown, hidden } = capped(g.stepId, fields, searching);
@@ -257,9 +295,11 @@ export function DataBrowser({
               );
             })}
 
-          {/* Search with no matches anywhere. */}
-          {!drill && anyFields && q.trim() && groups.every((g) => filterFields(g.fields, q).length === 0) && (
-            <p className="px-2 py-4 text-center text-xs text-neutral-400">No fields match “{q.trim()}”.</p>
+          {/* Search / type filter with no matches anywhere. */}
+          {!drill && anyFields && (q.trim() || typeFilter !== "all") && groups.every((g) => filterFields(g.fields, q, typeFilter).length === 0) && (
+            <p className="px-2 py-4 text-center text-xs text-neutral-400">
+              {q.trim() ? <>No fields match “{q.trim()}”{typeFilter !== "all" ? " with that type" : ""}.</> : <>No fields of that type here.</>}
+            </p>
           )}
         </div>
 
@@ -273,7 +313,9 @@ export function DataBrowser({
             }}
             className="border-t border-neutral-100 px-3 py-2 text-left text-xs text-neutral-600 hover:bg-neutral-50"
           >
-            Use “<span className="font-medium text-neutral-800">{q.trim()}</span>” exactly as typed
+            {/* Says what it DOES — now that search also matches values, this
+                hatch must not read as "pick the record with this email". */}
+            Use “<span className="font-medium text-neutral-800">{q.trim()}</span>” as a field path, exactly as typed
           </button>
         )}
       </>

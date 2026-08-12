@@ -269,3 +269,45 @@ describe("the schema describes the whole sample, not one record", () => {
     expect(flat.filter((x) => x.path === "properties.data.direction")).toHaveLength(1);
   });
 });
+
+describe("search by value + the type chips", () => {
+  /**
+   * Two audit asks in one surface. (1) Someone who knows the email but not
+   * which of 50 fields holds it types the email — "no fields match" over a
+   * value that is visibly on screen reads as data being withheld. (2) "Which
+   * date field?" shouldn't mean scrolling past forty text fields to compare
+   * three dates.
+   */
+  const fields: DataField[] = [
+    { path: "properties.data.emails.0.email", label: "data.emails.0.email", type: "email", sample: "missholleypeck@gmail.com" },
+    { path: "properties.data.duration", label: "data.duration", type: "number", sample: 42 },
+    { path: "properties.date_created", label: "date_created", type: "date", sample: "2026-07-06T10:00:00Z" },
+    { path: "properties.data", label: "data", type: "object", container: true, sample: { hidden: "missholleypeck@gmail.com" } },
+    { path: "properties.note", label: "note", type: "text", sample: "call back tomorrow" },
+  ];
+
+  it("a known VALUE finds its field — and a container's JSON never matches", () => {
+    // Sabotage 1: match names only and this is empty. Sabotage 2: stringify
+    // container samples and the parent object shadows the leaf that holds it.
+    expect(filterFields(fields, "missholleypeck").map((f) => f.path)).toEqual(["properties.data.emails.0.email"]);
+  });
+
+  it("value search is separator-insensitive like name search", () => {
+    // The realistic input: the email as remembered, dots and all.
+    expect(filterFields(fields, "missholleypeck@gmail.com").map((f) => f.path)).toEqual(["properties.data.emails.0.email"]);
+    expect(filterFields(fields, "MISSHOLLEYPECK@Gmail.Com").map((f) => f.path)).toEqual(["properties.data.emails.0.email"]);
+  });
+
+  it("chips narrow to one kind of value; All keeps everything including containers", () => {
+    expect(filterFields(fields, "", "number").map((f) => f.path)).toEqual(["properties.data.duration"]);
+    expect(filterFields(fields, "", "date").map((f) => f.path)).toEqual(["properties.date_created"]);
+    // Text is the human bucket: text AND email (an email is text you filter on).
+    expect(filterFields(fields, "", "text").map((f) => f.path)).toEqual(["properties.data.emails.0.email", "properties.note"]);
+    expect(filterFields(fields, "", "all")).toHaveLength(5);
+  });
+
+  it("chip and query compose — both must hold", () => {
+    expect(filterFields(fields, "data", "number").map((f) => f.path)).toEqual(["properties.data.duration"]);
+    expect(filterFields(fields, "tomorrow", "date")).toHaveLength(0);
+  });
+});

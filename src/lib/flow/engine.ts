@@ -948,6 +948,14 @@ export type CrossRefReport = {
   listSize: number;
   /** Reference records that had no value in `lookupField`. */
   listBlanks: number;
+  /**
+   * How many values (both sides) were matched by their digits. Only ever
+   * non-zero when BOTH chosen fields are phone fields by name (see
+   * `phoneField`) — and non-zero makes the receipt say so, because silence
+   * about a rewrite of the user's values is how a correct match reads as a
+   * wrong one.
+   */
+  phones: number;
 };
 
 /**
@@ -962,6 +970,53 @@ function matchKey(v: unknown): string | null {
   if (v == null) return null;
   const s = String(v).trim().toLowerCase();
   return s === "" ? null : s;
+}
+
+/**
+ * A phone number reduced to the digits that identify the line.
+ *
+ * Two systems never store the same phone the same way — a form writes
+ * `2086130936`, Close writes `+1 208-613-0936` — and exact-string matching
+ * across that divide returns ZERO matches while looking like a working
+ * feature. Measured on live data before this existed: 47 spreadsheet phones
+ * against 299 CRM phones, 0 exact matches, 38 by digits.
+ *
+ * GATED ON THE FIELDS, NOT THE VALUES — see `phoneField`. Value shape alone
+ * over-captures catastrophically: a compact timestamp `20250804093000`, a
+ * fixed-precision decimal `1.5000000000` and a dashed serial are all "digits
+ * plus separators, 10–15 digits", and keying those by their last 10 digits
+ * cross-matched timestamps a year apart (the slice drops exactly the year)
+ * and silently moved every existing match step built on a non-phone column.
+ * Only when BOTH chosen fields are phone fields by name does this run at all.
+ *
+ * Within phone fields, a value is normalized only when it is nothing BUT a
+ * phone: digits plus the separators people actually type (`+ ( ) - . space`),
+ * with 10–15 digits (a full national number up to the E.164 maximum) — an
+ * email in a phone column keeps exact matching. The key is the LAST 10
+ * digits, the industry-standard CRM join: `+1` and its absence agree. Known
+ * honest limits, stated in the receipt rather than papered over: a trunk-0
+ * national form vs its E.164 form (France's `06…` vs `+33 6…`) do NOT agree,
+ * and two countries' lines can share a 10-digit tail. The `tel:` prefix
+ * keeps a normalized phone from colliding with a literal text value.
+ */
+function phoneKey(s: string): string | null {
+  if (!/^[+()\-.\s\d]+$/.test(s)) return null;
+  const digits = s.replace(/\D/g, "");
+  if (digits.length < 10 || digits.length > 15) return null;
+  return `tel:${digits.slice(-10)}`;
+}
+
+/**
+ * Is this field, by its own name, a phone field? Segment-wise on purpose:
+ * `phone`, `data.phones.0.phone`, `mobile_number`, `whatsapp` pass;
+ * `timestamp` (contains "t-e-l"? no), `telegram_message_id` and `hotel` do
+ * not — "tel" and "cell" only count as whole segments.
+ */
+function phoneField(path: string): boolean {
+  return path
+    .toLowerCase()
+    .split(/[._]/)
+    .some((seg) => /phone|mobile|msisdn|whatsapp/.test(seg) || seg === "tel" || seg === "cell");
 }
 
 /**
@@ -989,8 +1044,22 @@ function matchUnite(node: FlowNode, inputs: ResolvedInput[], cfg: { keepNodeId: 
 
   const list = new Set<string>();
   let listBlanks = 0;
+  let phones = 0;
+  // Digit-matching only when BOTH chosen fields are phone fields by name —
+  // a value-shape heuristic here rewrote matching for timestamp/id/serial
+  // columns on every existing flow. With the gate on, `2086130936` and
+  // `+1 208-613-0936` land on the same key; everything else, everywhere
+  // else, keeps exact (case-folded) matching.
+  const phonesEnabled = phoneField(cfg.keyField) && phoneField(cfg.lookupField);
+  const keyOf = (v: unknown): string | null => {
+    const k = matchKey(v);
+    if (k == null || !phonesEnabled) return k;
+    const p = phoneKey(k);
+    if (p != null) phones++;
+    return p ?? k;
+  };
   for (const r of referenceRecords) {
-    const k = matchKey(getField(r, cfg.lookupField));
+    const k = keyOf(getField(r, cfg.lookupField));
     if (k == null) listBlanks++;
     else list.add(k);
   }
@@ -1008,7 +1077,7 @@ function matchUnite(node: FlowNode, inputs: ResolvedInput[], cfg: { keepNodeId: 
   const kept: FlowRecord[] = [];
   let blanks = 0;
   for (const r of primaryRecords) {
-    const k = matchKey(getField(r, cfg.keyField));
+    const k = keyOf(getField(r, cfg.keyField));
     if (k == null) {
       blanks++;
       if (cfg.matchMode === "missing") kept.push(r);
@@ -1027,6 +1096,7 @@ function matchUnite(node: FlowNode, inputs: ResolvedInput[], cfg: { keepNodeId: 
     blanks,
     listSize: list.size,
     listBlanks,
+    phones,
   };
   return { ...datasetExec("unite", node.id, kept, primaryRecords.length), crossRef };
 }
@@ -1282,6 +1352,9 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
     tile.value = shape.total ?? round(shape.series.reduce((a, b) => a + b.value, 0));
   } else if (shape.kind === "grouped") {
     tile.groups = shape.groups;
+    // Carried so the tile can SAY when a "Show top" cut applied — five bars
+    // with nothing else on the card read as "these are all the groups".
+    if (shape.groupCount != null) tile.groupCount = shape.groupCount;
     tile.value = shape.total ?? round(shape.groups.reduce((a, b) => a + b.value, 0));
   } else {
     tile.value = shape.records.length;
@@ -1493,16 +1566,23 @@ function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series
     };
   }
   const field = cfg.groupBy.field;
+  if (!field) throw new Error('This step is set to break its number down by a field, but no field is chosen — open it and finish "Break this down".');
   const groups = new Map<string, FlowRecord[]>();
   for (const r of records) {
     const key = groupKey(getField(r, field));
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
+  const all = [...groups.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.field, cfg.distinctField) })).sort((a, b) => b.value - a.value);
+  const topN = cfg.groupBy.topN ?? null;
   return {
     kind: "grouped",
-    groups: [...groups.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.field, cfg.distinctField) })).sort((a, b) => b.value - a.value),
+    // Top-N is a cut of the GROUPS, never of the records: the total below is
+    // computed over everything, so the headline can't quietly become the sum
+    // of the survivors — and groupCount says how many groups the cut hid.
+    groups: topN != null ? all.slice(0, topN) : all,
     total: computeAgg(records, cfg.aggregation, cfg.field, cfg.distinctField),
+    groupCount: all.length,
   };
 }
 

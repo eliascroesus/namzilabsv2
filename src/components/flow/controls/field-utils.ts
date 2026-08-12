@@ -184,9 +184,44 @@ export function hasAnyFields(groups: DataGroup[]): boolean {
  */
 const canonical = (s: string) => s.toLowerCase().replace(/[\s._-]+/g, " ");
 
-/** Case- and separator-insensitive filter of a group's fields by label or path (data-browser search). */
-export function filterFields(fields: DataField[], query: string): DataField[] {
+/**
+ * The picker's type chips. Coarser than the inferred vocabulary on purpose:
+ * a user filtering thinks "text / number / date", not "email vs id vs text".
+ * Containers are excluded by every specific chip — a chip names what a field
+ * IS, and an object isn't a date — but "all" keeps them so drilling stays
+ * available.
+ */
+export const FIELD_TYPE_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "text", label: "Text" },
+  { key: "number", label: "Numbers" },
+  { key: "date", label: "Dates" },
+] as const;
+export type FieldTypeFilter = (typeof FIELD_TYPE_FILTERS)[number]["key"];
+
+function matchesTypeFilter(type: string | undefined, filter: FieldTypeFilter): boolean {
+  if (filter === "all") return true;
+  const t = type ?? "unknown";
+  if (filter === "number") return t === "number";
+  if (filter === "date") return t === "date";
+  return t === "text" || t === "email" || t === "id" || t === "boolean" || t === "unknown";
+}
+
+/**
+ * Case- and separator-insensitive filter of a group's fields (data-browser
+ * search). The query matches the field's NAME — and its SAMPLE VALUE: someone
+ * who knows the email but not which of 50 fields holds it types the email,
+ * and "no fields match" over data that is visibly on screen reads as broken.
+ * Only primitive samples participate; a container's stringified JSON would
+ * make every query match the parent of its own answer.
+ */
+export function filterFields(fields: DataField[], query: string, typeFilter: FieldTypeFilter = "all"): DataField[] {
   const q = canonical(query.trim());
-  if (!q) return fields;
-  return fields.filter((f) => canonical(`${f.label} ${f.path}`).includes(q));
+  const typed = typeFilter === "all" ? fields : fields.filter((f) => matchesTypeFilter(f.type, typeFilter));
+  if (!q) return typed;
+  return typed.filter((f) => {
+    if (canonical(`${f.label} ${f.path}`).includes(q)) return true;
+    const s = f.sample;
+    return s != null && typeof s !== "object" && canonical(String(s)).includes(q);
+  });
 }

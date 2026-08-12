@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { flowResults, flows, flowVersions } from "@/db/schema";
-import { materializeStaleAll } from "@/lib/flow/materialize";
+import { expireAgedResults, materializeStaleAll } from "@/lib/flow/materialize";
 import type { DB } from "@/db/types";
 
 /**
@@ -133,5 +133,47 @@ describe("time budget", () => {
       .from(flowResults)
       .where(and(eq(flowResults.orgId, "org_a"), eq(flowResults.status, "stale")));
     expect(remaining).toHaveLength(0);
+  });
+});
+
+describe("age-based expiry (the clock is a data source too)", () => {
+  /**
+   * A "last 7 days" tile changes at midnight with zero new records — data-
+   * driven staleness alone freezes it at its last data change forever.
+   * Sabotage: drop expireAgedResults from the cron and a sliding-window tile
+   * never recomputes again on a quiet source, "fresh" badge and all.
+   */
+  const setStatus = async (flowId: string, status: string) => {
+    await db.update(flowResults).set({ status }).where(eq(flowResults.flowId, flowId));
+  };
+
+  it("re-marks fresh results older than the ceiling; leaves recent, stale and error rows alone", async () => {
+    const aged = await staleFlow("org_a", "aged", back(2));
+    const recent = await staleFlow("org_a", "recent", new Date());
+    const erred = await staleFlow("org_a", "erred", back(3));
+    await setStatus(aged, "fresh");
+    await setStatus(recent, "fresh");
+    await setStatus(erred, "error");
+
+    const expired = await expireAgedResults(db, 3_600_000);
+
+    expect(expired).toBe(1);
+    expect(await statusOf(aged)).toBe("stale");
+    // A fresh, recent number is left exactly as it is…
+    expect(await statusOf(recent)).toBe("fresh");
+    // …and an error row is never put on a timer: recomputing a known-broken
+    // flow every pass would re-run the same failure forever.
+    expect(await statusOf(erred)).toBe("error");
+  });
+
+  it("what it expires, the next pass recomputes — the full hourly loop", async () => {
+    const aged = await staleFlow("org_a", "aged", back(2));
+    await setStatus(aged, "fresh");
+    await expireAgedResults(db, 3_600_000);
+    await materializeStaleAll(db, { orgId: "org_a" });
+    // The harness flow recomputes to "error" (no tile) — the pin is that the
+    // pass PICKED IT UP, i.e. it is no longer parked at fresh-but-ancient.
+    expect(await statusOf(aged)).not.toBe("fresh");
+    expect(await statusOf(aged)).not.toBe("stale");
   });
 });

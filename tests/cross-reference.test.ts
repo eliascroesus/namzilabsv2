@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
 import { connections, events } from "@/db/schema";
 import { runFlow, evalRule, type NodeExecOk, type CrossRefReport } from "@/lib/flow/engine";
@@ -123,6 +124,7 @@ describe("Combine match-mode semantics", () => {
       blanks: 1,
       listSize: 3,
       listBlanks: 0,
+      phones: 0,
     } satisfies CrossRefReport);
   });
 
@@ -151,6 +153,77 @@ describe("Combine match-mode semantics", () => {
     await row(" anna@x.COM");
     const exec = await runX();
     expect((exec as NodeExecOk).recordsOut).toBe(1);
+  });
+
+  /** A Sheets-lane record with a phone column, for the phone-join tests. */
+  async function phoneRow(phone: string) {
+    await db.insert(events).values({
+      eventId: `xr:${randomUUID()}`,
+      orgId: ORG,
+      connectionId: CONN,
+      source: "close",
+      eventType: "sheet_row",
+      occurredAt: new Date(T0 + seq++ * 60_000),
+      properties: { phone },
+    });
+  }
+
+  it("phone fields match by their digits across formatting divides", async () => {
+    // The live case this was measured on: a form writes `2086130936`, Close
+    // writes `+1 208-613-0936` — 47 sheet phones vs 299 CRM phones scored 0
+    // exact matches and 38 by digits. Sabotage: drop phoneKey from keyOf and
+    // Kathryn is dropped again, indistinguishable from a lead not in the CRM.
+    await contact(null); // no email — but the phone below identifies her
+    await db
+      .update(events)
+      .set({ properties: { data: { emails: [], phones: [{ phone: "+1 208-613-0936" }], name: "Kathryn" } } })
+      .where(eq(events.orgId, ORG));
+    await phoneRow("2086130936");
+
+    const exec = await runX({ keyField: "properties.data.phones.0.phone", lookupField: "properties.phone" });
+    const ok = exec as NodeExecOk;
+    expect(ok.status).toBe("ok");
+    expect(ok.recordsOut).toBe(1);
+    // Both sides were phone-normalized, and the receipt carries the count so
+    // the panel can SAY digits were compared — a silent rewrite of the user's
+    // values is how a correct match reads as a wrong one.
+    expect(ok.crossRef?.phones).toBe(2);
+  });
+
+  it("digit matching runs ONLY between phone-named fields — value shape alone never rewrites a join", async () => {
+    // The review case: compact timestamps `20250804093000` / `20260804093000`
+    // are "digits plus separators, 10-15 digits" — last-10 keying drops
+    // exactly the year and cross-matches records a year apart. Sabotage:
+    // gate on phoneKey's shape test alone and these two match.
+    await contact(null);
+    await db
+      .update(events)
+      .set({ properties: { data: { emails: [], stamp: "20250804093000", name: "T" } } })
+      .where(eq(events.orgId, ORG));
+    await row("20260804093000"); // row() stores it under properties.email — not phone-named
+    const exec = await runX({ keyField: "properties.data.stamp", lookupField: "properties.email" });
+    const ok = exec as NodeExecOk;
+    expect(ok.recordsOut).toBe(0);
+    expect(ok.crossRef?.phones).toBe(0);
+  });
+
+  it("short digit runs and non-phone values inside phone fields keep exact matching", async () => {
+    // Tristan's sheet rows hold `55548` in the phone column. Sabotage:
+    // normalize any digit run in a phone field and `55548` matches every
+    // value ending in those digits.
+    await contact(null);
+    await db
+      .update(events)
+      .set({ properties: { data: { emails: [], phones: [{ phone: "55548" }], name: "T" } } })
+      .where(eq(events.orgId, ORG));
+    await phoneRow("155548"); // shares a suffix; NOT the same 5-digit value
+    const differs = await runX({ keyField: "properties.data.phones.0.phone", lookupField: "properties.phone" });
+    expect((differs as NodeExecOk).recordsOut).toBe(0);
+
+    await phoneRow("55548"); // the exact value still matches, as text
+    const exact = await runX({ keyField: "properties.data.phones.0.phone", lookupField: "properties.phone" });
+    expect((exact as NodeExecOk).recordsOut).toBe(1);
+    expect((exact as NodeExecOk).crossRef?.phones).toBe(0);
   });
 
   it("matchMode 'missing' keeps the records NOT in the list — and keeps blanks, counted", async () => {

@@ -32,8 +32,15 @@ export type NodeTestDTO = {
   outputSchema: FieldInfo[];
   error?: string;
   tile?: unknown;
-  /** The computed number, when the step produces a single number (Count/Calculate). */
+  /**
+   * The computed number: the value itself for a single-number step, the
+   * whole-input total for a breakdown (never the sum of the shown groups).
+   */
   value?: number;
+  /** A field breakdown's groups (largest first, already cut to any top-N). */
+  groups?: Array<{ label: string; value: number }>;
+  /** Groups before the top-N cut — lets the receipt say "top 5 of 23". */
+  groupCount?: number;
   /**
    * F.8 honesty marker: set when the Test could NOT re-read the source (the
    * provider budget is spent, or syncing is paused) and therefore computed on
@@ -73,6 +80,8 @@ export type NodeTestDTO = {
     blanks: number;
     listSize: number;
     listBlanks: number;
+    /** Values matched as phone numbers (by digits) — the receipt says so. */
+    phones?: number;
   };
   /**
    * The read hit the safety ceiling. The engine has always set this and the
@@ -93,7 +102,9 @@ function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTest
     inputSample,
     outputSchema: exec.outputSchema,
     tile: exec.tile,
-    value: exec.shape.kind === "scalar" ? exec.shape.value : undefined,
+    value: exec.shape.kind === "scalar" ? exec.shape.value : exec.shape.kind === "grouped" ? exec.shape.total : undefined,
+    groups: exec.shape.kind === "grouped" ? exec.shape.groups : undefined,
+    groupCount: exec.shape.kind === "grouped" ? exec.shape.groupCount : undefined,
     dedupe: exec.dedupe,
     pairing: exec.pairing,
     crossRef: exec.crossRef,

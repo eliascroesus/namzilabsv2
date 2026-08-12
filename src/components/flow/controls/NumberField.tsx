@@ -24,6 +24,7 @@ export function NumberField({
   value,
   onChange,
   min,
+  max,
   allowNull = false,
   placeholder,
   className,
@@ -31,6 +32,7 @@ export function NumberField({
   value: number | null | undefined;
   onChange: (n: number | null) => void;
   min?: number;
+  max?: number;
   allowNull?: boolean;
   placeholder?: string;
   className?: string;
@@ -54,10 +56,20 @@ export function NumberField({
           return;
         }
         const n = Number(t);
-        if (Number.isFinite(n)) onChange(min != null ? Math.max(min, n) : n);
+        if (!Number.isFinite(n)) return;
+        const clamped = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n));
+        onChange(clamped);
       }}
       onBlur={() => {
-        if (text.trim() === "" && !allowNull) setText(value == null ? "" : String(value));
+        /**
+         * Leaving the box ALWAYS shows what was actually saved. The local
+         * text can drift from the stored value whenever a clamp intervenes —
+         * type "500" into a 1–50 field and the store holds 50 while the box
+         * kept "500" (the second clamp-to-50 changes nothing, so the resync
+         * effect never fires). A config box permanently displaying a value
+         * that was never saved is the config UI lying about the config.
+         */
+        setText(value == null ? "" : String(value));
       }}
       className={`${INPUT} ${className ?? ""}`}
     />

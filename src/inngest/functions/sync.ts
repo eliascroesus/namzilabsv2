@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { runSync, reprocessConnection, syncChanged } from "@/lib/sync/resync";
-import { markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
+import { expireAgedResults, markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
 import { sendOpsAlert } from "@/lib/alerts";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
 import { getJob, runnableJobsByProvider } from "@/lib/backfill/jobs";
@@ -53,7 +53,18 @@ export const reprocessConnectionFn = inngest.createFunction(
   },
 );
 
-/** New data landed — mark dependent published flows stale, then kick the debounced recompute. */
+/**
+ * New data landed — mark dependent published flows stale, then kick the
+ * debounced recompute.
+ *
+ * NO LONGER on the production path: the sweep (reconcileOne) and the webhook
+ * processor (processEvent) mark staleness DIRECTLY now, because on the live
+ * dashboard this hop demonstrably never landed — a full day of ingested rows
+ * left every dependent tile un-marked while every directly-callable link
+ * (the mark predicate, the recompute cron) worked when exercised. Kept
+ * registered so events already in flight at deploy time, and any manual
+ * emission, still do the right thing.
+ */
 export const flowDataChanged = inngest.createFunction(
   { id: "flow-data-changed", retries: 2, triggers: [{ event: "flow/data.changed" }] },
   async ({ event, step }) => {
@@ -117,10 +128,15 @@ export const recomputeStaleFlows = inngest.createFunction(
 );
 
 /** Scheduled backstop: anything the event path missed still recomputes —
- * fleet-wide by design, longest-stale first, under the pass's time budget. */
+ * fleet-wide by design, longest-stale first, under the pass's time budget.
+ * The expiry first: sliding-window tiles ("last 7 days") change with the
+ * clock, not with data, and would otherwise never recompute again. */
 export const materializeStale = inngest.createFunction(
   { id: "materialize-stale", retries: 2, triggers: [{ cron: "*/10 * * * *" }] },
-  async ({ step }) => step.run("materialize-stale", () => materializeStaleAll(getDb())),
+  async ({ step }) => {
+    await step.run("expire-aged-results", () => expireAgedResults(getDb()));
+    return step.run("materialize-stale", () => materializeStaleAll(getDb()));
+  },
 );
 
 /**

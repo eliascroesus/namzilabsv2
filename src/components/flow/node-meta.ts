@@ -154,7 +154,7 @@ export function formulaExpression(op: string, aName: string, bName: string): str
 /** Minimal wording for a successful test result — just the number + a short verb. */
 export function resultLabel(
   type: string,
-  test: { recordsIn: number; recordsOut: number; tile?: unknown; value?: number },
+  test: { recordsIn: number; recordsOut: number; tile?: unknown; value?: number; groups?: Array<{ label: string; value: number }>; groupCount?: number },
   cfg: Record<string, unknown> = {},
 ): string {
   const { recordsOut, tile, value } = test;
@@ -188,7 +188,13 @@ export function resultLabel(
       if (cfg.resultKind === "duration") {
         return formatDuration(n, durationValueUnit(String(cfg.field ?? ""), String(cfg.durationUnit ?? "minutes")), String(cfg.durationDisplay ?? "auto"));
       }
-      return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+      // A breakdown's headline is the whole-input total; saying the group
+      // count beside it is what stops "402" from reading as one number when
+      // the step actually produced eleven. Singular spelled out: "across 1
+      // group" is also the honest flag that the breakdown split nothing.
+      const groupCount = test.groupCount ?? test.groups?.length ?? 0;
+      const suffix = groupCount > 0 ? ` across ${groupCount.toLocaleString()} group${groupCount === 1 ? "" : "s"}` : "";
+      return `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}${suffix}`;
     }
     default:
       return `${recordsOut}`;
