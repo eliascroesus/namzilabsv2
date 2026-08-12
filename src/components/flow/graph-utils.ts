@@ -534,6 +534,21 @@ export function buildFieldGroups(opts: {
         // A matching Combine keeps "did this record survive the check" too —
         // it is a decision step as well as a population.
         fields = matchingUnite ? [...custom, ...std, outBool, outNum] : [...custom, ...std, outNum];
+        /**
+         * Time between offers THE MEASUREMENT, not the record it measured.
+         *
+         * Its output is the start record annotated, so its schema is that
+         * whole record — a Close lead's name, email, ids and forty more —
+         * and listing them here says "this step produced your email address",
+         * which it did not. It produced a duration. The step whose group they
+         * belong to (the Get data, or the matching Combine that narrowed it)
+         * is an ancestor and lists them already, so nothing becomes
+         * unreachable: a Filter below can still pick lead_id from there, and
+         * the path resolves on exactly these records.
+         */
+        if (sn.type === "time_between") {
+          fields = [...custom.filter((f) => f.path.startsWith("properties.time_between")), outNum];
+        }
       }
 
       groups.push({

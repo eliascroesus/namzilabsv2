@@ -293,6 +293,44 @@ describe("buildFieldGroups — nearest-app example resolution + provenance", () 
     expect(appGroup?.fields.some((f) => f.path === "plan")).toBe(true);
   });
 
+  it("Time between offers the measurement, not the record it measured", () => {
+    /**
+     * Its output is the START record annotated, so its schema is that whole
+     * record — every Close column the lead carried. Listing them under this
+     * step claims it produced your email address; it produced a duration.
+     * Sabotage: drop the filter and the group is 50 rows of lead data with
+     * the four numbers the step exists for buried inside them.
+     */
+    const tbSchema = [
+      { path: "properties.time_between", label: "time_between", type: "object" as const, container: true },
+      { path: "properties.time_between.minutes", label: "time_between.minutes", type: "number" as const },
+      { path: "properties.time_between.from_at", label: "time_between.from_at", type: "date" as const },
+      { path: "properties.lead_id", label: "lead_id", type: "text" as const },
+      { path: "properties.data.emails.0.email", label: "data.emails.0.email", type: "email" as const },
+    ];
+    const tb = N("tb", "time_between", {
+      lastTest: { status: "ok", recordsIn: 5, recordsOut: 3, sample: [], inputSample: [], outputSchema: tbSchema },
+    });
+    const calc = N("calcT", "formula", { config: { op: "avg" } });
+    const groups = buildFieldGroups({
+      selectedId: "calcT",
+      nodes: [app, tb, calc],
+      edges: [E("appN", "tb"), E("tb", "calcT")],
+      stepNoById: new Map([["appN", 1], ["tb", 2], ["calcT", 3]]),
+      titleOf,
+    });
+    const g = groups.find((x) => x.nodeId === "tb")!;
+    expect(g.fields.map((f) => f.path)).toEqual([
+      "properties.time_between",
+      "properties.time_between.minutes",
+      "properties.time_between.from_at",
+      "__count_tb",
+    ]);
+    // Nothing became unreachable: the lead's own columns are still offered by
+    // the step they belong to, and resolve on exactly these records.
+    expect(groups.find((x) => x.nodeId === "appN")!.fields.some((f) => f.path === "plan")).toBe(true);
+  });
+
   /**
    * "Output number" is how many records the step produced — the 390 on a Get data
    * card. It is a property of the dataset, so it reads identically on every row:
