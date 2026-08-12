@@ -303,6 +303,20 @@ export function DataBrowser({
           )}
         </div>
 
+        {/* WHY ISN'T MY FILTER / COMBINE STEP OFFERING ANY FIELDS?
+            Asked out loud the first time someone opened this after a Combine.
+            Because it adds none: it decides which records continue, and the
+            columns keep belonging to the Get data step that produced them.
+            Carefully worded — such a step IS usually listed here, carrying
+            its own "Output" and "Output number", and in the pickers that
+            hide those (Time between's "Match records by") it drops out of
+            the list entirely. Both readings have to survive this sentence. */}
+        {!drill && anyFields && groups.length > 0 && (
+          <p className="border-t border-neutral-100 px-3 py-2 text-[11px] leading-snug text-neutral-400">
+            Filters and combines add no columns of their own — a record&rsquo;s fields stay under the Get data step that produced them.
+          </p>
+        )}
+
         {/* Free-typing escape hatch: commit the search text as a custom field path. */}
         {onCustom && !drill && q.trim() && (
           <button

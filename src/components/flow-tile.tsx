@@ -71,7 +71,7 @@ export function FlowTile({ row }: { row: FlowResultRow }) {
       </div>
 
       {t.series && t.series.length > 0 ? (
-        <Sparkbars series={t.series} label={fmt(t.value, t)} />
+        <Sparkbars series={t.series} label={fmt(t.value, t)} tile={t} />
       ) : t.groups && t.groups.length > 0 ? (
         <GroupBars groups={t.groups} groupCount={t.groupCount} tile={t} />
       ) : (
@@ -140,7 +140,7 @@ function TargetBar({ value, target, tile }: { value: number; target: number; til
   );
 }
 
-function Sparkbars({ series, label }: { series: Array<{ bucket: string; value: number }>; label: string }) {
+function Sparkbars({ series, label, tile }: { series: Array<{ bucket: string; value: number }>; label: string; tile: Tile }) {
   const max = Math.max(1, ...series.map((s) => s.value));
   return (
     <>
@@ -149,7 +149,10 @@ function Sparkbars({ series, label }: { series: Array<{ bucket: string; value: n
         {series.map((s) => (
           <div
             key={s.bucket}
-            title={`${s.bucket}: ${s.value}`}
+            // The bar's own value, in the tile's own format. A raw number here
+            // contradicted the headline directly above it — "4h 44m" over bars
+            // whose tooltips read "284.6", the same quantity said two ways.
+            title={`${s.bucket}: ${fmt(s.value, tile)}`}
             className="flex-1 rounded-t bg-neutral-800"
             style={{ height: `${Math.max((s.value / max) * 100, 4)}%` }}
           />

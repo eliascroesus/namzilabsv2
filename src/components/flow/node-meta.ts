@@ -185,16 +185,19 @@ export function resultLabel(
       // gets thousands separators and two decimals at most.
       const n = value ?? (typeof tileVal === "number" ? tileVal : null);
       if (n == null) return `${val}`;
-      if (cfg.resultKind === "duration") {
-        return formatDuration(n, durationValueUnit(String(cfg.field ?? ""), String(cfg.durationUnit ?? "minutes")), String(cfg.durationDisplay ?? "auto"));
-      }
       // A breakdown's headline is the whole-input total; saying the group
       // count beside it is what stops "402" from reading as one number when
       // the step actually produced eleven. Singular spelled out: "across 1
       // group" is also the honest flag that the breakdown split nothing.
+      // A duration breakdown gets the same suffix — the number reads as a
+      // length of time either way.
       const groupCount = test.groupCount ?? test.groups?.length ?? 0;
       const suffix = groupCount > 0 ? ` across ${groupCount.toLocaleString()} group${groupCount === 1 ? "" : "s"}` : "";
-      return `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}${suffix}`;
+      const headline =
+        cfg.resultKind === "duration"
+          ? formatDuration(n, durationValueUnit(String(cfg.field ?? ""), String(cfg.durationUnit ?? "minutes")), String(cfg.durationDisplay ?? "auto"))
+          : n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+      return `${headline}${suffix}`;
     }
     default:
       return `${recordsOut}`;

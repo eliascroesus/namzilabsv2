@@ -37,8 +37,21 @@ export type FlowTemplate = {
  *   and a call event. (`properties.data.lead_id` exists only on the call
  *   side; the lead object carries `data.id` instead.) Verified against
  *   live data by scripts/verify-close-speed-to-lead.sql.
- * - Median, not average: one lead called after a weekend would drag an
- *   average into uselessness; the template description says how to switch.
+ * - Median, not average, and the Calculation dropdown on that step is how you
+ *   change it. Re-measured on live Close data (419 leads, 203 called): median
+ *   4h 44m, average 27h 36m. The average is not a slower version of the same
+ *   answer, it is a different and worse one, which is why the description no
+ *   longer advertises the switch.
+ * - A second endpoint breaks the SAME duration down by the lead's status, and
+ *   ships DISABLED — one checkbox, not a second tile nobody asked for. On the
+ *   same live data it separates 5h 20m (booked for a demo) from 2h 21m
+ *   (opted in), which is the follow-up question every median provokes. It
+ *   groups on a field of the LEAD, deliberately: Time between emits the START
+ *   record, so a call-side field (who dialled) is not on the row and would
+ *   silently produce one "(not set)" group. The status is the one the lead
+ *   carried WHEN IT WAS CREATED — the event log stores the object as it was
+ *   at the event — so every label the user sees says "when created" rather
+ *   than implying today's pipeline stage.
  */
 function speedToLeadClose(connectionId: string | null): FlowGraph {
   const conn = { connectionId, source: "close" };
@@ -80,6 +93,21 @@ function speedToLeadClose(connectionId: string | null): FlowGraph {
         type: "formula",
         data: { label: "Speed to lead", config: { op: "median", field: "properties.time_between.minutes", resultKind: "duration", durationUnit: "minutes", distinctField: "subject" } },
       },
+      {
+        id: "bystatus",
+        type: "formula",
+        data: {
+          label: "By status when created",
+          config: {
+            op: "median",
+            field: "properties.time_between.minutes",
+            resultKind: "duration",
+            durationUnit: "minutes",
+            distinctField: "subject",
+            groupBy: { type: "field", field: "properties.data.status_label", topN: null },
+          },
+        },
+      },
     ],
     edges: [
       { id: "leads->combine", source: "leads", target: "combine" },
@@ -87,8 +115,14 @@ function speedToLeadClose(connectionId: string | null): FlowGraph {
       { id: "outbound->combine", source: "outbound", target: "combine" },
       { id: "combine->gap", source: "combine", target: "gap" },
       { id: "gap->median", source: "gap", target: "median" },
+      { id: "gap->bystatus", source: "gap", target: "bystatus" },
     ],
-    metrics: [{ nodeId: "median", enabled: true, name: "Speed to lead", viz: "number", format: "duration", unit: "minutes", precision: 0 }],
+    metrics: [
+      { nodeId: "median", enabled: true, name: "Speed to lead", viz: "number", format: "duration", unit: "minutes", precision: 0 },
+      // Disabled, like the no-show template's count nodes: a second terminal
+      // would otherwise be seeded as an enabled tile named after its step.
+      { nodeId: "bystatus", enabled: false, name: "Speed to lead by status when created", viz: "bar", format: "duration", unit: "minutes", precision: 0 },
+    ],
   });
 }
 
@@ -185,7 +219,7 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
     id: "speed-to-lead-close",
     name: "Speed to lead (Close)",
     description:
-      "How fast your team calls new leads: minutes from a lead being created to its first outbound call, median across leads. Switch the last step to Average with one dropdown if you prefer.",
+      "How fast your team calls new leads: from a lead being created to its first outbound call, median across leads. Leads never called are counted and reported when you test, never folded in as a zero. A second result — one checkbox away at publish — splits the same number by the status each lead had when it was created. Close's event log only reaches back about 30 days, so leads created before you connected aren't in it.",
     source: "close",
     build: speedToLeadClose,
   },
