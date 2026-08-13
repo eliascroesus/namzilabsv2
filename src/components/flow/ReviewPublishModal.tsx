@@ -55,6 +55,7 @@ export function ReviewPublishModal({
   previews,
   timeFieldOptions,
   hasCustomRange,
+  hasOpenEndedRange,
   publishing,
   error,
   issues,
@@ -70,8 +71,10 @@ export function ReviewPublishModal({
   /** Each endpoint's last tested value, unformatted — null when untested. */
   previews: Record<string, number | null>;
   timeFieldOptions: Array<{ value: string; label: string; hint?: string }>;
-  /** True when any step in this flow uses a "between two dates" window. */
+  /** True when any step uses a date window with BOTH ends set. */
   hasCustomRange: boolean;
+  /** True when any step uses a date window with no end date. */
+  hasOpenEndedRange: boolean;
   publishing: boolean;
   error: string | null;
   /** Publish issues, each naming the step that caused it. */
@@ -108,6 +111,16 @@ export function ReviewPublishModal({
           {endpoints.length === 0 && <p className="text-sm text-neutral-500">This flow has no result step yet. Add a Calculate step, then come back.</p>}
           {/* The one change in the reliability pass that MOVES a number, said
               at the moment of consequence rather than in a release note. */}
+          {/* The bigger of the two window changes, and the one most likely to
+              move a live number: an open end used to stop at the current
+              instant, so a flow reading a calendar counted 9 of its 20
+              matching meetings. */}
+          {hasOpenEndedRange && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+              A date range with no “To” now has no end at all. It used to stop at the moment the number was computed, so anything dated in the future —
+              scheduled meetings — was left out. This number may rise.
+            </p>
+          )}
           {hasCustomRange && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
               A custom date range now includes the whole of its “To” day. It used to stop at midnight, so this number may rise by up to a day&rsquo;s worth of records.

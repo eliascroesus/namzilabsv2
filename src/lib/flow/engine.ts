@@ -1705,7 +1705,20 @@ function timeWindow(cfg: { mode: string; preset: string; from?: string; to?: str
      * Guarded on the date-only shape, so a hand-typed ISO datetime keeps the
      * exact instant it names.
      */
-    return { start: dateMs(cfg.from ?? "") ?? 0, end: endOfDayMs(cfg.to ?? "") ?? now };
+    /**
+     * AN EMPTY "TO" HAS NO END — not "up to now".
+     *
+     * It used to stop at the current instant, which is invisible on data that
+     * only ever looks backwards and catastrophic on data that does not: a
+     * Google Calendar filtered "from 11 Aug onwards" returned 9 of 20 matching
+     * meetings, because the other 11 are SCHEDULED and the window quietly
+     * ended before them. "Onwards" that stops at this second is not a window
+     * anyone asked for; a bounded range is what the "To" box is for.
+     *
+     * Presets and rolling windows still end at `now`, and must: "the last 30
+     * days" reaching into next week would be a different kind of wrong.
+     */
+    return { start: dateMs(cfg.from ?? "") ?? 0, end: endOfDayMs(cfg.to ?? "") ?? Number.POSITIVE_INFINITY };
   }
   if (cfg.mode === "rolling") return { start: now - cfg.days * 86_400_000, end: now };
 

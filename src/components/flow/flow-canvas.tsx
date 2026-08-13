@@ -1261,11 +1261,21 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           previews={endpointPreviews}
           timeFieldOptions={timeFieldOptions}
           hasCustomRange={nodes.some((n) => {
-            const c = n.data.config as { dateRange?: { enabled?: boolean; mode?: string }; mode?: string };
+            const c = n.data.config as { dateRange?: { enabled?: boolean; mode?: string; to?: string }; mode?: string; to?: string };
             // Both shapes: a Filter's dateRange, and the retired-but-still-
             // running Date range step, which stores mode/from/to at the top level.
-            if (c.dateRange?.enabled && c.dateRange.mode === "between") return true;
-            return n.type === "time" && c.mode === "between";
+            // A window with no "To" is the OPEN-ended one below; this notice is
+            // about the end-of-day change, which can only move a bounded range.
+            if (c.dateRange?.enabled && c.dateRange.mode === "between") return !!c.dateRange.to;
+            return n.type === "time" && c.mode === "between" && !!c.to;
+          })}
+          // The second number-moving change to the same control, and the bigger
+          // one: an open end used to stop at the current instant, so a flow
+          // reading a calendar silently excluded every scheduled meeting.
+          hasOpenEndedRange={nodes.some((n) => {
+            const c = n.data.config as { dateRange?: { enabled?: boolean; mode?: string; to?: string }; mode?: string; to?: string };
+            if (c.dateRange?.enabled && c.dateRange.mode === "between") return !c.dateRange.to;
+            return n.type === "time" && c.mode === "between" && !c.to;
           })}
           publishing={publishing}
           error={publishError}

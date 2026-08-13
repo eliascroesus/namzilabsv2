@@ -775,6 +775,29 @@ describe("a date range includes the day it names", () => {
     expect(await inWindow("2026-08-01", "2026-08-30")).toBe(0);
   });
 
+  it("an empty To has NO end — a scheduled meeting is still inside it", async () => {
+    /**
+     * Measured on the customer's calendar: "from 11 Aug onwards" returned 9
+     * of 20 matching meetings, because 11 of them are in the future and the
+     * open end quietly stopped at the current instant. Sabotage: restore
+     * `?? now` and the future record below drops out, which is the entire
+     * bug — invisible on data that only looks backwards, and wrong by more
+     * than half on a calendar.
+     */
+    const dayMs = 86_400_000;
+    const future = new Date(Date.now() + 30 * dayMs);
+    const past = new Date(Date.now() - 30 * dayMs);
+    await db.insert(events).values([
+      { eventId: "sched", orgId: ORG, connectionId: CONN, source: "webhook", eventType: "meeting", subject: "future", occurredAt: future, properties: {} },
+      { eventId: "held", orgId: ORG, connectionId: CONN, source: "webhook", eventType: "meeting", subject: "past", occurredAt: past, properties: {} },
+    ]);
+    const from = new Date(Date.now() - 60 * dayMs).toISOString().slice(0, 10);
+    expect(await inWindow(from, "")).toBe(2);
+    // A window WITH an end still ends: presets and rolling ranges are
+    // untouched, and so is a range the user actually bounded.
+    expect(await inWindow(from, new Date().toISOString().slice(0, 10))).toBe(1);
+  });
+
   it("a hand-typed instant keeps the exact moment it names", async () => {
     await db.insert(events).values({
       eventId: "pm", orgId: ORG, connectionId: CONN, source: "webhook", eventType: "call",

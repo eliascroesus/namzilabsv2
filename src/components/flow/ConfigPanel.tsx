@@ -508,7 +508,7 @@ function NodeConfig({
           <Select
             value={mode}
             width={W}
-            options={[{ value: "preset", label: "Preset period" }, { value: "rolling", label: "Rolling (last N days)" }, { value: "between", label: "Between two dates" }]}
+            options={[{ value: "preset", label: "Preset period" }, { value: "rolling", label: "Rolling (last N days)" }, { value: "between", label: "From a date onwards" }]}
             onChange={(v) => onChange({ mode: v })}
           />
         </Field>
@@ -525,9 +525,14 @@ function NodeConfig({
         {mode === "between" && (
           <div className="grid grid-cols-2 gap-2">
             <Field label="From"><input type="date" value={(cfg.from as string) ?? ""} onChange={(e) => onChange({ from: e.target.value })} className={INPUT} /></Field>
-            <Field label="To"><input type="date" value={(cfg.to as string) ?? ""} onChange={(e) => onChange({ to: e.target.value })} className={INPUT} /></Field>
+            {/* Open-ended on purpose: an empty "To" means "up to right now",
+                which is what "count everything since we started doing X"
+                needs. The engine always allowed it; only the label said
+                otherwise. */}
+            <Field label="To (optional)"><input type="date" value={(cfg.to as string) ?? ""} onChange={(e) => onChange({ to: e.target.value })} className={INPUT} /></Field>
           </div>
         )}
+        <p className="text-xs text-neutral-400">{describeWindow(mode, cfg as { preset?: string; days?: number; from?: string; to?: string })}</p>
       </div>
     );
   }
@@ -1747,7 +1752,7 @@ function DateRangeSection({ cfg, groups, onChange }: { cfg: Record<string, unkno
                 <Select
                   value={mode}
                   width={W}
-                  options={[{ value: "preset", label: "A preset range" }, { value: "rolling", label: "Last N days" }, { value: "between", label: "Between two dates" }]}
+                  options={[{ value: "preset", label: "A preset range" }, { value: "rolling", label: "Last N days" }, { value: "between", label: "From a date onwards" }]}
                   onChange={(v) => set({ mode: v as DateRange["mode"] })}
                 />
               </Field>
@@ -1756,7 +1761,8 @@ function DateRangeSection({ cfg, groups, onChange }: { cfg: Record<string, unkno
               {mode === "between" && (
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="From"><input type="date" value={dr.from ?? ""} onChange={(e) => set({ from: e.target.value })} className={INPUT} /></Field>
-                  <Field label="To"><input type="date" value={dr.to ?? ""} onChange={(e) => set({ to: e.target.value })} className={INPUT} /></Field>
+                  {/* Empty "To" = up to right now. See the Time step's note. */}
+                  <Field label="To (optional)"><input type="date" value={dr.to ?? ""} onChange={(e) => set({ to: e.target.value })} className={INPUT} /></Field>
                 </div>
               )}
               {/* THE WINDOW SAYS WHAT IT INCLUDES. A date range is the one
@@ -1785,15 +1791,23 @@ const RUNNING_PRESETS = new Set(["today", "this_week", "this_month"]);
 function describeWindow(mode: string, dr: { preset?: string; days?: number; from?: string; to?: string }): string {
   if (mode === "rolling") return `Includes the last ${dr.days ?? 30} days, up to right now (UTC).`;
   if (mode === "between") {
-    if (!dr.from && !dr.to) return "Pick both dates to set the window.";
+    if (!dr.from && !dr.to) return "Pick a start date. Leaving “To” empty means no end — everything from then on.";
     const from = dr.from ? `${dr.from} 00:00` : "the earliest record";
-    const to = dr.to ? `${dr.to} 23:59` : "right now";
-    return `Includes ${from} through ${to} (UTC) — the whole of the last day.`;
+    // An open end is genuinely open, so it has to say so — on a calendar that
+    // is the difference between 9 meetings and 20.
+    if (!dr.to) return `Includes everything from ${from} (UTC) onwards, with no end — scheduled dates included.`;
+    return `Includes ${from} through ${dr.to} 23:59 (UTC) — the whole of the last day.`;
   }
   const preset = dr.preset ?? "last_30_days";
   if (RUNNING_PRESETS.has(preset)) {
     return "This period is still running, so it holds fewer records than a finished one. Comparing it to a completed period always reads low.";
   }
+  // "last N days" ends at NOW, not at the last complete day — the engine
+  // computes `now - N days … now` with no day rounding. The whole-days
+  // sentence below is true only of yesterday / last week / last month, and
+  // saying it here described the opposite of the window being applied.
+  const rolling = /^last_(\d+)_days$/.exec(preset);
+  if (rolling) return `Includes the last ${rolling[1]} days, up to right now (UTC).`;
   return "Includes whole days, ending at the last complete one (UTC).";
 }
 
