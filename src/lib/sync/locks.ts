@@ -20,7 +20,7 @@ import type { DB } from "@/db/types";
  * open across HTTP calls pins pool connections and bloats vacuum horizons.
  *
  * CONNECTION scope (the lease, further down). Sources with no streams
- * (Sendblue, Close) get no cover from the per-stream lock, and the queue keys
+ * (Close, Instantly) get no cover from the per-stream lock, and the queue keys
  * do not close it either: Inngest scopes `singleton`/`concurrency` PER FUNCTION,
  * so `sync-connection` and `reconcile-one-connection` never exclude each other,
  * and the inline Test path does not enter Inngest at all. Their critical section

@@ -547,7 +547,7 @@ export async function reconcileConnection(
     let nextCursor: string | null;
     // A connection-scoped poll is called ONCE — the connector's own page walk is
     // invisible to this runner — so `incomplete` is the only way Close or
-    // Sendblue can say it still has history to fetch. Without it a connection
+    // Close can say it still has history to fetch. Without it a connection
     // mid-import reads as idle and tiers down, which slows the very pages it is
     // still waiting on.
     let incomplete: boolean | undefined;
@@ -622,7 +622,7 @@ export async function reconcileConnection(
     return withCadence({
       inserted: res.inserted, updated: res.updated, softDeleted: 0, deduped: res.deduped,
       polled: true, webhook, changedStreamHashes: [], incomplete,
-      // Asked of the cursor just persisted, which for Close and Sendblue is
+      // Asked of the cursor just persisted, which for Close is
       // where a mid-walk `cont` lives. It is not the same question as
       // `incomplete`: Close's 400-handler returns a cursor with `cont` cleared
       // AND `incomplete: true`, while a budget-bounded walk returns both set —

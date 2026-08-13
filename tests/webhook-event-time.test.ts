@@ -549,10 +549,10 @@ describe("answering the question by hand", () => {
 });
 
 /**
- * THE OBSERVATION, on the five connectors that keep `parseDate`.
+ * THE OBSERVATION, on the four connectors that keep `parseDate`.
  *
  * Their behaviour is unchanged and stays unchanged — a provider's documented ISO
- * field is not worth re-verifying five ways for a shape nobody has sent. But
+ * field is not worth re-verifying four ways for a shape nobody has sent. But
  * "nobody has sent one" was an assumption, and it is the class of assumption
  * that has been wrong four times here. So every value they parse is checked
  * against the strict parser too and the disagreements are logged, using
@@ -620,7 +620,7 @@ describe("watching for a provider that sends something the table warns about", (
   it("is wired into every connector that parses a provider timestamp", () => {
     // A call site that forgot the name would report gate-closed noise forever,
     // which is the failure that makes an observation useless.
-    const sources = ["calendly", "close", "instantly", "sendblue", "google-calendar"];
+    const sources = ["calendly", "close", "instantly", "google-calendar"];
     for (const name of sources) {
       const src = readFileSync(`src/connectors/${name}.ts`, "utf8");
       let at = src.indexOf("parseDate(");

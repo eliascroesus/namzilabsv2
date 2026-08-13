@@ -183,7 +183,6 @@ describe("a walk cut short by the page cap licenses no retire", () => {
  * `{hw: maxSeen ?? hw, cont: null, maxSeen: null}` to a serializer that falls
  * through to `maxSeen ?? hw` — both null on a fresh walk that found nothing. A
  * Close workspace with no Event Log activity in thirty days is all it takes.
- * Sendblue's serializer has the identical shape.
  *
  * The deeper problem the gate fixes is not the empty case though: a completed
  * walk covers a WINDOW. Close's Event Log retains thirty days, so any mature

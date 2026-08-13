@@ -215,9 +215,13 @@ describe("Google's per-API quotas, as declared", () => {
 
 describe("pollOperation resolution", () => {
   it("falls back to the shared bucket for connectors with one account-wide limit", () => {
-    // Correct, not a gap: the provider publishes a single limit.
+    // Correct, not a gap, and two honest ways to land here: Instantly's
+    // provider publishes ONE workspace-wide limit, declared on "*", so the
+    // wildcard IS the declared bucket; Close declares no per-endpoint limits
+    // at all, so the wildcard is its whole budget rather than a per-endpoint
+    // limit being bypassed — which is the bug this suite exists for.
     expect(pollOperation("close")).toBe("*");
-    expect(pollOperation("sendblue")).toBe("*");
+    expect(pollOperation("instantly")).toBe("*");
   });
 
   it("names the endpoint where the provider budgets per API", () => {

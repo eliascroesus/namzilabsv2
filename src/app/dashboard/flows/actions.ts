@@ -155,7 +155,7 @@ export type StartNodeTestResult =
  * important interactive path in the product, and routing it through a queue
  * made it depend on that queue being healthy — a dependency it does not need.
  * Most tests are now fast enough to finish in-request: Instantly is
- * analytics-first (one or two calls), Calendar and Sendblue are date-bounded,
+ * analytics-first (one or two calls), Calendar is date-bounded,
  * Sheets is one tab.
  *
  * So: run it here under a time budget. If it finishes — the common case — the

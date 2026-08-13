@@ -95,7 +95,7 @@ export const instantlyConnector: Connector = {
   },
 
   verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
-    // Fails CLOSED, for the same reason as Sendblue: injected rows land at
+    // Fails CLOSED, for the same reason as Close: injected rows land at
     // generation 0 and are unreachable by every sweep. This IS reachable now —
     // the route verifies BEFORE the stream-scoped doorbell bail, so this check
     // is what stands between an anonymous POST and a quota-spending sweep.

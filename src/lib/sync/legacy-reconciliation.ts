@@ -23,7 +23,7 @@ import { isStreamScoped } from "@/connectors/catalog";
  * This script retires exactly (a).
  *
  * What it must NEVER touch:
- * - rows on CONNECTION-SCOPED connections (Close, Instantly, Sendblue, custom
+ * - rows on CONNECTION-SCOPED connections (Close, Instantly, custom
  *   webhook). There, `stream_hash IS NULL` is the CORRECT steady state for
  *   every row — poll-managed and webhook alike. Deleting those would erase
  *   live customer data.

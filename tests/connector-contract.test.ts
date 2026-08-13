@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { closeConnector } from "@/connectors/close";
-import { sendblueConnector } from "@/connectors/sendblue";
 import { instantlyConnector } from "@/connectors/instantly";
 import type { CanonicalEvent, Connector } from "@/connectors/types";
 
@@ -166,38 +165,6 @@ const CONTRACTS: Contract[] = [
     burst: 210,
     mark: hwMark,
   },
-  {
-    source: "sendblue",
-    connector: sendblueConnector,
-    credentials: { apiKey: "kid", apiSecret: "ksec" },
-    boundParam: null,
-    cursorField: "date_sent",
-    decoyField: "date_updated",
-    assumesNewestFirst: true,
-    row: (id, cursorAt, decoyAt) => ({
-      message_handle: id,
-      status: "DELIVERED",
-      is_outbound: true,
-      to_number: "+15551230000",
-      date_sent: cursorAt,
-      date_updated: decoyAt,
-    }),
-    serve(rows) {
-      const calls: URLSearchParams[] = [];
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (input: string | URL | Request) => {
-          const p = new URL(String(input)).searchParams;
-          calls.push(p);
-          const offset = Number(p.get("offset") ?? 0);
-          return respond({ messages: rows.slice(offset, offset + Number(p.get("limit") ?? 100)) });
-        }),
-      );
-      return { calls };
-    },
-    burst: 420,
-    mark: hwMark,
-  },
 ];
 
 /**
@@ -352,7 +319,7 @@ describe("ordering assumptions are declared, and the declaration is true", () =>
 
 /** Guards against a connector being quietly dropped from the table. */
 it("covers every connector with a windowed poll", () => {
-  expect(CONTRACTS.map((c) => c.source).sort()).toEqual(["close", "instantly", "sendblue"]);
+  expect(CONTRACTS.map((c) => c.source).sort()).toEqual(["close", "instantly"]);
 });
 
 it("fixtures sit inside every connector's own first-sync window", () => {

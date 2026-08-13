@@ -136,7 +136,7 @@ export async function connectionImportStatuses(db: DB, orgId: string, connection
       if (coverage) {
         out.set(c.id, { state: "importing", coverage, note: importProgressNote(coverage) });
       } else if (cursorSaysImporting(raw)) {
-        // Every other paging source (Sendblue) stores the same JSON-while-
+        // Every other paging source stores the same JSON-while-
         // walking shape but no coverage fields: we can say THAT it is still
         // on its first window, just not how far in.
         out.set(c.id, { state: "importing", note: "Still importing history — these numbers can still grow." });

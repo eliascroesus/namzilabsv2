@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { closeConnector } from "@/connectors/close";
-import { sendblueConnector } from "@/connectors/sendblue";
 import { instantlyConnector } from "@/connectors/instantly";
 import type { CanonicalEvent, Connector } from "@/connectors/types";
 
@@ -16,9 +15,7 @@ import type { CanonicalEvent, Connector } from "@/connectors/types";
  * error, it is not a zero, it is not a slow sync. The rows simply are not there,
  * and nothing says so.
  *
- * It has now happened twice (Close, "Defect #2") and shipped a third time
- * (Sendblue, which grew the multi-page walk but not the continuation — raising
- * the burst threshold from 100 to 300 rather than removing it). Both were found
+ * It has now happened twice (Close, "Defect #2"), and both times it was found
  * by reading, not by a test, which is why this file exists: a burst deeper than
  * one poll's budget, walked to exhaustion, asserting the union is complete.
  *
@@ -85,32 +82,6 @@ const CASES: Case[] = [
           const offset = p.get("_cursor") ? Number(p.get("_cursor")) : 0;
           const page = rows.slice(offset, offset + Number(p.get("_limit") ?? 50));
           return respond({ data: page, cursor_next: offset + page.length < rows.length ? String(offset + page.length) : null });
-        }),
-      );
-    },
-    idOf: (e) => e.eventId.split(":").pop()!,
-  },
-  {
-    source: "sendblue",
-    connector: sendblueConnector,
-    credentials: { apiKey: "kid", apiSecret: "ksec" },
-    total: 420, // 3 pages × 100 = 300 per poll
-    serve(total) {
-      const newestFirst = [...timeline(total)].reverse();
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (input: string | URL | Request) => {
-          const p = new URL(String(input)).searchParams;
-          const offset = Number(p.get("offset") ?? 0);
-          const limit = Number(p.get("limit") ?? 100);
-          const page = newestFirst.slice(offset, offset + limit).map((r) => ({
-            message_handle: r.id,
-            status: "DELIVERED",
-            is_outbound: true,
-            to_number: "+15551230000",
-            date_sent: r.at,
-          }));
-          return respond({ messages: page });
         }),
       );
     },
@@ -226,7 +197,7 @@ describe("a drained window settles", () => {
 
 /** Guards against a case being silently dropped from the table. */
 it("covers every connector with a paged poll", () => {
-  expect(CASES.map((c) => c.source).sort()).toEqual(["close", "instantly", "sendblue"]);
+  expect(CASES.map((c) => c.source).sort()).toEqual(["close", "instantly"]);
   expect(CASES.every((c) => c.total > 0)).toBe(true);
 });
 

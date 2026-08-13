@@ -27,7 +27,7 @@ export default function PrivacyPage() {
             <li>Account information (name and email) used to sign in.</li>
             <li>
               Data from the third-party services you explicitly connect (such as Calendly, Close,
-              Instantly, Sendblue and Google Workspace), retrieved only to display it back to you.
+              Instantly and Google Workspace), retrieved only to display it back to you.
             </li>
             <li>Basic operational logs needed to run the Service reliably.</li>
           </ul>

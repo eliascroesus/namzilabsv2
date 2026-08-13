@@ -597,7 +597,6 @@ describe("progress belongs to the stream", () => {
 describe("6.3 — the depth policy", () => {
   it("uses a row ceiling per source, not one number for everything", () => {
     expect(rowCeilingFor("close")).toBe(25_000);
-    expect(rowCeilingFor("sendblue")).toBe(25_000);
     // Instantly analytics is one small row per campaign per day — a ceiling
     // sized for record streams would stop an import that costs almost nothing.
     expect(rowCeilingFor("instantly")).toBeGreaterThan(25_000);

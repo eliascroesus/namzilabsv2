@@ -23,7 +23,7 @@ export const DEFAULT_TARGET_DAYS = 90;
  * 90 days of a quiet calendar is nothing, and 90 days of a busy Close workspace
  * is hundreds of thousands of rows. Whichever comes first wins.
  *
- * Sendblue and Close are the only two that realistically reach it. When the
+ * Close is the one that realistically reaches it. When the
  * ceiling stops an import the UI must say "covering 47 of 90 days" — never imply
  * the 90 it was aiming for.
  */

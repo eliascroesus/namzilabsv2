@@ -13,7 +13,7 @@ historical record.
 
 Run these against production (or a production-like account) shortly before
 launch, top to bottom. **Item 0 comes first and blocks everything else** — the
-migration runner cannot currently apply anything. Items 1, 2 and 3 are
+migration runner cannot currently apply anything. Items 1, 1b and 2 are
 independent; item 4 is a sequence with a soak period in the middle — start it
 early enough to finish the soak.
 
@@ -592,9 +592,6 @@ the high-water mark does not advance — so the next sweep repeats it.
 The contract lane demonstrates exactly this against a reversed log, so the
 dependence is a pinned fact rather than a worry.
 
-The same shape is in `sendblue.ts`. **Sendblue is parked** and this is recorded
-for completeness, not as work.
-
 **Confirmed against the live API:** I2 reports newest-first, so the assumption
 holds today. It is measured on BOTH `timestamp_created` and `timestamp_email` —
 the two fields the connector reads — because Close's ordering claim was right
@@ -627,56 +624,8 @@ INSTANTLY_API_KEY=xxx pnpm tsx scripts/verify-instantly.ts
   Instantly connection in the app (its connection page will also show the
   reconnect prompt after the first sweep).
 - Any I1–I4 check fails → update `src/connectors/instantly.ts` +
-  `tests/instantly-sendblue-poll.test.ts` to the live behavior before shipping
+  `tests/instantly-poll.test.ts` to the live behavior before shipping
   the Instantly poll.
-
----
-
-## 3. Sendblue — base URL + messages list + webhook management
-
-**Why:** the Sendblue poll and webhook self-healing are built on
-`https://api.sendblue.co` with `GET /api/v2/messages` and
-`GET|POST /api/account/webhooks`, none of which could be confirmed from the
-build environment (docs bot-walled, no pre-existing send path in the repo to
-compare against). One authenticated call settles the host and both endpoints.
-
-**Keys:** Sendblue dashboard → API settings → API Key ID + API Secret (the same
-pair entered when connecting Sendblue in the app).
-
-**Run:**
-
-Store both credentials as the repo secrets `SENDBLUE_API_KEY_ID` and
-`SENDBLUE_API_SECRET`, then: Actions → **Verify providers (read-only)** → Run
-workflow → provider **sendblue** (or **all**).
-
-`scripts/verify-sendblue.ts` checks S1-S5 (host answers, messages list,
-`message_handle` present, limit/offset honored, webhook list readable) and — the
-part that used to need a human guess — **automatically retries the alternate
-host** (`api.sendblue.com`) when the primary does not answer, then tells you
-which one worked so `API_BASE` can be corrected in one move.
-
-<details><summary>Local equivalent</summary>
-
-```bash
-SENDBLUE_API_KEY_ID=xxx SENDBLUE_API_SECRET=yyy pnpm tsx scripts/verify-sendblue.ts
-```
-
-</details>
-
-**PASS:** both return `HTTP 200` with JSON — the first containing a message
-list (message objects with `message_handle`), the second a webhook list (may be
-empty `[]`/`{"webhooks":[]}` — empty is fine; the sweep will register ours).
-
-**FAIL:**
-- DNS error / connection refused / redirect to a marketing page → the host is
-  wrong: try `api.sendblue.com` with the same calls; whichever answers 200,
-  set it as `API_BASE` in `src/connectors/sendblue.ts` (single constant at the
-  top) and re-run tests.
-- `HTTP 401/403` with correct keys → the auth header names differ from
-  `sb-api-key-id`/`sb-api-secret-key`; check the dashboard's API examples and
-  update `authHeaders()` in `src/connectors/sendblue.ts`.
-- `404` on one endpoint only → that endpoint's path changed; update the path in
-  `src/connectors/sendblue.ts` (poll and/or `verifyWebhookSubscription`).
 
 ---
 
@@ -897,9 +846,8 @@ Close is connection-scoped, so a NULL hash is its normal shape and not a ghost),
 carries a hash; nothing is stranded.
 
 **What this unblocks:** backfills and replays, which were gated on this step.
-`scripts/reconcile-sendblue-ids.ts` and the Action remain in the repo — they are
-idempotent, report `Nothing to do` on a clean database, and are the right tool if
-pre-unified-writer rows ever reappear from a restored branch.
+The one-off Sendblue id-reconciliation script has been deleted along with that
+connector; nothing remains to run here.
 
 **Re-run the query above before trusting this**, if the database has been
 restored from a Neon branch older than 29 July: a restore brings the ghosts back
@@ -986,10 +934,9 @@ nothing is lost, and `deleted_at` can be cleared for a mistaken batch.
 - Open **Integrations** in the app: no connection should show a red error strip.
   An Instantly connection showing the "reconnect with a v2 key" message means a
   v1-era key is stored — reconnect it (item 2's key).
-- For a Sendblue connection: after one sweep (≤10 min), its connection page
-  should show no `Webhook subscription check failed` error, and the Sendblue
-  dashboard should list our webhook URL (the sweep self-registers it if
-  missing).
+- For a Calendly or Close connection: after one sweep (≤10 min), its connection
+  page should show no `Webhook subscription check failed` error — both verify
+  the provider-side subscription each sweep and re-register it if missing.
 
 ---
 
@@ -1136,7 +1083,7 @@ down so it cannot be quietly forgotten.
    data behind the first sweep of a record-mirroring source.
 
 **Why it is not needed yet:** every stream that ships today is either bounded
-(Sheets = one tab; Calendly, Calendar, Sendblue, Instantly raw-emails = a dated
+(Sheets = one tab; Calendly, Calendar, Instantly raw-emails = a dated
 window) or tiny (Instantly analytics = one row per day). Nothing currently has
 a large first import to checkpoint.
 

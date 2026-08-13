@@ -28,8 +28,8 @@ reconciliation, outstanding since deploy, turned out to be **already resolved by
 the 29 July wipe** — so backfills and replays are unblocked. What is left is the
 pool-driver rollout, a day of Close traffic to replace the guessed rate limits,
 and two contract checks: **Calendly** (live, five load-bearing parameters, never
-verified — the highest-value one) then **Instantly**. **Sendblue is parked** by
-decision, not blocked.
+verified — the highest-value one) then **Instantly**. **Sendblue has been removed** from the
+product entirely — connector, catalog entry, scripts and tests.
 
 ---
 
@@ -52,7 +52,6 @@ decision, not blocked.
 | `CLOSE_API_KEY` | `scripts/verify-close-pagination.ts` (checklist item 1). Store as a repo secret; run via Actions → *Verify providers (read-only)*. |
 | `INSTANTLY_API_KEY` | `scripts/verify-instantly.ts` (item 2). A **v2** key — a 401 is the signature of a v1-era one. |
 | `INSTANTLY_SKIP_TARGET` / `INSTANTLY_CAMPAIGN` | Records the Instantly skip detector compares (default 60), and a campaign to pin instead of the first. |
-| `SENDBLUE_API_KEY_ID` / `SENDBLUE_API_SECRET` | `scripts/verify-sendblue.ts` (item 3). |
 | `CALENDLY_API_TOKEN` | `scripts/verify-calendly.ts` (item 1b). A Calendly **Personal Access Token**: Integrations & apps → API & webhooks → Personal Access Tokens. |
 | `CLOSE_VERIFY_PAGES` | Walk depth for the Close script. Default 40 pages. |
 | `CALENDLY_TOKEN_WAIT` | Seconds CL11 ages a Calendly page_token before retrying it. Default 60; **use `600`** to match base cadence, which is the gap the connector actually reuses a token across. In CI this is the *Calendly CL11* dropdown on the Verify providers Action (60 / 600 / 3600), not a secret. |
@@ -84,7 +83,7 @@ connection with a healthy webhook widens to the 60-minute backstop.
 - **Sync core** — one writer (`upsertEvents`), generation model, soft deletes,
   per-stream cursors, per-connection lease, provider budget ledger with a
   breaker.
-- **Six connectors** — Calendly, Close, Instantly, Sendblue, Google Sheets,
+- **Five connectors** — Calendly, Close, Instantly, Google Sheets,
   Google Calendar, plus the custom webhook. **Close's incremental window is
   verified against the live API**: it bounds on `date_updated` (the field the
   endpoint filters and sorts on) and dates rows by `date_created` (when the thing
@@ -185,15 +184,15 @@ Three things to know before it moves:
 
 | Blocked | Waiting on |
 |---|---|
-| **Declaring Close's and Sendblue's real rate limits (5b)** | A day of production traffic now that Close is connected (checklist item 7). Both fall through to `DEFAULT_RPM = 60` → 42/min (31 background), a guess no provider published. Close returns real `ratelimit` headers on every response and the connector already parses them, so the evidence accumulates on its own — it just has to accumulate. |
+| **Declaring Close's real rate limit (5b)** | A day of production traffic now that Close is connected (checklist item 7). It falls through to `DEFAULT_RPM = 60` → 42/min (31 background), a guess no provider published. Close returns real `ratelimit` headers on every response and the connector already parses them, so the evidence accumulates on its own — it just has to accumulate. |
 | **Calendly's contract check** | The `CALENDLY_API_TOKEN` secret (checklist item 1b). Calendly is the most parameter-dependent connector — its outward scan rests on `sort`, `min_start_time`, `max_start_time`, `status` and `page_token` all working — and the only one never verified live. `scripts/verify-calendly.ts` controls every one of them. **A PASS is not the answer: an ignored parameter is an INFO line, because a provider that accepts and discards one returns 200 and a plausible page.** |
 | **Instantly's contract check** | A live key (checklist item 2). Now carries a second question: its `raw_emails` walk sends NO date parameter and stops when a page falls below its floor, so it silently imports **nothing at all** on a log that is not newest-first. `tests/connector-contract.test.ts` pins that dependence; only a live run can say whether the assumption holds. |
 | **`DB_DRIVER=pool`** | A read-path soak with `DB_DRIVER_READ=pool` first (checklist item 4 / LAUNCH_DAY D4 → F3). Until then advisory locks and `db.transaction` are inert, which is why one test stands in for lock contention rather than producing it. |
 | **The "cursor stopped advancing" invariant** | A column. `sync_state.cursor` holds only the current value and is rewritten every poll, so standing still is unobservable from stored state, and inferring it from `occurred_at` would flag every quiet account. Needs a migration; the CI stranding contract catches the same class meanwhile. Written up in `docs/DATA_MODEL.md`. |
 
-**Sendblue is PARKED** — by decision, not blocked on anything. Its contract check
-(item 3) and its date-parameter probe are not to be run, planned for, or counted
-as outstanding work.
+**Sendblue is REMOVED** — the connector, its catalog entry, its verify and
+rekey scripts and its tests are deleted. Its contract check (item 3) and its
+date-parameter probe no longer exist as work.
 
 ### Answered, so nobody re-opens them
 

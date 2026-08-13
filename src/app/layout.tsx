@@ -6,7 +6,7 @@ import type { UserInfo, NoUserInfo } from "@workos-inc/authkit-nextjs";
 
 export const metadata: Metadata = {
   title: "Namzilabs — all your tools' data in one place",
-  description: "Unify Calendly, Close, Instantly, Sendblue, Google Sheets and more into one reliable dashboard.",
+  description: "Unify Calendly, Close, Instantly, Google Sheets and more into one reliable dashboard.",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

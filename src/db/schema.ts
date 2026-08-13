@@ -35,7 +35,7 @@ export const connections = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     orgId: text("org_id").notNull(),
-    source: text("source").notNull(), // calendly | close | instantly | sendblue | gsheets | gcal | webhook
+    source: text("source").notNull(), // calendly | close | instantly | gsheets | gcal | webhook
     name: text("name").notNull(),
     status: text("status").notNull().default("active"), // active | error | disabled
     authType: text("auth_type").notNull().default("none"), // apiKey | oauth2 | secret | none

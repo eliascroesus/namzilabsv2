@@ -807,7 +807,7 @@ export const closeConnector: Connector = {
    * re-activate verb and can only self-heal by re-creating) and reconcile
    * persists it — but Close stays re-activate-only BY CHOICE: re-activation
    * preserves the existing key, which is strictly better wherever the
-   * provider offers the verb. Sendblue can re-create freely because its
+   * provider offers the verb. Calendly can re-create freely because its
    * secret is one we mint; Close's is one we are given.
    *
    * The re-activation verb is `PUT /api/v1/webhook/{id}/` with a `status` field,

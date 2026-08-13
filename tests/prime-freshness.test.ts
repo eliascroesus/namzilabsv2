@@ -256,43 +256,42 @@ describe("primeStream freshness gate (Defect #1)", () => {
  * The gap `primeStream` could not cover, and what it cost.
  *
  * `primeStreamsForTest` only primed a step whose `sourceConfig` was non-empty.
- * Sendblue has no flowFields and Close's are readFilter-only (a WHERE over the
- * shared sync, excluded from stream identity) — either way the account IS the
- * resource, so their steps carry an empty EFFECTIVE config and the refresh was
- * skipped entirely. Test then ran
- * the flow over whatever storage held and printed "0 loaded · No records
- * returned": identical to a genuinely empty source, with no request made and so
- * nothing to diagnose. It also made connector fixes look inert, since changing a
- * poll cannot change a Test that never calls it.
+ * Close's flowFields are readFilter-only (a WHERE over the shared sync,
+ * excluded from stream identity), so the account IS the resource and a Close
+ * step carries an empty EFFECTIVE config — which meant the refresh was skipped
+ * entirely. Test then ran the flow over whatever storage held and printed
+ * "0 loaded · No records returned": identical to a genuinely empty source, with
+ * no request made and so nothing to diagnose. It also made connector fixes look
+ * inert, since changing a poll cannot change a Test that never calls it.
  */
 describe("primeConnection — sources with no per-flow resource", () => {
-  const SB_KEY = { apiKey: "kid", apiSecret: "ksec" };
-  let sbId: string;
+  const CLOSE_KEY = { apiKey: "api_test" };
+  let closeId: string;
 
-  const message = (handle: string, minsAgo: number) => ({
-    message_handle: handle,
-    status: "DELIVERED",
-    is_outbound: true,
-    to_number: "+15551234567",
-    date_sent: new Date(Date.now() - minsAgo * 60_000).toISOString(),
-  });
+  const activity = (id: string, minsAgo: number) => {
+    const at = new Date(Date.now() - minsAgo * 60_000).toISOString();
+    return { id, object_type: "activity.sms", action: "created", date_created: at, date_updated: at };
+  };
 
-  async function connectSendblue(): Promise<string> {
+  async function connectClose(): Promise<string> {
     const [row] = await db
       .insert(connections)
       .values({
         orgId: ORG,
-        source: "sendblue",
-        name: "Sendblue",
+        source: "close",
+        name: "Close CRM",
         status: "active",
-        authType: "secret",
-        credentialsEncrypted: encrypt(JSON.stringify(SB_KEY), Buffer.from(KEY, "base64")),
+        authType: "apiKey",
+        credentialsEncrypted: encrypt(JSON.stringify(CLOSE_KEY), Buffer.from(KEY, "base64")),
       })
       .returning({ id: connections.id });
     return row.id;
   }
 
-  function serve(messages: unknown[], status = 200) {
+  function serve(records: unknown[], status = 200) {
+    // One drained page: `cursor_next: null` ends the walk, so these tests are
+    // about the prime reaching the provider at all, not about paging.
+    const body = { data: records, cursor_next: null };
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -300,22 +299,22 @@ describe("primeConnection — sources with no per-flow resource", () => {
         status,
         statusText: status === 200 ? "OK" : "Error",
         headers: { get: () => null },
-        json: async () => ({ messages }),
-        text: async () => JSON.stringify({ messages }),
+        json: async () => body,
+        text: async () => JSON.stringify(body),
       }) as unknown as Response),
     );
   }
 
   beforeEach(async () => {
-    sbId = await connectSendblue();
+    closeId = await connectClose();
   });
 
   it("actually calls the provider and stores what comes back", async () => {
-    serve([message("h1", 10), message("h2", 20)]);
-    const res = await primeConnection(db, ORG, sbId);
+    serve([activity("h1", 10), activity("h2", 20)]);
+    const res = await primeConnection(db, ORG, closeId);
     expect(res).toEqual({ ok: true, refreshed: true });
 
-    const rows = await db.select().from(events).where(and(eq(events.connectionId, sbId), isNull(events.deletedAt)));
+    const rows = await db.select().from(events).where(and(eq(events.connectionId, closeId), isNull(events.deletedAt)));
     expect(rows).toHaveLength(2);
   });
 
@@ -323,29 +322,29 @@ describe("primeConnection — sources with no per-flow resource", () => {
     // THE regression: before, this path was never reached and the user saw
     // "0 loaded" with no indication anything had gone wrong.
     serve([], 401);
-    const res = await primeConnection(db, ORG, sbId);
+    const res = await primeConnection(db, ORG, closeId);
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("401");
   });
 
   it("an account that really is empty stays zero, with no error", async () => {
     serve([]);
-    const res = await primeConnection(db, ORG, sbId);
+    const res = await primeConnection(db, ORG, closeId);
     expect(res).toEqual({ ok: true, refreshed: true });
-    const rows = await db.select().from(events).where(eq(events.connectionId, sbId));
+    const rows = await db.select().from(events).where(eq(events.connectionId, closeId));
     expect(rows).toHaveLength(0);
   });
 
   it("declines to touch a stream-scoped connection — that is primeStream's job", async () => {
-    serve([message("h1", 5)]);
+    serve([activity("h1", 5)]);
     const res = await primeConnection(db, ORG, connId); // the gsheets connection
     expect(res).toEqual({ ok: true, refreshed: false });
   });
 
   it("honors the same pause guard as primeStream, with the same wording", async () => {
-    await pauseConnection(db, sbId, 60_000, "provider limit");
-    serve([message("h1", 5)]);
-    const res = await primeConnection(db, ORG, sbId);
+    await pauseConnection(db, closeId, 60_000, "provider limit");
+    serve([activity("h1", 5)]);
+    const res = await primeConnection(db, ORG, closeId);
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.refreshed).toBe(false);
@@ -355,15 +354,11 @@ describe("primeConnection — sources with no per-flow resource", () => {
 
   /**
    * The day-one experience this fixes: a connection-scoped source has no page
-   * loop in the runner (`connector.poll` is called once), so Close and Sendblue
-   * could not say "still importing" no matter how much history was outstanding.
+   * loop in the runner (`connector.poll` is called once), so Close could not
+   * say "still importing" no matter how much history was outstanding.
    * A new account watched a number climb for a day with nothing to explain it.
    */
   it("says it is still importing, with real coverage, when the connector reports more to fetch", async () => {
-    const conn = await db.select().from(connections).where(eq(connections.id, sbId)).limit(1);
-    await db.update(connections).set({ source: "close" }).where(eq(connections.id, sbId));
-    expect(conn).toHaveLength(1);
-
     // 260 events an hour apart, newest-first: Close walks 4 pages of 50 and
     // stops with more left. Spaced by the HOUR so the coverage it reports is a
     // real number of days rather than a rounding artefact of a 4-hour fixture.
@@ -390,7 +385,7 @@ describe("primeConnection — sources with no per-flow resource", () => {
       }),
     );
 
-    const res = await primeConnection(db, ORG, sbId);
+    const res = await primeConnection(db, ORG, closeId);
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.refreshed).toBe(true);

@@ -258,8 +258,8 @@ describe("the stream's dating settings reach the re-poll", () => {
  * nothing at all about rows outside the window the walk covered.
  *
  * Both gaps are reachable. `pollAll` sets `complete` when `nextCursor` is null,
- * and the window serializers in Close, Sendblue and Instantly all fall through
- * to `maxSeen ?? hw` — both null on a fresh walk that returned nothing. Worse,
+ * and the window serializers in Close and Instantly both fall through to
+ * `maxSeen ?? hw` — both null on a fresh walk that returned nothing. Worse,
  * Instantly's analytics streams return `nextCursor: null` on EVERY poll by
  * construction, so an empty analytics response needs no edge case at all.
  *

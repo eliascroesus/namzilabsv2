@@ -92,7 +92,7 @@ Declared in `src/connectors/catalog.ts` (`sync` field; UI copy states the class)
 |---|---|---|
 | **mirror** | Every sweep re-reads the ENTIRE resource, refreshes rows in place and soft-deletes rows no longer present. Stored live rows ≡ source after every sweep. Row identity = sheet row number (per stream); blank rows mirror as deleted; `occurred_at` = the stream's date column — chosen or detected — else first-seen (see below). | Google Sheets |
 | **derived-mirror** | Numbers **computed by the provider**, re-read on a schedule and refreshed in place. Faithful to what the provider reports — including restatements of recent periods, which are normal, not edits. Reads declare a `mirrorScope` (the span they enumerate completely), so a row that disappears from inside the window is retired while history behind it is untouched. | Instantly (campaign analytics) |
-| **incremental** | Cursor-forward polling with an overlap window; nothing is stranded (windows are drained to their end, deeper windows resume next sweep). Edits older than the overlap surface on a full re-sync. | Close (5-min overlap, continuation cursor), Google Calendar (sync token, ±window bound on first sync), Calendly, Sendblue (30-day first-sweep bound), Instantly raw-emails streams |
+| **incremental** | Cursor-forward polling with an overlap window; nothing is stranded (windows are drained to their end, deeper windows resume next sweep). Edits older than the overlap surface on a full re-sync. | Close (5-min overlap, continuation cursor), Google Calendar (sync token, ±window bound on first sync), Calendly, Instantly raw-emails streams |
 | **webhook-only** | No list endpoint to reconcile against: data is as complete as the webhooks that arrived. Weakest class; the connection UI must say so. | Custom webhook |
 
 ### What `derived-mirror` does NOT promise
@@ -277,7 +277,7 @@ leaves the request standing.
 ### The other connectors keep `parseDate`, and that is deliberate
 
 Every connector ends in `parseDate(...) ?? new Date()`, but for
-Calendly/Close/Instantly/Sendblue/Calendar the key it reads is the provider's
+Calendly/Close/Instantly/Calendar the key it reads is the provider's
 own documented field — always ISO — so the fallback is an edge case rather than
 a routine outcome. Only the catch-hook takes arbitrary JSON with no schema,
 which is why it is the one that behaved like a sheet and the one that moved to
@@ -423,12 +423,12 @@ Sources split in two, and only one half was being refreshed.
 calendar, an Instantly campaign. That choice is the step's `sourceConfig`, which
 is what `primeStream` keys on.
 
-**Connection-scoped** sources — Sendblue, Close — have no such choice. The
+**Connection-scoped** sources — Close — have no such choice. The
 account IS the resource, so the Get data step's config is empty. And
 `primeStreamsForTest` skipped any step whose config was empty:
 
 ```ts
-if (!connectionId || !hasStreamConfig(sourceConfig)) continue;   // ← Sendblue, Close
+if (!connectionId || !hasStreamConfig(sourceConfig)) continue;   // ← Close
 ```
 
 So Test never contacted those providers. It ran the flow over whatever storage
@@ -445,7 +445,7 @@ an old account still legitimately return zero.
 The general rule this leaves behind: **every branch that can produce "no data"
 must be reachable only when we actually asked.** A skip that looks like an empty
 result is the most expensive bug shape in this codebase — it has now appeared in
-the migration tracker, the flow Test, and both layers of the Sendblue poll.
+the migration tracker, the flow Test, and both layers of a connector poll.
 
 ### One writer per connection (C.1, connection scope)
 
@@ -481,50 +481,6 @@ leaves no session to die with, so the deadline is what makes recovery automatic.
 The lease is one `INSERT … ON CONFLICT DO UPDATE … WHERE`, hence atomic on every
 driver. The token fences release, so a Test that timed out and proceeded cannot
 clear the lease of the writer it gave up on.
-
-### Sendblue: the messages ARE the analytics
-
-Sendblue's own dashboard shows response rate, messages sent/received, unresponded
-conversations, speed to dial and average rep response time. None of those come
-from an analytics API — their product computes them from message history, which
-is the same history this connector already polls. So Sendblue is the mirror image
-of Instantly: there, per-email rows are 37.9K against the tightest rate bucket in
-the catalog and provider-computed analytics are the only sane read; here the
-whole account is on the order of a thousand messages and every count or rate is
-a Filter + Calculate away — and the two duration metrics (speed to dial, rep
-response time) are a **Time between + Calculate** away, since they pair two
-events per conversation rather than counting one. Adding an analytics stream
-would add a second source of truth for numbers we can already derive.
-
-### Time between: the pairing step
-
-Cross-record durations (speed to lead, response time) were not expressible
-until the `time_between` node existed: nothing else in the engine reads two
-records at once, and timestamps are not numbers anywhere in the aggregate
-machinery.
-
-It is an ordinary step in every other respect. The start and the end are
-CONDITIONS — the same `FilterConfig` shape Filter, Paths and Group use, run
-through the same `evalRules` — so "the first outbound call" is sayable and
-no raw column is addressed by name. Per distinct `keyField` value (the lead
-id both records carry) it takes the earliest matching start, then the first
-matching end at-or-after it, and emits ONE record: **the start record
-itself**, annotated with `key`, `from_at`, `to_at` and
-`duration_<unit>` (plus a stable `duration` alias). Preserving the incoming
-fields is the point — every other dataset step does, and a downstream
-Filter on `properties.lead_id` has to keep working.
-
-Unmatched keys emit nothing: a lead never called has no response time, and
-a zero would drag every average toward a lie. The start record is excluded
-from being its own end by identity, so the same condition on both sides
-means "the gap to the next occurrence".
-
-The connector's own response parsing is still **unverified against the live API**
-(`API_BASE`, the message-list envelope and the date field are all assumptions —
-see the header comment in `src/connectors/sendblue.ts`). `docs.sendblue.com` is
-blocked by this environment's egress policy, so it has not been possible to
-confirm them from the documentation. Confirm against a live account before
-trusting Sendblue numbers.
 
 ## `nextCursor: null` means START OVER
 
@@ -736,8 +692,7 @@ that into a note and the editor shows it above the result.
 "0 loaded" and "0 loaded so far" are different claims. A count taken mid-scan is
 a floor, not an answer, and a Test that renders the two identically is the same
 silent zero this codebase keeps having to unpick — it has now appeared in the
-migration tracker, the flow Test's skipped refresh, both layers of the Sendblue
-poll, and Calendly's page walk.
+migration tracker, the flow Test's skipped refresh, and Calendly's page walk.
 
 "Meeting type" is deliberately not called "event type": that name already means
 the canonical `booked` / `canceled` / `no_show` in this product, and the panel's
@@ -911,8 +866,8 @@ Three layers, and they are deliberately different kinds of thing:
 **At CI — the stranding contract** (`tests/stranding-contract.test.ts`). Each
 `poll()` is driven through a synthetic burst larger than `pages × pageSize` and
 every record must stay reachable across successive polls. Deterministic, free,
-and it is where the "cursor jumped past unread data" class is caught — Sendblue
-lost data that way for months while every count looked plausible.
+and it is where the "cursor jumped past unread data" class is caught — a
+connector once lost data that way for months while every count looked plausible.
 
 **Nightly — the invariant scan** (`src/lib/health/invariants.ts`, run from
 `prune-storage`). Reads only, no provider calls. Streams an active connection

@@ -45,7 +45,7 @@ function printReRegisterPlan(plan: ReRegisterPlanEntry[], heading: string) {
   });
   console.log("");
   console.log("  Only stream-scoped sources appear here — Calendly, Google Sheets, Google");
-  console.log("  Calendar and Instantly. Close, Sendblue and catch-hook connections sync at");
+  console.log("  Calendar and Instantly. Close and catch-hook connections sync at");
   console.log("  the CONNECTION level, have no stream row, and are restored by the re-arm");
   console.log("  above instead. A flow that reads only those will never be listed, and that");
   console.log("  is correct rather than a miss.");

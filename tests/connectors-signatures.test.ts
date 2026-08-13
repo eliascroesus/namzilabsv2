@@ -4,7 +4,6 @@ import { hmacSha256Hex } from "@/lib/signatures";
 import { calendlyConnector } from "@/connectors/calendly";
 import { closeConnector } from "@/connectors/close";
 import { instantlyConnector } from "@/connectors/instantly";
-import { sendblueConnector } from "@/connectors/sendblue";
 import { catchHookConnector } from "@/connectors/catch-hook";
 import { googleSheetsConnector } from "@/connectors/google-sheets";
 import { googleCalendarConnector } from "@/connectors/google-calendar";
@@ -187,23 +186,6 @@ describe("Instantly optional HMAC signature", () => {
   });
 });
 
-describe("Sendblue secret-in-header verification", () => {
-  const secret = "sb_secret";
-  it("accepts when a candidate header carries the secret", () => {
-    expect(sendblueConnector.verifySignature({ rawBody: "{}", headers: { "sb-signing-secret": secret }, secret })).toBe(
-      true,
-    );
-  });
-  it("rejects when the header value does not match", () => {
-    expect(
-      sendblueConnector.verifySignature({ rawBody: "{}", headers: { "sb-signing-secret": "wrong" }, secret }),
-    ).toBe(false);
-  });
-  it("REJECTS when no secret is configured", () => {
-    expect(sendblueConnector.verifySignature({ rawBody: "{}", headers: {}, secret: null })).toBe(false);
-  });
-});
-
 /**
  * Fail-open is only tolerable where an injected row is removable, and here it
  * is not: webhook rows land at generation 0 with a null stream_hash, and every
@@ -231,7 +213,6 @@ describe("which connectors may accept an unsigned request", () => {
       ["calendly", calendlyConnector],
       ["close", closeConnector],
       ["instantly", instantlyConnector],
-      ["sendblue", sendblueConnector],
       ["gsheets", googleSheetsConnector],
       ["gcal", googleCalendarConnector],
     ]

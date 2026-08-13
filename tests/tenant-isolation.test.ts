@@ -86,10 +86,10 @@ beforeEach(async () => {
     }
     if (marker) {
       await db.insert(events).values({
-        eventId: `close:${connectionId}:neighbour-only`,
+        eventId: `calendly:${connectionId}:neighbour-only`,
         orgId,
         connectionId,
-        source: "sendblue",
+        source: "calendly",
         eventType: "neighbour_only_type",
         subject: "s9",
         occurredAt: at,
@@ -171,7 +171,7 @@ describe("metrics read one org", () => {
   });
 
   it("builder dropdowns never list a neighbour's sources or event types", async () => {
-    expect(await distinctSources(db, ORG_A)).toEqual(["close"]); // sendblue exists only in org B
+    expect(await distinctSources(db, ORG_A)).toEqual(["close"]); // calendly exists only in org B
     expect(await distinctEventTypes(db, ORG_A, null)).not.toContain("neighbour_only_type");
   });
 

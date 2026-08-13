@@ -22,7 +22,7 @@ import { replayRawEvent } from "@/ingestion/pipeline";
 import { setEventTime, type EventTimeChoice } from "@/lib/webhooks/event-time";
 
 /**
- * Connect an API-key / token based source (Calendly, Close, Instantly, Sendblue, custom
+ * Connect an API-key / token based source (Calendly, Close, Instantly, custom
  * webhook). Auth only — there is no "what to pull" config here; that lives on each
  * flow's Get data step.
  */

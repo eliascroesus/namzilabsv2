@@ -152,11 +152,13 @@ describe("connectionImportStatus", () => {
     expect(status.note).toBeUndefined();
   });
 
-  it("a non-Close paging source mid-first-walk reads importing, not done", async () => {
-    // Sendblue stores the same JSON-while-walking cursor but no coverage
-    // fields. We can say THAT it is still on its first window even without a
-    // percentage; the old code read it as finished — backwards.
-    const id = await seedConnection(db, { orgId: ORG, source: "sendblue" });
+  it("a mid-first-walk cursor with no coverage fields reads importing, not done", async () => {
+    // The JSON-while-walking shape without the coverage fields — a cursor
+    // written before they existed, and the shape any paging source that
+    // measures nothing stores. `hw: null` still says the FIRST window is
+    // walking, so we can say THAT much even without a percentage; the old
+    // code read it as finished — backwards.
+    const id = await seedConnection(db, { orgId: ORG, source: "close" });
     await db.insert(syncState).values({ connectionId: id, cursor: JSON.stringify({ hw: null, cont: "c1" }) });
     const status = await connectionImportStatus(db, ORG, id);
     expect(status.state).toBe("importing");

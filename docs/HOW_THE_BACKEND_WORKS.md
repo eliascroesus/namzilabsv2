@@ -10,7 +10,7 @@ that it works. Wherever something can be verified, this document says how.
 ## 1. The one-sentence job
 
 **The backend's job is: pull your customers' data out of the tools they
-already use (Close, Calendly, Instantly, Sendblue, Google Sheets, Google
+already use (Close, Calendly, Instantly, Google Sheets, Google
 Calendar, or any custom source), keep one clean, always-up-to-date copy of
 it, and turn it into the numbers on their dashboard — without ever losing
 data, mixing up two customers, or getting banned by the tools it pulls from.**
@@ -320,7 +320,6 @@ by design:
 | Faster calculation engine | Off | You flip `ENGINE_COMPILE_TEST=1`, soak, then `ENGINE_COMPILE=1` |
 | Close's full speed | Capped at a safe guess | You send the `observed-limits.sql` output after a day of traffic (then it's a one-line change) |
 | Close live webhook | Built, never witnessed | You edit one lead in Close and see it arrive |
-| Sendblue's last check | Waiting | One SMS in the Sendblue account |
 | Health-detail token | Unset | You add `HEALTH_CHECK_TOKEN` + point an uptime monitor |
 | Pool database driver | Off | A later, documented rollout (checklist item 4) |
 

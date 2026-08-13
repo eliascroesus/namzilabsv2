@@ -27,7 +27,7 @@ export function firstNumber(obj: Record<string, unknown>, keys: string[]): numbe
  * This is `new Date(value)` with a null guard, and it is kept — rather than
  * unified with `normalizeDateValue` — because its callers read fields whose
  * format the provider documents: Calendly's `start_time`, Close's
- * `date_created`, Instantly's `timestamp_created`, Sendblue's four date fields,
+ * `date_created`, Instantly's `timestamp_created`,
  * Calendar's `start.dateTime`. All ISO, all the time.
  *
  * The catch-hook does NOT use it, and that is the point of this comment. Its
@@ -188,7 +188,7 @@ export function spanCovered(
 /**
  * Is this `{hw, cont, maxSeen}` cursor mid-walk?
  *
- * Close, Instantly and Sendblue all serialize the same way: JSON while a
+ * Close and Instantly serialize the same way: JSON while a
  * provider continuation is in flight, a bare high-water date string once the
  * window has drained. So `cont` is the field that separates "come back before
  * this expires" from "a mark that can sit indefinitely", and the bare form —
@@ -196,7 +196,7 @@ export function spanCovered(
  * emphatically NOT a continuation.
  *
  * That distinction is the whole reason `Connector.holdsContinuation` exists
- * rather than the runner testing `cursor != null`: for these three, and for
+ * rather than the runner testing `cursor != null`: for these two, and for
  * Calendar and Sheets, a non-null cursor is the steady state.
  *
  * Defensive on every axis. A cursor that will not parse, or parses to something

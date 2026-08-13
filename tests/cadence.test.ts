@@ -106,7 +106,7 @@ describe("cadence is enforced by the sweep filter", () => {
   });
 
   it("applyCadence stamps webhook health only when it was verified this sweep", async () => {
-    const id = await seedConnection(db, { source: "sendblue" });
+    const id = await seedConnection(db, { source: "close" });
     await applyCadence(db, id, decideCadence({ changed: false, previousNoOps: 0, now: NOW }), false, NOW);
     let [row] = await db.select().from(connections).where(eq(connections.id, id));
     expect(row.webhookHealthyAt).toBeNull();

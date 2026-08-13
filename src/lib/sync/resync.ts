@@ -42,7 +42,7 @@ export type SyncResult = {
    *
    * Connection-scoped sources have no page loop in the runner (`connector.poll`
    * is called exactly once), so this is the ONLY channel by which Close or
-   * Sendblue can say "still importing". Without it a new account watched a
+   * Close can say "still importing". Without it a new account watched a
    * number climb for a day with nothing to explain it.
    */
   incomplete?: boolean;
@@ -127,7 +127,7 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
        * both null on a fresh walk that returned zero records. So a full re-sync
        * of a Close workspace with no Event Log activity in thirty days reported a
        * complete walk of nothing and tombstoned the connection's entire history.
-       * Sendblue's serializer has the identical shape. This is `ebc1ec3` through
+       * Instantly's serializer has the identical shape. This is `ebc1ec3` through
        * a different door: `complete` separates truncation from completion, not
        * completion-with-data from completion-with-nothing, and an empty read
        * means NOTHING WAS READ rather than everything was deleted — the same rule
@@ -150,7 +150,7 @@ export async function runSync(db: DB, connectionId: string, mode: SyncMode): Pro
        * discards those fields anyway.
        *
        * So the retire runs for mirror-class sources only. No connection-scoped
-       * source is one today (Close and Sendblue are both incremental), which
+       * source is one today (Close and Instantly are both incremental), which
        * makes this branch unreachable — and that is the honest outcome rather
        * than a regression: the only conditions under which it fired were the two
        * above. A connection-scoped mirror added later gets the behaviour it can
@@ -552,7 +552,7 @@ async function upsertCursor(db: DB, connectionId: string, cursor: string | null)
  *
  * Not every source is stream-scoped. Sheets picks a tab, Calendar a calendar,
  * Instantly a campaign; each has a `sourceConfig`, which is what `primeStream`
- * keys on. Sendblue and Close have none — the account IS the resource, so their
+ * keys on. Close has none — the account IS the resource, so its
  * Get data step carries an empty config and `hasStreamConfig` is false.
  *
  * That gap made Test silently skip the refresh for exactly those sources: it

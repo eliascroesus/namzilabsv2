@@ -74,10 +74,8 @@ GitHub → repo → **Settings → Secrets and variables → Actions**. You shou
 | `DATABASE_MIGRATION_URL` | B3, D1/D2, F2 | the direct (non-pooled) Neon URL |
 | `CLOSE_API_KEY` | A2 | Close → Settings → Developer → API Keys |
 | `INSTANTLY_API_KEY` | A2 | Instantly → Settings → Integrations → API (**v2** key) |
-| `SENDBLUE_API_KEY_ID` | A2 | Sendblue dashboard → API settings |
-| `SENDBLUE_API_SECRET` | A2 | same place |
 
-**PASS:** all five are listed. **FAIL:** add whichever are missing. A missing
+**PASS:** all three are listed. **FAIL:** add whichever are missing. A missing
 provider key is not a blocker — A2 skips that provider with a clear message —
 but `DATABASE_MIGRATION_URL` is required and everything from B3 on depends on it.
 
@@ -91,7 +89,7 @@ but `DATABASE_MIGRATION_URL` is required and everything from B3 on depends on it
 **Do:** Actions → **Verify providers (read-only)** → *Run workflow* → providers
 = **all** → Run.
 
-Read-only: GETs against Close, Instantly and Sendblue. No database, no writes,
+Read-only: GETs against Close and Instantly. No database, no writes,
 no deploy. Safe to re-run.
 
 **PASS:** the run summary shows a table with ✅ PASS for every provider whose
@@ -102,10 +100,6 @@ secret is set. Anything skipped says exactly which secret was missing.
   needs updating before that connector ships.
 - Instantly 401 → the stored key is invalid or v1-era (v1 stopped working
   Jan 19 2026). Create a v2 key, update the secret, re-run.
-- Sendblue S1 → the host is wrong; the script says which host *did* answer, and
-  `API_BASE` in `src/connectors/sendblue.ts` gets that value.
-- Sendblue 401/403 → the auth header names differ from
-  `sb-api-key-id`/`sb-api-secret-key`.
 
 A provider failing here does **not** block launch — it blocks *that connector*.
 The rest of the sequence continues unchanged.
@@ -312,9 +306,9 @@ double-deletes. Rows are soft-deleted only, so nothing is lost.
 1. Open **Integrations**. No connection should show a red error strip.
 2. An Instantly connection showing *"reconnect with a v2 key"* means a v1-era
    key is stored — reconnect it with the key from A2.
-3. For Sendblue: wait for one sweep (≤10 min), then open its connection page —
-   no `Webhook subscription check failed`, and the Sendblue dashboard should now
-   list your webhook URL (the sweep registers it automatically if missing).
+3. For Calendly and Close: wait for one sweep (≤10 min), then open the
+   connection page — no `Webhook subscription check failed`. Both verify their
+   provider-side subscription every sweep and re-register it when missing.
 4. Open a dashboard. Tiles should show a **"Data as of …"** timestamp.
 5. **Instantly only —** open any flow with an Instantly *Get data* step and
    pick a **Campaign** and **What to pull** (daily performance is the usual

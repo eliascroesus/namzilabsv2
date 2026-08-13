@@ -40,7 +40,6 @@ for backfill and preview). Adding one is additive — the engine never changes.
 | **Calendly** | ✔ invitee.*/no-show | HMAC `t=,v1=` over `t.body` | ✔ scheduled events | ✔ (subscription API) |
 | **Close** | ✔ event log | HMAC `close-sig-hash` over `ts+body` | ✔ event log | ✔ (webhook API) |
 | **Instantly** | ✔ email/reply events | optional HMAC `x-instantly-signature` | — | manual URL + secret |
-| **Sendblue** | ✔ status/inbound | shared secret in header | — | manual URL + secret |
 | **Google Sheets** | (Apps Script push, optional) | HMAC | ✔ **poll-primary**, row cursor | n/a (OAuth) |
 | **Google Calendar** | — | — | ✔ incremental `syncToken` | n/a (OAuth) |
 | **Custom Webhook** | ✔ any app | optional HMAC | — | manual URL + secret |

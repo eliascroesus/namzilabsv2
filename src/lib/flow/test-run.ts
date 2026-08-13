@@ -144,7 +144,7 @@ async function primeStreamsForTest(
     const sourceConfig = (cfg.sourceConfig ?? {}) as Record<string, unknown>;
     if (!connectionId) continue;
     const source = typeof cfg.source === "string" ? cfg.source : sourceOf.get(connectionId);
-    // A source with no per-flow resource (Sendblue, Close) has an empty
+    // A source with no per-flow resource (Close) has an empty
     // sourceConfig, so primeStream has nothing to key on. Refresh the whole
     // connection instead — skipping it silently is what made Test report "0
     // loaded" for sources it had never actually asked.

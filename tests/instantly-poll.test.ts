@@ -1,13 +1,12 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { instantlyConnector, looksLikeInstantlyV1Key } from "@/connectors/instantly";
-import { sendblueConnector } from "@/connectors/sendblue";
 import { catalogEntry, syncGuarantee } from "@/connectors/catalog";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 
 /**
- * D.4 poll backstops for the formerly webhook-only sources, plus D.6
- * (Sendblue webhook subscription verify/re-register). Provider contracts are
- * encoded here as the assumed behavior; confirm once against the live APIs.
+ * D.4 poll backstop for Instantly, a formerly webhook-only source. Provider
+ * contracts are encoded here as the assumed behavior; confirm once against
+ * the live API.
  */
 
 function jsonResponse(data: unknown, status = 200) {
@@ -279,172 +278,6 @@ describe("Instantly is campaign-scoped and analytics-first", () => {
   });
 });
 
-describe("Sendblue messages poll + webhook health", () => {
-  const msg = (handle: string, mins: number, over: Record<string, unknown> = {}) => ({
-    message_handle: handle,
-    status: "DELIVERED",
-    is_outbound: true,
-    to_number: "+15551234567",
-    date_sent: T(mins),
-    ...over,
-  });
-
-  it("is declared as a poll source (incremental class — the warning strip goes away)", () => {
-    expect(catalogEntry("sendblue")!.poll).toBe(true);
-    expect(syncGuarantee("sendblue")).toBe("incremental");
-  });
-
-  it("polls message history with sb auth headers, dedups on message_handle, honors the floor", async () => {
-    const seenHeaders: Array<Record<string, string>> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-        const url = new URL(String(input));
-        seenHeaders.push((init?.headers ?? {}) as Record<string, string>);
-        expect(url.pathname).toBe("/api/v2/messages");
-        const offset = Number(url.searchParams.get("offset") ?? "0");
-        // One page of history: two fresh, one ancient (below the floor).
-        return jsonResponse(offset === 0 ? { messages: [msg("h2", 30), msg("h1", 20, { status: "SENT" }), msg("h0", -600)] } : { messages: [] });
-      }),
-    );
-    const res = await sendblueConnector.poll!({
-      connectionId: "c1",
-      cursor: T(0),
-      credentials: { apiKey: "kid", apiSecret: "ksec" },
-    });
-    expect(seenHeaders[0]["sb-api-key-id"]).toBe("kid");
-    expect(seenHeaders[0]["sb-api-secret-key"]).toBe("ksec");
-    // Keyed on the handle alone — the status is a property, so a message that
-    // moves QUEUED → SENT → DELIVERED stays one row.
-    expect(res.records.map((r) => r.eventId)).toEqual(["sendblue:c1:h2", "sendblue:c1:h1"]);
-    expect(res.nextCursor).toBe(T(30)); // newest seen
-  });
-
-  it("poll and webhook produce the SAME event id for the same message state (reconciliation dedups)", async () => {
-    const payload = msg("h9", 5);
-    const [fromWebhook] = sendblueConnector.normalize!(payload, { connectionId: "c1" });
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ messages: [payload] })));
-    const { records } = await sendblueConnector.poll!({ connectionId: "c1", cursor: null, credentials: { apiKey: "a", apiSecret: "b" } });
-    expect(records[0].eventId).toBe(fromWebhook.eventId);
-  });
-
-  /**
-   * The DOCUMENTED webhook envelope, verbatim (docs.sendblue.com): `webhooks`
-   * is an OBJECT keyed by event type — arrays of URL strings or {url} objects
-   * — with `globalSecret`, a bare string, mixed in among the event types. The
-   * first live S5 verify run proved it: the old flat-array fixture kept this
-   * suite green while production threw `.some is not a function` on every
-   * sweep and the self-heal never ran once.
-   */
-  const envelope = (receive: string[], outbound: Array<string | { url: string }> = []) => ({
-    message: "Webhooks retrieved successfully",
-    status: "OK",
-    webhooks: {
-      call_log: [],
-      contact_created: [],
-      globalSecret: "whsec_test123",
-      line_assigned: [],
-      line_blocked: [],
-      outbound,
-      receive,
-      typing_indicator: [],
-    },
-  });
-
-  it("verifyWebhookSubscription: present in the event-type map → healthy; missing → re-registers with the documented body", async () => {
-    const posts: Array<{ url: string; body: unknown }> = [];
-    let receive: string[] = ["https://app.example/api/webhooks/OTHER"];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-        const url = String(input);
-        expect(url).toContain("/api/account/webhooks");
-        if ((init?.method ?? "GET").toUpperCase() === "POST") {
-          const body = JSON.parse(String(init?.body)) as { webhooks: string[] };
-          posts.push({ url, body });
-          receive = [...receive, ...body.webhooks];
-          return jsonResponse({ ok: true });
-        }
-        return jsonResponse(envelope(receive));
-      }),
-    );
-    const args = { connectionId: "c1", webhookUrl: "https://app.example/api/webhooks/c1", credentials: { apiKey: "a", apiSecret: "b" } };
-
-    const first = await sendblueConnector.verifyWebhookSubscription!(args);
-    expect(first).toEqual({ healthy: true, reregistered: true });
-    expect(posts).toHaveLength(1);
-    // The documented request parameter — the old body `{url}` was a guess.
-    expect(posts[0].body).toEqual({ webhooks: ["https://app.example/api/webhooks/c1"] });
-
-    const second = await sendblueConnector.verifyWebhookSubscription!(args);
-    expect(second).toEqual({ healthy: true, reregistered: false });
-    expect(posts).toHaveLength(1); // no duplicate registration
-  });
-
-  it("a URL registered under ANOTHER event type still counts (POST appends — re-registering would compound forever)", async () => {
-    const posts: unknown[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
-        if ((init?.method ?? "GET").toUpperCase() === "POST") {
-          posts.push(init?.body);
-          return jsonResponse({ ok: true });
-        }
-        // Present only under `outbound`, and as an OBJECT entry — both the
-        // any-event-type rule and the {url} entry shape in one fixture.
-        return jsonResponse(envelope([], [{ url: "https://app.example/api/webhooks/c1" }]));
-      }),
-    );
-    const res = await sendblueConnector.verifyWebhookSubscription!({
-      connectionId: "c1",
-      webhookUrl: "https://app.example/api/webhooks/c1",
-      credentials: { apiKey: "a", apiSecret: "b" },
-    });
-    expect(res).toEqual({ healthy: true, reregistered: false });
-    expect(posts).toHaveLength(0);
-  });
-
-  it("the legacy flat-array shape is still tolerated", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => jsonResponse({ webhooks: [{ url: "https://app.example/api/webhooks/c1" }] })),
-    );
-    const res = await sendblueConnector.verifyWebhookSubscription!({
-      connectionId: "c1",
-      webhookUrl: "https://app.example/api/webhooks/c1",
-      credentials: { apiKey: "a", apiSecret: "b" },
-    });
-    expect(res).toEqual({ healthy: true, reregistered: false });
-  });
-
-  it("verifyWebhookSubscription reports failure without throwing (sweep never blocked)", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ error: "nope" }, 500)));
-    const res = await sendblueConnector.verifyWebhookSubscription!({
-      connectionId: "c1",
-      webhookUrl: "https://app.example/api/webhooks/c1",
-      credentials: { apiKey: "a", apiSecret: "b" },
-    });
-    expect(res.healthy).toBe(false);
-    expect(res.reregistered).toBe(false);
-    expect(res.detail).toContain("500");
-  });
-});
-
-/**
- * A WALK THAT GAVE UP MUST NOT MOVE THE MARK IT DID NOT REACH.
- *
- * `serializeWindowCursor` falls through to `maxSeen ?? hw` the moment `cont` is
- * null, which is right for a walk that DRAINED and wrong for one that stopped.
- * The 400 handler cleared `cont` to unwedge the stream and took the promotion
- * with it: `/emails` is newest-first, so a partial walk holds the newest pages
- * and the unread remainder is older than everything in it. Promoting `maxSeen`
- * puts that remainder below the next window's floor, where nothing requests it
- * again — the stream unwedges by silently discarding what it had not reached.
- *
- * Close had the same defect and its serializer guarded only the first sync
- * (`!hw && floor`), so a steady-state connection was unprotected. Both now
- * decide at the call site, where "drained" and "gave up" are distinguishable.
- */
 describe("Instantly: a dead continuation restarts the window without advancing it", () => {
   const email = (id: string, iso: string) => ({
     id,

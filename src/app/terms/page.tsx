@@ -24,7 +24,7 @@ export default function TermsPage() {
           <h2 className="text-lg font-semibold text-neutral-900">2. The Service</h2>
           <p className="mt-2">
             Namzilabs connects to third-party tools you authorize (such as Calendly, Close,
-            Instantly, Sendblue and Google Workspace) and consolidates the data from those tools
+            Instantly and Google Workspace) and consolidates the data from those tools
             into a single dashboard and custom metrics for your organization.
           </p>
         </section>

@@ -567,28 +567,6 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "In Instantly, add a webhook pointing to the URL below. Optionally set an HMAC secret and paste it here to verify signatures.",
   },
   {
-    source: "sendblue",
-    name: "Sendblue",
-    description: "iMessage/SMS sent, delivered and received.",
-    connect: "apiKey",
-    instant: true,
-    // Poll backstop over the message history list; the sweep also verifies the
-    // provider-side webhook subscription and re-registers it when missing.
-    poll: true,
-    // NO DECLARED rateLimits: Sendblue publishes none, and inventing a ceiling
-    // for a provider that never stated one is the mistake the Close entry above
-    // documents. The 60/min DEFAULT_RPM paces the poll; anything the provider
-    // ever reports lands in `usage_ledger.observed_limit` and becomes the
-    // declaration when it exists.
-    autoWebhook: false,
-    credentialFields: [
-      { key: "apiKey", label: "API Key ID", placeholder: "..." },
-      { key: "apiSecret", label: "API Secret", placeholder: "..." },
-    ],
-    webhookSetup:
-      "In Sendblue, configure an outbound (status) webhook pointing to the URL below, with the signing secret shown.",
-  },
-  {
     source: "gsheets",
     name: "Google Sheets",
     description: "Rows from any spreadsheet, mirrored faithfully.",

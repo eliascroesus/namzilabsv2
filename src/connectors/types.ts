@@ -256,7 +256,7 @@ export type PollResult = {
    * The runner infers this for stream-scoped sources from its own page loop
    * (`syncStream`), but CONNECTION-scoped sources have no such loop — the
    * runner calls `poll` exactly once and the connector's internal walk is
-   * invisible to it. Close and Sendblue both knew they were mid-import and had
+   * invisible to it. Close knew it was mid-import and had
    * no way to say so, which is why a new account watched a number climb for a
    * day with nothing to explain it.
    *

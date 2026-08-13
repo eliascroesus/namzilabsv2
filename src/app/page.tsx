@@ -31,7 +31,7 @@ export default async function Home() {
           All your tools&rsquo; data, in one reliable place.
         </h1>
         <p className="mt-6 max-w-xl text-lg text-neutral-600">
-          Namzilabs unifies Calendly, Close, Instantly, Sendblue, Google Sheets and more into one
+          Namzilabs unifies Calendly, Close, Instantly, Google Sheets and more into one
           live dashboard &mdash; so you can see booked leads, calls, replies and SMS across every
           platform without logging into ten of them.
         </p>

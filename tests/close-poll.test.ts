@@ -770,11 +770,13 @@ describe("Close if the Event Log ran oldest-first", () => {
  * nowhere, and Close had no `verifyWebhookSubscription`.
  *
  * The half that matters most is what this must NOT do. `POST /webhook/` issues a
- * new `signature_key`, and `VerifyWebhookResult` has no field to carry a secret
- * back — so a re-creating implementation would leave the connection holding the
- * old key against a new subscription, failing every delivery again, silently,
- * for the same reason as before. Sendblue may re-create because its secret is
- * one we mint. Close may not.
+ * new `signature_key`, so a re-creating implementation would leave the
+ * connection holding the old key against a new subscription, failing every
+ * delivery again, silently, for the same reason as before. Calendly may
+ * re-create: it has no re-activate verb, so that is its only self-heal, and the
+ * new key rides back on `VerifyWebhookResult.signingSecret` for reconcile to
+ * persist. Close stays re-activate-only by choice — the verb exists here, and
+ * re-activating in place keeps the key this connection already holds.
  */
 describe("Close webhook-subscription health", () => {
   const webhookUrl = "https://app.example/api/webhooks/c1";
@@ -874,8 +876,8 @@ describe("Close webhook-subscription health", () => {
     const put = reqs.find((r) => r.method === "PUT")!;
     expect(put.url).toContain("/webhook/whsub_1/");
     expect(put.body).toEqual({ status: "active" });
-    // Never POST: a new subscription means a new signature_key, and this call
-    // has no way to store one.
+    // Never POST: a new subscription means a new signature_key, and the PUT is
+    // what keeps the key this connection already holds.
     expect(reqs.some((r) => r.method === "POST")).toBe(false);
 
     // Once active, the next sweep is a read and nothing more.

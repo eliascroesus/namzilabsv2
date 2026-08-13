@@ -991,7 +991,9 @@ async function main(): Promise<void> {
    * that finished just after a tick waits nearly two full intervals. The hour-long
    * webhook backstop this section used to cite is unreachable for Calendly: it
    * needs `webhook_healthy_at`, which is written only for a connector implementing
-   * `verifyWebhookSubscription`, and Sendblue is the only one that does.
+   * `verifyWebhookSubscription`. Calendly and Close both implement it today, so
+   * this note's "unreachable" conclusion is stale — re-derive it before relying
+   * on the figure. (It named Sendblue, a connector since removed.)
    *
    * If a continuation does not survive that gap, the outward scan restarts at
    * page 1 every sweep and never advances past one page per side. Same outcome as
@@ -1163,8 +1165,8 @@ async function main(): Promise<void> {
      *
      * The 60-minute figure this note used to quote is not reachable at all for
      * Calendly: the widened backstop needs `webhook_healthy_at`, which is only
-     * written for a connector implementing `verifyWebhookSubscription`, and
-     * Sendblue is the only one that does.
+     * written for a connector implementing `verifyWebhookSubscription` — which
+     * Calendly itself now does, so re-derive this before quoting the figure.
      */
     if (nextUrl) {
       note(

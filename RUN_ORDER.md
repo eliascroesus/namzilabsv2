@@ -139,7 +139,7 @@ looks like the one you configured.
 
 - **A flow is missing from the list entirely.** First check what it reads. Only
   four sources appear here: **Calendly, Google Sheets, Google Calendar,
-  Instantly**. **Close, Sendblue and catch-hook webhook connections never
+  Instantly**. **Close and catch-hook webhook connections never
   appear**, because they sync at the account level and have no per-flow
   resource. A flow that only reads those is correctly absent — that is not a
   miss. If the missing flow does read one of the four, open it in the editor and
@@ -263,7 +263,6 @@ bounded now:
 
 - **Close** goes back 30 days (this is new — it previously walked the entire
   workspace history, which is what made it run for days).
-- **Sendblue** goes back 30 days.
 - **Calendly** covers 30 days back and 90 days forward.
 - **Google Sheets** reads the whole tab, so it comes back complete.
 
@@ -295,10 +294,6 @@ open the flow and publish it again to force one.
 - **No redeploy.** The reset touches only the database. The one in-memory cache
   that matters holds provider identity for five minutes and expires on its own;
   the editor's label cache clears when you reload the page.
-- **No `reconcile-sendblue-ids` run.** That script exists to clean up Sendblue
-  rows stored under the old ID scheme, which would otherwise show up as
-  duplicates. A `level: data` reset deletes every event row, including those, so
-  after this procedure there is nothing left for it to clean. Skip it.
 - **No touching organizations, users or memberships.** No level of this reset
   deletes an account. You will still be logged in.
 

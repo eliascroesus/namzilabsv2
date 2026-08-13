@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
 import { connections, rawEvents } from "@/db/schema";
@@ -20,10 +20,10 @@ import type { DB } from "@/db/types";
  * And what gets written that way is PERMANENT as far as anything automatic goes:
  * webhook rows land at generation 0 with a null `stream_hash`, and every SWEEP's
  * soft-delete is generation-guarded or stream-hash-scoped, because the
- * append-only guarantee depends on it. No sweep cleans up an injected row. (Two
- * operator-invoked tools do reach generation 0 — disconnect, which hides a whole
- * connection, and the Sendblue rekey script — so "permanent" means "no automatic
- * repair", not "literally unreachable".)
+ * append-only guarantee depends on it. No sweep cleans up an injected row. (One
+ * operator-invoked tool does reach generation 0 — disconnect, which retires a
+ * whole connection's rows whatever their generation — so "permanent" means "no
+ * automatic repair", not "literally unreachable".)
  */
 
 const KEY = randomBytes(32).toString("base64");
@@ -76,17 +76,32 @@ afterEach(async () => {
   await close();
 });
 
+/**
+ * Close's scheme: `close-sig-hash = HMAC-SHA256(fromhex(secret), timestamp + rawBody)`.
+ * The secret is hex (the connector refuses anything else), and the timestamp must
+ * be CURRENT — it is signed and doubles as replay protection.
+ */
+const CLOSE_SECRET = "a1b2c3d4e5f60718293a4b5c6d7e8f90";
+const signClose = (secret: string, body: unknown) => {
+  const t = String(Math.floor(Date.now() / 1000));
+  const hash = createHmac("sha256", Buffer.from(secret, "hex"))
+    .update(`${t}${JSON.stringify(body)}`, "utf8")
+    .digest("hex");
+  return { "close-sig-timestamp": t, "close-sig-hash": hash };
+};
+const CLOSE_EVENT = { event: { id: "ev_1", object_type: "activity.call", action: "created" } };
+
 describe("inbound webhook authentication", () => {
   it("rejects an unsigned POST to a connector that requires a signature", async () => {
-    const id = await seed({ source: "sendblue", secret: "sb_secret" });
-    const res = await post(id, { message_handle: "h1" });
+    const id = await seed({ source: "close", secret: CLOSE_SECRET });
+    const res = await post(id, CLOSE_EVENT);
     expect(res.status).toBe(401);
     expect(await db.select().from(rawEvents)).toHaveLength(0);
   });
 
   it("accepts a correctly signed POST", async () => {
-    const id = await seed({ source: "sendblue", secret: "sb_secret" });
-    const res = await post(id, { message_handle: "h1" }, { "sb-signing-secret": "sb_secret" });
+    const id = await seed({ source: "close", secret: CLOSE_SECRET });
+    const res = await post(id, CLOSE_EVENT, signClose(CLOSE_SECRET, CLOSE_EVENT));
     expect(res.status).toBe(202);
     expect(await db.select().from(rawEvents)).toHaveLength(1);
   });
@@ -98,8 +113,8 @@ describe("inbound webhook authentication", () => {
    * never be removed.
    */
   it("rejects when a secret IS configured but cannot be decrypted", async () => {
-    const id = await seed({ source: "sendblue", secretCiphertext: "not-valid-ciphertext" });
-    const res = await post(id, { message_handle: "h1" }, { "sb-signing-secret": "anything" });
+    const id = await seed({ source: "close", secretCiphertext: "not-valid-ciphertext" });
+    const res = await post(id, CLOSE_EVENT, signClose(CLOSE_SECRET, CLOSE_EVENT));
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "signing secret unreadable" });
     expect(await db.select().from(rawEvents)).toHaveLength(0);
@@ -127,18 +142,18 @@ describe("inbound webhook authentication", () => {
     // payload had been checked — including the ones nothing checked.
     expect(unverified.signatureValid).toBe(false);
 
-    const signed = await seed({ source: "sendblue", secret: "sb_secret" });
-    await post(signed, { message_handle: "h1" }, { "sb-signing-secret": "sb_secret" });
+    const signed = await seed({ source: "close", secret: CLOSE_SECRET });
+    await post(signed, CLOSE_EVENT, signClose(CLOSE_SECRET, CLOSE_EVENT));
     const [verified] = await db.select().from(rawEvents).where(eq(rawEvents.connectionId, signed));
     expect(verified.signatureValid).toBe(true);
   });
 
   it("does not reset the sweep backoff for a request it rejected", async () => {
-    const id = await seed({ source: "sendblue", secret: "sb_secret" });
+    const id = await seed({ source: "close", secret: CLOSE_SECRET });
     const far = new Date(Date.now() + 6 * 3_600_000);
     await db.update(connections).set({ nextSweepAt: far, consecutiveNoOpSweeps: 40 }).where(eq(connections.id, id));
 
-    await post(id, { message_handle: "h1" }); // unsigned → 401
+    await post(id, CLOSE_EVENT); // unsigned → 401
     const [after] = await db.select().from(connections).where(eq(connections.id, id));
     // An open endpoint plus an unconditional promote would be a free "poll this
     // connection now" primitive for anyone who knows the URL.

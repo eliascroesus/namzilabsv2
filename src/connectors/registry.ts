@@ -3,7 +3,6 @@ import { catchHookConnector } from "./catch-hook";
 import { calendlyConnector } from "./calendly";
 import { closeConnector } from "./close";
 import { instantlyConnector } from "./instantly";
-import { sendblueConnector } from "./sendblue";
 import { googleSheetsConnector } from "./google-sheets";
 import { googleCalendarConnector } from "./google-calendar";
 
@@ -23,7 +22,6 @@ for (const connector of [
   calendlyConnector,
   closeConnector,
   instantlyConnector,
-  sendblueConnector,
   googleSheetsConnector,
   googleCalendarConnector,
 ]) {

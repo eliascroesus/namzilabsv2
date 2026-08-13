@@ -9,7 +9,7 @@
  * nothing else can ever retire these — they linger and are counted by reads
  * that aren't stream-filtered.
  *
- * Rows on connection-scoped connections (Close, Instantly, Sendblue, custom
+ * Rows on connection-scoped connections (Close, Instantly, custom
  * webhook) are NEVER touched: there, a null stream_hash is correct for every
  * row. Generation-0 (webhook) rows are never touched anywhere.
  *

@@ -2,9 +2,8 @@
 -- What the PROVIDERS say their rate limits are. READ ONLY — no writes, no DDL.
 -- Paste into the Neon SQL Editor.
 --
--- Why this exists: four of the seven connectors (close, sendblue, gsheets,
--- gcal) declare no limit at all and are governed by a DEFAULT_RPM of 60 that no
--- provider ever published. Close reports its real limit on EVERY response, in
+-- Why this exists: of the polling connectors, Close alone declares no limit and
+-- is governed by a DEFAULT_RPM of 60 that no provider ever published. Close reports its real limit on EVERY response, in
 -- an RFC `ratelimit` header; that number used to be parsed and dropped on the
 -- floor. It is now kept in `usage_ledger.observed_limit`.
 --

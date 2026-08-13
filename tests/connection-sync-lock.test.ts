@@ -17,7 +17,7 @@ import type { DB } from "@/db/types";
 /**
  * C.1 at connection scope.
  *
- * A connection-scoped source (Sendblue, Close) has no streams, so the per-stream
+ * A connection-scoped source (Close) has no streams, so the per-stream
  * lock cannot cover it — and until now nothing else did either. Inngest's keys
  * look like they should: `sync-connection` carries
  * `concurrency: {key: connectionId, limit: 1}` and `reconcile-one-connection`
@@ -65,12 +65,14 @@ let pollGate: Promise<void> | null;
 const BASE = Date.now();
 const T = (mins: number) => new Date(BASE + mins * 60_000).toISOString();
 
-const message = (handle: string, mins: number) => ({
-  message_handle: handle,
-  status: "DELIVERED",
-  is_outbound: true,
-  to_number: "+15551234567",
-  date_sent: T(mins),
+/** One Close Event Log entry — `id` is what the stored `event_id` is built from. */
+const logEntry = (id: string, mins: number) => ({
+  id,
+  object_type: "activity.sms",
+  action: "created",
+  date_created: T(mins),
+  date_updated: T(mins),
+  data: { direction: "outbound", status: "sent", contact_name: "Ada Lovelace" },
 });
 
 beforeAll(() => {
@@ -86,13 +88,14 @@ beforeEach(async () => {
     "fetch",
     vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input));
-      // The webhook-health check the sweep runs first — not a message poll.
-      if (url.pathname.includes("/account/webhooks")) {
-        return json({ webhooks: [] });
+      // The webhook-subscription health check the sweep runs first — not an
+      // event poll, so it never counts towards `polls`.
+      if (url.pathname.includes("/webhook")) {
+        return json({ data: [] });
       }
-      polls.push({ cursor: url.searchParams.get("offset"), at: Date.now() });
+      polls.push({ cursor: url.searchParams.get("_cursor"), at: Date.now() });
       if (pollGate) await pollGate;
-      return json({ messages: [message("h1", -5), message("h2", -3)] });
+      return json({ data: [logEntry("e1", -5), logEntry("e2", -3)], cursor_next: null });
     }),
   );
 
@@ -100,11 +103,11 @@ beforeEach(async () => {
     .insert(connections)
     .values({
       orgId: ORG,
-      source: "sendblue",
-      name: "Sendblue",
+      source: "close",
+      name: "Close CRM",
       status: "active",
-      authType: "secret",
-      credentialsEncrypted: encrypt(JSON.stringify({ apiKey: "kid", apiSecret: "ksec" }), Buffer.from(KEY, "base64")),
+      authType: "apiKey",
+      credentialsEncrypted: encrypt(JSON.stringify({ apiKey: "api_k" }), Buffer.from(KEY, "base64")),
     })
     .returning({ id: connections.id });
   connId = row.id;

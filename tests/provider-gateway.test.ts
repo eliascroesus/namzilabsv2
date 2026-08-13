@@ -925,9 +925,9 @@ describe("observed rate limits", () => {
 });
 
 /**
- * 5b's evidence. The catalog governs close, sendblue, gsheets and gcal with a
- * DEFAULT_RPM of 60 that no provider ever published. Close states its real
- * limit on every response, and the runner parsed that number and dropped it.
+ * 5b's evidence. Close declares no rateLimits of its own, so a DEFAULT_RPM of
+ * 60 that no provider ever published governs it. Close states its real limit on
+ * every response, and the runner parsed that number and dropped it.
  */
 describe("F.1 (observed) — keep what the provider said its ceiling was", () => {
   let db: DB;

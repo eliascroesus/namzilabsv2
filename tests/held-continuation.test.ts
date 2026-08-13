@@ -8,7 +8,6 @@ import { BASE_INTERVAL_MS, decideCadence } from "@/lib/sync/cadence";
 import { calendlyConnector } from "@/connectors/calendly";
 import { closeConnector } from "@/connectors/close";
 import { instantlyConnector } from "@/connectors/instantly";
-import { sendblueConnector } from "@/connectors/sendblue";
 import { googleCalendarConnector } from "@/connectors/google-calendar";
 import { googleSheetsConnector } from "@/connectors/google-sheets";
 import type { Connector, PollResult } from "@/connectors/types";
@@ -89,7 +88,7 @@ describe("the runner reads the connector's own `incomplete`", () => {
    * preserveOccurredAt/retireOutsideWindow and stopped. Every stream-scoped
    * source's `incomplete` was dropped — Calendly, Calendar, Sheets, Instantly —
    * while the connection-scoped path in reconcile.ts read it correctly, which is
-   * why Close and Sendblue worked and this went unnoticed.
+   * why Close worked and this went unnoticed.
    *
    * A null cursor is deliberate: the walk then breaks before the page-budget
    * rule can set `incomplete` itself, so the only way the flag can be true is if
@@ -164,8 +163,8 @@ describe("which connectors hold a perishable continuation", () => {
     expect(calendlyConnector.holdsContinuation).toBeUndefined();
   });
 
-  it("close / instantly / sendblue: the `cont` field, not the bare high-water mark", () => {
-    for (const c of [closeConnector, instantlyConnector, sendblueConnector]) {
+  it("close / instantly: the `cont` field, not the bare high-water mark", () => {
+    for (const c of [closeConnector, instantlyConnector]) {
       expect(c.holdsContinuation!(null), c.source).toBe(false);
       // The settled form: a plain date string. Non-null, and NOT a continuation.
       expect(c.holdsContinuation!("2026-08-03T10:00:00Z"), c.source).toBe(false);
@@ -174,10 +173,6 @@ describe("which connectors hold a perishable continuation", () => {
       // Garbage must never pin a connection forever.
       expect(c.holdsContinuation!("{not json"), c.source).toBe(false);
     }
-  });
-
-  it("sendblue's continuation is an object, and still reads as held", () => {
-    expect(sendblueConnector.holdsContinuation!('{"hw":null,"cont":{"offset":100,"lowWater":null},"maxSeen":null}')).toBe(true);
   });
 
   /**
@@ -222,11 +217,12 @@ describe("cadence never widens past a held continuation", () => {
   });
 
   /**
-   * The 60-minute webhook backstop must not be able to outrank this. It is
-   * unreachable for Calendly today (it needs `webhook_healthy_at`, written only
-   * for a connector implementing `verifyWebhookSubscription` — Sendblue alone),
-   * but a connector gaining one later must not silently start aging its own
-   * continuation past its life.
+   * The 60-minute webhook backstop must not be able to outrank this.
+   * `webhook_healthy_at` is written only for a connector implementing
+   * `verifyWebhookSubscription`, and Close has both that and a
+   * `holdsContinuation` — so a Close connection part-way through a window is
+   * exactly the case where a healthy subscription would otherwise widen the gap
+   * and age the connection's own continuation past its life.
    */
   it("outranks the webhook backstop", () => {
     const d = decideCadence({
