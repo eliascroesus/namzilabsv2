@@ -15,25 +15,41 @@ import {
 } from "@/components/flow/controls/field-utils";
 import type { DataGroup, FieldRef } from "@/components/flow/controls/types";
 
-describe("operatorsForType — operators match the field type", () => {
-  it("offers numeric comparisons for number fields, not text ones", () => {
+describe("operatorsForType — a type ADDS comparisons, it never removes text ones", () => {
+  /**
+   * Reported from a Paths branch: its Condition list had no "Contains", and
+   * a branch's conditions are a Filter rendered by the same editor from the
+   * same fields — so one screen looked broken. The cause was the field: a
+   * spreadsheet column holding "1" and "2" infers numeric, and the old table
+   * gave numbers a disjoint menu with the text operators removed. Inference
+   * is a guess from a sample, and that column later held "Jay".
+   */
+  it("a number keeps every text operator AND gains the numeric comparisons", () => {
     const ops = operatorsForType("number");
     expect(ops).toContain("gt");
     expect(ops).toContain("lte");
-    expect(ops).not.toContain("contains");
+    // Sabotage: restore the disjoint NUMERIC list and this is the exact
+    // dropdown the customer screenshotted — no Contains anywhere.
+    expect(ops).toContain("contains");
+    expect(ops).toContain("starts_with");
+    // `evalRule` stringifies before comparing, so this is not a lie: contains
+    // on a number is well defined.
+    expect(ops).toContain("not_contains");
   });
   it("offers text operators for text/email fields", () => {
     expect(operatorsForType("text")).toContain("contains");
     expect(operatorsForType("email")).toContain("starts_with");
   });
-  it("offers date operators for date fields, not text ones", () => {
+  it("a date keeps them too, and leads with its own comparisons", () => {
     const d = operatorsForType("date");
     expect(d).toContain("before");
     expect(d).toContain("between");
-    expect(d).not.toContain("contains");
+    expect(d).toContain("contains"); // "2026-08" against an ISO timestamp
+    // The type-specific ones come first — they are why the type matters.
+    expect(d.indexOf("before")).toBeLessThan(d.indexOf("contains"));
   });
-  it("limits booleans to equality/emptiness", () => {
-    expect(operatorsForType("boolean")).toEqual(["equals", "not_equals", "is_empty", "is_not_empty"]);
+  it("a boolean is the plain menu — no comparisons of its own", () => {
+    expect(operatorsForType("boolean")).toEqual(operatorsForType("text"));
   });
   it("defaults to text operators for unknown types, with human labels", () => {
     expect(operatorsForType(undefined)).toContain("equals");
