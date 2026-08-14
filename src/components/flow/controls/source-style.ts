@@ -9,6 +9,7 @@ const SOURCE_STYLE: Record<string, SourceStyle> = {
   calendly: { label: "Calendly", color: "#006BFF", short: "Ca" },
   close: { label: "Close", color: "#1E88E5", short: "Cl" },
   instantly: { label: "Instantly", color: "#7C3AED", short: "In" },
+  whop: { label: "Whop", color: "#FF6243", short: "Wh" },
   gsheets: { label: "Google Sheets", color: "#0F9D58", short: "Sh" },
   gcal: { label: "Google Calendar", color: "#4285F4", short: "GC" },
   webhook: { label: "Webhook", color: "#64748B", short: "Wh" },

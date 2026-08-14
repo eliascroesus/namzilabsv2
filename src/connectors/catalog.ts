@@ -567,6 +567,31 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "In Instantly, add a webhook pointing to the URL below. Optionally set an HMAC secret and paste it here to verify signatures.",
   },
   {
+    source: "whop",
+    name: "Whop",
+    description: "Payments and memberships from your Whop company.",
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    historyNote:
+      "The first sync reaches back 90 days. Older payments and memberships arrive only if you import more history from this connection.",
+    /**
+     * Whop publishes one ceiling — 600 requests per minute per API credential
+     * (docs.whop.com) — and does not define what it scopes "per operation" to,
+     * so every call shares one declared bucket. One number that is certainly
+     * right beats two that split a limit whose scoping is unstated.
+     */
+    rateLimits: { "api.request": { requestsPerMinute: 600 } },
+    autoWebhook: false,
+    credentialFields: [
+      { key: "apiKey", label: "API key", placeholder: "Whop → Developer → API keys" },
+      { key: "companyId", label: "Company ID", placeholder: "biz_..." },
+    ],
+    webhookSetup:
+      "In Whop, add a webhook pointing at the URL below and paste its signing secret here. Payments and memberships also arrive by polling, so webhooks are optional — they only make updates instant.",
+  },
+  {
     source: "gsheets",
     name: "Google Sheets",
     description: "Rows from any spreadsheet, mirrored faithfully.",
