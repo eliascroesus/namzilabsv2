@@ -142,3 +142,44 @@ describe("drill-down", () => {
     expect(rows[0].subject).toBe("new");
   });
 });
+
+/**
+ * The dashboard's day-grained ranges. UTC boundaries, computed the same way
+ * the flow engine computes its own `today`/`yesterday` presets — the product
+ * dates every record in UTC, and a dashboard that defined the day locally
+ * would disagree with the identical preset inside a flow.
+ */
+describe("resolveRange — Today and Yesterday", () => {
+  const startOfTodayUtc = () => {
+    const n = new Date();
+    return Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());
+  };
+
+  it("Today starts at UTC midnight and runs to now, not to end of day", () => {
+    const { key, range } = resolveRange("today");
+    expect(key).toBe("today");
+    expect(range.from.getTime()).toBe(startOfTodayUtc());
+    // Sabotage: end the window at end-of-day and a still-running period is
+    // reported as a finished one — the partial-period lie the flow presets
+    // carry a warning about.
+    expect(range.to.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(range.to.getTime()).toBeGreaterThan(startOfTodayUtc() - 1);
+  });
+
+  it("Yesterday is the whole previous UTC day, ending the instant before today", () => {
+    const { range } = resolveRange("yesterday");
+    expect(range.from.getTime()).toBe(startOfTodayUtc() - 86_400_000);
+    // Sabotage: end it at startOfToday and midnight lands in both windows,
+    // double-counting one instant across two ranges.
+    expect(range.to.getTime()).toBe(startOfTodayUtc() - 1);
+    expect(range.to.getTime() - range.from.getTime()).toBe(86_400_000 - 1);
+  });
+
+  it("the two never overlap, and an unknown key still falls back to 7 days", () => {
+    const today = resolveRange("today").range;
+    const yesterday = resolveRange("yesterday").range;
+    expect(yesterday.to.getTime()).toBeLessThan(today.from.getTime());
+    expect(resolveRange("nonsense").key).toBe("7d");
+    expect(resolveRange(undefined).key).toBe("7d");
+  });
+});

@@ -1248,7 +1248,24 @@ function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     // Aggregate the records flowing in through the chain (any stray a/b
     // reference edges from an op switch are ignored).
     const input = inputs.find((i) => i.targetHandle == null && i.shape.kind === "dataset");
-    if (!input) throw new Error("Calculate needs records flowing in — connect it after a data step.");
+    if (!input) {
+      /**
+       * NAME WHAT IS ACTUALLY WIRED IN. "Connect it after a data step" reads
+       * as false to someone who did exactly that: the reported case was
+       * Sheets → Calculate → Calculate, where the step above had already
+       * collapsed 5 rows into one number, so the second one had no column
+       * left to add up — while its field picker still offered the sheet's
+       * columns, because the sheet IS an ancestor. Same words for an empty
+       * input and for a number-shaped one is what made it unreadable.
+       */
+      const plain = inputs.filter((i) => i.targetHandle == null);
+      if (plain.length > 0) {
+        throw new Error(
+          "The step above produces a single number, not records, so there is nothing here to add up. A Calculate reads records — put this step directly after the one that produces them (Get data, Filter, Combine), or add its own Get data step.",
+        );
+      }
+      throw new Error("Calculate needs records flowing in — connect it after a data step.");
+    }
     const records = (input.shape as Dataset).records;
     /**
      * A field-grouping here is honoured, deliberately, even though no control

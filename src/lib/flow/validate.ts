@@ -139,7 +139,14 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
         for (const e of plain) {
           const src = byId.get(e.source);
           if (src && outputKind(src) !== "dataset") {
-            issues.push({ nodeId: node.id, message: "Calculate needs records as input." });
+            // Says WHICH shape arrived, like the engine's twin: "needs records
+            // as input" beside a step that is plainly connected reads as a
+            // bug in us rather than a fixable mistake in the flow.
+            const shape = outputKind(src) === "dataset" ? "records" : "a single number";
+            issues.push({
+              nodeId: node.id,
+              message: `Calculate needs records, but the step above it produces ${shape}. Put it directly after the step that produces records, or give it its own Get data step.`,
+            });
           }
         }
       } else {

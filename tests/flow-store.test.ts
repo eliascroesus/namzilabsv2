@@ -211,7 +211,12 @@ describe("graph validation", () => {
       ],
       edges: [E("a", "agg1"), E("agg1", "agg2"), E("agg2", "out")], // agg2 fed by a value, not records
     });
-    expect(validateGraph(g).some((i) => /records as input/.test(i.message))).toBe(true);
+    // The publish-time twin of the engine's message, and it must NAME the
+    // shape that arrived: reported from the builder as "connect it after a
+    // data step" shown under a step that was plainly connected.
+    const msg = validateGraph(g).find((i) => /Calculate needs records/.test(i.message))?.message ?? "";
+    expect(msg).toContain("single number");
+    expect(msg).toContain("Get data step");
   });
   it("flags a graph with no metric to publish (no Output node, no metrics)", () => {
     const g = parseGraph({ nodes: [N("a", "app", { connectionId: CONN })], edges: [] });

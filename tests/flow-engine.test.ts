@@ -865,3 +865,45 @@ describe("the sweep's own gaps", () => {
   });
 });
 
+
+/**
+ * Sheets → Calculate → Calculate, reported from the builder: the second
+ * Calculate said "connect it after a data step" while sitting directly under
+ * a step that was plainly connected — and its field picker still offered the
+ * sheet's columns, because the sheet IS an ancestor. The step above had
+ * already collapsed the rows into one number, so there was no column left to
+ * add up. The rule is right; only the sentence was unreadable.
+ */
+describe("a Calculate fed by another Calculate says what is actually wrong", () => {
+  it("names the shape that arrived and the cure, instead of denying the connection", async () => {
+    await ev({ eventType: "row", subject: "a", value: 5 });
+    await ev({ eventType: "row", subject: "b", value: 8 });
+
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("sum1", "formula", { op: "sum", field: "value" }),
+        N("sum2", "formula", { op: "sum", field: "value" }),
+      ],
+      [E("a", "sum1"), E("sum1", "sum2")],
+    );
+    const res = await runFlow({ db, orgId: ORG }, g);
+
+    // The first one is fine: it reads the records.
+    expect((res.nodes.get("sum1") as { shape: { value?: number } }).shape).toMatchObject({ kind: "scalar", value: 13 });
+
+    const second = res.nodes.get("sum2")!;
+    expect(second.status).toBe("error");
+    const msg = (second as { error: string }).error;
+    // Sabotage: restore the single message and this reads "connect it after a
+    // data step" to a user who did exactly that.
+    expect(msg).toContain("single number");
+    expect(msg).toContain("nothing here to add up");
+    expect(msg).not.toContain("connect it after a data step");
+
+    // An UNCONNECTED Calculate keeps the original wording — a different
+    // mistake deserves a different sentence.
+    const orphan = await runFlow({ db, orgId: ORG }, G([N("c", "formula", { op: "sum", field: "value" })], []));
+    expect((orphan.nodes.get("c") as { error: string }).error).toContain("connect it after a data step");
+  });
+});
