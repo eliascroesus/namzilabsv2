@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
 import { getDb, getReadDb } from "@/db/client";
-import { connections } from "@/db/schema";
+import { connections, flowResults } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { dateColumnChoice, dateColumnNote, dateColumnSettings, setDateColumn, type DateColumnChoice } from "@/lib/sync/date-column";
@@ -13,7 +13,7 @@ import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow, getFlow } f
 import { flowTemplate } from "@/lib/flow/templates";
 import { CapError } from "@/lib/limits";
 import { sampleAppFields } from "@/lib/flow/engine";
-import { materializeFlow } from "@/lib/flow/materialize";
+import { materializeFlow, materializeStaleAll } from "@/lib/flow/materialize";
 import { parseGraph } from "@/lib/flow/types";
 import { createTestRun, executeAndSettleTestRun, getTestRun, type NodeTestDTO, type TestRunState } from "@/lib/flow/test-run";
 import { ensureStreamsForGraph, primeStream, pruneOrphanStreams } from "@/lib/sync/streams";
@@ -327,6 +327,25 @@ export async function refreshFlowAction(formData: FormData): Promise<void> {
   const { orgId } = await requireOrg();
   const id = String(formData.get("flowId") ?? "");
   if (id) await materializeFlow(getDb(), orgId, id);
+  revalidatePath("/dashboard");
+}
+
+/**
+ * "Refresh all" — recompute every published tile in the workspace, now.
+ *
+ * The per-tile button next to it recomputes ONE flow, which is the wrong unit
+ * when somebody has just changed something upstream and wants the board to
+ * agree with reality. Marking stale first and then materializing means the
+ * pass is the same one the sweep runs, under the same time budget, rather
+ * than a second implementation that could drift from it: whatever the budget
+ * cannot finish stays marked and the next tick picks it up, longest-stale
+ * first.
+ */
+export async function refreshAllFlowsAction(): Promise<void> {
+  const { orgId } = await requireOrg();
+  const db = getDb();
+  await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.orgId, orgId));
+  await materializeStaleAll(db, { orgId });
   revalidatePath("/dashboard");
 }
 

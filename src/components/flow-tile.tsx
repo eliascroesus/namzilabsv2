@@ -15,6 +15,7 @@ type Tile = {
   value?: number;
   series?: Array<{ bucket: string; value: number }>;
   groups?: Array<{ label: string; value: number }>;
+  byRange?: Record<string, { value?: number; series?: Array<{ bucket: string; value: number }>; groups?: Array<{ label: string; value: number }> }>;
 };
 
 export type FlowResultRow = {
@@ -43,8 +44,16 @@ function fmt(value: number | undefined, t: Tile): string {
 }
 
 /** Renders one materialized flow Output as a dashboard tile. */
-export function FlowTile({ row }: { row: FlowResultRow }) {
-  const t = (row.tile ?? {}) as Tile;
+export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: string }) {
+  const stored = (row.tile ?? {}) as Tile;
+  /**
+   * The dashboard's range, applied. Each range was computed by its own run of
+   * the flow (see materializeFlow), so switching pills is a lookup rather
+   * than a recompute — and a tile written before this feature has no
+   * `byRange` and keeps rendering exactly what it always did.
+   */
+  const windowed = rangeKey ? stored.byRange?.[rangeKey] : undefined;
+  const t: Tile = windowed ? { ...stored, value: windowed.value, series: windowed.series, groups: windowed.groups } : stored;
   return (
     <div className="rounded-lg border border-neutral-200 p-5">
       <div className="flex items-start justify-between">

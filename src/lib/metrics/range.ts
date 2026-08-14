@@ -11,6 +11,14 @@ export const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
   { key: "all", label: "All time" },
 ];
 
+/**
+ * The ranges a published tile is pre-computed for, so the dashboard's pills
+ * can switch instantly instead of re-running a flow per click. Every key here
+ * costs one extra graph run per materialize — narrow ones are cheap, and
+ * "all" reuses the run the materializer already did.
+ */
+export const MATERIALIZED_RANGES: RangeKey[] = ["today", "yesterday", "7d", "30d", "90d", "all"];
+
 const DAY_MS = 86_400_000;
 const ROLLING: Record<"7d" | "30d" | "90d", number> = { "7d": 7, "30d": 30, "90d": 90 };
 

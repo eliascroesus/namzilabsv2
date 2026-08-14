@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
-import { flowResults, flows, flowVersions } from "@/db/schema";
-import { expireAgedResults, materializeStaleAll } from "@/lib/flow/materialize";
+import { connections, events, flowResults, flows, flowVersions } from "@/db/schema";
+import { expireAgedResults, materializeFlow, materializeStaleAll } from "@/lib/flow/materialize";
 import type { DB } from "@/db/types";
 
 /**
@@ -188,5 +188,91 @@ describe("age-based expiry (the clock is a data source too)", () => {
     // pass PICKED IT UP, i.e. it is no longer parked at fresh-but-ancient.
     expect(await statusOf(aged)).not.toBe("fresh");
     expect(await statusOf(aged)).not.toBe("stale");
+  });
+});
+
+/**
+ * THE RANGE PILLS, which for their whole life sat above tiles they could not
+ * touch. A published tile is a stored snapshot computed from the flow's own
+ * definition, and `publishedFlowTiles` never took a range — so "Today" and
+ * "Last 90 days" rendered the identical number. Reported as "the time thing
+ * doesn't work at all", and it didn't.
+ */
+describe("a published tile carries one value per dashboard range", () => {
+  const CONN = "11111111-1111-4111-8111-111111111111";
+
+  async function publishCountFlow(orgId: string) {
+    await db.insert(connections).values({ id: CONN, orgId, source: "webhook", name: "Hook", status: "active", authType: "none" });
+    const graph = {
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN, source: "webhook" } } },
+        { id: "c", type: "formula", data: { config: { op: "count" } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "c" }],
+      metrics: [{ nodeId: "c", enabled: true, name: "Events", viz: "number", format: "number", precision: 0 }],
+    };
+    const [flow] = await db.insert(flows).values({ orgId, name: "counter", draftGraph: graph, status: "published", publishedVersion: 1 }).returning();
+    await db.insert(flowVersions).values({ flowId: flow.id, orgId, version: 1, graph });
+    return flow.id;
+  }
+
+  const event = async (orgId: string, id: string, occurredAt: Date) => {
+    await db.insert(events).values({
+      eventId: id, orgId, connectionId: CONN, source: "webhook", eventType: "thing",
+      subject: id, occurredAt, properties: {},
+    });
+  };
+
+  it("counts only the records inside each window", async () => {
+    const org = "org_range";
+    const flowId = await publishCountFlow(org);
+    const now = Date.now();
+    const startOfToday = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
+    await event(org, "today-1", new Date(startOfToday + 60_000));
+    await event(org, "yesterday-1", new Date(startOfToday - 3_600_000));
+    await event(org, "yesterday-2", new Date(startOfToday - 7_200_000));
+    await event(org, "long-ago", new Date(now - 60 * 86_400_000));
+
+    await materializeFlow(db, org, flowId);
+    const [row] = await db.select().from(flowResults).where(eq(flowResults.flowId, flowId));
+    const byRange = (row.tile as { byRange?: Record<string, { value?: number }> }).byRange!;
+
+    // Sabotage: drop ctx.window from the app read and every one of these is 4.
+    expect(byRange.today.value).toBe(1);
+    expect(byRange.yesterday.value).toBe(2);
+    expect(byRange["7d"].value).toBe(3);
+    expect(byRange["90d"].value).toBe(4);
+    expect(byRange.all.value).toBe(4);
+    // The headline value stays the flow's own definition, so a tile rendered
+    // without a range (or written before this shipped) is unchanged.
+    expect((row.tile as { value?: number }).value).toBe(4);
+  });
+
+  it("a window NARROWS the flow's own definition — it never widens it", async () => {
+    const org = "org_range2";
+    await db.insert(connections).values({ id: CONN, orgId: org, source: "webhook", name: "Hook", status: "active", authType: "none" });
+    const startOfToday = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
+    // A flow that already restricts itself to one event type.
+    const graph = {
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN, source: "webhook", eventType: "kept" } } },
+        { id: "c", type: "formula", data: { config: { op: "count" } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "c" }],
+      metrics: [{ nodeId: "c", enabled: true, name: "Kept", viz: "number", format: "number", precision: 0 }],
+    };
+    const [flow] = await db.insert(flows).values({ orgId: org, name: "kept", draftGraph: graph, status: "published", publishedVersion: 1 }).returning();
+    await db.insert(flowVersions).values({ flowId: flow.id, orgId: org, version: 1, graph });
+    await db.insert(events).values([
+      { eventId: "k1", orgId: org, connectionId: CONN, source: "webhook", eventType: "kept", subject: "k1", occurredAt: new Date(startOfToday + 60_000), properties: {} },
+      { eventId: "x1", orgId: org, connectionId: CONN, source: "webhook", eventType: "other", subject: "x1", occurredAt: new Date(startOfToday + 60_000), properties: {} },
+    ]);
+
+    await materializeFlow(db, org, flow.id);
+    const [row] = await db.select().from(flowResults).where(eq(flowResults.flowId, flow.id));
+    const byRange = (row.tile as { byRange?: Record<string, { value?: number }> }).byRange!;
+    // Today holds two events; the flow only ever counts one of them.
+    expect(byRange.today.value).toBe(1);
+    expect(byRange.all.value).toBe(1);
   });
 });

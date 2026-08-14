@@ -804,4 +804,16 @@ export type TileSpec = {
   series?: Array<{ bucket: string; value: number }>;
   groups?: Array<{ label: string; value: number }>;
   sample?: FlowRecord[];
+  /**
+   * The same metric computed over each dashboard range, keyed by range key.
+   *
+   * Lives inside the tile rather than in its own column so this needed no
+   * migration, and so a tile written before the feature simply has no
+   * `byRange` and renders exactly as it always did.
+   *
+   * Every entry is a REAL run of the flow over that window — not a slice of a
+   * stored series — because a median or a rate cannot be re-derived from
+   * buckets.
+   */
+  byRange?: Record<string, { value?: number; series?: Array<{ bucket: string; value: number }>; groups?: Array<{ label: string; value: number }> }>;
 };

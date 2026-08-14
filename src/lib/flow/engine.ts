@@ -63,6 +63,28 @@ export type EngineCtx = {
    * outputSchema, so it never pays for the walk.
    */
   fieldPresence?: boolean;
+  /**
+   * THE DASHBOARD'S DATE RANGE, applied at every Get-data read.
+   *
+   * The range pills sat above tiles they could not touch: a published tile is
+   * a stored snapshot computed from the flow's own definition, and
+   * `publishedFlowTiles` never took a range, so "Today" and "Last 90 days"
+   * rendered the identical number. Reported as "the time thing doesn't work
+   * at all", and it didn't.
+   *
+   * Applied HERE rather than by slicing a stored series, because only a
+   * re-run is correct for every metric: a median or a rate cannot be
+   * re-derived from daily buckets, and summing them would quietly turn
+   * "median speed to lead" into arithmetic nobody asked for. It bounds
+   * `occurred_at`, the canonical event time every connector already
+   * normalizes to — the sheet's nominated date column, the meeting's start,
+   * the payment's paid_at — so the window means the same thing everywhere.
+   *
+   * It NARROWS; it never widens. A flow with its own date window keeps it and
+   * the two intersect, which is what someone picking "Today" on a
+   * this-month metric means.
+   */
+  window?: { start: number; end: number };
 };
 
 /**
@@ -269,8 +291,14 @@ async function appSource(ctx: EngineCtx, cfg: AppConfig): Promise<string | null>
 }
 
 /** The org-scoped WHERE for a Get data step (shared by the executor and field sampling). */
-function appConds(orgId: string, cfg: AppConfig, source: string | null): SQL[] {
+function appConds(orgId: string, cfg: AppConfig, source: string | null, window?: { start: number; end: number }): SQL[] {
   const conds: SQL[] = [sql`${events.orgId} = ${orgId}`, isNull(events.deletedAt)];
+  // The dashboard range, pushed into the read itself — so a narrow window is
+  // CHEAPER than the unwindowed run, not six times the work.
+  if (window) {
+    conds.push(sql`${events.occurredAt} >= ${new Date(window.start)}`);
+    if (Number.isFinite(window.end)) conds.push(sql`${events.occurredAt} <= ${new Date(window.end)}`);
+  }
   if (cfg.connectionId) conds.push(eq(events.connectionId, cfg.connectionId));
   if (cfg.source) conds.push(eq(events.source, cfg.source));
   if (cfg.eventType) conds.push(eq(events.eventType, cfg.eventType));
@@ -500,7 +528,7 @@ export async function appFieldUnion(
 
 async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promise<NodeExec> {
   const cfg = AppConfigSchema.parse(node.data.config ?? {});
-  const conds = appConds(ctx.orgId, cfg, await appSource(ctx, cfg));
+  const conds = appConds(ctx.orgId, cfg, await appSource(ctx, cfg), ctx.window);
 
   // E.1: fold the downstream filter chain into this read when the flow has
   // opted in. The filters STILL run in JS afterwards, so the pre-filter can

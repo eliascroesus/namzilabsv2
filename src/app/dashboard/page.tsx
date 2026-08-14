@@ -11,6 +11,7 @@ import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
 import { publishedFlowTiles } from "@/lib/flow/materialize";
+import { refreshAllFlowsAction } from "@/app/dashboard/flows/actions";
 import { listMetrics, type Metric } from "@/lib/metrics/store";
 import { parseDefinition } from "@/lib/metrics/types";
 import {
@@ -183,6 +184,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <div className="flex gap-2">
+            {/* Every tile at once. The per-tile Refresh recomputes one flow,
+                which is the wrong unit when you have just changed something
+                upstream and want the whole board to agree with reality. */}
+            <form action={refreshAllFlowsAction}>
+              <button
+                type="submit"
+                className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+                title="Recompute every published metric now"
+              >
+                Refresh
+              </button>
+            </form>
             <Link href="/dashboard/flows" className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
               New flow
             </Link>
@@ -233,7 +246,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         ) : !hasTiles ? null : (
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {flowTiles.map((row) => (
-              <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} />
+              <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} rangeKey={rangeKey} />
             ))}
             {tiles.map((tile) => (
               <MetricTile key={tile.metric.id} tile={tile} />

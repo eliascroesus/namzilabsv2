@@ -6,6 +6,7 @@ import { runFlow, buildTile, type CompileProvenance } from "./engine";
 import { compileEnabled } from "./compile/flags";
 import { getPublishedVersion } from "./store";
 import { parseGraph, type TileSpec } from "./types";
+import { resolveRange, MATERIALIZED_RANGES } from "@/lib/metrics/range";
 import { streamRefsOfGraph } from "@/lib/sync/streams";
 
 /**
@@ -91,8 +92,53 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
       reads: provenance,
       streams,
     };
+
+    /**
+     * THE SAME METRIC, ONCE PER DASHBOARD RANGE.
+     *
+     * The range pills sat above tiles they could not touch — a stored tile is
+     * computed from the flow's own definition, so "Today" and "Last 90 days"
+     * rendered the identical number. Reported, correctly, as "the time thing
+     * doesn't work at all".
+     *
+     * Each range is a REAL run of the graph with `ctx.window` bounding
+     * `occurred_at` at every Get-data read. Re-running is the only correct
+     * answer for every metric: a median or a rate cannot be recovered from a
+     * daily series, and adding buckets up would turn "median speed to lead"
+     * into arithmetic nobody asked for. The windows also make each run
+     * CHEAPER than the unwindowed one — "Today" reads a day, not a year — and
+     * "All time" is the run already performed above, reused rather than
+     * repeated.
+     */
+    const byRangeByNode = new Map<string, NonNullable<TileSpec["byRange"]>>();
+    for (const t of tiles) byRangeByNode.set(t.nodeId, {});
+    for (const key of MATERIALIZED_RANGES) {
+      const { range } = resolveRange(key);
+      const windowed =
+        key === "all"
+          ? { nodes, outputs }
+          : await runFlow(
+              { db, orgId, compile: compileEnabled("materialize"), window: { start: range.from.getTime(), end: range.to.getTime() } },
+              graph,
+            );
+      for (const o of windowed.outputs) {
+        const slot = byRangeByNode.get(o.nodeId);
+        if (slot) slot[key] = { value: o.tile.value, series: o.tile.series, groups: o.tile.groups };
+      }
+      for (const m of graph.metrics) {
+        if (!m.enabled) continue;
+        const ex = windowed.nodes.get(m.nodeId);
+        const slot = byRangeByNode.get(m.nodeId);
+        if (!slot || !ex || ex.status !== "ok") continue;
+        const tile = buildTile(m, ex.shape, ex.sample);
+        slot[key] = { value: tile.value, series: tile.series, groups: tile.groups };
+      }
+    }
+
     for (const t of tiles) {
-      await upsertResult(db, orgId, flowId, version, t.nodeId, t.tile, "fresh", null, record);
+      const byRange = byRangeByNode.get(t.nodeId);
+      const tile = byRange && Object.keys(byRange).length > 0 ? { ...t.tile, byRange } : t.tile;
+      await upsertResult(db, orgId, flowId, version, t.nodeId, tile, "fresh", null, record);
     }
     // A metric that broke keeps its row, its last good value, and gains the
     // reason — so the tile goes red and says why, instead of disappearing.
@@ -311,7 +357,19 @@ const MATERIALIZE_BUDGET_MS = 45_000;
  * Only "fresh" rows: an "error" row recomputing on a timer would re-run a
  * known-broken flow every pass, and "stale"/"computing" are already in flight.
  */
-const RESULT_MAX_AGE_MS = 60 * 60 * 1000;
+/**
+ * Ten minutes, matching the sweep's own cadence, so every published number is
+ * recomputed on a clock rather than only when its data happens to change.
+ *
+ * An hour was the first choice and it was too slow to be believed: a metric
+ * whose window slides ("Today", "Last 7 days") changes with the clock alone,
+ * and a board that lags an hour behind reality gets checked against the CRM
+ * and disbelieved. The cost is bounded by the pass's own time budget — what
+ * it cannot finish stays marked and the next tick continues, longest-stale
+ * first — and by the fact that a recompute reads stored events, never the
+ * provider.
+ */
+const RESULT_MAX_AGE_MS = 10 * 60 * 1000;
 
 export async function expireAgedResults(db: DB, maxAgeMs = RESULT_MAX_AGE_MS, orgId?: string): Promise<number> {
   const cutoff = new Date(Date.now() - maxAgeMs);
