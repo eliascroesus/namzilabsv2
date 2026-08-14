@@ -11,6 +11,7 @@ import {
   defaultTargetFloor,
   quantizeFloor,
   runnableJobsByProvider,
+  runnableJobForConnection,
   finishJob,
   requestBackfill,
   rowCeilingFor,
@@ -468,6 +469,110 @@ describe("running a slice", () => {
     // Still runnable, and its checkpoint is intact — a denial costs time only.
     expect((await reload(job.id)).status).toBe("running");
     expect(await runnableJobsByProvider(db, 1, NOW)).toHaveLength(1);
+  });
+
+  /**
+   * TERMINAL IS TERMINAL — the corruption the first draft shipped and review
+   * reproduced: lane A finishes a job `complete`, lane B's consolation write
+   * flipped it to `failed`, and reviving a failed job resumes from a null
+   * checkpoint — a full re-walk of the window against the provider.
+   */
+  it("finishJob cannot overwrite a terminal status — whoever settled it first said what happened", async () => {
+    const { job } = await ask(90);
+    await startJob(db, job.id, NOW);
+    await finishJob(db, job.id, { status: "complete" }, NOW);
+
+    // Sabotage: drop the status guard from finishJob's WHERE and this flips
+    // the completed import to failed, exactly the reproduced corruption.
+    const second = await finishJob(db, job.id, { status: "failed", detail: "The job was already finished." }, NOW);
+    expect(second).toBeNull();
+    expect((await reload(job.id)).status).toBe("complete");
+  });
+
+  it("a slice on an already-settled job reports the settled state and rewrites nothing", async () => {
+    fakeClose([[{ occurredAt: back(10), id: "a" }]]);
+    const { job } = await ask(90);
+    await startJob(db, job.id, NOW);
+    await finishJob(db, job.id, { status: "complete", detail: "done" }, NOW);
+
+    const outcome = await runBackfillSlice(db, (await reload(job.id))!);
+    expect(outcome).toMatchObject({ kind: "finished", status: "complete" });
+    const after = await reload(job.id);
+    expect(after.status).toBe("complete");
+    expect(after.detail).toBe("done"); // untouched — observation, not outcome
+  });
+
+  it("the slice hands the connector a wall-clock deadline without tightening its page cap", async () => {
+    // The review's other critical: bounded in pages and calls, unbounded in
+    // SECONDS — a gcal walk could outlive the 60s container, and a killed
+    // step writes no checkpoint, so the retry re-walked into the same kill.
+    // Sabotage: drop `budget` from the poll args and deadlineMs is undefined.
+    const budgets: Array<{ maxCalls: number; deadlineMs?: number } | undefined> = [];
+    registerConnector({
+      source: "close",
+      authType: "apiKey",
+      verifySignature: () => true,
+      normalize: () => [],
+      poll: async (args) => {
+        budgets.push(args.budget);
+        return { records: [], nextCursor: null };
+      },
+    } as Connector);
+    const { job } = await ask(90);
+    await runBackfillSlice(db, job);
+    expect(budgets).toHaveLength(1);
+    expect(budgets[0]?.deadlineMs).toBeGreaterThan(Date.now() - 1_000);
+    // Claim-before-spend: maxCalls equals what claimCalls claimed for this
+    // poll. Sabotage: pass MAX_SAFE_INTEGER and Close's budget-present page
+    // ceiling (40) unlocks against a claim of 4 — the ledger overdraw the
+    // second review caught.
+    expect(budgets[0]!.maxCalls).toBe(4);
+  });
+
+  it("the sweep's pick skips disabled and paused connections, like the dispatcher's", async () => {
+    // Review: the first draft dropped these guards, so a user disconnecting
+    // mid-sweep had the job terminated `partial` — which requestBackfill
+    // counts as coverage forever, so reconnecting never re-imported.
+    const { job } = await ask(90);
+    expect((await runnableJobForConnection(db, connId, NOW))?.id).toBe(job.id);
+
+    await db.update(connections).set({ pausedUntil: new Date(NOW.getTime() + 60_000) }).where(eq(connections.id, connId));
+    expect(await runnableJobForConnection(db, connId, NOW)).toBeNull();
+
+    await db.update(connections).set({ pausedUntil: null, status: "disabled" }).where(eq(connections.id, connId));
+    expect(await runnableJobForConnection(db, connId, NOW)).toBeNull();
+
+    await db.update(connections).set({ status: "active" }).where(eq(connections.id, connId));
+    expect((await runnableJobForConnection(db, connId, NOW))?.id).toBe(job.id);
+  });
+
+  /**
+   * THE SWEEP'S OWN PICK. Measured on production: a Google Calendar import
+   * sat `queued` for two days, attempts 0, started_at null, "covering 0 of
+   * 92 days" on screen — while the connection, the stream and the job were
+   * all healthy and that stream was being polled every ten minutes. Nothing
+   * had ever picked the job up, so the reconcile sweep now advances one
+   * slice itself, and it needs its own connection's job rather than the
+   * fleet-wide per-provider pick.
+   */
+  it("gives one connection its own next job, ignoring other connections' work", async () => {
+    const { job: mine } = await ask(90);
+    const connB = await seedConnection(db, { orgId: ORG, source: "close" });
+    const [streamB] = await db
+      .insert(sourceStreams)
+      .values({ orgId: ORG, connectionId: connB, configHash: "hash-b", config: {} })
+      .returning();
+    await requestBackfill(db, { id: streamB.id, orgId: ORG, connectionId: connB, configHash: "hash-b" }, "close", back(90));
+
+    // Sabotage: reuse runnableJobsByProvider and this returns ONE job for the
+    // whole provider — the second connection's import never advances, which
+    // is the starvation the per-connection pick exists to avoid.
+    expect((await runnableJobForConnection(db, connId))!.id).toBe(mine.id);
+    expect((await runnableJobForConnection(db, connB))!.connectionId).toBe(connB);
+
+    // A finished job is not runnable work.
+    await finishJob(db, mine.id, { status: "complete" });
+    expect(await runnableJobForConnection(db, connId)).toBeNull();
   });
 
   it("rotates fairly: a job that just ran a slice yields the provider slot to its sibling", async () => {

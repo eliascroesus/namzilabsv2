@@ -2,6 +2,8 @@ import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { reconcileConnection, reconcileChanged, dueConnectionsForSweep } from "@/ingestion/reconcile";
 import { expireAgedResults, markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
+import { runnableJobForConnection } from "@/lib/backfill/jobs";
+import { runBackfillSlice } from "@/lib/backfill/run";
 
 /**
  * C.4 — fan-out reconciliation.
@@ -144,6 +146,50 @@ export const reconcileOne = inngest.createFunction(
         return { error: e instanceof Error ? e.message : String(e) };
       }
     });
+
+    /**
+     * ONE SLICE OF HISTORY, LAST — for the third time the same reason, with
+     * the review's two corrections built in.
+     *
+     * Measured on production: a Google Calendar import sat `queued` for two
+     * days with `attempts: 0`, `started_at: null`, "covering 0 of 92 days"
+     * on the customer's screen — while the connection, the stream and the
+     * job were all healthy and that same stream was polled every ten
+     * minutes by THIS function. Its two runners (the backfill-dispatch cron
+     * and the run-backfill event worker) sit on the mechanisms that already
+     * failed to deliver staleness events; nothing had ever picked the job
+     * up. So the sweep advances its own connection's import by one slice.
+     *
+     * AFTER refresh-tiles, not before: the recompute is this function's
+     * guarantee to the dashboard, and history arriving late must never sit
+     * upstream of it. The slice itself is wall-clock bounded now
+     * (SLICE_BUDGET_MS through PollBudget.deadlineMs), and its whole job
+     * lifecycle runs inside the connection lease, so the event-lane worker
+     * and this can never both settle one job. Skipped when the sweep was
+     * deferred or stood down — a spent budget or a held lease means exactly
+     * that. Rows it lands are marked stale here and recomputed next tick;
+     * ten minutes of lag on months-old history is nothing.
+     *
+     * The dispatcher and worker stay registered: belt, not braces removal.
+     */
+    if (!r.deferredUntil && !r.skipped) {
+      await step.run("backfill-slice", async () => {
+        const db = getDb();
+        try {
+          const job = await runnableJobForConnection(db, connectionId);
+          if (!job) return { ran: false };
+          const outcome = await runBackfillSlice(db, job);
+          if ((outcome.kind === "progressed" && outcome.rows > 0) || outcome.kind === "finished") {
+            await markStaleForSource(db, r.orgId, r.source, connectionId, job.streamHash ? [job.streamHash] : null);
+          }
+          return { ran: true, outcome };
+        } catch (e) {
+          // History is the lowest-priority work in the system; its failure
+          // must never fail an ingest run that already committed.
+          return { ran: true, error: e instanceof Error ? e.message : String(e) };
+        }
+      });
+    }
     return r;
   },
 );

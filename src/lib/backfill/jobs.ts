@@ -152,6 +152,41 @@ export async function getJob(db: DB, id: string): Promise<BackfillJob | null> {
   return row ?? null;
 }
 
+/**
+ * The one unfinished import for a connection the SWEEP should advance — the
+ * same predicate as `runnableJobsByProvider` (including its connection
+ * guards, which the first draft of this dropped and the review caught: a
+ * user disconnecting mid-sweep would otherwise have this pick the job and
+ * terminate it `partial`, which `requestBackfill` then counts as coverage
+ * forever — reconnecting never re-imports). Narrowed to one connection and
+ * without the per-provider fairness pick, because the caller already IS one
+ * connection's turn.
+ *
+ * Oldest progress first, so a connection with several streams importing
+ * rotates through them instead of starving the ones behind.
+ */
+export async function runnableJobForConnection(db: DB, connectionId: string, now = new Date()): Promise<BackfillJob | null> {
+  const [row] = await db
+    .select({ job: backfillJobs })
+    .from(backfillJobs)
+    .innerJoin(connections, eq(connections.id, backfillJobs.connectionId))
+    .where(
+      and(
+        eq(backfillJobs.connectionId, connectionId),
+        inArray(backfillJobs.status, ["queued", "running"]),
+        ne(connections.status, "disabled"),
+        or(sql`${connections.pausedUntil} is null`, lt(connections.pausedUntil, now)),
+      ),
+    )
+    .orderBy(
+      sql`coalesce(${backfillJobs.lastProgressAt}, ${backfillJobs.startedAt}, ${backfillJobs.createdAt}) asc nulls first`,
+      asc(backfillJobs.createdAt),
+      asc(backfillJobs.id),
+    )
+    .limit(1);
+  return row?.job ?? null;
+}
+
 /** The default depth, snapped to a day so repeated requests are identical. */
 export function defaultTargetFloor(now = new Date()): Date {
   return quantizeFloor(new Date(now.getTime() - DEFAULT_TARGET_DAYS * DAY_MS));
@@ -272,7 +307,13 @@ export async function finishJob(
   const rows = await db
     .update(backfillJobs)
     .set({ status: outcome.status, detail: outcome.detail ?? null, finishedAt: now, updatedAt: now })
-    .where(eq(backfillJobs.id, jobId))
+    // TERMINAL IS TERMINAL. Without the status guard, a second runner's
+    // consolation write ("the job was already finished") could flip a
+    // COMPLETED import to `failed` — and reviving a failed job resumes from
+    // a null checkpoint, which is a full re-walk of the window against the
+    // provider. A finish can only land on a job that is still in flight;
+    // whoever settled it first said what happened.
+    .where(and(eq(backfillJobs.id, jobId), inArray(backfillJobs.status, ["queued", "running"])))
     .returning();
   const job = rows[0];
   if (!job) return null;
