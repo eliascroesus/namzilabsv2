@@ -379,7 +379,7 @@ async function retireOutside(db: DB, conn: ConnRow, stream: StreamRow, window: {
  * mirror re-reads its entire resource, so the two sets are the same set, and
  * this runs only on a restamp.
  */
-async function firstSeenByEventId(db: DB, connectionId: string, streamHash: string): Promise<Map<string, Date>> {
+export async function firstSeenByEventId(db: DB, connectionId: string, streamHash: string): Promise<Map<string, Date>> {
   const rows = await db
     .select({ eventId: events.eventId, receivedAt: events.receivedAt })
     .from(events)
@@ -409,7 +409,7 @@ async function firstSeenByEventId(db: DB, connectionId: string, streamHash: stri
  * A record with no `received_at` is one this read is INSERTING, so it has no
  * first-seen yet — the connector's own stamp becomes it, milliseconds later.
  */
-function restampRecords(
+export function restampRecords(
   records: CanonicalEvent[],
   dateField: string | null,
   undatedEventIds: Set<string> | undefined,
@@ -634,6 +634,24 @@ export async function syncStream(
        */
       const usedColumn = mirrorRes.dateFieldState?.column ?? null;
       const columnChanged = usedColumn !== (stream.dateFieldState?.column ?? null);
+      /**
+       * WHETHER THIS SWEEP DATES ITS OWN ROWS, instead of letting the writer pin
+       * whatever the row happened to hold the first time it was seen.
+       *
+       * True whenever a column dated this read — re-decided every sweep, never
+       * latched by a marker, and that is the whole point. A SHEET ROW'S IDENTITY
+       * IS ITS ROW NUMBER, so when rows shift, row 10 becomes a different lead
+       * while staying the same event id. The writer updates `properties` and
+       * pins `occurred_at`, so the new occupant silently inherited the previous
+       * one's date. Measured live before this changed: 22 of 33 rows carried a
+       * date belonging to somebody else — true timestamps spanning 12-14 Aug,
+       * stored dates saying 7-8 Aug — and every Today/Yesterday metric over that
+       * sheet read 0 while the data was sitting right there.
+       *
+       * Content is the trigger because content is what moved. The marker and the
+       * column change still force it, for the one case a column cannot cover:
+       * the column going away, where every row has to go back to first-seen.
+       */
       const restamping = restampRequestedAt != null || columnChanged;
       /**
        * The restamp is the CALLER doing something different for one sweep, not
@@ -643,12 +661,19 @@ export async function syncStream(
        * `upsertEvents` a writer of event content. So this sweep hands the writer
        * the values it wants and asks it not to pin them.
        */
+      /**
+       * First-seen times are read only when something will actually consult
+       * them: a row the column could not date, or no column at all. Now that
+       * this runs on EVERY sweep rather than once per picker change, the common
+       * case is a fully dated sheet — and that case costs no extra query.
+       */
+      const needsFirstSeen = usedColumn == null || (mirrorRes.undatedEventIds?.size ?? 0) > 0;
       const toWrite = restamping
         ? restampRecords(
             records,
             usedColumn,
             mirrorRes.undatedEventIds,
-            await firstSeenByEventId(db, conn.id, stream.configHash),
+            needsFirstSeen ? await firstSeenByEventId(db, conn.id, stream.configHash) : new Map(),
           )
         : records;
       // C.1: the upsert and the retire are ONE swap. Wrapped so that on the

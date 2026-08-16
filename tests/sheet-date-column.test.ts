@@ -541,22 +541,61 @@ describe("changing the column restamps the rows already stored", () => {
   });
 
   /**
-   * The pin is the DEFAULT and stays the default. Only the sweep that follows a
-   * change is exempt — an ordinary re-read of a mirror must never shift the
-   * event times of rows it is merely restating.
+   * A ROW IS DATED BY WHAT IT SAYS NOW, on every sweep — not only on the one
+   * that follows a change of column.
+   *
+   * This test asserted the opposite until the dating rule changed, and the
+   * behaviour it protected was a live data-corruption bug. A sheet row's
+   * identity is its ROW NUMBER, so when rows shift, row 10 becomes a different
+   * lead while staying the same event id. The writer updates `properties` and
+   * pinned `occurred_at`, so each new occupant inherited the previous one's
+   * date. Measured in production: 22 of 33 rows carried somebody else's date —
+   * real timestamps spanning 12-14 Aug, stored dates saying 7-8 Aug — and every
+   * Today/Yesterday metric over that sheet read 0 with the data sitting in it.
+   *
+   * REVERT `restamping` TO THE ONE-SHOT MARKER AND THIS FAILS: Ana keeps
+   * 2026-07-21 forever, however many times the sheet says otherwise.
    */
-  it("goes back to pinning once the restamp is done", async () => {
+  it("re-dates a row whenever the sheet's own date column changes", async () => {
     await pick("Booked on");
     await sweep();
     expect((await streamRow()).restampRequestedAt).toBeNull();
 
-    // The sheet now says something different about Ana. A mirror re-read
-    // restates the row; it does not re-date it.
+    // The sheet now says something different about Ana, with no picker change
+    // and no marker pending — content alone.
     SHEET[1][1] = "1/1/2020";
     MODIFIED = "2026-03-03T00:00:00.000Z";
     await sweep();
 
-    expect((await stored())[0].occurredAt.toISOString()).toBe("2026-07-21T14:23:45.000Z");
+    expect((await stored())[0].occurredAt.toISOString()).toBe("2020-01-01T00:00:00.000Z");
+  });
+
+  /**
+   * The other half of the same rule, and the reason it is not simply
+   * "stop pinning": a row the column CANNOT date must not drift. Without the
+   * `restampRecords` pass, an undated row is written with the connector's
+   * fallback stamp — `new Date()` — so every sweep would move it to the import
+   * moment, which is the original defect this whole mechanism exists to
+   * prevent, now firing every ten minutes instead of once.
+   */
+  it("leaves a row the column cannot date on its first-seen time, sweep after sweep", async () => {
+    await pick("Booked on");
+    await sweep();
+    const firstSeen = await ageRows();
+
+    SHEET[1][1] = "not a date at all";
+    MODIFIED = "2026-03-03T00:00:00.000Z";
+    await sweep();
+    expect((await stored())[0].occurredAt.getTime()).toBe(firstSeen.getTime());
+
+    // The second sweep is the one that matters: it is where a rule that runs
+    // every time, rather than once, would show its drift.
+    MODIFIED = "2026-03-04T00:00:00.000Z";
+    await sweep();
+    expect((await stored())[0].occurredAt.getTime()).toBe(firstSeen.getTime());
+
+    // …and it is reported as undated rather than silently counted as dated.
+    expect((await streamRow()).dateFieldState).toMatchObject({ column: "Booked on", undated: 1 });
   });
 
   /**

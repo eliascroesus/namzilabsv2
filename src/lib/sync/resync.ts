@@ -5,7 +5,17 @@ import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { processRawEvent, upsertEvents } from "@/ingestion/pipeline";
-import { activeStreams, importProgressNote, syncStream, SWEEP_MAX_PAGES, SYNC_BUDGET_MS, type PrimeStreamResult, type SyncBudget } from "@/lib/sync/streams";
+import {
+  activeStreams,
+  firstSeenByEventId,
+  importProgressNote,
+  restampRecords,
+  syncStream,
+  SWEEP_MAX_PAGES,
+  SYNC_BUDGET_MS,
+  type PrimeStreamResult,
+  type SyncBudget,
+} from "@/lib/sync/streams";
 import { awaitConnectionSyncLock, releaseConnectionSyncLock, tryConnectionSyncLock } from "@/lib/sync/locks";
 import { applyObservedRateLimit, claimCalls, isPaused, recordObservedLimit, settlePollCalls } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
@@ -302,7 +312,28 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
       detectDateField: !stream.dateFieldLocked,
       restamp: true,
     };
-    const { records, cursor, complete, dateFieldState } = await pollAll(db, conn, connector, base);
+    const { records, cursor, complete, dateFieldState, undatedEventIds } = await pollAll(db, conn, connector, base);
+    /**
+     * THE SAME DATING RULE AS AN ORDINARY SWEEP, and it has to be, because this
+     * is the path a customer reaches for when the numbers look wrong. Pinning
+     * unconditionally — what this did — meant "Re-sync" re-froze every row onto
+     * whatever date it already carried, so the one button that promises to fix
+     * stale data was the one guaranteed not to.
+     *
+     * Shared helpers rather than a second copy of the rule: `restampRecords`
+     * sends undated rows back to their first-seen time and leaves every dated
+     * row on the column's own date, and the writer is then asked not to pin.
+     */
+    const usedColumn = dateFieldState?.column ?? null;
+    const dates = isMirrorSource(conn.source) && usedColumn != null;
+    const toWrite = dates
+      ? restampRecords(
+          records,
+          usedColumn,
+          undatedEventIds,
+          undatedEventIds.size > 0 ? await firstSeenByEventId(db, conn.id, stream.configHash) : new Map(),
+        )
+      : records;
     const res = await upsertEvents(
       db,
       {
@@ -311,9 +342,9 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
         source: conn.source,
         streamHash: stream.configHash,
         generation: gen,
-        preserveOccurredAt: isMirrorSource(conn.source),
+        preserveOccurredAt: isMirrorSource(conn.source) && !dates,
       },
-      records,
+      toWrite,
     );
     upserted += res.total;
     inserted += res.inserted;
@@ -465,6 +496,13 @@ async function pollAll(
   cursor: string | null;
   complete: boolean;
   dateFieldState?: StreamRow["dateFieldState"];
+  /**
+   * Records the date column could not date, unioned across the walk the same
+   * way `seen` unions the records themselves — so the caller can send exactly
+   * those back to their first-seen time and let every other row take the
+   * column's date.
+   */
+  undatedEventIds: Set<string>;
   /** The walk stopped on the provider budget, not on the data or PAGE_CAP. */
   deferred?: { reason: string; retryAfterMs: number };
 }> {
@@ -483,6 +521,11 @@ async function pollAll(
    * when a row was written — the same split `syncStream` makes.
    */
   let dateFieldState: StreamRow["dateFieldState"] | undefined;
+  /**
+   * Per-id and last-answer-wins, exactly like `seen`: a row re-read on a later
+   * page with a parseable date must not stay marked undated by an earlier one.
+   */
+  const undatedEventIds = new Set<string>();
   // The full re-sync's own wall clock: PAGE_CAP bounds memory in `seen`, but
   // the honest stop for a long walk is the deadline — a walk cut short keeps
   // `complete` false, so nothing is retired on the strength of a prefix.
@@ -517,7 +560,11 @@ async function pollAll(
     const observedPause = await applyObservedRateLimit(db, conn, res.rateLimit, claimedAt);
     const { records, nextCursor } = res;
     if (res.dateFieldState) dateFieldState = { ...res.dateFieldState, at: new Date().toISOString() };
-    for (const r of records) seen.set(r.eventId, r);
+    for (const r of records) {
+      seen.set(r.eventId, r);
+      if (res.undatedEventIds?.has(r.eventId)) undatedEventIds.add(r.eventId);
+      else undatedEventIds.delete(r.eventId);
+    }
     if (!nextCursor) {
       // null means START OVER (PollResult.nextCursor), so it is stored as null —
       // the following incremental sweep then begins a fresh scan instead of
@@ -535,7 +582,7 @@ async function pollAll(
       break;
     }
   }
-  return { records: [...seen.values()], cursor, complete, dateFieldState, deferred };
+  return { records: [...seen.values()], cursor, complete, dateFieldState, undatedEventIds, deferred };
 }
 
 async function upsertCursor(db: DB, connectionId: string, cursor: string | null): Promise<void> {

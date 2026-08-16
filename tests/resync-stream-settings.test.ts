@@ -308,6 +308,56 @@ describe("an empty full re-sync does not tombstone the history it did not read",
  * the whole resource. A sheet whose rows were deleted comes back empty, and
  * those rows genuinely should go — so the guard above must not apply here.
  */
+/**
+ * "Re-sync" IS THE BUTTON A CUSTOMER PRESSES WHEN THE NUMBERS LOOK WRONG, so it
+ * is the one path that must not re-freeze them.
+ *
+ * It passed `preserveOccurredAt: isMirrorSource(...)` unconditionally, so a full
+ * re-sync of a sheet restated every row's content and pinned every row's date to
+ * whatever it already held. The repair path was the one guaranteed not to
+ * repair — and, unlike an ordinary sweep, it never consulted the restamp marker
+ * either, so nothing else in the system would have corrected it afterwards.
+ */
+describe("a full re-sync re-dates a mirror's rows from its own date column", () => {
+  registerStreamScoped("redate-stream", "Redate", "mirror");
+  let CELL = "2026-03-04T00:00:00.000Z";
+  registerConnector({
+    source: "redate-stream",
+    authType: "none",
+    verifySignature: () => true,
+    poll: async (args: PollArgs): Promise<PollResult> => {
+      SEEN.push(args);
+      return {
+        records: [
+          { eventId: "settings:conn:row-1", eventType: "row_added", subject: "row-1", occurredAt: new Date(CELL), properties: {} },
+        ],
+        nextCursor: null,
+        dateFieldState: { column: "Booked On", source: "user", presentInHeader: true, dated: 1, undated: 0 },
+      };
+    },
+  });
+
+  const dateOf = async (conn: string): Promise<string> =>
+    (await db.select().from(events).where(eq(events.connectionId, conn)))[0].occurredAt.toISOString();
+
+  it("moves a stored row onto the date the source now reports", async () => {
+    CELL = "2026-03-04T00:00:00.000Z";
+    const conn = await seedConnection(db, { orgId: ORG, source: "redate-stream" });
+    await seedStream(conn, { dateField: "Booked On", dateFieldLocked: true });
+
+    await runSync(db, conn, "full");
+    expect(await dateOf(conn)).toBe("2026-03-04T00:00:00.000Z");
+
+    // The row now says something else about itself — a spreadsheet cell edited,
+    // or rows shifted so this key holds a different record entirely.
+    CELL = "2026-05-05T00:00:00.000Z";
+    await runSync(db, conn, "full");
+
+    // REVERT THE RE-SYNC DATING RULE AND THIS READS 2026-03-04 FOREVER.
+    expect(await dateOf(conn)).toBe("2026-05-05T00:00:00.000Z");
+  });
+});
+
 describe("a mirror still retires on an empty re-read", () => {
   let MIRROR_SERVE = true;
   const mirrorConnector: Connector = {
