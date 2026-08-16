@@ -375,16 +375,46 @@ async function retireOutside(db: DB, conn: ConnRow, stream: StreamRow, window: {
  * first seen. Filtering them out would hand it `new Date()` instead — inventing
  * a fresher origin than the row has.
  *
- * The whole stream in one query rather than an `IN` list of the read's ids: a
- * mirror re-reads its entire resource, so the two sets are the same set, and
- * this runs only on a restamp.
+ * ASK FOR THE IDS YOU NEED. The stream-wide form is a SEQUENTIAL SCAN of the
+ * largest table in the schema, shared by every tenant: the predicate cannot say
+ * `deleted_at is null` (tombstones are the point, above) and every
+ * connection-leading index on `events` is partial on exactly that, so none of
+ * them can serve it. That was affordable while this ran once per change of date
+ * column. It is not affordable now that a row's date follows its content on
+ * every sweep, because a single blank cell in the chosen column — an ordinary,
+ * permanent state for something like "Closed on" — makes a caller need
+ * first-seen times forever after.
+ *
+ * Given ids, this probes the unique index on `event_id` instead, in chunks so a
+ * whole-sheet restamp cannot build one enormous statement. The connection and
+ * stream still bound the query: event ids are namespaced per connection, and a
+ * lookup that trusts that rather than restating it is one refactor away from
+ * reading another tenant's rows.
  */
-export async function firstSeenByEventId(db: DB, connectionId: string, streamHash: string): Promise<Map<string, Date>> {
-  const rows = await db
-    .select({ eventId: events.eventId, receivedAt: events.receivedAt })
-    .from(events)
-    .where(and(eq(events.connectionId, connectionId), eq(events.streamHash, streamHash)));
-  return new Map(rows.map((r) => [r.eventId, r.receivedAt]));
+const FIRST_SEEN_CHUNK = 1_000;
+
+export async function firstSeenByEventId(
+  db: DB,
+  connectionId: string,
+  streamHash: string,
+  eventIds?: Set<string>,
+): Promise<Map<string, Date>> {
+  const scope = and(eq(events.connectionId, connectionId), eq(events.streamHash, streamHash));
+  const cols = { eventId: events.eventId, receivedAt: events.receivedAt };
+  if (!eventIds) {
+    const rows = await db.select(cols).from(events).where(scope);
+    return new Map(rows.map((r) => [r.eventId, r.receivedAt]));
+  }
+  const out = new Map<string, Date>();
+  const ids = [...eventIds];
+  for (let i = 0; i < ids.length; i += FIRST_SEEN_CHUNK) {
+    const rows = await db
+      .select(cols)
+      .from(events)
+      .where(and(scope, inArray(events.eventId, ids.slice(i, i + FIRST_SEEN_CHUNK))));
+    for (const r of rows) out.set(r.eventId, r.receivedAt);
+  }
+  return out;
 }
 
 /**
@@ -652,7 +682,7 @@ export async function syncStream(
        * column change still force it, for the one case a column cannot cover:
        * the column going away, where every row has to go back to first-seen.
        */
-      const restamping = restampRequestedAt != null || columnChanged;
+      const restamping = usedColumn != null || restampRequestedAt != null || columnChanged;
       /**
        * The restamp is the CALLER doing something different for one sweep, not
        * the writer changing. `preserveOccurredAt` is right for every normal
@@ -662,20 +692,21 @@ export async function syncStream(
        * the values it wants and asks it not to pin them.
        */
       /**
-       * First-seen times are read only when something will actually consult
-       * them: a row the column could not date, or no column at all. Now that
-       * this runs on EVERY sweep rather than once per picker change, the common
-       * case is a fully dated sheet — and that case costs no extra query.
+       * First-seen times are read only for the rows that will consult them, and
+       * only when there are any. A fully dated sheet — the common case now that
+       * this runs every sweep — costs no query at all; a sheet with a few blank
+       * date cells costs a few index probes rather than a scan of every event
+       * in the database. With no column at all, every row needs one, so the
+       * stream-wide read is the right shape and stays as rare as it was.
        */
-      const needsFirstSeen = usedColumn == null || (mirrorRes.undatedEventIds?.size ?? 0) > 0;
-      const toWrite = restamping
-        ? restampRecords(
-            records,
-            usedColumn,
-            mirrorRes.undatedEventIds,
-            needsFirstSeen ? await firstSeenByEventId(db, conn.id, stream.configHash) : new Map(),
-          )
-        : records;
+      const undated = mirrorRes.undatedEventIds;
+      const firstSeen =
+        usedColumn == null
+          ? await firstSeenByEventId(db, conn.id, stream.configHash)
+          : undated && undated.size > 0
+            ? await firstSeenByEventId(db, conn.id, stream.configHash, undated)
+            : new Map<string, Date>();
+      const toWrite = restamping ? restampRecords(records, usedColumn, undated, firstSeen) : records;
       // C.1: the upsert and the retire are ONE swap. Wrapped so that on the
       // pool driver they run in a transaction holding the stream's advisory
       // lock — no reader can observe the window half-replaced, and a concurrent

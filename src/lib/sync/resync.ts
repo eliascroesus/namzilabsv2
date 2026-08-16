@@ -331,7 +331,7 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
           records,
           usedColumn,
           undatedEventIds,
-          undatedEventIds.size > 0 ? await firstSeenByEventId(db, conn.id, stream.configHash) : new Map(),
+          undatedEventIds.size > 0 ? await firstSeenByEventId(db, conn.id, stream.configHash, undatedEventIds) : new Map(),
         )
       : records;
     const res = await upsertEvents(

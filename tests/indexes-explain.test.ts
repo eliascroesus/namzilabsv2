@@ -151,4 +151,33 @@ describe("B.1 indexes are chosen by the planner", () => {
     expect(plan).toMatch(/events_(conn_stream|org)_live/);
     expect(plan).not.toContain("Seq Scan");
   });
+
+  /**
+   * THE FIRST-SEEN LOOKUP BEHIND THE SHEET RESTAMP, which cannot say
+   * `deleted_at is null` — a row deleted from the sheet and re-added is
+   * resurrected by the same upsert and keeps its original first-seen time.
+   * Every connection-leading index on `events` is partial on exactly that
+   * predicate, so the stream-wide form is a sequential scan of the largest,
+   * multi-tenant table in the schema.
+   *
+   * That was affordable while it ran once per change of date column. A row's
+   * date now follows its content on every sweep, so one blank cell in the
+   * chosen column would have made this run for that stream forever. Asking for
+   * the ids instead puts it on the unique index.
+   */
+  it("the restamp's first-seen lookup probes events_event_id_uq instead of scanning", async () => {
+    // The shape drizzle's `inArray` emits, so this tests the query that runs.
+    const ids = Array.from({ length: 20 }, (_, i) => `ev_${i}`);
+    const list = sql.join(
+      ids.map((i) => sql`${i}`),
+      sql`, `,
+    );
+    const plan = await explain(
+      sql`select event_id, received_at from events
+          where connection_id = ${connA} and stream_hash = ${HASH_A}
+            and event_id in (${list})`,
+    );
+    expect(plan).toContain("events_event_id_uq");
+    expect(plan).not.toContain("Seq Scan");
+  });
 });
