@@ -63,28 +63,6 @@ export type EngineCtx = {
    * outputSchema, so it never pays for the walk.
    */
   fieldPresence?: boolean;
-  /**
-   * THE DASHBOARD'S DATE RANGE, applied at every Get-data read.
-   *
-   * The range pills sat above tiles they could not touch: a published tile is
-   * a stored snapshot computed from the flow's own definition, and
-   * `publishedFlowTiles` never took a range, so "Today" and "Last 90 days"
-   * rendered the identical number. Reported as "the time thing doesn't work
-   * at all", and it didn't.
-   *
-   * Applied HERE rather than by slicing a stored series, because only a
-   * re-run is correct for every metric: a median or a rate cannot be
-   * re-derived from daily buckets, and summing them would quietly turn
-   * "median speed to lead" into arithmetic nobody asked for. It bounds
-   * `occurred_at`, the canonical event time every connector already
-   * normalizes to — the sheet's nominated date column, the meeting's start,
-   * the payment's paid_at — so the window means the same thing everywhere.
-   *
-   * It NARROWS; it never widens. A flow with its own date window keeps it and
-   * the two intersect, which is what someone picking "Today" on a
-   * this-month metric means.
-   */
-  window?: { start: number; end: number };
 };
 
 /**
@@ -291,14 +269,22 @@ async function appSource(ctx: EngineCtx, cfg: AppConfig): Promise<string | null>
 }
 
 /** The org-scoped WHERE for a Get data step (shared by the executor and field sampling). */
-function appConds(orgId: string, cfg: AppConfig, source: string | null, window?: { start: number; end: number }): SQL[] {
+function appConds(orgId: string, cfg: AppConfig, source: string | null): SQL[] {
   const conds: SQL[] = [sql`${events.orgId} = ${orgId}`, isNull(events.deletedAt)];
-  // The dashboard range, pushed into the read itself — so a narrow window is
-  // CHEAPER than the unwindowed run, not six times the work.
-  if (window) {
-    conds.push(sql`${events.occurredAt} >= ${new Date(window.start)}`);
-    if (Number.isFinite(window.end)) conds.push(sql`${events.occurredAt} <= ${new Date(window.end)}`);
-  }
+  /**
+   * NO DASHBOARD RANGE IS APPLIED HERE, deliberately — see `tileByRange`.
+   *
+   * Bounding `occurred_at` at the READ looks cheaper and is wrong. It truncates
+   * every lane before the flow's own logic runs, so a de-duplicating step picks
+   * the earliest record OF THAT WINDOW rather than the genuine first, and a
+   * pairing step loses any pair that straddles the boundary — a lead that
+   * arrived yesterday at 18:00 and was called today at 09:00 was counted in
+   * neither day, and a measured gap could never exceed the window's own length,
+   * so "median speed to lead" fell the more the range was narrowed.
+   *
+   * The range is applied to the finished metric's records instead. The flow
+   * always sees the whole history it was written against.
+   */
   if (cfg.connectionId) conds.push(eq(events.connectionId, cfg.connectionId));
   if (cfg.source) conds.push(eq(events.source, cfg.source));
   if (cfg.eventType) conds.push(eq(events.eventType, cfg.eventType));
@@ -528,7 +514,7 @@ export async function appFieldUnion(
 
 async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promise<NodeExec> {
   const cfg = AppConfigSchema.parse(node.data.config ?? {});
-  const conds = appConds(ctx.orgId, cfg, await appSource(ctx, cfg), ctx.window);
+  const conds = appConds(ctx.orgId, cfg, await appSource(ctx, cfg));
 
   // E.1: fold the downstream filter chain into this read when the flow has
   // opted in. The filters STILL run in JS afterwards, so the pre-filter can
@@ -1411,6 +1397,178 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
     tile.sample = shape.records.slice(0, 5);
   }
   return tile;
+}
+
+/** One dashboard range's answer for one metric. */
+export type RangeSlot = NonNullable<TileSpec["byRange"]>[string];
+
+/**
+ * THE SAME METRIC, SEEN THROUGH EACH DASHBOARD RANGE — derived from the run the
+ * materializer already did, not from re-running the flow per range.
+ *
+ * The flow runs ONCE, over its whole history. Then a range keeps the records
+ * the metric is measured over and re-does only the final arithmetic. That
+ * ordering is the entire point:
+ *
+ *   - a de-duplicating step has already picked the genuine earliest/latest
+ *     record, not the earliest of a 24-hour slice;
+ *   - a pairing step has already matched a lead to its call, so a pair that
+ *     straddles midnight still counts, in the day its lead arrived, and the
+ *     gap it reports is free to be longer than the range itself;
+ *   - a comparison's two sides are windowed at their own datasets, so a
+ *     percentage stays a percentage of the same population.
+ *
+ * WHICH DATE is the customer's choice: `spec.timeField`, the "Time reference"
+ * they pick at Review & publish — a meeting's booked-at rather than its
+ * arrival, say — falling back per record to `occurredAt`. Per record, because a
+ * comparison's other side is usually a different dataset that never had that
+ * column, and excluding all of it would read as a confident zero.
+ *
+ * "All time" is the run itself, returned untouched. It must not be re-filtered:
+ * its upper bound is NOW, and Calendly meetings are dated when they will
+ * happen, so filtering would drop every future booking out of the total.
+ */
+export function tileByRange(
+  graph: FlowGraph,
+  nodes: Map<string, NodeExec>,
+  nodeId: string,
+  spec: TilePresentation,
+  ranges: Array<{ key: string; start: number; end: number; all?: boolean }>,
+): Record<string, RangeSlot> {
+  const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
+  const incomingBy = new Map<string, FlowGraph["edges"]>();
+  for (const e of graph.edges) {
+    if (!incomingBy.has(e.target)) incomingBy.set(e.target, []);
+    incomingBy.get(e.target)!.push(e);
+  }
+
+  const out: Record<string, RangeSlot> = {};
+  for (const range of ranges) {
+    let undated = 0;
+    /**
+     * The fallback is decided PER DATASET, not per record, and the difference
+     * matters both ways.
+     *
+     * A lane where the chosen field never resolves simply does not speak that
+     * vocabulary — the other side of a comparison is usually a different
+     * source entirely — so it is dated the ordinary way rather than excluded
+     * wholesale, which would read as a confident zero.
+     *
+     * A lane where it resolves for SOME records is using it, so the records it
+     * misses are genuinely undated: they belong to no period, and quietly
+     * filing them under `occurredAt` instead would put them in a period the
+     * metric does not claim to measure.
+     */
+    const keep = (records: FlowRecord[]): FlowRecord[] => {
+      if (range.all) return records;
+      const field =
+        spec.timeField && records.some((r) => dateMs(getField(r, spec.timeField!)) != null) ? spec.timeField : "occurredAt";
+      return records.filter((r) => {
+        const t = dateMs(getField(r, field));
+        if (t == null) {
+          undated++;
+          return false;
+        }
+        return t >= range.start && t <= range.end;
+      });
+    };
+
+    // Memoized per range: a step feeding both sides of a comparison is windowed
+    // once, and a diamond in the graph cannot re-do the work per path.
+    const memo = new Map<string, NodeExecOk>();
+    const windowed = (id: string): NodeExecOk => {
+      const hit = memo.get(id);
+      if (hit) return hit;
+      const ex = nodes.get(id);
+      if (!ex || ex.status !== "ok") throw new Error("This step produced no result.");
+      const node = nodeById.get(id);
+      let result: NodeExecOk;
+      /**
+       * A step that produces RECORDS is windowed in place — its own logic ran
+       * over everything and this only chooses which of its results are in the
+       * period. Anything else (a Calculate, a Group, an Output) is re-run over
+       * its windowed inputs, because an average or a rate cannot be sliced.
+       */
+      if (node && node.type !== "output" && ex.shape.kind === "dataset") {
+        const records = keep(ex.shape.records);
+        result = {
+          ...ex,
+          shape: { kind: "dataset", records },
+          recordsOut: records.length,
+          sample: records.slice(0, 3),
+          // Paths lanes live here, and a lane is a dataset of its own — leaving
+          // them unwindowed would hand a branch's whole history to a step
+          // reading it through the hub.
+          outputs: ex.outputs
+            ? Object.fromEntries(
+                Object.entries(ex.outputs).map(([h, s]) => [h, s.kind === "dataset" ? { kind: "dataset" as const, records: keep(s.records) } : s]),
+              )
+            : undefined,
+        };
+      } else if (!node) {
+        throw new Error("This step is no longer part of the flow.");
+      } else {
+        const inputs: ResolvedInput[] = [];
+        for (const e of incomingBy.get(id) ?? []) {
+          const se = windowed(e.source);
+          const shape = e.sourceHandle && se.outputs?.[e.sourceHandle] ? se.outputs[e.sourceHandle] : se.shape;
+          inputs.push({ shape, exec: se, targetHandle: e.targetHandle ?? null, sourceNodeId: e.source });
+        }
+        const re = reexecPure(node, inputs);
+        if (re.status !== "ok") throw new Error(re.error);
+        result = re;
+      }
+      memo.set(id, result);
+      return result;
+    };
+
+    try {
+      const ex = windowed(nodeId);
+      const tile = ex.tile ?? buildTile(spec, ex.shape, ex.sample);
+      out[range.key] = { value: tile.value, series: tile.series, groups: tile.groups, ...(undated > 0 ? { undated } : {}) };
+    } catch (e) {
+      /**
+       * EVERY RANGE GETS AN ENTRY, including the ones that cannot be answered.
+       *
+       * Skipping the key was the original defect: a missing entry was
+       * indistinguishable from a tile written before ranges existed, so the
+       * dashboard fell back to the flow's own all-time number and showed it
+       * under the "Today" pill with a green "Up to date" badge. The commonest
+       * trigger is a percentage whose denominator is zero for the period —
+       * exactly the case where an honest "no data yet" matters most.
+       */
+      out[range.key] = { unavailable: e instanceof Error ? e.message : String(e) };
+    }
+  }
+  return out;
+}
+
+/**
+ * Re-run one step over already-computed inputs. Only the steps that compute
+ * something from their input rather than produce records reach this, and none
+ * of them touch the database — so a range costs arithmetic, not a query.
+ */
+function reexecPure(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+  switch (node.type) {
+    case "output":
+      return execOutput(node, inputs);
+    case "calculate":
+      return execCalculate(node, inputs);
+    case "formula":
+      return execFormula(node, inputs);
+    case "group":
+      return execGroup(node, inputs);
+    default:
+      return {
+        status: "error",
+        nodeType: node.type,
+        error: "This step cannot be recomputed for a date range.",
+        recordsIn: 0,
+        recordsOut: 0,
+        sample: [],
+        outputSchema: [],
+      };
+  }
 }
 
 function execOutput(node: FlowNode, inputs: ResolvedInput[]): NodeExec {

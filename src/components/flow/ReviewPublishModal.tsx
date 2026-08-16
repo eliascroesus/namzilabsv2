@@ -164,15 +164,23 @@ export function ReviewPublishModal({
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
+                        {/* This field is what the dashboard's Today / Last 7 days
+                            pills measure against, so the label has to say that —
+                            it read as a chart-only setting while silently
+                            deciding which period every record counts in. The
+                            choice is real: a meeting belongs to "today" by when
+                            it is BOOKED for some questions and by when the
+                            booking arrived for others. */}
                         <span className="mb-1 block text-xs font-medium text-neutral-600">Time reference</span>
                         <Select
                           value={m.timeField ?? ""}
                           width={260}
                           searchable
                           placeholder="Pick a field…"
-                          options={[{ value: "", label: "None" }, ...timeFieldOptions]}
+                          options={[{ value: "", label: "When it happened (default)" }, ...timeFieldOptions]}
                           onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
                         />
+                        <p className="mt-1 text-xs text-neutral-500">Which date the dashboard&rsquo;s Today / Last 7 days uses.</p>
                       </div>
                       {(m.viz === "line" || m.viz === "bar") && m.timeField && (
                         <div>

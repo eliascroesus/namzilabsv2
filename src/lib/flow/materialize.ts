@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
 import { backfillJobs, connections, flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
-import { runFlow, buildTile, type CompileProvenance } from "./engine";
+import { runFlow, buildTile, tileByRange, type CompileProvenance } from "./engine";
 import { compileEnabled } from "./compile/flags";
 import { getPublishedVersion } from "./store";
 import { parseGraph, type TileSpec } from "./types";
@@ -94,49 +94,34 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
     };
 
     /**
-     * THE SAME METRIC, ONCE PER DASHBOARD RANGE.
+     * THE SAME METRIC, SEEN THROUGH EACH DASHBOARD RANGE.
      *
      * The range pills sat above tiles they could not touch — a stored tile is
      * computed from the flow's own definition, so "Today" and "Last 90 days"
      * rendered the identical number. Reported, correctly, as "the time thing
      * doesn't work at all".
      *
-     * Each range is a REAL run of the graph with `ctx.window` bounding
-     * `occurred_at` at every Get-data read. Re-running is the only correct
-     * answer for every metric: a median or a rate cannot be recovered from a
-     * daily series, and adding buckets up would turn "median speed to lead"
-     * into arithmetic nobody asked for. The windows also make each run
-     * CHEAPER than the unwindowed one — "Today" reads a day, not a year — and
-     * "All time" is the run already performed above, reused rather than
-     * repeated.
+     * ONE run of the graph answers every range. The first attempt re-ran it per
+     * range with the window pushed into each Get-data read, which was six times
+     * the database work AND wrong: truncating the read starves the flow's own
+     * logic, so de-duplication picked the earliest record of the window instead
+     * of the genuine first, and any pair straddling midnight was counted in
+     * neither day. `tileByRange` instead windows the finished metric's records
+     * and re-does only the arithmetic — see its docstring.
      */
-    const byRangeByNode = new Map<string, NonNullable<TileSpec["byRange"]>>();
-    for (const t of tiles) byRangeByNode.set(t.nodeId, {});
-    for (const key of MATERIALIZED_RANGES) {
+    const ranges = MATERIALIZED_RANGES.map((key) => {
       const { range } = resolveRange(key);
-      const windowed =
-        key === "all"
-          ? { nodes, outputs }
-          : await runFlow(
-              { db, orgId, compile: compileEnabled("materialize"), window: { start: range.from.getTime(), end: range.to.getTime() } },
-              graph,
-            );
-      for (const o of windowed.outputs) {
-        const slot = byRangeByNode.get(o.nodeId);
-        if (slot) slot[key] = { value: o.tile.value, series: o.tile.series, groups: o.tile.groups };
-      }
-      for (const m of graph.metrics) {
-        if (!m.enabled) continue;
-        const ex = windowed.nodes.get(m.nodeId);
-        const slot = byRangeByNode.get(m.nodeId);
-        if (!slot || !ex || ex.status !== "ok") continue;
-        const tile = buildTile(m, ex.shape, ex.sample);
-        slot[key] = { value: tile.value, series: tile.series, groups: tile.groups };
-      }
-    }
+      return { key, start: range.from.getTime(), end: range.to.getTime(), all: key === "all" };
+    });
+    const presentationOf = new Map<string, Parameters<typeof tileByRange>[3]>();
+    for (const m of graph.metrics) if (m.enabled) presentationOf.set(m.nodeId, m);
+    // An Output node carries its own presentation in its config; the tile it
+    // already produced is the faithful copy of it.
+    for (const o of outputs) if (!presentationOf.has(o.nodeId)) presentationOf.set(o.nodeId, o.tile as Parameters<typeof tileByRange>[3]);
 
     for (const t of tiles) {
-      const byRange = byRangeByNode.get(t.nodeId);
+      const spec = presentationOf.get(t.nodeId);
+      const byRange = spec ? tileByRange(graph, nodes, t.nodeId, spec, ranges) : undefined;
       const tile = byRange && Object.keys(byRange).length > 0 ? { ...t.tile, byRange } : t.tile;
       await upsertResult(db, orgId, flowId, version, t.nodeId, tile, "fresh", null, record);
     }

@@ -15,7 +15,16 @@ type Tile = {
   value?: number;
   series?: Array<{ bucket: string; value: number }>;
   groups?: Array<{ label: string; value: number }>;
-  byRange?: Record<string, { value?: number; series?: Array<{ bucket: string; value: number }>; groups?: Array<{ label: string; value: number }> }>;
+  byRange?: Record<
+    string,
+    {
+      value?: number;
+      series?: Array<{ bucket: string; value: number }>;
+      groups?: Array<{ label: string; value: number }>;
+      unavailable?: string;
+      undated?: number;
+    }
+  >;
 };
 
 export type FlowResultRow = {
@@ -47,13 +56,42 @@ function fmt(value: number | undefined, t: Tile): string {
 export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: string }) {
   const stored = (row.tile ?? {}) as Tile;
   /**
-   * The dashboard's range, applied. Each range was computed by its own run of
-   * the flow (see materializeFlow), so switching pills is a lookup rather
-   * than a recompute — and a tile written before this feature has no
-   * `byRange` and keeps rendering exactly what it always did.
+   * The dashboard's range, applied. Every range was derived from the run the
+   * materializer already did (see `tileByRange`), so switching pills is a
+   * lookup rather than a recompute.
+   *
+   * THREE STATES, AND THEY MUST STAY DISTINGUISHABLE. A tile written before
+   * ranges existed has no `byRange` at all and keeps rendering what it always
+   * did. A range that was answered renders its own number. A range that could
+   * not be answered — a percentage with nothing in its denominator this
+   * morning, most often — renders nothing and says why. Collapsing the last two
+   * is what put the all-time figure under the "Today" pill behind a green
+   * "Up to date" badge.
    */
   const windowed = rangeKey ? stored.byRange?.[rangeKey] : undefined;
-  const t: Tile = windowed ? { ...stored, value: windowed.value, series: windowed.series, groups: windowed.groups } : stored;
+  const missing = rangeKey != null && stored.byRange != null && windowed == null;
+  const unavailable = windowed?.unavailable ?? (missing ? "This range has not been computed yet." : undefined);
+  const t: Tile = windowed && !unavailable ? { ...stored, value: windowed.value, series: windowed.series, groups: windowed.groups } : stored;
+  if (unavailable) {
+    return (
+      <div className="rounded-lg border border-neutral-200 p-5">
+        <div className="flex items-start justify-between">
+          <h3 className="font-medium text-neutral-800">{stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
+          <Link href={`/dashboard/flows/${row.flowId}`} className="text-xs text-blue-600 hover:underline">
+            Open →
+          </Link>
+        </div>
+        {/* An em-dash, not a 0: "no answer for this period" and "the answer is
+            zero" are different facts, and the tile that conflates them is the
+            one nobody can trust. */}
+        <p className="mt-2 text-4xl font-semibold text-neutral-300">—</p>
+        <p className="mt-2 text-sm text-neutral-500">No data for this period.</p>
+        <p className="mt-1 text-xs text-neutral-400" title={unavailable}>
+          {unavailable.length > 120 ? `${unavailable.slice(0, 120)}…` : unavailable}
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="rounded-lg border border-neutral-200 p-5">
       <div className="flex items-start justify-between">
@@ -100,6 +138,16 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           </Link>
         </p>
       )}
+
+      {/* A record with no date in this metric's time reference belongs to no
+          period, so it is in "All time" and in none of the pills. Saying so is
+          the same rule the import bar follows: a number that leaves data out
+          has to admit it, or the gap reads as an answer. */}
+      {windowed?.undated ? (
+        <p className="mt-2 text-xs text-amber-700">
+          {windowed.undated} record{windowed.undated === 1 ? "" : "s"} carry no date, so they are counted only in All time.
+        </p>
+      ) : null}
 
       {/* Phase 8 — a number computed over an import that is still running is
           accurate and INCOMPLETE, and "Data as of <now>" says only the first

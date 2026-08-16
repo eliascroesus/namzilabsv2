@@ -811,9 +811,22 @@ export type TileSpec = {
    * migration, and so a tile written before the feature simply has no
    * `byRange` and renders exactly as it always did.
    *
-   * Every entry is a REAL run of the flow over that window — not a slice of a
-   * stored series — because a median or a rate cannot be re-derived from
-   * buckets.
+   * Every range the dashboard offers has an entry, ALWAYS — a range that could
+   * not be answered says so in `unavailable` rather than going missing. A
+   * missing key would be indistinguishable from a tile written before this
+   * existed, and the dashboard would quietly show the flow's own all-time
+   * number under a narrower pill.
    */
-  byRange?: Record<string, { value?: number; series?: Array<{ bucket: string; value: number }>; groups?: Array<{ label: string; value: number }> }>;
+  byRange?: Record<
+    string,
+    {
+      value?: number;
+      series?: Array<{ bucket: string; value: number }>;
+      groups?: Array<{ label: string; value: number }>;
+      /** Why this range has no number — shown instead of one, never in place of one. */
+      unavailable?: string;
+      /** Records carrying no date in the metric's time reference, so counted in no period. */
+      undated?: number;
+    }
+  >;
 };
