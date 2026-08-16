@@ -3,7 +3,17 @@
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, useNodesState, useEdgesState, useReactFlow, type Edge } from "@xyflow/react";
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  BackgroundVariant,
+  useNodesState,
+  useEdgesState,
+  useReactFlow,
+  useUpdateNodeInternals,
+  type Edge,
+} from "@xyflow/react";
 import { isDatasetFormulaOp, seedMetricFormat, type NodeType } from "@/lib/flow/types";
 import { isBinaryCalc, outputShapeOf, producesDataset, producesNumber } from "@/lib/flow/shapes";
 import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
@@ -54,7 +64,7 @@ async function pollTestResult(runId: string): Promise<NodeTestDTO> {
   return fail("The test is still running after 90 seconds. It may finish on its own — reopen this step shortly to see the result.");
 }
 import {
-  bridgeEdgeFor,
+  bridgeEdgesFor,
   buildFieldGroups,
   computeNodeStatus,
   computeStepNumbers,
@@ -439,27 +449,37 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   /** Remove a node with exactly one chain in + one chain out, bridging prev→next. */
   const deleteAndReconnect = useCallback(
     (id: string) => {
-      // A matching Combine must reconnect its KEPT lane — bridging blind from
-      // the first edge could hand downstream the check list's records.
-      const bridge = bridgeEdgeFor(id, sEdges, matchKeepOf(nodes.find((n) => n.id === id)));
-      if (!bridge) return deleteNode(id);
+      /**
+       * ALL the edges, not just the structural ones. A step wired into a
+       * Calculate's A or B input is connected by a number reference, which
+       * `structuralEdges` deliberately hides from the drawn line — and hiding
+       * it here meant the step below had no outgoing edge to bridge, so
+       * deleting the step above it left it standing alone with "Needs setup".
+       *
+       * A matching Combine still reconnects its KEPT lane: bridging blind from
+       * the first edge could hand downstream the check list's records.
+       */
+      const bridges = bridgeEdgesFor(id, edges, matchKeepOf(nodes.find((n) => n.id === id)));
+      if (bridges.length === 0) return deleteNode(id);
       commit();
-      setEdges((es) => [...es.filter((e) => e.source !== id && e.target !== id), bridge]);
+      setEdges((es) => [...es.filter((e) => e.source !== id && e.target !== id), ...bridges]);
+      const bridgedTargets = new Map(bridges.map((b) => [b.target, b.source]));
       setNodes((ns) =>
         ns
           .map((n) => {
-            if (n.id !== bridge.target) return n;
+            const newSource = bridgedTargets.get(n.id);
+            if (newSource == null) return n;
             // Deleting the head of a matching Combine's KEEP lane promotes
             // the bridged predecessor into the role — otherwise the config
             // names a step that no longer exists.
-            const repointed = matchKeepOf(n) === id ? { ...n.data.config, keepNodeId: bridge.source } : n.data.config;
+            const repointed = matchKeepOf(n) === id ? { ...n.data.config, keepNodeId: newSource } : n.data.config;
             return { ...n, data: { ...n.data, config: repointed, dirty: true } };
           })
           .filter((n) => n.id !== id),
       );
       setSelectedId(null);
     },
-    [nodes, sEdges, commit, setEdges, setNodes, deleteNode],
+    [nodes, edges, commit, setEdges, setNodes, deleteNode],
   );
 
   // Multi-input steps are wired from the config panel (labeled pills), never by
@@ -901,6 +921,39 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       };
     });
   }, [selected, nodes, edges, stepNoById]);
+
+  /**
+   * RE-MEASURE A PATHS HUB WHENEVER ITS LANES CHANGE.
+   *
+   * React Flow caches each node's handle positions and only re-reads them when
+   * the card's BOX changes size — a resize, a type change. A hub's lanes are
+   * handles created from its config: adding a branch adds a 6x6 invisible
+   * handle to a fixed-width card, so nothing it watches changes. The new lane's
+   * edge then cannot be positioned, and an edge whose endpoints resolve to null
+   * is not drawn at all — no line, no elbow, no marker. That is the reported
+   * "the connection line doesn't appear when I add a new branch": the branch,
+   * its step and its edge all existed, and only the drawing was missing, which
+   * is why reloading the page fixed it.
+   *
+   * The lanes that were already there are re-measured too, and need to be: the
+   * handles are spaced (i+1)/(n+1) across the card, so going from two lanes to
+   * three moves every existing one.
+   */
+  const updateNodeInternals = useUpdateNodeInternals();
+  const laneSignature = useMemo(
+    () =>
+      nodes
+        .filter((n) => n.type === "paths")
+        .map((n) => `${n.id}:${pathHandles(n.data).map((h) => h.id).join(",")}`)
+        .join("|"),
+    [nodes],
+  );
+  useEffect(() => {
+    for (const part of laneSignature.split("|")) {
+      const id = part.split(":")[0];
+      if (id) updateNodeInternals(id);
+    }
+  }, [laneSignature, updateNodeInternals]);
 
   // Managed top-to-bottom layout + per-node status + terminal add points (no free placement).
   const layout = useMemo(() => computeVerticalLayout(nodes, edges), [nodes, edges]);

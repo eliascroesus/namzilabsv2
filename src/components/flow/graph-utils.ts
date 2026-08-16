@@ -72,12 +72,38 @@ export function structuralEdges(nodes: FNode[], edges: Edge[]): Edge[] {
   const compareIds = new Set(nodes.filter(isCompareNode).map((n) => n.id));
   const hasPlainIn = new Set<string>();
   for (const e of edges) if (compareIds.has(e.target) && e.targetHandle == null) hasPlainIn.add(e.target);
-  return edges.filter((e) => {
+  const kept = edges.filter((e) => {
     if (!compareIds.has(e.target)) return true;
     if (e.targetHandle === "b") return false;
     if (e.targetHandle === "a") return !hasPlainIn.has(e.target);
     return true;
   });
+  /**
+   * ONE LINE BETWEEN TWO STEPS, however many edges connect them.
+   *
+   * Every new Calculate is created with TWO edges from the step above it: the
+   * chain edge that fixes its place in the line, and an "a" reference that
+   * pre-fills its first number if the user later switches it to a comparison.
+   * A Calculate's default op is `count`, which is not a comparison, so both
+   * edges survived the filter above and the pair read as a two-input junction.
+   * The damage was entirely downstream of that miscount: the layout treats
+   * multi-input nodes as merges and centres them on their sources, dropping the
+   * branch lane offset, so every Calculate under a Paths branch drifted right;
+   * and delete-and-reconnect requires exactly one outgoing edge, saw two, and
+   * orphaned the Calculate instead of bridging to it.
+   *
+   * Only ONE line is ever drawn between two steps anyway (`displayEdges`
+   * collapses them), so this makes the shape the code reasons about the same
+   * shape the customer is looking at. The plain chain edge wins, because that
+   * is the one that means "comes after".
+   */
+  const byPair = new Map<string, Edge>();
+  for (const e of kept) {
+    const pair = `${e.source}::${e.sourceHandle ?? ""}->${e.target}`;
+    const seen = byPair.get(pair);
+    if (!seen || (seen.targetHandle != null && e.targetHandle == null)) byPair.set(pair, e);
+  }
+  return [...byPair.values()];
 }
 
 /** Assign 1-based step numbers in topological (top-to-bottom, left-to-right) order. */
@@ -183,7 +209,13 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
     const parent = nodeById.get(edge.source);
     if (parent && parent.type === "paths" && edge.handle) {
       const ids = pathIds(parent);
-      const idx = Math.max(0, ids.indexOf(edge.handle));
+      const idx = ids.indexOf(edge.handle);
+      // A handle the hub no longer lists (a stale edge from an undo, or a
+      // branch removed while its child survived) used to clamp to 0 and so
+      // claim the FIRST lane's column — landing on top of the branch that
+      // really is lane one and shoving it sideways. It has no lane, so it gets
+      // no offset and stays under the hub, where the packing can separate it.
+      if (idx < 0) return px;
       return px + (idx - (ids.length - 1) / 2) * SPREAD;
     }
     return px;
@@ -330,9 +362,10 @@ export function descendantsOf(start: string, edges: Edge[]): Set<string> {
 // ---------- Delete & reconnect ----------
 
 /**
- * The bridge edge that reconnects a node's predecessor to its single successor when
- * the node is removed. A multi-input junction (Unite) bridges from its FIRST lane so
- * the line downstream survives; multi-output nodes are deleted normally (null).
+ * The bridge edges that reconnect a node's predecessor to its successors when the
+ * node is removed. A multi-input junction (Unite) bridges from its FIRST lane so
+ * the line downstream survives; a node with no input or no output has nothing to
+ * bridge and is simply deleted (empty).
  *
  * `preferredSource` names the lane that must survive when the first one is the
  * wrong answer: deleting a MATCHING Combine has to reconnect the kept lane —
@@ -340,20 +373,32 @@ export function descendantsOf(start: string, edges: Edge[]): Set<string> {
  * list's records, silently, the moment the keep lane happened to be wired
  * second.
  */
-export function bridgeEdgeFor(nodeId: string, edges: Edge[], preferredSource?: string | null): Edge | null {
+export function bridgeEdgesFor(nodeId: string, edges: Edge[], preferredSource?: string | null): Edge[] {
   const incoming = edges.filter((e) => e.target === nodeId);
   const outgoing = edges.filter((e) => e.source === nodeId);
-  if (incoming.length === 0 || outgoing.length !== 1) return null;
+  if (incoming.length === 0 || outgoing.length === 0) return [];
   const i = (preferredSource ? incoming.find((e) => e.source === preferredSource) : undefined) ?? incoming[0];
-  const o = outgoing[0];
-  return {
+  /**
+   * ONE BRIDGE PER SURVIVING CONNECTION, not one per deleted node.
+   *
+   * Deleting a step in the middle of a line must leave the step above wired to
+   * the step below — for every step below, and through whichever input it was
+   * wired to. Requiring exactly one outgoing edge failed both halves: a step
+   * feeding two next steps orphaned both, and a step feeding a Calculate's B
+   * input orphaned it because that edge is a number reference rather than a
+   * chain link, so it was not even counted.
+   *
+   * `targetHandle` is carried through, so a number that was wired into B comes
+   * back into B rather than silently becoming the chain input.
+   */
+  return outgoing.map((o) => ({
     id: `e_${Math.random().toString(36).slice(2, 9)}`,
     type: "insert",
     source: i.source,
     sourceHandle: i.sourceHandle ?? undefined,
     target: o.target,
     targetHandle: o.targetHandle ?? undefined,
-  };
+  }));
 }
 
 // ---------- Variable picker fields ----------

@@ -2,7 +2,7 @@ import type { FieldInfo } from "@/lib/flow/schema-infer";
 import { describe, it, expect } from "vitest";
 import type { Edge } from "@xyflow/react";
 import {
-  bridgeEdgeFor,
+  bridgeEdgesFor,
   buildFieldGroups,
   computeVerticalLayout,
   computeStepNumbers,
@@ -21,22 +21,21 @@ const N = (id: string, type: string, data: Partial<FNode["data"]> = {}): FNode =
 const E = (source: string, target: string, extra: Partial<Edge> = {}): Edge => ({ id: `${source}->${target}`, source, target, ...extra });
 const titleOf = (n: FNode) => (typeof n.data.label === "string" && n.data.label) || String(n.type);
 
-describe("bridgeEdgeFor (delete & reconnect)", () => {
+describe("bridgeEdgesFor (delete & reconnect)", () => {
   it("bridges a node with exactly one in and one out edge", () => {
-    const edges = [E("a", "b"), E("b", "c")];
-    const bridge = bridgeEdgeFor("b", edges);
-    expect(bridge).not.toBeNull();
-    expect(bridge!.source).toBe("a");
-    expect(bridge!.target).toBe("c");
+    const bridges = bridgeEdgesFor("b", [E("a", "b"), E("b", "c")]);
+    expect(bridges).toHaveLength(1);
+    expect(bridges[0].source).toBe("a");
+    expect(bridges[0].target).toBe("c");
   });
   it("preserves the incoming sourceHandle and outgoing targetHandle", () => {
     const edges = [E("p", "b", { sourceHandle: "x" }), E("b", "f", { targetHandle: "a" })];
-    const bridge = bridgeEdgeFor("b", edges)!;
+    const [bridge] = bridgeEdgesFor("b", edges);
     expect(bridge.sourceHandle).toBe("x");
     expect(bridge.targetHandle).toBe("a");
   });
   it("bridges a multi-input junction (Unite) from its first lane", () => {
-    const bridge = bridgeEdgeFor("b", [E("a", "b"), E("a2", "b"), E("b", "c")])!;
+    const [bridge] = bridgeEdgesFor("b", [E("a", "b"), E("a2", "b"), E("b", "c")]);
     expect(bridge.source).toBe("a");
     expect(bridge.target).toBe("c");
   });
@@ -45,17 +44,40 @@ describe("bridgeEdgeFor (delete & reconnect)", () => {
     // whose keep lane was wired second hands every downstream step the check
     // list's records — silently, with a well-formed graph no validator flags.
     const edges = [E("sheetRows", "x"), E("closeLeads", "x"), E("x", "calc")];
-    const bridge = bridgeEdgeFor("x", edges, "closeLeads")!;
+    const [bridge] = bridgeEdgesFor("x", edges, "closeLeads");
     expect(bridge.source).toBe("closeLeads");
     expect(bridge.target).toBe("calc");
     // No preference (a stacking Combine) keeps the old first-lane rule.
-    expect(bridgeEdgeFor("x", edges)!.source).toBe("sheetRows");
+    expect(bridgeEdgesFor("x", edges)[0].source).toBe("sheetRows");
     // A preference that no longer matches any edge falls back rather than failing.
-    expect(bridgeEdgeFor("x", edges, "gone")!.source).toBe("sheetRows");
+    expect(bridgeEdgesFor("x", edges, "gone")[0].source).toBe("sheetRows");
   });
-  it("returns null for multiple outputs or no input", () => {
-    expect(bridgeEdgeFor("b", [E("a", "b"), E("b", "c"), E("b", "c2")])).toBeNull();
-    expect(bridgeEdgeFor("b", [E("b", "c")])).toBeNull(); // no input
+  /**
+   * A step feeding several next steps used to orphan ALL of them: the rule was
+   * "exactly one outgoing edge or don't bridge at all". Deleting one step in the
+   * middle of a flow then broke every line through it at once, which is the
+   * opposite of what deleting a step should do.
+   */
+  it("reconnects every step below, not just a single one", () => {
+    const bridges = bridgeEdgesFor("b", [E("a", "b"), E("b", "c"), E("b", "c2")]);
+    expect(bridges.map((x) => x.target).sort()).toEqual(["c", "c2"]);
+    expect(bridges.every((x) => x.source === "a")).toBe(true);
+  });
+  /**
+   * THE REPORTED CASE. A step wired into a Calculate's B input is connected by a
+   * number reference, not a chain link. Deleting the step above it left the
+   * Calculate with nothing wired in, reading "Needs setup" beside the step that
+   * should have taken its place.
+   */
+  it("reconnects a step wired into a Calculate's B input, through B", () => {
+    const bridges = bridgeEdgesFor("filter", [E("whop", "filter"), E("filter", "calc", { targetHandle: "b" })]);
+    expect(bridges).toHaveLength(1);
+    expect(bridges[0].source).toBe("whop");
+    expect(bridges[0].targetHandle).toBe("b");
+  });
+  it("has nothing to bridge with no input or no output", () => {
+    expect(bridgeEdgesFor("b", [E("b", "c")])).toEqual([]); // no input
+    expect(bridgeEdgesFor("b", [E("a", "b")])).toEqual([]); // no output
   });
 });
 
@@ -474,6 +496,53 @@ describe("multiple Get data roots — parallel lanes", () => {
     const terms = terminalIds(nodes, edges);
     expect(terms.has("f1")).toBe(true);
     expect(terms.has("f2")).toBe(true);
+  });
+});
+
+/**
+ * THE REPORTED MISALIGNMENT: "the calculate nodes are moved a bit to the right".
+ *
+ * Every new Calculate is created with two edges from the step above it — the
+ * chain edge, and an "a" reference that pre-fills its first number if the op is
+ * later switched to a comparison. A Calculate's default op is `count`, which is
+ * NOT a comparison, so both edges survived into the flow's shape and the step
+ * read as a two-input junction. The layout centres junctions on their sources,
+ * which discards the branch lane offset entirely: three Calculates that belong
+ * at -320 / 0 / +320 collapsed onto one column and were then shoved apart to
+ * the right by the packing pass, landing at 0 / 288 / 576 — a staircase.
+ */
+describe("a Calculate under a branch stays in its branch's column", () => {
+  const hub = N("hub", "paths", { config: { paths: [{ id: "pA" }, { id: "pB" }], fallbackId: "fb" } });
+  const calcs = ["cA", "cB", "cFb"].map((id) => N(id, "formula", { config: { op: "count" } }));
+  const nodes = [N("src", "app"), hub, ...calcs];
+  /** Each lane's Calculate, wired the way the canvas wires one: chain + "a". */
+  const edges = [
+    E("src", "hub"),
+    E("hub", "cA", { sourceHandle: "pA" }),
+    E("hub", "cA", { sourceHandle: "pA", targetHandle: "a" }),
+    E("hub", "cB", { sourceHandle: "pB" }),
+    E("hub", "cB", { sourceHandle: "pB", targetHandle: "a" }),
+    E("hub", "cFb", { sourceHandle: "fb" }),
+    E("hub", "cFb", { sourceHandle: "fb", targetHandle: "a" }),
+  ];
+
+  it("spreads the three lanes symmetrically about the hub", () => {
+    const pos = computeVerticalLayout(nodes, edges);
+    const hubX = pos.get("hub")!.x;
+    const xs = ["cA", "cB", "cFb"].map((id) => pos.get(id)!.x);
+    // Symmetric about the hub: one lane left, one under it, one right.
+    expect(xs[1]).toBe(hubX);
+    expect(xs[0]).toBeLessThan(hubX);
+    expect(xs[2]).toBeGreaterThan(hubX);
+    expect(hubX - xs[0]).toBe(xs[2] - hubX);
+    // Sabotage: let the duplicate edge count as a second input and all three
+    // land at 0 / 288 / 576 — every one of them to the RIGHT of its lane.
+    expect(xs.every((x, i) => i === 0 || x > xs[i - 1])).toBe(true);
+  });
+
+  it("counts the pair as one connection, so delete still bridges through it", () => {
+    // The same miscount broke deletion: two edges to one step read as a fan-out.
+    expect(structuralEdges(nodes, edges).filter((e) => e.target === "cA")).toHaveLength(1);
   });
 });
 
