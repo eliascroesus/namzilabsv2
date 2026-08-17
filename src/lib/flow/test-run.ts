@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { connections, testRuns } from "@/db/schema";
 import type { DB } from "@/db/types";
-import { appFieldUnion, runFlow, type NodeExec } from "./engine";
+import { appFieldUnion, headlineValue, runFlow, type NodeExec } from "./engine";
 import type { FieldInfo } from "./schema-infer";
 import { compileEnabled } from "./compile/flags";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
@@ -95,11 +95,15 @@ function execToDTO(exec: NodeExec | undefined, inputSample: unknown[]): NodeTest
     inputSample,
     outputSchema: exec.outputSchema,
     tile: exec.tile,
-    // A grouped step's headline is its metric over EVERY record. Without this
+    // A split step's headline is its metric over EVERY record. Without this
     // the DTO carries no number at all and `resultLabel` falls back to
     // `recordsOut`, which for a grouped shape is the GROUP COUNT — a step
-    // measuring 35 minutes across two groups reported "2".
-    value: exec.shape.kind === "scalar" ? exec.shape.value : exec.shape.kind === "grouped" ? exec.shape.total : undefined,
+    // measuring 35 minutes across two groups reported "2" — and for a series
+    // is the BUCKET COUNT, "12" for a year split by month.
+    //
+    // THE SAME FUNCTION THE TILE USES. Deriving it here independently is how
+    // series came to be missing from a rule the tile had all along.
+    value: headlineValue(exec.shape),
     dedupe: exec.dedupe,
     pairing: exec.pairing,
     crossRef: exec.crossRef,

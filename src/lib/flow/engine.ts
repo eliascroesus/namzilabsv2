@@ -1239,7 +1239,7 @@ function execGroup(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
  * Filter, …) contributes its record count — its "Output number" — so counts like
  * "56 passed" or "76 loaded" can be compared directly.
  */
-function scalarAt(inputs: ResolvedInput[], handle: "a" | "b", fixed?: number | null): number {
+function scalarAt(inputs: ResolvedInput[], handle: "a" | "b", fixed?: number | null, fieldPath?: string | null): number {
   const found = inputs.find((i) => i.targetHandle === handle);
   if (!found) {
     // No step wired in: a typed-in literal number fills the slot.
@@ -1247,7 +1247,41 @@ function scalarAt(inputs: ResolvedInput[], handle: "a" | "b", fixed?: number | n
     throw new Error(`Needs a number connected to input ${handle.toUpperCase()}.`);
   }
   if (found.shape.kind === "scalar") return found.shape.value;
-  if (found.shape.kind === "dataset") return found.shape.records.length;
+  if (found.shape.kind === "dataset") {
+    /**
+     * A picked FIELD beats the record count: the input is "that column",
+     * read off the step's newest record. This is what makes a spreadsheet
+     * cell holding a precomputed total usable in a Calculate — the one-row
+     * summary tab it exists for has exactly one record, and for anything
+     * longer "the newest record's value" is the same current-state answer
+     * every preview already gives. `toNumber` is the same reader the
+     * aggregations use, so a text cell holding "5" counts as 5 here exactly
+     * as it would in a Sum — and a value that genuinely isn't a number says
+     * WHICH field and WHAT it held, because "isn't a single number" with no
+     * name was unactionable.
+     */
+    if (fieldPath) {
+      const rec = found.shape.records[0];
+      if (!rec) throw new Error(`Input ${handle.toUpperCase()} has no records to read "${fieldPath}" from.`);
+      const v = toNumber(getField(rec, fieldPath));
+      if (v == null) {
+        const raw = getField(rec, fieldPath);
+        // Two different failures, two different sentences: a value that
+        // exists but isn't numeric, and a field the records don't carry at
+        // all — a renamed sheet column lands here, and calling that "empty"
+        // sent the person to fix the wrong thing.
+        const said =
+          raw === undefined
+            ? "the records don't carry that field — it may have been renamed at the source"
+            : raw == null || raw === ""
+              ? "the latest record has no value there"
+              : `the latest record holds "${String(raw).slice(0, 60)}", which isn't a number`;
+        throw new Error(`Input ${handle.toUpperCase()} reads "${fieldPath}", but ${said}. Pick a numeric field, or the step's Output number.`);
+      }
+      return v;
+    }
+    return found.shape.records.length;
+  }
   throw new Error("This input isn't a single number — pick a Count step or a step's record count.");
 }
 
@@ -1319,7 +1353,7 @@ function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
     return { status: "ok", nodeType: "formula", shape, recordsIn: records.length, recordsOut, sample: records.slice(0, 3), outputSchema: [] };
   }
 
-  const value = formulaValue(cfg.op, scalarAt(inputs, "a", cfg.aFixed), scalarAt(inputs, "b", cfg.bFixed));
+  const value = formulaValue(cfg.op, scalarAt(inputs, "a", cfg.aFixed, cfg.aField), scalarAt(inputs, "b", cfg.bFixed, cfg.bField));
   return { status: "ok", nodeType: "formula", shape: { kind: "scalar", value: round(value) }, recordsIn: 2, recordsOut: 1, sample: [], outputSchema: [] };
 }
 
@@ -1328,7 +1362,7 @@ function execCalculate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = CalculateConfigSchema.parse(node.data.config ?? {});
 
   if (cfg.mode === "compare") {
-    const value = formulaValue(cfg.op, scalarAt(inputs, "a", cfg.aFixed), scalarAt(inputs, "b", cfg.bFixed));
+    const value = formulaValue(cfg.op, scalarAt(inputs, "a", cfg.aFixed, cfg.aField), scalarAt(inputs, "b", cfg.bFixed, cfg.bField));
     return { status: "ok", nodeType: "calculate", shape: { kind: "scalar", value: round(value) }, recordsIn: 2, recordsOut: 1, sample: [], outputSchema: [] };
   }
 
@@ -1376,6 +1410,29 @@ export type TilePresentation = {
 
 /** Build a dashboard tile from a computed shape + its presentation. Shared by the
  * Output node and the materializer (endpoint metrics). */
+/**
+ * THE ONE NUMBER A SHAPE REPRESENTS — the tile's headline and the builder's
+ * Test result, computed in one place so the two cannot disagree.
+ *
+ * They did. The Test DTO derived its own number and covered scalar and
+ * grouped but not SERIES, so a Calculate split over time reported its BUCKET
+ * COUNT in the editor ("12" for twelve months) while the dashboard rendered
+ * the actual total — and grouped lacked the `?? sum` fallback the tile has, so
+ * a grouped shape with no precomputed total fell back to the group count the
+ * same way. The comment beside that DTO line already describes this exact
+ * failure being fixed once for grouped; the fix belongs here, once, for every
+ * shape.
+ *
+ * A dataset has no single number of its own — its headline is a record count,
+ * which the caller states — so it answers undefined.
+ */
+export function headlineValue(shape: Shape): number | undefined {
+  if (shape.kind === "scalar") return shape.value;
+  if (shape.kind === "series") return shape.total ?? round(shape.series.reduce((a, b) => a + b.value, 0));
+  if (shape.kind === "grouped") return shape.total ?? round(shape.groups.reduce((a, b) => a + b.value, 0));
+  return undefined;
+}
+
 export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowRecord[]): TileSpec {
   const tile: TileSpec = {
     name: spec.name,
@@ -1406,16 +1463,16 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
     tile.value = round(tile.series.reduce((a, b) => a + b.value, 0));
     return tile;
   }
-  if (shape.kind === "scalar") tile.value = shape.value;
+  // The metric over the whole set when the shape carried one; the sum of the
+  // buckets only as the fallback it always was. `headlineValue` is the shared
+  // rule — the builder's Test box reads the same function.
+  if (shape.kind === "scalar") tile.value = headlineValue(shape);
   else if (shape.kind === "series") {
     tile.series = shape.series;
-    // The metric over the whole set when the shape carried one; the sum of the
-    // buckets only as the fallback it always was. For a sum or a count the two
-    // agree, so no existing tile moves.
-    tile.value = shape.total ?? round(shape.series.reduce((a, b) => a + b.value, 0));
+    tile.value = headlineValue(shape);
   } else if (shape.kind === "grouped") {
     tile.groups = shape.groups;
-    tile.value = shape.total ?? round(shape.groups.reduce((a, b) => a + b.value, 0));
+    tile.value = headlineValue(shape);
   } else {
     tile.value = shape.records.length;
     tile.sample = shape.records.slice(0, 5);
@@ -1569,8 +1626,30 @@ export function tileByRange(
         throw new Error("This step is no longer part of the flow.");
       } else {
         const inputs: ResolvedInput[] = [];
+        /**
+         * A FIELD-READ INPUT IS CURRENT STATE, NOT A COHORT — so the range
+         * must not window it. A compare slot reading a spreadsheet cell
+         * (aField/bField) reads the newest record's value: the summary row is
+         * usually dated whenever it was written, so windowing that dataset to
+         * "Today" empties it and every pill but All time would show "no data"
+         * for a tile whose denominator is a constant. Same rule as a typed-in
+         * literal, which also stays unwindowed. The OTHER slot — a genuine
+         * count — still windows, so "booked today ÷ the sheet's total" means
+         * exactly what it says.
+         */
+        const cfgAB = (node.data.config ?? {}) as { aField?: unknown; bField?: unknown };
+        const fieldRead = (h: string | null | undefined): boolean =>
+          (h === "a" && typeof cfgAB.aField === "string" && cfgAB.aField !== "") ||
+          (h === "b" && typeof cfgAB.bField === "string" && cfgAB.bField !== "");
         for (const e of incomingBy.get(id) ?? []) {
-          const se = windowed(e.source);
+          let se: NodeExecOk;
+          if (fieldRead(e.targetHandle)) {
+            const full = nodes.get(e.source);
+            if (!full || full.status !== "ok") throw new Error("This step produced no result.");
+            se = full;
+          } else {
+            se = windowed(e.source);
+          }
           const shape = e.sourceHandle && se.outputs?.[e.sourceHandle] ? se.outputs[e.sourceHandle] : se.shape;
           inputs.push({ shape, exec: se, targetHandle: e.targetHandle ?? null, sourceNodeId: e.source });
         }

@@ -18,7 +18,10 @@ export function formatMetricValue(
       maximumFractionDigits: p,
     }).format(value);
   }
-  const n = value.toLocaleString(undefined, { maximumFractionDigits: p });
+  // en-US pinned like every other formatter in the pipeline (the builder's
+  // resultLabel, the currency branch above): the same tile must not read
+  // "1,234" on one machine and "1.234" on another.
+  const n = value.toLocaleString("en-US", { maximumFractionDigits: p });
   return opts.unit ? `${n} ${opts.unit}` : n;
 }
 

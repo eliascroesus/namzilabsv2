@@ -416,6 +416,17 @@ export const FormulaConfigSchema = z.object({
   /** Typed-in literal numbers for the A/B inputs — used when no step is wired in. */
   aFixed: z.number().nullable().optional(),
   bFixed: z.number().nullable().optional(),
+  /**
+   * A FIELD an A/B input reads off its wired step, instead of that step's
+   * record count. "Count this" used to offer exactly one thing per step —
+   * its Output number — so a spreadsheet cell holding a precomputed total
+   * was unreachable from a Calculate. The value is the field on the step's
+   * NEWEST record: for the one-row summary tab this exists for, that is the
+   * cell; for a multi-row step it is the current value, same as every
+   * preview. Unset means the record count, unchanged for every saved flow.
+   */
+  aField: z.string().nullable().optional(),
+  bField: z.string().nullable().optional(),
   // Dataset ops: which field to aggregate (sum/avg/min/max read numbers from it,
   // count_distinct counts its unique values), plus an optional time split.
   field: z.string().default("value"),
@@ -457,6 +468,9 @@ export const CalculateConfigSchema = z.object({
   /** Typed-in literal numbers for the A/B inputs — used when no step is wired in. */
   aFixed: z.number().nullable().optional(),
   bFixed: z.number().nullable().optional(),
+  /** A field read off the wired step instead of its record count — see FormulaConfigSchema. */
+  aField: z.string().nullable().optional(),
+  bField: z.string().nullable().optional(),
 });
 export type CalculateConfig = z.infer<typeof CalculateConfigSchema>;
 

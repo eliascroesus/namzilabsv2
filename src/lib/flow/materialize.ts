@@ -91,7 +91,11 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
       const cfg = nodeCfgById.get(m.nodeId);
       if (!cfg) return m;
       const derived = seedMetricFormat(cfg);
-      return m.format === "duration" || derived.format === "duration" ? { ...m, ...derived } : m;
+      if (m.format !== "duration" && derived.format !== "duration") return m;
+      // A step switched from duration back to plain number sheds its unit too:
+      // `seedMetricFormat`'s number answer carries no unit key, so a bare
+      // spread kept the old "minutes" and a count rendered as "56 minutes".
+      return derived.format === "duration" ? { ...m, ...derived } : { ...m, ...derived, unit: undefined, durationDisplay: undefined };
     };
     for (const m of graph.metrics) {
       if (!m.enabled) continue;

@@ -46,19 +46,27 @@ export function DataBrowser({
   groups,
   onPick,
   onCustom,
+  initialType,
   trigger,
 }: {
   groups: DataGroup[];
   onPick: (ref: FieldRef) => void;
   /** When set, the search text can be committed as-is (a custom field path). */
   onCustom?: (text: string) => void;
+  /**
+   * The type chip preselected when the flyout opens — a CONTEXT, not a cage.
+   * A Calculate's number slot opens on "Numbers" because that is almost
+   * always the answer, but every other kind of value stays one chip away:
+   * a text column holding "5" is still a number to the engine.
+   */
+  initialType?: FieldTypeFilter;
   trigger: (o: { open: boolean; toggle: () => void }) => ReactNode;
 }) {
   const [open, setOpenRaw] = useState(false);
   const [q, setQ] = useState("");
   // Narrow the list to one kind of value (text / numbers / dates). Transient
   // browse state like the search — reset when the flyout closes.
-  const [typeFilter, setTypeFilter] = useState<FieldTypeFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<FieldTypeFilter>(initialType ?? "all");
   // Drill state: which step, and the trail of container fields we've descended into.
   const [drill, setDrill] = useState<{ groupId: string; trail: DataField[] } | null>(null);
   // Which step groups are expanded. Collapsed by default so the user first sees every
@@ -73,7 +81,7 @@ export function DataBrowser({
     setOpenRaw(o);
     if (!o) {
       setQ("");
-      setTypeFilter("all");
+      setTypeFilter(initialType ?? "all");
       setDrill(null);
       setExpanded(new Set());
       setShowAll(new Set());

@@ -554,12 +554,15 @@ function NodeConfig({
     const fieldPath = String((useDistinct ? cfg.distinctField : cfg.field) ?? (useDistinct ? "subject" : "value"));
     const fieldLabel = groups.flatMap((g) => g.fields).find((f) => f.path === fieldPath)?.label ?? humanizeKey(fieldPath);
     const setOp = (v: string) => {
-      onChange({ op: v });
       // Numbers play no part in a dataset aggregation — clear any wired slots so
-      // stray a/b reference edges never linger on the canvas.
+      // stray a/b reference edges never linger on the canvas. The picked
+      // columns go with them: they described inputs that no longer exist.
       if (isDatasetFormulaOp(v) && !datasetOp) {
+        onChange({ op: v, aField: null, bField: null });
         if (inA) onSetInput("a", null);
         if (inB) onSetInput("b", null);
+      } else {
+        onChange({ op: v });
       }
     };
     return (
@@ -649,8 +652,8 @@ function NodeConfig({
           </>
         ) : (
           <>
-            <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} fixed={aFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ aFixed: n })} />
-            <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} fixed={bFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ bFixed: n })} />
+            <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} fixed={aFixed} fieldPath={typeof cfg.aField === "string" ? cfg.aField : null} onSetInput={onSetInput} onSetFixed={(n) => onChange({ aFixed: n })} onSetField={(path) => onChange({ aField: path })} />
+            <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} fixed={bFixed} fieldPath={typeof cfg.bField === "string" ? cfg.bField : null} onSetInput={onSetInput} onSetFixed={(n) => onChange({ bFixed: n })} onSetField={(path) => onChange({ bField: path })} />
           </>
         )}
       </div>
@@ -868,8 +871,8 @@ function CalcCompare({ cfg, inputs, numberGroups, onChange, onSetInput }: { cfg:
       <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
         <p className="font-medium">{formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}</p>
       </div>
-      <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} fixed={aFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ aFixed: n })} />
-      <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} fixed={bFixed} onSetInput={onSetInput} onSetFixed={(n) => onChange({ bFixed: n })} />
+      <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} fixed={aFixed} fieldPath={typeof cfg.aField === "string" ? cfg.aField : null} onSetInput={onSetInput} onSetFixed={(n) => onChange({ aFixed: n })} onSetField={(path) => onChange({ aField: path })} />
+      <NumberPicker handle="b" label={labels.b} desc={inB} groups={numberGroups} fixed={bFixed} fieldPath={typeof cfg.bField === "string" ? cfg.bField : null} onSetInput={onSetInput} onSetFixed={(n) => onChange({ bFixed: n })} onSetField={(path) => onChange({ bField: path })} />
     </>
   );
 }
@@ -886,29 +889,46 @@ function NumberPicker({
   desc,
   groups,
   fixed,
+  fieldPath,
   onSetInput,
   onSetFixed,
+  onSetField,
 }: {
   handle: "a" | "b";
   label: string;
   desc?: InputDescriptor;
   groups: DataGroup[];
   fixed: number | null;
+  /** A field read off the wired step instead of its record count (aField/bField). */
+  fieldPath: string | null;
   onSetInput: (h: "a" | "b", id: string | null) => void;
   onSetFixed: (n: number | null) => void;
+  onSetField: (path: string | null) => void;
 }) {
   const chosen = groups.find((g) => g.stepId === desc?.nodeId);
-  const chosenLabel = chosen ? `${chosen.stepNo != null ? `${chosen.stepNo}. ` : ""}${chosen.title}` : desc ? desc.title : null;
+  const pickedField = fieldPath ? chosen?.fields.find((f) => f.path === fieldPath) : undefined;
+  // A picked column reads "3. Google Sheets · Total booked", not just the step —
+  // the pill has to say WHICH value fills the slot, or a cell pick and a record
+  // count are indistinguishable on the card.
+  const stepLabel = chosen ? `${chosen.stepNo != null ? `${chosen.stepNo}. ` : ""}${chosen.title}` : desc ? desc.title : null;
+  const chosenLabel = stepLabel && fieldPath ? `${stepLabel} · ${pickedField?.label ?? humanizeKey(fieldPath)}` : stepLabel;
   // The group sample is already the right number per step type (a scalar step's Result,
   // a dataset step's record count). Never fall back to recordCount — that shows a scalar
   // step's meaningless "1 record" instead of its actual value.
-  const preview = chosen?.fields[0]?.sample ?? desc?.value;
+  const preview = fieldPath ? pickedField?.sample : chosen?.fields[0]?.sample ?? desc?.value;
   return (
     <Field label={label}>
       <DataBrowser
         groups={groups}
+        // Numbers first, everything one chip away: this slot wants a number,
+        // but a text cell holding "5" is still a number to the engine.
+        initialType="number"
         onPick={(ref) => {
           onSetInput(handle, ref.producerStepId);
+          // A "__"-prefixed pick is the step's own number (Output number /
+          // Result); anything else is one of its columns, read off the
+          // newest record by the engine.
+          onSetField(ref.fieldPath.startsWith("__") ? null : ref.fieldPath);
           onSetFixed(null);
         }}
         trigger={({ toggle }) => (
@@ -918,7 +938,12 @@ function NumberPicker({
                 <span className="min-w-0 truncate text-neutral-800">{chosenLabel}</span>
                 <button
                   type="button"
-                  onClick={() => onSetInput(handle, null)}
+                  onClick={() => {
+                    onSetInput(handle, null);
+                    // The field belongs to the cleared step — a later pick of a
+                    // different step must not inherit a column it never had.
+                    onSetField(null);
+                  }}
                   className="absolute right-8 top-1/2 -translate-y-1/2 rounded p-1 text-neutral-400 hover:text-neutral-700"
                   title="Clear — type a number instead"
                   aria-label="Clear the picked step"

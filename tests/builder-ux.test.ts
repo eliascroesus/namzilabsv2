@@ -181,6 +181,86 @@ describe("a length of time is shown as one", () => {
     );
   });
 
+  /**
+   * A SPLIT STEP'S HEADLINE IS ITS METRIC, NOT ITS NUMBER OF BUCKETS. The Test
+   * DTO derived its own number and covered scalar and grouped but not SERIES,
+   * so a Calculate split over time reported "12" for twelve months in the
+   * editor while the dashboard rendered the real total. Grouped had the same
+   * hole whenever the shape carried no precomputed total.
+   *
+   * REVERT test-run.ts TO ITS OWN EXPRESSION AND THIS FAILS: one function now
+   * answers for both screens.
+   */
+  it("a trend or breakdown reads the same in the builder as on the tile", async () => {
+    const { headlineValue, buildTile } = await import("@/lib/flow/engine");
+    const spec = { name: "m", viz: "line" as const, format: "number" as const, precision: 0, target: null };
+
+    // Twelve monthly buckets summing to 120, with no precomputed total.
+    const series = {
+      kind: "series" as const,
+      series: Array.from({ length: 12 }, (_, i) => ({ bucket: `2026-${String(i + 1).padStart(2, "0")}`, value: 10 })),
+    };
+    expect(headlineValue(series)).toBe(120);
+    expect(buildTile(spec, series, []).value).toBe(120);
+
+    // A carried total wins over the sum — a median is not the sum of medians.
+    const withTotal = { ...series, total: 35 };
+    expect(headlineValue(withTotal)).toBe(35);
+    expect(buildTile(spec, withTotal, []).value).toBe(35);
+
+    // Grouped, same rule, including the missing-total fallback.
+    const grouped = { kind: "grouped" as const, groups: [{ label: "a", value: 3 }, { label: "b", value: 4 }] };
+    expect(headlineValue(grouped)).toBe(7);
+    expect(buildTile(spec, grouped, []).value).toBe(7);
+
+    // A dataset has no single number of its own — the caller states the count.
+    expect(headlineValue({ kind: "dataset", records: [] })).toBeUndefined();
+  });
+
+  /**
+   * A legacy Output node says "duration" through `format` + `unit`, never
+   * `resultKind` — so the builder printed its raw float beside a tile that
+   * rendered the same number as "4h 45m".
+   */
+  it("a legacy Output node's duration reads the same on both screens", async () => {
+    const { resultLabel } = await import("@/components/flow/node-meta");
+    const { formatMetricValue } = await import("@/lib/format");
+    const cfg = { format: "duration", unit: "minutes", durationDisplay: "hours" };
+    const label = resultLabel("output", { recordsIn: 1, recordsOut: 1, value: 285.195783 }, cfg);
+    expect(label).toBe("4h 45m 12s");
+    expect(label).toBe(formatMetricValue(285.195783, { format: "duration", unit: "minutes", durationDisplay: "hours" }));
+  });
+
+  /**
+   * Every formatter in the pipeline pins en-US. The number branch alone read
+   * the runtime's locale, so one tile said "1,234" on a laptop and "1.234" on
+   * a server with a European ICU default — same data, different number.
+   */
+  it("a plain number is formatted the same wherever it renders", async () => {
+    const { formatMetricValue } = await import("@/lib/format");
+    expect(formatMetricValue(1234.5, { format: "number", precision: 1 })).toBe("1,234.5");
+    expect(formatMetricValue(1234.5, { format: "number", precision: 1, unit: "leads" })).toBe("1,234.5 leads");
+
+    // The OUTPUT cannot prove this on an en-US machine — both the pinned and
+    // the ambient call render "1,234.5" here, and the bug only appears on a
+    // server whose ICU default is elsewhere. So assert what was actually
+    // wrong: that a locale is REQUESTED rather than left to the runtime.
+    const original = Number.prototype.toLocaleString;
+    const asked: unknown[] = [];
+    // eslint-disable-next-line no-extend-native
+    Number.prototype.toLocaleString = function (this: number, locale?: unknown, opts?: unknown) {
+      asked.push(locale);
+      return (original as (l?: unknown, o?: unknown) => string).call(this, locale, opts);
+    } as typeof Number.prototype.toLocaleString;
+    try {
+      formatMetricValue(1234.5, { format: "number", precision: 1 });
+    } finally {
+      // eslint-disable-next-line no-extend-native
+      Number.prototype.toLocaleString = original;
+    }
+    expect(asked).toEqual(["en-US"]);
+  });
+
   it("a hand-built duration flow publishes a duration tile, not a bare 285", async () => {
     const { seedMetricFormat } = await import("@/lib/flow/types");
     // Sabotage: hardcode format "number" as the seeding used to and the

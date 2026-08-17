@@ -368,6 +368,46 @@ describe("a published duration tile takes its unit from the step's own field", (
     expect(tile.durationDisplay).toBe("hours");
   });
 
+  /**
+   * THE UNIT LEAVES WITH THE DURATION. `seedMetricFormat`'s number answer
+   * carries no unit key at all, so spreading it over a spec that used to be a
+   * duration kept `unit: "minutes"` — and the number branch of the formatter
+   * suffixes the unit, so a plain record count published as "56 minutes"
+   * while the builder's Test box said "56". No control anywhere can clear it,
+   * so it survived every republish.
+   */
+  it("sheds the unit when a step goes back to plain numbers", async () => {
+    const org = "org_unit3";
+    await db.insert(connections).values({ id: CONN, orgId: org, source: "webhook", name: "Hook", status: "active", authType: "none" });
+    // The step is a plain count now; the spec is a leftover from when it measured time.
+    const graph = {
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN, source: "webhook" } } },
+        { id: "c", type: "formula", data: { config: { op: "count" } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "c" }],
+      metrics: [
+        { nodeId: "c", enabled: true, name: "Leads", viz: "number", format: "duration", unit: "minutes", durationDisplay: "hours", precision: 0 },
+      ],
+    };
+    const [flow] = await db.insert(flows).values({ orgId: org, name: "leads", draftGraph: graph, status: "published", publishedVersion: 1 }).returning();
+    await db.insert(flowVersions).values({ flowId: flow.id, orgId: org, version: 1, graph });
+    await db.insert(events).values({
+      eventId: "u3", orgId: org, connectionId: CONN, source: "webhook", eventType: "lead", subject: "u3",
+      occurredAt: new Date(), properties: {},
+    });
+
+    await materializeFlow(db, org, flow.id);
+    const [row] = await db.select().from(flowResults).where(eq(flowResults.flowId, flow.id));
+    const tile = row.tile as { value?: number; format?: string; unit?: string; durationDisplay?: string };
+
+    expect(tile.value).toBe(1);
+    expect(tile.format).toBe("number");
+    // REVERT THE SHED AND THESE ARE "minutes"/"hours" — the tile reads "1 minutes".
+    expect(tile.unit).toBeUndefined();
+    expect(tile.durationDisplay).toBeUndefined();
+  });
+
   it("leaves a non-duration metric's chosen format alone", async () => {
     const org = "org_unit2";
     await db.insert(connections).values({ id: CONN, orgId: org, source: "webhook", name: "Hook", status: "active", authType: "none" });

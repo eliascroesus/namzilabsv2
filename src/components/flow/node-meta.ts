@@ -188,6 +188,12 @@ export function resultLabel(
       if (cfg.resultKind === "duration") {
         return formatDuration(n, durationValueUnit(String(cfg.field ?? ""), String(cfg.durationUnit ?? "minutes")), String(cfg.durationDisplay ?? "auto"));
       }
+      // A legacy Output node says "duration" through `format` + `unit`, not
+      // `resultKind` — so this read its float raw ("285.19") while the tile it
+      // publishes rendered "4h 45m". Same number, two readings, one step.
+      if (type === "output" && cfg.format === "duration") {
+        return formatDuration(n, String(cfg.unit ?? "seconds"), String(cfg.durationDisplay ?? "auto"));
+      }
       return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
     }
     default:

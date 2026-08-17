@@ -86,7 +86,7 @@ import {
   type LibraryCtx,
   type MetricSpecT,
 } from "./graph-utils";
-import type { DataGroup } from "./controls/types";
+import type { DataField, DataGroup } from "./controls/types";
 import { formatSample } from "./controls/field-utils";
 import { ALL_TYPES, defaultConfig, nodeTitle, pathHandles } from "./node-meta";
 import { FlowNodeCard } from "./FlowNodeCard";
@@ -912,12 +912,44 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       const t = n.data.lastTest;
       const tile = t?.status === "ok" ? (t.tile as { value?: unknown } | undefined) : undefined;
       const sample = scalar ? t?.value ?? tile?.value : t?.status === "ok" ? t.recordsOut : undefined;
+      /**
+       * A dataset step's OWN COLUMNS, after its Output number. The slot used
+       * to offer exactly one thing per step — the record count — so a
+       * spreadsheet cell holding a precomputed total was unreachable from a
+       * Calculate. Every column is offered (the browser opens on the Numbers
+       * chip, but a text cell holding "5" is still a number to the engine);
+       * picking one reads it off the step's newest record.
+       *
+       * THE PREVIEW COMES FROM THE NEWEST RECORD, deliberately NOT from the
+       * step's chosen sample record the way every other picker does. In this
+       * one picker the sample IS the value that fills the slot — the two
+       * entries beside it show the step's exact Result and Output number — so
+       * previewing a different row than `scalarAt` reads would put "= 10"
+       * under an input the flow computes as 20. Elsewhere a sample is one
+       * illustrative row of many; here it is the answer.
+       */
+      const own: DataField[] = [];
+      if (!scalar && t?.status === "ok") {
+        const sampleRecs = (t.sample ?? []) as unknown[];
+        const chosen = sampleRecs[0];
+        for (const f of t.outputSchema ?? []) {
+          if (f.path.startsWith("__")) continue;
+          own.push({
+            path: f.path,
+            label: f.label,
+            type: f.type,
+            container: f.container,
+            populated: f.populated,
+            sample: chosen !== undefined ? resolveSampleField(chosen, f.path) : f.example,
+          });
+        }
+      }
       return {
         stepId: n.id,
         stepNo: stepNoById.get(n.id),
         source: app ? String((app.data.config as { source?: unknown }).source ?? "") : undefined,
         title: nodeTitle(String(n.type) as NodeType, n.data),
-        fields: [{ path: scalar ? `__result_${n.id}` : `__count_${n.id}`, label: scalar ? "Result" : "Output number", type: "number", sample }],
+        fields: [{ path: scalar ? `__result_${n.id}` : `__count_${n.id}`, label: scalar ? "Result" : "Output number", type: "number", sample }, ...own],
       };
     });
   }, [selected, nodes, edges, stepNoById]);
@@ -998,7 +1030,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         const existing = byId.get(ep.nodeId);
         if (existing) {
           const derived = seedFormat(ep);
-          return existing.format === "duration" || derived.format === "duration" ? { ...existing, ...derived } : existing;
+          if (existing.format !== "duration" && derived.format !== "duration") return existing;
+          // Same rule as the materializer: a step back on plain numbers sheds
+          // the old duration unit, or a count republishes as "56 minutes".
+          return derived.format === "duration" ? { ...existing, ...derived } : { ...existing, ...derived, unit: undefined, durationDisplay: undefined };
         }
         return {
           nodeId: ep.nodeId,
