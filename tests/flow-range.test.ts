@@ -73,17 +73,22 @@ const SPEC = (over: Partial<TilePresentation> = {}): TilePresentation => ({
   ...over,
 });
 
-/** The three pills these tests care about, resolved the way the dashboard does. */
+/** The pills these tests care about, resolved the way the dashboard does. */
 const RANGES = [
   { key: "today", start: START_OF_TODAY, end: Date.now() },
   { key: "yesterday", start: START_OF_TODAY - DAY, end: START_OF_TODAY - 1 },
+  { key: "7d", start: Date.now() - 7 * DAY, end: Date.now(), rollingMs: 7 * DAY },
   { key: "all", start: 0, end: Date.now(), all: true },
 ];
 
-async function slots(graph: unknown, nodeId: string, spec: TilePresentation = SPEC()) {
+async function derive(graph: unknown, nodeId: string, spec: TilePresentation = SPEC()) {
   const g = parseGraph(graph);
   const run = await runFlow({ db, orgId: ORG }, g);
   return tileByRange(g, run.nodes, nodeId, spec, RANGES);
+}
+
+async function slots(graph: unknown, nodeId: string, spec: TilePresentation = SPEC()) {
+  return (await derive(graph, nodeId, spec)).byRange;
 }
 
 describe("a range selects records; it does not re-run the flow against a truncated read", () => {
@@ -257,5 +262,88 @@ describe("a range selects records; it does not re-run the flow against a truncat
     const by = await slots(graph, "m");
     expect(by.all.value).toBe(1);
     expect(by.today.value).toBe(0);
+  });
+});
+
+/**
+ * THE READ SHIPS NINE COLUMNS, because nine is what `eventToRecord` consumes.
+ * `select *` also shipped `event_id`, the harvested `identifiers` jsonb and
+ * the row's bookkeeping out of the database with every record of every
+ * materialize — paid for by the byte, discarded on arrival. REVERT TO
+ * `select()` AND THIS FAILS on the first excluded column.
+ */
+describe("the app read's SQL", () => {
+  it("selects the engine's columns and none of the bookkeeping", async () => {
+    await ev({ eventType: "lead_created", at: START_OF_TODAY, key: "L1" });
+    const g = parseGraph({
+      nodes: [N("m", "app", { connectionId: CONN, source: "close", eventType: "lead_created" })],
+      edges: [],
+    });
+    const provenance: import("@/lib/flow/engine").CompileProvenance[] = [];
+    await runFlow({ db, orgId: ORG, provenance }, g);
+    const sql = provenance[0]?.sql ?? "";
+    expect(sql).toContain('"properties"');
+    expect(sql).toContain('"occurred_at"');
+    for (const dropped of ['"identifiers"', '"event_id"', '"raw_event_id"', '"sync_generation"', '"received_at"']) {
+      expect(sql).not.toContain(dropped);
+    }
+  });
+});
+
+/**
+ * WHEN A TILE CAN NEXT CHANGE WITHOUT NEW DATA — the number that replaced the
+ * blind ten-minute recompute. The clock only moves a stored number three ways:
+ * a record falls out of a rolling window at exactly `t + length`, a
+ * future-dated record reaches "Today" at exactly `t`, and everything
+ * day-anchored shifts at UTC midnight. `tileByRange` computes the earliest of
+ * these from the records in hand; the refresh loop recomputes then and not
+ * before. REVERT THE CROSSING TRACKING AND EVERY ASSERTION HERE RETURNS THE
+ * MIDNIGHT DEFAULT — and the dashboard goes back to re-reading each flow's
+ * whole history 144 times a day against a database billed by the byte.
+ */
+describe("nextChangeMs — the exact moment a tile's numbers can move", () => {
+  const graph = {
+    nodes: [N("m", "app", { connectionId: CONN, source: "close", eventType: "meeting_booked" })],
+    edges: [],
+  };
+  const NEXT_MIDNIGHT = START_OF_TODAY + DAY;
+
+  it("is capped at the next UTC midnight for a flow with nothing nearer", async () => {
+    // Dated long ago: its 7d exit is long past, nothing is upcoming.
+    await ev({ eventType: "meeting_booked", at: START_OF_TODAY - 40 * DAY, key: "L1" });
+    const { nextChangeMs } = await derive(graph, "m");
+    expect(nextChangeMs).toBe(NEXT_MIDNIGHT);
+  });
+
+  it("is the moment a record falls out of a rolling window, when that comes first", async () => {
+    // Entered the 7d window 6d23h ago — it leaves within the hour, before midnight.
+    const t = Date.now() - 7 * DAY + 30 * 60_000;
+    await ev({ eventType: "meeting_booked", at: t, key: "L1" });
+    const { nextChangeMs } = await derive(graph, "m");
+    // min() with midnight so a run started just before 00:00 UTC stays green.
+    expect(nextChangeMs).toBe(Math.min(t + 7 * DAY, NEXT_MIDNIGHT));
+  });
+
+  it("is the start of a future-dated record, when the meeting comes first", async () => {
+    // A meeting later today enters "Today" the moment the clock reaches it —
+    // sooner than the old record's window exits and sooner than midnight.
+    const meeting = Date.now() + 60 * 60_000;
+    await ev({ eventType: "meeting_booked", at: Date.now() - 40 * DAY, key: "L1" });
+    await ev({ eventType: "meeting_booked", at: meeting, key: "L2" });
+    const { nextChangeMs } = await derive(graph, "m");
+    expect(nextChangeMs).toBe(Math.min(meeting, NEXT_MIDNIGHT));
+  });
+
+  it("reads the metric's own time reference, not just occurredAt", async () => {
+    // The row arrived days ago; what is upcoming is the BOOKED time.
+    const starts = Date.now() + 2 * 60 * 60_000;
+    await ev({
+      eventType: "meeting_booked",
+      at: START_OF_TODAY - 3 * DAY,
+      key: "L1",
+      props: { starts_at: new Date(starts).toISOString() },
+    });
+    const { nextChangeMs } = await derive(graph, "m", SPEC({ timeField: "properties.starts_at" }));
+    expect(nextChangeMs).toBe(Math.min(starts, NEXT_MIDNIGHT));
   });
 });

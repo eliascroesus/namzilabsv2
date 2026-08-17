@@ -4,7 +4,7 @@ import { createTestDb, seedConnection } from "./helpers/testdb";
 import { storeRawEvent } from "@/ingestion/raw-store";
 import { deadLetterRawEvent, replayRawEvent } from "@/ingestion/pipeline";
 import { unresolvedDeadLetters, unresolvedDeadLetterCountsByConnection } from "@/lib/dead-letter";
-import { deadLetter, deliveryLog, connections, events } from "@/db/schema";
+import { deadLetter, deliveryLog, connections, events, flows, flowResults, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 let db: DB;
@@ -111,6 +111,73 @@ describe("dead-letter queue + replay", () => {
 
     const unresolved = await db.select().from(deadLetter).where(isNull(deadLetter.resolvedAt));
     expect(unresolved).toHaveLength(0);
+  });
+
+  /**
+   * A REPLAY THAT CHANGED SOMETHING IS DATA ARRIVING, and the tiles computed
+   * from it must find out. The blanket ten-minute recompute used to surface a
+   * replayed event by accident; tiles now recompute only when something says
+   * they must, so the replay says it. REVERT THE MARK IN replayRawEvent AND
+   * THIS FAILS: the user replays a dead-lettered payment, the UI confirms it,
+   * and the revenue tile keeps serving the old number as "fresh" for hours.
+   *
+   * Seeded with an EXISTING event the replay UPDATES (same natural id, new
+   * type), because updates are the half that was silently dropped everywhere:
+   * "inserted > 0" gates read as "new data" and a changed record is not new.
+   */
+  it("a replay that inserts or updates marks dependent tiles stale", async () => {
+    const connectionId = await seedConnection(db);
+    const graph = {
+      nodes: [{ id: "a1", type: "app", data: { config: { connectionId, source: "webhook" } } }],
+      edges: [],
+      metrics: [],
+    };
+    const [flow] = await db
+      .insert(flows)
+      .values({ orgId: "org_test", name: "revenue", draftGraph: graph, status: "published", publishedVersion: 1 })
+      .returning();
+    await db.insert(flowVersions).values({ flowId: flow.id, orgId: "org_test", version: 1, graph });
+    await db.insert(flowResults).values({
+      orgId: "org_test",
+      flowId: flow.id,
+      version: 1,
+      outputNodeId: "o1",
+      tile: { name: "revenue", value: 5000 },
+      status: "fresh",
+      computedAt: new Date(),
+    });
+
+    const raw = await storeRawEvent(db, {
+      orgId: "org_test",
+      connectionId,
+      source: "webhook",
+      headers: {},
+      payload: { id: "e1", type: "booked" },
+      signatureValid: true,
+    });
+    // First replay INSERTS the event and must mark.
+    await replayRawEvent(db, raw.id, "org_test");
+    let [r] = await db.select().from(flowResults).where(eq(flowResults.flowId, flow.id));
+    expect(r.status).toBe("stale");
+
+    // Recompute happened elsewhere; the tile is fresh again.
+    await db.update(flowResults).set({ status: "fresh" }).where(eq(flowResults.flowId, flow.id));
+
+    // A redelivery of the SAME record with changed content is an UPDATE
+    // (inserted: 0, updated: 1) — and it must mark just the same.
+    const raw2 = await storeRawEvent(db, {
+      orgId: "org_test",
+      connectionId,
+      source: "webhook",
+      headers: {},
+      payload: { id: "e1", type: "rescheduled" },
+      signatureValid: true,
+    });
+    const res = await replayRawEvent(db, raw2.id, "org_test");
+    expect(res.inserted).toBe(0);
+    expect(res.updated).toBe(1);
+    [r] = await db.select().from(flowResults).where(eq(flowResults.flowId, flow.id));
+    expect(r.status).toBe("stale");
   });
 
   it("refuses a cross-tenant replay (organization isolation)", async () => {

@@ -37,7 +37,16 @@ export const processEvent = inngest.createFunction(
   async ({ event, step }) => {
     const { rawEventId } = event.data as { rawEventId: string };
     const res = await step.run("process-raw-event", () => processRawEvent(getDb(), rawEventId));
-    if (res.inserted > 0) {
+    /**
+     * UPDATES COUNT. This gated on `inserted` alone, and an update-only
+     * webhook — a Close lead changing status, a Whop membership renewing —
+     * changed the stored record while every tile computed from it stayed
+     * "fresh". The blind ten-minute recompute used to paper over that within
+     * a cycle; now that tiles recompute only when something says they must,
+     * this gate is the something. The next sweep can NOT catch it instead: it
+     * re-reads a record that already matches and reports nothing changed.
+     */
+    if (res.inserted > 0 || res.updated > 0) {
       // Mark directly, same reasoning as reconcileOne: staleness is durable DB
       // state written by the path that ingested the data, never contingent on
       // a `flow/data.changed` hop being delivered. The raw row names the
@@ -47,8 +56,8 @@ export const processEvent = inngest.createFunction(
       // `onFailure` dead-letters unconditionally — so a transient failure
       // HERE used to be able to file a successfully-ingested event as
       // "webhook processing failed", stamp connections.lastError, and invite
-      // a pointless replay. A missed mark costs at most one cron interval:
-      // the ten-minute sweep and the hourly expiry both pick the tile up.
+      // a pointless replay. A missed mark costs at most the age backstop:
+      // the sweep's expiry pass picks the tile up.
       const marked = await step.run("mark-stale", async () => {
         try {
           const db = getDb();

@@ -331,6 +331,26 @@ export async function replayRawEvent(db: DB, rawEventId: string, orgId?: string)
     if (raw.orgId !== orgId) throw new Error("forbidden: cross-tenant replay");
   }
   const result = await processRawEvent(db, rawEventId);
+  /**
+   * A REPLAY THAT CHANGED SOMETHING IS DATA ARRIVING. The webhook handler
+   * marks dependent tiles stale on ingest; a replay is the same ingest run
+   * later by a person, and it used to rely on the blanket ten-minute
+   * recompute to surface its effect. That net is gone — tiles recompute when
+   * something says they must — so the replay says it. Best-effort, like every
+   * mark: the repaired data is already committed, and a failed mark costs at
+   * most the age backstop.
+   */
+  if (result.inserted > 0 || result.updated > 0) {
+    const [raw] = await db
+      .select({ orgId: rawEvents.orgId, source: rawEvents.source, connectionId: rawEvents.connectionId })
+      .from(rawEvents)
+      .where(eq(rawEvents.id, rawEventId))
+      .limit(1);
+    // Resolved at call time: a static import here closes the cycle
+    // pipeline -> materialize -> streams -> pipeline.
+    const { markStaleForSource } = await import("@/lib/flow/materialize");
+    if (raw) await markStaleForSource(db, raw.orgId, raw.source, raw.connectionId).catch(() => []);
+  }
   await db
     .update(deadLetter)
     .set({ resolvedAt: new Date() })

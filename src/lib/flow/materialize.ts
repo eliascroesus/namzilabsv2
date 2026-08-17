@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, notInArray, or, sql } from "drizzle-orm";
 import { backfillJobs, connections, flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
@@ -6,8 +6,38 @@ import { runFlow, buildTile, tileByRange, type CompileProvenance } from "./engin
 import { compileEnabled } from "./compile/flags";
 import { getPublishedVersion } from "./store";
 import { parseGraph, type TileSpec } from "./types";
-import { resolveRange, MATERIALIZED_RANGES } from "@/lib/metrics/range";
+import { resolveRange, rollingMsOf, MATERIALIZED_RANGES } from "@/lib/metrics/range";
 import { streamRefsOfGraph } from "@/lib/sync/streams";
+
+/**
+ * Whether the graph carries a window that MOVES WITH THE CLOCK — a Filter's
+ * quick date range or a Time step on a relative preset or a rolling "last N
+ * days", including the legacy per-branch conditions a Paths hub can hold. A
+ * fixed between-dates window is excluded when both ends are set; an open
+ * "from X onwards" ends at now, so it slides too.
+ */
+function graphHasSlidingWindow(graph: { nodes: Array<{ type: string; data: { config?: unknown } }> }): boolean {
+  const slides = (w?: { enabled?: boolean; mode?: string; to?: string }): boolean => {
+    if (!w) return false;
+    if (w.enabled === false) return false; // Filter ranges carry `enabled`; a Time step does not.
+    if (w.mode === "between") return !w.to;
+    return true; // presets and rolling windows follow the clock
+  };
+  for (const n of graph.nodes) {
+    const cfg = (n.data.config ?? {}) as {
+      dateRange?: { enabled?: boolean; mode?: string; to?: string };
+      mode?: string;
+      to?: string;
+      paths?: Array<{ filters?: { dateRange?: { enabled?: boolean; mode?: string; to?: string } } }>;
+    };
+    if (n.type === "time" && slides(cfg)) return true;
+    if (n.type === "filter" && slides(cfg.dateRange)) return true;
+    if (n.type === "paths") {
+      for (const p of cfg.paths ?? []) if (slides(p.filters?.dateRange)) return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Compute the published version's Output results and store them in flow_results
@@ -111,7 +141,7 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
      */
     const ranges = MATERIALIZED_RANGES.map((key) => {
       const { range } = resolveRange(key);
-      return { key, start: range.from.getTime(), end: range.to.getTime(), all: key === "all" };
+      return { key, start: range.from.getTime(), end: range.to.getTime(), all: key === "all", rollingMs: rollingMsOf(key) ?? undefined };
     });
     const presentationOf = new Map<string, Parameters<typeof tileByRange>[3]>();
     for (const m of graph.metrics) if (m.enabled) presentationOf.set(m.nodeId, m);
@@ -119,10 +149,25 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
     // already produced is the faithful copy of it.
     for (const o of outputs) if (!presentationOf.has(o.nodeId)) presentationOf.set(o.nodeId, o.tile as Parameters<typeof tileByRange>[3]);
 
+    /**
+     * A flow with its OWN sliding window is the one case the crossings cannot
+     * see: records the in-flow filter excludes never reach the endpoint, so a
+     * record due to fall out of the filter's "last 7 days" — or a future
+     * meeting due to enter its "today" — is invisible to `tileByRange`. Those
+     * flows get an hourly cap instead: still 24 recomputes a day instead of
+     * 144, and only for the flows whose base number actually moves with the
+     * clock. Fixed between-dates windows never move and take no cap.
+     */
+    const slidingCapMs = graphHasSlidingWindow(graph) ? asOf.getTime() + 60 * 60 * 1000 : Infinity;
     for (const t of tiles) {
       const spec = presentationOf.get(t.nodeId);
-      const byRange = spec ? tileByRange(graph, nodes, t.nodeId, spec, ranges) : undefined;
-      const tile = byRange && Object.keys(byRange).length > 0 ? { ...t.tile, byRange } : t.tile;
+      const derived = spec ? tileByRange(graph, nodes, t.nodeId, spec, ranges) : undefined;
+      // `nextChangeAt` rides in the tile jsonb, so no migration — and the
+      // expiry can read it in SQL. See its docstring in types.ts.
+      const tile =
+        derived && Object.keys(derived.byRange).length > 0
+          ? { ...t.tile, byRange: derived.byRange, nextChangeAt: new Date(Math.min(derived.nextChangeMs, slidingCapMs)).toISOString() }
+          : t.tile;
       await upsertResult(db, orgId, flowId, version, t.nodeId, tile, "fresh", null, record);
     }
     // A metric that broke keeps its row, its last good value, and gains the
@@ -333,38 +378,50 @@ const MATERIALIZE_BUDGET_MS = 45_000;
  * slow progress, not to a stall that looks like a healthy no-op.
  */
 /**
- * A published number ages even when no data arrives: "last 7 days" slides with
- * the clock, "this month" gains days, and data-driven staleness alone would
- * freeze such a tile at its last data change forever. Re-mark anything fresh
- * older than an hour so the cron behind this recomputes it — every tile's
- * "Updated N ago" is then bounded at roughly an hour, whatever its window.
+ * A published number ages even when no data arrives: a rolling window sheds a
+ * record at exactly `t + length`, a future-dated meeting enters "Today" at
+ * exactly `t`, and every day-anchored range shifts at UTC midnight. But those
+ * are the ONLY ways a stored tile changes without new data — and the
+ * materializer computes the earliest of them from the records themselves and
+ * stores it on the tile as `nextChangeAt`.
+ *
+ * So a tile expires when the clock reaches ITS OWN next crossing, not on a
+ * blanket timer. The blanket timer was ten minutes, and it was the single
+ * largest source of database egress in the product: every flow re-read its
+ * whole history 144 times a day — 864 before the per-range runs were collapsed
+ * — almost always to reproduce an identical tile, against a database that
+ * bills every byte it sends. A quiet flow now recomputes once a day (the
+ * midnight cap), a flow with a meeting due this afternoon recomputes when the
+ * meeting starts, and NEW data still refreshes within a sweep because the
+ * sweep marks staleness directly on change.
+ *
+ * `maxAgeMs` remains as an unconditional age backstop: it catches tiles
+ * written before crossings existed AND a crossing computed wrongly far into
+ * the future — either way, no tile can freeze for good. A quiet flow now
+ * recomputes a handful of times a day instead of 144.
  *
  * Only "fresh" rows: an "error" row recomputing on a timer would re-run a
  * known-broken flow every pass, and "stale"/"computing" are already in flight.
  */
-/**
- * Ten minutes, matching the sweep's own cadence, so every published number is
- * recomputed on a clock rather than only when its data happens to change.
- *
- * An hour was the first choice and it was too slow to be believed: a metric
- * whose window slides ("Today", "Last 7 days") changes with the clock alone,
- * and a board that lags an hour behind reality gets checked against the CRM
- * and disbelieved. The cost is bounded by the pass's own time budget — what
- * it cannot finish stays marked and the next tick continues, longest-stale
- * first — and by the fact that a recompute reads stored events, never the
- * provider.
- */
-const RESULT_MAX_AGE_MS = 10 * 60 * 1000;
+const RESULT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 export async function expireAgedResults(db: DB, maxAgeMs = RESULT_MAX_AGE_MS, orgId?: string): Promise<number> {
   const cutoff = new Date(Date.now() - maxAgeMs);
-  const aged = and(eq(flowResults.status, "fresh"), lt(flowResults.computedAt, cutoff));
+  const due = and(
+    eq(flowResults.status, "fresh"),
+    or(
+      // The tile's own stated next crossing has arrived.
+      sql`(${flowResults.tile} ->> 'nextChangeAt')::timestamptz <= now()`,
+      // Everything else waits for the age backstop alone.
+      lt(flowResults.computedAt, cutoff),
+    ),
+  );
   const rows = await db
     .update(flowResults)
     .set({ status: "stale" })
     // Org-scoped when a per-tenant caller asks (the sweep): one org's sweep
     // must not write rows belonging to every other tenant.
-    .where(orgId ? and(aged, eq(flowResults.orgId, orgId)) : aged)
+    .where(orgId ? and(due, eq(flowResults.orgId, orgId)) : due)
     .returning({ flowId: flowResults.flowId });
   return rows.length;
 }

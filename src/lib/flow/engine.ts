@@ -268,6 +268,30 @@ async function appSource(ctx: EngineCtx, cfg: AppConfig): Promise<string | null>
   return c?.source ?? null;
 }
 
+/**
+ * The columns a Get-data read SELECTs — exactly the ones `eventToRecord`
+ * consumes, nothing else. `select *` here shipped `event_id`, the harvested
+ * `identifiers` jsonb and the rest of the row's bookkeeping out of the
+ * database on every read of every materialize, to be discarded in the very
+ * next line. Egress is billed by the byte and this is the hottest read in the
+ * product; the keyset cursor needs only `occurred_at` and `id`, both present.
+ */
+type AppRow = {
+  [K in keyof typeof RECORD_COLUMNS]: (typeof events.$inferSelect)[K];
+};
+
+const RECORD_COLUMNS = {
+  id: events.id,
+  source: events.source,
+  eventType: events.eventType,
+  subject: events.subject,
+  occurredAt: events.occurredAt,
+  value: events.value,
+  currency: events.currency,
+  connectionId: events.connectionId,
+  properties: events.properties,
+};
+
 /** The org-scoped WHERE for a Get data step (shared by the executor and field sampling). */
 function appConds(orgId: string, cfg: AppConfig, source: string | null): SQL[] {
   const conds: SQL[] = [sql`${events.orgId} = ${orgId}`, isNull(events.deletedAt)];
@@ -345,7 +369,7 @@ export async function sampleAppFields(ctx: EngineCtx, config: unknown, limit = 1
   // its own value reads as broken.
   if (cfg.eventType && cfg.connectionId) {
     const rows = await ctx.db
-      .select()
+      .select(RECORD_COLUMNS)
       .from(events)
       .where(and(...appConds(ctx.orgId, cfg, await appSource(ctx, cfg))))
       .orderBy(desc(events.occurredAt))
@@ -374,7 +398,7 @@ export async function sampleAppFields(ctx: EngineCtx, config: unknown, limit = 1
   // whose registry has not been populated yet — a connection synced before A.1,
   // or one whose first sweep has not landed. Correct, just costlier.
   const rows = await ctx.db
-    .select()
+    .select(RECORD_COLUMNS)
     .from(events)
     .where(and(...appConds(ctx.orgId, cfg, await appSource(ctx, cfg))))
     .orderBy(desc(events.occurredAt))
@@ -528,7 +552,7 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
     }
   }
 
-  const rows: (typeof events.$inferSelect)[] = [];
+  const rows: AppRow[] = [];
   // The statement SHAPE is the same for every page (only the keyset bound
   // moves), so provenance records the first one — with the real total below.
   let statement = { sql: "", params: [] as unknown[] };
@@ -547,7 +571,7 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
         )
       : and(...conds);
     const query = ctx.db
-      .select()
+      .select(RECORD_COLUMNS)
       .from(events)
       .where(page)
       // E.3: a deterministic TOTAL order — occurred_at alone leaves ties, and an
@@ -564,7 +588,7 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
       }
     }
 
-    let batch: (typeof events.$inferSelect)[];
+    let batch: AppRow[];
     try {
       batch = await query;
     } catch (e) {
@@ -1433,14 +1457,49 @@ export function tileByRange(
   nodes: Map<string, NodeExec>,
   nodeId: string,
   spec: TilePresentation,
-  ranges: Array<{ key: string; start: number; end: number; all?: boolean }>,
-): Record<string, RangeSlot> {
+  ranges: Array<{ key: string; start: number; end: number; all?: boolean; rollingMs?: number }>,
+): { byRange: Record<string, RangeSlot>; nextChangeMs: number } {
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
   const incomingBy = new Map<string, FlowGraph["edges"]>();
   for (const e of graph.edges) {
     if (!incomingBy.has(e.target)) incomingBy.set(e.target, []);
     incomingBy.get(e.target)!.push(e);
   }
+
+  /**
+   * WHEN CAN THESE NUMBERS NEXT CHANGE WITHOUT NEW DATA?
+   *
+   * The clock is a data source: a rolling window sheds a record at exactly
+   * `t + length`, a future-dated record (a Calendly meeting this afternoon)
+   * enters "Today" at exactly `t`, and every day-anchored range shifts at UTC
+   * midnight. Recomputing every ten minutes to catch those moments re-read the
+   * whole history 144 times a day per flow, almost always to reproduce the
+   * identical tile — the single largest source of database egress in the
+   * product. So the crossings are computed HERE, where every windowed record
+   * is already in hand, and the materializer stores the earliest one; the
+   * refresh loop recomputes this tile at that moment and not before. Data
+   * arriving still marks it stale immediately through the sweep — this is
+   * only about the quiet hours.
+   *
+   * Midnight always participates, so the answer is never later than the next
+   * UTC midnight and a completely quiet flow recomputes once a day.
+   */
+  const now = ranges.reduce((a, r) => Math.max(a, r.end), 0);
+  const nextMidnight = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate() + 1);
+  let nextChangeMs = nextMidnight;
+  const rollings = ranges.filter((r) => r.rollingMs != null).map((r) => r.rollingMs!);
+  const trackCrossing = (t: number) => {
+    if (t > now) {
+      // A future record enters every now-ended range the moment the clock
+      // reaches it.
+      if (t < nextChangeMs) nextChangeMs = t;
+      return;
+    }
+    for (const len of rollings) {
+      const leaves = t + len;
+      if (leaves > now && leaves < nextChangeMs) nextChangeMs = leaves;
+    }
+  };
 
   const out: Record<string, RangeSlot> = {};
   for (const range of ranges) {
@@ -1469,6 +1528,7 @@ export function tileByRange(
           undated++;
           return false;
         }
+        trackCrossing(t);
         return t >= range.start && t <= range.end;
       });
     };
@@ -1540,7 +1600,7 @@ export function tileByRange(
       out[range.key] = { unavailable: e instanceof Error ? e.message : String(e) };
     }
   }
-  return out;
+  return { byRange: out, nextChangeMs };
 }
 
 /**

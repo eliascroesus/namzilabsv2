@@ -189,6 +189,35 @@ describe("age-based expiry (the clock is a data source too)", () => {
     expect(await statusOf(aged)).not.toBe("fresh");
     expect(await statusOf(aged)).not.toBe("stale");
   });
+
+  /**
+   * THE CROSSING, not the timer. A tile stores `nextChangeAt` — the earliest
+   * moment its numbers can move without new data (a record leaving a rolling
+   * window, a future-dated one reaching "Today", or midnight). Expiry follows
+   * that moment: a tile whose crossing has passed recomputes even though it
+   * was computed seconds ago, and a tile whose crossing is hours away sits
+   * still. REVERT TO THE BLANKET TIMER AND THE SECOND ASSERTION FLIPS — every
+   * fresh tile re-read its flow's whole history 144 times a day against a
+   * database that bills every byte it sends.
+   */
+  it("expires a tile whose own crossing has arrived, and only that tile", async () => {
+    const crossed = await staleFlow("org_a", "crossed", new Date());
+    const parked = await staleFlow("org_a", "parked", new Date());
+    const setNext = async (flowId: string, iso: string) => {
+      const [r] = await db.select().from(flowResults).where(eq(flowResults.flowId, flowId));
+      await db
+        .update(flowResults)
+        .set({ tile: { ...(r.tile as Record<string, unknown>), nextChangeAt: iso }, status: "fresh" })
+        .where(eq(flowResults.flowId, flowId));
+    };
+    // Both computed NOW — the timer alone would keep both fresh.
+    await setNext(crossed, new Date(Date.now() - 60_000).toISOString());
+    await setNext(parked, new Date(Date.now() + 3_600_000).toISOString());
+
+    expect(await expireAgedResults(db, 3_600_000)).toBe(1);
+    expect(await statusOf(crossed)).toBe("stale");
+    expect(await statusOf(parked)).toBe("fresh");
+  });
 });
 
 /**

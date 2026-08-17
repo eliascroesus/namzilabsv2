@@ -18,7 +18,7 @@ import { scanWebhookEventTime } from "@/lib/webhooks/event-time";
  */
 const BACKFILL_PROVIDERS_PER_TICK = 4;
 import { runBackfillSlice } from "@/lib/backfill/run";
-import { rawEvents } from "@/db/schema";
+import { connections, rawEvents } from "@/db/schema";
 
 /** Sync a connection (full backfill/re-sync or incremental). */
 export const syncConnection = inngest.createFunction(
@@ -49,7 +49,27 @@ export const reprocessConnectionFn = inngest.createFunction(
   { id: "reprocess-connection", retries: 3, triggers: [{ event: "sync/reprocess.requested" }] },
   async ({ event, step }) => {
     const { orgId, connectionId } = event.data as { orgId: string; connectionId: string };
-    return step.run("reprocess", () => reprocessConnection(getDb(), orgId, connectionId));
+    const res = await step.run("reprocess", () => reprocessConnection(getDb(), orgId, connectionId));
+    /**
+     * A reprocess exists to CHANGE stored rows (new normalize logic, new date
+     * canonicalization), and the rows it changes count as updates the sweep
+     * will never see — a webhook-only source is not even polled. It leaned on
+     * the blanket ten-minute recompute to surface its effect; tiles now
+     * recompute when something says they must, so this says it. Best-effort,
+     * like every mark.
+     */
+    if (res.processed > 0) {
+      await step.run("mark-stale", async () => {
+        try {
+          const db = getDb();
+          const [c] = await db.select({ source: connections.source }).from(connections).where(eq(connections.id, connectionId)).limit(1);
+          return c ? (await markStaleForSource(db, orgId, c.source, connectionId)).length : 0;
+        } catch {
+          return 0;
+        }
+      });
+    }
+    return res;
   },
 );
 

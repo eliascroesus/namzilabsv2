@@ -14,7 +14,19 @@ export type FlowRecord = {
   properties: Record<string, unknown>;
 };
 
-type EventRow = typeof events.$inferSelect;
+/**
+ * The nine columns a FlowRecord is built from — and therefore the only nine
+ * the engine has any business SELECTing. Every event read used to be
+ * `select *`, which shipped `event_id`, the harvested `identifiers` jsonb and
+ * five other bookkeeping columns out of the database with every row, on every
+ * materialize, and then dropped them on the floor right here. Egress is billed
+ * by the byte; the flow engine is the biggest reader in the product; this type
+ * is what keeps its reads honest.
+ */
+type EventRow = Pick<
+  typeof events.$inferSelect,
+  "id" | "source" | "eventType" | "subject" | "occurredAt" | "value" | "currency" | "connectionId" | "properties"
+>;
 
 export function eventToRecord(row: EventRow): FlowRecord {
   return {

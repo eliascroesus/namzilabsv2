@@ -829,4 +829,13 @@ export type TileSpec = {
       undated?: number;
     }
   >;
+  /**
+   * The earliest moment these numbers can change WITHOUT new data arriving —
+   * a record falling out of a rolling window, a future-dated one reaching
+   * "Today", or the next UTC midnight, whichever comes first (ISO). The
+   * refresh loop recomputes the tile then and not before; recomputing on a
+   * blind timer re-read the whole history 144 times a day to reproduce an
+   * identical tile. New data still marks it stale immediately via the sweep.
+   */
+  nextChangeAt?: string;
 };

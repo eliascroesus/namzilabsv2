@@ -23,6 +23,18 @@ const DAY_MS = 86_400_000;
 const ROLLING: Record<"7d" | "30d" | "90d", number> = { "7d": 7, "30d": 30, "90d": 90 };
 
 /**
+ * The length of a rolling range, or null for the fixed ones. A rolling
+ * window's start moves with the clock, so a record dated `t` falls out of it
+ * at exactly `t + length` — the fact the materializer uses to compute the
+ * precise moment a stored tile's numbers can next change without any new data
+ * arriving. Fixed ranges (today/yesterday/all) only ever change membership at
+ * a UTC midnight, which the caller accounts for separately.
+ */
+export function rollingMsOf(key: RangeKey): number | null {
+  return key === "7d" || key === "30d" || key === "90d" ? ROLLING[key] * DAY_MS : null;
+}
+
+/**
  * Resolve a range key to a concrete {from, to} window.
  *
  * DAY BOUNDARIES ARE UTC, and they are computed exactly the way the flow
