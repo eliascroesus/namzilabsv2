@@ -5,7 +5,7 @@ import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import { runFlow, buildTile, tileByRange, type CompileProvenance } from "./engine";
 import { compileEnabled } from "./compile/flags";
 import { getPublishedVersion } from "./store";
-import { parseGraph, type TileSpec } from "./types";
+import { parseGraph, seedMetricFormat, type TileSpec } from "./types";
 import { resolveRange, rollingMsOf, MATERIALIZED_RANGES } from "@/lib/metrics/range";
 import { streamRefsOfGraph } from "@/lib/sync/streams";
 
@@ -72,10 +72,31 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
      * every single tile fails.
      */
     const failed: Array<{ nodeId: string; error: string }> = [];
+    /**
+     * THE STEP'S CONFIG IS THE TRUTH ABOUT WHAT ITS NUMBER MEANS. A metric
+     * spec snapshots the step's format/unit at seed time and is returned
+     * verbatim forever after — so when a customer changed a Calculate's field
+     * from `time_between.hours` to `time_between.minutes`, the published spec
+     * kept `unit: "hours"`, and a median of 0.58 minutes (35 seconds, exactly
+     * what the builder's Test showed) rendered on the dashboard as "35m". The
+     * builder derives the unit from the field on every render; the tile must
+     * derive it from the same place. Re-derived HERE, at materialize, so every
+     * already-published stale spec heals on its next recompute with no
+     * republish. Presentation the spec legitimately owns — name, viz,
+     * precision, target, time reference — is untouched; only duration FACTS
+     * follow the step, in either direction of staleness.
+     */
+    const nodeCfgById = new Map(graph.nodes.map((n) => [n.id, (n.data.config ?? {}) as Record<string, unknown>]));
+    const factCorrected = <T extends { nodeId: string; format?: string }>(m: T): T => {
+      const cfg = nodeCfgById.get(m.nodeId);
+      if (!cfg) return m;
+      const derived = seedMetricFormat(cfg);
+      return m.format === "duration" || derived.format === "duration" ? { ...m, ...derived } : m;
+    };
     for (const m of graph.metrics) {
       if (!m.enabled) continue;
       const ex = nodes.get(m.nodeId);
-      if (ex && ex.status === "ok") tiles.push({ nodeId: m.nodeId, tile: buildTile(m, ex.shape, ex.sample) });
+      if (ex && ex.status === "ok") tiles.push({ nodeId: m.nodeId, tile: buildTile(factCorrected(m), ex.shape, ex.sample) });
       else failed.push({ nodeId: m.nodeId, error: ex && ex.status === "error" ? ex.error : "This step produced no result." });
     }
 
@@ -144,7 +165,7 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
       return { key, start: range.from.getTime(), end: range.to.getTime(), all: key === "all", rollingMs: rollingMsOf(key) ?? undefined };
     });
     const presentationOf = new Map<string, Parameters<typeof tileByRange>[3]>();
-    for (const m of graph.metrics) if (m.enabled) presentationOf.set(m.nodeId, m);
+    for (const m of graph.metrics) if (m.enabled) presentationOf.set(m.nodeId, factCorrected(m));
     // An Output node carries its own presentation in its config; the tile it
     // already produced is the faithful copy of it.
     for (const o of outputs) if (!presentationOf.has(o.nodeId)) presentationOf.set(o.nodeId, o.tile as Parameters<typeof tileByRange>[3]);

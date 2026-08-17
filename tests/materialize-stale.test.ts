@@ -305,3 +305,91 @@ describe("a published tile carries one value per dashboard range", () => {
     expect(byRange.all.value).toBe(1);
   });
 });
+
+/**
+ * THE UNIT IS A FACT ABOUT THE DATA, AND THE STEP'S FIELD NAMES IT. A metric
+ * spec snapshots the step's duration facts at seed time; nothing re-derived
+ * them when the step changed. Measured live: a Calculate whose field was
+ * `time_between.minutes` (median 0.583 minutes = 35 seconds, exactly what the
+ * builder's Test showed) published under a spec still saying `unit: "hours"`
+ * — and the dashboard rendered 0.583 HOURS as "35m". Same number, wrong by a
+ * factor of sixty, green badge on top.
+ *
+ * REVERT `factCorrected` IN materializeFlow AND THIS FAILS: the stored tile
+ * keeps the spec's stale unit and every duration on the dashboard is at the
+ * mercy of whichever unit the step USED to measure in.
+ */
+describe("a published duration tile takes its unit from the step's own field", () => {
+  const CONN = "22222222-2222-4222-8222-222222222222";
+
+  it("heals a stale spec unit at materialize, with no republish", async () => {
+    const org = "org_unit";
+    await db.insert(connections).values({ id: CONN, orgId: org, source: "webhook", name: "Hook", status: "active", authType: "none" });
+    // The live defect, replicated: field says minutes, config and spec say hours.
+    const graph = {
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN, source: "webhook" } } },
+        {
+          id: "c",
+          type: "formula",
+          data: {
+            config: {
+              op: "median",
+              field: "properties.time_between.minutes",
+              resultKind: "duration",
+              durationUnit: "hours",
+              durationDisplay: "hours",
+            },
+          },
+        },
+      ],
+      edges: [{ id: "e", source: "a", target: "c" }],
+      metrics: [
+        { nodeId: "c", enabled: true, name: "Speed", viz: "number", format: "duration", unit: "hours", durationDisplay: "auto", precision: 0 },
+      ],
+    };
+    const [flow] = await db.insert(flows).values({ orgId: org, name: "speed", draftGraph: graph, status: "published", publishedVersion: 1 }).returning();
+    await db.insert(flowVersions).values({ flowId: flow.id, orgId: org, version: 1, graph });
+    await db.insert(events).values({
+      eventId: "u1", orgId: org, connectionId: CONN, source: "webhook", eventType: "pair", subject: "u1",
+      occurredAt: new Date(), properties: { time_between: { minutes: 0.583333 } },
+    });
+
+    await materializeFlow(db, org, flow.id);
+    const [row] = await db.select().from(flowResults).where(eq(flowResults.flowId, flow.id));
+    const tile = row.tile as { value?: number; unit?: string; format?: string; durationDisplay?: string };
+
+    // The number is unchanged — 0.583 of SOMETHING — and the something now
+    // comes from the field: minutes, i.e. 35 seconds, what the builder shows.
+    expect(tile.value).toBeCloseTo(0.583333, 4);
+    expect(tile.format).toBe("duration");
+    expect(tile.unit).toBe("minutes");
+    // Display preference follows the step too — the one place it is chosen.
+    expect(tile.durationDisplay).toBe("hours");
+  });
+
+  it("leaves a non-duration metric's chosen format alone", async () => {
+    const org = "org_unit2";
+    await db.insert(connections).values({ id: CONN, orgId: org, source: "webhook", name: "Hook", status: "active", authType: "none" });
+    // A plain count the user chose to show as currency — the spec owns that.
+    const graph = {
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN, source: "webhook" } } },
+        { id: "c", type: "formula", data: { config: { op: "sum", field: "value" } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "c" }],
+      metrics: [{ nodeId: "c", enabled: true, name: "Revenue", viz: "number", format: "currency", currency: "USD", precision: 0 }],
+    };
+    const [flow] = await db.insert(flows).values({ orgId: org, name: "rev", draftGraph: graph, status: "published", publishedVersion: 1 }).returning();
+    await db.insert(flowVersions).values({ flowId: flow.id, orgId: org, version: 1, graph });
+    await db.insert(events).values({
+      eventId: "u2", orgId: org, connectionId: CONN, source: "webhook", eventType: "sale", subject: "u2",
+      occurredAt: new Date(), value: "250", properties: {},
+    });
+
+    await materializeFlow(db, org, flow.id);
+    const [row] = await db.select().from(flowResults).where(eq(flowResults.flowId, flow.id));
+    expect((row.tile as { format?: string }).format).toBe("currency");
+    expect((row.tile as { value?: number }).value).toBe(250);
+  });
+});

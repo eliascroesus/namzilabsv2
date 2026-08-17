@@ -984,20 +984,34 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
        */
       const byNodeId = new Map(nodes.map((n) => [n.id, n]));
       const seedFormat = (ep: Endpoint) => seedMetricFormat((byNodeId.get(ep.nodeId)?.data.config ?? {}) as Record<string, unknown>);
-      return endpoints.map(
-        (ep) =>
-          byId.get(ep.nodeId) ?? {
-            nodeId: ep.nodeId,
-            enabled: true,
-            name: defaultName(ep),
-            viz: "number",
-            currency: "USD",
-            precision: 0,
-            target: null,
-            timeUnit: "month",
-            ...seedFormat(ep),
-          },
-      );
+      return endpoints.map((ep) => {
+        /**
+         * AN EXISTING METRIC RE-DERIVES ITS DURATION FACTS, every time this
+         * opens. The spec used to be returned verbatim, so it was a snapshot:
+         * change the step's field from `time_between.hours` to `.minutes`
+         * and the published tile kept `unit: "hours"` — the builder said 35s
+         * while the dashboard said 35m. The step owns what its number IS
+         * (this modal's own Format select says "set on the step"); the spec
+         * keeps only what the person chose here — name, viz, precision,
+         * target, time reference.
+         */
+        const existing = byId.get(ep.nodeId);
+        if (existing) {
+          const derived = seedFormat(ep);
+          return existing.format === "duration" || derived.format === "duration" ? { ...existing, ...derived } : existing;
+        }
+        return {
+          nodeId: ep.nodeId,
+          enabled: true,
+          name: defaultName(ep),
+          viz: "number",
+          currency: "USD",
+          precision: 0,
+          target: null,
+          timeUnit: "month",
+          ...seedFormat(ep),
+        };
+      });
     });
     setPublishError(null);
     setPublishWarning(null);
