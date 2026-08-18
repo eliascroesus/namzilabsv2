@@ -1,4 +1,4 @@
-import { consumesDataset, outputShapeOf, type ShapeKind } from "./shapes";
+import { consumesDataset, outputShapeOf, recordsSourceOf, type ShapeKind } from "./shapes";
 import { AppConfigSchema, FilterConfigSchema, PathsConfigSchema, GroupConfigSchema, CalculateConfigSchema, FormulaConfigSchema, TimeBetweenConfigSchema, UniteConfigSchema, NODE_TYPES, NODE_LABELS, isDatasetFormulaOp, type FilterConfig, type FlowGraph, type FlowNode } from "./types";
 
 export type ValidationIssue = { nodeId?: string; message: string };
@@ -119,7 +119,12 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
       if (ins.length === 0) issues.push({ nodeId: node.id, message: `${stepName(node.type)} needs a step before it.` });
       for (const srcId of ins) {
         const src = byId.get(srcId);
-        if (src && outputKind(src) !== "dataset") {
+        // THE SAME QUESTION THE ENGINE ASKS, asked the same way. A step whose
+        // parent produces a number reaches back to the nearest step that has
+        // records, so rejecting it here would refuse to publish a flow that
+        // computes perfectly — which is exactly what happened: a Pickup Rate
+        // showing 45% in the builder, blocked at the door.
+        if (src && outputKind(src) !== "dataset" && !recordsSourceOf(graph, node.id)) {
           issues.push({ nodeId: node.id, message: `${stepName(node.type)} needs records flowing into it — connect it after a data step.` });
         }
       }
@@ -138,14 +143,20 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
         }
         for (const e of plain) {
           const src = byId.get(e.source);
-          if (src && outputKind(src) !== "dataset") {
+          // Only when the engine ALSO has nowhere to read from. A Calculate
+          // under another Calculate reaches back to the nearest step holding
+          // records, so the old check blocked a flow that runs correctly —
+          // and the advice it gave ("put it directly after the step that
+          // produces records") could not be followed, because the canvas
+          // offers no way to give a step a second child.
+          if (src && outputKind(src) !== "dataset" && !recordsSourceOf(graph, node.id)) {
             // Says WHICH shape arrived, like the engine's twin: "needs records
             // as input" beside a step that is plainly connected reads as a
             // bug in us rather than a fixable mistake in the flow.
-            const shape = outputKind(src) === "dataset" ? "records" : "a single number";
             issues.push({
               nodeId: node.id,
-              message: `Calculate needs records, but the step above it produces ${shape}. Put it directly after the step that produces records, or give it its own Get data step.`,
+              message:
+                "Calculate needs records, but nothing above it produces any. Put it after a Get data step, or give it its own.",
             });
           }
         }
@@ -234,8 +245,12 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
           }
         }
       } else {
+        // Same reach-back as the live Calculate: the legacy node runs through
+        // the same engine, so it must be judged by the same rule.
         const hasDataset = ins.map((sid) => byId.get(sid)).some((s) => s && outputKind(s) === "dataset");
-        if (!hasDataset) issues.push({ nodeId: node.id, message: "Calculate needs records as input." });
+        if (!hasDataset && !recordsSourceOf(graph, node.id)) {
+          issues.push({ nodeId: node.id, message: "Calculate needs records as input." });
+        }
       }
     }
 

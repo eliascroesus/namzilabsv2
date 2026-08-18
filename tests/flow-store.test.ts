@@ -201,7 +201,18 @@ describe("graph validation", () => {
   it("flags an empty flow", () => {
     expect(validateGraph(parseGraph({ nodes: [], edges: [] })).length).toBeGreaterThan(0);
   });
-  it("flags an aggregate fed by a non-dataset input", () => {
+  /**
+   * THE GATE MUST ASK THE ENGINE'S QUESTION, NOT ITS OWN.
+   *
+   * This graph runs: the second aggregation reaches back to the Get data step
+   * for its records. The validator kept an independent copy of the old rule
+   * and rejected it anyway, so a Pickup Rate reading 45% in the builder was
+   * refused at the door — with advice ("put it directly after the step that
+   * produces records") that the canvas gives no way to follow.
+   *
+   * REVERT THE recordsSourceOf CHECK IN validate.ts AND THIS FAILS.
+   */
+  it("publishes a second aggregation stacked under the first — the engine can run it", () => {
     const g = parseGraph({
       nodes: [
         N("a", "app", { connectionId: CONN }),
@@ -209,15 +220,26 @@ describe("graph validation", () => {
         N("agg2", "aggregate", { aggregation: "count" }),
         N("out", "output", {}),
       ],
-      edges: [E("a", "agg1"), E("agg1", "agg2"), E("agg2", "out")], // agg2 fed by a value, not records
+      edges: [E("a", "agg1"), E("agg1", "agg2"), E("agg2", "out")],
     });
-    // The publish-time twin of the engine's message, and it must NAME the
-    // shape that arrived: reported from the builder as "connect it after a
-    // data step" shown under a step that was plainly connected.
-    const msg = validateGraph(g).find((i) => /Calculate needs records/.test(i.message))?.message ?? "";
-    expect(msg).toContain("single number");
-    expect(msg).toContain("Get data step");
+    expect(validateGraph(g).filter((i) => /needs records/.test(i.message))).toEqual([]);
   });
+
+  it("still flags an aggregation with no records anywhere above it", () => {
+    const g = parseGraph({
+      nodes: [
+        // A comparison of two typed-in numbers: nothing behind it holds records.
+        N("cmp", "formula", { op: "percentage", aFixed: 10, bFixed: 20 }),
+        N("agg", "formula", { op: "sum", field: "value" }),
+        N("out", "output", {}),
+      ],
+      edges: [E("cmp", "agg"), E("agg", "out")],
+    });
+    const msg = validateGraph(g).find((i) => /needs records/.test(i.message))?.message ?? "";
+    expect(msg).toContain("nothing above it produces any");
+    expect(msg).toContain("Get data");
+  });
+
   it("flags a graph with no metric to publish (no Output node, no metrics)", () => {
     const g = parseGraph({ nodes: [N("a", "app", { connectionId: CONN })], edges: [] });
     // The copy speaks the UI's language ("Turn on… in Review & publish"),
