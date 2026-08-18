@@ -343,6 +343,20 @@ async function runStreamSync(db: DB, conn: ConnRow, mode: SyncMode): Promise<Syn
         streamHash: stream.configHash,
         generation: gen,
         preserveOccurredAt: isMirrorSource(conn.source) && !dates,
+        /**
+         * Same rule as the sweep: only a mirror's whole-resource read licenses
+         * the registry to retire a column, and `complete` guards the truncated
+         * walk — a re-sync cut short by its budget has not seen everything.
+         *
+         * IN PRACTICE THIS IS FALSE TODAY, deliberately left rather than
+         * forced: `complete` means the connector returned a NULL cursor, and
+         * Sheets — the only mirror source — always returns its Drive marker
+         * instead. So a re-sync does not retire fields; the ordinary sweep
+         * does, within one ten-minute cycle. The conservative direction is the
+         * right one to be wrong in, and this becomes live on its own the day a
+         * mirror reports a finished walk.
+         */
+        wholeResource: isMirrorSource(conn.source) && complete,
       },
       toWrite,
     );

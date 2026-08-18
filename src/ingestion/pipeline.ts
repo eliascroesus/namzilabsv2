@@ -39,6 +39,13 @@ type EventMeta = {
    * upstream timestamp leave this false so genuine reschedules propagate.
    */
   preserveOccurredAt?: boolean;
+  /**
+   * This batch is the ENTIRE resource, not a page or a window — true only for
+   * a mirror's whole-tab re-read. It lets the field registry retire a column
+   * the source no longer has (a renamed form question), which no incremental
+   * read may ever conclude. See `recordFields`.
+   */
+  wholeResource?: boolean;
 };
 
 /** Multi-row VALUES chunk size (~12 params/row, comfortably under limits). */
@@ -154,11 +161,24 @@ export async function upsertEvents(db: DB, meta: EventMeta, canonical: Canonical
       .update(connections)
       .set({ lastEventAt: new Date(), updatedAt: new Date() })
       .where(eq(connections.id, meta.connectionId));
-    // A.1: record what we wrote so field pickers read an index instead of
-    // scanning a sample. Best-effort — the registry is a convenience, and a
-    // hiccup here must never fail an ingest.
+  }
+  /**
+   * A.1: record what we wrote so field pickers read an index instead of
+   * scanning a sample. Best-effort — the registry is a convenience, and a
+   * hiccup here must never fail an ingest.
+   *
+   * A WHOLE-RESOURCE READ REFRESHES THE REGISTRY EVEN WHEN NOTHING CHANGED,
+   * and that is what makes field retirement actually happen. Gated on
+   * "something changed", it would only ever run on the sweep that carried the
+   * change — so a sheet whose columns were renamed a week ago, and which has
+   * been quiet since, would keep its abandoned headers in every picker
+   * forever. The re-read is the only moment the current column set is known.
+   */
+  if (inserted + updated > 0 || meta.wholeResource) {
     try {
-      await recordFields(db, { orgId: meta.orgId, connectionId: meta.connectionId, streamHash: meta.streamHash ?? null }, canonical);
+      await recordFields(db, { orgId: meta.orgId, connectionId: meta.connectionId, streamHash: meta.streamHash ?? null }, canonical, {
+        wholeResource: meta.wholeResource,
+      });
     } catch {
       // Registry is rebuildable from the events themselves.
     }

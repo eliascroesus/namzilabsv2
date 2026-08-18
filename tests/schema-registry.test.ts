@@ -221,3 +221,89 @@ describe("a blank is not a value", () => {
     expect(await paths({ dedupe: true, dedupeField: "properties.legacy_blank" })).toContain("properties.legacy_blank");
   });
 });
+
+/**
+ * A RENAMED FORM QUESTION MUST NOT LEAVE A GHOST IN EVERY PICKER.
+ *
+ * The registry remembers every field it has ever seen, deliberately: a column
+ * that stopped being FILLED is still a real column, and a sampled scan would
+ * drop it. But a column that has been REMOVED is a different thing. Measured
+ * live: after a Google Form's wording changed, the sheet's registry held 19
+ * fields — the 12 that exist and 7 abandoned headers, identical to their
+ * replacements but for a suffix — and the picker showed two of every question.
+ *
+ * The events themselves were already correct: a mirror re-reads its whole tab
+ * and rewrites every row with the current headers, so the old key survived
+ * nowhere in the data. It was offered anyway, and a metric built on it would
+ * have found nothing.
+ */
+describe("a whole-resource read retires the columns it no longer sees", () => {
+  const scoped = () => ({ orgId: "org_reg", connectionId: connId, streamHash: "h-sheet" });
+  const paths = async () =>
+    (await db.select().from(streamFields).where(eq(streamFields.streamHash, "h-sheet"))).map((r) => r.fieldPath).sort();
+
+  it("drops a renamed column and keeps the one that replaced it", async () => {
+    await recordFields(db, scoped(), [ev({ "How many did you call?": "3", Timestamp: "2026-08-12" })], { wholeResource: true });
+    expect(await paths()).toEqual(["How many did you call?", "Timestamp"]);
+
+    // The question is reworded; the mirror's next whole-tab read carries the
+    // new header on EVERY row, old responses included.
+    await recordFields(db, scoped(), [ev({ "How many did you call? [NUMBER ONLY]": "3", Timestamp: "2026-08-12" })], { wholeResource: true });
+
+    // REVERT THE RETIREMENT AND THIS HOLDS BOTH, which is the reported bug.
+    expect(await paths()).toEqual(["How many did you call? [NUMBER ONLY]", "Timestamp"]);
+  });
+
+  /**
+   * THE SAFETY ARGUMENT, and the reason the flag exists. An incremental source
+   * returns only what is NEW, so a field missing from one batch proves nothing:
+   * Close's `lost_reason` appears solely on lost opportunities, and a quiet
+   * afternoon would otherwise "prove" the column no longer exists and delete it
+   * from every picker in the org.
+   */
+  it("never retires anything on a read that was not the whole resource", async () => {
+    await recordFields(db, scoped(), [ev({ subject_line: "a", lost_reason: "budget" })], { wholeResource: true });
+    expect(await paths()).toEqual(["lost_reason", "subject_line"]);
+
+    // A later incremental page happens to contain no lost opportunity.
+    await recordFields(db, scoped(), [ev({ subject_line: "b" })]);
+    expect(await paths()).toEqual(["lost_reason", "subject_line"]);
+
+    // And the default is the safe one — an omitted flag never retires.
+    await recordFields(db, scoped(), [ev({ subject_line: "c" })], {});
+    expect(await paths()).toEqual(["lost_reason", "subject_line"]);
+  });
+
+  it("keeps a column that still exists but is blank in every row", async () => {
+    await recordFields(db, scoped(), [ev({ answered: "2", nobody_replied: "" })], { wholeResource: true });
+    // The column is present in the header and empty in the data — a real
+    // answer of zero, not a removed column.
+    await recordFields(db, scoped(), [ev({ answered: "5", nobody_replied: "" })], { wholeResource: true });
+    expect(await paths()).toEqual(["answered", "nobody_replied"]);
+  });
+
+  /**
+   * AN EMPTY PATH SET MUST NOT MEAN "DELETE EVERYTHING". A NOT-IN over an empty
+   * list is vacuously true, so a whole-resource read that produced records
+   * carrying no fields at all — a tab whose header row is blank — would wipe
+   * the stream's registry. REVERT THE `seen.size > 0` GUARD AND THIS EMPTIES.
+   */
+  it("keeps everything when a whole-resource read produced no fields at all", async () => {
+    await recordFields(db, scoped(), [ev({ answered: "2" })], { wholeResource: true });
+    expect(await paths()).toEqual(["answered"]);
+    await recordFields(db, scoped(), [ev({})], { wholeResource: true });
+    expect(await paths()).toEqual(["answered"]);
+  });
+
+  it("retires only within its own stream, never a neighbour's", async () => {
+    await recordFields(db, scoped(), [ev({ only_here: "1" })], { wholeResource: true });
+    await recordFields(db, { orgId: "org_reg", connectionId: connId, streamHash: "h-other" }, [ev({ other_sheet: "1" })], {
+      wholeResource: true,
+    });
+    await recordFields(db, scoped(), [ev({ renamed: "1" })], { wholeResource: true });
+
+    expect(await paths()).toEqual(["renamed"]);
+    const other = await db.select().from(streamFields).where(eq(streamFields.streamHash, "h-other"));
+    expect(other.map((r) => r.fieldPath)).toEqual(["other_sheet"]);
+  });
+});

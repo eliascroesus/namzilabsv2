@@ -1,5 +1,5 @@
 import { isEmptyValue } from "@/lib/flow/schema-infer";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { streamFields } from "@/db/schema";
 import type { DB } from "@/db/types";
 import type { CanonicalEvent } from "@/connectors/types";
@@ -65,7 +65,20 @@ export type RegistryScope = { orgId: string; connectionId: string; streamHash?: 
  * successful upsert; failures here must never fail an ingest, so callers
  * wrap it defensively.
  */
-export async function recordFields(db: DB, scope: RegistryScope, records: CanonicalEvent[]): Promise<number> {
+export async function recordFields(
+  db: DB,
+  scope: RegistryScope,
+  records: CanonicalEvent[],
+  opts: {
+    /**
+     * This batch IS the entire resource — every record it currently holds, not
+     * a page or a window. Only a whole-resource read can conclude that a field
+     * it did not see no longer exists, so only a whole-resource read may retire
+     * one. See the retirement note below.
+     */
+    wholeResource?: boolean;
+  } = {},
+): Promise<number> {
   if (records.length === 0) return 0;
 
   // Aggregate the batch in memory first: one upsert per distinct field, not per
@@ -128,6 +141,60 @@ export async function recordFields(db: DB, scope: RegistryScope, records: Canoni
           lastSeen: sql`excluded.last_seen`,
         },
       });
+  }
+
+  /**
+   * A COLUMN THAT NO LONGER EXISTS STOPS BEING OFFERED.
+   *
+   * The registry deliberately remembers every field ever seen, because a
+   * column that stopped being FILLED is still a real column and a sampled scan
+   * would drop it from every picker. But a column that has been REMOVED —
+   * renamed at the source, most often — is a different thing, and remembering
+   * it forever is what put two of every question in the picker after a Google
+   * Form's wording changed: seven abandoned headers sitting beside the seven
+   * that replaced them, identical but for a suffix.
+   *
+   * It is worse than clutter. The mirror rewrites every row with the CURRENT
+   * headers, so the old key survives nowhere in the data — but it is still
+   * offered, and a metric built on it reads whatever the engine can find,
+   * which is nothing.
+   *
+   * ONLY A WHOLE-RESOURCE READ MAY RETIRE ANYTHING, and that is the whole
+   * safety argument. A mirror re-reads its entire tab every sweep, so a header
+   * it did not return is genuinely gone. An incremental source returns only
+   * what is NEW: Close's `lost_reason` appears solely on lost opportunities, so
+   * a quiet afternoon would "prove" it no longer exists and delete a real field
+   * from every picker. Hence the flag, set by the two mirror paths and nobody
+   * else.
+   *
+   * Costs one statement on the sweeps that actually wrote something, returns no
+   * rows, and is scoped by the same unique index the upsert above uses.
+   */
+  /**
+   * `seen.size > 0` IS LOAD-BEARING, not a tidy-up. An empty path set makes the
+   * NOT-IN predicate vacuously true, so a whole-resource read that produced
+   * records with no fields at all — a tab whose header row is blank — would
+   * delete every registered field for the stream. A DELETE is the one
+   * operation where being wrong is unrecoverable, so it does not get to
+   * depend on how a query builder renders an empty array.
+   */
+  if (opts.wholeResource && seen.size > 0) {
+    await db.delete(streamFields).where(
+      and(
+        // The tenant wall, re-asserted. `connection_id` is globally unique so
+        // this cannot currently widen the scope — it is here for the same
+        // reason the writer's own conflict clause states it: a delete is the
+        // one operation where being wrong is unrecoverable, and the predicate
+        // should not depend on a uniqueness argument made in another table.
+        eq(streamFields.orgId, scope.orgId),
+        eq(streamFields.connectionId, scope.connectionId),
+        // NULL is a real scope here (connection-scoped sources), and the live
+        // unique index is NULLS NOT DISTINCT — so the delete has to match rows
+        // the same way the upsert above targets them.
+        scope.streamHash == null ? isNull(streamFields.streamHash) : eq(streamFields.streamHash, scope.streamHash),
+        notInArray(streamFields.fieldPath, [...seen.keys()]),
+      ),
+    );
   }
   return seen.size;
 }

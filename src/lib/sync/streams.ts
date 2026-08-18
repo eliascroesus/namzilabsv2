@@ -723,6 +723,9 @@ export async function syncStream(
             streamHash: stream.configHash,
             generation,
             preserveOccurredAt: !restamping,
+            // A mirror re-read the WHOLE tab, so a column it did not return is
+            // genuinely gone and the field registry may retire it.
+            wholeResource: true,
           },
           toWrite,
         );

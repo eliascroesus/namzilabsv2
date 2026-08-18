@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { upsertEvents } from "@/ingestion/pipeline";
-import { events } from "@/db/schema";
+import { events, streamFields } from "@/db/schema";
 import type { CanonicalEvent } from "@/connectors/types";
 import type { DB } from "@/db/types";
 
@@ -125,5 +125,61 @@ describe("unified upsertEvents — guarded conflict semantics", () => {
     expect(res.inserted).toBe(1203);
     expect(res.deduped).toBe(1);
     expect((await db.select().from(events)).length).toBe(1203);
+  });
+});
+
+/**
+ * FIELD RETIREMENT HAS TO RUN ON A SETTLED RESOURCE, and this is the pipeline
+ * half of that.
+ *
+ * The registry refresh used to be gated on "something changed", which is right
+ * for recording fields and wrong for retiring them: the retirement can only
+ * happen on a sweep that re-read the whole resource, and a sheet whose columns
+ * were renamed last week has nothing changing now. Measured live, that is
+ * exactly the state the ghost columns were found in — twelve current headers
+ * beside seven abandoned ones, on a sheet nobody had touched in days.
+ */
+describe("a whole-resource read refreshes the registry even when nothing changed", () => {
+  const paths = async () =>
+    (await db.select().from(streamFields).where(eq(streamFields.connectionId, connectionId))).map((r) => r.fieldPath).sort();
+
+  it("retires a vanished column on a sweep that wrote no changes at all", async () => {
+    const m = meta({ streamHash: "h1", wholeResource: true });
+    await upsertEvents(db, m, [rec("r1", { properties: { new_question: "3" } })]);
+    expect(await paths()).toEqual(["new_question"]);
+
+    // THE STATE THE BUG WAS FOUND IN: an abandoned header already sitting in
+    // the registry from before retirement existed, on a sheet nobody has
+    // touched since. Written directly, because that is the only way to
+    // reproduce a registry that predates the feature.
+    await db.insert(streamFields).values({
+      orgId: "org_test",
+      connectionId,
+      streamHash: "h1",
+      fieldPath: "old_question",
+      inferredType: "string",
+      approxCardinality: 3,
+      seenCount: 12,
+      sample: { value: "3" },
+    });
+    expect(await paths()).toEqual(["new_question", "old_question"]);
+
+    // A sweep that writes NOTHING — the steady state of a settled sheet.
+    const quiet = await upsertEvents(db, m, [rec("r1", { properties: { new_question: "3" } })]);
+    expect(quiet.inserted + quiet.updated).toBe(0);
+
+    // REVERT THE `|| meta.wholeResource` GUARD AND THE GHOST SURVIVES FOREVER:
+    // the only sweep that could retire it is one that changed something, and
+    // nothing about this sheet is ever going to change again.
+    expect(await paths()).toEqual(["new_question"]);
+  });
+
+  it("a settled sweep on a NON-whole-resource read still records nothing new and retires nothing", async () => {
+    const m = meta({ streamHash: "h2" });
+    await upsertEvents(db, m, [rec("r2", { properties: { a: "1", rare: "x" } })]);
+    expect(await paths()).toEqual(["a", "rare"]);
+    // An incremental page without the rare field must never retire it.
+    await upsertEvents(db, m, [rec("r3", { properties: { a: "2" } })]);
+    expect(await paths()).toEqual(["a", "rare"]);
   });
 });
