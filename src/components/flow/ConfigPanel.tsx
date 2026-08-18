@@ -29,10 +29,11 @@ import {
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
 import { computeNodeStatus, STD_META } from "./graph-utils";
 import { NumberField } from "./controls/NumberField";
-import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel } from "./node-meta";
+import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel, stepSummaryLines } from "./node-meta";
 import { RecordSamplePicker, recordWhen } from "./RecordSamplePicker";
 import { DataIcon, NodeIcon } from "./icons";
 import { Select, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
+import { hasAnyFields } from "./controls/field-utils";
 import type { DataGroup } from "./controls/types";
 import { prepareGroups, toDataGroups, momentGroups } from "./field-groups";
 import { asFilterConfig } from "./panel-mappers";
@@ -101,6 +102,7 @@ export function ConfigPanel({
   onChange,
   onRename,
   onTest,
+  onCancelTest,
   onTestUpstream,
   onAddNext,
   animClass = "flow-pop-in",
@@ -127,6 +129,8 @@ export function ConfigPanel({
   onChange: (patch: Record<string, unknown>) => void;
   onRename: (v: string) => void;
   onTest: () => void;
+  /** Abandons a running test — its late result is dropped, not applied. */
+  onCancelTest?: () => void;
   /** Runs the previous step's test — the cure for an empty field picker. */
   onTestUpstream?: () => void;
   onAddNext: (anchor?: { x: number; y: number; leftX?: number }) => void;
@@ -146,6 +150,23 @@ export function ConfigPanel({
   // hundreds of entries, and a fresh array identity every render would
   // re-flatten on every keystroke in the panel.
   const groups = useMemo(() => toDataGroups(fieldGroups), [fieldGroups]);
+
+  /**
+   * The step's own sentence. Field PATHS are resolved to the labels the user
+   * picked ("Direction", not "properties.data.direction") — a summary that
+   * echoes raw paths restates the problem instead of solving it. Falls back to
+   * `humanizeKey` for a path no upstream step is currently offering, which is
+   * the ordinary case before the step above has been tested.
+   */
+  const summaryLines = useMemo(() => {
+    const labelOf = (p: string) => groups.flatMap((g) => g.fields).find((f) => f.path === p)?.label ?? humanizeKey(p);
+    const source = String((cfg as { source?: unknown }).source ?? "");
+    const et = (cfg as { eventType?: unknown }).eventType;
+    return stepSummaryLines(type, cfg, labelOf, {
+      recordType: typeof et === "string" && et ? eventTypeLabel(source || null, et) : undefined,
+      inputCount,
+    });
+  }, [type, cfg, groups, inputCount]);
 
   // Two tabs: set the step up, then test it. Remounts per step (keyed on id), so a
   // freshly-opened step always starts on Configure.
@@ -174,7 +195,13 @@ export function ConfigPanel({
   );
 
   return (
-    <aside data-config-panel className={`absolute inset-y-0 right-0 z-20 m-4 flex w-[452px] flex-col overflow-hidden rounded-2xl bg-neutral-50 flow-shadow ${animClass}`}>
+    // Fixed at 452px, which on a 13" laptop is 35% of the screen before the
+    // field browser opens beside it. It now yields on a narrow viewport
+    // instead of pushing the canvas off the left edge.
+    <aside
+      data-config-panel
+      className={`absolute inset-y-0 right-0 z-20 m-4 flex w-[min(452px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl bg-neutral-50 flow-shadow ${animClass}`}
+    >
       {/* Header — a slightly darker grey band with the step's colourful icon, so it
           reads as a distinct "what am I editing" strip above the fields. */}
       <div className="flex items-center justify-between gap-3 border-b border-neutral-200/70 bg-neutral-100 px-5 py-4">
@@ -211,6 +238,28 @@ export function ConfigPanel({
         <div className="flex min-h-full flex-col p-5">
           {activeTab === "configure" ? (
             <div className="space-y-5">
+              {/* Every picker in this panel is fed by the step above's last
+                  test, so before that test they are all empty and the panel
+                  is unanswerable. This says so ONCE, at the top, with the fix
+                  attached — instead of letting the user discover it by
+                  opening a picker and reading "No data yet. Test an earlier
+                  step to bring its fields here", which is an instruction to
+                  leave this step, find that one, run it, and come back. */}
+              {type !== "app" && onTestUpstream && !hasAnyFields(groups) && (
+                <UpstreamPrompt onTestUpstream={onTestUpstream} />
+              )}
+              {/* What this step does, restated as a sentence, above the
+                  controls that produce it — the pattern Calculate has always
+                  had and every other step lacked. */}
+              {summaryLines.length > 0 && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
+                  {summaryLines.map((line, i) => (
+                    <p key={i} className={i > 0 ? "mt-1 text-indigo-700" : "font-medium"}>
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              )}
               <NodeConfig
                 type={type}
                 cfg={cfg}
@@ -230,7 +279,6 @@ export function ConfigPanel({
                 onAddBranch={onAddBranch}
                 onRemoveBranch={onRemoveBranch}
               />
-              {!(branch && branch.mode !== "custom") && <NodeExtras type={type} cfg={cfg} groups={groups} onChange={onChange} />}
             </div>
           ) : (
             <div className="space-y-4">
@@ -260,9 +308,25 @@ export function ConfigPanel({
           hasTest={!!node.data.lastTest}
           supportsTest={supportsTest}
           tested={tested}
-          onContinueToTest={() => setTab("test")}
+          /**
+           * ONE BUTTON PER STEP, NOT TWO. Continue used to only switch tabs,
+           * so the user pressed Continue, arrived at a screen whose whole
+           * content was another button, and pressed that. The middle click
+           * existed to reach a button. Now Continue advances AND runs, which
+           * is the Zapier rhythm — and it means almost every published flow
+           * has been seen working, because testing is on the forward path
+           * rather than beside it.
+           *
+           * A step already tested and unchanged just shows its result: a
+           * re-run there would spend a real query to redraw the same numbers.
+           */
+          onContinueToTest={() => {
+            setTab("test");
+            if (status !== "ready") onTest();
+          }}
           onBackToConfigure={() => setTab("configure")}
           onTest={onTest}
+          onCancelTest={onCancelTest}
           onAddNext={onAddNext}
         />
       </div>
@@ -285,6 +349,7 @@ function Footer({
   onContinueToTest,
   onBackToConfigure,
   onTest,
+  onCancelTest,
   onAddNext,
 }: {
   tab: "configure" | "test";
@@ -296,15 +361,10 @@ function Footer({
   onContinueToTest: () => void;
   onBackToConfigure: () => void;
   onTest: () => void;
+  onCancelTest?: () => void;
   onAddNext: (anchor?: { x: number; y: number; leftX?: number }) => void;
 }) {
-  if (testing) {
-    return (
-      <button disabled className={`${BTN_PRIMARY} w-full`}>
-        Testing…
-      </button>
-    );
-  }
+  if (testing) return <TestingFooter onCancelTest={onCancelTest} />;
 
   if (tab === "configure") {
     // Untestable steps (split hub) continue straight on; the rest advance to Test.
@@ -339,6 +399,83 @@ function Footer({
     <button onClick={onTest} className={`${BTN_PRIMARY} w-full`}>
       {hasTest ? "Test again" : "Test"}
     </button>
+  );
+}
+
+/**
+ * A RUNNING TEST SAYS HOW LONG IT HAS BEEN RUNNING, AND CAN BE LEFT.
+ *
+ * A test can hold this footer for ninety seconds (112 ticks of 800ms) behind a
+ * disabled "Testing…" with no elapsed time and no way out. The three failure
+ * messages waiting at the end of that window are precise and useful — but a
+ * minute and a half of a dead button is a long time to earn them, and a user
+ * who realises mid-run that they picked the wrong field has to sit through it.
+ *
+ * The counter appears at 8s: below that it is noise on a test that was about
+ * to return anyway. The suggestion appears at 30s, because by then the most
+ * likely cause is genuinely the amount of data, and narrowing the range is
+ * something the user can actually do.
+ */
+function TestingFooter({ onCancelTest }: { onCancelTest?: () => void }) {
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setSecs((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (secs < 8 || !onCancelTest) {
+    return (
+      <button disabled className={`${BTN_PRIMARY} w-full`}>
+        Testing…
+      </button>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <button disabled className={`${BTN_PRIMARY} flex-1`}>
+          Testing… {secs}s
+        </button>
+        <button onClick={onCancelTest} className={BTN_SECONDARY}>
+          Stop
+        </button>
+      </div>
+      {secs >= 30 && (
+        <p className="text-center text-xs text-neutral-500">Large date ranges take longer. You can narrow this step and try again.</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The one banner that turns a dead panel into a live one.
+ *
+ * `onTestUpstream` has existed since the panel was built — created in the
+ * canvas, threaded through two components, typed at every hop, and never once
+ * rendered. Its own comment called it "the cure for an empty field picker".
+ * This is that cure, on screen: the step above has not been tested, so this
+ * step has no fields to offer, and the fix is one button rather than five
+ * navigation moves.
+ */
+function UpstreamPrompt({ onTestUpstream }: { onTestUpstream: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+      <p className="text-[13px] font-medium text-amber-900">No fields to choose from yet</p>
+      <p className="mt-1 text-xs leading-snug text-amber-800">
+        The step above hasn&rsquo;t been tested, so we don&rsquo;t know what its records look like.
+      </p>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          onTestUpstream();
+        }}
+        className="mt-2.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100 disabled:opacity-60"
+      >
+        {busy ? "Testing the previous step…" : "Test the previous step"}
+      </button>
+    </div>
   );
 }
 
@@ -491,9 +628,17 @@ function NodeConfig({
           </div>
         )}
         {bmode === "custom" ? (
-          <div className="space-y-2.5">
-            <SectionLabel>Only continue if…</SectionLabel>
-            <ConditionEditor value={fc} groups={groups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />
+          <div className="space-y-5">
+            {/* LIMITING A METRIC TO A PERIOD IS ONE OF THE TWO THINGS EVERYONE
+                DOES TO ONE, and it was a collapsed grey accordion reading
+                "Date range · off", below the conditions, below the fold. The
+                config shape, the engine and the resolved-window sentence are
+                all unchanged — only the prominence is. */}
+            <TimePeriodSection cfg={cfg} groups={groups} onChange={onChange} />
+            <div className="space-y-2.5">
+              <SectionLabel>Only continue if…</SectionLabel>
+              <ConditionEditor value={fc} groups={groups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />
+            </div>
           </div>
         ) : (
           <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-[13px] text-neutral-600">
@@ -720,19 +865,21 @@ function NodeConfig({
           </div>
         </div>
 
-        {/* The join option, where the sources come together. Off = stack everything. */}
-        <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-neutral-200 bg-white p-3">
-          <input
-            type="checkbox"
-            checked={matching}
-            onChange={(e) => onChange(e.target.checked ? { mode: "match" } : { mode: "stack" })}
-            className="mt-0.5 h-4 w-4 accent-indigo-600"
+        {/* The two jobs, named. Each is now its own entry in the step picker,
+            so this control is for CHANGING one into the other rather than for
+            discovering the second one exists — which is what a checkbox
+            buried under the lane list was being asked to do. */}
+        <Field label="What should this step do?">
+          <Select
+            value={matching ? "match" : "stack"}
+            width={W}
+            options={[
+              { value: "stack", label: "Put all their records on one line", hint: "Later steps see every lane's records together." },
+              { value: "match", label: "Keep only records that match", hint: "Like a lookup: keep one step's records only when a value also exists in the other." },
+            ]}
+            onChange={(v) => onChange({ mode: v })}
           />
-          <span>
-            <span className="block text-sm font-medium text-neutral-800">Only keep records that match across these steps</span>
-            <span className="mt-0.5 block text-xs text-neutral-500">Like a lookup: keep one step&rsquo;s records only when a value from them also exists in the other step.</span>
-          </span>
-        </label>
+        </Field>
         {matching && inputs.length !== 2 && (
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
             Matching compares exactly two steps — this Combine has {inputs.length} wired in.
@@ -1826,68 +1973,84 @@ const DATE_PRESETS: Array<{ value: string; label: string }> = TIME_PRESETS.map((
 
 type DateRange = { enabled?: boolean; dateField?: string; mode?: "preset" | "rolling" | "between"; preset?: string; days?: number; from?: string; to?: string };
 
-/** Node-specific extras that belong at the bottom, out of the main focus. */
-function NodeExtras({ type, cfg, groups, onChange }: { type: NodeType; cfg: Record<string, unknown>; groups: DataGroup[]; onChange: (p: Record<string, unknown>) => void }) {
-  if (type === "filter") return <DateRangeSection cfg={cfg} groups={groups} onChange={onChange} />;
-  return null;
-}
-
-/** Optional "Date range" window for Filter (collapsed by default), maps to engine dateRange. */
-function DateRangeSection({ cfg, groups, onChange }: { cfg: Record<string, unknown>; groups: DataGroup[]; onChange: (p: Record<string, unknown>) => void }) {
+/**
+ * "Which period?" — asked first, in one dropdown, in the words people use.
+ *
+ * This replaces a collapsed accordion reading "Date range · off" that sat
+ * BELOW the conditions, and which opened onto four stacked controls: a
+ * checkbox to turn the window on, a Date-field picker, a Window mode, and
+ * only then the range itself. Four answers for a question people arrive
+ * already knowing the answer to ("last 30 days").
+ *
+ * So the mode and the preset are collapsed into ONE list — "All time" is the
+ * off state and a real, selectable answer rather than an unticked box — and
+ * the two controls that genuinely need asking (which days, and which date
+ * column) appear only once a window is chosen. The date field stays available
+ * because it is a real question on a record with several timestamps; it is
+ * just no longer asked before the period is.
+ *
+ * The stored shape (`dateRange`), the engine, and `describeWindow`'s resolved
+ * sentence are untouched.
+ */
+function TimePeriodSection({ cfg, groups, onChange }: { cfg: Record<string, unknown>; groups: DataGroup[]; onChange: (p: Record<string, unknown>) => void }) {
   const dr = (cfg.dateRange as DateRange) ?? {};
-  const [open, setOpen] = useState(!!dr.enabled);
   const enabled = !!dr.enabled;
   const mode = dr.mode ?? "preset";
   const set = (patch: Partial<DateRange>) =>
     onChange({ dateRange: { enabled, dateField: dr.dateField ?? "occurredAt", mode, preset: dr.preset ?? "last_30_days", days: dr.days ?? 30, from: dr.from, to: dr.to, ...patch } });
+
   // Only date fields make sense here; fall back to the built-in when none are known yet.
   const dateGroups: DataGroup[] = groups
     .map((g) => ({ ...g, fields: g.fields.filter((f) => f.type === "date") }))
     .filter((g) => g.fields.length > 0);
   if (dateGroups.length === 0) dateGroups.push({ stepId: "builtin", title: "Built-in", fields: [{ path: "occurredAt", label: "When it happened", type: "date" }] });
+
+  const value = !enabled ? "all" : mode === "preset" ? `preset:${dr.preset ?? "last_30_days"}` : mode;
+  const pick = (v: string) => {
+    if (v === "all") return set({ enabled: false });
+    if (v.startsWith("preset:")) return set({ enabled: true, mode: "preset", preset: v.slice(7) });
+    set({ enabled: true, mode: v as DateRange["mode"] });
+  };
+
   return (
-    <div className="rounded-lg border border-neutral-200">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-neutral-600 hover:bg-neutral-50">
-        <span>Date range {enabled ? "· on" : "· off"}</span>
-        <span className="text-neutral-400">{open ? "▴" : "▾"}</span>
-      </button>
-      {open && (
-        <div className="space-y-2 border-t border-neutral-100 p-3">
-          <button type="button" onClick={() => set({ enabled: !enabled })} className="flex items-center gap-2 text-xs text-neutral-700">
-            <span className={`flex h-4 w-4 items-center justify-center rounded border ${enabled ? "border-neutral-800 bg-neutral-800 text-white" : "border-neutral-300"}`}>{enabled ? "✓" : ""}</span>
-            Only include records inside a date window
-          </button>
-          {enabled && (
-            <div className="space-y-2">
-              <Field label="Date field">
-                <FieldInput value={dr.dateField ?? "occurredAt"} groups={dateGroups} onChange={(v) => set({ dateField: v })} />
-              </Field>
-              <Field label="Window">
-                <Select
-                  value={mode}
-                  width={W}
-                  options={[{ value: "preset", label: "A preset range" }, { value: "rolling", label: "Last N days" }, { value: "between", label: "From a date onwards" }]}
-                  onChange={(v) => set({ mode: v as DateRange["mode"] })}
-                />
-              </Field>
-              {mode === "preset" && <Field label="Range"><Select value={dr.preset ?? "last_30_days"} width={W} searchable options={DATE_PRESETS} onChange={(v) => set({ preset: v })} /></Field>}
-              {mode === "rolling" && <Field label="Days"><NumberField value={dr.days ?? 30} min={1} onChange={(n) => set({ days: n ?? 1 })} /></Field>}
-              {mode === "between" && (
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="From"><input type="date" value={dr.from ?? ""} onChange={(e) => set({ from: e.target.value })} className={INPUT} /></Field>
-                  {/* Empty "To" = up to right now. See the Time step's note. */}
-                  <Field label="To (optional)"><input type="date" value={dr.to ?? ""} onChange={(e) => set({ to: e.target.value })} className={INPUT} /></Field>
-                </div>
-              )}
-              {/* THE WINDOW SAYS WHAT IT INCLUDES. A date range is the one
-                  control whose meaning cannot be read off its own inputs:
-                  "to 31 Aug" could reasonably mean midnight or midnight-plus-
-                  a-day, and it silently meant the first. Printing the resolved
-                  window is a permanent answer to "did this change?" that no
-                  one-off announcement can be. */}
-              <p className="text-xs text-neutral-400">{describeWindow(mode, dr)}</p>
+    <div className="space-y-2.5">
+      <SectionLabel>Time period</SectionLabel>
+      <Select
+        value={value}
+        width={W}
+        searchable
+        options={[
+          { value: "all", label: "All time", hint: "Every record this step receives." },
+          ...DATE_PRESETS.map((p) => ({ value: `preset:${p.value}`, label: p.label, group: "Preset periods" })),
+          { value: "rolling", label: "Last N days…", group: "Custom" },
+          { value: "between", label: "Between two dates…", group: "Custom" },
+        ]}
+        onChange={pick}
+      />
+      {enabled && (
+        <div className="space-y-2.5 rounded-lg border border-neutral-200 bg-white p-3">
+          {mode === "rolling" && (
+            <Field label="Number of days">
+              <NumberField value={dr.days ?? 30} min={1} onChange={(n) => set({ days: n ?? 1 })} />
+            </Field>
+          )}
+          {mode === "between" && (
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="From"><input type="date" value={dr.from ?? ""} onChange={(e) => set({ from: e.target.value })} className={INPUT} /></Field>
+              {/* Empty "To" = up to right now. See the Time step's note. */}
+              <Field label="To (optional)"><input type="date" value={dr.to ?? ""} onChange={(e) => set({ to: e.target.value })} className={INPUT} /></Field>
             </div>
           )}
+          <Field label="Measured by which date?">
+            <FieldInput value={dr.dateField ?? "occurredAt"} groups={dateGroups} onChange={(v) => set({ dateField: v })} />
+          </Field>
+          {/* THE WINDOW SAYS WHAT IT INCLUDES. A date range is the one
+              control whose meaning cannot be read off its own inputs:
+              "to 31 Aug" could reasonably mean midnight or midnight-plus-
+              a-day, and it silently meant the first. Printing the resolved
+              window is a permanent answer to "did this change?" that no
+              one-off announcement can be. */}
+          <p className="text-xs text-neutral-500">{describeWindow(mode, dr)}</p>
         </div>
       )}
     </div>

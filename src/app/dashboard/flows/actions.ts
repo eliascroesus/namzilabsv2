@@ -10,7 +10,6 @@ import { requireOrg } from "@/lib/auth";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { dateColumnChoice, dateColumnNote, dateColumnSettings, setDateColumn, type DateColumnChoice } from "@/lib/sync/date-column";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow, getFlow } from "@/lib/flow/store";
-import { flowTemplate } from "@/lib/flow/templates";
 import { CapError } from "@/lib/limits";
 import { sampleAppFields } from "@/lib/flow/engine";
 import { materializeFlow, materializeStaleAll } from "@/lib/flow/materialize";
@@ -33,44 +32,6 @@ export async function createFlowAction(): Promise<void> {
     // The cap is a friendly banner on the list page, not a crashed action.
     if (e instanceof CapError) redirect("/dashboard/flows?error=flow_limit");
     throw e;
-  }
-  redirect(`/dashboard/flows/${flow.id}`);
-}
-
-/**
- * Create a flow from a starter template — the whole graph arrives wired, so
- * the user's first sight of the editor is a working shape, not a blank grid.
- * The connection prefills only when the org has exactly ONE active
- * connection of the template's source; ambiguity leaves the Get data steps
- * asking, which is honest ("Needs setup — choose an account") where a guess
- * would silently read the wrong account's data.
- */
-export async function createFlowFromTemplateAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
-  const template = flowTemplate(String(formData.get("template") ?? ""));
-  if (!template) throw new Error("unknown template");
-  const db = getDb();
-  const candidates = await db
-    .select({ id: connections.id })
-    .from(connections)
-    .where(and(eq(connections.orgId, orgId), eq(connections.source, template.source), eq(connections.status, "active")));
-  const connectionId = candidates.length === 1 ? candidates[0].id : null;
-
-  let flow;
-  try {
-    flow = await createFlow(db, orgId, template.name);
-  } catch (e) {
-    if (e instanceof CapError) redirect("/dashboard/flows?error=flow_limit");
-    throw e;
-  }
-  const graph = template.build(connectionId);
-  await saveDraft(db, orgId, flow.id, graph);
-  // Same best-effort stream registration the manual save does — a template
-  // whose source is stream-scoped (a Calendly starter) needs its streams.
-  try {
-    await ensureStreamsForGraph(db, orgId, graph);
-  } catch {
-    // stream hiccup must never fail the create; the sweep will catch up
   }
   redirect(`/dashboard/flows/${flow.id}`);
 }

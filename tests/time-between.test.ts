@@ -6,7 +6,6 @@ import { runFlow, type NodeExecOk } from "@/lib/flow/engine";
 import { planPushdown } from "@/lib/flow/compile/pushdown";
 import { validateGraph } from "@/lib/flow/validate";
 import { parseGraph, type Scalar } from "@/lib/flow/types";
-import { FLOW_TEMPLATES, flowTemplate } from "@/lib/flow/templates";
 import type { DB } from "@/db/types";
 
 /**
@@ -253,11 +252,35 @@ describe("guards around the node", () => {
   });
 });
 
-describe("Speed to lead (Close) template", () => {
-  it("parses clean and validates with no issues when a connection is prefilled", () => {
-    const template = flowTemplate("speed-to-lead-close")!;
-    expect(template).toBeTruthy();
-    const g = template.build(CONN);
+/**
+ * The full speed-to-lead SHAPE, hand-built the way a user builds it: two Get
+ * data lanes, an outbound-only Filter on the calls lane, a Combine, the
+ * pairing step, and a median over the gap.
+ *
+ * It used to be a shipped template and is now only a fixture — the product
+ * ships no starter flows. The engine coverage below is what mattered about
+ * it, and it is exactly the shape a real user assembles by hand, so it stays
+ * the hardest thing these tests can ask the engine to run.
+ */
+function speedToLeadGraph(connectionId: string) {
+  const conn = { connectionId, source: "close" };
+  return parseGraph({
+    nodes: [
+      N("leads", "app", { ...conn, eventType: "lead_created", sourceConfig: {} }, "Leads created"),
+      N("calls", "app", { ...conn, eventType: "call_logged", sourceConfig: {} }, "Calls dialed"),
+      N("outbound", "filter", { combinator: "and", rules: [{ field: "properties.data.direction", op: "equals", value: "outbound", valueKind: "fixed" }] }, "Outbound only"),
+      N("combine", "unite", {}, "Leads + calls together"),
+      N("gap", "time_between", TB({ startStep: "leads", endStep: "calls" }), "Time to first call"),
+      N("median", "formula", { op: "median", field: "properties.time_between.minutes", resultKind: "duration", durationUnit: "minutes", distinctField: "subject" }, "Speed to lead"),
+    ],
+    edges: [E("leads", "combine"), E("calls", "outbound"), E("outbound", "combine"), E("combine", "gap"), E("gap", "median")],
+    metrics: [{ nodeId: "median", enabled: true, name: "Speed to lead", viz: "number", format: "duration", unit: "minutes", precision: 0 }],
+  });
+}
+
+describe("the speed-to-lead shape, hand-built", () => {
+  it("parses clean and validates with no issues", () => {
+    const g = speedToLeadGraph(CONN);
     expect(validateGraph(g)).toEqual([]);
     // The tile renders a LENGTH OF TIME, not a bare 285.195783.
     expect({ name: g.metrics[0]?.name, format: g.metrics[0]?.format, unit: g.metrics[0]?.unit }).toEqual({
@@ -265,13 +288,6 @@ describe("Speed to lead (Close) template", () => {
       format: "duration",
       unit: "minutes",
     });
-  });
-
-  it("every registered template parses and carries a source", () => {
-    for (const t of FLOW_TEMPLATES) {
-      expect(t.source.length).toBeGreaterThan(0);
-      expect(() => t.build(null)).not.toThrow();
-    }
   });
 
   it("computes the real number end-to-end: outbound-only, first call, median across leads", async () => {
@@ -285,12 +301,12 @@ describe("Speed to lead (Close) template", () => {
     // L3: never called — excluded, not a zero
     await ev({ eventType: "lead_created", leadId: "L3", atMin: 0 });
 
-    const g = flowTemplate("speed-to-lead-close")!.build(CONN);
+    const g = speedToLeadGraph(CONN);
     const res = await runFlow({ db, orgId: ORG }, g);
     const median = res.nodes.get("median")! as NodeExecOk;
     expect(median.status).toBe("ok");
-    // median of [10, 30] = 20. Sabotage: drop the template's outbound filter
-    // and L1's inbound call at +2 wins, making this 16 (median of 2, 30).
+    // median of [10, 30] = 20. Sabotage: drop the outbound filter and L1's
+    // inbound call at +2 wins, making this 16 (median of 2, 30).
     expect((median.shape as Scalar).value).toBe(20);
 
     const gap = res.nodes.get("gap")! as NodeExecOk;
@@ -298,13 +314,13 @@ describe("Speed to lead (Close) template", () => {
   });
 
   it("a lane's stamp survives the steps in between — the calls lane runs through a Filter", async () => {
-    // The template's stop moment names the Get data step, but those records
-    // reach the Combine through an outbound Filter. Sabotage: stamp only the
-    // immediate producer and this metric silently pairs nothing.
+    // The stop moment names the Get data step, but those records reach the
+    // Combine through an outbound Filter. Sabotage: stamp only the immediate
+    // producer and this metric silently pairs nothing.
     await ev({ eventType: "lead_created", leadId: "L1", atMin: 0 });
     await ev({ eventType: "call_logged", leadId: "L1", atMin: 10, direction: "outbound" });
 
-    const g = flowTemplate("speed-to-lead-close")!.build(CONN);
+    const g = speedToLeadGraph(CONN);
     const res = await runFlow({ db, orgId: ORG }, g);
     expect((res.nodes.get("gap")! as NodeExecOk).recordsOut).toBe(1);
   });

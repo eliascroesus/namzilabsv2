@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Popover } from "./Popover";
 
 export type Option = { value: string; label: string; hint?: string; group?: string; disabled?: boolean };
@@ -73,6 +73,21 @@ export function Select({
   };
 
   // Group options under headers when any option has a `group`.
+  /**
+   * KEEP THE KEYBOARD HIGHLIGHT ON SCREEN.
+   *
+   * `listRef` was attached to the scroller and never read, so arrowing down a
+   * long list — a Close connection's record types, a spreadsheet picker, the
+   * ten date presets — moved the highlight out of view and left the user
+   * scrolling blind, with Enter about to choose something they could not see.
+   * The list is capped at `max-h-72`, so this bites on any list past about
+   * nine options.
+   */
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.querySelector<HTMLElement>(`[data-opt="${active}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [active, open]);
+
   const grouped = useMemo(() => {
     const groups = new Map<string, Option[]>();
     for (const o of filtered) {
@@ -139,6 +154,7 @@ export function Select({
                   key={o.value}
                   type="button"
                   role="option"
+                  data-opt={i}
                   aria-selected={o.value === value}
                   aria-disabled={o.disabled || undefined}
                   onClick={() => {

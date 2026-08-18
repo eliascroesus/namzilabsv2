@@ -65,6 +65,14 @@ export async function AppHeader({
             <Link href="/dashboard" className="hover:text-neutral-900">
               Dashboard
             </Link>
+            {/* Flows had no route in the nav at all: the ONLY ways in were the
+                dashboard's New-flow button and the onboarding checklist, and
+                the checklist disappears for good once one tile is published.
+                A user who published a metric last week and came back had no
+                visible path to the thing that built it. */}
+            <Link href="/dashboard/flows" className="hover:text-neutral-900">
+              Flows
+            </Link>
             <Link href="/integrations" className="hover:text-neutral-900">
               Integrations
             </Link>

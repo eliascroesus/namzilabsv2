@@ -173,13 +173,28 @@ export function DataBrowser({
         <div onPointerDown={startResize} title="Drag to resize" className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-ew-resize transition-colors hover:bg-indigo-200/70" />
 
         <div className="space-y-2 border-b border-neutral-100 p-2.5">
-          <input
-            autoFocus
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search names or values…"
-            className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-100"
-          />
+          <div className="flex items-center gap-1.5">
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search names or values…"
+              className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-100"
+            />
+            {/* On a narrow viewport this flyout covers the config panel, so
+                the trigger that opened it is underneath — "click outside" is
+                no longer a way back. Escape always worked and was never
+                advertised; this is. */}
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              title="Close"
+              aria-label="Close the field browser"
+              className="shrink-0 rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
+            >
+              ✕
+            </button>
+          </div>
           {/* One kind of value at a time — "which date field?" shouldn't mean
               scrolling past forty text fields to compare three dates. */}
           <div className="flex gap-1">

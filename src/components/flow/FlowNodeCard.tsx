@@ -100,6 +100,17 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   // their single line.
   const sourceLine = status === "ready" && test?.status === "ok" ? test.sourceNote : null;
 
+  /**
+   * A compare step's two inputs, on the card. Its links are drawn only while
+   * it is selected (see ReferenceEdge), so without this the card is the one
+   * place in the product that shows a number and not where it came from —
+   * and "why is this 38%" is answered by opening the step rather than by
+   * looking at it.
+   */
+  const refLine = (data as { refLine?: string }).refLine;
+  /** True when this step's result becomes a dashboard tile on publish. */
+  const publishes = (data as { publishes?: boolean }).publishes;
+
   return (
     <div className={`w-64 rounded-xl border bg-white shadow-sm transition-[border-color,box-shadow] duration-150 ${border}`}>
       {isCompare ? (
@@ -121,11 +132,28 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             {nodeTitle(t, data)}
           </span>
           {bodyLine && <span className={`block truncate text-xs ${bodyLine.cls}`} title={bodyLine.text}>{bodyLine.text}</span>}
+          {refLine && <span className="block truncate text-xs text-indigo-600" title={refLine}>{refLine}</span>}
           {sourceLine && <span className="block truncate text-xs text-amber-700" title={sourceLine}>{sourceLine}</span>}
         </span>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>
         <NodeMenu id={id} data={data} />
       </div>
+
+      {/* The publish rule, said on the canvas instead of only at the gate. */}
+      {publishes != null && (
+        <div
+          className={`flex items-center gap-1.5 border-t px-3 py-1.5 text-[10px] font-medium ${
+            publishes ? "border-indigo-100 bg-indigo-50/70 text-indigo-700" : "border-neutral-100 bg-neutral-50 text-neutral-400"
+          }`}
+          title={publishes ? "This step's result becomes a tile when you publish." : "Switched off in Review & publish — this step publishes nothing."}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 3v18h18" />
+            <path d="M7 15l4-5 3 3 5-7" />
+          </svg>
+          {publishes ? "Goes to your dashboard" : "Not published"}
+        </div>
+      )}
 
       {isPaths ? (
         pathHandles(data).map((h, i, arr) => (

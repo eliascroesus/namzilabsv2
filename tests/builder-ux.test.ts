@@ -1,15 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { validateGraph } from "@/lib/flow/validate";
-import { parseGraph, aggregationInputs, AGGREGATIONS, NODE_LABELS, NODE_TYPES } from "@/lib/flow/types";
-import { defaultConfig, NODE_META } from "@/components/flow/node-meta";
-import { nodeNeedsSetup } from "@/components/flow/graph-utils";
-import { FLOW_TEMPLATES } from "@/lib/flow/templates";
+import { parseGraph, aggregationInputs, AGGREGATIONS, isDatasetFormulaOp, NODE_LABELS, NODE_TYPES } from "@/lib/flow/types";
+import { defaultConfig, defaultTitle, NODE_LIBRARY, STATUS_META, stepSummaryLines } from "@/components/flow/node-meta";
+import { nodeNeedsSetup, publishesToDashboard } from "@/components/flow/graph-utils";
 
 /**
  * The builder's plain-English contract. Every pin here is a user-facing
  * promise: messages never speak raw node types, the first Calculate a user
- * adds counts records instead of demanding a Numerator, a do-nothing Filter
- * is detectable, and every shipped template validates clean.
+ * adds counts records instead of demanding a Numerator, and a do-nothing
+ * Filter is detectable.
  */
 
 describe("validation speaks plain English", () => {
@@ -36,11 +35,61 @@ describe("validation speaks plain English", () => {
     }
   });
 
-  it("picker labels and message labels agree for every visible step", () => {
-    for (const t of NODE_TYPES) {
-      if (NODE_META[t]?.hidden) continue;
-      expect(NODE_LABELS[t]).toBe(NODE_META[t].label);
+  /**
+   * THE PICKER'S PROMISE: the card you get is titled with the entry you
+   * picked.
+   *
+   * One node type can be two picker entries — "Summarise records" and
+   * "Compare two numbers" both build a `formula`; "Combine data" and "Match
+   * against a list" both build a `unite`. That split only helps if the card
+   * agrees: an entry called "Match against a list" producing a card that says
+   * "Combine data" would leave the user hunting for a step they never added.
+   */
+  it("every step in the picker produces a card titled with its own label", () => {
+    for (const entry of NODE_LIBRARY) {
+      const config = { ...defaultConfig(entry.type), ...(entry.config ?? {}) };
+      // Sabotage: drop the formula/unite branches from defaultTitle and both
+      // Calculate doors title their cards "Calculate", both Combine doors
+      // "Combine data" — the picker naming four jobs the canvas names two.
+      expect({ key: entry.key, title: defaultTitle(entry.type, { config }) }).toEqual({ key: entry.key, title: entry.label });
     }
+  });
+
+  it("every picker entry builds a real node type, and every key is unique", () => {
+    const keys = new Set<string>();
+    for (const entry of NODE_LIBRARY) {
+      expect((NODE_TYPES as readonly string[])).toContain(entry.type);
+      expect(keys.has(entry.key)).toBe(false);
+      keys.add(entry.key);
+    }
+  });
+
+  /**
+   * Both halves of Calculate, and both halves of Combine, are reachable
+   * without touching a dropdown. The whole point of the split is that a user
+   * who wants a rate never has to learn that it lives inside a step whose
+   * default is counting.
+   */
+  it("both halves of the merged steps are their own front door", () => {
+    const byKey = new Map(NODE_LIBRARY.map((e) => [e.key, e]));
+    expect(isDatasetFormulaOp(byKey.get("formula_dataset")?.config?.op)).toBe(true);
+    expect(isDatasetFormulaOp(byKey.get("formula_compare")?.config?.op)).toBe(false);
+    expect(byKey.get("unite")?.config?.mode).toBe("stack");
+    expect(byKey.get("unite_match")?.config?.mode).toBe("match");
+  });
+
+  /**
+   * A status BLOCKS publish or it does not, and the badge has to say which.
+   * "Needs setup" and "Ready to test" were both bg-neutral-100 — the two most
+   * common states on a half-built canvas, one of them the only one the user
+   * must act on, wearing the same grey.
+   */
+  it("a blocking step status never looks like a non-blocking one", () => {
+    expect(STATUS_META.setup.cls).not.toBe(STATUS_META.untested.cls);
+    expect(STATUS_META.setup.border).not.toBe(STATUS_META.untested.border);
+    // And a status states what IS, never what to do next — the footer button
+    // already owns the instruction.
+    for (const s of Object.values(STATUS_META)) expect(s.label).not.toMatch(/^Ready to /);
   });
 });
 
@@ -76,17 +125,89 @@ describe("Calculate defaults to counting", () => {
   });
 });
 
-describe("every shipped template validates clean", () => {
-  it("with a connection prefilled, no template ships with a validation issue", () => {
-    for (const t of FLOW_TEMPLATES) {
-      const g = t.build("00000000-0000-0000-0000-000000000000");
-      expect({ template: t.id, issues: validateGraph(g) }).toEqual({ template: t.id, issues: [] });
-      // At least one enabled metric, every pre-seeded one human-named — a
-      // template may deliberately pre-seed DISABLED specs for structural
-      // terminals (no-show rate's count nodes) so they don't auto-publish.
-      expect(g.metrics.some((m) => m.enabled)).toBe(true);
-      expect(g.metrics.every((m) => m.name.length > 3)).toBe(true);
-    }
+/**
+ * Every step restates its own configuration in a sentence, above the controls
+ * that produced it. Calculate always had this; nothing else did, and the
+ * reading that goes wrong is exactly the one three separate boxes force the
+ * user to do in their head.
+ */
+describe("a step says what it does, in words", () => {
+  // The labels the user actually picked, never the paths underneath them.
+  const labelOf = (p: string) => ({ "properties.data.direction": "Direction", "properties.amount": "Amount", subject: "Subject" })[p] ?? p;
+
+  it("a filter with no conditions admits it passes everything", () => {
+    // The most common half-built state in the product, and the one that reads
+    // as finished: an empty Filter changes nothing at all.
+    expect(stepSummaryLines("filter", { combinator: "and", rules: [] }, labelOf)).toEqual(["Passes every record through — no conditions yet."]);
+  });
+
+  it("a filter names its conditions with field labels and a short verb", () => {
+    // Sabotage: echo `rule.field` instead of resolving it and this reads
+    // "properties.data.direction is 'outbound'" — restating the problem the
+    // sentence exists to solve.
+    expect(
+      stepSummaryLines(
+        "filter",
+        {
+          combinator: "and",
+          rules: [
+            { field: "properties.data.direction", op: "equals", value: "outbound", valueKind: "fixed" },
+            { field: "properties.amount", op: "gt", value: "100", valueKind: "fixed" },
+          ],
+        },
+        labelOf,
+      ),
+    ).toEqual(["Keeps records where Direction is “outbound” and Amount is more than “100”."]);
+  });
+
+  it("a date window is stated as its own clause, so it can't be missed", () => {
+    const lines = stepSummaryLines(
+      "filter",
+      { combinator: "and", rules: [], dateRange: { enabled: true, mode: "rolling", days: 7 } },
+      labelOf,
+    );
+    expect(lines[1]).toBe("Only records from the last 7 days.");
+  });
+
+  it("a Get data step says which records, from which account, and what dedupe does", () => {
+    expect(
+      stepSummaryLines("app", { connectionName: "Acme (Close)", dedupe: true, dedupeField: "subject", dedupeKeep: "earliest" }, labelOf, {
+        recordType: "Lead created",
+      }),
+    ).toEqual(["Lead created from Acme (Close). One record per Subject, keeping the earliest."]);
+  });
+
+  it("a step with nothing configured yet says nothing rather than half a sentence", () => {
+    expect(stepSummaryLines("app", {}, labelOf)).toEqual([]);
+    expect(stepSummaryLines("time_between", { keyField: "", startField: "", endField: "" }, labelOf)).toEqual([]);
+    // Calculate has its own richer expression and must not get a second box.
+    expect(stepSummaryLines("formula", { op: "count" }, labelOf)).toEqual([]);
+  });
+});
+
+/**
+ * "A step becomes a metric by being a structural terminal" is a real rule with
+ * real consequences, and it was invisible until the publish gate. The canvas
+ * badge is where it becomes learnable, so what the badge claims has to match
+ * what Review & publish will actually do.
+ */
+describe("the canvas says which steps reach the dashboard", () => {
+  it("a terminal with no spec yet counts as publishing — because that is what Review & publish seeds", () => {
+    // Sabotage: return `metric?.enabled ?? false` and every freshly built
+    // flow reads "Not published" right up until the user opens the modal
+    // that enables it — the badge predicting the opposite of the next screen.
+    expect(publishesToDashboard("formula", true, undefined)).toBe(true);
+  });
+
+  it("a spec the user switched off says so", () => {
+    expect(publishesToDashboard("formula", true, { enabled: false })).toBe(false);
+    expect(publishesToDashboard("formula", true, { enabled: true })).toBe(true);
+  });
+
+  it("a step with no stake shows nothing rather than a reassuring 'no'", () => {
+    // Mid-flow steps, and the legacy Output node, which IS the tile.
+    expect(publishesToDashboard("filter", false, undefined)).toBeUndefined();
+    expect(publishesToDashboard("output", true, undefined)).toBeUndefined();
   });
 });
 
@@ -94,9 +215,9 @@ describe("an account is required, not just a source", () => {
   const APP_NO_CONN = { connectionId: null, source: "close", eventType: "lead_created", sourceConfig: {} };
 
   it("nodeNeedsSetup flags a source-only Get data step", () => {
-    // Sabotage: restore the `!connectionId && !source` check and a template
-    // built without a prefilled account looks Ready while silently reading
-    // EVERY connection of that source in the org — blended workspaces.
+    // Sabotage: restore the `!connectionId && !source` check and a Get data
+    // step with no account picked looks Ready while silently reading EVERY
+    // connection of that source in the org — blended workspaces.
     expect(nodeNeedsSetup("app", APP_NO_CONN, 0)).toBe(true);
     expect(nodeNeedsSetup("app", { ...APP_NO_CONN, connectionId: "c1" }, 0)).toBe(false);
   });

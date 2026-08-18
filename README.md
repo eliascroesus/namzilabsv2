@@ -183,13 +183,17 @@ see `.claude/plans/` and the code under `src/lib/flow/`.
   dashboard rendering those **stored** results (fast — no live recompute) alongside
   existing metric tiles. Editing a draft never changes the live dashboard until
   republish.
-- **M2 (done):** the React Flow canvas at `/dashboard/flows` — drag/connect/zoom/pan,
-  minimap, the App/Filter/Aggregate/Output nodes, a config panel (Setup/Configure/
-  Test), **per-node live testing on real synced data** (records-in/out + samples),
-  a **variable picker** (fields from previous nodes), autosave-to-draft, undo/redo,
-  and **Publish** (validates → snapshots an immutable version → materializes tiles).
-  The dashboard's primary "New flow" opens the canvas; the classic form builder
-  remains as a secondary option.
+- **M2 (done):** the React Flow canvas at `/dashboard/flows` — a **managed
+  top-to-bottom layout** (steps are numbered and placed for you; nodes are
+  deliberately NOT draggable and ports are NOT hand-connectable — the flow is a
+  numbered list that happens to be drawn), scroll-to-pan and pinch-to-zoom, the
+  step cards, a config panel (Configure / Test), **per-node live testing on real
+  synced data** (records-in/out + samples), a **variable picker** (fields from
+  previous steps), autosave-to-draft, undo/redo, **Test flow** (runs every step
+  top to bottom), and **Publish** (validates → snapshots an immutable version →
+  materializes tiles). "New flow" is the only advertised way to build a metric;
+  the classic form builder's routes still open existing metrics but are no longer
+  linked from the dashboard.
 - **M3 (done, since simplified):** advanced nodes with engine executors, config
   UI, and tests — **Calculate** (one unified step: dataset aggregations
   count/count-unique/sum/avg/min/max with an optional time split, OR two-number
@@ -205,8 +209,22 @@ see `.claude/plans/` and the code under `src/lib/flow/`.
   publish **time-reference picker lists only date fields**; the Count node is
   merged into Calculate. Stored graphs from before migrate losslessly on load
   (`parseGraph`): Count → Calculate, Combine/Clean-up → pass-through Filters.
+- **UX pass (done):** see [`docs/UX_AUDIT.md`](docs/UX_AUDIT.md) for the full
+  findings, every defect and its status. Landed: Flows in the header nav; one
+  advertised builder; a real empty-canvas first-run whose only first step is Get
+  data; a distinguishable blocking-vs-non-blocking step status; auto-test on
+  Continue; **Test flow** (every step, top to bottom); a cancellable test with
+  elapsed time; an undo notice on delete; **the step picker split from a list of
+  node types into a list of jobs** (Summarise records / Compare two numbers,
+  Combine data / Match against a list — one engine node, two doors each,
+  display-layer only); the time period promoted to the top of Filter; a
+  plain-English summary of its own config on every step; **selection-scoped
+  reference edges** so a Compare step's inputs are visible; a **"goes to your
+  dashboard"** badge on the steps that publish; zoom/fit controls; Review &
+  publish behind progressive disclosure; and a responsive panel + field browser.
+  **No starter templates** — the product ships none by design.
 - **Next:** M4 sync system (historical backfill, live/importing/outdated statuses,
-  versioned/safe full re-sync, Reprocess) + polish.
+  versioned/safe full re-sync, Reprocess).
 
 ## Other follow-ups
 

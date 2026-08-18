@@ -3,12 +3,22 @@ import { formatMetricValue, relativeTime } from "@/lib/format";
 import { refreshFlowAction } from "@/app/dashboard/flows/actions";
 import type { ImportCoverage } from "@/connectors/types";
 
+/**
+ * The stored tile, as this component reads it. Kept in step with `TileSpec`
+ * in lib/flow/types — this used to omit "duration" from `format` and omit
+ * `durationDisplay` entirely, which cost nothing at runtime (the row is cast
+ * from `unknown` and the fields ride through the spread into
+ * `formatMetricValue`) and was a type that disagreed with its own data: the
+ * next person to build a Tile literal would have dropped both, and a
+ * speed-to-lead would have published as a bare number again.
+ */
 type Tile = {
   name?: string;
   description?: string;
   viz?: string;
-  format?: "number" | "percent" | "currency";
+  format?: "number" | "percent" | "currency" | "duration";
   unit?: string;
+  durationDisplay?: string;
   currency?: string;
   precision?: number;
   target?: number | null;

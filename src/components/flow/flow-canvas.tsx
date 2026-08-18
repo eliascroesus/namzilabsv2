@@ -26,8 +26,14 @@ import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAc
  * client had no basis for: a run nobody ever picked up, and a run whose
  * container was killed mid-flight, both looked like slowness. That copy is why
  * a dead background worker could sit unnoticed — it reads as patience.
+ *
+ * `cancelled` returns null and stops polling — the user walked away from a run
+ * they no longer care about. The run itself is left to settle on the server:
+ * it is durable, it costs nothing to finish, and killing it from here would
+ * mean inventing a cancel path through Inngest for a button whose entire job is
+ * "stop showing me this".
  */
-async function pollTestResult(runId: string): Promise<NodeTestDTO> {
+async function pollTestResult(runId: string, cancelled: () => boolean): Promise<NodeTestDTO | null> {
   const fail = (error: string): NodeTestDTO => ({
     status: "error",
     recordsIn: 0,
@@ -43,6 +49,7 @@ async function pollTestResult(runId: string): Promise<NodeTestDTO> {
 
   for (let tick = 0; tick < 112; tick++) {
     await new Promise((resolve) => setTimeout(resolve, 800));
+    if (cancelled()) return null;
     const state = await pollNodeTestAction(runId);
     if (!state) return fail("This test run no longer exists — try again.");
     if (state.status === "ok" && state.result) return state.result;
@@ -75,6 +82,7 @@ import {
   laneAncestorIds,
   matchKeepOf,
   nearestAppAncestor,
+  publishesToDashboard,
   resolveSampleField,
   structuralEdges,
   terminalIds,
@@ -88,9 +96,10 @@ import {
 } from "./graph-utils";
 import type { DataField, DataGroup } from "./controls/types";
 import { formatSample } from "./controls/field-utils";
-import { ALL_TYPES, defaultConfig, nodeTitle, pathHandles } from "./node-meta";
+import { ALL_TYPES, defaultConfig, formulaExpression, formulaHandleLabels, nodeTitle, pathHandles } from "./node-meta";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
+import { ReferenceEdge } from "./ReferenceEdge";
 import { ConfigPanel, type StepRef } from "./ConfigPanel";
 import { NodeLibraryModal, anchorFromRect, type PickerAnchor } from "./NodeLibraryModal";
 import { ReviewPublishModal, type Endpoint } from "./ReviewPublishModal";
@@ -128,7 +137,7 @@ function setupHint(type: string, cfg: Record<string, unknown>, inputCount: numbe
 }
 
 const nodeTypes = Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])) as Record<string, typeof FlowNodeCard>;
-const edgeTypes = { insert: InsertEdge };
+const edgeTypes = { insert: InsertEdge, reference: ReferenceEdge };
 
 export function FlowCanvas(props: {
   flowId: string;
@@ -203,15 +212,28 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [metrics, setMetrics] = useState<MetricSpecT[]>(initialGraph.metrics ?? []);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ message: string; run: () => void } | null>(null);
+  /** Transient "step deleted — Undo" notice. Cheaper than a confirm dialog on an action people take often. */
+  const [toast, setToast] = useState<string | null>(null);
+  /** Running a whole flow: which step number we are on, out of how many. */
+  const [runAll, setRunAll] = useState<{ at: number; of: number } | null>(null);
 
   const past = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
   const future = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
+  /**
+   * The history stacks live in refs (a snapshot must not trigger a render),
+   * so their DEPTHS are mirrored into state — otherwise the Undo and Redo
+   * buttons can never go flat, and both sat there looking pressable on a
+   * brand-new flow with nothing behind them.
+   */
+  const [hist, setHist] = useState({ undo: 0, redo: 0 });
+  const syncHist = useCallback(() => setHist({ undo: past.current.length, redo: future.current.length }), []);
   const snapshot = useCallback(() => ({ nodes: JSON.parse(JSON.stringify(nodes)), edges: JSON.parse(JSON.stringify(edges)) }), [nodes, edges]);
   const commit = useCallback(() => {
     past.current.push(snapshot());
     if (past.current.length > 50) past.current.shift();
     future.current = [];
-  }, [snapshot]);
+    syncHist();
+  }, [snapshot, syncHist]);
 
   const toGraph = useCallback((): Graph => {
     return {
@@ -267,9 +289,17 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [descendants, setNodes],
   );
 
-  /** Create a node (optionally connected from a source or inserted on an edge). */
+  /**
+   * Create a node (optionally connected from a source or inserted on an edge).
+   *
+   * `configOverride` is what lets one node type be two picker entries: the
+   * library's "Summarise records" and "Compare two numbers" both build a
+   * `formula`, differing only in the `op` they land on — so the panel opens on
+   * the half the user asked for instead of on a dropdown asking which half
+   * they meant.
+   */
   const createNode = useCallback(
-    (type: NodeType, ctx: LibraryCtx) => {
+    (type: NodeType, ctx: LibraryCtx, configOverride?: Record<string, unknown>) => {
       commit();
       const id = `${type}_${Math.random().toString(36).slice(2, 8)}`;
       let position = { x: 140 + (nodes.length % 4) * 40, y: 90 + nodes.length * 70 };
@@ -283,7 +313,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         if (src && tgt) position = { x: (src.position.x + tgt.position.x) / 2, y: (src.position.y + tgt.position.y) / 2 };
       }
 
-      const config = defaultConfig(type);
+      const config = { ...defaultConfig(type), ...(configOverride ?? {}) };
       const newNode: FNode = { id, type, position, data: { config, lastTest: null, dirty: false } };
 
       // A Paths hub auto-creates one "Path conditions" (Filter) step per branch, so the
@@ -686,10 +716,27 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         return;
       }
 
+      // A PLAIN STEP DELETES INSTANTLY, AND SAYS SO WITH A WAY BACK.
+      //
+      // Cards are selected by clicking and are never edited in place, so
+      // "click a step, reach for the keyboard, press Backspace" is an ordinary
+      // sequence that destroyed a configured step in silence. A confirm dialog
+      // is the wrong fix — deleting is common here and a modal on every one of
+      // them is worse than the mistake. Undo already existed (⌘Z and the
+      // toolbar); nothing had ever told anyone it was there.
       deleteAndReconnect(id);
+      setToast(`“${nodeTitle(String(node.type) as NodeType, node.data)}” deleted.`);
     },
     [nodes, sEdges, commit, setNodes, setEdges, removeBranch, setFallback, deleteAndReconnect],
   );
+
+  // The notice clears itself; a stale "Undo" pointing at a history entry the
+  // user has since built past would undo the wrong thing.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 7000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   // Backspace / Delete removes the selected step (routed through the same smart delete,
   // so a Paths hub or branch still asks for confirmation). Ignored while typing in a field.
@@ -719,20 +766,33 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [commit, nodes, setNodes],
   );
 
+  /**
+   * Set while a Test is being abandoned, so its late result is dropped instead
+   * of landing on a card the user has moved on from. A ref, not state: the
+   * running `testNode` closure has to read the CURRENT value, not the one that
+   * existed when it started.
+   */
+  const cancelTestRef = useRef(false);
+  const cancelTest = useCallback(() => {
+    cancelTestRef.current = true;
+    setTestingId(null);
+  }, []);
+
   const testNode = useCallback(
     async (id: string) => {
+      cancelTestRef.current = false;
       setTestingId(id);
       // D.1-full: the Test runs on the durable high-priority lane; the editor
       // polls for its result instead of holding one long request open. The
       // inline fallback (Inngest unavailable) returns the settled result
       // immediately in the same shape.
-      let result: NodeTestDTO;
+      let result: NodeTestDTO | null;
       try {
         const started = await startNodeTestAction(toGraph(), id);
         if (started.result) {
           result = started.result;
         } else {
-          result = await pollTestResult(started.runId);
+          result = await pollTestResult(started.runId, () => cancelTestRef.current);
         }
       } catch (e) {
         result = {
@@ -745,6 +805,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           error: e instanceof Error ? e.message : String(e),
         };
       }
+      // Cancelled: the step keeps whatever it had, including its dirty mark.
+      // Writing the result anyway would resurrect a run the user dismissed.
+      if (cancelTestRef.current || result == null) return;
       setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, lastTest: result, dirty: false } } : n)));
       setTestingId(null);
     },
@@ -757,14 +820,16 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     future.current.push(snapshot());
     setNodes(prev.nodes);
     setEdges(prev.edges);
-  }, [snapshot, setNodes, setEdges]);
+    syncHist();
+  }, [snapshot, setNodes, setEdges, syncHist]);
   const redo = useCallback(() => {
     const next = future.current.pop();
     if (!next) return;
     past.current.push(snapshot());
     setNodes(next.nodes);
     setEdges(next.edges);
-  }, [snapshot, setNodes, setEdges]);
+    syncHist();
+  }, [snapshot, setNodes, setEdges, syncHist]);
 
   // ⌘Z / ⌘⇧Z (Ctrl on Windows) — the toolbar buttons' keyboard twins. Same
   // typing guard as Backspace: never steal undo from a focused input.
@@ -1166,6 +1231,44 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     return out;
   }, [nodes, edges]);
 
+  /**
+   * WHICH STEPS BECOME DASHBOARD TILES, visible while building instead of
+   * only at the publish gate.
+   *
+   * A step becomes a metric by being a structural terminal — a rule that was
+   * never stated and never shown. It bites hardest on the shape everyone
+   * builds second: two counts feeding a rate. Those counts' only outgoing
+   * edges are number references, which the layout drops, so they ARE
+   * terminals, and Review & publish offered three metrics to someone who
+   * expected one. Saying it on the canvas turns that surprise into something
+   * learnable by looking, and fixable while there is still context.
+   *
+   * A metric the user has explicitly switched off in Review & publish says so
+   * instead; a terminal with no spec yet will be seeded enabled, so it counts
+   * as publishing.
+   */
+  const metricByNode = useMemo(() => new Map(metrics.map((m) => [m.nodeId, m])), [metrics]);
+
+  /** A compare step's two inputs, named on the card itself. */
+  const refLineById = useMemo(() => {
+    const out = new Map<string, string>();
+    const label = (id: string | undefined) => {
+      if (!id) return null;
+      const n = nodes.find((x) => x.id === id);
+      if (!n) return null;
+      const no = stepNoById.get(id);
+      return `${no != null ? `${no}. ` : ""}${nodeTitle(String(n.type) as NodeType, n.data)}`;
+    };
+    for (const n of nodes) {
+      if (!isCompareNode(n)) continue;
+      const cfg = (n.data.config ?? {}) as { op?: unknown; aFixed?: unknown; bFixed?: unknown };
+      const a = label(edges.find((e) => e.target === n.id && e.targetHandle === "a")?.source) ?? (cfg.aFixed != null ? String(cfg.aFixed) : null);
+      const b = label(edges.find((e) => e.target === n.id && e.targetHandle === "b")?.source) ?? (cfg.bFixed != null ? String(cfg.bFixed) : null);
+      if (a && b) out.set(n.id, formulaExpression(String(cfg.op ?? "percentage"), a, b));
+    }
+    return out;
+  }, [nodes, edges, stepNoById]);
+
   const displayNodes = useMemo(
     () =>
       nodes.map((n) => {
@@ -1183,11 +1286,55 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           // Drive the selection ring from OUR selection (the open config step), so
           // programmatic selection (adding/continuing to a step) highlights the right card.
           selected: n.id === selectedId,
-          data: { ...n.data, stepNo: stepNoById.get(n.id), status, issue, isTerminal: terminals.has(n.id), freeHandles, onAddFrom: addFromNode, onDeleteNode: requestDelete, onDuplicateNode: duplicateNode },
+          data: {
+            ...n.data,
+            stepNo: stepNoById.get(n.id),
+            status,
+            issue,
+            isTerminal: terminals.has(n.id),
+            publishes: publishesToDashboard(String(n.type), terminals.has(n.id), metricByNode.get(n.id)),
+            refLine: refLineById.get(n.id),
+            freeHandles,
+            onAddFrom: addFromNode,
+            onDeleteNode: requestDelete,
+            onDuplicateNode: duplicateNode,
+          },
         };
       }),
-    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId],
+    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId, metricByNode, refLineById],
   );
+  /**
+   * RUN THE WHOLE FLOW, top to bottom.
+   *
+   * Every Test was per-step, and changing step 1 correctly marks every step
+   * below it dirty — so seeing the effect of one edit meant opening six panels
+   * and pressing six buttons. There was also no way at all to ask "what does
+   * this metric say right now?" without opening the last step, or publishing.
+   *
+   * Sequential on purpose: these are real queries over real data, and firing
+   * six at once would spike the very provider budget the sync engine spends
+   * the rest of its life protecting. In step order, so the canvas reads as a
+   * progress display — which is the moment the flow explains itself.
+   *
+   * Steps that need setup are SKIPPED rather than run: they would fail, and a
+   * red Error badge on a step whose only problem is being unfinished replaces
+   * a true amber with a false red.
+   */
+  const testAll = useCallback(async () => {
+    const runnable = displayNodes
+      .filter((n) => n.type !== "paths" && n.data.status !== "setup")
+      .sort((a, b) => (stepNoById.get(a.id) ?? 999) - (stepNoById.get(b.id) ?? 999));
+    if (runnable.length === 0) return;
+    for (let i = 0; i < runnable.length; i++) {
+      setRunAll({ at: i + 1, of: runnable.length });
+      setSelectedId(runnable[i].id);
+      await testNode(runnable[i].id);
+      // A cancel during a run-all stops the whole run, not just this step.
+      if (cancelTestRef.current) break;
+    }
+    setRunAll(null);
+  }, [displayNodes, stepNoById, testNode]);
+
   // Only the flow's chain edges are drawn — a compare step's number references are
   // picked in the panel and never rendered as lines (they'd cut across the canvas).
   // Branch edges (from a Paths hub) get no "+" insert: a branch always starts with
@@ -1197,8 +1344,16 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     const seen = new Set<string>();
     const out: Edge[] = [];
     for (const e of edges) {
-      // A compare step's number references are picked in the panel, never drawn as lines.
-      if (compareIds.has(e.target) && (e.targetHandle === "a" || e.targetHandle === "b")) continue;
+      // A compare step's number references are picked in the panel — drawn only
+      // while that step is selected, so the default canvas stays a clean column
+      // and the wiring appears exactly when someone is looking for it.
+      if (compareIds.has(e.target) && (e.targetHandle === "a" || e.targetHandle === "b")) {
+        if (e.target !== selectedId) continue;
+        const target = nodes.find((n) => n.id === e.target);
+        const labels = formulaHandleLabels(String((target?.data.config as { op?: unknown })?.op ?? "percentage"));
+        out.push({ ...e, type: "reference", zIndex: 5, data: { label: e.targetHandle === "a" ? labels.a : labels.b } });
+        continue;
+      }
       // Collapse duplicate lines between the same two nodes (chain + reference pair).
       const key = `${e.source}::${e.sourceHandle ?? ""}->${e.target}`;
       if (seen.has(key)) continue;
@@ -1206,7 +1361,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge } });
     }
     return out;
-  }, [nodes, edges, insertOnEdge]);
+  }, [nodes, edges, insertOnEdge, selectedId]);
 
   const empty = nodes.length === 0;
 
@@ -1240,8 +1395,18 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           )}
         </div>
         <div className="flex items-center gap-2">
-          <ToolButton onClick={undo}>Undo</ToolButton>
-          <ToolButton onClick={redo}>Redo</ToolButton>
+          <ToolButton onClick={undo} disabled={hist.undo === 0}>Undo</ToolButton>
+          <ToolButton onClick={redo} disabled={hist.redo === 0}>Redo</ToolButton>
+          {/* The whole flow, end to end, without publishing it. */}
+          {!empty && (
+            <button
+              onClick={runAll ? cancelTest : testAll}
+              className="rounded border border-neutral-300 px-2.5 py-1 text-sm font-medium text-neutral-700 transition-colors hover:border-neutral-400 hover:bg-neutral-50"
+              title={runAll ? "Stop the run" : "Run every step, top to bottom"}
+            >
+              {runAll ? `Testing ${runAll.at}/${runAll.of} — Stop` : "Test flow"}
+            </button>
+          )}
           {publishState.status === "published" && (
             <span className="rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800">Published v{publishState.version}</span>
           )}
@@ -1320,19 +1485,27 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="#dfe1e8" bgColor="#f6f6f8" />
           </ReactFlow>
 
-          {empty && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="pointer-events-auto rounded-lg border border-dashed border-neutral-300 bg-white/80 p-8 text-center">
-                <p className="text-sm text-neutral-600">Start by pulling data from an app.</p>
-                <button
-                  onClick={(e) => setLibrary({ open: true, ctx: null, anchor: anchorFromRect(e.currentTarget.getBoundingClientRect()), anchorSelector: null })}
-                  className="mt-3 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
-                >
-                  + Add your first step
-                </button>
-              </div>
+          {/* ZOOM HAS ALWAYS WORKED AND NEVER SAID SO. Panning is scroll and
+              zooming is pinch or ⌘-scroll — both discoverable only by a user
+              who already expects a canvas. Nodes stay undraggable and ports
+              unconnectable (the managed layout is why this reads as a
+              numbered list rather than a diagram); these three buttons only
+              expose the view controls that were already there. */}
+          {!empty && (
+            <div className="absolute bottom-4 left-4 flex overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+              <ViewButton onClick={() => rf.zoomIn({ duration: 150 })} label="Zoom in">
+                <path d="M12 5v14M5 12h14" />
+              </ViewButton>
+              <ViewButton onClick={() => rf.zoomOut({ duration: 150 })} label="Zoom out">
+                <path d="M5 12h14" />
+              </ViewButton>
+              <ViewButton onClick={() => rf.fitView({ duration: 250, maxZoom: 1 })} label="Fit the whole flow on screen">
+                <path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" />
+              </ViewButton>
             </div>
           )}
+
+          {empty && <EmptyCanvas hasConnections={connections.length > 0} onStart={() => createNode("app", null)} />}
 
         </div>
 
@@ -1357,6 +1530,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                   onChange: (patch) => updateConfig(selected.id, patch),
                   onRename: (v) => renameNode(selected.id, v),
                   onTest: () => testNode(selected.id),
+                  onCancelTest: cancelTest,
                   onTestUpstream: (() => {
                     const up = edges.find((e) => e.target === selected.id && e.targetHandle == null)?.source;
                     return up ? () => testNode(up) : undefined;
@@ -1377,8 +1551,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           anchor={library.anchor}
           anchorSelector={library.anchorSelector}
           onClose={() => setLibrary({ open: false, ctx: null, anchor: null, anchorSelector: null })}
-          onPick={(type) => {
-            createNode(type, library.ctx);
+          onPick={(entry) => {
+            createNode(entry.type, library.ctx, entry.config);
             setLibrary({ open: false, ctx: null, anchor: null, anchorSelector: null });
           }}
         />
@@ -1419,6 +1593,24 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         />
       )}
 
+      {/* Bottom-centre, over the canvas, out of the config panel's way. */}
+      {toast && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-xl bg-neutral-900 py-2.5 pl-4 pr-2.5 text-sm text-white flow-shadow flow-pop-in">
+            <span>{toast}</span>
+            <button
+              onClick={() => {
+                undo();
+                setToast(null);
+              }}
+              className="rounded-lg px-2.5 py-1 text-sm font-semibold text-white/90 transition-colors hover:bg-white/15 hover:text-white"
+            >
+              Undo
+            </button>
+          </div>
+        </div>
+      )}
+
       {pendingDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4" onClick={() => setPendingDelete(null)}>
           <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-5 flow-shadow flow-pop-in" onClick={(e) => e.stopPropagation()}>
@@ -1445,11 +1637,93 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   );
 }
 
-function ToolButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+/** A toolbar button that goes flat when there is nothing for it to do. */
+function ToolButton({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} className="rounded border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-50">
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded border border-neutral-300 px-2 py-1 text-sm transition-colors hover:bg-neutral-50 disabled:cursor-default disabled:border-neutral-200 disabled:text-neutral-300 disabled:hover:bg-transparent"
+    >
       {children}
     </button>
+  );
+}
+
+/** One square icon button in the canvas view-controls cluster. */
+function ViewButton({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="flex h-8 w-8 items-center justify-center border-r border-neutral-200 text-neutral-500 transition-colors last:border-r-0 hover:bg-neutral-50 hover:text-neutral-900"
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {children}
+      </svg>
+    </button>
+  );
+}
+
+/**
+ * The first thing anyone ever sees of the builder, and the only place in it
+ * that explains what a flow IS.
+ *
+ * IT OPENS THE STEP PICKER NO LONGER. The old empty state's one button opened
+ * the full six-step library, from which a first-time user could pick "Filter
+ * records" — creating a card that reads "Needs setup — Connect an input" with
+ * no input to connect and no way forward except deleting it. The first step of
+ * every flow is a Get data step; offering the other five was offering a dead
+ * end. So the button MAKES one and opens its panel.
+ *
+ * With no connected accounts, every path from here ends at "No connected
+ * accounts yet" inside that panel — so the button goes to Integrations
+ * instead, which is the actual next thing to do.
+ */
+function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boolean; onStart: () => void }) {
+  const steps = [
+    { n: 1, title: "Get the records", detail: "from an app you've connected" },
+    { n: 2, title: "Narrow them down", detail: "keep only the ones that count" },
+    { n: 3, title: "Turn them into a number", detail: "count, total, average, compare" },
+  ];
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+      <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-7 flow-shadow">
+        <h2 className="text-center text-[17px] font-semibold tracking-tight text-neutral-900">Build a metric in three moves</h2>
+        <ol className="mt-5 space-y-3">
+          {steps.map((s) => (
+            <li key={s.n} className="flex items-start gap-3">
+              <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-semibold text-neutral-500">
+                {s.n}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-neutral-800">{s.title}</span>
+                <span className="block text-[13px] leading-snug text-neutral-500">{s.detail}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        {hasConnections ? (
+          <button
+            onClick={onStart}
+            className="mt-6 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition-all hover:bg-indigo-700 active:scale-[0.985]"
+          >
+            Start with Get data
+          </button>
+        ) : (
+          <>
+            <Link
+              href="/integrations"
+              className="mt-6 block w-full rounded-xl bg-indigo-600 px-4 py-3 text-center text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition-all hover:bg-indigo-700 active:scale-[0.985]"
+            >
+              Connect an app first
+            </Link>
+            <p className="mt-2 text-center text-xs text-neutral-500">A flow reads records from a connected account — there aren&rsquo;t any yet.</p>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

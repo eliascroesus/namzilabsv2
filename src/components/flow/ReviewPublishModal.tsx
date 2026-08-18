@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, type ReactNode } from "react";
 import type { MetricSpecT } from "./graph-utils";
 import { Select } from "./controls";
 import { formatMetricValue } from "@/lib/format";
@@ -43,6 +44,26 @@ const TIME_UNIT_OPTIONS = [
 
 /** An endpoint of the flow (a step with no next step) that can become a metric. */
 export type Endpoint = { nodeId: string; title: string };
+
+/** A small inline "▸ label" section that opens in place. */
+function Disclosure({ summary, children }: { summary: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 rounded-md py-1 text-xs font-medium text-neutral-500 transition-colors hover:text-neutral-800"
+      >
+        <span className={`transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>
+          ›
+        </span>
+        {summary}
+      </button>
+      {open && <div className="mt-1.5 space-y-2.5">{children}</div>}
+    </div>
+  );
+}
 
 /**
  * "Review & publish": the Output node is gone — instead each flow endpoint becomes a
@@ -147,40 +168,47 @@ export function ReviewPublishModal({
                     {previews[ep.nodeId] != null && (
                       <p className="text-xs font-medium text-neutral-700">{formatMetricValue(previews[ep.nodeId], m)}</p>
                     )}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <span className="mb-1 block text-xs font-medium text-neutral-600">Show as</span>
-                        <Select
-                          value={m.viz}
-                          width={210}
-                          options={VIZ_OPTIONS.some((o) => o.value === m.viz) ? VIZ_OPTIONS : [...VIZ_OPTIONS, { value: m.viz, label: LEGACY_VIZ_LABELS[m.viz] ?? m.viz }]}
-                          onChange={(v) => set(ep.nodeId, { viz: v })}
-                        />
-                      </div>
-                      <div>
-                        <span className="mb-1 block text-xs font-medium text-neutral-600">Format</span>
-                        <Select value={m.format} width={210} options={formatOptionsFor(m.format)} onChange={(v) => set(ep.nodeId, { format: v })} />
-                      </div>
+                    {/* THE ONE SETTING THAT CHANGES A NUMBER STAYS IN THE OPEN.
+                        Everything else here is presentation and has a correct
+                        default; this decides which records land in which
+                        period, so it is the only one a user can get wrong
+                        without noticing. Its old label, "Time reference", read
+                        as a chart setting — the question is concrete and the
+                        label now asks it. */}
+                    <div>
+                      <span className="mb-1 block text-xs font-medium text-neutral-600">Which date puts a record in a period?</span>
+                      <Select
+                        value={m.timeField ?? ""}
+                        width={260}
+                        searchable
+                        placeholder="Pick a field…"
+                        options={[{ value: "", label: "When it happened (default)" }, ...timeFieldOptions]}
+                        onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
+                      />
+                      <p className="mt-1 text-xs text-neutral-500">
+                        A meeting can belong to &ldquo;today&rdquo; by when it happens, or by when it was booked. This is what the dashboard&rsquo;s Today / Last 7 days measures.
+                      </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        {/* This field is what the dashboard's Today / Last 7 days
-                            pills measure against, so the label has to say that —
-                            it read as a chart-only setting while silently
-                            deciding which period every record counts in. The
-                            choice is real: a meeting belongs to "today" by when
-                            it is BOOKED for some questions and by when the
-                            booking arrived for others. */}
-                        <span className="mb-1 block text-xs font-medium text-neutral-600">Time reference</span>
-                        <Select
-                          value={m.timeField ?? ""}
-                          width={260}
-                          searchable
-                          placeholder="Pick a field…"
-                          options={[{ value: "", label: "When it happened (default)" }, ...timeFieldOptions]}
-                          onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
-                        />
-                        <p className="mt-1 text-xs text-neutral-500">Which date the dashboard&rsquo;s Today / Last 7 days uses.</p>
+
+                    {/* Five presentation settings, folded away. A user who
+                        wants one number on a dashboard was answering seven
+                        questions per metric, six of which already had the
+                        right answer. */}
+                    <Disclosure summary="Display options">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="mb-1 block text-xs font-medium text-neutral-600">Show as</span>
+                          <Select
+                            value={m.viz}
+                            width={210}
+                            options={VIZ_OPTIONS.some((o) => o.value === m.viz) ? VIZ_OPTIONS : [...VIZ_OPTIONS, { value: m.viz, label: LEGACY_VIZ_LABELS[m.viz] ?? m.viz }]}
+                            onChange={(v) => set(ep.nodeId, { viz: v })}
+                          />
+                        </div>
+                        <div>
+                          <span className="mb-1 block text-xs font-medium text-neutral-600">Format</span>
+                          <Select value={m.format} width={210} options={formatOptionsFor(m.format)} onChange={(v) => set(ep.nodeId, { format: v })} />
+                        </div>
                       </div>
                       {(m.viz === "line" || m.viz === "bar") && m.timeField && (
                         <div>
@@ -188,31 +216,31 @@ export function ReviewPublishModal({
                           <Select value={m.timeUnit ?? "month"} width={210} options={TIME_UNIT_OPTIONS} onChange={(v) => set(ep.nodeId, { timeUnit: v })} />
                         </div>
                       )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="block">
-                        <span className="mb-1 block text-xs font-medium text-neutral-600">Decimals</span>
-                        {/* Not <input type="number">: Number("") is NaN, and a
-                            NaN here fails the graph schema, so clearing this
-                            box silently killed the autosave of this edit and
-                            every edit after it. */}
-                        <NumberField value={m.precision} min={0} onChange={(n) => set(ep.nodeId, { precision: n ?? 0 })} />
-                      </label>
-                      <label className="block">
-                        <span className="mb-1 block text-xs font-medium text-neutral-600">Goal / target</span>
-                        {/* The goal is in the metric's own format: % for percentages, $ for currency. */}
-                        <div className="relative">
-                          {m.format === "currency" && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400">$</span>}
-                          <NumberField
-                            value={m.target}
-                            allowNull
-                            onChange={(n) => set(ep.nodeId, { target: n })}
-                            className={`${m.format === "currency" ? "pl-6" : ""} ${m.format === "percent" ? "pr-7" : ""}`}
-                          />
-                          {m.format === "percent" && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400">%</span>}
-                        </div>
-                      </label>
-                    </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-medium text-neutral-600">Decimals</span>
+                          {/* Not <input type="number">: Number("") is NaN, and a
+                              NaN here fails the graph schema, so clearing this
+                              box silently killed the autosave of this edit and
+                              every edit after it. */}
+                          <NumberField value={m.precision} min={0} onChange={(n) => set(ep.nodeId, { precision: n ?? 0 })} />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-medium text-neutral-600">Goal / target</span>
+                          {/* The goal is in the metric's own format: % for percentages, $ for currency. */}
+                          <div className="relative">
+                            {m.format === "currency" && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400">$</span>}
+                            <NumberField
+                              value={m.target}
+                              allowNull
+                              onChange={(n) => set(ep.nodeId, { target: n })}
+                              className={`${m.format === "currency" ? "pl-6" : ""} ${m.format === "percent" ? "pr-7" : ""}`}
+                            />
+                            {m.format === "percent" && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400">%</span>}
+                          </div>
+                        </label>
+                      </div>
+                    </Disclosure>
                   </div>
                 )}
               </div>
@@ -246,6 +274,16 @@ export function ReviewPublishModal({
             </div>
           )}
           {warning && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{warning}</p>}
+          {/* WHAT THE BUTTON DOES, BEFORE IT IS PRESSED. "Publish 1 metric" is
+              accurate and says nothing about consequences, and people hesitate
+              at buttons that sound one-way. Both halves here are true: it
+              starts updating by itself, and none of it is permanent. */}
+          {enabledCount > 0 && !publishing && (
+            <p className="text-center text-xs text-neutral-500">
+              Adds {enabledCount === 1 ? "this metric" : `these ${enabledCount} metrics`} to your dashboard and keeps {enabledCount === 1 ? "it" : "them"} updating
+              automatically. You can edit or remove {enabledCount === 1 ? "it" : "them"} any time.
+            </p>
+          )}
           <button
             onClick={onPublish}
             disabled={publishing || enabledCount === 0}

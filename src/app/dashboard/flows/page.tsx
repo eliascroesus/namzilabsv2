@@ -3,8 +3,7 @@ import { requireOrg } from "@/lib/auth";
 import { AppHeader } from "@/components/app-header";
 import { getReadDb } from "@/db/client";
 import { listFlows } from "@/lib/flow/store";
-import { FLOW_TEMPLATES } from "@/lib/flow/templates";
-import { createFlowAction, createFlowFromTemplateAction } from "./actions";
+import { createFlowAction } from "./actions";
 import { FlowList } from "./FlowRow";
 
 export const dynamic = "force-dynamic";
@@ -55,33 +54,11 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
           </form>
         </div>
 
-        {/* Starter templates: a complete, working shape instead of a blank
-            grid. Every step arrives wired and explained; the user's only
-            jobs are picking the account (when ambiguous) and pressing Test. */}
-        <section className="mt-8">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">Start from a template</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {FLOW_TEMPLATES.map((t) => (
-              <form key={t.id} action={createFlowFromTemplateAction} className="flex flex-col rounded-lg border border-neutral-200 p-4">
-                <input type="hidden" name="template" value={t.id} />
-                <h3 className="font-semibold">{t.name}</h3>
-                <p className="mt-1 flex-1 text-sm text-neutral-600">{t.description}</p>
-                <button
-                  type="submit"
-                  className="mt-3 self-start rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50"
-                >
-                  Use this template
-                </button>
-              </form>
-            ))}
-          </div>
-        </section>
-
         {flows.length === 0 ? (
           <div className="mt-8 rounded-lg border border-dashed border-neutral-300 p-10 text-center">
             <p className="text-neutral-600">No flows yet.</p>
             <p className="mt-1 text-sm text-neutral-500">
-              Start from a template above, or press <b>New flow</b> to build one step by step.
+              Press <b>New flow</b> to build one step by step.
             </p>
           </div>
         ) : (

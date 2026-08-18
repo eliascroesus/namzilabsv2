@@ -1,0 +1,746 @@
+# UX / UI audit — the flow builder and the app around it
+
+Written 2026-08-18, against `main`. Scope: everything the user sees. **No
+backend, engine, connector or ingestion change is proposed anywhere in this
+document.** Every recommendation is a component, a layout, a piece of copy, or
+a rule about which existing thing is shown when.
+
+> **Status — all five stages shipped; every defect closed.** All twenty items
+> in §9 and all fourteen defects in §8 have landed, each marked ✅ below. The
+> verification bar was met after every stage: `typecheck`, **1,396 tests / 112
+> files**, `build`, `check:orphans`. Behavioural changes are sabotage-verified
+> in the repo's convention — the pin is broken, confirmed to fail alone, and
+> restored.
+>
+> §10 (what not to change) still stands, and is the part of this document with
+> the longest shelf life.
+
+Read alongside `STATE.md` (what is switched on) and `docs/DATA_MODEL.md` (what
+each connector guarantees). This file answers a different question: **can a
+stranger build the metric they came for, alone, on the first sitting?**
+
+---
+
+## 0. The verdict in one paragraph
+
+The engine is ahead of the interface. The hard product thinking — what happens
+when a duplicate field is empty, which record survives a tie, whether a range
+includes its last day, what a metric's denominator quietly excluded — is
+*already solved and already written down on screen*, and that work is
+genuinely rare. What is not yet solved is the **first ten minutes**: the
+vocabulary is inconsistent across screens, the canvas hides the part of the
+graph that most often goes wrong, the build loop asks for two clicks where
+Zapier asks for zero, and one step (Calculate) carries two entirely different
+mental models behind a single sixteen-item dropdown. None of that is deep. All
+of it is between a new user and their first number.
+
+At 300,000 users, every ambiguity in this document is a support ticket
+multiplied by six figures. The fixes below are ordered by that arithmetic.
+
+---
+
+## 1. The core thesis: the picker is the product's taxonomy
+
+A first-time user does not learn your product from documentation. They learn it
+from **the list of steps they are offered**, once, in the moment they press "+".
+That list is the entire mental model they will carry for the rest of their
+account's life.
+
+Today that list is:
+
+| Stage | Step | What the user thinks it means |
+|---|---|---|
+| Data | Get data | ✅ correct instantly |
+| Data | Combine data | ⚠️ *two unrelated operations wearing one name* |
+| Conditions | Filter records | ✅ correct instantly |
+| Conditions | Split into paths | ✅ correct, though rarely needed |
+| Calculation | Calculate | ❌ *two unrelated operations wearing one name* |
+| Calculation | Time between | ✅ correct, and excellent |
+
+Two of six entries are compound. That is the single biggest comprehension cost
+in the builder, and it comes from a decision that was *right for the engine and
+wrong for the picker*: merging Count into Calculate, and matching into Combine,
+removed real duplication from `engine.ts` — but the picker inherited a merge it
+should not have.
+
+**The fix is free: one engine node, two picker entries.**
+
+`NODE_META` is a display-layer map. Nothing stops it listing two entries that
+both create a `formula` node with different `defaultConfig`. The engine, the
+validator, `parseGraph`, and every stored flow are untouched.
+
+```
+Calculation
+  ├── Summarise records      → formula, defaultConfig { op: "count" }
+  │     "Count, total or average the records flowing in"
+  └── Compare two numbers    → formula, defaultConfig { op: "percentage" }
+        "A rate, a ratio, a % change — from two earlier steps"
+
+Data
+  ├── Combine data           → unite, defaultConfig { mode: "stack" }
+  │     "Put several steps' records on one line"
+  └── Match against a list   → unite, defaultConfig { mode: "match" }
+        "Keep only records that appear (or don't) in another step"
+```
+
+The user who wants "how many calls" and the user who wants "what % showed up"
+now take different doors and never see each other's controls. The user who
+wants "only the leads that are also in the sheet" finds it by its own name
+instead of discovering a checkbox inside a step called Combine.
+
+Both panels stay exactly as they are — the panel already branches on
+`isDatasetFormulaOp(op)` and on `mode === "match"`. You are changing which door
+leads there, not what is behind it. And because the op dropdown remains inside
+each panel, a power user can still switch a Summarise into a Compare without
+deleting the step.
+
+**Tradeoff, stated:** the picker grows from 6 entries to 8. That is the right
+direction — Zapier's action list is enormous and nobody is confused by it,
+because each entry means one thing. Six ambiguous entries are harder than eight
+unambiguous ones.
+
+---
+
+## 2. Information architecture — the app around the builder
+
+### 2.1 Flows are not in the navigation
+
+The header offers **Dashboard · Integrations · Settings**. The flow builder —
+the core of the product, the thing the entire ingestion engine exists to feed —
+is reachable only by:
+
+- a "New flow" button on the dashboard,
+- a link inside the onboarding checklist, which disappears forever once one
+  tile is published,
+- typing the URL.
+
+A user who publishes one metric, closes the tab, and comes back next week has
+**no visible path to their flows**. They will assume the dashboard is the
+product and that metrics are not editable.
+
+**Fix:** `Dashboard · Flows · Integrations · Settings` in `app-header.tsx`. One
+line. This is the highest value-per-character change in the audit.
+
+### 2.2 Two builders are exposed at once
+
+The dashboard header renders three actions: **Refresh**, **New flow**, and
+**Classic metric** (→ `/dashboard/metrics/new`, the retired form builder). A
+new user reads "Classic" as "the stable one" and takes it. They then land in a
+completely different authoring model, produce a `metrics` row instead of a
+flow, and never see the canvas.
+
+**Fix:** remove "Classic metric" from the dashboard. Keep the routes alive so
+existing metrics still open and edit — just stop advertising a second way in.
+Same for `/dashboard/funnels/new`. One product, one way to build.
+
+### 2.3 The dashboard's action row has no hierarchy
+
+Three buttons of near-equal weight: a bordered Refresh, a black New flow, a
+bordered Classic metric. Once Classic is gone, the pair should read:
+
+- **New flow** — the only filled button.
+- **Refresh** — demote to an icon button with a tooltip, or fold it into the
+  range pill row. It is a maintenance action, not a primary one; it currently
+  competes with the one action you want people taking.
+
+### 2.4 Terminology drift across screens
+
+The same object is called five things:
+
+| Screen | Word used |
+|---|---|
+| `flows/page.tsx` h1 | "Metric flows" |
+| dashboard button | "New flow" |
+| onboarding checklist | "your first flow" |
+| flow list status pill | "published" / "draft" |
+| what it produces | "metric", "tile", "result", "output", "endpoint" |
+
+Pick two words and enforce them everywhere:
+
+- **Flow** — the thing you build. (h1 becomes "Flows".)
+- **Metric** — the number a flow publishes to the dashboard.
+
+Then: "endpoint" never appears in UI copy (it is currently only internal —
+keep it that way), "output" never appears (the legacy Output node is hidden
+anyway), "result" is reserved for the Test tab's own heading.
+
+### 2.5 Raw machine strings leak into three user-facing places
+
+The product has `eventTypeLabel()` and `sourceStyle()` for exactly this, and
+uses them correctly in the builder — but not on the dashboard:
+
+- **Source filter pills** render `{srcName}` — the user sees `gsheets`,
+  `close`, `webhook` rather than *Google Sheets*, *Close*, *Custom webhook*.
+- **Recent activity table** renders `{e.source}` and `{e.eventType}` raw —
+  `close` / `lead_created` instead of *Close* / *Lead created*.
+- **Legacy `MetricTile`** renders `{tile.result.value}` with no formatter,
+  while `FlowTile` next to it runs everything through `formatMetricValue`. Two
+  tiles side by side on one board, one reading `1234.5` and one reading
+  `1,234.5`.
+
+These are one-line substitutions using functions that already exist.
+
+---
+
+## 3. First run — from empty canvas to first number
+
+This is the sequence that decides whether someone becomes a customer, and it is
+currently the least-designed part of the builder.
+
+### 3.1 The empty canvas says too little and allows too much
+
+Today: a dashed box, *"Start by pulling data from an app."*, one button, and
+then the **full six-step picker**.
+
+Two problems:
+
+1. **A first step that isn't Get data is a guaranteed dead end.** Nothing stops
+   a new user picking "Filter records" first. They get a card reading *"Needs
+   setup — Connect an input"* with no input to connect and no way to fix it
+   except deleting the step. `createNode` places it, `computeNodeStatus` marks
+   it `setup`, and the flow cannot progress.
+2. **Nothing says what a flow is.** "Start by pulling data from an app" tells
+   them the first move but not the shape of the game.
+
+**Fix — a real empty state:**
+
+```
+        ┌─────────────────────────────────────────┐
+        │   Build a metric in three moves          │
+        │                                          │
+        │   1. Get the records   →  from a         │
+        │      connected app                       │
+        │   2. Narrow them       →  keep only      │
+        │      what counts                         │
+        │   3. Turn them into    →  a number for   │
+        │      a number             your dashboard │
+        │                                          │
+        │        [ + Get data ]                    │
+        │                                          │
+        │   Connected: Close · Google Sheets       │
+        └─────────────────────────────────────────┘
+```
+
+The button is **not** the generic picker — on an empty canvas it creates a Get
+data step directly and opens its panel. The three-line explainer is the only
+onboarding text in the builder and it earns its place, because it is the mental
+model in eleven words.
+
+If the org has **no connections**, the button instead reads
+**"Connect an app first →"** and links to `/integrations`, because every other
+path from here dead-ends at "No connected accounts yet" inside the panel.
+
+### 3.2 Templates are gone — what replaces them
+
+You removed the four starter templates (done in this session: `templates.ts`
+deleted, gallery removed, `createFlowFromTemplateAction` removed, engine
+coverage preserved as an inline fixture in `tests/time-between.test.ts`).
+
+That is defensible — templates that only fit Close and Calendly users are noise
+to the other 80% — but it removes the only worked example in the product. The
+replacement is **not** a template gallery. It is:
+
+- the three-line explainer above (what a flow *is*),
+- the guided per-step rhythm in §4 (what to do *next*),
+- and the setup hints already in `setupHint()` (what is *missing*).
+
+All three are generic. None of them assume a CRM.
+
+### 3.3 The onboarding checklist stops too early
+
+`OnboardingChecklist` shows *connect → build → publish*, then vanishes forever
+once one tile exists. It is well-built and honestly state-driven. Two gaps:
+
+- It lives **only** on the dashboard's empty state. A user mid-way through
+  their first flow has left it behind and has nothing.
+- Step 2 says "Build your first flow" — but the hard part is not starting one,
+  it is finishing one. Roughly: people create a flow and abandon it unpublished.
+
+**Fix:** keep the checklist, and add a fourth state — when `hasFlow &&
+!hasPublished`, the checklist's step 3 CTA should deep-link to *that specific
+draft* ("Finish 'Untitled flow' →"), not to the flow list.
+
+---
+
+## 4. The build loop — the rhythm of Configure → Test → Continue
+
+This is the part that most resembles Zapier and is closest to right. Three
+changes take it the rest of the way.
+
+### 4.1 Auto-test on Continue
+
+Today the guided footer is:
+
+```
+Configure tab  →  [ Continue ]        (switches to Test tab)
+Test tab       →  [ Test ]            (runs it)
+after success  →  [ Retest ] [ Continue ]
+```
+
+So every step costs **two deliberate clicks** before the user sees data, and
+the middle click has no purpose except to arrive at a button. Zapier collapses
+this: pressing Continue runs the test.
+
+**Fix:** Configure's `[ Continue ]` switches to the Test tab **and immediately
+fires `onTest()`**. The user presses one button per step and watches their data
+appear. `Retest` remains for the deliberate re-run. Nothing about the test
+mechanism changes — only who triggers it.
+
+This also fixes a subtler thing: today a user *can* skip testing entirely and
+publish an untested flow. Auto-testing on the natural forward path means almost
+every published flow has been seen working.
+
+### 4.2 `onTestUpstream` is wired up and never rendered — a defect
+
+`onTestUpstream` is created in `flow-canvas.tsx`, passed to `ConfigPanel`,
+destructured, typed, and passed again into `NodeConfig` — where it is
+destructured, typed, and **never used**. Its own comment calls it *"the cure
+for an empty field picker."*
+
+The disease it cures is real and common: a user opens a Filter, clicks the
+field picker, and reads *"No data yet. Test an earlier step to bring its fields
+here."* — which is an instruction to leave the step they are on, find the step
+above, open it, run its test, come back, and re-open the picker. Five actions
+to answer a question the panel could answer with one button.
+
+**Fix:** render it. In the `DataBrowser` empty state, when `onTestUpstream`
+exists:
+
+> **No fields yet.**
+> The step above hasn't been tested, so we don't know what its records look
+> like.
+> **[ Test the previous step ]**
+
+`check:orphans` did not catch this because it only tracks exported functions,
+not props. Worth a glance for other props threaded but unused.
+
+### 4.3 There is no way to run the whole flow
+
+Every test is per-step. A user with a six-step flow who changes step 1 must
+re-test six steps, one panel at a time, because `markDirtyFrom` correctly marks
+all descendants dirty. There is no "run everything" anywhere, and the only way
+to see the flow's final number is to open the last step and test it.
+
+**Fix:** add **[ Test flow ]** to the toolbar, beside Undo/Redo. It walks the
+steps in `computeStepNumbers` order calling the existing per-step test, updates
+each card as it lands, and needs no new backend path. The canvas becomes a live
+progress display — which is exactly the moment a user understands what they
+built.
+
+This is also the honest answer to "what does my metric say right now?" before
+committing to Publish.
+
+### 4.4 The status vocabulary needs one more level of contrast
+
+`STATUS_META` today:
+
+| Status | Label | Colour |
+|---|---|---|
+| `setup` | Needs setup | grey |
+| `untested` | Ready to test | grey |
+| `updating` | Testing… | blue |
+| `ready` | Ready | green |
+| `error` | Error | red |
+
+**"Needs setup" and "Ready to test" are the same grey.** One means *this step
+is broken and the flow cannot publish*; the other means *this step is fine, I
+just haven't run it*. They are opposite states wearing the same badge, and they
+are by far the two most common states on a half-built canvas.
+
+**Fix:**
+
+| Status | Label | Colour | Why |
+|---|---|---|---|
+| `setup` | **Needs setup** | **amber** | It blocks publish. Amber is the product's existing "you must look at this" tone. |
+| `untested` | **Not tested** | grey | Neutral, non-blocking, accurate. |
+| `updating` | Testing… | blue | unchanged |
+| `ready` | **Tested** | green | "Ready" over-promises — it means the test passed, not that the flow is correct. |
+| `error` | Error | red | unchanged |
+
+"Not tested" also reads better than "Ready to test", which is an instruction
+disguised as a status.
+
+### 4.5 A running test can take 90 seconds with no way out
+
+`pollTestResult` ticks 112 × 800ms. During that window the footer is a disabled
+**"Testing…"** and the card shows a blue chip. There is no elapsed time, no
+progress, and **no cancel**. The three failure messages at the end are
+excellent and specific — but 90 seconds of a dead button is a long time to earn
+them.
+
+**Fix:** after ~8 seconds, replace the disabled button with:
+
+> Testing… **12s** · [ Cancel ]
+
+Cancel just stops polling client-side and restores the previous state (the
+background run settles harmlessly on its own). Also consider surfacing the
+existing honest note earlier: at ~30s, add *"Large date ranges take longer —
+you can narrow this step's date range to speed it up."*
+
+---
+
+## 5. The canvas
+
+### 5.1 The canvas hides the connections most likely to be wrong
+
+`displayEdges` deliberately drops every `a`/`b` reference edge, and
+`structuralEdges` hides them from layout. The reasoning in the comments is
+sound — reference lines would cut diagonally across the canvas and turn a clean
+column into spaghetti.
+
+But the consequence is that **a Compare step's two inputs are invisible**.
+Looking at the canvas, nothing shows that step 5's denominator comes from step
+2. The product has already had to paper over this twice: the `recordSourceNote`
+("Reads records from 2. Calls dialed") and the `formulaExpression` line in the
+panel both exist to describe a relationship the drawing refuses to draw.
+
+**Fix — selection-scoped reference edges.** Draw the `a`/`b` edges *only when
+the compare step is selected or hovered*, as thin dashed lines in a distinct
+colour, labelled with the handle name ("Count this" / "Out of this"). Default
+canvas stays clean; the moment you look at the step, its wiring appears.
+
+Additionally, put a compact chip on the compare card itself:
+
+```
+┌────────────────────────────────┐
+│ ⬤  5. Show-up rate      Tested │
+│    38%                          │
+│    ◆ 2. Meetings ÷ ◆ 4. Booked │   ← new line, grey
+└────────────────────────────────┘
+```
+
+The card then says what it computes without being opened. This is the single
+change most likely to prevent "why is my number wrong" tickets.
+
+### 5.2 Which steps become dashboard tiles is invisible until Publish
+
+A step becomes a metric by being a **structural terminal**. That rule is never
+stated and never shown. Consequence, straight from the code you deleted this
+session: the no-show-rate shape produced *three* offered metrics, because its
+two count steps are structural terminals whose only outgoing edges are `a`/`b`
+references that the layout drops — and the only defence was pre-seeding them
+`enabled: false` in the template. Hand-built flows have no such defence: the
+user opens Review & publish and is offered three metrics where they expected
+one, with no explanation.
+
+**Fix:** show it on the canvas. Every terminal card gets a small badge:
+
+```
+  📊 Goes to dashboard
+```
+
+Now the rule is learnable by looking, the three-metric surprise happens *while
+building* rather than at the publish gate, and the user can react by connecting
+the stray step into something.
+
+### 5.3 No zoom, fit, or minimap controls exist
+
+`README.md` claims the canvas has "drag/connect/zoom/pan, minimap". The code
+has none of that: `nodesDraggable={false}`, `nodesConnectable={false}`, no
+`<MiniMap>`, no `<Controls>`. Panning is scroll, zooming is pinch or ⌘-scroll,
+and **nothing on screen says so**.
+
+The *behaviour* is right — a managed layout is the correct call for this
+audience, and I would not add dragging. What's missing is the affordance:
+
+**Fix:** a small floating control cluster, bottom-left, matching the rounded
+Make-ish language already in use:
+
+```
+  [ + ]  [ − ]  [ ⤢ Fit ]
+```
+
+Three buttons calling `rf.zoomIn/zoomOut/fitView`. That is the whole change.
+A minimap is unnecessary for a single managed column — skip it, and fix the
+README instead (see §8).
+
+### 5.4 Backspace deletes a step with no confirmation
+
+The keydown handler routes through `requestDelete`, which confirms for Paths
+hubs and branches — but a plain step is deleted immediately via
+`deleteAndReconnect`. Since cards are *selected by clicking* and are *not
+editable in place*, the sequence "click a card, reach for the keyboard, press
+backspace" is entirely plausible, and it silently destroys a configured step.
+
+Undo exists (⌘Z) but nothing tells the user that.
+
+**Fix — cheapest effective version:** keep the instant delete, and show a
+transient toast: *"Step deleted. **Undo**"* for ~6 seconds. This is better than
+a confirm dialog, which would slow down deliberate deletes on a canvas where
+deleting is common.
+
+### 5.5 The panel + flyout eat the screen on a laptop
+
+The config panel is a fixed `w-[452px]`, and the `DataBrowser` flyout opens to
+its **left** at a default 340px. Together: **792px**. On a 1280px MacBook Air
+that leaves 488px of canvas — and the flyout is opened constantly, because
+every field, value, number and moment is picked through it.
+
+**Fix, in order of effort:**
+1. When the flyout opens, pan the canvas so the selected card stays visible in
+   the remaining space (the code already does exactly this kind of minimal-nudge
+   panning in `continueFromNode` — reuse that math).
+2. Below ~1200px viewport width, let the flyout overlay the panel rather than
+   sit beside it, with a back arrow.
+
+There is currently **no responsive handling at all** — `h-screen` flex, fixed
+pixel widths, no breakpoints. For an enterprise product that will be opened on
+13" laptops constantly, this deserves a pass.
+
+---
+
+## 6. Per-step notes
+
+### 6.1 Get data — the strongest panel in the product
+
+Account → resource fields → Record type → Remove duplicates, with the import
+status line under the account and the honest history note. Very little to
+change.
+
+- **"Keep one record per…"** as the checkbox label is good, but the collapsed
+  state below it reads *"Collapse records that share a value down to one, right
+  as they load."* — that sentence is doing explanation work in the *off* state
+  where nobody has asked a question yet. Trim to: *"Remove duplicate records as
+  they load."*
+- The dedupe block's border and internal `Field` labels make it visually
+  heavier than the fields above it, despite being optional. Move it below a
+  thin divider labelled **Options**, so the required path reads top-to-bottom
+  without interruption.
+- **"Record type"** vs the provider's own "event type" is handled thoughtfully
+  in the code comments. Keep the label; consider the hint *"What kind of record
+  to pull — leave as All if you're not sure."*
+
+### 6.2 Filter — good, but the date range is hiding
+
+`DateRangeSection` renders as a collapsed accordion at the *bottom* of the
+panel, under the conditions, reading **"Date range · off"**. Yet limiting a
+metric to a period is one of the two most common things anyone does to a
+metric, and the internal comment already acknowledges this ("a prominent 'Date
+range' quick section lives inside Filter").
+
+It is not prominent. It is a grey collapsed row below the fold.
+
+**Fix:** promote it to a **segmented control at the top of the Filter panel**:
+
+```
+  Time period    [ All time ▾ ]        ← Last 7 days, Last 30 days,
+                                          This month, Custom…
+  ───────────────────────────────
+  Only continue if…
+  [ conditions ]
+```
+
+Same config shape (`dateRange`), same engine, same `describeWindow()` sentence
+underneath — which is excellent and should stay exactly as it is. Only the
+prominence changes.
+
+### 6.3 Calculate — see §1, plus two panel notes
+
+Beyond the split into two picker entries:
+
+- **"What are you calculating?" → "A number" / "A length of time"** is asked
+  *after* the Calculation dropdown, which means the user picks `median` before
+  saying they're measuring time. Ask it **first**: it changes what the rest of
+  the panel offers, and it is the cheaper question.
+- The blue expression box (`datasetCalcExpression` / `formulaExpression`) is a
+  genuinely great pattern — a plain-English restatement of the configuration,
+  above the controls. **Extend it to every step**, not just Calculate. A Filter
+  could read *"Keep records where Direction is exactly 'outbound'"*; a Get data
+  step *"All Lead created records from Close (Acme)"*. This is the cheapest
+  comprehension win available and the component already exists.
+
+### 6.4 Combine — see §1
+
+Splitting stack from match into two picker entries removes the checkbox
+entirely, and the panel's warning *"Matching compares exactly two steps — this
+Combine has 3 wired in"* becomes a constraint the UI can enforce up front
+rather than a message after the fact.
+
+### 6.5 Split into paths — correct, and correctly rare
+
+The auto-created "Path conditions" head per branch is the right Zapier-style
+move. The entry-mode dropdown living on the branch head rather than the hub is
+also right. No changes proposed.
+
+One copy note: branches default to *"Path A" / "Path B"*. Prompt for real names
+by using placeholder text in the label inputs (*"e.g. Enterprise"*) rather than
+prefilling a value the user will leave.
+
+### 6.6 Time between — the best-designed step, one gap
+
+Configuring it by picking variables — *Match records by*, *Start the clock on*,
+*Stop the clock on* — is exactly right, and the `MomentInput` showing
+"2. Calls dialed › occurredAt" solves the hardest ambiguity in the product
+(two lanes, same field name) with no jargon at all.
+
+The gap: **it is unusable until upstream steps are tested**, because
+`momentGroups` derives entirely from `lastTest.outputSchema`. Fixing §4.2
+(render `onTestUpstream`) matters more here than anywhere else in the builder.
+
+---
+
+## 7. Review & publish, and the payoff
+
+### 7.1 The modal asks seven questions per metric
+
+Name, Show as, Format, Time reference, Group by, Decimals, Goal — plus a
+checkbox — for **each** endpoint, in a 512px-wide modal that scrolls. For a
+user who wants one number on a dashboard, six of those seven have correct
+defaults.
+
+**Fix — progressive disclosure:**
+
+```
+  ☑  Speed to lead                              4h 45m
+     Name  [ Speed to lead              ]
+     ▸ Display options                          ← collapsed
+```
+
+"Display options" holds Show as / Format / Decimals / Goal / Group by. **Time
+reference stays visible**, because it is the one setting that silently changes
+which records count in which period — the code comment says exactly this and it
+is right. Everything else is presentation.
+
+### 7.2 "Time reference" is the hardest concept in the modal
+
+Current label + hint: *"Time reference" / "Which date the dashboard's Today /
+Last 7 days uses."* Accurate, but abstract on first read.
+
+**Better:** label it **"Which date puts a record in a period?"** with the hint
+*"A meeting can belong to 'today' by when it happens, or by when it was
+booked."* — the concrete example is what makes it land, and it is already
+written in your code comments.
+
+### 7.3 The publish button hides its own consequence
+
+**"Publish 1 metric"** is accurate but says nothing about what happens next.
+Users hesitate at irreversible-sounding buttons.
+
+**Fix:** a line above the button — *"This adds 1 tile to your dashboard and
+keeps it updating automatically. You can edit or unpublish any time."* The
+reassurance is true and the hesitation is real.
+
+### 7.4 The dashboard tile is excellent
+
+`FlowTile` is the best-designed component in the app. The em-dash-not-zero rule,
+the "Updated 4 minutes ago" honesty marker, the import-progress bar with days
+rather than a fake percentage, the "showing 6 largest of 11 groups" admission,
+the error message with a "Fix in the editor →" link — this is the standard the
+rest of the UI should be held to.
+
+Two small things:
+- The legacy `MetricTile` beside it does none of this (see §2.5). Once the
+  classic builder is de-advertised, consider rendering legacy metrics through
+  the same tile component.
+- The tile's local `Tile` type omits `"duration"` from `format` and omits
+  `durationDisplay` entirely, while `TileSpec` and `MetricSpecSchema` both carry
+  them. It works at runtime because `row.tile` is cast from `unknown` and the
+  fields ride through the spread — but it is a type that disagrees with its own
+  data, and the next person to construct a tile literal will drop the duration
+  fields silently.
+
+---
+
+## 8. Defects found
+
+Ranked by user impact. None require backend changes.
+
+| # | Severity | Defect | Status |
+|---|---|---|---|
+| 1 | **High** | `onTestUpstream` is threaded from `flow-canvas.tsx` → `ConfigPanel` → `NodeConfig` and never rendered. The documented cure for an empty field picker does not exist on screen. (§4.2) | ✅ fixed |
+| 2 | **High** | "Needs setup" and "Ready to test" share one grey badge — a blocking state and a non-blocking state, visually identical. (§4.4) | ✅ fixed |
+| 3 | **High** | Flows are absent from the header navigation; after the onboarding checklist disappears there is no visible route to them. (§2.1) | ✅ fixed |
+| 4 | **Med** | A first step other than Get data creates a permanent dead-end card the user can only delete. (§3.1) | ✅ fixed |
+| 5 | **Med** | Backspace deletes a configured step instantly, with no confirmation and no visible undo affordance. (§5.4) | ✅ fixed |
+| 6 | **Med** | `Select` never scrolls the keyboard-active option into view — `listRef` is assigned and never read. Arrow-keying through Close's long option lists moves the highlight off-screen. | ✅ fixed |
+| 7 | **Med** | Dashboard source pills and the Recent-activity table print raw machine strings (`gsheets`, `lead_created`) while the rest of the product humanises them. (§2.5) | ✅ fixed |
+| 8 | **Med** | Legacy `MetricTile` prints unformatted numbers beside `FlowTile`'s formatted ones — same board, two number formats. (§2.5) | ✅ fixed |
+| 9 | **Med** | A test can occupy the panel for 90 seconds with no elapsed time and no cancel. (§4.5) | ✅ fixed |
+| 10 | **Low** | `README.md` claims the canvas has drag, connect, zoom controls and a minimap. It has none — nodes are undraggable and unconnectable by design, and no `<MiniMap>`/`<Controls>` is mounted. Fix the README, not the canvas. | ✅ fixed |
+| 11 | **Low** | `NodeLibraryModal` runs an unconditional `requestAnimationFrame` loop for as long as it is open, re-measuring the anchor every frame even when the canvas is still. | ✅ fixed — loop still runs (the canvas can pan at any moment), but writes only on change |
+| 12 | **Low** | Undo/Redo toolbar buttons never disable, so they look actionable with empty history. | ✅ fixed |
+| 13 | **Low** | `FlowTile`'s local `Tile` type contradicts `TileSpec` on duration fields. (§7.4) | ✅ fixed |
+| 14 | **Low** | No responsive handling anywhere in the builder: fixed `h-screen`, fixed panel and flyout widths, no breakpoints. (§5.5) | ✅ fixed |
+
+---
+
+## 9. What to do first
+
+Sequenced so that each stage is independently shippable and each one is
+testable by the people you're about to put in front of it.
+
+**Stage 1 — navigation and first run** ✅ shipped
+1. ✅ Add Flows to the header nav. (§2.1)
+2. ✅ Remove "Classic metric" from the dashboard. (§2.2)
+3. ✅ Real empty-canvas state; first step is always Get data. (§3.1)
+4. ✅ Amber "Needs setup", grey "Not tested", green "Tested". (§4.4)
+5. ✅ Humanise source and event-type strings on the dashboard, and run legacy
+   metric tiles through the same formatter as flow tiles. (§2.5)
+
+**Stage 2 — the build loop** ✅ shipped
+6. ✅ Auto-test on Continue. (§4.1)
+7. ✅ Render `onTestUpstream` — as a banner at the top of the panel rather than
+   inside the picker's empty state, so the user meets it before opening a
+   picker rather than after. (§4.2)
+8. ✅ "Test flow" in the toolbar — sequential, in step order, skipping steps
+   that need setup, doubling as the Stop control while it runs. (§4.3)
+9. ✅ Elapsed time + Stop on a running test, with the narrow-your-range hint at
+   30s. (§4.5)
+10. ✅ Undo notice on step delete. (§5.4)
+
+**Stage 3 — the taxonomy** ✅ shipped
+11. ✅ Split Calculate into *Summarise records* / *Compare two numbers*. (§1)
+12. ✅ Split Combine into *Combine data* / *Match against a list*, and replace
+    the buried match checkbox with a named mode control. (§1)
+13. ✅ Promote the time period to the top of Filter — mode and preset collapsed
+    into one list, with "All time" as a real selectable answer. (§6.2)
+14. ✅ Extend the plain-English summary to Filter, Get data, Combine, Paths and
+    Time between. (§6.3)
+
+Also landed with Stage 3: `NODE_META` is gone. It was the picker's per-type
+table, and once the picker became a list of jobs its label half duplicated
+`NODE_LABELS` while its blurb and keyword halves were read by nothing —
+editable, plausible, and inert. `ALL_TYPES` now derives from `NODE_TYPES`.
+
+**Stage 4 — canvas honesty** ✅ shipped
+15. ✅ Selection-scoped reference edges (dashed, indigo, labelled with the slot
+    they fill) + the compare card's own "2. Meetings ÷ 4. Booked" line. (§5.1)
+16. ✅ "Goes to your dashboard" / "Not published" badge on terminal steps, with
+    the rule extracted to `publishesToDashboard` and pinned. (§5.2)
+17. ✅ Zoom in / out / fit cluster, bottom-left. Nodes stay undraggable and
+    ports unconnectable — only the view controls that already existed are now
+    visible. (§5.3)
+
+**Stage 5 — publish and polish** ✅ shipped
+18. ✅ Review & publish collapses five presentation settings behind "Display
+    options"; name and the time reference stay in the open. (§7.1)
+19. ✅ "Time reference" → "Which date puts a record in a period?", with the
+    concrete meeting example, plus the publish reassurance line. (§7.2, §7.3)
+20. ✅ Responsive pass: the panel yields below 484px of viewport, and the field
+    browser overlays it rather than squeezing beside it when there is under
+    280px of room — with a close button in its search row, since "click
+    outside" stops being a way back once it covers its own trigger. (§5.5)
+
+**Now run your user tests.** The mechanical friction that would otherwise have
+dominated the feedback is gone; what surfaces from here will be about the
+model, which is what is actually worth learning.
+
+---
+
+## 10. What not to change
+
+Explicitly, so nobody optimises these away later:
+
+- **The receipts.** `DedupeOutcome`, `PairingOutcome`, `CrossRefOutcome`, the
+  truncation notice, `describeWindow`, the import-progress bar, the
+  "6 largest of 11 groups" note, the em-dash-not-zero rule. These are the
+  reason a customer will trust a number they can't verify themselves. If
+  anything, make them *more* prominent.
+- **Managed layout.** No free node dragging. It is why this can feel simple.
+- **Asking instead of assuming** on dedupe direction, match side, and date
+  column.
+- **`NODE_LABELS` as the single vocabulary** that validation must speak, pinned
+  by test.
+- **No sample data.** The reasoning in `onboarding-checklist.tsx` is correct —
+  fake rows would poison four real subsystems.
+- **Publish issues that select the offending step.**

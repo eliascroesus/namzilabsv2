@@ -1,42 +1,142 @@
 import { formatDuration } from "@/lib/format";
-import { durationValueUnit, type NodeType } from "@/lib/flow/types";
+import { durationValueUnit, isDatasetFormulaOp, NODE_LABELS, NODE_TYPES, type NodeType } from "@/lib/flow/types";
 import type { NodeData } from "./graph-utils";
 
 /** The four visible stages a metric flows through, in order. */
 export const STAGES = ["Data", "Conditions", "Calculation", "Dashboard"] as const;
 export type Stage = (typeof STAGES)[number];
 
-/** Plain-English node metadata. Labels read like instructions, not jargon. */
-export const NODE_META: Record<NodeType, { label: string; blurb: string; stage: Stage; keywords: string; hidden?: boolean }> = {
-  app: { label: "Get data", blurb: "Pull records from a connected app", stage: "Data", keywords: "integration source connect data app get duplicates dedupe" },
-  // Combine also hosts the join primitive (its "Only keep records that
-  // match" option) — "only the leads that are also in the spreadsheet" is a
-  // question about how two sources come together, so it lives where the
-  // sources come together.
-  unite: {
-    label: "Combine data",
-    blurb: "Bring sources together — stack them, or keep only matches",
-    stage: "Data",
-    keywords: "unite combine merge join together branches lanes sources union bring back cross reference lookup match intersect appears exists in both vlookup check against",
-  },
-  filter: { label: "Filter records", blurb: "Keep only the records you want", stage: "Conditions", keywords: "condition where keep only match date range filter" },
-  paths: { label: "Split into paths", blurb: "Send records down different branches", stage: "Conditions", keywords: "split branch route condition paths" },
-  // The one Calculation step: it aggregates records into a number (count/sum/avg/…,
-  // the former Count node) OR compares two numbers (rate, ratio, % change).
-  formula: { label: "Calculate", blurb: "Count, sum, or compare — rate, ratio, % change", stage: "Calculation", keywords: "calculate count sum average total maximum minimum distinct compare rate ratio percentage change difference formula divide aggregate number median" },
-  // The pairing step: per key (a lead), measure from one event to another
-  // (its first call). Emits one record per match with the gap as a number,
-  // so a Calculate right after can average or take the median.
-  time_between: { label: "Time between", blurb: "Measure how long from one event to another, per record", stage: "Calculation", keywords: "speed to lead time between duration gap first call response elapsed how long pair match" },
-  // Output is replaced by "Review & publish" (metrics are chosen there). Kept so old
-  // flows with an Output node still render + run; hidden from the picker.
-  output: { label: "Show on dashboard", blurb: "Save the metric as a dashboard tile", stage: "Dashboard", keywords: "dashboard tile metric result output show", hidden: true },
-  // Retired from the picker but kept so old flows still render + run.
-  calculate: { label: "Calculate a number", blurb: "Count, compare, or break down", stage: "Calculation", keywords: "count sum average metric number compare rate ratio break down group calculate", hidden: true },
-  time: { label: "Date range", blurb: "Limit records to a time window", stage: "Conditions", keywords: "date range window period time", hidden: true },
-  group: { label: "Group into categories", blurb: "Break records into groups", stage: "Calculation", keywords: "category breakdown segment group", hidden: true },
+/**
+ * Every node type the canvas can render — including the retired ones, which
+ * still load and run so no stored flow ever breaks.
+ *
+ * There used to be a second table here (`NODE_META`) carrying a label, blurb,
+ * stage and keyword string per type, because the picker was a list of TYPES.
+ * The picker is now a list of JOBS (`NODE_LIBRARY`), and one type can be two
+ * of them — so that table's picker half moved there, and its label half was
+ * always a duplicate of `NODE_LABELS`, the canonical vocabulary that
+ * validation messages are required to speak. Keeping it would have left a
+ * blurb and a keyword list per type that nothing reads: editable, plausible,
+ * and with no effect on anything — the kind of dead copy someone eventually
+ * fixes a bug in.
+ */
+export const ALL_TYPES = [...NODE_TYPES];
+
+/**
+ * THE STEP PICKER'S OWN LIST — and the product's real taxonomy.
+ *
+ * Nobody learns this product from documentation. They learn it from the list
+ * of steps they are offered, once, in the moment they press "+", and they
+ * carry that model for the life of the account. So the list has to be a list
+ * of THINGS PEOPLE WANT TO DO, not a list of node types.
+ *
+ * Those two lists stopped matching when the engine was simplified. Merging
+ * Count into Calculate and cross-reference into Combine removed real
+ * duplication from the executor — and left two of six picker entries carrying
+ * two unrelated jobs each. "Calculate" meant both "how many calls did we
+ * make" and "what share of meetings showed up"; the first is a question about
+ * a pile of records, the second is arithmetic on two numbers, and a user
+ * arriving with one of those questions had to read a sixteen-item dropdown
+ * mixing both to find out which half they were in.
+ *
+ * So: ONE engine node, TWO doors. Each entry names one job and lands on the
+ * panel already configured for it. `parseGraph`, the validator, the engine and
+ * every stored flow are untouched — this list is display-layer only, and the
+ * op dropdown stays inside each panel so a step can still be switched without
+ * being deleted.
+ *
+ * `config` is merged over `defaultConfig(type)`, and `titleOf` in this file
+ * reads the SAME fields back, so the card a user gets is titled with the
+ * entry they picked. A picker that says "Match against a list" and produces a
+ * card saying "Combine data" is the mismatch this whole split exists to end.
+ */
+export type LibraryEntry = {
+  /** Unique within the picker; several entries may share a node `type`. */
+  key: string;
+  type: NodeType;
+  label: string;
+  blurb: string;
+  stage: Stage;
+  keywords: string;
+  /** Merged over defaultConfig(type) — what makes one type two doors. */
+  config?: Record<string, unknown>;
 };
-export const ALL_TYPES = Object.keys(NODE_META) as NodeType[];
+
+export const NODE_LIBRARY: LibraryEntry[] = [
+  {
+    key: "app",
+    type: "app",
+    label: "Get data",
+    blurb: "Pull records from a connected app",
+    stage: "Data",
+    keywords: "integration source connect data app get duplicates dedupe records pull import",
+  },
+  {
+    key: "unite",
+    type: "unite",
+    label: "Combine data",
+    blurb: "Put several steps’ records on one line",
+    stage: "Data",
+    keywords: "unite combine merge together branches lanes sources union bring back stack join",
+    config: { mode: "stack" },
+  },
+  {
+    // Was a checkbox inside Combine reading "Only keep records that match
+    // across these steps" — so "only the leads that are also in the
+    // spreadsheet", a question people arrive with already formed, was
+    // reachable only by first picking a step that sounded like it did
+    // something else, then finding a checkbox in it.
+    key: "unite_match",
+    type: "unite",
+    label: "Match against a list",
+    blurb: "Keep only records that appear (or don’t) in another step",
+    stage: "Data",
+    keywords: "match cross reference lookup intersect appears exists in both vlookup check against missing not in compare lists filter by another step",
+    config: { mode: "match" },
+  },
+  {
+    key: "filter",
+    type: "filter",
+    label: "Filter records",
+    blurb: "Keep only the records you want",
+    stage: "Conditions",
+    keywords: "condition where keep only match date range filter narrow exclude remove",
+  },
+  {
+    key: "paths",
+    type: "paths",
+    label: "Split into paths",
+    blurb: "Send records down different branches",
+    stage: "Conditions",
+    keywords: "split branch route condition paths segment separate",
+  },
+  {
+    key: "formula_dataset",
+    type: "formula",
+    label: "Summarise records",
+    blurb: "Count, total or average them into one number",
+    stage: "Calculation",
+    keywords: "count sum average total maximum minimum median distinct unique aggregate how many number summarise summarize records",
+    config: { op: "count" },
+  },
+  {
+    key: "formula_compare",
+    type: "formula",
+    label: "Compare two numbers",
+    blurb: "A rate, a ratio or a % change from two earlier steps",
+    stage: "Calculation",
+    keywords: "compare rate ratio percentage percent change difference divide conversion share of formula two numbers",
+    config: { op: "percentage" },
+  },
+  {
+    key: "time_between",
+    type: "time_between",
+    label: "Time between",
+    blurb: "Measure how long from one event to another, per record",
+    stage: "Calculation",
+    keywords: "speed to lead time between duration gap first call response elapsed how long pair match latency",
+  },
+];
 
 // (Source badge styling lives in controls/source-style.ts — the one copy.)
 
@@ -74,11 +174,27 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
   }
 }
 
+/**
+ * The card's own name for a step.
+ *
+ * For the two node types the picker offers twice, this reads the SAME config
+ * field the library entry set — so picking "Match against a list" produces a
+ * card that says "Match against a list", and switching the step's mode inside
+ * the panel renames the card to match. The alternative is a card whose title
+ * describes a different operation from the one it is performing, which is how
+ * a user ends up debugging the wrong step.
+ *
+ * `NODE_LABELS` is untouched and stays the canonical per-TYPE name that
+ * validation messages speak — a message naming the type is still correct,
+ * because both doors lead to the same type.
+ */
 export function defaultTitle(type: NodeType, data: NodeData): string {
   const c = data.config;
   if (type === "app") return (c.connectionName as string) || "Get data";
   if (type === "output") return (c.name as string) || "New metric";
-  return NODE_META[type].label;
+  if (type === "formula") return isDatasetFormulaOp(c.op ?? "percentage") ? "Summarise records" : "Compare two numbers";
+  if (type === "unite") return String(c.mode ?? "stack") === "match" ? "Match against a list" : "Combine data";
+  return NODE_LABELS[type];
 }
 export function nodeTitle(type: NodeType, data: NodeData): string {
   const custom = typeof data.label === "string" ? data.label.trim() : "";
@@ -125,6 +241,124 @@ export function datasetCalcExpression(op: string, fieldLabel: string): string {
     default:
       return op;
   }
+}
+
+/**
+ * Short verbs for a filter rule, for prose rather than for a dropdown.
+ *
+ * FILTER_OP_LABELS is deliberately explicit ("Exactly matches
+ * (case-sensitive)") because a dropdown is where that distinction has to be
+ * made — it is the difference between "Outbound" matching and not matching.
+ * A sentence restating the whole configuration needs the short form, or it
+ * stops being readable at two conditions.
+ */
+const OP_PHRASE: Record<string, string> = {
+  equals: "is",
+  not_equals: "is not",
+  contains: "contains",
+  not_contains: "doesn’t contain",
+  starts_with: "starts with",
+  ends_with: "ends with",
+  gt: "is more than",
+  lt: "is less than",
+  gte: "is at least",
+  lte: "is at most",
+  is_empty: "is empty",
+  is_not_empty: "is not empty",
+  is_one_of: "is one of",
+  is_not_one_of: "is none of",
+  before: "is before",
+  after: "is after",
+  between: "is between",
+};
+
+/**
+ * WHAT THIS STEP DOES, IN A SENTENCE, ABOVE ITS CONTROLS.
+ *
+ * The Calculate panel has always had one — a plain restatement of its own
+ * configuration, sitting above the fields that produce it — and it is the
+ * single most reassuring thing in the builder: it closes the loop between
+ * "what I picked" and "what that means" without running anything.
+ *
+ * Every other step was left to be read off its own controls, which is exactly
+ * the reading that goes wrong. A Filter showing `properties.data.direction` /
+ * `Exactly matches (case-sensitive)` / `outbound` in three separate boxes is
+ * three facts; "Keeps records where Direction is 'outbound'" is a sentence a
+ * person can check against what they meant.
+ *
+ * Returns one line per clause. Empty for `formula`, which has its own richer
+ * expression, and for steps whose whole configuration is already one sentence
+ * on screen (a matching Combine).
+ */
+export function stepSummaryLines(
+  type: NodeType,
+  cfg: Record<string, unknown>,
+  labelOf: (path: string) => string,
+  ctx: { recordType?: string; inputCount?: number } = {},
+): string[] {
+  if (type === "filter") {
+    const rules = Array.isArray(cfg.rules) ? (cfg.rules as Array<Record<string, unknown>>) : [];
+    const combinator = String(cfg.combinator ?? "and") === "or" ? " or " : " and ";
+    const clause = rules
+      .filter((r) => String(r.field ?? "").trim() !== "")
+      .map((r) => {
+        const op = OP_PHRASE[String(r.op)] ?? String(r.op);
+        // A rule comparing against another FIELD says so — it reads as a
+        // literal otherwise, and "Email is Email" is nonsense a user would
+        // stare at rather than recognise as field-to-field.
+        if (r.valueKind === "field" && r.valueField) return `${labelOf(String(r.field))} ${op} ${labelOf(String(r.valueField))}`;
+        const v = String(r.value ?? "").trim();
+        if (!v) return `${labelOf(String(r.field))} ${op}`;
+        return `${labelOf(String(r.field))} ${op} “${v}”`;
+      });
+    const dr = (cfg.dateRange ?? {}) as { enabled?: boolean; mode?: string; preset?: string; days?: number; from?: string; to?: string };
+    const lines: string[] = [];
+    lines.push(clause.length === 0 ? "Passes every record through — no conditions yet." : `Keeps records where ${clause.join(combinator)}.`);
+    if (dr.enabled) {
+      const period =
+        dr.mode === "rolling"
+          ? `the last ${dr.days ?? 30} days`
+          : dr.mode === "between"
+            ? dr.from
+              ? `${dr.from}${dr.to ? ` to ${dr.to}` : " onwards"}`
+              : "a custom range"
+            : String(dr.preset ?? "last_30_days").replace(/_/g, " ");
+      lines.push(`Only records from ${period}.`);
+    }
+    return lines;
+  }
+
+  if (type === "app") {
+    const account = String(cfg.connectionName ?? "").trim();
+    if (!account) return [];
+    const kind = ctx.recordType?.trim() ? ctx.recordType : "All records";
+    const dedupe = cfg.dedupe
+      ? ` One record per ${labelOf(String(cfg.dedupeField ?? "subject"))}, keeping the ${String(cfg.dedupeKeep ?? "latest") === "earliest" ? "earliest" : "latest"}.`
+      : "";
+    return [`${kind} from ${account}.${dedupe}`];
+  }
+
+  if (type === "unite") {
+    if (String(cfg.mode ?? "stack") === "match") return [];
+    const n = ctx.inputCount ?? 0;
+    return n === 0 ? ["Pick the steps whose records should flow on together."] : [`Records from ${n} step${n === 1 ? "" : "s"}, continuing as one list.`];
+  }
+
+  if (type === "paths") {
+    const paths = Array.isArray(cfg.paths) ? (cfg.paths as Array<{ label?: string }>) : [];
+    if (paths.length === 0) return [];
+    return [`Splits into ${paths.length} branch${paths.length === 1 ? "" : "es"}: ${paths.map((p) => p.label ?? "?").join(", ")}.`];
+  }
+
+  if (type === "time_between") {
+    const key = String(cfg.keyField ?? "");
+    const start = String(cfg.startField ?? "");
+    const end = String(cfg.endField ?? "");
+    if (!key || !start || !end) return [];
+    return [`For each ${labelOf(key)}, the time from ${labelOf(start)} to ${labelOf(end)}.`];
+  }
+
+  return [];
 }
 
 /** A one-line human expression for a Formula, using upstream titles when known. */
@@ -201,12 +435,30 @@ export function resultLabel(
   }
 }
 
-/** User-facing step status vocabulary (what the user should understand, not internals). */
+/**
+ * User-facing step status vocabulary (what the user should understand, not internals).
+ *
+ * THE TWO GREYS WERE OPPOSITE STATES WEARING ONE BADGE. "Needs setup" BLOCKS
+ * publish — the step is unfinished and the flow cannot ship. "Ready to test"
+ * blocks nothing — the step is complete and simply hasn't been run. Both were
+ * `bg-neutral-100`, and they are by far the two most common states on a
+ * half-built canvas, so the one badge a user most needs to act on was the one
+ * they could not pick out.
+ *
+ * Amber is the product's existing "look at this" tone (the Test receipts, the
+ * import notes), so `setup` borrows it and nothing new is invented.
+ *
+ * "Tested" rather than "Ready": green means the step RAN and returned data. It
+ * has never meant the flow is correct, and a badge reading "Ready" over a step
+ * whose filter matches the wrong column is a promise the product can't keep.
+ * "Not tested" rather than "Ready to test": a status says what IS, not what to
+ * do next — the footer button already says what to do next.
+ */
 export type NodeStatus = "ready" | "setup" | "untested" | "updating" | "error";
 export const STATUS_META: Record<NodeStatus, { label: string; cls: string; border: string }> = {
-  ready: { label: "Ready", cls: "bg-green-100 text-green-700", border: "border-green-300" },
-  setup: { label: "Needs setup", cls: "bg-neutral-100 text-neutral-600", border: "border-neutral-300" },
-  untested: { label: "Ready to test", cls: "bg-neutral-100 text-neutral-500", border: "border-neutral-300" },
+  ready: { label: "Tested", cls: "bg-green-100 text-green-700", border: "border-green-300" },
+  setup: { label: "Needs setup", cls: "bg-amber-100 text-amber-800", border: "border-amber-300" },
+  untested: { label: "Not tested", cls: "bg-neutral-100 text-neutral-500", border: "border-neutral-300" },
   updating: { label: "Testing…", cls: "bg-blue-100 text-blue-700", border: "border-blue-300" },
   error: { label: "Error", cls: "bg-red-100 text-red-700", border: "border-red-300" },
 };

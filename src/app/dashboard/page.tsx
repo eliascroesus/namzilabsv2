@@ -22,6 +22,8 @@ import {
   type FunnelResult,
 } from "@/lib/metrics/compute";
 import { resolveRange, RANGE_OPTIONS } from "@/lib/metrics/range";
+import { catalogEntry, eventTypeLabel } from "@/connectors/catalog";
+import { formatMetricValue } from "@/lib/format";
 import type { ImportCoverage } from "@/connectors/types";
 
 export const dynamic = "force-dynamic";
@@ -196,11 +198,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 Refresh
               </button>
             </form>
+            {/* ONE way to build a metric. The retired form builder was still
+                advertised here as "Classic metric", and "classic" reads as
+                "the stable one" — so a first-time user took it, produced a
+                `metrics` row instead of a flow, and never saw the canvas.
+                The routes stay alive so existing metrics still open and edit
+                (their tiles link to them); they are simply no longer a door
+                anyone walks through by accident. */}
             <Link href="/dashboard/flows" className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
               New flow
-            </Link>
-            <Link href="/dashboard/metrics/new" className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
-              Classic metric
             </Link>
           </div>
         </div>
@@ -220,13 +226,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <Link href={qs({ source: "" })} className={`rounded-full px-3 py-1 ${!boardSource ? "bg-neutral-900 text-white" : "border border-neutral-300 hover:bg-neutral-50"}`}>
             All sources
           </Link>
+          {/* The connector's own name, not its storage key: this row read
+              "gsheets · close · webhook" while every other screen in the
+              product says "Google Sheets", "Close CRM", "Custom Webhook". */}
           {sources.map((srcName) => (
             <Link
               key={srcName}
               href={qs({ source: srcName })}
               className={`rounded-full px-3 py-1 ${boardSource === srcName ? "bg-neutral-900 text-white" : "border border-neutral-300 hover:bg-neutral-50"}`}
             >
-              {srcName}
+              {catalogEntry(srcName)?.name ?? srcName}
             </Link>
           ))}
         </div>
@@ -292,10 +301,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Humanised the way the builder's own pickers do it —
+                      "Close CRM · Lead created", not "close · lead_created".
+                      The raw type rides along in the title attribute, because
+                      it IS what a Filter step matches on. */}
                   {recentEvents.map((e) => (
                     <tr key={e.id} className="border-t border-neutral-100">
-                      <td className="px-3 py-2">{e.source}</td>
-                      <td className="px-3 py-2">{e.eventType}</td>
+                      <td className="px-3 py-2">{catalogEntry(e.source)?.name ?? e.source}</td>
+                      <td className="px-3 py-2" title={e.eventType}>{eventTypeLabel(e.source, e.eventType)}</td>
                       <td className="px-3 py-2 text-neutral-700">{e.subject ?? "—"}</td>
                       <td className="px-3 py-2 text-neutral-500">{new Date(e.occurredAt).toLocaleString()}</td>
                     </tr>
@@ -327,8 +340,14 @@ function MetricTile({ tile }: { tile: Tile }) {
 
       {tile.kind === "aggregate" && tile.result.kind === "scalar" && (
         <>
+          {/* Through the same formatter the flow tiles use. A legacy metric
+              printed its raw number, so one board could show "1234.5" beside
+              a flow tile reading "1,234.5" — the same quantity, two
+              renderings, side by side. A legacy metric stores no precision,
+              so an integer keeps none and a real decimal keeps two rather
+              than being silently rounded away. */}
           <p className="mt-2 text-4xl font-semibold">
-            {tile.result.value}
+            {formatMetricValue(tile.result.value, { format: "number", precision: Number.isInteger(tile.result.value) ? 0 : 2 })}
             {metric.unit && <span className="ml-2 text-base font-normal text-neutral-500">{metric.unit}</span>}
           </p>
           {metric.target != null && <TargetBar value={tile.result.value} target={Number(metric.target)} />}
@@ -366,7 +385,9 @@ function Sparkbars({ series }: { series: Array<{ bucket: string; value: number }
   const total = series.reduce((a, b) => a + b.value, 0);
   return (
     <>
-      <p className="mt-2 text-2xl font-semibold">{total}</p>
+      {/* Same formatter as everywhere else — this headline is a sum, so it can
+          reach the thousands where the raw print loses its separators. */}
+      <p className="mt-2 text-2xl font-semibold">{formatMetricValue(total, { format: "number", precision: Number.isInteger(total) ? 0 : 2 })}</p>
       <div className="mt-3 flex h-16 items-end gap-1">
         {series.map((s) => (
           <div

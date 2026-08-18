@@ -74,9 +74,22 @@ export function Popover({
       const ref = anchorRectRef.current?.() ?? null;
       // Left flyout: attach to the reference element (config panel), span its
       // vertical extent, sit just to its left. Content wraps; height caps here.
+      //
+      // ON A NARROW VIEWPORT IT COVERS THE PANEL INSTEAD OF SQUEEZING BESIDE
+      // IT. The panel and this flyout together want ~790px; below roughly a
+      // 13" laptop that left the canvas a sliver, and on a tablet the clamp
+      // drove the flyout's own width under its minimum. Overlaying is the
+      // ordinary answer to "two panes, one pane's worth of room" — and the
+      // flyout is transient, so nothing is lost behind it. The search row
+      // carries a close button precisely so this state has a way back.
       if (placement === "left" && ref) {
         const desired = width ?? 452;
-        const w = Math.max(240, Math.min(desired, ref.left - 24));
+        const room = ref.left - 24;
+        if (room < 280) {
+          setPos({ top: ref.top, left: ref.left, width: ref.width, maxHeight: ref.height });
+          return;
+        }
+        const w = Math.max(240, Math.min(desired, room));
         const left = Math.max(12, ref.left - 12 - w);
         setPos({ top: ref.top, left, width: w, maxHeight: ref.height });
         return;

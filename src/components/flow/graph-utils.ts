@@ -265,6 +265,32 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
   return pos;
 }
 
+/**
+ * Does this step's result become a dashboard tile when the flow is published?
+ *
+ * The rule — "a step becomes a metric by being a structural terminal" — was
+ * never stated and never shown, and it surprises people on the second flow
+ * everyone builds. Two counts feeding a rate: the counts' only outgoing edges
+ * are number references, which the layout drops, so they ARE terminals, and
+ * Review & publish offers three metrics to someone who expected one.
+ *
+ * Returns undefined for a step that publishes nothing either way, so a card
+ * with no stake in this shows no badge at all rather than a reassuring "no".
+ *
+ * A terminal with no spec yet counts as publishing, because that is what
+ * `openReview` will seed it as — a badge that said otherwise would be
+ * predicting the opposite of what the modal is about to do. A legacy Output
+ * node IS the tile, so it never wears the badge.
+ */
+export function publishesToDashboard(
+  type: string,
+  isTerminal: boolean,
+  metric: { enabled?: boolean } | undefined,
+): boolean | undefined {
+  if (!isTerminal || type === "output") return undefined;
+  return metric?.enabled ?? true;
+}
+
 /** Nodes with no outgoing chain edge — the "ends" of the flow (per branch). A step
  * that only feeds a compare reference is still a line end (it gets an Add-next). */
 export function terminalIds(nodes: FNode[], allEdges: Edge[]): Set<string> {

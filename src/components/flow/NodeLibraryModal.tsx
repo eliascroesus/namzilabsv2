@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { NodeType } from "@/lib/flow/types";
-import { ALL_TYPES, NODE_META, STAGES } from "./node-meta";
+import { NODE_LIBRARY, STAGES, type LibraryEntry } from "./node-meta";
 import { NodeIcon } from "./icons";
 
 /** Where to anchor the picker: the button's right edge + vertical centre (and its
@@ -31,7 +30,7 @@ export function NodeLibraryModal({
   anchorSelector,
 }: {
   onClose: () => void;
-  onPick: (type: NodeType) => void;
+  onPick: (entry: LibraryEntry) => void;
   anchor: PickerAnchor;
   anchorSelector?: string | null;
 }) {
@@ -40,17 +39,14 @@ export function NodeLibraryModal({
   const panelRef = useRef<HTMLDivElement>(null);
 
   const query = q.trim().toLowerCase();
-  const matches = (t: NodeType) => {
-    if (!query) return true;
-    const m = NODE_META[t];
-    return `${m.label} ${m.blurb} ${m.keywords} ${m.stage}`.toLowerCase().includes(query);
-  };
+  const matches = (e: LibraryEntry) =>
+    !query || `${e.label} ${e.blurb} ${e.keywords} ${e.stage}`.toLowerCase().includes(query);
   // Grouped by stage, with headers; a stage with nothing visible (Dashboard,
   // whose Output step became Review & publish) simply doesn't render — an
   // empty section header would advertise a step that doesn't exist.
   const sections = STAGES.map((stage) => ({
     stage,
-    items: ALL_TYPES.filter((t) => NODE_META[t].stage === stage && !NODE_META[t].hidden && matches(t)),
+    items: NODE_LIBRARY.filter((e) => e.stage === stage && matches(e)),
   })).filter((s) => s.items.length > 0);
   const items = sections.flatMap((s) => s.items);
 
@@ -68,6 +64,12 @@ export function NodeLibraryModal({
   useLayoutEffect(() => {
     if (centered) return;
     let raf = 0;
+    // The frame loop has to keep RUNNING (the canvas can pan under us at any
+    // moment), but it must not keep WRITING: assigning the same three style
+    // properties every frame invalidates layout sixty times a second for a
+    // card that is usually perfectly still. Remembering the last placement
+    // makes the idle case free and leaves the moving case identical.
+    let last = "";
     const place = () => {
       const el = panelRef.current;
       if (el) {
@@ -90,10 +92,14 @@ export function NodeLibraryModal({
           left = Math.max(MARGIN, Math.min(left, vw - w - MARGIN));
           let top = a.y - h / 2;
           top = Math.max(MARGIN, Math.min(top, vh - h - MARGIN));
-          el.style.left = `${left}px`;
-          el.style.top = `${top}px`;
-          el.style.transformOrigin = `${side} center`;
-          el.style.visibility = "visible";
+          const next = `${left}|${top}|${side}`;
+          if (next !== last) {
+            last = next;
+            el.style.left = `${left}px`;
+            el.style.top = `${top}px`;
+            el.style.transformOrigin = `${side} center`;
+            el.style.visibility = "visible";
+          }
         }
       }
       raf = requestAnimationFrame(place);
@@ -157,16 +163,16 @@ export function NodeLibraryModal({
               {sections.map((sec) => (
                 <div key={sec.stage}>
                   <p className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{sec.stage}</p>
-                  {sec.items.map((t) => (
+                  {sec.items.map((e) => (
                     <button
-                      key={t}
-                      onClick={() => onPick(t)}
+                      key={e.key}
+                      onClick={() => onPick(e)}
                       className="group flex w-full items-center gap-3.5 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-neutral-100"
                     >
-                      <NodeIcon type={t} size={40} />
+                      <NodeIcon type={e.type} size={40} />
                       <span className="min-w-0">
-                        <span className="block text-[15px] font-semibold leading-tight text-neutral-900">{NODE_META[t].label}</span>
-                        <span className="mt-0.5 block truncate text-[13px] leading-tight text-neutral-500">{NODE_META[t].blurb}</span>
+                        <span className="block text-[15px] font-semibold leading-tight text-neutral-900">{e.label}</span>
+                        <span className="mt-0.5 block text-[13px] leading-tight text-neutral-500">{e.blurb}</span>
                       </span>
                     </button>
                   ))}
