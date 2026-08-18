@@ -83,3 +83,68 @@ export function producesNumber(type: string, cfg: Record<string, unknown> = {}):
   // A dataset counts as a number too — that is what `scalarAt` does with one.
   return shape === "scalar" || shape === "dataset";
 }
+
+/**
+ * A step whose MAIN input is a record set — as opposed to a Compare, whose two
+ * numbers are picked in its panel rather than flowing down the line.
+ */
+export function readsRecords(type: string, cfg: Record<string, unknown> = {}): boolean {
+  if (consumesDataset(type)) return true;
+  if (type === "formula" || type === "calculate") return !isBinaryCalc(type, cfg);
+  return false;
+}
+
+/**
+ * WHICH STEP'S RECORDS A RECORDS-READING STEP ACTUALLY READS.
+ *
+ * The step directly above it, when that step produces records — which is the
+ * ordinary case and the only one that ever worked. Otherwise the nearest step
+ * above THAT which does.
+ *
+ * Without this, two aggregations of one source were unbuildable. A Calculate
+ * consumes records and emits a number, so stacking a second one under it left
+ * nothing to read, and the canvas offers no way to branch: "+ Add next step"
+ * appears only on a step with nothing after it, so a sheet already feeding a
+ * Calculate cannot be given a second child at all. The person who wanted
+ * "total calls AND total pickups from this sheet" had no route to it, while
+ * the field picker on that second Calculate cheerfully offered the sheet's
+ * columns — the product promising what the engine then refused.
+ *
+ * The line keeps its meaning. It has always said "comes after"; for a step
+ * that reads records it now also says "reads from here, or from the last
+ * place there were records", which is what everyone reading the canvas
+ * already assumed. The nearest producer wins, so a Filter between the source
+ * and the step still narrows it.
+ *
+ * Returns the lane handle too: a branch of a Split is its own record set, and
+ * resolving to the hub without its lane would hand back every branch's rows.
+ */
+export function recordsSourceOf(
+  graph: { nodes: Array<{ id: string; type: string }>; edges: Array<{ source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }> },
+  nodeId: string,
+): { nodeId: string; sourceHandle?: string | null } | null {
+  const typeOf = new Map(graph.nodes.map((n) => [n.id, n.type]));
+  const plainIncoming = new Map<string, Array<{ source: string; sourceHandle?: string | null }>>();
+  for (const e of graph.edges) {
+    // Only the CHAIN carries records; a Compare's a/b edges are references to
+    // a number and must never be mistaken for the line.
+    if (e.targetHandle != null) continue;
+    if (!plainIncoming.has(e.target)) plainIncoming.set(e.target, []);
+    plainIncoming.get(e.target)!.push({ source: e.source, sourceHandle: e.sourceHandle ?? null });
+  }
+  // Breadth-first, so "nearest" means nearest and a diamond cannot prefer the
+  // longer way round. `seen` also makes a cyclic graph terminate.
+  const seen = new Set<string>([nodeId]);
+  let frontier = plainIncoming.get(nodeId) ?? [];
+  while (frontier.length > 0) {
+    const next: Array<{ source: string; sourceHandle?: string | null }> = [];
+    for (const step of frontier) {
+      if (seen.has(step.source)) continue;
+      seen.add(step.source);
+      if (producesDataset(typeOf.get(step.source) ?? "")) return { nodeId: step.source, sourceHandle: step.sourceHandle };
+      next.push(...(plainIncoming.get(step.source) ?? []));
+    }
+    frontier = next;
+  }
+  return null;
+}

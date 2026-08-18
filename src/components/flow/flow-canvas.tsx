@@ -15,7 +15,7 @@ import {
   type Edge,
 } from "@xyflow/react";
 import { isDatasetFormulaOp, seedMetricFormat, type NodeType } from "@/lib/flow/types";
-import { isBinaryCalc, outputShapeOf, producesDataset, producesNumber } from "@/lib/flow/shapes";
+import { isBinaryCalc, outputShapeOf, producesDataset, producesNumber, readsRecords, recordsSourceOf } from "@/lib/flow/shapes";
 import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 
 /**
@@ -835,6 +835,31 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     [selected, nodes, edges],
   );
 
+  /**
+   * WHICH STEP'S RECORDS THIS ONE READS, named on screen whenever it is not
+   * simply the step above.
+   *
+   * The engine reaches back past steps that produce a number to the nearest
+   * one that produces records, which is what makes two aggregations of one
+   * source buildable at all. Reaching back silently would be worse than the
+   * error it replaces, so the panel says where the records came from.
+   */
+  const recordSourceNote = useMemo<string | null>(() => {
+    if (!selected) return null;
+    const cfg = (selected.data.config ?? {}) as Record<string, unknown>;
+    if (!readsRecords(String(selected.type), cfg)) return null;
+    const src = recordsSourceOf({ nodes: nodes.map((n) => ({ id: n.id, type: String(n.type) })), edges }, selected.id);
+    if (!src) return null;
+    // Silent in the ordinary case: the records come from the step directly
+    // above, which the line already says.
+    const parent = edges.find((e) => e.target === selected.id && e.targetHandle == null)?.source;
+    if (!parent || parent === src.nodeId) return null;
+    const from = nodes.find((n) => n.id === src.nodeId);
+    if (!from) return null;
+    const no = stepNoById.get(src.nodeId);
+    return `${no != null ? `${no}. ` : ""}${nodeTitle(String(from.type) as NodeType, from.data)}`;
+  }, [selected, nodes, edges, stepNoById]);
+
   // If the selected step is a branch head (the first step of a Paths branch), its panel
   // shows the entry-mode dropdown (Custom rules / Always run / Fallback) — the mode
   // itself lives on the hub's path entry.
@@ -1322,6 +1347,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                   connections,
                   fieldGroups,
                   inputs: selectedInputs,
+                  recordSourceNote,
                   inputCount: edges.filter((e) => e.target === selected.id).length,
                   testing: testingId === selected.id,
                   numberGroups,

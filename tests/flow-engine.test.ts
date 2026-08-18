@@ -874,8 +874,20 @@ describe("the sweep's own gaps", () => {
  * already collapsed the rows into one number, so there was no column left to
  * add up. The rule is right; only the sentence was unreadable.
  */
-describe("a Calculate fed by another Calculate says what is actually wrong", () => {
-  it("names the shape that arrived and the cure, instead of denying the connection", async () => {
+describe("a Calculate fed by another Calculate reads the records above it", () => {
+  /**
+   * This used to be an error, and the error was even a careful one — it named
+   * the shape that arrived and told the user to "put this step directly after
+   * the one that produces records". That cure could not be followed: the
+   * canvas shows "+ Add next step" only on a step with nothing after it, so a
+   * source already feeding a Calculate cannot be given a second child, and two
+   * totals from one sheet were unbuildable. Meanwhile the second step's field
+   * picker offered that sheet's columns the whole time.
+   *
+   * A records-reading step now reaches back to the nearest step above it that
+   * has records. REVERT THE REACH-BACK AND THE SECOND SUM ERRORS AGAIN.
+   */
+  it("stacks two aggregations of one source instead of erroring", async () => {
     await ev({ eventType: "row", subject: "a", value: 5 });
     await ev({ eventType: "row", subject: "b", value: 8 });
 
@@ -889,20 +901,30 @@ describe("a Calculate fed by another Calculate says what is actually wrong", () 
     );
     const res = await runFlow({ db, orgId: ORG }, g);
 
-    // The first one is fine: it reads the records.
     expect((res.nodes.get("sum1") as { shape: { value?: number } }).shape).toMatchObject({ kind: "scalar", value: 13 });
+    // Both read the same records, which is the point — two numbers, one source.
+    expect(res.nodes.get("sum2")!.status).toBe("ok");
+    expect((res.nodes.get("sum2") as { shape: { value?: number } }).shape).toMatchObject({ kind: "scalar", value: 13 });
+  });
 
-    const second = res.nodes.get("sum2")!;
-    expect(second.status).toBe("error");
-    const msg = (second as { error: string }).error;
-    // Sabotage: restore the single message and this reads "connect it after a
-    // data step" to a user who did exactly that.
+  it("still names the shape that arrived when there are genuinely no records above", async () => {
+    // A comparison of two typed-in numbers has no records anywhere behind it,
+    // so a Calculate below it has nothing to reach back to.
+    const g = G(
+      [
+        N("cmp", "formula", { op: "percentage", aFixed: 10, bFixed: 20 }),
+        N("sum", "formula", { op: "sum", field: "value" }),
+      ],
+      [E("cmp", "sum")],
+    );
+    const res = await runFlow({ db, orgId: ORG }, g);
+    const msg = (res.nodes.get("sum") as { error: string }).error;
     expect(msg).toContain("single number");
     expect(msg).toContain("nothing here to add up");
     expect(msg).not.toContain("connect it after a data step");
+  });
 
-    // An UNCONNECTED Calculate keeps the original wording — a different
-    // mistake deserves a different sentence.
+  it("an unconnected Calculate keeps its own wording — a different mistake, a different sentence", async () => {
     const orphan = await runFlow({ db, orgId: ORG }, G([N("c", "formula", { op: "sum", field: "value" })], []));
     expect((orphan.nodes.get("c") as { error: string }).error).toContain("connect it after a data step");
   });

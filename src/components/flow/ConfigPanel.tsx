@@ -92,6 +92,7 @@ export function ConfigPanel({
   connections,
   fieldGroups,
   inputs,
+  recordSourceNote,
   inputCount,
   testing,
   numberGroups,
@@ -114,6 +115,8 @@ export function ConfigPanel({
   connections: ConnMeta[];
   fieldGroups: FieldGroup[];
   inputs: InputDescriptor[];
+  /** The step whose records this one reads, when it is not the step above. */
+  recordSourceNote?: string | null;
   inputCount: number;
   testing: boolean;
   numberGroups: DataGroup[];
@@ -215,6 +218,7 @@ export function ConfigPanel({
                 groups={groups}
                 selfGroups={selfGroups}
                 inputs={inputs}
+                recordSourceNote={recordSourceNote}
                 numberGroups={numberGroups}
                 datasetCandidates={datasetCandidates}
                 laneScopes={laneScopes}
@@ -349,6 +353,7 @@ function NodeConfig({
   datasetCandidates,
   laneScopes,
   branch,
+  recordSourceNote,
   onChange,
   onTestUpstream,
   onSetInput,
@@ -366,6 +371,7 @@ function NodeConfig({
   datasetCandidates: StepRef[];
   laneScopes?: Record<string, string[]>;
   branch: BranchCtx | null;
+  recordSourceNote?: string | null;
   onChange: (patch: Record<string, unknown>) => void;
   onTestUpstream?: () => void;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
@@ -580,6 +586,11 @@ function NodeConfig({
               ? datasetCalcExpression(op, op === "count" ? "records" : fieldLabel)
               : formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}
           </p>
+          {/* The engine reaches past steps that produce a NUMBER to the nearest
+              one that produces records — that is what lets two totals come off
+              one source. Doing it silently would be worse than the error it
+              replaces, so the step says where its records came from. */}
+          {datasetOp && recordSourceNote && <p className="mt-1 text-indigo-700">Reads records from {recordSourceNote}</p>}
         </div>
         {datasetOp ? (
           <>

@@ -4,6 +4,7 @@ import { connections, events } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { eventToRecord, getField, toNumber, STANDARD_FIELDS, type FlowRecord } from "./records";
 import { planPushdown } from "./compile/pushdown";
+import { readsRecords, recordsSourceOf } from "./shapes";
 import { compileRule } from "./compile/operators";
 import { inferSchema, presenceByPath, buildFieldInfo, isEmptyValue, trimExample, type FieldInfo } from "./schema-infer";
 import { listRegisteredFields } from "@/lib/schema-registry/registry";
@@ -177,6 +178,8 @@ export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNod
       const shape = e.sourceHandle && se.outputs?.[e.sourceHandle] ? se.outputs[e.sourceHandle] : se.shape;
       inputs.push({ shape, exec: se, targetHandle: e.targetHandle ?? null, sourceNodeId: e.source });
     }
+    const reachBack = recordsReachBack(node, inputs, graph, (nid) => nodes.get(nid));
+    if (reachBack) inputs.push(reachBack);
 
     const exec = await execNode(ctx, node, inputs, inputError, graph);
     nodes.set(id, exec);
@@ -186,6 +189,39 @@ export async function runFlow(ctx: EngineCtx, graph: FlowGraph, opts: { untilNod
   }
 
   return { nodes, outputs };
+}
+
+/**
+ * THE RECORDS A STEP READS WHEN THE STEP ABOVE IT HAS NONE TO GIVE.
+ *
+ * A Calculate consumes records and emits a number, so stacking a second one
+ * under it left nothing to read — and the canvas offers no way to branch,
+ * because "+ Add next step" appears only on a step with nothing after it. Two
+ * aggregations of one sheet ("total calls" AND "total pickups") were therefore
+ * unbuildable, while the second step's own field picker offered that sheet's
+ * columns: the product promising exactly what the engine then refused.
+ *
+ * So a records-reading step with no record input reaches back to the nearest
+ * step above it that has some. Returns null in every other case — including
+ * when the step already has its records, which is the ordinary path and stays
+ * byte-for-byte unchanged.
+ */
+function recordsReachBack(
+  node: FlowNode,
+  inputs: ResolvedInput[],
+  graph: FlowGraph,
+  execOf: (id: string) => NodeExec | undefined,
+): ResolvedInput | null {
+  const cfg = (node.data.config ?? {}) as Record<string, unknown>;
+  if (!readsRecords(node.type, cfg)) return null;
+  if (inputs.some((i) => i.targetHandle == null && i.shape.kind === "dataset")) return null;
+  const src = recordsSourceOf(graph, node.id);
+  if (!src) return null;
+  const se = execOf(src.nodeId);
+  if (!se || se.status !== "ok") return null;
+  const shape = src.sourceHandle && se.outputs?.[src.sourceHandle] ? se.outputs[src.sourceHandle] : se.shape;
+  if (shape.kind !== "dataset") return null;
+  return { shape, exec: se, targetHandle: null, sourceNodeId: src.nodeId };
 }
 
 async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[], inputError: boolean, graph: FlowGraph): Promise<NodeExec> {
@@ -1670,6 +1706,17 @@ export function tileByRange(
           const shape = e.sourceHandle && se.outputs?.[e.sourceHandle] ? se.outputs[e.sourceHandle] : se.shape;
           inputs.push({ shape, exec: se, targetHandle: e.targetHandle ?? null, sourceNodeId: e.source });
         }
+        // The same reach-back the run itself does, over WINDOWED records — a
+        // range that resolved a step's input differently from the headline
+        // would put two answers to one question on the same tile.
+        const reachBack = recordsReachBack(node, inputs, graph, (nid) => {
+          try {
+            return windowed(nid);
+          } catch {
+            return undefined;
+          }
+        });
+        if (reachBack) inputs.push(reachBack);
         const re = reexecPure(node, inputs);
         if (re.status !== "ok") throw new Error(re.error);
         result = re;
