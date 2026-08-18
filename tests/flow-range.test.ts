@@ -32,11 +32,17 @@ let close: () => Promise<void>;
 
 const ORG = "org_range";
 const CONN = randomUUID();
+/**
+ * A FIXED CLOCK. Every range ends at "now", so fixtures pinned to a real
+ * wall-clock day are a trap: a record placed at 09:00 UTC is in the FUTURE for
+ * any run started before 09:00, and these tests passed all afternoon and then
+ * failed at 00:46. Nothing under test reads the system clock — `tileByRange`
+ * takes "now" as the largest range end — so the whole file can simply state
+ * what time it is.
+ */
+const NOW = Date.parse("2026-08-18T14:00:00Z");
 /** Midnight UTC of "today", the boundary every pill is defined against. */
-const START_OF_TODAY = (() => {
-  const n = new Date();
-  return Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());
-})();
+const START_OF_TODAY = Date.parse("2026-08-18T00:00:00Z");
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
 
@@ -75,10 +81,10 @@ const SPEC = (over: Partial<TilePresentation> = {}): TilePresentation => ({
 
 /** The pills these tests care about, resolved the way the dashboard does. */
 const RANGES = [
-  { key: "today", start: START_OF_TODAY, end: Date.now() },
+  { key: "today", start: START_OF_TODAY, end: NOW },
   { key: "yesterday", start: START_OF_TODAY - DAY, end: START_OF_TODAY - 1 },
-  { key: "7d", start: Date.now() - 7 * DAY, end: Date.now(), rollingMs: 7 * DAY },
-  { key: "all", start: 0, end: Date.now(), all: true },
+  { key: "7d", start: NOW - 7 * DAY, end: NOW, rollingMs: 7 * DAY },
+  { key: "all", start: 0, end: NOW, all: true },
 ];
 
 async function derive(graph: unknown, nodeId: string, spec: TilePresentation = SPEC()) {
@@ -317,7 +323,7 @@ describe("nextChangeMs — the exact moment a tile's numbers can move", () => {
 
   it("is the moment a record falls out of a rolling window, when that comes first", async () => {
     // Entered the 7d window 6d23h ago — it leaves within the hour, before midnight.
-    const t = Date.now() - 7 * DAY + 30 * 60_000;
+    const t = NOW - 7 * DAY + 30 * 60_000;
     await ev({ eventType: "meeting_booked", at: t, key: "L1" });
     const { nextChangeMs } = await derive(graph, "m");
     // min() with midnight so a run started just before 00:00 UTC stays green.
@@ -327,8 +333,8 @@ describe("nextChangeMs — the exact moment a tile's numbers can move", () => {
   it("is the start of a future-dated record, when the meeting comes first", async () => {
     // A meeting later today enters "Today" the moment the clock reaches it —
     // sooner than the old record's window exits and sooner than midnight.
-    const meeting = Date.now() + 60 * 60_000;
-    await ev({ eventType: "meeting_booked", at: Date.now() - 40 * DAY, key: "L1" });
+    const meeting = NOW + 60 * 60_000;
+    await ev({ eventType: "meeting_booked", at: NOW - 40 * DAY, key: "L1" });
     await ev({ eventType: "meeting_booked", at: meeting, key: "L2" });
     const { nextChangeMs } = await derive(graph, "m");
     expect(nextChangeMs).toBe(Math.min(meeting, NEXT_MIDNIGHT));
@@ -336,7 +342,7 @@ describe("nextChangeMs — the exact moment a tile's numbers can move", () => {
 
   it("reads the metric's own time reference, not just occurredAt", async () => {
     // The row arrived days ago; what is upcoming is the BOOKED time.
-    const starts = Date.now() + 2 * 60 * 60_000;
+    const starts = NOW + 2 * 60 * 60_000;
     await ev({
       eventType: "meeting_booked",
       at: START_OF_TODAY - 3 * DAY,

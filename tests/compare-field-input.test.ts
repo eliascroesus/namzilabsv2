@@ -81,15 +81,27 @@ describe("a compare input reading a field off its wired step", () => {
     expect((exec as NodeExecOk).shape).toEqual({ kind: "scalar", value: 15 });
   });
 
-  it("reads the NEWEST record's value when the step has several", async () => {
+  /**
+   * ONE RECORD, OR NO ANSWER. This used to silently answer with the newest
+   * record, and that is precisely how the founder got "3" — the last row of a
+   * five-row sheet — while believing it was a total of all thirty numbers.
+   * There is no default reading of "that column" across many records: the
+   * total, the average and the latest are three different questions.
+   *
+   * REVERT THE GUARD AND THIS RETURNS 5, a plausible number computed from one
+   * arbitrary row.
+   */
+  it("refuses a column read off a step holding several records, and names what to use", async () => {
     await ev({ eventType: "row_added", atMin: 0 });
-    // An older summary says 10; the current one says 20. The current one is
-    // the answer, the same way every preview shows current state.
     await ev({ eventType: "summary_row", atMin: 0, props: { total: 10 } });
     await ev({ eventType: "summary_row", atMin: 5, props: { total: 20 } });
 
     const exec = await pct({ bField: "properties.total" });
-    expect((exec as NodeExecOk).shape).toEqual({ kind: "scalar", value: 5 });
+    expect(exec.status).toBe("error");
+    if (exec.status === "error") {
+      expect(exec.error).toContain("2 records");
+      expect(exec.error).toMatch(/Sum/);
+    }
   });
 
   it("names the field and the value when the cell is not a number", async () => {
@@ -163,7 +175,11 @@ describe("a compare input reading a field off its wired step", () => {
    * `unavailable` on the today slot.
    */
   it("a dashboard range windows the counted side, never the picked cell", async () => {
-    const startOfToday = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
+    // A fixed clock, for the reason flow-range.test.ts states: every range ends
+    // at "now", so a fixture pinned to a real wall-clock day is in the future
+    // for any run started earlier in the day.
+    const NOW = Date.parse("2026-08-18T14:00:00Z");
+    const startOfToday = Date.parse("2026-08-18T00:00:00Z");
     const at = async (eventType: string, ms: number, props: Record<string, unknown> = {}) =>
       db.insert(events).values({
         eventId: `cf:${randomUUID()}`,
@@ -175,7 +191,6 @@ describe("a compare input reading a field off its wired step", () => {
         occurredAt: new Date(ms),
         properties: props,
       });
-    // Two bookings today, one last week; the summary cell written last month.
     await at("row_added", startOfToday + 3_600_000);
     await at("row_added", startOfToday + 7_200_000);
     await at("row_added", startOfToday - 7 * 86_400_000);
@@ -192,8 +207,8 @@ describe("a compare input reading a field off its wired step", () => {
     const run = await runFlow({ db, orgId: ORG }, g);
     const spec: TilePresentation = { name: "Rate", viz: "number", format: "percent", precision: 0, target: null };
     const { byRange } = tileByRange(g, run.nodes, "rate", spec, [
-      { key: "today", start: startOfToday, end: Date.now() },
-      { key: "all", start: 0, end: Date.now(), all: true },
+      { key: "today", start: startOfToday, end: NOW },
+      { key: "all", start: 0, end: NOW, all: true },
     ]);
 
     // 2 booked today ÷ the cell's 20 — not unavailable, not 2 ÷ 1.

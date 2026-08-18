@@ -15,6 +15,7 @@ import type { ImportStatus } from "@/lib/sync/import-status";
 import type { SourceOption } from "@/connectors/types";
 import {
   AGGREGATIONS,
+  aggregationFields,
   aggregationInputs,
   DURATION_UNITS,
   fieldNamesItsUnit,
@@ -552,7 +553,10 @@ function NodeConfig({
     const gb = (cfg.groupBy as { type?: string; unit?: string; field?: string; topN?: number | null } | null) ?? null;
     const useDistinct = aggregationInputs(op).distinctField;
     const fieldPath = String((useDistinct ? cfg.distinctField : cfg.field) ?? (useDistinct ? "subject" : "value"));
-    const fieldLabel = groups.flatMap((g) => g.fields).find((f) => f.path === fieldPath)?.label ?? humanizeKey(fieldPath);
+    const labelOf = (p: string) => groups.flatMap((g) => g.fields).find((f) => f.path === p)?.label ?? humanizeKey(p);
+    // "Sum of CRM + Your phone" — the summary line names EVERY column being
+    // totalled, so a second field can never be added invisibly.
+    const fieldLabel = useDistinct ? labelOf(fieldPath) : aggregationFields(cfg).map(labelOf).join(" + ");
     const setOp = (v: string) => {
       // Numbers play no part in a dataset aggregation — clear any wired slots so
       // stray a/b reference edges never linger on the canvas. The picked
@@ -590,11 +594,7 @@ function NodeConfig({
                 onChange={(v) => onChange({ resultKind: v, ...(v === "duration" ? { groupBy: null } : {}) })}
               />
             </Field>
-            {aggregationInputs(op).numberField && (
-              <Field label="Field to calculate">
-                <FieldInput value={String(cfg.field ?? "value")} groups={groups} onChange={(v) => onChange({ field: v })} placeholder="Pick the number field…" />
-              </Field>
-            )}
+            {aggregationInputs(op).numberField && <NumberFieldList cfg={cfg} groups={groups} onChange={onChange} />}
             {aggregationInputs(op).distinctField && (
               <Field label="Count unique values of">
                 <FieldInput value={String(cfg.distinctField ?? "subject")} groups={groups} onChange={(v) => onChange({ distinctField: v })} />
@@ -811,6 +811,84 @@ function NodeConfig({
   );
 }
 
+/**
+ * THE COLUMNS THIS STEP ADDS UP — one, or several totalled together.
+ *
+ * A form writes one question per column, so "how many did you call (CRM)" and
+ * "how many did you call (your phone)" are two columns meaning one thing.
+ * Expressing that used to need two Get-data steps reading the same sheet
+ * twice, two Calculates and a third to add them — and since a step with
+ * something after it offers no way to branch, nobody found that path. Now it
+ * is one step and a second picker.
+ *
+ * Each row totals into the same per-record number, so the aggregation above
+ * still means what it says: Sum totals the combined column, Average averages
+ * the combined per-record total.
+ */
+function NumberFieldList({
+  cfg,
+  groups,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  groups: DataGroup[];
+  onChange: (p: Record<string, unknown>) => void;
+}) {
+  const extra = Array.isArray(cfg.extraFields) ? (cfg.extraFields as unknown[]).map(String) : [];
+  const setExtra = (next: string[]) => onChange({ extraFields: next });
+  /**
+   * A LENGTH OF TIME READS ITS UNIT OFF THE FIELD NAME, so a second column
+   * could be counted in something else entirely and the total would be
+   * meaningless — and the tile derives that unit forever after. Totalling
+   * columns stays a plain-number feature.
+   */
+  if (String(cfg.resultKind ?? "number") === "duration") {
+    return (
+      <Field label="Field to calculate">
+        <FieldInput value={String(cfg.field ?? "value")} groups={groups} onChange={(v) => onChange({ field: v })} placeholder="Pick the number field…" />
+      </Field>
+    );
+  }
+  return (
+    <Field label={extra.length > 0 ? "Fields to add up" : "Field to calculate"}>
+      <div className="space-y-2">
+        <FieldInput value={String(cfg.field ?? "value")} groups={groups} onChange={(v) => onChange({ field: v })} placeholder="Pick the number field…" />
+        {extra.map((f, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <span className="text-sm text-neutral-400">+</span>
+            <div className="min-w-0 flex-1">
+              <FieldInput
+                value={f}
+                groups={groups}
+                onChange={(v) => setExtra(extra.map((x, j) => (j === i ? v : x)))}
+                placeholder="Pick another number field…"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setExtra(extra.filter((_, j) => j !== i))}
+              className="rounded p-1 text-neutral-400 hover:text-neutral-700"
+              title="Remove this field"
+              aria-label="Remove this field"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button type="button" onClick={() => setExtra([...extra, ""])} className="text-xs font-medium text-blue-600 hover:underline">
+          + Add another field
+        </button>
+        {extra.length > 0 && (
+          <p className="text-xs text-neutral-500">
+            Each record&rsquo;s values are added together first, then {AGG_LABELS[String(cfg.aggregation ?? cfg.op ?? "sum")]?.replace(/^\S+\s+/, "").toLowerCase() ?? "totalled"} across
+            your records. A blank or non-numeric cell adds nothing.
+          </p>
+        )}
+      </div>
+    </Field>
+  );
+}
+
 /** The Count step (aggregate executor): turn records into one number, optionally a trend. */
 function CalcNumber({ cfg, groups, onChange }: { cfg: Record<string, unknown>; groups: DataGroup[]; onChange: (p: Record<string, unknown>) => void }) {
   const agg = String(cfg.aggregation ?? "count");
@@ -820,7 +898,7 @@ function CalcNumber({ cfg, groups, onChange }: { cfg: Record<string, unknown>; g
       <Field label="Calculation">
         <Select value={agg} width={W} options={AGGREGATIONS.map((a) => ({ value: a, label: AGG_LABELS[a] ?? title(a) }))} onChange={(v) => onChange({ aggregation: v })} />
       </Field>
-      {aggregationInputs(agg).numberField && <Field label="Number field"><FieldInput value={(cfg.field as string) ?? "value"} groups={groups} onChange={(v) => onChange({ field: v })} /></Field>}
+      {aggregationInputs(agg).numberField && <NumberFieldList cfg={cfg} groups={groups} onChange={onChange} />}
       {aggregationInputs(agg).distinctField && <Field label="Distinct by"><FieldInput value={(cfg.distinctField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ distinctField: v })} /></Field>}
       <Field label="Split over time?">
         <Select

@@ -917,19 +917,21 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
        * to offer exactly one thing per step — the record count — so a
        * spreadsheet cell holding a precomputed total was unreachable from a
        * Calculate. Every column is offered (the browser opens on the Numbers
-       * chip, but a text cell holding "5" is still a number to the engine);
-       * picking one reads it off the step's newest record.
+       * chip, but a text cell holding "5" is still a number to the engine).
        *
-       * THE PREVIEW COMES FROM THE NEWEST RECORD, deliberately NOT from the
-       * step's chosen sample record the way every other picker does. In this
-       * one picker the sample IS the value that fills the slot — the two
-       * entries beside it show the step's exact Result and Output number — so
-       * previewing a different row than `scalarAt` reads would put "= 10"
-       * under an input the flow computes as 20. Elsewhere a sample is one
-       * illustrative row of many; here it is the answer.
+       * ONLY FROM A STEP HOLDING ONE RECORD. A column read off many records
+       * has no single value — the total, the average and the latest are three
+       * different questions — so the engine refuses it, and offering it here
+       * would be inviting the error. Totalling a column across records is what
+       * Calculate's own Sum is for, and it can now add several columns at once.
+       *
+       * THE PREVIEW IS THAT ONE RECORD'S VALUE, which is exactly what fills the
+       * slot: the two entries beside it show the step's precise Result and
+       * Output number, so a sample that disagreed would read as a promise the
+       * flow then broke.
        */
       const own: DataField[] = [];
-      if (!scalar && t?.status === "ok") {
+      if (!scalar && t?.status === "ok" && t.recordsOut === 1) {
         const sampleRecs = (t.sample ?? []) as unknown[];
         const chosen = sampleRecs[0];
         for (const f of t.outputSchema ?? []) {

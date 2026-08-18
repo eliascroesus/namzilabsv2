@@ -196,6 +196,20 @@ const GroupBySchema = z
 const AggregateConfigSchema = z.object({
   aggregation: z.enum(AGGREGATIONS).default("count"),
   field: z.string().default("value"),
+  /**
+   * MORE COLUMNS ADDED INTO THE SAME NUMBER. A record's value becomes
+   * `field` plus each of these, and the aggregation then runs over that
+   * combined per-record total.
+   *
+   * This exists because a form writes one question per column: "how many did
+   * you call (CRM)" and "how many did you call (your phone)" are two columns
+   * that mean one thing. Expressing that used to require two Get-data steps
+   * reading the same sheet twice, two Calculates and a third to add them —
+   * and the canvas offers no way to branch a step, so nobody found it.
+   *
+   * Empty for every saved flow, which then behaves exactly as before.
+   */
+  extraFields: z.array(z.string()).default([]),
   distinctField: z.string().default("subject"),
   groupBy: GroupBySchema,
 });
@@ -430,10 +444,32 @@ export const FormulaConfigSchema = z.object({
   // Dataset ops: which field to aggregate (sum/avg/min/max read numbers from it,
   // count_distinct counts its unique values), plus an optional time split.
   field: z.string().default("value"),
+  /** Columns added into the same number as `field` — see AggregateConfigSchema. */
+  extraFields: z.array(z.string()).default([]),
   distinctField: z.string().default("subject"),
   groupBy: GroupBySchema,
 });
 export type FormulaConfig = z.infer<typeof FormulaConfigSchema>;
+
+/**
+ * Every column an aggregation reads, primary first. One list so the engine,
+ * the summary line and the field pickers cannot disagree about how many
+ * columns a step is actually totalling.
+ */
+export function aggregationFields(cfg: { field?: unknown; extraFields?: unknown }): string[] {
+  const primary = String(cfg.field ?? "value");
+  const out = [primary];
+  // DEDUPED, because the same column picked twice would be COUNTED twice: a
+  // sheet totalling 13 would read 26, which is a plausible number and a wrong
+  // one. Two pickers open on the same list makes that a slip, not an edge case.
+  if (Array.isArray(cfg.extraFields)) {
+    for (const raw of cfg.extraFields) {
+      const f = String(raw);
+      if (f.trim() !== "" && !out.includes(f)) out.push(f);
+    }
+  }
+  return out;
+}
 
 // ---------- Group / Category (advanced) ----------
 export const GroupConfigSchema = z.object({
@@ -471,6 +507,8 @@ export const CalculateConfigSchema = z.object({
   /** A field read off the wired step instead of its record count — see FormulaConfigSchema. */
   aField: z.string().nullable().optional(),
   bField: z.string().nullable().optional(),
+  /** Columns added into the same number as `field` — see AggregateConfigSchema. */
+  extraFields: z.array(z.string()).default([]),
 });
 export type CalculateConfig = z.infer<typeof CalculateConfigSchema>;
 

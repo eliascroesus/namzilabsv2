@@ -23,6 +23,7 @@ import {
   CalculateConfigSchema,
   PathsConfigSchema,
   isDatasetFormulaOp,
+  aggregationFields,
   type FlowGraph,
   type FlowNode,
   type FilterConfig,
@@ -1263,6 +1264,22 @@ function scalarAt(inputs: ResolvedInput[], handle: "a" | "b", fixed?: number | n
     if (fieldPath) {
       const rec = found.shape.records[0];
       if (!rec) throw new Error(`Input ${handle.toUpperCase()} has no records to read "${fieldPath}" from.`);
+      /**
+       * ONE RECORD, OR NO ANSWER. Reading a column off a step holding many
+       * records silently answers with the newest one — the founder wired
+       * exactly this and got 3, the last row of a five-row sheet, while
+       * believing it was a total of all thirty numbers. There is no reading of
+       * "that column" over many records that a person means by default: the
+       * total, the average and the latest are three different questions.
+       *
+       * So this refuses, and names the step that answers each. The one-row
+       * summary tab the feature exists for is untouched.
+       */
+      if (found.shape.records.length > 1) {
+        throw new Error(
+          `Input ${handle.toUpperCase()} reads "${fieldPath}" from a step holding ${found.shape.records.length.toLocaleString()} records, so there is no single value to take. To total that column across every record, use a Calculate set to Sum — it can add several columns at once. To read one value, narrow that step to a single record first.`,
+        );
+      }
       const v = toNumber(getField(rec, fieldPath));
       if (v == null) {
         const raw = getField(rec, fieldPath);
@@ -1347,7 +1364,7 @@ function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
      * it would silently turn a customer's published breakdown into a single
      * number — pinned by "produces a time series and a grouped result".
      */
-    const acfg: AggregateConfig = { aggregation: cfg.op as AggregateConfig["aggregation"], field: cfg.field, distinctField: cfg.distinctField, groupBy: cfg.groupBy };
+    const acfg: AggregateConfig = { aggregation: cfg.op as AggregateConfig["aggregation"], field: cfg.field, extraFields: cfg.extraFields, distinctField: cfg.distinctField, groupBy: cfg.groupBy };
     const shape = aggregate(records, acfg);
     const recordsOut = shape.kind === "scalar" ? 1 : shape.kind === "series" ? shape.series.length : shape.groups.length;
     return { status: "ok", nodeType: "formula", shape, recordsIn: records.length, recordsOut, sample: records.slice(0, 3), outputSchema: [] };
@@ -1384,7 +1401,7 @@ function execCalculate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   }
 
   // number
-  const acfg: AggregateConfig = { aggregation: cfg.aggregation, field: cfg.field, distinctField: cfg.distinctField, groupBy: cfg.groupBy };
+  const acfg: AggregateConfig = { aggregation: cfg.aggregation, field: cfg.field, extraFields: cfg.extraFields, distinctField: cfg.distinctField, groupBy: cfg.groupBy };
   const shape = aggregate(input.records, acfg);
   const recordsOut = shape.kind === "scalar" ? 1 : shape.kind === "series" ? shape.series.length : shape.groups.length;
   return { status: "ok", nodeType: "calculate", shape, recordsIn: input.records.length, recordsOut, sample: input.records.slice(0, 3), outputSchema: [] };
@@ -1889,13 +1906,46 @@ function assertFieldHasValues(records: FlowRecord[], cfg: AggregateConfig): void
     }
     throw new EmptyFieldError(cfg.distinctField, records.length, "count unique values of");
   }
-  for (const r of records) if (num(getField(r, cfg.field)) != null) return;
-  throw new EmptyFieldError(cfg.field, records.length, cfg.aggregation);
+  const fields = aggregationFields(cfg);
+  /**
+   * TWO CHECKS, and the split is the whole point.
+   *
+   * PRESENCE, per column, only once a step reads more than one. A column whose
+   * key is absent from every record was renamed or mistyped at the source —
+   * and since a record still counts through its OTHER columns, that failure is
+   * otherwise silent: a total of 21 quietly becomes 13, green badge and all.
+   * Asked only for multi-column steps, so no existing single-field message
+   * changes and no published metric moves.
+   *
+   * VALUE, combined, exactly as before: an error only when no record yields a
+   * number from ANY of the columns. A column that is present but blank all
+   * week — confirmation calls nobody made — is a real answer of zero, not a
+   * misconfiguration, and erroring there would turn every quiet "Today" pill
+   * on the dashboard red.
+   */
+  if (fields.length > 1) {
+    for (const f of fields) {
+      let present = false;
+      for (const r of records) {
+        if (getField(r, f) !== undefined) {
+          present = true;
+          break;
+        }
+      }
+      if (!present) {
+        throw new Error(
+          `Can't ${cfg.aggregation} "${f.replace(/^properties\./, "")}" — none of the ${records.length.toLocaleString()} records here have that field at all. It may have been renamed at the source; pick it again, or remove it from this step.`,
+        );
+      }
+    }
+  }
+  for (const r of records) for (const f of fields) if (num(getField(r, f)) != null) return;
+  throw new EmptyFieldError(fields.join('" + "'), records.length, cfg.aggregation);
 }
 
 function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series | Grouped {
   assertFieldHasValues(records, cfg);
-  if (!cfg.groupBy) return { kind: "scalar", value: computeAgg(records, cfg.aggregation, cfg.field, cfg.distinctField) };
+  if (!cfg.groupBy) return { kind: "scalar", value: computeAgg(records, cfg.aggregation, aggregationFields(cfg), cfg.distinctField) };
   if (cfg.groupBy.type === "time") {
     const unit = cfg.groupBy.unit;
     const buckets = new Map<string, FlowRecord[]>();
@@ -1906,10 +1956,10 @@ function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series
     }
     return {
       kind: "series",
-      series: [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([bucket, recs]) => ({ bucket, value: computeAgg(recs, cfg.aggregation, cfg.field, cfg.distinctField) })),
+      series: [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([bucket, recs]) => ({ bucket, value: computeAgg(recs, cfg.aggregation, aggregationFields(cfg), cfg.distinctField) })),
       // The headline, computed HERE because this is where the records are. See
       // the note on `Series` for why it cannot be derived from the buckets.
-      total: computeAgg(records, cfg.aggregation, cfg.field, cfg.distinctField),
+      total: computeAgg(records, cfg.aggregation, aggregationFields(cfg), cfg.distinctField),
     };
   }
   const field = cfg.groupBy.field;
@@ -1921,8 +1971,8 @@ function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series
   }
   return {
     kind: "grouped",
-    groups: [...groups.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.field, cfg.distinctField) })).sort((a, b) => b.value - a.value),
-    total: computeAgg(records, cfg.aggregation, cfg.field, cfg.distinctField),
+    groups: [...groups.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, aggregationFields(cfg), cfg.distinctField) })).sort((a, b) => b.value - a.value),
+    total: computeAgg(records, cfg.aggregation, aggregationFields(cfg), cfg.distinctField),
   };
 }
 
@@ -1936,7 +1986,35 @@ class EmptyFieldError extends Error {
   }
 }
 
-function computeAgg(records: FlowRecord[], aggregation: string, field: string, distinctField: string): number {
+/**
+ * WHAT ONE RECORD CONTRIBUTES — the total of every column the step reads.
+ *
+ * A form writes one question per column, so "how many did you call (CRM)" and
+ * "how many did you call (your phone)" are two columns meaning one thing. The
+ * step adds them into one per-record number, and the aggregation then runs
+ * over that: `sum` totals the combined column, `avg` averages the combined
+ * daily total, `max` finds the busiest single record.
+ *
+ * A column that holds nothing readable on this record contributes NOTHING
+ * rather than a zero, and the record still counts through its other columns —
+ * a zero here would be a measurement nobody took. Only when NO column on the
+ * record reads as a number does the record drop out entirely, exactly as a
+ * single unreadable field always has.
+ */
+function combinedValue(r: FlowRecord, fields: string[]): number | null {
+  let total = 0;
+  let read = 0;
+  for (const f of fields) {
+    const n = num(getField(r, f));
+    if (n != null) {
+      total += n;
+      read += 1;
+    }
+  }
+  return read > 0 ? total : null;
+}
+
+function computeAgg(records: FlowRecord[], aggregation: string, fields: string[], distinctField: string): number {
   switch (aggregation) {
     case "count":
       return records.length;
@@ -1949,7 +2027,7 @@ function computeAgg(records: FlowRecord[], aggregation: string, field: string, d
       return set.size;
     }
     default: {
-      const nums = records.map((r) => num(getField(r, field))).filter((n): n is number => n != null);
+      const nums = records.map((r) => combinedValue(r, fields)).filter((n): n is number => n != null);
       /**
        * A CONFIDENT ZERO IS THE WORST POSSIBLE ANSWER.
        *
@@ -2016,7 +2094,7 @@ function groupByField(records: FlowRecord[], cfg: GroupConfig): Array<{ label: s
     groups.get(key)!.push(r);
   }
   return [...groups.entries()]
-    .map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.valueField, cfg.distinctField) }))
+    .map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, [cfg.valueField], cfg.distinctField) }))
     .sort((a, b) => b.value - a.value);
 }
 
@@ -2028,7 +2106,7 @@ function groupByCategories(records: FlowRecord[], cfg: GroupConfig): Array<{ lab
     const cat = cfg.categories.find((c) => evalRules(r, c.filters));
     buckets.get(cat ? cat.label : cfg.fallbackLabel)!.push(r);
   }
-  return [...buckets.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, cfg.valueField, cfg.distinctField) }));
+  return [...buckets.entries()].map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, [cfg.valueField], cfg.distinctField) }));
 }
 
 // ---------- time windows ----------
