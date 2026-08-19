@@ -1144,6 +1144,43 @@ The kit gained a **canvas slice** — two connected cards, the connector, the
 ghost step — because cards shown in isolation cannot reveal what was actually
 wrong: the rhythm between them.
 
+### 9l. The chrome, regrouped by job
+
+Two more rounds of "still looks the same" had one cause: the chrome was
+**two blobs**. Everything about the flow in a top-left pill, everything
+pressable in a top-right one, and the canvas controls exiled to a cramped
+bottom-left cluster. Restyling blobs keeps them blobs.
+
+What the references actually do, measured rather than glanced at:
+
+- **Miro** anchors four *jobs* to four *places*: board identity top-left,
+  sharing top-right, tools to a vertical island on the left edge, view to a
+  pill bottom-right. Its tool island is split again — undo/redo is its own
+  separate surface below the tools.
+- **Make** does identity top-left, sharing top-right, and puts **every run and
+  view control in one horizontal bar pinned to the bottom centre**: "Run once"
+  as a filled primary, a divider, then the quiet icon controls.
+
+So the builder now has: **identity top-left** (back, name, save dot, ⋯ menu
+holding duplicate/delete), **publish top-right** (Live chip + the one primary),
+and **a bottom-centre bar** carrying everything you do to the canvas — Test
+flow as a filled green primary with a play icon, then undo/redo, then zoom
+out / **live zoom readout** / zoom in / fit.
+
+Two things that fixes beyond looks:
+
+- **Test flow was a ghost button beside Publish**, which framed the control
+  you press twenty times an hour as Publish's poor relation. It is now the
+  filled primary of its own bar.
+- **Zoom and undo were in a corner cluster nobody would find.** They are under
+  your hands, and the zoom readout — Miro's, and it earns the space — answers
+  "where am I" after a pinch. Clicking it fits the flow.
+
+Geometry is measured, not chosen: 6px island padding, 36px controls, 8px from
+the viewport edge, one hairline divider per group. Deleting a flow became a
+centred modal — it was a popover hanging off a menu item that had already
+closed, which is a lot of consequence for a surface that small.
+
 ---
 
 ## 10. What not to change

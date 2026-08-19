@@ -14,6 +14,7 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
+  useViewport,
   useUpdateNodeInternals,
   type Edge,
 } from "@xyflow/react";
@@ -213,6 +214,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [nodes, setNodes, onNodesChange] = useNodesState<FNode>(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
   const rf = useReactFlow();
+  // The bottom bar shows the zoom level, so it has to re-render as it changes.
+  const { zoom } = useViewport();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState(initialName);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
@@ -1416,6 +1419,14 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         publishing={publishing}
         onReview={openReview}
         panelOpen={selectedId != null}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={hist.undo > 0}
+        canRedo={hist.redo > 0}
+        onZoomIn={() => rf.zoomIn({ duration: 150 })}
+        onZoomOut={() => rf.zoomOut({ duration: 150 })}
+        onFitView={() => rf.fitView({ duration: 250, maxZoom: 1 })}
+        zoom={zoom}
       />
 
       {publishError && !reviewOpen && (
@@ -1486,25 +1497,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                 smooth while panning, not a busy pattern. */}
             <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="#dfe1e8" bgColor="#f6f6f8" />
           </ReactFlow>
-
-          {/* ZOOM HAS ALWAYS WORKED AND NEVER SAID SO. Panning is scroll and
-              zooming is pinch or ⌘-scroll — both discoverable only by a user
-              who already expects a canvas. Nodes stay undraggable and ports
-              unconnectable (the managed layout is why this reads as a
-              numbered list rather than a diagram); these three buttons only
-              expose the view controls that were already there. */}
-          {!empty && (
-            <div className="absolute bottom-4 left-4 flex overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
-              <ViewButton onClick={() => rf.zoomIn({ duration: 150 })} label="Zoom in"><ZoomIn /></ViewButton>
-              <ViewButton onClick={() => rf.zoomOut({ duration: 150 })} label="Zoom out"><ZoomOut /></ViewButton>
-              <ViewButton onClick={() => rf.fitView({ duration: 250, maxZoom: 1 })} label="Fit the whole flow on screen"><Maximize2 /></ViewButton>
-              <span className="my-1.5 w-px bg-neutral-200" aria-hidden />
-              <ViewButton onClick={undo} disabled={hist.undo === 0} label="Undo"><Undo2 /></ViewButton>
-              <ViewButton onClick={redo} disabled={hist.redo === 0} label="Redo"><Redo2 /></ViewButton>
-            </div>
-          )}
-
-          {empty && <EmptyCanvas hasConnections={connections.length > 0} onStart={() => createNode("app", null)} />}
 
         </div>
 
@@ -1635,21 +1627,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         </div>
       )}
     </div>
-  );
-}
-
-/** One square icon button in the canvas view-controls cluster. */
-function ViewButton({ onClick, disabled, label, children }: { onClick: () => void; disabled?: boolean; label: string; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={label}
-      aria-label={label}
-      className="flex h-8 w-8 items-center justify-center border-r border-neutral-200 text-neutral-500 transition-colors last:border-r-0 hover:bg-neutral-50 hover:text-neutral-900 disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[15px]"
-    >
-      {children}
-    </button>
   );
 }
 

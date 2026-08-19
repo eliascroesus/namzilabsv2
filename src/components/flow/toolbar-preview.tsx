@@ -35,6 +35,14 @@ export function ToolbarPreview({ panelOpen = false }: { panelOpen?: boolean }) {
       publishing={false}
       onReview={noop}
       panelOpen={panelOpen}
+      onUndo={noop}
+      onRedo={noop}
+      canUndo
+      canRedo={false}
+      onZoomIn={noop}
+      onZoomOut={noop}
+      onFitView={noop}
+      zoom={1}
     />
   );
 }

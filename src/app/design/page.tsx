@@ -179,7 +179,7 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Controls" note="Every input is 8px, hairline, with the same 4px brand focus ring.">
+          <Section title="Controls" note="Every input is 10px, hairline, with the same 4px brand focus ring.">
             <div className="grid grid-cols-2 gap-4">
               <label className="block">
                 <span className="mb-1.5 block text-small font-medium text-neutral-700">Text field</span>
@@ -215,8 +215,8 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Builder chrome" note="Floating islands over the canvas — never an edge-to-edge bar. Miro's pattern, our kit.">
-            <div className="relative h-44 overflow-hidden rounded-card bg-canvas-bg">
+          <Section title="Builder chrome" note="Four islands grouped by job: identity top-left, publish top-right, everything you do to the canvas in one bar at the bottom.">
+            <div className="relative h-64 overflow-hidden rounded-card bg-canvas-bg">
               <div
                 className="absolute inset-0"
                 style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 1px, transparent 1px)", backgroundSize: "26px 26px" }}
