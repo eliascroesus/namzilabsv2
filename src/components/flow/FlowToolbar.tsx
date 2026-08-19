@@ -27,23 +27,25 @@ import { Button } from "@/components/ui/button";
  * top-left pill, everything pressable in a top-right one. That is not what the
  * canvas tools it borrows from actually do. Measured off the two references:
  *
- *  - MIRO anchors board IDENTITY top-left, SHARING top-right, TOOLS to a
- *    vertical island on the left edge, and VIEW to a pill bottom-right. Four
- *    jobs, four surfaces — and the tool island is split again, with undo/redo
- *    as its own separate island below the tools.
- *  - MAKE puts identity top-left, sharing top-right, and — the move worth
- *    stealing — every RUN and VIEW control in one horizontal bar pinned to the
+ *  - MIRO's top-left island runs wordmark → board title → ⋮ → upload →
+ *    Upgrade. Identity AND the call to action, in ONE surface. Its view
+ *    controls live in a separate pill at the far bottom corner.
+ *  - MAKE puts every RUN and VIEW control in one horizontal bar pinned to the
  *    bottom centre: "Run once" as a filled primary, a divider, then quiet icon
  *    controls.
  *
- * So: identity top-left, publish top-right, and everything you DO to the
- * canvas — run, undo, zoom, fit — in one bar under your hands. Undo and zoom
- * were in a cramped bottom-left cluster nobody would find, and "Test flow" was
- * a ghost button beside Publish, where it read as Publish's poor relation
- * rather than the control you press twenty times an hour.
+ * So there are two surfaces, not four. Everything ABOUT the flow — where it
+ * came from, what it is called, whether it saved, what you can do to it, and
+ * shipping it — is one top island, because Publish alone in the far corner
+ * read as an afterthought stranded across the screen. Everything you do to the
+ * CANVAS — run, undo, zoom, fit — is one bottom bar under your hands, where
+ * "Test flow" is a filled primary rather than the ghost button it was beside
+ * Publish.
  *
- * Geometry is measured, not chosen: 6px island padding, 36px controls, 8px
- * from the viewport edge, one hairline divider between groups.
+ * Geometry is measured, not chosen: 6px island padding, 36px controls, 12px
+ * from every viewport edge (top, left and bottom all the same, which they were
+ * not), one hairline divider between groups. Icons are 20px and near-black —
+ * Miro's toolbar glyphs read as objects; 17px grey was a toolbar whispering.
  */
 export type SaveState = "saved" | "saving" | "unsaved" | "error";
 
@@ -69,7 +71,7 @@ function IslandButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-neutral-600 transition-colors hover:bg-muted hover:text-foreground disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[17px]"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-neutral-900 transition-colors hover:bg-muted disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[20px]"
     >
       {children}
     </button>
@@ -131,19 +133,19 @@ export function FlowToolbar({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   /** The right island and the bottom bar both step aside for the config panel. */
-  const panelInset = panelOpen ? "calc(min(452px, 100vw - 2rem) + 1.75rem)" : "0.5rem";
+  const panelInset = panelOpen ? "calc(min(452px, 100vw - 2rem) + 1.75rem)" : "0.75rem";
 
   return (
     <>
       {/* ── Top-left: WHICH FLOW IS THIS ────────────────────────────────── */}
-      <div className="pointer-events-none absolute left-2 top-2 z-10 flex max-w-[min(44vw,460px)] items-center">
+      <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[min(62vw,720px)] items-center">
         <Island className="min-w-0">
           <Link
             href="/dashboard/flows"
             title="All flows"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-neutral-500 transition-colors hover:bg-muted hover:text-foreground"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-neutral-900 transition-colors hover:bg-muted"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={20} />
           </Link>
 
           <input
@@ -190,28 +192,20 @@ export function FlowToolbar({
               </button>
             </div>
           </Popover>
-        </Island>
-      </div>
 
-      {/* ── Top-right: SHIP IT ──────────────────────────────────────────── */}
-      <div
-        className="pointer-events-none absolute top-2 z-10 flex items-center transition-[right] duration-200 ease-out"
-        style={{ right: panelInset }}
-      >
-        <Island>
+          <Divider />
+
           {isPublished && publishedVersion != null && (
-            <>
-              <span
-                className="flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1.5 text-micro font-bold text-success-ink"
-                title="This flow is live on your dashboard"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-                Live · v{publishedVersion}
-              </span>
-              <Divider />
-            </>
+            <span
+              className="flex shrink-0 items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1.5 text-micro font-bold text-success-ink"
+              title="This flow is live on your dashboard"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
+              Live · v{publishedVersion}
+            </span>
           )}
-          <Button onClick={onReview} disabled={publishing} className="h-9">
+
+          <Button onClick={onReview} disabled={publishing} className="h-9 shrink-0">
             {isPublished ? <SlidersHorizontal /> : <Rocket />}
             {isPublished ? "Edit output" : "Review & publish"}
           </Button>
@@ -222,14 +216,14 @@ export function FlowToolbar({
           Make's bar. Run first as a filled primary, then the quiet controls
           behind a divider — under your hands, not tucked in a corner. */}
       <div
-        className="pointer-events-none absolute bottom-4 z-10 flex justify-center transition-[right] duration-200 ease-out"
-        style={{ left: "0.5rem", right: panelInset }}
+        className="pointer-events-none absolute bottom-3 z-10 flex justify-center transition-[right] duration-200 ease-out"
+        style={{ left: "0.75rem", right: panelInset }}
       >
         <Island>
           {showTestAll && (
             <>
               <Button
-                variant={runAll ? "secondary" : "success"}
+                variant={runAll ? "secondary" : "default"}
                 onClick={runAll ? onStopTestAll : onTestAll}
                 title={runAll ? "Stop the run" : "Run every step, top to bottom"}
                 className="h-9"

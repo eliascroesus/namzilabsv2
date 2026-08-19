@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Sidebar } from "@/components/sidebar";
 import { CanvasPreview, FlowNodeCard } from "@/components/flow/flow-canvas-preview";
 import { NodeIcon } from "@/components/flow/icons";
+import { LayoutDashboard, Workflow } from "lucide-react";
 import { ToolbarPreview } from "@/components/flow/toolbar-preview";
 import { FlowList } from "@/app/dashboard/flows/FlowRow";
 
@@ -99,10 +100,22 @@ export default function DesignPage() {
 
           <Section title="Rail" note="The one place in the product allowed to be loud. Everything right of it stays neutral, which is what lets it.">
             <div className="flex items-stretch gap-4">
-              <div className="bg-rail h-28 w-[76px] shrink-0 rounded-card" />
+              <div className="bg-rail flex w-[76px] shrink-0 flex-col items-stretch gap-1 rounded-card py-3 px-2.5">
+                {/* Selected is a SOLID white tile with the brand glyph — Miro's
+                    tinted selected tool, translated onto a coloured rail. */}
+                <span className="flex flex-col items-center gap-1.5 rounded-card bg-white px-1 py-2.5 text-brand-600 shadow-sm">
+                  <LayoutDashboard size={23} strokeWidth={1.9} />
+                  <span className="text-micro font-semibold leading-none">Active</span>
+                </span>
+                <span className="flex flex-col items-center gap-1.5 rounded-card px-1 py-2.5 text-white/70">
+                  <Workflow size={23} strokeWidth={1.9} />
+                  <span className="text-micro font-semibold leading-none">Rest</span>
+                </span>
+              </div>
               <div className="flex flex-1 flex-col justify-center gap-1 text-tiny text-muted-foreground">
                 <p><code className="text-foreground">--gradient-rail</code></p>
                 <p>Brand at the top, warming through violet to fuchsia. One declaration, so it dials back in one edit.</p>
+                <p className="mt-1">Selected is solid white with the brand glyph — a translucent wash could not say &ldquo;you are here&rdquo; loudly enough on a coloured surface.</p>
               </div>
             </div>
           </Section>
@@ -132,9 +145,9 @@ export default function DesignPage() {
           <Section title="Radius and elevation" note="Three radii, four shadows — layered as a ring plus ambient plus contact, never one glow.">
             <div className="grid grid-cols-3 gap-3">
               {[
-                { cls: "rounded-control", label: "control · 10px", body: "Inputs, buttons, nav items" },
-                { cls: "rounded-card", label: "card · 14px", body: "Step cards, tiles, sections" },
-                { cls: "rounded-surface", label: "surface · 20px", body: "Panels, modals, popovers" },
+                { cls: "rounded-control", label: "control · 8px", body: "Inputs, buttons, nav items" },
+                { cls: "rounded-card", label: "card · 12px", body: "Step cards, tiles, sections" },
+                { cls: "rounded-surface", label: "surface · 16px", body: "Panels, modals, popovers" },
               ].map((r) => (
                 <div key={r.cls} className={`${r.cls} border border-neutral-200 bg-white p-4 shadow-raised`}>
                   <p className="text-small font-semibold text-neutral-800">{r.label}</p>
@@ -162,7 +175,7 @@ export default function DesignPage() {
               <Button>Review &amp; publish</Button>
               <Button variant="secondary">Secondary</Button>
               <Button variant="ghost">Quiet</Button>
-              <Button variant="success">Test flow</Button>
+              <Button variant="success">Success</Button>
               <Button disabled>Disabled</Button>
               <Button variant="destructive">Delete</Button>
             </div>
@@ -179,7 +192,7 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Controls" note="Every input is 10px, hairline, with the same 4px brand focus ring.">
+          <Section title="Controls" note="Every input is 8px, hairline, with the same 4px brand focus ring.">
             <div className="grid grid-cols-2 gap-4">
               <label className="block">
                 <span className="mb-1.5 block text-small font-medium text-neutral-700">Text field</span>
@@ -215,7 +228,7 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Builder chrome" note="Four islands grouped by job: identity top-left, publish top-right, everything you do to the canvas in one bar at the bottom.">
+          <Section title="Builder chrome" note="Two surfaces: everything about the flow in one top island, everything you do to the canvas in one bottom bar.">
             <div className="relative h-64 overflow-hidden rounded-card bg-canvas-bg">
               <div
                 className="absolute inset-0"

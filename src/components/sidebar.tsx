@@ -25,34 +25,34 @@ const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: stri
   {
     href: "/dashboard",
     label: "Dashboard",
-    icon: <LayoutDashboard size={20} strokeWidth={1.9} />,
+    icon: <LayoutDashboard size={23} strokeWidth={1.9} />,
     match: (p) => p === "/dashboard" || p.startsWith("/dashboard/metrics") || p.startsWith("/dashboard/funnels"),
   },
-  { href: "/dashboard/flows", label: "Flows", icon: <Workflow size={20} strokeWidth={1.9} />, match: (p) => p.startsWith("/dashboard/flows") },
+  { href: "/dashboard/flows", label: "Flows", icon: <Workflow size={23} strokeWidth={1.9} />, match: (p) => p.startsWith("/dashboard/flows") },
   {
     href: "/integrations",
     label: "Apps",
-    icon: <Plug size={20} strokeWidth={1.9} />,
+    icon: <Plug size={23} strokeWidth={1.9} />,
     match: (p) => p.startsWith("/integrations") || p.startsWith("/connections"),
   },
-  { href: "/dashboard/settings", label: "Settings", icon: <Settings size={20} strokeWidth={1.9} />, match: (p) => p.startsWith("/dashboard/settings") },
+  { href: "/dashboard/settings", label: "Settings", icon: <Settings size={23} strokeWidth={1.9} />, match: (p) => p.startsWith("/dashboard/settings") },
 ];
 
 export function Sidebar({ account }: { account?: { initials: string; panel: ReactNode } }) {
   const pathname = usePathname() ?? "";
   return (
-    <aside className="bg-rail flex h-full w-[76px] shrink-0 flex-col items-center py-3.5">
+    <aside className="bg-rail flex h-full w-[76px] shrink-0 flex-col items-center py-3">
       {/* The wordmark: a glass tile on the wash rather than another coloured
           square, which on a coloured rail would be a colour on a colour. */}
       <Link
         href="/dashboard"
         title="Namzilabs — dashboard"
-        className="mb-5 flex h-10 w-10 items-center justify-center rounded-card bg-white/20 text-title font-bold text-white ring-1 ring-white/25 backdrop-blur-sm transition-all hover:bg-white/30"
+        className="mb-3 flex h-11 w-11 items-center justify-center rounded-card bg-white/20 text-title font-bold text-white ring-1 ring-white/25 backdrop-blur-sm transition-all hover:bg-white/30"
       >
         N
       </Link>
 
-      <nav className="flex w-full flex-1 flex-col items-stretch gap-1.5 px-2">
+      <nav className="flex w-full flex-1 flex-col items-stretch gap-1 px-2.5">
         {NAV.map((item) => {
           const active = item.match(pathname);
           return (
@@ -61,9 +61,7 @@ export function Sidebar({ account }: { account?: { initials: string; panel: Reac
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={`group flex flex-col items-center gap-1.5 rounded-card px-1 py-2.5 transition-all ${
-                active
-                  ? "bg-white/22 text-white shadow-sm ring-1 ring-white/25"
-                  : "text-white/65 hover:bg-white/12 hover:text-white"
+                active ? "bg-white text-brand-600 shadow-sm" : "text-white/70 hover:bg-white/15 hover:text-white"
               }`}
             >
               {item.icon}

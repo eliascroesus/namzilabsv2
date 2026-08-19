@@ -31,20 +31,19 @@
    * One accent, used for every primary action, every selection, every focus
    * ring. `brand-600` is the button; 500 is hover-on-dark; 50/100 are tints.
    *
-   * NOT Tailwind's stock indigo (#4f46e5) — that is the default every
-   * unstyled project ships with, and it reads that way. This ramp sits in the
-   * blue-violet register Miro uses for its primary actions: bluer and more
-   * confident than the iris it replaced, which read closer to lavender.
-   * `brand-600` under white text is ~5.8:1, comfortably past AA.
+   * Miro's primary blue, matched. The ramp has walked from stock indigo to
+   * blue-violet to here: a true, bright blue with just enough violet to stay
+   * ours. `brand-600` under white text is ~4.8:1 — past AA for the 14px+
+   * semibold text every button in the product uses.
    */
-  --color-brand-50: #eff0fe;
-  --color-brand-100: #e1e3fd;
-  --color-brand-200: #c7cbfb;
-  --color-brand-300: #a3a8f7;
-  --color-brand-400: #7d84f2;
-  --color-brand-500: #5f66ec;
-  --color-brand-600: #4b52e0;
-  --color-brand-700: #3d43c4;
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #dfe6ff;
+  --color-brand-200: #c2cfff;
+  --color-brand-300: #9aafff;
+  --color-brand-400: #7089ff;
+  --color-brand-500: #5470ff;
+  --color-brand-600: #4262ff;
+  --color-brand-700: #2f4ce0;
 
   /* --- Ink: the navigation rail and any dark surface ----------------------
    * A four-step ladder, which is the minimum a dark surface needs to express
@@ -98,9 +97,13 @@
    * Three steps. Controls, cards, floating surfaces. Everything else was a
    * one-off.
    */
-  --radius-control: 0.625rem; /* 10px — inputs, buttons, nav items */
-  --radius-card: 0.875rem; /* 14px — step cards, tiles, sections */
-  --radius-surface: 1.25rem; /* 20px — panels, modals, popovers */
+  /* Mirotone's scale (8 / 16) with a card step between. The kit briefly ran
+   * 10/14/20 on the theory that rounder reads as playful; against the actual
+   * reference that read as soft rather than crisp. Miro is tighter than it
+   * looks in memory. */
+  --radius-control: 0.5rem; /* 8px — inputs, buttons, nav items */
+  --radius-card: 0.75rem; /* 12px — step cards, tiles, sections */
+  --radius-surface: 1rem; /* 16px — panels, modals, popovers */
 
   /* --- Elevation ----------------------------------------------------------
    * Two, plus the existing `.flow-shadow` for surfaces that float over the

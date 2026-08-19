@@ -1181,6 +1181,42 @@ the viewport edge, one hairline divider per group. Deleting a flow became a
 centred modal — it was a popover hanging off a menu item that had already
 closed, which is a lot of consequence for a surface that small.
 
+### 9m. Measured against the reference, item by item
+
+Seven corrections, each checked against the screenshots rather than judged:
+
+**One top island, not two.** Miro's top-left island runs wordmark → title →
+⋮ → upload → **Upgrade**: identity *and* the call to action, in one surface.
+Publish alone in the opposite corner read as an afterthought stranded across
+the screen. Back, name, save dot, ⋯, Live chip and Review & publish are now
+one island.
+
+**Insets are one number.** Top was 8px, bottom 16px, and the left island's 8px
+sat against the rail rather than a canvas edge — nothing lined up with
+anything. All three edges are 12px.
+
+**Icons are 20px and near-black.** They were 17px `neutral-600`, which is a
+toolbar whispering; Miro's tool glyphs read as objects. Rail icons went 20→23px.
+
+**The accent is Miro's blue** (`brand-600 #4262ff`). The ramp has walked from
+stock indigo → blue-violet → here: a true bright blue with just enough violet
+to stay ours.
+
+**Radii went back down** — 8 / 12 / 16, Mirotone's own scale. The kit briefly
+ran 10 / 14 / 20 on the theory that rounder reads as playful; against the
+actual reference that read as *soft* rather than crisp. Miro is tighter than it
+looks in memory.
+
+**Test flow wears the primary blue**, matching Review & publish. They are the
+two things you press, and they no longer compete for a corner — one is in the
+top island, one anchors the bottom bar.
+
+**The rail's selected state is a solid white tile with the brand glyph.** Miro
+marks the selected tool with a *filled* tinted tile, not a translucent wash;
+22% white on a coloured rail could not say "you are here" loudly enough. The
+kit now renders the rail's active and rest states side by side, because the
+selected treatment was otherwise only checkable on an authenticated route.
+
 ---
 
 ## 10. What not to change
