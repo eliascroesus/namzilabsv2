@@ -1549,6 +1549,39 @@ bare `twMerge`, which fails those tests alone.
 
 ---
 
+### 9w. The cut is 32px, and it belongs to the builder alone
+
+**Double the radius.** `--radius-frame: 2rem` — a fourth radius, deliberately
+larger than anything inside the app. The other three describe components
+(8px controls, 12px cards, 16px surfaces); this one describes the edge of the
+application itself, and at surface's 16px it read as a rounded box rather than
+as the app holding the canvas.
+
+**And only the builder gets it.** The frame takes a `framed` flag, default
+off. A canvas is a workspace you look *into*, so the app cuts a corner out of
+it and shows its own colour through the notch. A list of flows is a document,
+not a workspace, and reads better running flush off the rail with no gutter of
+wash between the navigation and the thing you came to read. The rail itself
+stays on every page — that was checked rather than assumed, because the ask
+was ambiguous between "only the builder gets the cut" and "only the builder
+gets the rail", and the second would have deleted navigation from eight pages.
+
+The wash is still painted unconditionally: an unframed page covers it
+completely, so there is nothing to switch off, and one code path means framed
+and unframed pages can never disagree about the colour.
+
+**A note on the dev server, because it cost twenty minutes.** After the change
+the corner rendered square, the class was on the element, and
+`--radius-frame` was absent from `:root` — which reads exactly like Tailwind
+failing to scan the file. It was not: `pkill -f "next dev"` had not matched
+the running process, so every probe was hitting a stale server that still
+held port 3000. `pnpm build` settled it in one command —
+`.rounded-l-frame{border-top-left-radius:var(--radius-frame)…}` was in the
+built CSS all along. **When the dev server disagrees with the source, build
+before you debug**, and kill by port (`lsof -ti:3000`) rather than by pattern.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

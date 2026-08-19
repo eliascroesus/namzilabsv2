@@ -104,6 +104,11 @@
   --radius-control: 0.5rem; /* 8px — inputs, buttons, nav items */
   --radius-card: 0.75rem; /* 12px — step cards, tiles, sections */
   --radius-surface: 1rem; /* 16px — panels, modals, popovers */
+  /* 32px — the frame's own corner, where the canvas is cut into the rail's
+     wash. Bigger than any radius INSIDE the app on purpose: this one is not a
+     component, it is the edge of the application itself, and at surface's 16px
+     it read as a rounded box rather than as the app sitting in its chrome. */
+  --radius-frame: 2rem;
 
   /* --- Elevation ----------------------------------------------------------
    * Two, plus the existing `.flow-shadow` for surfaces that float over the

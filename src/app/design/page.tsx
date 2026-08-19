@@ -56,8 +56,11 @@ export default function DesignPage() {
   return (
     // The kit is rendered in the REAL frame, notches and all — a page that
     // showed the rail without the wash behind the canvas would be exactly the
-    // drift it exists to catch.
+    // drift it exists to catch. It takes `framed` although it is not the
+    // builder: the cut is the thing that needs looking at, and the Frame
+    // section below says plainly that only the builder gets it.
     <AppFrame
+      framed
       surface="overflow-y-auto bg-white"
       account={{
         initials: "EC",
@@ -131,7 +134,7 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Frame" note="One element paints the wash. The rail is transparent inside it and the canvas sits on top of it opaque, covering all of it but the two notches — so the colour behind the canvas and the colour of the rail are not two values kept in sync, they are one gradient and cannot drift.">
+        <Section title="Frame" note="The builder only. A canvas is a workspace you look into, so the app cuts 32px out of it and shows its own colour through the notch; a list of flows runs flush off the rail, square. One element paints the wash — the rail is transparent inside it and the surface sits on top opaque — so the colour behind the canvas and the colour of the rail are not two values kept in sync, they are one gradient and cannot drift.">
           {/* The frame at figure size: the wash on the outer box, the rail's own
               100px of it left bare, and the surface cut 16px at its two left
               corners so the wash shows through them. Only the left corners — the
