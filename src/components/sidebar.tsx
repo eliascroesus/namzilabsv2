@@ -6,21 +6,18 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LayoutDashboard, Plug, Settings, Workflow } from "lucide-react";
 
 /**
- * THE RAIL — Zapier's shape: narrow, solid, icons only.
+ * THE RAIL: a 76px icon column carrying the product's colour.
  *
- * It has been 256px with labels, then 76px with labels under a gradient, and
- * the labels were the problem: four words stacked down the side of a canvas
- * app, each in 11px, reading as a list rather than a rail. Zapier's is 60px of
- * icons with nothing else, and it disappears until you want it — which is the
- * correct behaviour for navigation in a tool you spend hours inside.
+ * It has been three things now — a saturated gradient, then near-black, then
+ * graphite — and the graphite was right about contrast and wrong about
+ * feeling: a grey bar down the side of a grey app is correct and joyless. The
+ * wash is back, but built rather than picked: anchored on our own brand at
+ * the top, warming through violet to fuchsia, on a rail whose icons and
+ * labels were designed for it (they were not, the first time).
  *
- * Labels move to tooltips. That is a real trade: a first-time user has to
- * hover to learn "Apps". Four destinations with distinct glyphs is inside the
- * budget where that is fine, and the icons are the standardised 24px from the
- * kit rather than a smaller set drawn for a narrow rail.
- *
- * SOLID, not a gradient. A wash needs height to read as one, and at 60px it
- * was a smear; the deep navy that anchored it carries the colour on its own.
+ * This is the one place in the product allowed to be loud. Everything to the
+ * right of it stays neutral, which is exactly what lets the rail carry colour
+ * without the app becoming noisy.
  *
  * The active item is derived from the path; no page passes it in.
  */
@@ -44,30 +41,31 @@ const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: stri
 export function Sidebar({ account }: { account?: { initials: string; panel: ReactNode } }) {
   const pathname = usePathname() ?? "";
   return (
-    <aside className="flex h-full w-[60px] shrink-0 flex-col items-center gap-1 bg-ink-950 py-3">
+    <aside className="bg-rail flex h-full w-[76px] shrink-0 flex-col items-center py-3">
+      {/* The wordmark: a glass tile on the wash rather than another coloured
+          square, which on a coloured rail would be a colour on a colour. */}
       <Link
         href="/dashboard"
         title="Namzilabs — dashboard"
-        className="mb-2 flex h-10 w-10 items-center justify-center rounded-control bg-primary text-lead font-bold text-primary-foreground transition-all hover:brightness-110"
+        className="mb-3 flex h-11 w-11 items-center justify-center rounded-card bg-white/20 text-title font-bold text-white ring-1 ring-white/25 backdrop-blur-sm transition-all hover:bg-white/30"
       >
         N
       </Link>
 
-      <nav className="flex flex-1 flex-col items-center gap-1">
+      <nav className="flex w-full flex-1 flex-col items-stretch gap-1 px-2.5">
         {NAV.map((item) => {
           const active = item.match(pathname);
           return (
             <Link
               key={item.href}
               href={item.href}
-              title={item.label}
-              aria-label={item.label}
               aria-current={active ? "page" : undefined}
-              className={`flex h-11 w-11 items-center justify-center rounded-control transition-colors ${
-                active ? "bg-white/12 text-white" : "text-white/45 hover:bg-white/8 hover:text-white/85"
+              className={`group flex flex-col items-center gap-1.5 rounded-card px-1 py-2.5 transition-all ${
+                active ? "bg-white text-brand-600 shadow-sm" : "text-white/70 hover:bg-white/15 hover:text-white"
               }`}
             >
               {item.icon}
+              <span className="text-micro font-semibold leading-none">{item.label}</span>
             </Link>
           );
         })}
@@ -111,8 +109,8 @@ function RailAccount({ initials, children }: { initials: string; children: React
         title="Account"
         aria-label="Account"
         aria-expanded={open}
-        className={`flex h-9 w-9 items-center justify-center rounded-full text-micro font-bold transition-colors ${
-          open ? "bg-white/25 text-white" : "bg-white/12 text-white/85 hover:bg-white/20 hover:text-white"
+        className={`flex h-9 w-9 items-center justify-center rounded-full text-micro font-bold ring-1 ring-white/25 transition-all ${
+          open ? "bg-white/35 text-white" : "bg-white/20 text-white hover:bg-white/30"
         }`}
       >
         {initials}

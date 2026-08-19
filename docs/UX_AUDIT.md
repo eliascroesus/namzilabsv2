@@ -1275,37 +1275,6 @@ borders a ring has to compete with. Applied to the selected step card, the
 picker's hover rows and the Select's keyboard-active row, so "highlighted"
 means one thing everywhere.
 
-### 9p. Two bars framing a canvas, and Zapier's rail
-
-**The top bar spans the canvas.** It was a pill hugging the left corner while
-the bottom bar spanned the width — two surfaces at different scales, which is
-why the top always read as "off". Both are now full-width with the same 12px
-inset on every edge, so they frame the canvas as a pair. The top bar shrinks
-for the config panel exactly as the bottom one does.
-
-**Type and targets went up** where the eye lands: the flow name and Review &
-publish at 17px, Test flow at 17px in a 44px button, the zoom readout at 14px
-bold. Island padding 6→8px.
-
-**The board mark is gone** — added last round from Miro, removed this round on
-sight. Worth recording as a miss: Miro's mark identifies *which board* among
-thousands; our editor opens one flow at a time from a list, so it was
-decoration borrowed without its reason.
-
-**The flow's on/off switch is in the bar.** Zapier puts a Zap's switch beside
-its name, and it belongs there: it is the most consequential fact about a
-workflow and was previously reachable only from the list. Same
-`setFlowEnabledAction` and same three-state model as the list, so the two
-screens cannot disagree; optimistic, and corrected from the server's own
-answer for a flow that has never been published.
-
-**The rail is Zapier's**: 60px, solid, icons only. Labels were the problem —
-four words stacked down the side of a canvas app read as a list rather than a
-rail. They move to tooltips, which is a real trade (a first-timer hovers to
-learn "Apps") that four distinct glyphs can afford. Solid rather than a
-gradient, because a wash needs height to read as one and at 60px it was a
-smear.
-
 ---
 
 ## 10. What not to change
