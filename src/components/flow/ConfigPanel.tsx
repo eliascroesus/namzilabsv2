@@ -29,7 +29,7 @@ import {
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
 import { computeNodeStatus, STD_META } from "./graph-utils";
 import { NumberField } from "./controls/NumberField";
-import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, nodeVariant, resultLabel, stepSummaryLines } from "./node-meta";
+import { STATUS_META, defaultTitle, formulaExpression, formulaHandleLabels, nodeVariant, resultLabel } from "./node-meta";
 import { RecordSamplePicker, recordWhen } from "./RecordSamplePicker";
 import { DataIcon, NodeIcon } from "./icons";
 import { Select, Segmented, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
@@ -151,23 +151,6 @@ export function ConfigPanel({
   // re-flatten on every keystroke in the panel.
   const groups = useMemo(() => toDataGroups(fieldGroups), [fieldGroups]);
 
-  /**
-   * The step's own sentence. Field PATHS are resolved to the labels the user
-   * picked ("Direction", not "properties.data.direction") — a summary that
-   * echoes raw paths restates the problem instead of solving it. Falls back to
-   * `humanizeKey` for a path no upstream step is currently offering, which is
-   * the ordinary case before the step above has been tested.
-   */
-  const summaryLines = useMemo(() => {
-    const labelOf = (p: string) => groups.flatMap((g) => g.fields).find((f) => f.path === p)?.label ?? humanizeKey(p);
-    const source = String((cfg as { source?: unknown }).source ?? "");
-    const et = (cfg as { eventType?: unknown }).eventType;
-    return stepSummaryLines(type, cfg, labelOf, {
-      recordType: typeof et === "string" && et ? eventTypeLabel(source || null, et) : undefined,
-      inputCount,
-    });
-  }, [type, cfg, groups, inputCount]);
-
   // Two tabs: set the step up, then test it. Remounts per step (keyed on id), so a
   // freshly-opened step always starts on Configure.
   const [tab, setTab] = useState<"configure" | "test">("configure");
@@ -247,18 +230,6 @@ export function ConfigPanel({
                   leave this step, find that one, run it, and come back. */}
               {type !== "app" && onTestUpstream && !hasAnyFields(groups) && (
                 <UpstreamPrompt onTestUpstream={onTestUpstream} />
-              )}
-              {/* What this step does, restated as a sentence, above the
-                  controls that produce it — the pattern Calculate has always
-                  had and every other step lacked. */}
-              {summaryLines.length > 0 && (
-                <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
-                  {summaryLines.map((line, i) => (
-                    <p key={i} className={i > 0 ? "mt-1 text-indigo-700" : "font-medium"}>
-                      {line}
-                    </p>
-                  ))}
-                </div>
               )}
               <NodeConfig
                 type={type}
@@ -639,7 +610,7 @@ function NodeConfig({
           </div>
         ) : (
           <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-[13px] text-neutral-600">
-            {bmode === "always" ? "Every record continues — no conditions needed." : "Gets the records no other path matched."}
+            {bmode === "always" ? "Every record continues." : "Gets what no other path matched."}
           </p>
         )}
       </div>
@@ -722,18 +693,23 @@ function NodeConfig({
         <Field label="Calculation">
           <Select value={op} width={W} options={FORMULA_OP_OPTIONS} onChange={setOp} />
         </Field>
-        <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
-          <p className="font-medium">
-            {datasetOp
-              ? datasetCalcExpression(op, op === "count" ? "records" : fieldLabel)
-              : formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}
-          </p>
-          {/* The engine reaches past steps that produce a NUMBER to the nearest
-              one that produces records — that is what lets two totals come off
-              one source. Doing it silently would be worse than the error it
-              replaces, so the step says where its records came from. */}
-          {datasetOp && recordSourceNote && <p className="mt-1 text-indigo-700">Reads records from {recordSourceNote}</p>}
-        </div>
+        {/* The expression, ONLY where it adds something the controls don't.
+            A two-number compare composes two other steps, so naming them is
+            the one place a user can check the thing they meant; a dataset
+            aggregation just restated the dropdown directly below it ("Count
+            of records" over a select reading "Count of records"). */}
+        {!datasetOp && (
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-900">
+            {formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}
+          </div>
+        )}
+        {/* The engine reaches past steps that produce a NUMBER to the nearest
+            one that produces records — that is what lets two totals come off
+            one source. Doing it silently would be worse than the error it
+            replaces, so the step says where its records came from. */}
+        {datasetOp && recordSourceNote && (
+          <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">Reads records from {recordSourceNote}</p>
+        )}
         {datasetOp ? (
           <>
             <Field label="Measuring">
@@ -869,19 +845,6 @@ function NodeConfig({
             so this control is for CHANGING one into the other rather than for
             discovering the second one exists — which is what a checkbox
             buried under the lane list was being asked to do. */}
-        {/* Two pills rather than a full-width dropdown with two long options:
-            the choice is binary, both answers fit, and a segmented control
-            shows the alternative instead of hiding it behind a click. */}
-        <Field label="Mode">
-          <Segmented
-            value={matching ? "match" : "stack"}
-            options={[
-              { value: "stack", label: "Stack" },
-              { value: "match", label: "Match" },
-            ]}
-            onChange={(v) => onChange({ mode: v })}
-          />
-        </Field>
         {matching && inputs.length !== 2 && (
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
             Match needs exactly 2 steps — {inputs.length} wired in.
@@ -1037,12 +1000,11 @@ function NumberFieldList({
         <button type="button" onClick={() => setExtra([...extra, ""])} className="text-xs font-medium text-blue-600 hover:underline">
           + Add another field
         </button>
-        {extra.length > 0 && (
-          <p className="text-xs text-neutral-500">
-            Each record&rsquo;s values are added together first, then {AGG_LABELS[String(cfg.aggregation ?? cfg.op ?? "sum")]?.replace(/^\S+\s+/, "").toLowerCase() ?? "totalled"} across
-            your records. A blank or non-numeric cell adds nothing.
-          </p>
-        )}
+        {/* The "+" between the pickers already says these are added; what it
+            cannot say is the ORDER — per record first, then across records —
+            which is the difference between an average of totals and a total
+            of averages. Six words instead of a paragraph. */}
+        {extra.length > 0 && <p className="text-xs text-neutral-500">Added up per record, then across records.</p>}
       </div>
     </Field>
   );
@@ -1332,6 +1294,8 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
   const [note, setNote] = useState<string>("");
   const [columns, setColumns] = useState<SourceOption[]>([]);
   const [busy, setBusy] = useState(false);
+  /** The picker is revealed on demand; the detector's answer is the default view. */
+  const [editing, setEditing] = useState(false);
   const signature = JSON.stringify(sourceConfig);
 
   useEffect(() => {
@@ -1384,6 +1348,31 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
   const pick = (v: string) =>
     void save(v === "__auto" ? { kind: "auto" } : v === "__none" ? { kind: "none" } : { kind: "column", column: v });
 
+  /**
+   * COLLAPSED TO ITS ANSWER, because it is almost never a question.
+   *
+   * A spreadsheet row carries no timestamp of its own, so something has to
+   * decide which column dates it — and unlike everything else in this panel
+   * that decision is made FOR the user, correctly, nearly always. Standing it
+   * up as a full labelled field with a dropdown put a question mark next to
+   * an answer, in the middle of the one step a first-timer has to get through.
+   *
+   * So the answer is the control: one grey line saying which column is dating
+   * these rows, and a Change that reveals the picker for the sheet where the
+   * detector guessed wrong. Nothing is hidden — what it decided is still the
+   * first thing you read.
+   */
+  if (!editing) {
+    return (
+      <p className="flex items-center gap-2 text-xs text-neutral-500">
+        <span className="min-w-0 truncate">{note}</span>
+        <button type="button" onClick={() => setEditing(true)} className="shrink-0 font-medium text-indigo-600 hover:underline">
+          Change
+        </button>
+      </p>
+    );
+  }
+
   return (
     <Field label="Date column">
       <Select
@@ -1391,16 +1380,12 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
         width={W}
         disabled={busy}
         options={[
-          { value: "__auto", label: "Detect automatically", hint: "Use a column that holds real dates, if exactly one does." },
+          { value: "__auto", label: "Detect automatically" },
           { value: "__none", label: "Use import time (no date column)" },
           ...columns,
         ]}
         onChange={pick}
       />
-      <p className="mt-1.5 text-xs text-gray-500">
-        Which column holds the date each row happened on. Applies to every flow reading this sheet.
-      </p>
-      <p className="mt-1 text-xs text-gray-600">{note}</p>
     </Field>
   );
 }
@@ -1533,9 +1518,6 @@ function CombineMatchFields({
               <FieldInput value={String(cfg.lookupField ?? "")} groups={scopeFor(other.nodeId)} onChange={(v) => onChange({ lookupField: v })} placeholder="Field holding the values…" />
             </Field>
           )}
-          <p className="text-xs text-neutral-400">
-            Ignores capitalization and extra spaces. A blank value can never match{matchMode === "appears" ? ", so it is dropped." : ", so it is kept."}
-          </p>
         </>
       )}
     </div>
@@ -1916,7 +1898,7 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
         </span>
         Remove duplicates
       </button>
-      {on ? (
+      {on && (
         <>
           {/* WHICH ONE SURVIVES IS ASKED, IN THE SAME BREATH AS THE ORDER IT
               SURVIVES BY. The old copy said "the newest is kept" in grey below
@@ -1950,8 +1932,6 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
             <p className="text-xs text-amber-700">No synced records yet — sync or test this step to see its fields.</p>
           )}
         </>
-      ) : (
-        <p className="text-xs text-neutral-400">Collapse records sharing a value down to one.</p>
       )}
     </div>
   );
@@ -2024,7 +2004,7 @@ function TimePeriodSection({ cfg, groups, onChange }: { cfg: Record<string, unkn
         width={W}
         searchable
         options={[
-          { value: "all", label: "All time", hint: "Every record this step receives." },
+          { value: "all", label: "All time" },
           ...DATE_PRESETS.map((p) => ({ value: `preset:${p.value}`, label: p.label, group: "Preset periods" })),
           { value: "rolling", label: "Last N days…", group: "Custom" },
           { value: "between", label: "Between two dates…", group: "Custom" },

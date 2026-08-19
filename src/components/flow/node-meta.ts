@@ -244,155 +244,6 @@ export function formulaHandleLabels(op: string): { a: string; b: string } {
   }
 }
 
-/** A one-line human expression for a dataset Calculate (count/sum/avg/…). */
-export function datasetCalcExpression(op: string, fieldLabel: string): string {
-  switch (op) {
-    case "count":
-      return "Count of records";
-    case "count_distinct":
-      return `Unique values of ${fieldLabel}`;
-    case "sum":
-      return `Sum of ${fieldLabel}`;
-    case "avg":
-      return `Average of ${fieldLabel}`;
-    case "median":
-      return `Median of ${fieldLabel}`;
-    case "min":
-      return `Lowest ${fieldLabel}`;
-    case "max":
-      return `Highest ${fieldLabel}`;
-    default:
-      return op;
-  }
-}
-
-/**
- * Short verbs for a filter rule, for prose rather than for a dropdown.
- *
- * FILTER_OP_LABELS is deliberately explicit ("Exactly matches
- * (case-sensitive)") because a dropdown is where that distinction has to be
- * made — it is the difference between "Outbound" matching and not matching.
- * A sentence restating the whole configuration needs the short form, or it
- * stops being readable at two conditions.
- */
-const OP_PHRASE: Record<string, string> = {
-  equals: "is",
-  not_equals: "is not",
-  contains: "contains",
-  not_contains: "doesn’t contain",
-  starts_with: "starts with",
-  ends_with: "ends with",
-  gt: "is more than",
-  lt: "is less than",
-  gte: "is at least",
-  lte: "is at most",
-  is_empty: "is empty",
-  is_not_empty: "is not empty",
-  is_one_of: "is one of",
-  is_not_one_of: "is none of",
-  before: "is before",
-  after: "is after",
-  between: "is between",
-};
-
-/**
- * WHAT THIS STEP DOES, IN A SENTENCE, ABOVE ITS CONTROLS.
- *
- * The Calculate panel has always had one — a plain restatement of its own
- * configuration, sitting above the fields that produce it — and it is the
- * single most reassuring thing in the builder: it closes the loop between
- * "what I picked" and "what that means" without running anything.
- *
- * Every other step was left to be read off its own controls, which is exactly
- * the reading that goes wrong. A Filter showing `properties.data.direction` /
- * `Exactly matches (case-sensitive)` / `outbound` in three separate boxes is
- * three facts; "Keeps records where Direction is 'outbound'" is a sentence a
- * person can check against what they meant.
- *
- * Returns one line per clause. Empty for `formula`, which has its own richer
- * expression, and for steps whose whole configuration is already one sentence
- * on screen (a matching Combine).
- */
-export function stepSummaryLines(
-  type: NodeType,
-  cfg: Record<string, unknown>,
-  labelOf: (path: string) => string,
-  ctx: { recordType?: string; inputCount?: number } = {},
-): string[] {
-  if (type === "filter") {
-    const rules = Array.isArray(cfg.rules) ? (cfg.rules as Array<Record<string, unknown>>) : [];
-    const combinator = String(cfg.combinator ?? "and") === "or" ? " or " : " and ";
-    const clause = rules
-      .filter((r) => String(r.field ?? "").trim() !== "")
-      .map((r) => {
-        const op = OP_PHRASE[String(r.op)] ?? String(r.op);
-        // A rule comparing against another FIELD says so — it reads as a
-        // literal otherwise, and "Email is Email" is nonsense a user would
-        // stare at rather than recognise as field-to-field.
-        if (r.valueKind === "field" && r.valueField) return `${labelOf(String(r.field))} ${op} ${labelOf(String(r.valueField))}`;
-        const v = String(r.value ?? "").trim();
-        if (!v) return `${labelOf(String(r.field))} ${op}`;
-        return `${labelOf(String(r.field))} ${op} “${v}”`;
-      });
-    const dr = (cfg.dateRange ?? {}) as { enabled?: boolean; mode?: string; preset?: string; days?: number; from?: string; to?: string };
-    const lines: string[] = [];
-    lines.push(clause.length === 0 ? "Passes every record through — no conditions yet." : `Keeps records where ${clause.join(combinator)}.`);
-    if (dr.enabled) {
-      const period =
-        dr.mode === "rolling"
-          ? `the last ${dr.days ?? 30} days`
-          : dr.mode === "between"
-            ? dr.from
-              ? `${dr.from}${dr.to ? ` to ${dr.to}` : " onwards"}`
-              : "a custom range"
-            : String(dr.preset ?? "last_30_days").replace(/_/g, " ");
-      lines.push(`Only records from ${period}.`);
-    }
-    return lines;
-  }
-
-  if (type === "app") {
-    const account = String(cfg.connectionName ?? "").trim();
-    if (!account) return [];
-    const kind = ctx.recordType?.trim() ? ctx.recordType : "All records";
-    const dedupe = cfg.dedupe
-      ? ` One record per ${labelOf(String(cfg.dedupeField ?? "subject"))}, keeping the ${String(cfg.dedupeKeep ?? "latest") === "earliest" ? "earliest" : "latest"}.`
-      : "";
-    return [`${kind} from ${account}.${dedupe}`];
-  }
-
-  if (type === "unite") {
-    const n = ctx.inputCount ?? 0;
-    if (String(cfg.mode ?? "stack") === "match") {
-      // A half-answered Match has no honest sentence — naming only the side
-      // that IS chosen would read as a complete rule that keeps the wrong
-      // records. The setup hint on the card covers the unfinished case.
-      const key = String(cfg.keyField ?? "");
-      const lookup = String(cfg.lookupField ?? "");
-      if (!key || !lookup) return [];
-      const verb = String(cfg.matchMode ?? "appears") === "missing" ? "is not in" : "is in";
-      return [`Keeps records whose ${labelOf(key)} ${verb} the other step’s ${labelOf(lookup)}.`];
-    }
-    return n === 0 ? ["Pick the steps whose records should flow on together."] : [`Records from ${n} step${n === 1 ? "" : "s"}, continuing as one list.`];
-  }
-
-  if (type === "paths") {
-    const paths = Array.isArray(cfg.paths) ? (cfg.paths as Array<{ label?: string }>) : [];
-    if (paths.length === 0) return [];
-    return [`Splits into ${paths.length} branch${paths.length === 1 ? "" : "es"}: ${paths.map((p) => p.label ?? "?").join(", ")}.`];
-  }
-
-  if (type === "time_between") {
-    const key = String(cfg.keyField ?? "");
-    const start = String(cfg.startField ?? "");
-    const end = String(cfg.endField ?? "");
-    if (!key || !start || !end) return [];
-    return [`For each ${labelOf(key)}, the time from ${labelOf(start)} to ${labelOf(end)}.`];
-  }
-
-  return [];
-}
-
 /** A one-line human expression for a Formula, using upstream titles when known. */
 export function formulaExpression(op: string, aName: string, bName: string): string {
   switch (op) {
@@ -486,13 +337,28 @@ export function resultLabel(
  * "Not tested" rather than "Ready to test": a status says what IS, not what to
  * do next — the footer button already says what to do next.
  */
+/**
+ * `border` is deliberately neutral for the states that are FINE.
+ *
+ * Every status used to tint the card's whole outline, so a five-step flow was
+ * a green card, an amber card, a grey card and a blue card — four colours
+ * competing with the four coloured step icons, and none of them meaning
+ * anything more than the dot beside them already said. Colour on a canvas
+ * should be spent on identity (which kind of step this is) and on the one or
+ * two states worth interrupting for.
+ *
+ * So: amber outlines a step that BLOCKS publish, red outlines one that broke,
+ * and everything else is a plain neutral card with a coloured dot. "Tested" in
+ * particular gets no decoration at all — a canvas that celebrates every
+ * working step has no way left to point at the one that isn't.
+ */
 export type NodeStatus = "ready" | "setup" | "untested" | "updating" | "error";
 export const STATUS_META: Record<NodeStatus, { label: string; cls: string; border: string; dot: string; hint: string }> = {
-  ready: { label: "Tested", cls: "bg-green-100 text-green-700", border: "border-green-300", dot: "bg-green-500", hint: "text-neutral-500" },
-  setup: { label: "Needs setup", cls: "bg-amber-100 text-amber-800", border: "border-amber-300", dot: "bg-amber-500", hint: "text-amber-700" },
-  untested: { label: "Not tested", cls: "bg-neutral-100 text-neutral-500", border: "border-neutral-300", dot: "bg-neutral-300", hint: "text-neutral-400" },
-  updating: { label: "Testing…", cls: "bg-blue-100 text-blue-700", border: "border-blue-300", dot: "bg-blue-500", hint: "text-blue-600" },
-  error: { label: "Error", cls: "bg-red-100 text-red-700", border: "border-red-300", dot: "bg-red-500", hint: "text-red-600" },
+  ready: { label: "Tested", cls: "bg-green-100 text-green-700", border: "border-neutral-200", dot: "bg-green-500", hint: "text-neutral-500" },
+  setup: { label: "Needs setup", cls: "bg-amber-100 text-amber-800", border: "border-amber-200", dot: "bg-amber-500", hint: "text-amber-700" },
+  untested: { label: "Not tested", cls: "bg-neutral-100 text-neutral-500", border: "border-neutral-200", dot: "bg-neutral-300", hint: "text-neutral-400" },
+  updating: { label: "Testing…", cls: "bg-blue-100 text-blue-700", border: "border-neutral-200", dot: "bg-blue-500", hint: "text-blue-600" },
+  error: { label: "Error", cls: "bg-red-100 text-red-700", border: "border-red-200", dot: "bg-red-500", hint: "text-red-600" },
 };
 
 export function pathHandles(data: NodeData): Array<{ id: string; label: string }> {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { validateGraph } from "@/lib/flow/validate";
 import { parseGraph, aggregationInputs, AGGREGATIONS, isDatasetFormulaOp, NODE_LABELS, NODE_TYPES } from "@/lib/flow/types";
-import { defaultConfig, defaultTitle, NODE_LIBRARY, STATUS_META, stepSummaryLines } from "@/components/flow/node-meta";
+import { defaultConfig, defaultTitle, NODE_LIBRARY, STATUS_META } from "@/components/flow/node-meta";
 import { nodeNeedsSetup, publishesToDashboard } from "@/components/flow/graph-utils";
 
 /**
@@ -148,83 +148,6 @@ describe("Calculate defaults to counting", () => {
     // Sabotage: restore { op: "percentage" } and a new Calculate lands on
     // "Needs setup — Pick or type a First and Second number".
     expect(defaultConfig("formula").op).toBe("count");
-  });
-});
-
-/**
- * Every step restates its own configuration in a sentence, above the controls
- * that produced it. Calculate always had this; nothing else did, and the
- * reading that goes wrong is exactly the one three separate boxes force the
- * user to do in their head.
- */
-describe("a step says what it does, in words", () => {
-  // The labels the user actually picked, never the paths underneath them.
-  const labelOf = (p: string) => ({ "properties.data.direction": "Direction", "properties.amount": "Amount", subject: "Subject" })[p] ?? p;
-
-  it("a filter with no conditions admits it passes everything", () => {
-    // The most common half-built state in the product, and the one that reads
-    // as finished: an empty Filter changes nothing at all.
-    expect(stepSummaryLines("filter", { combinator: "and", rules: [] }, labelOf)).toEqual(["Passes every record through — no conditions yet."]);
-  });
-
-  it("a filter names its conditions with field labels and a short verb", () => {
-    // Sabotage: echo `rule.field` instead of resolving it and this reads
-    // "properties.data.direction is 'outbound'" — restating the problem the
-    // sentence exists to solve.
-    expect(
-      stepSummaryLines(
-        "filter",
-        {
-          combinator: "and",
-          rules: [
-            { field: "properties.data.direction", op: "equals", value: "outbound", valueKind: "fixed" },
-            { field: "properties.amount", op: "gt", value: "100", valueKind: "fixed" },
-          ],
-        },
-        labelOf,
-      ),
-    ).toEqual(["Keeps records where Direction is “outbound” and Amount is more than “100”."]);
-  });
-
-  it("a date window is stated as its own clause, so it can't be missed", () => {
-    const lines = stepSummaryLines(
-      "filter",
-      { combinator: "and", rules: [], dateRange: { enabled: true, mode: "rolling", days: 7 } },
-      labelOf,
-    );
-    expect(lines[1]).toBe("Only records from the last 7 days.");
-  });
-
-  it("a Get data step says which records, from which account, and what dedupe does", () => {
-    expect(
-      stepSummaryLines("app", { connectionName: "Acme (Close)", dedupe: true, dedupeField: "subject", dedupeKeep: "earliest" }, labelOf, {
-        recordType: "Lead created",
-      }),
-    ).toEqual(["Lead created from Acme (Close). One record per Subject, keeping the earliest."]);
-  });
-
-  it("a Match step states its rule, in the direction it is set to", () => {
-    const cfg = { mode: "match", keepNodeId: "a", keyField: "subject", lookupField: "properties.amount" };
-    // Sabotage: return [] for match mode as it used to and the panel opens on
-    // a standing paragraph about STACKING — the copy promising the opposite
-    // of what the step does, which is what the screenshot caught.
-    expect(stepSummaryLines("unite", cfg, labelOf)).toEqual(["Keeps records whose Subject is in the other step’s Amount."]);
-    expect(stepSummaryLines("unite", { ...cfg, matchMode: "missing" }, labelOf)).toEqual([
-      "Keeps records whose Subject is not in the other step’s Amount.",
-    ]);
-  });
-
-  it("a half-answered Match says nothing rather than a rule it isn't following", () => {
-    // Naming only the side that IS chosen would read as a complete rule that
-    // keeps the wrong records.
-    expect(stepSummaryLines("unite", { mode: "match", keyField: "subject" }, labelOf)).toEqual([]);
-  });
-
-  it("a step with nothing configured yet says nothing rather than half a sentence", () => {
-    expect(stepSummaryLines("app", {}, labelOf)).toEqual([]);
-    expect(stepSummaryLines("time_between", { keyField: "", startField: "", endField: "" }, labelOf)).toEqual([]);
-    // Calculate has its own richer expression and must not get a second box.
-    expect(stepSummaryLines("formula", { op: "count" }, labelOf)).toEqual([]);
   });
 });
 

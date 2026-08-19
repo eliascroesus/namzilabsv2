@@ -1491,7 +1491,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           >
             {/* A soft grey canvas with a faint, wide-spaced dot grid — calm and
                 smooth while panning, not a busy pattern. */}
-            <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="#dfe1e8" bgColor="#f6f6f8" />
+            {/* Lighter than before, and cooler: the cards are the content and
+                they were competing with a grid that had nearly their own
+                contrast. The dots recede; white cards float. */}
+            <Background variant={BackgroundVariant.Dots} gap={28} size={1} color="#dde0e8" bgColor="#fafbfc" />
           </ReactFlow>
 
           {/* ZOOM HAS ALWAYS WORKED AND NEVER SAID SO. Panning is scroll and

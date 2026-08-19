@@ -121,7 +121,6 @@ export function ReviewPublishModal({
         <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
           <div>
             <h2 className="text-base font-semibold tracking-tight text-neutral-900">Review &amp; publish</h2>
-            <p className="mt-0.5 text-xs text-neutral-500">Choose which results appear on your dashboard.</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700" aria-label="Close">
             ✕
@@ -176,7 +175,7 @@ export function ReviewPublishModal({
                         as a chart setting — the question is concrete and the
                         label now asks it. */}
                     <div>
-                      <span className="mb-1 block text-xs font-medium text-neutral-600">Which date puts a record in a period?</span>
+                      <span className="mb-1 block text-xs font-medium text-neutral-600">Date the dashboard filters by</span>
                       <Select
                         value={m.timeField ?? ""}
                         width={260}
@@ -185,9 +184,6 @@ export function ReviewPublishModal({
                         options={[{ value: "", label: "When it happened (default)" }, ...timeFieldOptions]}
                         onChange={(v) => set(ep.nodeId, { timeField: v || undefined })}
                       />
-                      <p className="mt-1 text-xs text-neutral-500">
-                        A meeting can belong to &ldquo;today&rdquo; by when it happens, or by when it was booked. This is what the dashboard&rsquo;s Today / Last 7 days measures.
-                      </p>
                     </div>
 
                     {/* Five presentation settings, folded away. A user who
@@ -279,10 +275,7 @@ export function ReviewPublishModal({
               at buttons that sound one-way. Both halves here are true: it
               starts updating by itself, and none of it is permanent. */}
           {enabledCount > 0 && !publishing && (
-            <p className="text-center text-xs text-neutral-500">
-              Adds {enabledCount === 1 ? "this metric" : `these ${enabledCount} metrics`} to your dashboard and keeps {enabledCount === 1 ? "it" : "them"} updating
-              automatically. You can edit or remove {enabledCount === 1 ? "it" : "them"} any time.
-            </p>
+            <p className="text-center text-xs text-neutral-500">Updates automatically. Editable any time.</p>
           )}
           <button
             onClick={onPublish}

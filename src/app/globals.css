@@ -54,10 +54,13 @@ body {
  * Make.com. Brightens to indigo when the edge is hovered or selected.
  */
 .react-flow__edge-path {
-  stroke: #aab4cb;
-  stroke-width: 2;
+  /* Lighter and finer than before. The line's job is to say "this follows
+     that"; at 2px in mid-grey it was reading as loudly as the cards it
+     connects, which is backwards on a canvas whose whole shape is one column. */
+  stroke: #c3cad9;
+  stroke-width: 1.75;
   stroke-linecap: round;
-  stroke-dasharray: 6 7;
+  stroke-dasharray: 5 6;
   transition: stroke 0.15s ease;
 }
 .react-flow__edge:hover .react-flow__edge-path,

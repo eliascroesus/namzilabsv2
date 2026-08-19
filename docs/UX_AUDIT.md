@@ -7,9 +7,9 @@ a rule about which existing thing is shown when.
 
 > **Status — all five stages shipped, every defect closed, plus a density
 > pass.** All twenty items in §9 and all fourteen defects in §8 have landed,
-> each marked ✅ below; §9b covers the label/icon/density round that followed
-> the first screenshots. The verification bar was met after every stage:
-> `typecheck`, **1,399 tests / 112 files**, `build`, `check:orphans`.
+> each marked ✅ below; §9b and §9c cover the label/icon and declutter rounds
+> that followed the first screenshots. The verification bar was met after every stage:
+> `typecheck`, **1,392 tests / 112 files**, `build`, `check:orphans`.
 > Behavioural changes are sabotage-verified in the repo's convention — the pin
 > is broken, confirmed to fail alone, and restored.
 >
@@ -779,6 +779,60 @@ the division sign. The old Calculate glyph was trying to mean both halves at
 once and read as neither. And an unconfigured Get data step — the picker's own
 entry included — used to render a grey tile reading **"Ap"**, which looks like
 a failed image; it now shows the database glyph until an app is chosen.
+
+### 9c. The declutter pass
+
+Screenshots again, and the rule tightened: **if the controls already say it,
+delete it.**
+
+**The step-summary box is gone.** §6.3 argued for extending Calculate's
+plain-English restatement to every step. On screen it was clutter: *"All
+records from Google Sheets · eliascroesus@gmail.com."* sat above an Account
+picker reading exactly that, and *"Passes every record through — no conditions
+yet."* sat above an empty condition list. A restatement earns its place only
+when it composes something the controls show separately — which is true of a
+two-number Compare (*"Meetings ÷ Booked × 100"*, naming two other steps) and
+false of everything else. The box now renders for Compare alone. The
+`recordSourceNote` survives, because "these records came from step 2, not the
+step above" is the one thing no control on screen says.
+
+**The Stack/Match switch is gone.** They are two entries in the picker; a mode
+dropdown inside the config made them one step wearing two hats again, which is
+the exact confusion the split existed to end. Which step you added is the
+answer.
+
+**Every subtitle under a control, deleted.** "Which column holds the date each
+row happened on. Applies to every flow reading this sheet." · "Collapse records
+sharing a value down to one." · "Ignores capitalization and extra spaces." ·
+"A meeting can belong to 'today' by when it happens, or by when it was booked."
+· the hints under "All time" and "Detect automatically". Where the fact was
+load-bearing it moved into the label instead of sitting under it: Review &
+publish's time reference is now simply **"Date the dashboard filters by"**, no
+subtitle. The paragraph about adding several columns became six words.
+
+**Date column collapses to its answer.** Asked about directly: a spreadsheet
+row carries no timestamp, so something must decide which column dates it, and
+that decision is stream-scoped — every flow reading the sheet shares it, which
+is why it cannot live in Review & publish. But it is auto-detected and right
+nearly always, so standing it up as a labelled field with a dropdown put a
+question mark beside an answer. It is now one grey line — *Timing uses
+"timestamp".* — with a **Change** that reveals the picker.
+
+It is **not** the same setting as Review & publish's time reference. This one
+decides what `occurredAt` *is* for a sheet row (and so what date filters,
+backfill windows and dedupe ordering use). That one picks which date field a
+single metric's dashboard pills bucket by.
+
+**Canvas colour.** Status was encoded twice — a tinted card border *and* a dot
+— so a five-step flow was a green card, an amber card, a grey card and a blue
+one, four colours competing with four coloured step icons. Colour now belongs
+to identity (which kind of step) and to the two states worth interrupting for:
+amber outlines a step that blocks publish, red one that broke, everything else
+is a plain neutral card. "Tested" gets no decoration at all — a canvas that
+celebrates every working step has nothing left to point at the one that isn't.
+Selection became a soft indigo halo rather than a hard ring at the same weight
+as the status borders it had to be told apart from; edges went finer and
+lighter; the dot grid receded so white cards float.
 
 ---
 
