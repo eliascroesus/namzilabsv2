@@ -1109,6 +1109,41 @@ different kinds of act — Make and Zapier both give "run" its own colour rather
 than a second grey. Test flow is green; publish stays the single strongest
 thing on screen.
 
+### 9k. The card, rebuilt — and a layout invariant it exposed
+
+"Still looks the same" was correct, and the reason is worth recording: §9i–9j
+changed **tokens** — colour, radius, shadow, icons — and never touched the
+thing the canvas is actually made of. The step card was the same cramped
+256px row it had been since the beginning: a 30px mark, a 14px title and a
+2px dot in one 40px strip. Restyling a list item does not make it a card.
+
+**The card is now a card.** 300px wide, 44px mark, the step number as its own
+chip so it stops eating the title's width, the title on its own line at 15px,
+the result below it. The kebab appears on hover, so a resting canvas is cards
+and nothing else. The publish footer is a proper foot rather than a thin
+stripe.
+
+**"Add next step" is a ghost card**, not a pill — full width, dashed, with a
+dashed icon well. Zapier's pattern, and it works because it shows the SHAPE of
+what comes next rather than describing it.
+
+**A regression the tests caught, and a coupling nobody had written down.**
+Growing the card meant growing the canvas geometry — and raising the row
+packing gap from 288 to 344 broke three-way splits, because branch lanes were
+*placed* at `SPREAD = 320` and then *packed* at `MIN_GAP = 344`. The packer
+shoved every lane after the first rightward and splits stopped being
+symmetric about their hub.
+
+Those two constants were always the same quantity — "how far apart do two
+columns sit" — expressed twice, and the invariant `SPREAD >= MIN_GAP` existed
+only implicitly in the fact that 320 > 288. They are one constant now (`COL`),
+so they cannot disagree, and a new test pins the symmetry directly rather than
+trusting a pixel value.
+
+The kit gained a **canvas slice** — two connected cards, the connector, the
+ghost step — because cards shown in isolation cannot reveal what was actually
+wrong: the rhythm between them.
+
 ---
 
 ## 10. What not to change

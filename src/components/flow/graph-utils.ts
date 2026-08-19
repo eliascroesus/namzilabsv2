@@ -201,7 +201,21 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
     if (fb) ids.push(fb);
     return ids;
   };
-  const SPREAD = 320;
+  /**
+   * ONE COLUMN PITCH, used for both jobs, because two numbers drift.
+   *
+   * Branch lanes are PLACED at this pitch, and then the same-row packer below
+   * ENFORCES it as a minimum. If the placement value were ever smaller than
+   * the packing value, the packer would shove every lane after the first to
+   * the right and a split would stop being symmetric about its hub — which is
+   * exactly what happened when the card grew and the packing gap was raised
+   * from 288 to 344 while the spread stayed at 320. They are the same
+   * quantity ("how far apart do two columns sit"), so they are now the same
+   * constant and cannot disagree again.
+   *
+   * The value follows the card: 300px wide plus a 44px gutter.
+   */
+  const COL = 344;
   const xById = new Map<string, number>();
   /** X under one incoming edge: the parent's lane, offset if it's a Paths branch. */
   const laneX = (edge: { source: string; handle: string | null }): number => {
@@ -216,12 +230,15 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
       // really is lane one and shoving it sideways. It has no lane, so it gets
       // no offset and stays under the hub, where the packing can separate it.
       if (idx < 0) return px;
-      return px + (idx - (ids.length - 1) / 2) * SPREAD;
+      return px + (idx - (ids.length - 1) / 2) * COL;
     }
     return px;
   };
-  const ROW = 168;
-  const MIN_GAP = 288;
+  // Row pitch follows the card's HEIGHT the way COL follows its width: the
+  // card grew from ~40px to ~76px (taller again with a publish footer), and
+  // the ghost "Add next step" beneath a terminal needs its own room.
+  const ROW = 232;
+  const MIN_GAP = COL;
   const byDepth = new Map<number, string[]>();
   for (const n of nodes) {
     const d = depth.get(n.id) ?? 0;

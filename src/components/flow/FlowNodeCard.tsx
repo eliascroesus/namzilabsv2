@@ -1,6 +1,6 @@
 "use client";
 
-import { LineChart, MoreVertical } from "lucide-react";
+import { LineChart, MoreVertical, Plus } from "lucide-react";
 
 import { useState, type CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
@@ -126,7 +126,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
      * (the same trap `flow-pop-in` documents for the config panel). So the
      * rule is simply: this box does not clip.
      */
-    <div className={`w-64 rounded-card border bg-card shadow-raised transition-[border-color,box-shadow] duration-150 ${border}`}>
+    <div className={`group/card w-[300px] rounded-card border bg-card shadow-raised transition-all duration-150 hover:shadow-lifted ${border}`}>
       {isCompare ? (
         <>
           {/* Both number inputs anchor at top-centre; the edges enter straight down (no
@@ -138,35 +138,58 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         <Handle type="target" position={Position.Top} style={HIDDEN_HANDLE} />
       ) : null}
 
-      <div className="flex items-center gap-2.5 px-3 py-2.5">
-        <NodeIcon type={t} source={String(data.config.source ?? "")} variant={nodeVariant(t, data.config as Record<string, unknown>)} size={30} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-neutral-800">
-            {data.stepNo != null ? `${data.stepNo}. ` : ""}
-            {nodeTitle(t, data)}
+      {/* ---- Head: the step, at a size you can actually read ----
+          It was a 30px icon, a 14px title and a 2px dot crammed into one
+          40px row — a list item, not a card, on a canvas made of nothing but
+          these. Now: a 44px mark, the step number as its own chip so it stops
+          eating the title's width, and the title on its own line. */}
+      <div className="flex items-start gap-3 p-3.5">
+        <NodeIcon type={t} source={String(data.config.source ?? "")} variant={nodeVariant(t, data.config as Record<string, unknown>)} size={44} />
+
+        <span className="min-w-0 flex-1 pt-0.5">
+          <span className="flex items-center gap-1.5">
+            {data.stepNo != null && (
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-micro font-bold tabular-nums text-muted-foreground">{data.stepNo}</span>
+            )}
+            <span className="min-w-0 truncate text-lead font-semibold text-foreground">{nodeTitle(t, data)}</span>
           </span>
-          {bodyLine && <span className={`block truncate text-xs ${bodyLine.cls}`} title={bodyLine.text}>{bodyLine.text}</span>}
-          {refLine && <span className="block truncate text-xs text-brand-600" title={refLine}>{refLine}</span>}
-          {sourceLine && <span className="block truncate text-xs text-amber-700" title={sourceLine}>{sourceLine}</span>}
+          {bodyLine && (
+            <span className={`mt-1 block truncate text-tiny font-medium ${bodyLine.cls}`} title={bodyLine.text}>
+              {bodyLine.text}
+            </span>
+          )}
+          {refLine && (
+            <span className="mt-0.5 block truncate text-tiny text-brand-600" title={refLine}>
+              {refLine}
+            </span>
+          )}
+          {sourceLine && (
+            <span className="mt-0.5 block truncate text-tiny text-warn-ink" title={sourceLine}>
+              {sourceLine}
+            </span>
+          )}
         </span>
-        {/* A DOT, NOT A BADGE. "Needs setup" is 72px of a 256px card, and it
-            was taking them from the title — a step read "2. Match ..." while
-            spending most of its width on a word the border colour and the
-            amber hint line already say. The full label lives in the tooltip
-            and, in full, in the config panel's header, where there is room. */}
-        <span className={`h-2 w-2 shrink-0 rounded-full ${sm.dot}`} title={sm.label} aria-label={sm.label} />
-        <NodeMenu id={id} data={data} />
+
+        {/* The kebab appears on hover or while its own menu is open, so a
+            resting canvas is cards and nothing else. The status dot stays
+            put — it is information, not a control. */}
+        <span className="flex shrink-0 items-center gap-1 pt-1">
+          <span className={`h-2 w-2 rounded-full ${sm.dot}`} title={sm.label} aria-label={sm.label} />
+          <span className="opacity-0 transition-opacity group-hover/card:opacity-100 focus-within:opacity-100">
+            <NodeMenu id={id} data={data} />
+          </span>
+        </span>
       </div>
 
       {/* The publish rule, said on the canvas instead of only at the gate. */}
       {publishes != null && (
         <div
-          className={`flex items-center gap-1.5 border-t px-3 py-1.5 text-micro font-medium ${
-            publishes ? "border-brand-100 bg-brand-50/70 text-brand-700" : "border-neutral-100 bg-neutral-50 text-neutral-400"
+          className={`flex items-center gap-1.5 rounded-b-[13px] border-t px-3.5 py-2 text-micro font-semibold ${
+            publishes ? "border-brand-100 bg-brand-50 text-brand-700" : "border-neutral-100 bg-neutral-50 text-neutral-400"
           }`}
           title={publishes ? "This step's result becomes a tile when you publish." : "Switched off in Review & publish — this step publishes nothing."}
         >
-<LineChart size={11} strokeWidth={2.4} />
+          <LineChart size={12} strokeWidth={2.4} />
           {publishes ? "On your dashboard" : "Not published"}
         </div>
       )}
@@ -188,9 +211,12 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             (data as NodeData).onAddFrom?.(id, null, anchorFromRect(e.currentTarget.getBoundingClientRect()));
           }}
           title="Add the next step"
-          className="nodrag absolute left-1/2 top-full z-10 mt-3 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm transition-colors hover:border-neutral-900 hover:bg-neutral-900 hover:text-white"
+          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-card border-2 border-dashed border-neutral-300 bg-white/60 p-3 text-left text-base font-semibold text-neutral-500 transition-all hover:border-primary hover:bg-brand-50/60 hover:text-primary"
         >
-          + Add next step
+          <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
+            <Plus size={16} strokeWidth={2.5} />
+          </span>
+          Add next step
         </button>
       )}
 
@@ -206,9 +232,10 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
                 (data as NodeData).onAddFrom?.(id, h.id, anchorFromRect(e.currentTarget.getBoundingClientRect()));
               }}
               title={`Add a step to “${h.label}”`}
-              className="flex items-center gap-1 whitespace-nowrap rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm transition-colors hover:border-neutral-900 hover:bg-neutral-900 hover:text-white"
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-neutral-300 bg-white px-3 py-1.5 text-tiny font-semibold text-neutral-500 transition-all hover:border-primary hover:text-primary"
             >
-              + Add to “{h.label}”
+              <Plus size={13} strokeWidth={2.5} />
+              {h.label}
             </button>
           ))}
         </div>

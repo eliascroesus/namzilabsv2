@@ -643,3 +643,40 @@ describe("a non-custom branch head is already configured", () => {
     expect(nodeNeedsSetup("filter", empty, 0, undefined, "always")).toBe(true);
   });
 });
+
+/**
+ * The canvas places branch lanes at one pitch and then packs same-row nodes at
+ * another. Those are the same quantity — "how far apart do two columns sit" —
+ * and when they were two constants they drifted: growing the card raised the
+ * packing gap to 344 while the lane spread stayed at 320, so the packer shoved
+ * every lane after the first rightward and splits stopped being symmetric.
+ */
+describe("lane spread and row packing cannot disagree", () => {
+  it("a three-way split stays symmetric about its hub whatever the pitch", () => {
+    const hub = {
+      id: "hub",
+      type: "paths",
+      position: { x: 0, y: 0 },
+      data: { config: { paths: [{ id: "p1", label: "A" }, { id: "p2", label: "B" }, { id: "p3", label: "C" }] } },
+    };
+    const nodes = [
+      hub,
+      { id: "a", type: "filter", position: { x: 0, y: 0 }, data: { config: {} } },
+      { id: "b", type: "filter", position: { x: 0, y: 0 }, data: { config: {} } },
+      { id: "c", type: "filter", position: { x: 0, y: 0 }, data: { config: {} } },
+    ] as unknown as Parameters<typeof computeVerticalLayout>[0];
+    const edges = [
+      { id: "e1", source: "hub", sourceHandle: "p1", target: "a" },
+      { id: "e2", source: "hub", sourceHandle: "p2", target: "b" },
+      { id: "e3", source: "hub", sourceHandle: "p3", target: "c" },
+    ] as unknown as Parameters<typeof computeVerticalLayout>[1];
+
+    const pos = computeVerticalLayout(nodes, edges);
+    const hubX = pos.get("hub")!.x;
+    const [xa, xb, xc] = ["a", "b", "c"].map((id) => pos.get(id)!.x);
+    // Sabotage: set the lane spread below the packing gap and the middle lane
+    // no longer sits under the hub — it gets pushed right along with the rest.
+    expect(xb).toBe(hubX);
+    expect(hubX - xa).toBe(xc - hubX);
+  });
+});

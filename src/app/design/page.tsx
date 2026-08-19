@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Sidebar } from "@/components/sidebar";
-import { FlowNodeCard } from "@/components/flow/flow-canvas-preview";
+import { CanvasPreview, FlowNodeCard } from "@/components/flow/flow-canvas-preview";
 import { NodeIcon } from "@/components/flow/icons";
 import { ToolbarPreview } from "@/components/flow/toolbar-preview";
 import { FlowList } from "@/app/dashboard/flows/FlowRow";
@@ -236,12 +236,14 @@ export default function DesignPage() {
             />
           </Section>
 
-          <Section title="Step cards" note="The canvas's only content. Chroma is the step's identity; the dot is its state.">
+          <Section title="The canvas" note="Cards, connectors and the ghost next-step — the rhythm between them is most of what a canvas is.">
+            <CanvasPreview />
+          </Section>
+
+          <Section title="Step cards" note="300px, a 44px mark, the step number as its own chip so it stops eating the title.">
             <div className="flex flex-wrap items-start gap-4 rounded-card bg-canvas-bg p-6">
-              <FlowNodeCard variant="app" title="1. Google Sheets" body="49 loaded" status="ready" />
-              <FlowNodeCard variant="filter" title="2. Filter" body="24 passed" status="ready" publishes />
-              <FlowNodeCard variant="unite_match" title="3. Match" body="Needs two steps" status="setup" />
-              <FlowNodeCard variant="formula_compare" title="4. Compare" body="38" status="untested" />
+              <FlowNodeCard variant="unite_match" title="Match" body="Needs two steps" status="setup" stepNo={3} />
+              <FlowNodeCard variant="formula_compare" title="Compare" body="38" status="untested" stepNo={4} />
             </div>
           </Section>
 
