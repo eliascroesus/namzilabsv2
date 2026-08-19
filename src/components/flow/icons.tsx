@@ -130,16 +130,15 @@ export const NODE_ACCENT: Record<string, string> = {
  * of operation), different glyph, so the two doors are never one face.
  */
 /**
- * A flat colour tile is a coloured rectangle; a top-lit one is an OBJECT.
- * The gradient is one step (16% toward white at the top), the inset pair is
- * a hairline of light above and shade below — the same recipe as .btn-brand,
- * because it is the same illusion: everything in this interface is lit from
- * the top, consistently, which is most of what "crafted" means.
+ * Flat colour, like the primary button. These briefly carried a top-lit
+ * gradient and an inset bevel pair; on a canvas holding a dozen of them the
+ * effect read as plastic rather than crafted, and the step's IDENTITY is its
+ * hue and glyph — the lighting was adding nothing the colour was not already
+ * saying.
  */
 function tileStyle(color: string, size: number): React.CSSProperties {
   return {
-    background: `linear-gradient(to bottom, color-mix(in srgb, ${color} 84%, white), ${color})`,
-    boxShadow: "inset 0 1px 0 rgb(255 255 255 / 0.25), inset 0 -1px 0 rgb(0 0 0 / 0.12)",
+    background: color,
     width: size,
     height: size,
     borderRadius: Math.max(6, Math.round(size * 0.3)),

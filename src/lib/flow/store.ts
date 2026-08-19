@@ -104,6 +104,55 @@ export async function publishFlow(db: DB, orgId: string, id: string): Promise<{ 
   return { version };
 }
 
+/**
+ * THE THREE STATES A FLOW CAN BE IN, read off the two columns that already
+ * exist. No migration, and no fourth source of truth.
+ *
+ *  - active — `status: "published"`. On the dashboard, and recomputed by the
+ *    sweep (both gate on exactly this).
+ *  - paused — turned off by hand, but it HAS a published version. Its tiles
+ *    disappear and its recomputes stop; nothing is destroyed, and switching
+ *    it back on restores the same numbers from the same stored results.
+ *  - draft  — never published. Cannot be turned on; there is nothing to turn
+ *    on yet.
+ *
+ * "Paused" and "draft" are the same `status` value on purpose: what separates
+ * them is whether a published version was ever cut, which `publishedVersion`
+ * already records. Adding a column to say it twice would let the two disagree.
+ */
+export type FlowState = "active" | "paused" | "draft";
+
+export function flowState(flow: { status: string; publishedVersion: number | null }): FlowState {
+  if (flow.status === "published") return "active";
+  return flow.publishedVersion != null ? "paused" : "draft";
+}
+
+/**
+ * Turn a flow on or off.
+ *
+ * Turning ON is refused unless the flow has a published version — otherwise
+ * the dashboard would join to `flow_results` rows that were never written and
+ * the flow would read "active" while showing nothing. Returns the state it
+ * ended in so the caller can render the truth rather than its own optimism.
+ */
+export async function setFlowEnabled(db: DB, orgId: string, id: string, enabled: boolean): Promise<FlowState> {
+  const flow = await getFlow(db, orgId, id);
+  if (!flow) throw new Error("flow not found");
+  if (enabled && flow.publishedVersion == null) return "draft";
+
+  const next = enabled ? "published" : "draft";
+  if (flow.status !== next) {
+    await db
+      .update(flows)
+      // `publishedVersion` is deliberately untouched: it is what makes a
+      // paused flow distinguishable from one that was never published, and
+      // what lets it come back on with its numbers intact.
+      .set({ status: next, updatedAt: new Date() })
+      .where(and(eq(flows.id, id), eq(flows.orgId, orgId)));
+  }
+  return flowState({ status: next, publishedVersion: flow.publishedVersion });
+}
+
 /** The immutable published graph the dashboard/materializer should use. */
 export async function getPublishedVersion(
   db: DB,

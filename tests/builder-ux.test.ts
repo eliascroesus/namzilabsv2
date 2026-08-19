@@ -461,3 +461,27 @@ describe("the editor tells the truth about its own failures", () => {
     expect(validateGraph(g).some((i) => i.nodeId === "f")).toBe(true);
   });
 });
+
+/**
+ * A flow is off, on, or was never on — and the difference between the last
+ * two matters, because only one of them can be switched.
+ *
+ * Both live on columns that already existed: `status` says whether the
+ * dashboard and the materialize sweep pick it up (they both gate on exactly
+ * that), and `publishedVersion` says whether there is anything to pick up.
+ * Encoding "paused" as its own status value would have needed a migration in
+ * a repo where those are applied by hand, and would have let the two columns
+ * disagree about the same fact.
+ */
+describe("a flow can be turned off without being unpublished", () => {
+  it("reads its state off the two columns that already exist", async () => {
+    const { flowState } = await import("@/lib/flow/store");
+    expect(flowState({ status: "published", publishedVersion: 3 })).toBe("active");
+    // Turned off by hand: still HAS a version, so it can come back on with
+    // the same stored numbers. Sabotage: return "draft" here and the list
+    // offers no way to distinguish it from one that never shipped.
+    expect(flowState({ status: "draft", publishedVersion: 3 })).toBe("paused");
+    // Never published: nothing to turn on, and the toggle says so.
+    expect(flowState({ status: "draft", publishedVersion: null })).toBe("draft");
+  });
+});

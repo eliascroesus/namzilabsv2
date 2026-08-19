@@ -996,6 +996,48 @@ the exact pixels of the rail's account avatar — and swallowed its clicks in
 every dev session. Moved to bottom-right in `next.config.mjs`. This is the
 fourth defect the screenshot loop has caught that reading code could not.
 
+### 9h. Flat again, warmer, and flows you can switch off
+
+**The gradients are gone.** The bevelled primary and the top-lit icon tiles
+lasted one review. The reasoning that put them there ("flat reads as
+unstyled") was half-right and wrong for this product: Linear's own primary is
+a flat brand fill whose depth comes entirely from `filter: brightness()` on
+hover, and on a canvas holding a dozen step tiles the bevel read as plastic.
+`.btn-brand` is a flat fill; `tileStyle` is a flat colour.
+
+**The rail is graphite, not near-black.** `#0b0c0f` was technically calm and
+actually bleak — the whole left edge of the app read as a bar of absence. The
+ink ladder lifts to `#23262d`, which keeps the contrast the icons need while
+letting the rail read as a surface.
+
+**The accent moved to Miro's register:** `brand-600 #4b52e0`, bluer and more
+confident than the iris `#5b58d6` it replaced, which sat closer to lavender.
+~5.8:1 under white text.
+
+**Flows can be switched off — and it needed no migration.** The three states
+already existed in two columns nobody was reading together:
+
+| State | `status` | `publishedVersion` | Effect |
+|---|---|---|---|
+| Active | `published` | set | On the dashboard, recomputed by the sweep |
+| Paused | `draft` | set | Tiles hidden, recomputes stopped, nothing destroyed |
+| Draft | `draft` | `null` | Never published — cannot be turned on |
+
+Both `publishedFlowTiles` and the materialize sweep already gate on
+`flows.status`, so flipping it is the whole feature: the immutable version and
+every stored result stay put, and switching back on restores the same numbers
+from the same rows. Encoding "paused" as its own status value would have meant
+a hand-applied migration and two columns that could disagree about one fact.
+`flowState()` is the single reader, pinned and sabotage-verified.
+
+**The flows list is a table** — the inspo's columns with Zapier's per-row
+switch: filter tabs carrying live counts, an app-coloured icon per row, a
+derived subtitle (`6 steps · Close CRM`, from the graph the list already
+loads — `flows.description` exists on the table and has never been written),
+the toggle, last-updated, and duplicate/delete. The toggle is optimistic and
+reverts from the action's own answer, which is what happens on a
+never-published flow where "on" is not available.
+
 ---
 
 ## 10. What not to change

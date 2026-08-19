@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/sidebar";
 import { FlowNodeCard } from "@/components/flow/flow-canvas-preview";
 import { ToolbarPreview } from "@/components/flow/toolbar-preview";
+import { FlowList } from "@/app/dashboard/flows/FlowRow";
 
 /**
  * THE UI KIT, RENDERED.
@@ -201,6 +202,17 @@ export default function DesignPage() {
               />
               <ToolbarPreview />
             </div>
+          </Section>
+
+          <Section title="Flow list" note="Zapier's per-row switch, the inspo's table. Off is paused, not deleted — the tiles come back with it.">
+            <FlowList
+              flows={[
+                { id: "1", name: "Speed to lead", state: "active", updatedAt: "2026-08-19T14:45:00Z", summary: "6 steps · Close CRM", source: "close" },
+                { id: "2", name: "Pickup rate", state: "active", updatedAt: "2026-08-18T11:20:00Z", summary: "4 steps · Close CRM", source: "close" },
+                { id: "3", name: "Claimed leads", state: "paused", updatedAt: "2026-08-17T09:10:00Z", summary: "3 steps · Google Sheets", source: "gsheets" },
+                { id: "4", name: "Meetings booked", state: "draft", updatedAt: "2026-08-14T16:05:00Z", summary: "2 steps · Calendly", source: "calendly" },
+              ]}
+            />
           </Section>
 
           <Section title="Step cards" note="The canvas's only content. Chroma is the step's identity; the dot is its state.">

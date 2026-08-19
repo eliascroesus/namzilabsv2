@@ -9,7 +9,7 @@ import { connections, flowResults } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { dateColumnChoice, dateColumnNote, dateColumnSettings, setDateColumn, type DateColumnChoice } from "@/lib/sync/date-column";
-import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow, getFlow } from "@/lib/flow/store";
+import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow, getFlow, setFlowEnabled, type FlowState } from "@/lib/flow/store";
 import { CapError } from "@/lib/limits";
 import { sampleAppFields } from "@/lib/flow/engine";
 import { materializeFlow, materializeStaleAll } from "@/lib/flow/materialize";
@@ -34,6 +34,30 @@ export async function createFlowAction(): Promise<void> {
     throw e;
   }
   redirect(`/dashboard/flows/${flow.id}`);
+}
+
+/**
+ * Turn a published flow off, or back on.
+ *
+ * OFF is not delete and not unpublish: the immutable version and every stored
+ * result stay exactly where they are, the dashboard simply stops joining to
+ * them and the materialize sweep stops picking the flow up (both already gate
+ * on `flows.status`). ON restores the same numbers from the same rows.
+ */
+export async function setFlowEnabledAction(
+  id: string,
+  enabled: boolean,
+): Promise<{ ok: true; state: FlowState } | { ok: false; error: string }> {
+  const { orgId } = await requireOrg();
+  try {
+    const state = await setFlowEnabled(getDb(), orgId, id, enabled);
+    // The dashboard's tiles come and go with this, so it has to re-render too.
+    revalidatePath("/dashboard/flows");
+    revalidatePath("/dashboard");
+    return { ok: true, state };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /**

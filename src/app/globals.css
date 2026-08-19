@@ -29,32 +29,37 @@
    * One accent, used for every primary action, every selection, every focus
    * ring. `brand-600` is the button; 500 is hover-on-dark; 50/100 are tints.
    *
-   * NOT Tailwind's stock indigo. #4f46e5 is the default palette every
-   * unstyled project ships with, and it reads that way. This ramp is
-   * hand-tuned around a violet-iris hue (near Radix "iris", near Linear's
-   * lavender family) — close enough to feel familiar, chosen enough to feel
-   * chosen. 600 keeps ~5:1 contrast under white text.
+   * NOT Tailwind's stock indigo (#4f46e5) — that is the default every
+   * unstyled project ships with, and it reads that way. This ramp sits in the
+   * blue-violet register Miro uses for its primary actions: bluer and more
+   * confident than the iris it replaced, which read closer to lavender.
+   * `brand-600` under white text is ~5.8:1, comfortably past AA.
    */
-  --color-brand-50: #f3f3fd;
-  --color-brand-100: #e8e7fc;
-  --color-brand-200: #d3d3f9;
-  --color-brand-300: #b2b1f4;
-  --color-brand-400: #908fed;
-  --color-brand-500: #7472e4;
-  --color-brand-600: #5b58d6;
-  --color-brand-700: #4b48c0;
+  --color-brand-50: #eff0fe;
+  --color-brand-100: #e1e3fd;
+  --color-brand-200: #c7cbfb;
+  --color-brand-300: #a3a8f7;
+  --color-brand-400: #7d84f2;
+  --color-brand-500: #5f66ec;
+  --color-brand-600: #4b52e0;
+  --color-brand-700: #3d43c4;
 
   /* --- Ink: the navigation rail and any dark surface ----------------------
    * A four-step ladder, which is the minimum a dark surface needs to express
-   * elevation at all: base, raised, hover, hairline. Cool-shifted rather than
-   * pure grey so it reads as deliberate next to the warm white content area.
+   * elevation at all: base, raised, hover, hairline.
+   *
+   * GRAPHITE, NOT NEAR-BLACK. #0b0c0f made the rail a void beside a white
+   * working surface — technically calm, actually bleak, and the whole left
+   * edge of the app read as a bar of absence. Lifting the base three steps to
+   * a cool graphite keeps the contrast the icons need while letting the rail
+   * read as a surface rather than a hole.
    */
-  --color-ink-950: #0b0c0f; /* rail base */
-  --color-ink-900: #121419; /* rail raised (active item) */
-  --color-ink-800: #1a1d24; /* rail hover */
-  --color-ink-700: #262a33; /* hairline on dark */
-  --color-ink-400: #8b93a7; /* muted text on dark */
-  --color-ink-100: #e8eaf0; /* body text on dark */
+  --color-ink-950: #23262d; /* rail base — graphite, not black */
+  --color-ink-900: #31353e; /* rail raised (active item) */
+  --color-ink-800: #3b404a; /* rail hover */
+  --color-ink-700: #4a5059; /* hairline on dark */
+  --color-ink-400: #9aa1ae; /* muted text on dark */
+  --color-ink-100: #e7e9ee; /* body text on dark */
   --color-ink-50: #f7f8fa; /* headings on dark */
 
   /* --- Canvas -------------------------------------------------------------
@@ -137,32 +142,29 @@ body {
 }
 
 /**
- * THE ONE PRIMARY BUTTON. A flat single-colour fill is the tell of an
- * unstyled product; the products this one is measured against light their
- * primaries from the top (a one-step vertical gradient) and seat them with an
- * inset hairline highlight above and shade below. Kept as a class because it
- * is a recipe, not a palette entry — utilities can't express the inset pair.
+ * THE ONE PRIMARY BUTTON — a flat fill, no gradient, no bevel.
+ *
+ * It briefly had a top-lit gradient with inset highlight/shade, on the theory
+ * that flat reads as unstyled. Wrong for this product: Linear's own primary
+ * is a flat brand fill whose depth comes entirely from interaction
+ * (`filter: brightness()` on hover), and that is the register this interface
+ * is in. Kept as a class rather than utilities so every primary in the app
+ * changes together, which is the actual job it was doing.
  */
 .btn-brand {
   color: #fff;
-  background: linear-gradient(to bottom, var(--color-brand-500), var(--color-brand-600));
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.16),
-    inset 0 -1px 0 rgb(0 0 0 / 0.1),
-    0 0 0 1px rgb(75 72 192 / 0.9),
-    0 1px 2px rgb(75 72 192 / 0.35);
-  transition: filter 0.15s ease;
+  background-color: var(--color-brand-600);
+  transition: filter 0.15s ease, background-color 0.15s ease;
 }
 .btn-brand:hover:not(:disabled) {
-  filter: brightness(1.07);
+  filter: brightness(1.1);
 }
 .btn-brand:active:not(:disabled) {
-  filter: brightness(0.96);
+  filter: brightness(0.94);
 }
 .btn-brand:disabled {
-  background: var(--color-neutral-200);
+  background-color: var(--color-neutral-200);
   color: var(--color-neutral-400);
-  box-shadow: none;
 }
 
 /*
