@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import { inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { connections, flows } from "@/db/schema";
 import { OrgSwitcher } from "./org-switcher";
+import { BrandMark, MainNav } from "./main-nav";
 import { signOutAction } from "@/app/actions";
 
 /**
@@ -55,39 +55,28 @@ export async function AppHeader({
   }
 
   return (
-    <header className="border-b border-neutral-200 bg-white">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-        <div className="flex items-center gap-6">
-          <Link href="/dashboard" className="text-sm font-semibold tracking-tight">
-            Namzilabs
-          </Link>
-          <nav className="flex items-center gap-4 text-sm text-neutral-600">
-            <Link href="/dashboard" className="hover:text-neutral-900">
-              Dashboard
-            </Link>
-            {/* Flows had no route in the nav at all: the ONLY ways in were the
-                dashboard's New-flow button and the onboarding checklist, and
-                the checklist disappears for good once one tile is published.
-                A user who published a metric last week and came back had no
-                visible path to the thing that built it. */}
-            <Link href="/dashboard/flows" className="hover:text-neutral-900">
-              Flows
-            </Link>
-            <Link href="/integrations" className="hover:text-neutral-900">
-              Integrations
-            </Link>
-            <Link href="/dashboard/settings" className="hover:text-neutral-900">
-              Settings
-            </Link>
-          </nav>
+    // Sticky, and hairline rather than a full border: the page scrolls under a
+    // bar that stays available instead of scrolling away with the content.
+    <header className="sticky top-0 z-30 border-b border-neutral-200/80 bg-white/85 backdrop-blur">
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-2.5">
+        <div className="flex min-w-0 items-center gap-6">
+          <BrandMark />
+          {/* Flows had no route in the nav at all: the ONLY ways in were the
+              dashboard's New-flow button and the onboarding checklist, and
+              the checklist disappears for good once one tile is published.
+              A user who published a metric last week and came back had no
+              visible path to the thing that built it. */}
+          <MainNav />
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex shrink-0 items-center gap-2.5">
           <OrgSwitcher orgs={orgs} currentId={orgId} />
-          {userEmail && <span className="hidden text-sm text-neutral-500 sm:inline">{userEmail}</span>}
+          {/* The email is identity, not navigation — it reads as a quiet
+              caption beside the switcher rather than a fourth control. */}
+          {userEmail && <span className="hidden max-w-[180px] truncate text-xs text-neutral-400 lg:inline">{userEmail}</span>}
           <form action={signOutAction}>
             <button
               type="submit"
-              className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
+              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
             >
               Sign out
             </button>

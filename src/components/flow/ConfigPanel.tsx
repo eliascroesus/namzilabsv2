@@ -803,11 +803,10 @@ function NodeConfig({
     return (
       <div className="space-y-4">
         {/* The paragraph that used to sit here described STACKING, and it was
-            rendered in both modes — so a step set to "Keep only records that
-            match" opened with a sentence promising the opposite ("later steps
-            see records from all of them"). The summary box above now says what
-            the step actually does, in whichever mode it is in, so there is
-            nothing left for a standing paragraph to add. */}
+            rendered in both modes — so a step set to match opened with a
+            sentence promising the opposite ("later steps see records from all
+            of them"). Nothing replaced it: which of the two this step is, is
+            already answered by its own name, its icon and the labels below. */}
         <div>
           <p className="mb-1 text-xs font-medium text-neutral-600">{matching ? "Steps to check" : "Steps to combine"}</p>
           <div className="space-y-1.5">
@@ -1363,6 +1362,10 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
    * first thing you read.
    */
   if (!editing) {
+    // `note` is empty until the settings fetch lands. Rendering the row anyway
+    // put a bare "Change" link beside nothing at all — an offer to edit a fact
+    // the panel had not yet loaded.
+    if (!note) return null;
     return (
       <p className="flex items-center gap-2 text-xs text-neutral-500">
         <span className="min-w-0 truncate">{note}</span>

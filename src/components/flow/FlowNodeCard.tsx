@@ -79,10 +79,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const isCompare =
     isBinaryCalc(t, data.config as Record<string, unknown>) ||
     (t === "calculate" && String(data.config.mode ?? "") === "compare");
-  // Selection is a soft indigo halo rather than a hard 2px ring: the ring sat
-  // at the same weight as the status borders it had to be told apart from, so
-  // "which step am I editing" and "which step is unfinished" competed.
-  const border = selected ? "border-indigo-400 ring-[3px] ring-indigo-500/15" : sm.border;
+  const border = selected ? "border-blue-400 ring-2 ring-blue-500" : sm.border;
   const freeHandles = (data.freeHandles as Array<{ id: string; label: string }> | undefined) ?? [];
 
   // The single body line: the plain output when ready, a hint when setup, else nothing.
@@ -116,10 +113,22 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const publishes = (data as { publishes?: boolean }).publishes;
 
   return (
-    <div
-      className={`w-64 overflow-hidden rounded-xl border bg-white transition-[border-color,box-shadow] duration-150 ${border}`}
-      style={{ boxShadow: selected ? undefined : "0 1px 2px rgba(15,23,42,0.04), 0 4px 12px -4px rgba(15,23,42,0.08)" }}
-    >
+    /**
+     * NEVER `overflow-hidden` ON THIS CARD.
+     *
+     * The kebab menu is a non-fixed Popover — absolutely positioned inside
+     * this element — and so is clipped to it. Adding `overflow-hidden` here
+     * (to round the footer strip's bottom corners) silently cut the menu off
+     * at the card's edge: "Duplicate" survived, "Delete" did not, and nothing
+     * about it looked broken.
+     *
+     * `position: fixed` is not the escape hatch it would be anywhere else,
+     * either: React Flow's viewport is CSS-transformed, and a fixed child of a
+     * transformed ancestor anchors to that ancestor rather than to the window
+     * (the same trap `flow-pop-in` documents for the config panel). So the
+     * rule is simply: this box does not clip.
+     */
+    <div className={`w-64 rounded-xl border bg-white shadow-sm transition-[border-color,box-shadow] duration-150 ${border}`}>
       {isCompare ? (
         <>
           {/* Both number inputs anchor at top-centre; the edges enter straight down (no
@@ -154,8 +163,8 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       {/* The publish rule, said on the canvas instead of only at the gate. */}
       {publishes != null && (
         <div
-          className={`flex items-center gap-1.5 border-t px-3 py-1 text-[10px] font-medium ${
-            publishes ? "border-neutral-100 text-indigo-500" : "border-neutral-100 text-neutral-400"
+          className={`flex items-center gap-1.5 border-t px-3 py-1.5 text-[10px] font-medium ${
+            publishes ? "border-indigo-100 bg-indigo-50/70 text-indigo-700" : "border-neutral-100 bg-neutral-50 text-neutral-400"
           }`}
           title={publishes ? "This step's result becomes a tile when you publish." : "Switched off in Review & publish — this step publishes nothing."}
         >

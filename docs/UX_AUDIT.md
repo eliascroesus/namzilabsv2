@@ -739,11 +739,8 @@ one thing.**
 paragraph — *"Brings branches and other data steps back together — later steps
 see records from all of them"* — rendered in **both** modes. So a step set to
 "Keep only records that match" led with a sentence promising the opposite. The
-paragraph is gone; the summary box (§6.3) states the actual rule in whichever
-mode the step is in, including the direction: *"Keeps records whose Email is in
-the other step's Email."* A half-answered Match says nothing at all, because
-naming only the side that IS chosen would read as a complete rule that keeps
-the wrong records.
+paragraph is gone. (§9c removed the summary box that briefly replaced it: the
+step's own name, icon and field labels already answer which of the two it is.)
 
 **Labels cut to fit the narrowest place they appear.** A canvas card is 256px
 and already spends most of it on a step number, an icon, a status and a menu.
@@ -833,6 +830,36 @@ celebrates every working step has nothing left to point at the one that isn't.
 Selection became a soft indigo halo rather than a hard ring at the same weight
 as the status borders it had to be told apart from; edges went finer and
 lighter; the dot grid receded so white cards float.
+
+### 9d. Reverted, and a bug the screenshots caught
+
+**The node design went back one step, at the owner's call.** §9c had taken the
+status colour off the card outline on the argument that the dot already said
+it. On a real canvas the flatter cards read as less legible, not calmer, so the
+coloured borders, the blue selection ring, the tinted "On your dashboard" strip,
+the heavier dot grid and the 2px edges are all restored. The label, icon, dot
+and copy work from §9b/§9c stays.
+
+**A real defect, introduced by §9c and visible in the screenshot: the kebab
+menu lost its Delete.** Rounding the footer strip's corners meant putting
+`overflow-hidden` on the card — and the kebab menu is a non-fixed popover
+positioned *inside* that card, so it was clipped at the card's edge. Duplicate
+fit; Delete did not. Nothing looked broken; the item simply was not there.
+
+`position: fixed` is not the fix. React Flow's viewport is CSS-transformed, and
+a fixed child of a transformed ancestor anchors to that ancestor rather than
+the window — the same trap `flow-pop-in` already documents for the config
+panel. The rule is that this card does not clip, and it now says so in place.
+
+**App chrome.** The header was three undifferentiated grey links, so it could
+not answer "where am I" on a product whose pages all render a white sheet with
+a heading. It now has a wordmark, a filled pill on the active item (matched by
+prefix so the builder still highlights Flows, and exactly for Dashboard so it
+does not light up for every page under it), and a sticky translucent bar. In
+the builder: Undo/Redo became icons, the save state got a dot, the back link
+became an arrow, and **Review & publish is indigo** — it was the one
+`neutral-900` button in a panel system built entirely on indigo, so the most
+important control on screen was also the only one wearing a different brand.
 
 ---
 

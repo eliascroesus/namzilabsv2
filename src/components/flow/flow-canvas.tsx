@@ -1377,15 +1377,22 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   return (
     <div className="flex h-screen flex-col">
       {/* Toolbar */}
-      <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-2">
+      <header className="flex items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5">
         <div className="flex items-center gap-3">
-          <Link href="/dashboard/flows" className="text-sm text-neutral-500 hover:text-neutral-800">
-            &larr; Flows
+          <Link
+            href="/dashboard/flows"
+            title="Back to all flows"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
           </Link>
           <input
             value={name}
             onChange={(e) => onRename(e.target.value)}
-            className="rounded border border-transparent px-2 py-1 text-sm font-medium hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
+            aria-label="Flow name"
+            className="min-w-0 rounded-lg border border-transparent px-2 py-1 text-sm font-semibold text-neutral-900 transition-colors hover:bg-neutral-100 focus:border-indigo-300 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-100"
           />
           {saveState === "error" ? (
             // It used to say "Save failed" in the same grey twelve-point as
@@ -1398,28 +1405,50 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
               </button>
             </span>
           ) : (
-            <span className="text-xs text-neutral-400">
+            // A dot, so "Saved" and "Saving…" are legible at a glance without
+            // reading — the same trick the step cards use.
+            <span className="flex items-center gap-1.5 text-xs text-neutral-400">
+              <span className={`h-1.5 w-1.5 rounded-full ${saveState === "saved" ? "bg-green-500" : "bg-amber-400"}`} aria-hidden />
               {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Unsaved"}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <ToolButton onClick={undo} disabled={hist.undo === 0}>Undo</ToolButton>
-          <ToolButton onClick={redo} disabled={hist.redo === 0}>Redo</ToolButton>
+        <div className="flex items-center gap-1.5">
+          {/* Undo/Redo are icons: two words of chrome beside the one button
+              that matters read as three equal choices. */}
+          <ToolButton onClick={undo} disabled={hist.undo === 0} label="Undo">
+            <path d="M3 10h11a5 5 0 0 1 0 10h-3" />
+            <path d="M7 6l-4 4 4 4" />
+          </ToolButton>
+          <ToolButton onClick={redo} disabled={hist.redo === 0} label="Redo">
+            <path d="M21 10H10a5 5 0 0 0 0 10h3" />
+            <path d="M17 6l4 4-4 4" />
+          </ToolButton>
+          <span className="mx-1 h-5 w-px bg-neutral-200" aria-hidden />
           {/* The whole flow, end to end, without publishing it. */}
           {!empty && (
             <button
               onClick={runAll ? cancelTest : testAll}
-              className="rounded border border-neutral-300 px-2.5 py-1 text-sm font-medium text-neutral-700 transition-colors hover:border-neutral-400 hover:bg-neutral-50"
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                runAll ? "bg-amber-50 text-amber-800 hover:bg-amber-100" : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+              }`}
               title={runAll ? "Stop the run" : "Run every step, top to bottom"}
             >
               {runAll ? `Testing ${runAll.at}/${runAll.of} — Stop` : "Test flow"}
             </button>
           )}
           {publishState.status === "published" && (
-            <span className="rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800">Published v{publishState.version}</span>
+            <span className="rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700">Live · v{publishState.version}</span>
           )}
-          <button onClick={openReview} disabled={publishing} className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50">
+          {/* Indigo, like every other primary action in the builder. It was
+              the one neutral-900 button in a panel system built on indigo,
+              so the most important control on the screen was also the only
+              one wearing a different brand. */}
+          <button
+            onClick={openReview}
+            disabled={publishing}
+            className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:opacity-50"
+          >
             {publishState.status === "published" ? "Edit output" : "Review & publish"}
           </button>
         </div>
@@ -1491,10 +1520,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           >
             {/* A soft grey canvas with a faint, wide-spaced dot grid — calm and
                 smooth while panning, not a busy pattern. */}
-            {/* Lighter than before, and cooler: the cards are the content and
-                they were competing with a grid that had nearly their own
-                contrast. The dots recede; white cards float. */}
-            <Background variant={BackgroundVariant.Dots} gap={28} size={1} color="#dde0e8" bgColor="#fafbfc" />
+            <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="#dfe1e8" bgColor="#f6f6f8" />
           </ReactFlow>
 
           {/* ZOOM HAS ALWAYS WORKED AND NEVER SAID SO. Panning is scroll and
@@ -1649,15 +1675,19 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   );
 }
 
-/** A toolbar button that goes flat when there is nothing for it to do. */
-function ToolButton({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
+/** A toolbar icon button that goes flat when there is nothing for it to do. */
+function ToolButton({ onClick, disabled, label, children }: { onClick: () => void; disabled?: boolean; label: string; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className="rounded border border-neutral-300 px-2 py-1 text-sm transition-colors hover:bg-neutral-50 disabled:cursor-default disabled:border-neutral-200 disabled:text-neutral-300 disabled:hover:bg-transparent"
+      title={label}
+      aria-label={label}
+      className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent disabled:hover:text-neutral-300"
     >
-      {children}
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        {children}
+      </svg>
     </button>
   );
 }
