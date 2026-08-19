@@ -100,6 +100,7 @@ import { ALL_TYPES, defaultConfig, formulaExpression, formulaHandleLabels, nodeT
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
 import { ReferenceEdge } from "./ReferenceEdge";
+import { FlowToolbar } from "./FlowToolbar";
 import { ConfigPanel, type StepRef } from "./ConfigPanel";
 import { NodeLibraryModal, anchorFromRect, type PickerAnchor } from "./NodeLibraryModal";
 import { ReviewPublishModal, type Endpoint } from "./ReviewPublishModal";
@@ -1375,92 +1376,30 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const empty = nodes.length === 0;
 
   return (
-    <div className="flex h-screen flex-col">
-      {/* Toolbar */}
-      {/* MAKE-STYLE: the toolbar is groups of pills floating on a hairline bar,
-          not a row of loose links. Left is WHAT you are looking at, right is
-          what you can do to it — no navigation at all, because the rail owns
-          that now. */}
-      <header className="flex items-center justify-between gap-4 border-b border-neutral-200 bg-white px-3 py-2">
-        <div className="flex min-w-0 items-center gap-1.5 rounded-control bg-neutral-100/70 p-1">
-          <Link
-            href="/dashboard/flows"
-            title="Back to all flows"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-neutral-500 transition-colors hover:bg-white hover:text-neutral-900 hover:shadow-sm"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </Link>
-          <input
-            value={name}
-            onChange={(e) => onRename(e.target.value)}
-            aria-label="Flow name"
-            className="min-w-0 rounded-[6px] border border-transparent bg-transparent px-2 py-1 text-base font-semibold text-neutral-900 transition-colors hover:bg-white focus:border-brand-300 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100"
-          />
-          {saveState === "error" ? (
-            // It used to say "Save failed" in the same grey twelve-point as
-            // "Saved", so losing every edit since the last good one looked
-            // identical to everything being fine.
-            <span className="flex items-center gap-2 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700">
-              Not saved — your changes are only in this tab
-              <button type="button" onClick={saveNow} className="underline underline-offset-2 hover:no-underline">
-                Retry
-              </button>
-            </span>
-          ) : (
-            // A dot, so "Saved" and "Saving…" are legible at a glance without
-            // reading — the same trick the step cards use.
-            <span className="flex shrink-0 items-center gap-1.5 pr-2 text-tiny text-neutral-500">
-              <span className={`h-1.5 w-1.5 rounded-full ${saveState === "saved" ? "bg-green-500" : "bg-amber-400"}`} aria-hidden />
-              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Unsaved"}
-            </span>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {/* Undo/Redo are icons in their own group: two words of chrome beside
-              the one button that matters read as three equal choices. */}
-          <div className="flex items-center gap-0.5 rounded-control bg-neutral-100/70 p-1">
-          <ToolButton onClick={undo} disabled={hist.undo === 0} label="Undo">
-            <path d="M3 10h11a5 5 0 0 1 0 10h-3" />
-            <path d="M7 6l-4 4 4 4" />
-          </ToolButton>
-          <ToolButton onClick={redo} disabled={hist.redo === 0} label="Redo">
-            <path d="M21 10H10a5 5 0 0 0 0 10h3" />
-            <path d="M17 6l4 4-4 4" />
-          </ToolButton>
-          </div>
-          {/* The whole flow, end to end, without publishing it. */}
-          {!empty && (
-            <button
-              onClick={runAll ? cancelTest : testAll}
-              className={`rounded-control px-3 py-1.5 text-base font-medium transition-colors ${
-                runAll ? "bg-amber-50 text-amber-800 hover:bg-amber-100" : "border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
-              }`}
-              title={runAll ? "Stop the run" : "Run every step, top to bottom"}
-            >
-              {runAll ? `Testing ${runAll.at}/${runAll.of} — Stop` : "Test flow"}
-            </button>
-          )}
-          {publishState.status === "published" && (
-            <span className="rounded-control bg-green-50 px-2 py-1 text-micro font-semibold text-green-700">Live · v{publishState.version}</span>
-          )}
-          {/* Indigo, like every other primary action in the builder. It was
-              the one neutral-900 button in a panel system built on indigo,
-              so the most important control on the screen was also the only
-              one wearing a different brand. */}
-          <button
-            onClick={openReview}
-            disabled={publishing}
-            className="rounded-control bg-brand-600 px-4 py-1.5 text-base font-semibold text-white shadow-sm shadow-brand-600/20 transition-colors hover:bg-brand-700 disabled:opacity-50"
-          >
-            {publishState.status === "published" ? "Edit output" : "Review & publish"}
-          </button>
-        </div>
-      </header>
+    // NO BAR, NO RAIL. The canvas is the page; the chrome floats on it.
+    <div className="relative flex h-screen flex-col">
+      <FlowToolbar
+        name={name}
+        onRename={onRename}
+        saveState={saveState}
+        onRetrySave={saveNow}
+        onUndo={undo}
+        onRedo={redo}
+        canUndo={hist.undo > 0}
+        canRedo={hist.redo > 0}
+        onTestAll={testAll}
+        onStopTestAll={cancelTest}
+        runAll={runAll}
+        showTestAll={!empty}
+        publishedVersion={publishState.version}
+        isPublished={publishState.status === "published"}
+        publishing={publishing}
+        onReview={openReview}
+        panelOpen={selectedId != null}
+      />
 
       {publishError && !reviewOpen && (
-        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+        <div className="absolute left-1/2 top-20 z-10 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-card border border-red-200 bg-red-50 px-4 py-3 text-small text-red-800 flow-shadow">
           <p>{publishError}</p>
           {/* One line per issue, each pointing at the step that caused it. The
               whole list used to be joined into a single string with no step
@@ -1485,7 +1424,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         </div>
       )}
       {publishWarning && (
-        <div className="flex items-center justify-between border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+        <div className="absolute left-1/2 top-20 z-10 flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 items-center justify-between gap-3 rounded-card border border-amber-200 bg-amber-50 px-4 py-3 text-small text-amber-800 flow-shadow">
           <span>{publishWarning}</span>
           <button onClick={() => setPublishWarning(null)} className="text-amber-700 hover:text-amber-900">
             Dismiss
@@ -1677,23 +1616,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         </div>
       )}
     </div>
-  );
-}
-
-/** A toolbar icon button that goes flat when there is nothing for it to do. */
-function ToolButton({ onClick, disabled, label, children }: { onClick: () => void; disabled?: boolean; label: string; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={label}
-      aria-label={label}
-      className="flex h-7 w-7 items-center justify-center rounded-[6px] text-neutral-500 transition-colors hover:bg-white hover:text-neutral-900 hover:shadow-sm disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent disabled:hover:text-neutral-300 disabled:hover:shadow-none"
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        {children}
-      </svg>
-    </button>
   );
 }
 

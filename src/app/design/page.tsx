@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/sidebar";
 import { FlowNodeCard } from "@/components/flow/flow-canvas-preview";
+import { ToolbarPreview } from "@/components/flow/toolbar-preview";
 
 /**
  * THE UI KIT, RENDERED.
@@ -188,6 +189,16 @@ export default function DesignPage() {
                   Last 30 days <span className="text-neutral-400">▾</span>
                 </div>
               </div>
+            </div>
+          </Section>
+
+          <Section title="Builder chrome" note="Floating islands over the canvas — never an edge-to-edge bar. Miro's pattern, our kit.">
+            <div className="relative h-44 overflow-hidden rounded-card bg-canvas-bg">
+              <div
+                className="absolute inset-0"
+                style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 1px, transparent 1px)", backgroundSize: "26px 26px" }}
+              />
+              <ToolbarPreview />
             </div>
           </Section>
 

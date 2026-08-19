@@ -916,6 +916,38 @@ the kit declares as the floor for anything that is content. Two `text-base`
 headlines that would have regressed 16px → 14px under the new scale were moved
 up to `text-title` rather than shrunk.
 
+### 9f. The editor is a canvas, so its chrome floats
+
+The builder was carrying the app's 256px rail **and** a full-width top bar —
+roughly a fifth of the screen spent framing the one page whose entire value is
+room to work. Miro's answer, and Figma's: on a canvas the chrome floats *on*
+the work rather than bounding it.
+
+**Two islands, no bar.** Left says what this is — the wordmark (→ Dashboard),
+the flow name, the save dot, and a ⋮ menu. Right says what you can do — undo /
+redo, Test flow, the Live chip, and publish. The canvas is visible around and
+between them, and nothing spans edge to edge.
+
+**Navigation moved into the ⋮ menu**, because inside the editor it is the
+rarest thing anyone wants; the rail was 256px of permanent cost for it. The
+wordmark covers the common case (get me out of here) in one click.
+
+**The right island slides when the config panel opens.** Both want the same
+corner, and a Publish button behind a panel is a Publish button that does not
+exist. Known and accepted: the field browser (z-30) still passes over the
+island while open — it is transient, and closing it is how you get back to
+publishing anyway.
+
+**The publish error and warning banners** were full-width bands under the
+header. With no header they are a floating card, centred under the islands.
+
+Two things this round proves about the §9e tooling. The toolbar preview 500'd
+on first render — a server component cannot hand function props to a client
+one — and the screenshot loop caught it in the same minute it was written,
+which is precisely the class of failure that shipped three times before the
+loop existed. And `/design` now renders the *real* `FlowToolbar`, so the
+builder's chrome is checkable without a session.
+
 ---
 
 ## 10. What not to change
