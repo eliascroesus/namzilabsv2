@@ -1074,6 +1074,41 @@ overrides rather than racing the base class in stylesheet order.
 rather than linearly. Two rules, and they are most of the difference between
 an interface that feels built and one that feels rendered.
 
+### 9j. Colour, on purpose
+
+Consistent and joyless is still joyless. The kit was correct — one accent,
+neutral everything — and correct is not the same as wanting to open it.
+
+**The rail carries the mood.** It has now been a saturated gradient, then
+near-black, then graphite, and graphite was right about contrast and wrong
+about feeling: a grey bar down the side of a grey app. The wash is back, but
+*built* rather than picked — anchored on our own brand at the top, warming
+through violet to fuchsia (`--gradient-rail`), on a rail whose icons, labels
+and glass active-state were designed for it. The first attempt was none of
+those things.
+
+The rule that makes this work, and it is now written at the top of
+`globals.css`: **the rail is the one surface allowed to be loud; everything
+to the right of it stays neutral except for identity and state.** A canvas
+where everything is coloured can point at nothing.
+
+**Rounder.** control 8→10px, card 12→14px, surface 16→20px. Playful reads as
+rounder before it reads as anything else.
+
+**Four shadows, layered.** `raised · lifted · float · pop`, each a hairline
+ring + soft ambient + tight contact rather than a single glow (the Figma UI3
+structure from §9e's research). `flow-shadow` is now just `--shadow-float`, so
+islands and panels share one recipe.
+
+**State became tokens** (`success`, `warn`, with `-soft` and `-ink` pairs)
+rather than raw palette picks — which is how three different greens end up on
+one screen. Status is a filled pill now, not a dot and a grey word.
+
+**A `success` button variant**, because running a thing and publishing it are
+different kinds of act — Make and Zapier both give "run" its own colour rather
+than a second grey. Test flow is green; publish stays the single strongest
+thing on screen.
+
 ---
 
 ## 10. What not to change

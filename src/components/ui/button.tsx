@@ -29,6 +29,9 @@ const buttonVariants = cva(
         secondary: "border border-border bg-card text-foreground hover:bg-muted",
         ghost: "text-muted-foreground hover:bg-muted hover:text-foreground",
         destructive: "bg-destructive text-destructive-foreground hover:brightness-110",
+        // Running something is a different KIND of act from publishing it, and
+        // Make/Zapier both give it its own colour rather than a second grey.
+        success: "bg-success-soft text-success-ink hover:brightness-[0.97]",
         // A destructive action that is not the point of the screen: quiet
         // until hovered, then unmistakable.
         destructiveGhost: "text-neutral-400 hover:bg-red-50 hover:text-destructive",

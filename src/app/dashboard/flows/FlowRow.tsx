@@ -28,10 +28,10 @@ const FILTERS: Array<{ key: "all" | FlowState; label: string }> = [
   { key: "paused", label: "Paused" },
 ];
 
-const STATE_META: Record<FlowState, { label: string; dot: string; text: string }> = {
-  active: { label: "Active", dot: "bg-green-500", text: "text-green-700" },
-  paused: { label: "Paused", dot: "bg-amber-500", text: "text-amber-700" },
-  draft: { label: "Draft", dot: "bg-neutral-300", text: "text-neutral-500" },
+const STATE_META: Record<FlowState, { label: string; dot: string; pill: string }> = {
+  active: { label: "Active", dot: "bg-success", pill: "bg-success-soft text-success-ink" },
+  paused: { label: "Paused", dot: "bg-warn", pill: "bg-warn-soft text-warn-ink" },
+  draft: { label: "Draft", dot: "bg-neutral-400", pill: "bg-neutral-100 text-neutral-600" },
 };
 
 /**
@@ -71,12 +71,12 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
-                className={`flex items-center gap-1.5 rounded-control px-3 py-1.5 text-small font-medium transition-colors ${
-                  active ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"
+                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-small font-semibold transition-colors ${
+                  active ? "bg-primary text-primary-foreground shadow-sm" : "text-neutral-600 hover:bg-muted"
                 }`}
               >
                 {f.label}
-                <span className={`rounded-full px-1.5 text-micro font-semibold ${active ? "bg-white/20" : "bg-neutral-100 text-neutral-500"}`}>
+                <span className={`rounded-full px-1.5 text-micro font-bold ${active ? "bg-white/25" : "bg-neutral-100 text-neutral-500"}`}>
                   {counts[f.key]}
                 </span>
               </button>
@@ -93,7 +93,7 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
         )}
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-card border border-neutral-200">
+      <div className="mt-4 overflow-hidden rounded-card border border-border bg-card shadow-raised">
         <div className="grid grid-cols-[1fr_150px_180px_120px] items-center gap-4 border-b border-neutral-200 bg-neutral-50/70 px-4 py-2.5 text-micro font-semibold uppercase tracking-wide text-neutral-500">
           <span>Flow name</span>
           <span>Status</span>
@@ -161,7 +161,7 @@ function Row({ flow }: { flow: FlowListItem }) {
     });
 
   return (
-    <div className="grid grid-cols-[1fr_150px_180px_120px] items-center gap-4 px-4 py-3 transition-colors hover:bg-neutral-50/60">
+    <div className="grid grid-cols-[1fr_150px_180px_120px] items-center gap-4 px-4 py-3 transition-colors hover:bg-accent/40">
       <Link href={`/dashboard/flows/${flow.id}`} className="flex min-w-0 items-center gap-3">
         <NodeIcon type="app" source={flow.source ?? undefined} size={34} />
         <span className="min-w-0">
@@ -179,7 +179,7 @@ function Row({ flow }: { flow: FlowListItem }) {
           onChange={toggle}
           label={state === "draft" ? "Publish this flow before turning it on" : state === "active" ? "Turn off" : "Turn on"}
         />
-        <span className={`flex items-center gap-1.5 text-tiny font-medium ${meta.text}`}>
+        <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-micro font-bold ${meta.pill}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} aria-hidden />
           {meta.label}
         </span>

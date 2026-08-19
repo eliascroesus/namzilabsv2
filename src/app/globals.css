@@ -17,9 +17,11 @@
  * and is what the tools people keep open all day (Linear, Vercel, Supabase)
  * converged on.
  *
- * THE RULE FOR COLOUR: surfaces are neutral, and chroma is reserved for
- * (a) identity — which kind of step this is, and (b) state — what needs the
- * user. A canvas where everything is coloured can point at nothing.
+ * THE RULE FOR COLOUR: the RAIL carries the product's mood, and everything
+ * to the right of it stays neutral except for (a) identity — which kind of
+ * step this is — and (b) state — what needs the user. That division is what
+ * lets the rail be loud without the app becoming noisy; a canvas where
+ * everything is coloured can point at nothing.
  * ========================================================================== */
 @theme {
   /* The app's typeface, wired through Tailwind so `font-sans` means Inter. */
@@ -96,17 +98,38 @@
    * Three steps. Controls, cards, floating surfaces. Everything else was a
    * one-off.
    */
-  --radius-control: 0.5rem; /* 8px  — inputs, buttons, nav items */
-  --radius-card: 0.75rem; /* 12px — step cards, tiles, sections */
-  --radius-surface: 1rem; /* 16px — panels, modals, popovers */
+  --radius-control: 0.625rem; /* 10px — inputs, buttons, nav items */
+  --radius-card: 0.875rem; /* 14px — step cards, tiles, sections */
+  --radius-surface: 1.25rem; /* 20px — panels, modals, popovers */
 
   /* --- Elevation ----------------------------------------------------------
    * Two, plus the existing `.flow-shadow` for surfaces that float over the
    * canvas. A card that is merely on the page uses `raised`; one that is
    * being dragged or hovered uses `lifted`.
    */
-  --shadow-raised: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
-  --shadow-lifted: 0 2px 4px rgba(15, 23, 42, 0.04), 0 8px 20px -6px rgba(15, 23, 42, 0.12);
+  --shadow-raised: 0 0 0 1px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.05), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-lifted: 0 0 0 1px rgb(15 23 42 / 0.05), 0 2px 4px rgb(15 23 42 / 0.05), 0 10px 20px -6px rgb(15 23 42 / 0.12);
+  --shadow-float: 0 0 0 1px rgb(15 23 42 / 0.06), 0 4px 8px -2px rgb(15 23 42 / 0.06), 0 16px 28px -8px rgb(15 23 42 / 0.14);
+  --shadow-pop: 0 0 0 1px rgb(15 23 42 / 0.06), 0 8px 16px -4px rgb(15 23 42 / 0.08), 0 28px 56px -12px rgb(15 23 42 / 0.2);
+
+  /* --- The rail's gradient -------------------------------------------------
+   * Make's rail is a vertical violet→magenta wash and it is the single thing
+   * that makes their app read as a PRODUCT rather than a tool. Anchored on
+   * our own brand at the top so it stays ours, then warming through violet to
+   * fuchsia. One place, so it can be dialled back in one edit.
+   */
+  --gradient-rail: linear-gradient(175deg, #4b52e0 0%, #6d3fe0 38%, #9333ea 72%, #b026c9 100%);
+
+  /* --- State, as tokens rather than raw palette picks ---------------------
+   * Green/amber/red were being reached for directly all over the app, which
+   * is how three different greens end up on one screen.
+   */
+  --color-success: #16a34a;
+  --color-success-soft: #dcfce7;
+  --color-success-ink: #15803d;
+  --color-warn: #f59e0b;
+  --color-warn-soft: #fef3c7;
+  --color-warn-ink: #b45309;
 }
 
 :root {
@@ -170,6 +193,17 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+}
+
+@theme {
+  /* State tokens re-declared here so `bg-success-soft` / `text-warn-ink`
+     become real utilities rather than raw CSS vars at every call site. */
+  --color-success: #16a34a;
+  --color-success-soft: #dcfce7;
+  --color-success-ink: #15803d;
+  --color-warn: #f59e0b;
+  --color-warn-soft: #fef3c7;
+  --color-warn-ink: #b45309;
 }
 
 body {
@@ -290,10 +324,26 @@ summary {
      36px non-directional glow, which reads as haze; this reads as height.
      The ring replaces any border — a border PLUS this ring is a double
      hairline, which is exactly the mud it replaces. */
-  box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.08),
-    0 10px 16px rgba(15, 23, 42, 0.1),
-    0 2px 5px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--shadow-float);
+}
+
+/* The rail's wash, as a utility so only one file decides it. */
+.bg-rail {
+  background-image: var(--gradient-rail);
+}
+
+/**
+ * A CARD THAT ANSWERS THE POINTER. Nothing on a list should sit inert while
+ * the cursor is on it — the lift is 1px and it is the difference between a
+ * table and something you want to click.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .lift {
+    transition: transform 0.16s cubic-bezier(0.34, 1.3, 0.64, 1), box-shadow 0.16s ease;
+  }
+  .lift:hover {
+    transform: translateY(-1px);
+  }
 }
 
 /* A springy scale "pop" — grows from ~0.9 with a slight overshoot, so surfaces

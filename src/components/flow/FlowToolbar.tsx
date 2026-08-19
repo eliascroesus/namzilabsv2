@@ -134,7 +134,7 @@ export function FlowToolbar({
         <div className="pointer-events-auto flex items-center gap-1.5 rounded-card bg-white p-1.5 flow-shadow">
           {showTestAll && (
             <Button
-              variant="ghost"
+              variant={runAll ? "ghost" : "success"}
               onClick={runAll ? onStopTestAll : onTestAll}
               title={runAll ? "Stop the run" : "Run every step, top to bottom"}
               className={runAll ? "bg-amber-50 text-amber-800 hover:bg-amber-100" : ""}
@@ -145,7 +145,8 @@ export function FlowToolbar({
           )}
 
           {isPublished && publishedVersion != null && (
-            <span className="rounded-control bg-green-50 px-2 py-1 text-micro font-semibold text-green-700" title="This flow is live on your dashboard">
+            <span className="flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-micro font-bold text-success-ink" title="This flow is live on your dashboard">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
               Live · v{publishedVersion}
             </span>
           )}

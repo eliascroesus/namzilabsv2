@@ -71,8 +71,8 @@ export default function DesignPage() {
           <p className="text-micro font-semibold uppercase tracking-widest text-brand-600">Design system</p>
           <h1 className="mt-2 text-display font-semibold tracking-tight text-neutral-900">The Namzilabs UI kit</h1>
           <p className="mt-2 max-w-xl text-base text-neutral-500">
-            One accent, neutral surfaces, seven type sizes, three radii. Colour is reserved for identity and for state — never for
-            decoration.
+            One accent, one coloured rail, seven type sizes, three radii, four elevations. Colour carries identity and state — the rail
+            is the one surface allowed to carry mood.
           </p>
 
           <Section title="Accent" note="Every primary action, selection and focus ring. One colour, so it means something.">
@@ -86,7 +86,7 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Ink" note="The navigation rail and every dark surface. Four steps of elevation, cool-shifted.">
+          <Section title="Ink" note="Dark surfaces: toasts, tooltips, the account panel. Four steps of elevation.">
             <div className="flex overflow-hidden rounded-card border border-neutral-200">
               {INK.map(([name, cls]) => (
                 <div key={name} className="flex-1">
@@ -94,6 +94,16 @@ export default function DesignPage() {
                   <p className="border-t border-neutral-200 px-2 py-1.5 text-micro text-neutral-500">{name}</p>
                 </div>
               ))}
+            </div>
+          </Section>
+
+          <Section title="Rail" note="The one place in the product allowed to be loud. Everything right of it stays neutral, which is what lets it.">
+            <div className="flex items-stretch gap-4">
+              <div className="bg-rail h-28 w-[76px] shrink-0 rounded-card" />
+              <div className="flex flex-1 flex-col justify-center gap-1 text-tiny text-muted-foreground">
+                <p><code className="text-foreground">--gradient-rail</code></p>
+                <p>Brand at the top, warming through violet to fuchsia. One declaration, so it dials back in one edit.</p>
+              </div>
             </div>
           </Section>
 
@@ -119,12 +129,12 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Radius and elevation" note="Three radii, two shadows. Everything else was a one-off.">
+          <Section title="Radius and elevation" note="Three radii, four shadows — layered as a ring plus ambient plus contact, never one glow.">
             <div className="grid grid-cols-3 gap-3">
               {[
-                { cls: "rounded-control", label: "control · 8px", body: "Inputs, buttons, nav items" },
-                { cls: "rounded-card", label: "card · 12px", body: "Step cards, tiles, sections" },
-                { cls: "rounded-surface", label: "surface · 16px", body: "Panels, modals, popovers" },
+                { cls: "rounded-control", label: "control · 10px", body: "Inputs, buttons, nav items" },
+                { cls: "rounded-card", label: "card · 14px", body: "Step cards, tiles, sections" },
+                { cls: "rounded-surface", label: "surface · 20px", body: "Panels, modals, popovers" },
               ].map((r) => (
                 <div key={r.cls} className={`${r.cls} border border-neutral-200 bg-white p-4 shadow-raised`}>
                   <p className="text-small font-semibold text-neutral-800">{r.label}</p>
@@ -132,23 +142,27 @@ export default function DesignPage() {
                 </div>
               ))}
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <div className="rounded-card border border-neutral-200 bg-white p-4 shadow-raised">
-                <p className="text-small font-semibold text-neutral-800">shadow-raised</p>
-                <p className="mt-0.5 text-tiny text-neutral-500">On the page</p>
-              </div>
-              <div className="rounded-card border border-neutral-200 bg-white p-4 shadow-lifted">
-                <p className="text-small font-semibold text-neutral-800">shadow-lifted</p>
-                <p className="mt-0.5 text-tiny text-neutral-500">Hovered or floating</p>
-              </div>
+            <div className="mt-3 grid grid-cols-4 gap-3">
+              {[
+                { cls: "shadow-raised", body: "On the page" },
+                { cls: "shadow-lifted", body: "Hovered" },
+                { cls: "shadow-float", body: "Over the canvas" },
+                { cls: "shadow-pop", body: "Modals" },
+              ].map((e) => (
+                <div key={e.cls} className={`rounded-card bg-card p-4 ${e.cls}`}>
+                  <p className="text-small font-semibold text-foreground">{e.cls}</p>
+                  <p className="mt-0.5 text-tiny text-muted-foreground">{e.body}</p>
+                </div>
+              ))}
             </div>
           </Section>
 
-          <Section title="Buttons" note="One component, five variants. Every clickable thing in the product comes from it.">
+          <Section title="Buttons" note="One component, six variants. Every clickable thing in the product comes from it.">
             <div className="flex flex-wrap items-center gap-3">
               <Button>Review &amp; publish</Button>
               <Button variant="secondary">Secondary</Button>
               <Button variant="ghost">Quiet</Button>
+              <Button variant="success">Test flow</Button>
               <Button disabled>Disabled</Button>
               <Button variant="destructive">Delete</Button>
             </div>
