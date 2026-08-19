@@ -1407,6 +1407,71 @@ from a fix.
 
 ---
 
+### 9s. The label pass, third time, done properly
+
+"Make Account / Spreadsheet / Sheet-tab bolder, like the Configure text" was
+asked three times and missed twice. Both misses were the same shape: I fixed
+*some* labels, saw them change, and called it done.
+
+The reference is the active Configure tab — `text-sm font-semibold
+text-foreground`, i.e. **14px, semibold, true black**. `Field` in ConfigPanel —
+the component behind every label in the user's screenshot — was `text-small
+font-medium text-neutral-700`: **13px, medium, grey**. Wrong on all three
+axes, while Review & publish and the condition editor had already been
+corrected. The kit looked fixed; the product was not.
+
+What actually closes it:
+
+- **One string, `FIELD_LABEL`**, referenced by `Field` and by a new
+  `FieldLabel` for the three places that lay their own control out. "Make the
+  labels bolder" now has exactly one place to land.
+- Three `SectionLabel` uses were doing `Field`'s job — "Time period", the
+  branch mode, "Only continue if…" — rendering an 11px uppercase grey-400
+  *question* above a 14px black *answer*. That inversion is the whole defect,
+  and it was hiding behind a helper named after a different job.
+- The sweep ran to the edges of the app: metrics/new, funnels/new,
+  integrations, onboarding, the event-time picker, the type-to-confirm field.
+
+**And it was verified adversarially rather than by spot-check** — an
+independent pass enumerated every `<input>`, `<select>` and shared control in
+`src/`, traced each one to the element that labels it, and reported that
+element's classes. That is what caught the three `SectionLabel` sites; reading
+the diff would not have. The exclusions are listed too — section headings,
+helper blurbs, checkbox text beside its control, table headers — so they are
+reviewable rather than silent.
+
+**The rule, written above `Field`:** a label is the QUESTION and the input is
+the ANSWER. The question may never be lighter than the answer.
+
+### 9t. Sized to ask, not to Make
+
+The rail is 100px with 10px of side air and a 30px rhythm; the labels are
+12px. Those are the user's numbers, not Make's — Make's measured geometry
+(the 40px tile, the label flush beneath it, 27px centre-to-centre) is what the
+item is *built* from, and the width and rhythm are set on top of it. The
+comment in `sidebar.tsx` says so explicitly, so nobody "corrects" it back.
+The label went to `text-tiny`, the next size up in our own scale, rather than
+to a new arbitrary value — the whole point of having seven sizes.
+
+Both bars went up 10%: 8px padding, 42px controls, 26px glyphs, `text-lead`,
+a 58px island. The rail's logo band follows to 74px so mark and island stay
+level across the seam.
+
+**One bug the measurement caught that no test could.** Moving the bar text
+from arbitrary `text-[14px]` to the `text-lead` token brought the token's
+24px line-height with it, and the zoom readout — the only control in the bar
+without a fixed height — grew to 44px, making the bottom bar 60px against the
+top island's 58px. Two pixels, on the one pair of surfaces that must agree.
+It now carries `h-[42px]` like every one of its siblings. Switching from an
+arbitrary value to a token is not a no-op: **tokens carry line-height too.**
+
+Rendered and measured back, all green: rail 100.0 wide with 10/10 padding,
+tiles 40×40 centred at x=50, pitch 86/86/86, label→next-tile gap 30/30/30,
+labels 12px on a 16px line flush under the tile, logo band 74, both islands
+58, bar text 15px, 108px of clear canvas between the two islands.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

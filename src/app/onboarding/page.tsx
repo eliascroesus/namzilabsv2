@@ -77,7 +77,7 @@ function CreateForm({ className }: { className?: string }) {
   return (
     <form action={createOrganizationAction} className={`space-y-4 ${className ?? ""}`}>
       <div>
-        <label htmlFor="name" className="block text-sm font-medium text-neutral-700">
+        <label htmlFor="name" className="block text-base font-semibold text-foreground">
           Workspace name
         </label>
         <input

@@ -161,7 +161,7 @@ export function ReviewPublishModal({
                 {m.enabled && (
                   <div className="mt-3 space-y-2.5">
                     <label className="block">
-                      <span className="mb-1 block text-small font-semibold text-foreground">Metric name</span>
+                      <span className="mb-1 block text-base font-semibold text-foreground">Metric name</span>
                       <input value={m.name} onChange={(e) => set(ep.nodeId, { name: e.target.value })} placeholder="e.g. Show-up rate" className={inputCls} />
                     </label>
                     {previews[ep.nodeId] != null && (
@@ -175,7 +175,7 @@ export function ReviewPublishModal({
                         as a chart setting — the question is concrete and the
                         label now asks it. */}
                     <div>
-                      <span className="mb-1 block text-small font-semibold text-foreground">Date the dashboard filters by</span>
+                      <span className="mb-1 block text-base font-semibold text-foreground">Date the dashboard filters by</span>
                       <Select
                         value={m.timeField ?? ""}
                         width={260}
@@ -193,7 +193,7 @@ export function ReviewPublishModal({
                     <Disclosure summary="Display options">
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <span className="mb-1 block text-small font-semibold text-foreground">Show as</span>
+                          <span className="mb-1 block text-base font-semibold text-foreground">Show as</span>
                           <Select
                             value={m.viz}
                             width={210}
@@ -202,19 +202,19 @@ export function ReviewPublishModal({
                           />
                         </div>
                         <div>
-                          <span className="mb-1 block text-small font-semibold text-foreground">Format</span>
+                          <span className="mb-1 block text-base font-semibold text-foreground">Format</span>
                           <Select value={m.format} width={210} options={formatOptionsFor(m.format)} onChange={(v) => set(ep.nodeId, { format: v })} />
                         </div>
                       </div>
                       {(m.viz === "line" || m.viz === "bar") && m.timeField && (
                         <div>
-                          <span className="mb-1 block text-small font-semibold text-foreground">Group by</span>
+                          <span className="mb-1 block text-base font-semibold text-foreground">Group by</span>
                           <Select value={m.timeUnit ?? "month"} width={210} options={TIME_UNIT_OPTIONS} onChange={(v) => set(ep.nodeId, { timeUnit: v })} />
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-2">
                         <label className="block">
-                          <span className="mb-1 block text-small font-semibold text-foreground">Decimals</span>
+                          <span className="mb-1 block text-base font-semibold text-foreground">Decimals</span>
                           {/* Not <input type="number">: Number("") is NaN, and a
                               NaN here fails the graph schema, so clearing this
                               box silently killed the autosave of this edit and
@@ -222,7 +222,7 @@ export function ReviewPublishModal({
                           <NumberField value={m.precision} min={0} onChange={(n) => set(ep.nodeId, { precision: n ?? 0 })} />
                         </label>
                         <label className="block">
-                          <span className="mb-1 block text-small font-semibold text-foreground">Goal / target</span>
+                          <span className="mb-1 block text-base font-semibold text-foreground">Goal / target</span>
                           {/* The goal is in the metric's own format: % for percentages, $ for currency. */}
                           <div className="relative">
                             {m.format === "currency" && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400">$</span>}

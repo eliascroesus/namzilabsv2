@@ -46,9 +46,9 @@ const TYPE: Array<{ token: string; cls: string; px: string; use: string }> = [
   { token: "text-display", cls: "text-display", px: "24px", use: "Page headings" },
   { token: "text-title", cls: "text-title", px: "17px", use: "Section and modal titles" },
   { token: "text-lead", cls: "text-lead", px: "15px", use: "Panel titles, navigation" },
-  { token: "text-base", cls: "text-base", px: "14px", use: "Body — the default" },
-  { token: "text-small", cls: "text-small", px: "13px", use: "Dense UI: field labels, options" },
-  { token: "text-tiny", cls: "text-tiny", px: "12px", use: "Helper text, captions" },
+  { token: "text-base", cls: "text-base", px: "14px", use: "Body, field labels — the default" },
+  { token: "text-small", cls: "text-small", px: "13px", use: "Dense UI: menu items, options" },
+  { token: "text-tiny", cls: "text-tiny", px: "12px", use: "Helper text, captions, rail labels" },
   { token: "text-micro", cls: "text-micro", px: "11px", use: "Badges, chips, micro-labels" },
 ];
 
@@ -105,19 +105,19 @@ export default function DesignPage() {
 
           <Section title="Rail" note="The one place in the product allowed to be loud. Everything right of it stays neutral, which is what lets it.">
             <div className="flex items-stretch gap-4">
-              {/* Duplicates the rail's item markup from src/components/sidebar.tsx — width, tile and label must track that file. */}
-              <div className="bg-rail flex w-[80px] shrink-0 flex-col items-center gap-3 rounded-card py-3">
+              {/* Duplicates the rail's item markup from src/components/sidebar.tsx — width, padding, gap, tile and label must track that file. */}
+              <div className="bg-rail flex w-[100px] shrink-0 flex-col items-center gap-[30px] rounded-card px-2.5 py-3">
                 <span className="flex w-full flex-col items-center">
                   <span className="flex h-10 w-10 items-center justify-center rounded-control bg-white/22 text-white">
                     <LayoutDashboard size={24} strokeWidth={2.1} />
                   </span>
-                  <span className="px-1 text-center text-micro font-medium leading-[15px] text-white">Active</span>
+                  <span className="px-1 text-center text-tiny font-medium leading-4 text-white">Active</span>
                 </span>
                 <span className="flex w-full flex-col items-center">
                   <span className="flex h-10 w-10 items-center justify-center rounded-control text-white/75">
                     <Workflow size={24} strokeWidth={2.1} />
                   </span>
-                  <span className="px-1 text-center text-micro font-medium leading-[15px] text-white/75">Rest</span>
+                  <span className="px-1 text-center text-tiny font-medium leading-4 text-white/75">Rest</span>
                 </span>
               </div>
               <div className="flex flex-1 flex-col justify-center gap-1 text-tiny text-muted-foreground">
@@ -200,10 +200,10 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Controls" note="Every control in the builder is 8px, hairline, 36px tall, with the same 4px brand focus ring. The settings and onboarding forms predate this and still use 6px.">
+          <Section title="Controls" note="Every control in the builder is 8px, hairline, 36px tall, with the same 4px brand focus ring. The settings and onboarding forms predate this and still use 6px. The label matches the Configure tab — 14px semibold, true black — because a label is the question and may never be lighter than its answer.">
             <div className="grid grid-cols-2 gap-4">
               <label className="block">
-                <span className="mb-1.5 block text-small font-medium text-neutral-700">Text field</span>
+                <span className="mb-1.5 block text-base font-semibold text-foreground">Text field</span>
                 <input
                   readOnly
                   value="Speed to lead"
@@ -211,7 +211,7 @@ export default function DesignPage() {
                 />
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-small font-medium text-neutral-700">Focused</span>
+                <span className="mb-1.5 block text-base font-semibold text-foreground">Focused</span>
                 <input
                   readOnly
                   value="Focused state"
@@ -219,7 +219,7 @@ export default function DesignPage() {
                 />
               </label>
               <div>
-                <span className="mb-1.5 block text-small font-medium text-neutral-700">Segmented</span>
+                <span className="mb-1.5 block text-base font-semibold text-foreground">Segmented</span>
                 <div className="inline-flex w-full rounded-control border border-neutral-300 bg-neutral-100 p-0.5">
                   <span className="flex-1 rounded-[6px] bg-white px-2.5 py-1.5 text-center text-small font-medium text-foreground shadow-sm">
                     A number
@@ -228,7 +228,7 @@ export default function DesignPage() {
                 </div>
               </div>
               <div>
-                <span className="mb-1.5 block text-small font-medium text-neutral-700">Select</span>
+                <span className="mb-1.5 block text-base font-semibold text-foreground">Select</span>
                 <div className="flex w-full items-center justify-between rounded-control border border-neutral-300 bg-white px-3 py-2 text-sm text-foreground">
                   Last 30 days <span className="text-neutral-400">▾</span>
                 </div>
@@ -237,6 +237,10 @@ export default function DesignPage() {
           </Section>
 
           <Section title="Builder chrome" note="Two surfaces: everything about the flow in one top island, everything you do to the canvas in one bottom bar.">
+            {/* 256px is a clearance, not a look: 16px inset + the 58px top island,
+                16px inset + the 58px bottom bar, leaving 108px of canvas between
+                the two. Both islands grow with src/components/flow/FlowToolbar.tsx,
+                so this floor does too. */}
             <div className="relative h-64 overflow-hidden rounded-card bg-canvas-bg">
               <div
                 className="absolute inset-0"

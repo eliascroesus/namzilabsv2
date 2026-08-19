@@ -65,7 +65,7 @@ export function EventTimePicker({
 
   return (
     <div className="mt-4">
-      <label className="block text-xs font-medium text-neutral-500" htmlFor="event-time-key">
+      <label className="block text-base font-semibold text-foreground" htmlFor="event-time-key">
         Event time
       </label>
       <select

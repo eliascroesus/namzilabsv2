@@ -569,7 +569,7 @@ function NodeConfig({
             rules, always run, or fallback. The mode is stored on the hub's path entry. */}
         {branch && (
           <div className="space-y-2">
-            <SectionLabel>How records enter this path</SectionLabel>
+            <FieldLabel>How records enter this path</FieldLabel>
             <Select
               value={bmode}
               width={W}
@@ -605,7 +605,7 @@ function NodeConfig({
                 all unchanged — only the prominence is. */}
             <TimePeriodSection cfg={cfg} groups={groups} onChange={onChange} />
             <div className="space-y-2.5">
-              <SectionLabel>Only continue if…</SectionLabel>
+              <FieldLabel>Only continue if…</FieldLabel>
               <ConditionEditor value={fc} groups={groups} onChange={(v) => onChange({ combinator: v.combinator, rules: v.rules })} />
             </div>
           </div>
@@ -809,7 +809,7 @@ function NodeConfig({
             of them"). Nothing replaced it: which of the two this step is, is
             already answered by its own name, its icon and the labels below. */}
         <div>
-          <p className="mb-1 text-small font-semibold text-foreground">{matching ? "Steps to check" : "Steps to combine"}</p>
+          <p className="mb-1 text-base font-semibold text-foreground">{matching ? "Steps to check" : "Steps to combine"}</p>
           <div className="space-y-1.5">
             {inputs.map((inp, idx) => (
               <div key={idx} className="flex items-center gap-2">
@@ -2002,7 +2002,7 @@ function TimePeriodSection({ cfg, groups, onChange }: { cfg: Record<string, unkn
 
   return (
     <div className="space-y-2.5">
-      <SectionLabel>Time period</SectionLabel>
+      <FieldLabel>Time period</FieldLabel>
       <Select
         value={value}
         width={W}
@@ -2131,13 +2131,30 @@ function sampleLine(r: unknown): string {
   return `${rec.source ?? ""} · ${type}${rec.subject ? ` · ${rec.subject}` : ""}${rec.value != null ? ` · ${String(rec.value)}` : ""}${when ? ` · ${when}` : ""}`;
 }
 
+/** The label is the QUESTION and the input under it is the ANSWER, so the
+    label may never read lighter than the thing it labels. It matches the
+    Configure tab above exactly — 14px semibold, true black — so the whole
+    panel speaks in one voice. */
+const FIELD_LABEL = "mb-1.5 block text-base font-semibold text-foreground";
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="block">
-      <span className="mb-1.5 block text-small font-medium text-neutral-700">{label}</span>
+      <span className={FIELD_LABEL}>{label}</span>
       {children}
     </div>
   );
+}
+
+/**
+ * The same label as `Field`, for the handful of places that lay their own
+ * control out rather than passing it as a child — "Time period", the branch
+ * mode, "Only continue if…". All three used `SectionLabel` before, which put
+ * an 11px uppercase grey-400 question above a 14px black answer: the exact
+ * inversion `Field` exists to prevent. Same string, so the two can never drift.
+ */
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <span className={FIELD_LABEL}>{children}</span>;
 }
 
 /** A small uppercase section heading, matching the step picker's group labels. */

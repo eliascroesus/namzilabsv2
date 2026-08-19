@@ -66,7 +66,7 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
 
         <form method="get" className="mt-8 space-y-4 rounded-lg border border-neutral-200 p-5">
           <label className="block">
-            <span className="mb-1 block text-sm text-neutral-600">Funnel name</span>
+            <span className="mb-1 block text-base font-semibold text-foreground">Funnel name</span>
             <input name="name" defaultValue={one(sp.name)} placeholder="SMS → Booked → Showed"
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm" />
           </label>

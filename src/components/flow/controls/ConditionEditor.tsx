@@ -11,7 +11,7 @@ import { NO_VALUE_FILTER_OPS, type FilterConfig } from "@/lib/flow/types";
 
 type Rule = FilterConfig["rules"][number];
 
-const LABEL = "mb-1 block text-small font-semibold text-foreground";
+const LABEL = "mb-1 block text-base font-semibold text-foreground";
 
 /** Convert a stored rule's value side into the ValueInput model (looking up display info). */
 function ruleToValue(rule: Rule, groups: DataGroup[]): ValueModel {

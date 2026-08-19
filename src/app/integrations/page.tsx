@@ -172,7 +172,7 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
             <form action={connectApiKeyAction} className="mt-3 space-y-3">
               <input type="hidden" name="source" value={entry.source} />
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-neutral-600">Connection name</span>
+                <span className="mb-1 block text-base font-semibold text-foreground">Connection name</span>
                 <input
                   name="name"
                   placeholder={entry.name}
@@ -181,7 +181,7 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
               </label>
               {entry.credentialFields.map((f) => (
                 <label key={f.key} className="block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-600">{f.label}</span>
+                  <span className="mb-1 block text-base font-semibold text-foreground">{f.label}</span>
                   <input
                     name={`cred_${f.key}`}
                     type="password"

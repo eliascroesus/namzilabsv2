@@ -155,8 +155,11 @@ export function ConnectionRow({
             <>Disconnect instead if you only want it to stop syncing; that keeps everything and can be reversed.</>
           )}
         </p>
-        <label className="mt-3 block text-xs text-neutral-600" htmlFor={`confirm-${id}`}>
-          Type <span className="font-medium text-foreground">{name}</span> to confirm
+        <label className="mt-3 block text-base font-semibold text-foreground" htmlFor={`confirm-${id}`}>
+          {/* The name carries no weight of its own: the label is already
+              semibold, so any inner weight could only be LIGHTER, thinning
+              out the one string the user has to type exactly. */}
+          Type {name} to confirm
         </label>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <input

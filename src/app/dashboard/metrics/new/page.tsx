@@ -236,7 +236,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm text-neutral-600">{label}</span>
+      <span className="mb-1 block text-base font-semibold text-foreground">{label}</span>
       {children}
     </label>
   );
