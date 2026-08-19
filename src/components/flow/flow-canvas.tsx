@@ -1377,12 +1377,16 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   return (
     <div className="flex h-screen flex-col">
       {/* Toolbar */}
-      <header className="flex items-center justify-between gap-4 border-b border-neutral-200 bg-white px-4 py-2.5">
-        <div className="flex items-center gap-3">
+      {/* MAKE-STYLE: the toolbar is groups of pills floating on a hairline bar,
+          not a row of loose links. Left is WHAT you are looking at, right is
+          what you can do to it — no navigation at all, because the rail owns
+          that now. */}
+      <header className="flex items-center justify-between gap-4 border-b border-neutral-200 bg-white px-3 py-2">
+        <div className="flex min-w-0 items-center gap-1.5 rounded-control bg-neutral-100/70 p-1">
           <Link
             href="/dashboard/flows"
             title="Back to all flows"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-neutral-500 transition-colors hover:bg-white hover:text-neutral-900 hover:shadow-sm"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M15 18l-6-6 6-6" />
@@ -1392,7 +1396,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             value={name}
             onChange={(e) => onRename(e.target.value)}
             aria-label="Flow name"
-            className="min-w-0 rounded-lg border border-transparent px-2 py-1 text-sm font-semibold text-neutral-900 transition-colors hover:bg-neutral-100 focus:border-indigo-300 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-100"
+            className="min-w-0 rounded-[6px] border border-transparent bg-transparent px-2 py-1 text-base font-semibold text-neutral-900 transition-colors hover:bg-white focus:border-brand-300 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100"
           />
           {saveState === "error" ? (
             // It used to say "Save failed" in the same grey twelve-point as
@@ -1407,15 +1411,16 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           ) : (
             // A dot, so "Saved" and "Saving…" are legible at a glance without
             // reading — the same trick the step cards use.
-            <span className="flex items-center gap-1.5 text-xs text-neutral-400">
+            <span className="flex shrink-0 items-center gap-1.5 pr-2 text-tiny text-neutral-500">
               <span className={`h-1.5 w-1.5 rounded-full ${saveState === "saved" ? "bg-green-500" : "bg-amber-400"}`} aria-hidden />
               {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Unsaved"}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          {/* Undo/Redo are icons: two words of chrome beside the one button
-              that matters read as three equal choices. */}
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Undo/Redo are icons in their own group: two words of chrome beside
+              the one button that matters read as three equal choices. */}
+          <div className="flex items-center gap-0.5 rounded-control bg-neutral-100/70 p-1">
           <ToolButton onClick={undo} disabled={hist.undo === 0} label="Undo">
             <path d="M3 10h11a5 5 0 0 1 0 10h-3" />
             <path d="M7 6l-4 4 4 4" />
@@ -1424,13 +1429,13 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             <path d="M21 10H10a5 5 0 0 0 0 10h3" />
             <path d="M17 6l4 4-4 4" />
           </ToolButton>
-          <span className="mx-1 h-5 w-px bg-neutral-200" aria-hidden />
+          </div>
           {/* The whole flow, end to end, without publishing it. */}
           {!empty && (
             <button
               onClick={runAll ? cancelTest : testAll}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                runAll ? "bg-amber-50 text-amber-800 hover:bg-amber-100" : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+              className={`rounded-control px-3 py-1.5 text-base font-medium transition-colors ${
+                runAll ? "bg-amber-50 text-amber-800 hover:bg-amber-100" : "border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
               }`}
               title={runAll ? "Stop the run" : "Run every step, top to bottom"}
             >
@@ -1438,7 +1443,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             </button>
           )}
           {publishState.status === "published" && (
-            <span className="rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700">Live · v{publishState.version}</span>
+            <span className="rounded-control bg-green-50 px-2 py-1 text-micro font-semibold text-green-700">Live · v{publishState.version}</span>
           )}
           {/* Indigo, like every other primary action in the builder. It was
               the one neutral-900 button in a panel system built on indigo,
@@ -1447,7 +1452,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           <button
             onClick={openReview}
             disabled={publishing}
-            className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:opacity-50"
+            className="rounded-control bg-brand-600 px-4 py-1.5 text-base font-semibold text-white shadow-sm shadow-brand-600/20 transition-colors hover:bg-brand-700 disabled:opacity-50"
           >
             {publishState.status === "published" ? "Edit output" : "Review & publish"}
           </button>
@@ -1683,7 +1688,7 @@ function ToolButton({ onClick, disabled, label, children }: { onClick: () => voi
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent disabled:hover:text-neutral-300"
+      className="flex h-7 w-7 items-center justify-center rounded-[6px] text-neutral-500 transition-colors hover:bg-white hover:text-neutral-900 hover:shadow-sm disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent disabled:hover:text-neutral-300 disabled:hover:shadow-none"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         {children}
@@ -1732,16 +1737,16 @@ function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boolean; onS
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
       <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-7 flow-shadow">
-        <h2 className="text-center text-[17px] font-semibold tracking-tight text-neutral-900">Build a metric in three moves</h2>
+        <h2 className="text-center text-title font-semibold tracking-tight text-neutral-900">Build a metric in three moves</h2>
         <ol className="mt-5 space-y-3">
           {steps.map((s) => (
             <li key={s.n} className="flex items-start gap-3">
-              <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-semibold text-neutral-500">
+              <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-micro font-semibold text-neutral-500">
                 {s.n}
               </span>
               <span className="min-w-0">
                 <span className="block text-sm font-medium text-neutral-800">{s.title}</span>
-                <span className="block text-[13px] leading-snug text-neutral-500">{s.detail}</span>
+                <span className="block text-small leading-snug text-neutral-500">{s.detail}</span>
               </span>
             </li>
           ))}

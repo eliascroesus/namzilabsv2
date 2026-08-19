@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import { requireOrg } from "@/lib/auth";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { CopyField } from "@/components/copy-field";
 import { inviteMemberAction, revokeInviteAction } from "./actions";
 
@@ -49,8 +49,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const pending = invitations.data.filter((i) => i.state === "pending");
 
   return (
-    <>
-      <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="text-2xl font-semibold tracking-tight">Workspace settings</h1>
 
@@ -151,6 +150,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </section>
         )}
       </main>
-    </>
+    </AppShell>
   );
 }

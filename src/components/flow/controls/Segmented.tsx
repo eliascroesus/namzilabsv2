@@ -37,7 +37,7 @@ export function Segmented({
             title={o.hint}
             aria-pressed={active}
             onClick={() => onChange(o.value)}
-            className={`min-w-0 flex-1 truncate rounded-[6px] px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+            className={`min-w-0 flex-1 truncate rounded-[6px] px-2.5 py-1.5 text-small font-medium transition-colors ${
               active ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"
             } ${off ? "cursor-not-allowed opacity-40" : ""}`}
           >

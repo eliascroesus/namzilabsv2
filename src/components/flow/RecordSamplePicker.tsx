@@ -59,7 +59,7 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
   if (records.length === 0) return <p className="text-xs text-neutral-400">No records returned.</p>;
   return (
     <div className="space-y-1.5">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Latest {records.length} records</p>
+      <p className="text-micro font-semibold uppercase tracking-wide text-neutral-400">Latest {records.length} records</p>
       {records.map((r, i) => {
         const rec = (r ?? {}) as Rec;
         const selected = i === selectedIndex;
@@ -81,7 +81,7 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
                 )}
                 <span className={`truncate font-medium ${selected ? "text-indigo-900" : "text-neutral-700"}`}>{title || `Record ${i + 1}`}</span>
               </span>
-              <span className="shrink-0 text-[11px] text-neutral-400">
+              <span className="shrink-0 text-micro text-neutral-400">
                 {recordWhen(rec.occurredAt) && <span className="mr-1.5">{recordWhen(rec.occurredAt)}</span>}
                 {fields(rec).length} fields
               </span>
@@ -89,7 +89,7 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
             <div className="border-t border-neutral-100 bg-white/70 px-2.5 py-2">
               <dl className="space-y-1">
                 {fields(rec).map((f) => (
-                  <div key={f.label} className="flex justify-between gap-2 text-[11px]">
+                  <div key={f.label} className="flex justify-between gap-2 text-micro">
                     <dt className="shrink-0 text-neutral-400">{f.label}</dt>
                     <dd className="min-w-0 truncate text-right font-medium text-neutral-700">{f.value}</dd>
                   </div>

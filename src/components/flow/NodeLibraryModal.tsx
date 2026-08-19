@@ -151,7 +151,7 @@ export function NodeLibraryModal({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search steps…"
-              className="w-full rounded-xl border border-neutral-200 bg-neutral-50 py-2.5 pl-10 pr-3 text-[15px] text-neutral-800 placeholder:text-neutral-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-100"
+              className="w-full rounded-xl border border-neutral-200 bg-neutral-50 py-2.5 pl-10 pr-3 text-lead text-neutral-800 placeholder:text-neutral-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-100"
             />
           </div>
         </div>
@@ -162,7 +162,7 @@ export function NodeLibraryModal({
             <div className="flex flex-col gap-0.5">
               {sections.map((sec) => (
                 <div key={sec.stage}>
-                  <p className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{sec.stage}</p>
+                  <p className="px-2.5 pb-1 pt-2 text-micro font-semibold uppercase tracking-wide text-neutral-400">{sec.stage}</p>
                   {sec.items.map((e) => (
                     <button
                       key={e.key}
@@ -171,8 +171,8 @@ export function NodeLibraryModal({
                     >
                       <NodeIcon type={e.type} variant={e.key === "unite_match" ? "unite_match" : e.key === "formula_compare" ? "formula_compare" : undefined} size={40} />
                       <span className="min-w-0">
-                        <span className="block text-[15px] font-semibold leading-tight text-neutral-900">{e.label}</span>
-                        <span className="mt-0.5 block text-[13px] leading-tight text-neutral-500">{e.blurb}</span>
+                        <span className="block text-lead font-semibold leading-tight text-neutral-900">{e.label}</span>
+                        <span className="mt-0.5 block text-small leading-tight text-neutral-500">{e.blurb}</span>
                       </span>
                     </button>
                   ))}

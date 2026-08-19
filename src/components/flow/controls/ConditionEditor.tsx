@@ -106,7 +106,7 @@ export function ConditionEditor({
           return (
             <div key={i} className="rounded-xl border border-neutral-200 bg-neutral-100 p-3">
               {i > 0 && (
-                <div className="-mt-1 mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{value.combinator === "or" ? "or" : "and"}</div>
+                <div className="-mt-1 mb-1.5 text-micro font-semibold uppercase tracking-wide text-neutral-400">{value.combinator === "or" ? "or" : "and"}</div>
               )}
               <div className="grid grid-cols-1 gap-3">
                 <div>

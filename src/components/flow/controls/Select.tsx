@@ -145,7 +145,7 @@ export function Select({
         {filtered.length === 0 && <p className="p-2 text-center text-xs text-neutral-400">No matches</p>}
         {grouped.map(([g, opts]) => (
           <div key={g || "_"}>
-            {g && <p className="px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{g}</p>}
+            {g && <p className="px-2 pb-0.5 pt-1.5 text-micro font-semibold uppercase tracking-wide text-neutral-400">{g}</p>}
             {opts.map((o) => {
               flatIndex += 1;
               const i = flatIndex;
@@ -165,7 +165,7 @@ export function Select({
                 >
                   <span className="min-w-0">
                     <span className={`block ${o.disabled ? "" : "truncate"} ${o.value === value ? "font-medium text-neutral-900" : "text-neutral-700"}`}>{o.label}</span>
-                    {o.hint && <span className={`block text-[10px] text-neutral-400 ${o.disabled ? "whitespace-normal" : "truncate"}`}>{o.hint}</span>}
+                    {o.hint && <span className={`block text-micro text-neutral-400 ${o.disabled ? "whitespace-normal" : "truncate"}`}>{o.hint}</span>}
                   </span>
                   {o.value === value && <span className="shrink-0 text-neutral-500">✓</span>}
                 </button>

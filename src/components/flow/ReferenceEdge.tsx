@@ -34,7 +34,7 @@ export function ReferenceEdge({ id, sourceX, sourceY, targetX, targetY, sourcePo
         <EdgeLabelRenderer>
           <div
             style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: "none" }}
-            className="whitespace-nowrap rounded-full border border-indigo-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-indigo-600 shadow-sm"
+            className="whitespace-nowrap rounded-full border border-indigo-200 bg-white px-2 py-0.5 text-micro font-semibold text-indigo-600 shadow-sm"
           >
             {label}
           </div>

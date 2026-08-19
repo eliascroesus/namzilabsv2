@@ -8,28 +8,33 @@ type Org = { id: string; name: string };
  * WorkOS against the user's memberships — the browser cannot switch into an org
  * the user isn't a member of.
  */
+/**
+ * Styled for the dark rail, which is now the only place it renders. A
+ * one-workspace user — almost everyone — sees just the name, so the control
+ * costs nothing until there is actually something to switch between.
+ */
 export function OrgSwitcher({ orgs, currentId }: { orgs: Org[]; currentId: string }) {
   const current = orgs.find((o) => o.id === currentId);
 
   if (orgs.length <= 1) {
-    return <span className="text-sm font-medium text-neutral-700">{current?.name ?? "Workspace"}</span>;
+    return <span className="block truncate text-tiny font-medium text-ink-100">{current?.name ?? "Workspace"}</span>;
   }
 
   return (
-    <form action={switchOrgAction} className="flex items-center gap-2">
+    <form action={switchOrgAction}>
       <select
         name="organizationId"
         defaultValue={currentId}
-        className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm"
+        className="w-full cursor-pointer rounded-control border border-ink-700 bg-ink-900 px-1.5 py-1 text-tiny font-medium text-ink-100 focus:border-brand-500 focus:outline-none"
       >
         {orgs.map((o) => (
-          <option key={o.id} value={o.id}>
+          <option key={o.id} value={o.id} className="bg-ink-900 text-ink-100">
             {o.name}
           </option>
         ))}
       </select>
-      <button type="submit" className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50">
-        Switch
+      <button type="submit" className="mt-1 text-micro font-medium text-brand-400 hover:text-brand-300">
+        Switch workspace
       </button>
     </form>
   );

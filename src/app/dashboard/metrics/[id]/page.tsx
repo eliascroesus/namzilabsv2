@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireOrg } from "@/lib/auth";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { FunnelView } from "@/components/funnel-view";
 import { getDb } from "@/db/client";
 import { getMetric } from "@/lib/metrics/store";
@@ -56,8 +56,7 @@ export default async function MetricDrillPage({
   }
 
   return (
-    <>
-      <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-4xl px-6 py-10">
         <Link href="/dashboard" className="text-sm text-neutral-500 hover:text-neutral-800">
           &larr; Dashboard
@@ -129,6 +128,6 @@ export default async function MetricDrillPage({
           </div>
         )}
       </main>
-    </>
+    </AppShell>
   );
 }

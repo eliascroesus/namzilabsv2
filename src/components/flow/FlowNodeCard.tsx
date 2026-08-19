@@ -163,7 +163,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       {/* The publish rule, said on the canvas instead of only at the gate. */}
       {publishes != null && (
         <div
-          className={`flex items-center gap-1.5 border-t px-3 py-1.5 text-[10px] font-medium ${
+          className={`flex items-center gap-1.5 border-t px-3 py-1.5 text-micro font-medium ${
             publishes ? "border-indigo-100 bg-indigo-50/70 text-indigo-700" : "border-neutral-100 bg-neutral-50 text-neutral-400"
           }`}
           title={publishes ? "This step's result becomes a tile when you publish." : "Switched off in Review & publish — this step publishes nothing."}

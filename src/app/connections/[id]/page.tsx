@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireOrg } from "@/lib/auth";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { getConnection, getSigningSecret, previewLatest, webhookUrlFor } from "@/lib/connections";
 import { CopyField } from "@/components/copy-field";
 import { catalogEntry, isStreamScoped, syncGuarantee } from "@/connectors/catalog";
@@ -67,8 +67,7 @@ export default async function ConnectionPage({
   }
 
   return (
-    <>
-      <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
         <Link href="/integrations" className="text-sm text-neutral-500 hover:text-neutral-800">
           &larr; Integrations
@@ -346,7 +345,7 @@ export default async function ConnectionPage({
           )}
         </div>
       </main>
-    </>
+    </AppShell>
   );
 }
 

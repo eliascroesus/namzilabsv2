@@ -138,7 +138,7 @@ export function DataBrowser({
     <button
       type="button"
       onClick={() => setShowAll((prev) => new Set(prev).add(k))}
-      className="mt-1 w-full rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-indigo-600 hover:bg-indigo-50"
+      className="mt-1 w-full rounded-lg px-2.5 py-1.5 text-left text-micro font-medium text-indigo-600 hover:bg-indigo-50"
     >
       Show all {hidden + VISIBLE} fields
     </button>
@@ -203,7 +203,7 @@ export function DataBrowser({
                 key={t.key}
                 type="button"
                 onClick={() => setTypeFilter(t.key)}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                className={`rounded-full px-2.5 py-1 text-micro font-medium transition-colors ${
                   typeFilter === t.key ? "bg-indigo-600 text-white" : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
                 }`}
               >
@@ -215,7 +215,7 @@ export function DataBrowser({
 
         {/* Drill breadcrumb */}
         {drill && drillGroup && (
-          <div className="flex items-center gap-1 border-b border-neutral-100 px-2 py-1 text-[11px] text-neutral-500">
+          <div className="flex items-center gap-1 border-b border-neutral-100 px-2 py-1 text-micro text-neutral-500">
             <button
               type="button"
               onClick={() => setDrill(drill.trail.length > 1 ? { groupId: drill.groupId, trail: drill.trail.slice(0, -1) } : null)}
@@ -297,11 +297,11 @@ export function DataBrowser({
                     ) : (
                       <SourceBadge source={g.source} size={16} />
                     )}
-                    {g.stepNo != null && <span className="text-[11px] font-semibold text-neutral-400">{g.stepNo}.</span>}
+                    {g.stepNo != null && <span className="text-micro font-semibold text-neutral-400">{g.stepNo}.</span>}
                     <span className="min-w-0 flex-1 truncate text-xs font-semibold text-neutral-700">{g.title}</span>
                     {/* While filtering, the count is the MATCHES — a "62" over
                         three visible rows reads as 59 fields being hidden. */}
-                    <span className="shrink-0 text-[10px] text-neutral-400">{searching ? fields.length : g.fields.length}</span>
+                    <span className="shrink-0 text-micro text-neutral-400">{searching ? fields.length : g.fields.length}</span>
                   </button>
                   {isOpen && (() => {
                     const { shown, hidden } = capped(g.stepId, fields, searching);
@@ -335,7 +335,7 @@ export function DataBrowser({
             hide those (Time between's "Match records by") it drops out of
             the list entirely. Both readings have to survive this sentence. */}
         {!drill && anyFields && groups.length > 0 && (
-          <p className="border-t border-neutral-100 px-3 py-2 text-[11px] leading-snug text-neutral-400">
+          <p className="border-t border-neutral-100 px-3 py-2 text-micro leading-snug text-neutral-400">
             Filters and date windows add no columns — a record&rsquo;s fields stay under the step that produced them.
           </p>
         )}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { getReadDb } from "@/db/client";
 import { listFlows } from "@/lib/flow/store";
 import { createFlowAction } from "./actions";
@@ -29,8 +29,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
   const flows = await listFlows(getReadDb(), orgId).catch(() => []);
 
   return (
-    <>
-      <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-4xl px-6 py-10">
         {one(sp.error) === "flow_limit" && (
           <div className="mb-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -65,6 +64,6 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
           <FlowList flows={flows.map((f) => ({ id: f.id, name: f.name, status: f.status, updatedAt: new Date(f.updatedAt).toISOString() }))} />
         )}
       </main>
-    </>
+    </AppShell>
   );
 }

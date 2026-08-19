@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
 import { eventTypeOptions } from "@/connectors/catalog";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { computeAggregate, queryEvents, distinctSources, distinctEventTypes } from "@/lib/metrics/compute";
 import { AggregateSchema, FILTER_OPS, type AggregateDefinition } from "@/lib/metrics/types";
@@ -86,8 +86,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
   ];
 
   return (
-    <>
-      <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
         <Link href="/dashboard" className="text-sm text-neutral-500 hover:text-neutral-800">
           &larr; Dashboard
@@ -230,7 +229,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
           </section>
         )}
       </main>
-    </>
+    </AppShell>
   );
 }
 

@@ -861,6 +861,61 @@ became an arrow, and **Review & publish is indigo** — it was the one
 `neutral-900` button in a panel system built entirely on indigo, so the most
 important control on screen was also the only one wearing a different brand.
 
+### 9e. The UI kit, and the ability to see it
+
+**I could not see any of this.** Every judgement up to here was made by reading
+class names, and three defects shipped that a single look would have caught: a
+clipped kebab menu, a `text-neutral-250` that resolved to no colour at all, and
+a card label truncating to "2. Match …". That is now fixed at the root:
+
+- `pnpm shot /design out.png` renders any unauthenticated route headlessly and
+  writes a PNG (`scripts/screenshot.mjs`, Playwright).
+- **`/design`** is the UI kit, rendered — every colour, size, radius and
+  component in one scroll, built from the *same* tokens and components the
+  product uses, so drift shows up there before a customer finds it. It reads no
+  data and touches no session, which is exactly what makes it screenshot-able.
+
+**The kit itself** lives in `globals.css` as Tailwind v4 `@theme` tokens, so
+every token is also a utility class:
+
+| Scale | Tokens | Rule |
+|---|---|---|
+| Accent | `brand-50…700` | One accent. Every primary action, selection and focus ring. |
+| Ink | `ink-950…50` | The rail and any dark surface. Four elevation steps, cool-shifted. |
+| Canvas | `canvas-bg/dot/edge` | So the builder's surface can't drift from its own grid. |
+| Type | `micro 11 · tiny 12 · small 13 · base 14 · lead 15 · title 17 · display 24` | Seven sizes, nothing between. |
+| Radius | `control 8 · card 12 · surface 16` | Three. |
+| Elevation | `raised · lifted` | Two, plus `flow-shadow` for what floats over the canvas. |
+
+The governing rule: **surfaces are neutral; chroma is reserved for identity
+(which kind of step) and for state (what needs you).** A canvas where
+everything is coloured can point at nothing.
+
+**The rail is near-black, not a gradient.** It was `indigo-600 → violet-800`,
+which competes with content, forces every coloured step icon to shout over it,
+and dates fast. Near-black with a blue cast recedes and gives the one accent
+something to mean — where Linear, Vercel and Supabase all landed. Widened
+192px → 256px, the width those products converged on.
+
+**One navigation, not two.** The flow editor rendered a rail; the other eight
+pages rendered a top bar with its own links — and the two lists had already
+drifted (the rail lacked Settings, the bar lacked Connections). `AppShell` now
+frames every authenticated page with the rail, which also takes the account
+controls: a top bar should say what you are *looking at*, and it cannot while
+it is also carrying who you are and where you can go. `app-header.tsx` and
+`main-nav.tsx` are deleted.
+
+**The builder toolbar is pill groups**, Make-style: context on the left (back,
+name, save state) and actions on the right (undo/redo, Test flow, publish),
+floating on a hairline bar with no navigation in it at all.
+
+**Font sizes were 9 ad-hoc values**, mostly arbitrary (`text-[10px]`,
+`text-[13px]`, `text-[17px]`), so two labels doing the same job in two panels
+were different sizes. All migrated to the scale; 10px folded into 11px, which
+the kit declares as the floor for anything that is content. Two `text-base`
+headlines that would have regressed 16px → 14px under the new scale were moved
+up to `text-title` rather than shrunk.
+
 ---
 
 ## 10. What not to change

@@ -4,7 +4,7 @@ import { getReadDb } from "@/db/client";
 import { connections, events, flows } from "@/db/schema";
 import { unresolvedDeadLetterCountsByConnection } from "@/lib/dead-letter";
 import { requireOrg } from "@/lib/auth";
-import { AppHeader } from "@/components/app-header";
+import { AppShell } from "@/components/app-shell";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
@@ -178,8 +178,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   };
 
   return (
-    <>
-      <AppHeader userId={userId} orgId={orgId} userEmail={auth.user.email} />
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       {/* G.4: refresh the server-rendered tiles when the org's results move. */}
       <FreshnessPoller />
       <main className="mx-auto max-w-5xl px-6 py-10">
@@ -319,7 +318,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           )}
         </section>
       </main>
-    </>
+    </AppShell>
   );
 }
 

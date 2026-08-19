@@ -1,5 +1,100 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+ * THE UI KIT — the whole visual language, in one place.
+ *
+ * Everything below is a Tailwind v4 `@theme` token, which means it is also a
+ * utility class: `--color-ink-700` is `text-ink-700`, `bg-ink-700`,
+ * `border-ink-700`. Nothing here is decoration for its own sake; each scale
+ * exists because the product was picking values ad hoc and drifting.
+ *
+ * WHAT THIS IS MODELLED ON. A light working surface (Zapier's clarity) with a
+ * dark, near-black navigation rail and one chromatic accent (Linear's calm).
+ * The rail was a saturated indigo→violet gradient, which is the single most
+ * common "we chose a colour" tell in early SaaS — it competes with content,
+ * it dates fast, and every step icon on the canvas has to shout over it. A
+ * near-black rail with a blue cast recedes, makes the accent mean something,
+ * and is what the tools people keep open all day (Linear, Vercel, Supabase)
+ * converged on.
+ *
+ * THE RULE FOR COLOUR: surfaces are neutral, and chroma is reserved for
+ * (a) identity — which kind of step this is, and (b) state — what needs the
+ * user. A canvas where everything is coloured can point at nothing.
+ * ========================================================================== */
+@theme {
+  /* --- Brand / accent -----------------------------------------------------
+   * One accent, used for every primary action, every selection, every focus
+   * ring. `brand-600` is the button; 500 is hover-on-dark; 50/100 are tints.
+   */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+
+  /* --- Ink: the navigation rail and any dark surface ----------------------
+   * A four-step ladder, which is the minimum a dark surface needs to express
+   * elevation at all: base, raised, hover, hairline. Cool-shifted rather than
+   * pure grey so it reads as deliberate next to the warm white content area.
+   */
+  --color-ink-950: #0b0c0f; /* rail base */
+  --color-ink-900: #121419; /* rail raised (active item) */
+  --color-ink-800: #1a1d24; /* rail hover */
+  --color-ink-700: #262a33; /* hairline on dark */
+  --color-ink-400: #8b93a7; /* muted text on dark */
+  --color-ink-100: #e8eaf0; /* body text on dark */
+  --color-ink-50: #f7f8fa; /* headings on dark */
+
+  /* --- Canvas -------------------------------------------------------------
+   * The flow builder's working surface. Kept as tokens so the dot grid, the
+   * page behind it and the edge colour can never drift apart again.
+   */
+  --color-canvas-bg: #f6f6f8;
+  --color-canvas-dot: #dfe1e8;
+  --color-canvas-edge: #aab4cb;
+
+  /* --- Type scale ---------------------------------------------------------
+   * SEVEN SIZES, AND NOTHING BETWEEN THEM. The app had accumulated 9px, 10px,
+   * 11px, 12px, 13px, 14px, 15px, 17px and 24px, mostly as one-off arbitrary
+   * values, so two labels doing the same job in two panels were different
+   * sizes. Anything below `micro` is unreadable at a glance and was being
+   * used for real content.
+   */
+  --text-micro: 0.6875rem; /* 11px — badges, chips, table micro-labels */
+  --text-micro--line-height: 1rem;
+  --text-tiny: 0.75rem; /* 12px — helper text, captions */
+  --text-tiny--line-height: 1.125rem;
+  --text-small: 0.8125rem; /* 13px — dense UI: field labels, options */
+  --text-small--line-height: 1.25rem;
+  --text-base: 0.875rem; /* 14px — the app's default body */
+  --text-base--line-height: 1.375rem;
+  --text-lead: 0.9375rem; /* 15px — panel titles, nav */
+  --text-lead--line-height: 1.5rem;
+  --text-title: 1.0625rem; /* 17px — section + modal titles */
+  --text-title--line-height: 1.5rem;
+  --text-display: 1.5rem; /* 24px — page headings */
+  --text-display--line-height: 2rem;
+
+  /* --- Radius -------------------------------------------------------------
+   * Three steps. Controls, cards, floating surfaces. Everything else was a
+   * one-off.
+   */
+  --radius-control: 0.5rem; /* 8px  — inputs, buttons, nav items */
+  --radius-card: 0.75rem; /* 12px — step cards, tiles, sections */
+  --radius-surface: 1rem; /* 16px — panels, modals, popovers */
+
+  /* --- Elevation ----------------------------------------------------------
+   * Two, plus the existing `.flow-shadow` for surfaces that float over the
+   * canvas. A card that is merely on the page uses `raised`; one that is
+   * being dragged or hovered uses `lifted`.
+   */
+  --shadow-raised: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-lifted: 0 2px 4px rgba(15, 23, 42, 0.04), 0 8px 20px -6px rgba(15, 23, 42, 0.12);
+}
+
 :root {
   --background: #ffffff;
   --foreground: #0a0a0a;
@@ -9,6 +104,11 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Type rendering is part of the kit: without these, the same 13px label is
+     visibly heavier on macOS than the design was drawn at. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /*

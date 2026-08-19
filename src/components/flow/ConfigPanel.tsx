@@ -194,10 +194,10 @@ export function ConfigPanel({
             value={node.data.label ?? ""}
             onChange={(e) => onRename(e.target.value)}
             placeholder={`${stepNo != null ? `${stepNo}. ` : ""}${defaultTitle(type, node.data)}`}
-            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-[17px] font-semibold text-neutral-900 hover:border-neutral-200 hover:bg-white focus:border-neutral-300 focus:bg-white focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-neutral-900 hover:border-neutral-200 hover:bg-white focus:border-neutral-300 focus:bg-white focus:outline-none"
           />
         </div>
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${sm.cls}`}>{sm.label}</span>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-micro font-semibold ${sm.cls}`}>{sm.label}</span>
       </div>
 
       {/* Tabs */}
@@ -428,7 +428,7 @@ function UpstreamPrompt({ onTestUpstream }: { onTestUpstream: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
-      <p className="text-[13px] font-medium text-amber-900">No fields to choose from yet</p>
+      <p className="text-small font-medium text-amber-900">No fields to choose from yet</p>
       <p className="mt-1 text-xs leading-snug text-amber-800">
         The step above hasn&rsquo;t been tested, so we don&rsquo;t know what its records look like.
       </p>
@@ -609,7 +609,7 @@ function NodeConfig({
             </div>
           </div>
         ) : (
-          <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-[13px] text-neutral-600">
+          <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-small text-neutral-600">
             {bmode === "always" ? "Every record continues." : "Gets what no other path matched."}
           </p>
         )}
@@ -864,13 +864,13 @@ function NodeConfig({
       <div className="space-y-4">
         {paths.map((p, i) => (
           <div key={p.id} className="flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50/40 px-2 py-1.5">
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-pink-700">Branch {i + 1}</span>
+            <span className="shrink-0 text-micro font-semibold uppercase tracking-wide text-pink-700">Branch {i + 1}</span>
             <input value={p.label} onChange={(e) => setLabel(i, e.target.value)} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
             {(p.mode ?? "custom") !== "custom" && (
-              <span className="shrink-0 rounded bg-pink-100 px-1.5 py-0.5 text-[10px] font-medium text-pink-700">{p.mode === "always" ? "always runs" : "fallback"}</span>
+              <span className="shrink-0 rounded bg-pink-100 px-1.5 py-0.5 text-micro font-medium text-pink-700">{p.mode === "always" ? "always runs" : "fallback"}</span>
             )}
             {paths.length > 1 && (
-              <button onClick={() => onRemoveBranch(p.id)} className="shrink-0 text-[11px] text-red-600 hover:underline" title="Remove this branch and its steps">Remove</button>
+              <button onClick={() => onRemoveBranch(p.id)} className="shrink-0 text-micro text-red-600 hover:underline" title="Remove this branch and its steps">Remove</button>
             )}
           </div>
         ))}
@@ -2097,7 +2097,7 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
           Only the newest 500,000 records were read, so this number is a floor, not a total. Narrow the step with a date range to measure a complete period.
         </p>
       )}
-      <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-base font-semibold text-neutral-900">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
+      <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-title font-semibold text-neutral-900">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
       ) : (
@@ -2116,7 +2116,7 @@ function BeforeAfter({ before, after }: { before: unknown[]; after: unknown[] })
       <p className="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-400">{label} ({recs.length})</p>
       <div className="space-y-1">
         {recs.length === 0 && <p className="text-xs text-neutral-400">—</p>}
-        {recs.slice(0, 3).map((r, i) => <div key={i} className={`truncate rounded border p-1.5 text-[11px] ${tone}`}>{sampleLine(r)}</div>)}
+        {recs.slice(0, 3).map((r, i) => <div key={i} className={`truncate rounded border p-1.5 text-micro ${tone}`}>{sampleLine(r)}</div>)}
       </div>
     </div>
   );
@@ -2133,7 +2133,7 @@ function sampleLine(r: unknown): string {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="block">
-      <span className="mb-1.5 block text-[13px] font-medium text-neutral-700">{label}</span>
+      <span className="mb-1.5 block text-small font-medium text-neutral-700">{label}</span>
       {children}
     </div>
   );
@@ -2141,6 +2141,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 /** A small uppercase section heading, matching the step picker's group labels. */
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">{children}</p>;
+  return <p className="text-micro font-semibold uppercase tracking-wider text-neutral-400">{children}</p>;
 }
 

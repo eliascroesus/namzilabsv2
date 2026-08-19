@@ -120,7 +120,7 @@ export function ReviewPublishModal({
       <div className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white flow-shadow flow-pop-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
           <div>
-            <h2 className="text-base font-semibold tracking-tight text-neutral-900">Review &amp; publish</h2>
+            <h2 className="text-title font-semibold tracking-tight text-neutral-900">Review &amp; publish</h2>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700" aria-label="Close">
             ✕
@@ -156,7 +156,7 @@ export function ReviewPublishModal({
                     <input type="checkbox" checked={m.enabled} onChange={(e) => set(ep.nodeId, { enabled: e.target.checked })} className="h-4 w-4 accent-indigo-600" />
                     <span className="truncate text-sm font-semibold text-neutral-800">{ep.title}</span>
                   </span>
-                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-400">metric</span>
+                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-neutral-400">metric</span>
                 </label>
                 {m.enabled && (
                   <div className="mt-3 space-y-2.5">
