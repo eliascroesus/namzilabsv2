@@ -1640,6 +1640,68 @@ with them or they would have broken:
 
 ---
 
+### 9y. The cards and the panel, and the rule that keeps being rediscovered
+
+**One ladder, two finishes.** Every elevation token except `island` opened with
+a `0 0 0 1px` ring standing in for an edge — and the step card set `border` AND
+`shadow-raised`, so it drew two 1px bands of different hue with the outer one
+darker. The same defect the toolbar islands had, still sitting on the two
+surfaces people look at most. There are now ring-free twins for the whole
+ladder — `card ← raised`, `card-hover ← lifted`, `island ← float`,
+`panel ← pop` — with the rule written once above them: **a surface that draws
+its own border takes the ring-free twin.** Then the sweep: the config panel,
+every Popover (so every dropdown, kebab and field picker in the builder), the
+data browser, both canvas modals, Review & publish, the flow list, the insert
+"+" and the canvas banners. Verified by walking the pixels across a card's
+left edge — 246 → 245 → 242 → 239 → 229 → 255, monotonic, one hairline.
+
+**Colour on a border means ACT ON ME.** Every status used to paint a full
+coloured border, so a healthy canvas was a wall of green outlines and the one
+card that needed you did not stand out. `ready` and `untested` are a neutral
+hairline now; `setup`, `error` and `updating` keep their colour. The dot still
+carries all five.
+
+**The panel is one white surface, not three greys** — `bg-neutral-50` under a
+`bg-neutral-100` header on `rounded-2xl` with the legacy `.flow-shadow` became
+white on `rounded-surface` with a hairline. And its shell and tab row moved
+into `panel-chrome.tsx`, which `/design` **imports** rather than copies.
+
+**The kit can finally see the panel.** It is the most-used surface in the
+product and the only one the kit never showed, which is exactly why two
+changes to it were reported done against a component nobody had touched.
+
+**What looking caught that reading could not.** The panel first shipped on
+`shadow-panel`, which is `pop` minus its ring — and pop's 56px 0.2 halo is
+sized for a centred dialog over a dimmed backdrop. Docked to the canvas it
+spread **darker than the 1px border it surrounded**, so the ramp reversed at
+the edge (`224 → 229 → 255`) and the hairline read as a light stripe inside a
+bruise. Bordered was not the only question; *how far the shadow throws* was
+the other. The panel takes `shadow-island` — it is a surface floating on the
+canvas, exactly like the toolbar islands — and `shadow-panel` is now labelled
+modals-only.
+
+Three more from the same pass:
+
+- **Two greys that read as a mistake.** `--border` #e5e5e5 against `--input`
+  #d4d4d4 — seventeen levels apart in one hue, so a select inside the panel was
+  drawn harder than the panel containing it. They are one value now, which is
+  what shadcn ships and for the same reason.
+- **The hairline was the only desaturated thing on screen.** Dead grey in a
+  #f6f6fb field, with the shadow falloff around it running blue-tinted and then
+  stepping back to neutral at the border. `--border` is `#e5e4ed` now: same
+  luminance, borrowed hue.
+- **The segmented control drew two parallel lines in six pixels** — its thumb
+  carried Tailwind's `shadow-sm`, which is *pure black* where every other
+  shadow here is slate, and its falloff landed 2px inside the track's own
+  border. A ring at the thumb's own edge separates it without a second line.
+
+Still open, and deliberately not guessed at: `updating` and `error` keep raw
+blue/red palette classes because there are no `info-*` / `destructive-soft`
+roles to move them to, and inventing two colour ramps is a decision, not a
+rename.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

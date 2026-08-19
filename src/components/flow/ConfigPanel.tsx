@@ -32,6 +32,7 @@ import { NumberField } from "./controls/NumberField";
 import { STATUS_META, defaultTitle, formulaExpression, formulaHandleLabels, nodeVariant, resultLabel } from "./node-meta";
 import { RecordSamplePicker, recordWhen } from "./RecordSamplePicker";
 import { NodeIcon } from "./icons";
+import { PANEL_SHELL, PanelTabs } from "./panel-chrome";
 import { Database } from "lucide-react";
 import { Select, Segmented, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
 import { hasAnyFields } from "./controls/field-utils";
@@ -45,13 +46,13 @@ export type StepRef = { id: string; title: string; stepNo?: number };
 /** Branch-head context: how records enter this Paths branch (mode lives on the hub). */
 export type BranchCtx = { mode: string; siblingHasFallback: boolean; siblingHasAlways: boolean; set: (mode: string) => void };
 
-const INPUT = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm transition-colors focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
+const INPUT = "w-full rounded-control border border-input bg-white px-3 py-2 text-sm transition-colors focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
 const W = 412;
 
 /** Shared button language for the config panel (Make.com vibe: rounded, tactile, colourful). */
-const BTN_BASE = "rounded-xl px-4 py-3 text-sm font-semibold transition-all active:scale-[0.985]";
+const BTN_BASE = "rounded-card px-4 py-3 text-sm font-semibold transition-all active:scale-[0.985]";
 const BTN_PRIMARY = `${BTN_BASE} bg-primary text-primary-foreground transition-all hover:brightness-110 active:brightness-95 disabled:cursor-default disabled:bg-neutral-200 disabled:text-neutral-400`;
-const BTN_SECONDARY = `${BTN_BASE} border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50`;
+const BTN_SECONDARY = `${BTN_BASE} border border-border bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50`;
 
 const AGG_LABELS: Record<string, string> = { count: "Count of records", count_distinct: "Count of distinct values", sum: "Sum of a field", avg: "Average of a field", median: "Median of a field", min: "Minimum of a field", max: "Maximum of a field" };
 const FORMULA_LABELS: Record<string, string> = {
@@ -184,39 +185,27 @@ export function ConfigPanel({
     // instead of pushing the canvas off the left edge.
     <aside
       data-config-panel
-      className={`absolute inset-y-0 right-0 z-20 m-6 flex w-[min(452px,calc(100vw-3rem))] flex-col overflow-hidden rounded-2xl bg-neutral-50 flow-shadow ${animClass}`}
+      className={`absolute inset-y-0 right-0 z-20 m-6 w-[min(452px,calc(100vw-3rem))] ${PANEL_SHELL} ${animClass}`}
     >
-      {/* Header — a slightly darker grey band with the step's colourful icon, so it
-          reads as a distinct "what am I editing" strip above the fields. */}
-      <div className="flex items-center justify-between gap-3 border-b border-neutral-200/70 bg-neutral-100 px-5 py-4">
+      {/* Header — no longer a darker band. The panel is ONE white surface cut by
+          hairlines, the way every other island in the builder is; three stacked
+          greys was the last place still separating regions by tint. What marks
+          this strip as "what am I editing" is the step's own colourful icon and
+          the rule under it, neither of which needed a second grey to work. */}
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-white px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} variant={nodeVariant(type, cfg)} size={38} />
           <input
             value={node.data.label ?? ""}
             onChange={(e) => onRename(e.target.value)}
             placeholder={`${stepNo != null ? `${stepNo}. ` : ""}${defaultTitle(type, node.data)}`}
-            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground hover:border-neutral-200 hover:bg-white focus:border-neutral-300 focus:bg-white focus:outline-none"
+            className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground hover:border-border hover:bg-white focus:border-input focus:bg-white focus:outline-none"
           />
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-1 text-micro font-semibold ${sm.cls}`}>{sm.label}</span>
       </div>
 
-      {/* Tabs */}
-      <div data-config-tabs className="flex gap-5 border-b border-neutral-200 bg-neutral-50 px-5">
-        {(["configure", "test"] as const)
-          .filter((t) => supportsTest || t === "configure")
-          .map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`-mb-px border-b-2 py-3 text-sm capitalize transition-colors ${
-                activeTab === t ? "border-brand-500 font-semibold text-foreground" : "border-transparent font-medium text-neutral-500 hover:text-foreground"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-      </div>
+      <PanelTabs tabs={supportsTest ? ["configure", "test"] : ["configure"]} active={activeTab} onSelect={setTab} />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col p-5">
@@ -254,12 +243,12 @@ export function ConfigPanel({
             </div>
           ) : (
             <div className="space-y-4">
-              {err && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>}
+              {err && <div className="rounded-control border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>}
               {node.data.lastTest?.status === "ok" ? (
                 <TestResults node={node} onChange={onChange} />
               ) : (
                 !err && (
-                  <div className="rounded-xl border border-dashed border-neutral-200 bg-neutral-50/60 p-6 text-center">
+                  <div className="rounded-card border border-dashed border-border bg-neutral-50/60 p-6 text-center">
                     <p className="text-sm font-medium text-neutral-700">{status === "setup" ? "Finish the Configure tab first." : "Test to see this step’s data."}</p>
                   </div>
                 )
@@ -269,7 +258,11 @@ export function ConfigPanel({
         </div>
       </div>
 
-      <div className="border-t border-neutral-200 bg-neutral-50 p-4">
+      {/* The same hairline-over-tint trade as the header: this band was grey
+          when the whole panel was, and left alone it would be the one slab of
+          neutral in an otherwise white surface. The rule above it is what
+          holds the action apart from the fields. */}
+      <div className="border-t border-border bg-white p-4">
         <Footer
           tab={activeTab}
           status={status}
@@ -409,7 +402,7 @@ function TestingFooter({ onCancelTest }: { onCancelTest?: () => void }) {
         </button>
       </div>
       {secs >= 30 && (
-        <p className="text-center text-xs text-neutral-500">Large date ranges take longer. You can narrow this step and try again.</p>
+        <p className="text-center text-xs text-muted-foreground">Large date ranges take longer. You can narrow this step and try again.</p>
       )}
     </div>
   );
@@ -428,7 +421,7 @@ function TestingFooter({ onCancelTest }: { onCancelTest?: () => void }) {
 function UpstreamPrompt({ onTestUpstream }: { onTestUpstream: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+    <div className="rounded-card border border-amber-200 bg-amber-50 p-3.5">
       <p className="text-small font-medium text-amber-900">No fields to choose from yet</p>
       <p className="mt-1 text-xs leading-snug text-amber-800">
         The step above hasn&rsquo;t been tested, so we don&rsquo;t know what its records look like.
@@ -440,7 +433,7 @@ function UpstreamPrompt({ onTestUpstream }: { onTestUpstream: () => void }) {
           setBusy(true);
           onTestUpstream();
         }}
-        className="mt-2.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100 disabled:opacity-60"
+        className="mt-2.5 rounded-control border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100 disabled:opacity-60"
       >
         {busy ? "Testing the previous step…" : "Test the previous step"}
       </button>
@@ -610,7 +603,7 @@ function NodeConfig({
             </div>
           </div>
         ) : (
-          <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-small text-neutral-600">
+          <p className="rounded-control border border-border bg-neutral-50 p-3 text-small text-neutral-600">
             {bmode === "always" ? "Every record continues." : "Gets what no other path matched."}
           </p>
         )}
@@ -700,7 +693,7 @@ function NodeConfig({
             aggregation just restated the dropdown directly below it ("Count
             of records" over a select reading "Count of records"). */}
         {!datasetOp && (
-          <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-medium text-brand-900">
+          <div className="rounded-control border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-medium text-brand-900">
             {formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}
           </div>
         )}
@@ -709,7 +702,7 @@ function NodeConfig({
             one source. Doing it silently would be worse than the error it
             replaces, so the step says where its records came from. */}
         {datasetOp && recordSourceNote && (
-          <p className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">Reads records from {recordSourceNote}</p>
+          <p className="rounded-control border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">Reads records from {recordSourceNote}</p>
         )}
         {datasetOp ? (
           <>
@@ -820,7 +813,7 @@ function NodeConfig({
                   options={datasetCandidates.filter((c) => c.id === inp.nodeId || !laneIds.includes(c.id)).map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
                   onChange={(v) => setLanes(laneIds.map((x, i) => (i === idx ? v : x)))}
                 />
-                <button type="button" onClick={() => setLanes(laneIds.filter((_, i) => i !== idx))} className="shrink-0 text-xs text-neutral-400 hover:text-red-600">
+                <button type="button" onClick={() => setLanes(laneIds.filter((_, i) => i !== idx))} className="shrink-0 text-xs text-neutral-400 hover:text-destructive">
                   Remove
                 </button>
               </div>
@@ -846,7 +839,7 @@ function NodeConfig({
             discovering the second one exists — which is what a checkbox
             buried under the lane list was being asked to do. */}
         {matching && inputs.length !== 2 && (
-          <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+          <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
             Match needs exactly 2 steps — {inputs.length} wired in.
           </p>
         )}
@@ -866,12 +859,12 @@ function NodeConfig({
         {paths.map((p, i) => (
           <div key={p.id} className="flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50/40 px-2 py-1.5">
             <span className="shrink-0 text-micro font-semibold uppercase tracking-wide text-pink-700">Branch {i + 1}</span>
-            <input value={p.label} onChange={(e) => setLabel(i, e.target.value)} className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
+            <input value={p.label} onChange={(e) => setLabel(i, e.target.value)} className="min-w-0 flex-1 rounded-md border border-input px-2 py-1 text-xs font-medium" />
             {(p.mode ?? "custom") !== "custom" && (
               <span className="shrink-0 rounded bg-pink-100 px-1.5 py-0.5 text-micro font-medium text-pink-700">{p.mode === "always" ? "always runs" : "fallback"}</span>
             )}
             {paths.length > 1 && (
-              <button onClick={() => onRemoveBranch(p.id)} className="shrink-0 text-micro text-red-600 hover:underline" title="Remove this branch and its steps">Remove</button>
+              <button onClick={() => onRemoveBranch(p.id)} className="shrink-0 text-micro text-destructive hover:underline" title="Remove this branch and its steps">Remove</button>
             )}
           </div>
         ))}
@@ -1004,7 +997,7 @@ function NumberFieldList({
             cannot say is the ORDER — per record first, then across records —
             which is the difference between an average of totals and a total
             of averages. Six words instead of a paragraph. */}
-        {extra.length > 0 && <p className="text-xs text-neutral-500">Added up per record, then across records.</p>}
+        {extra.length > 0 && <p className="text-xs text-muted-foreground">Added up per record, then across records.</p>}
       </div>
     </Field>
   );
@@ -1132,7 +1125,7 @@ function NumberPicker({
         trigger={({ toggle }) => (
           <div className="relative">
             {desc ? (
-              <div className="flex w-full items-center justify-between gap-2 rounded-md border border-neutral-300 bg-neutral-50 py-1.5 pl-2 pr-14 text-sm">
+              <div className="flex w-full items-center justify-between gap-2 rounded-md border border-input bg-neutral-50 py-1.5 pl-2 pr-14 text-sm">
                 <span className="min-w-0 truncate text-foreground">{chosenLabel}</span>
                 <button
                   type="button"
@@ -1164,7 +1157,7 @@ function NumberPicker({
           </div>
         )}
       />
-      {desc && preview != null && <p className="mt-1 text-xs text-neutral-500">= {String(preview)}</p>}
+      {desc && preview != null && <p className="mt-1 text-xs text-muted-foreground">= {String(preview)}</p>}
     </Field>
   );
 }
@@ -1176,10 +1169,10 @@ function CategoryEditor({ cfg, groups, onChange }: { cfg: Record<string, unknown
   return (
     <div className="space-y-2">
       {cats.map((c, i) => (
-        <div key={i} className="space-y-2 rounded border border-neutral-200 p-2">
-          <input value={c.label} placeholder="Category name" onChange={(e) => setCat(i, { label: e.target.value })} className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium" />
+        <div key={i} className="space-y-2 rounded border border-border p-2">
+          <input value={c.label} placeholder="Category name" onChange={(e) => setCat(i, { label: e.target.value })} className="w-full rounded-md border border-input px-2 py-1 text-xs font-medium" />
           <ConditionEditor value={asFilterConfig((c.filters as unknown as Record<string, unknown>) ?? {})} groups={groups} onChange={(v) => setCat(i, { filters: { combinator: v.combinator, rules: v.rules } })} />
-          <button onClick={() => onChange({ categories: cats.filter((_, j) => j !== i) })} className="text-xs text-red-600 hover:underline">Remove category</button>
+          <button onClick={() => onChange({ categories: cats.filter((_, j) => j !== i) })} className="text-xs text-destructive hover:underline">Remove category</button>
         </div>
       ))}
       <button onClick={() => onChange({ categories: [...cats, { label: `Category ${cats.length + 1}`, filters: { combinator: "and", rules: [] } }] })} className="rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">+ Add category</button>
@@ -1368,7 +1361,7 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
     // the panel had not yet loaded.
     if (!note) return null;
     return (
-      <p className="flex items-center gap-2 text-xs text-neutral-500">
+      <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="min-w-0 truncate">{note}</span>
         <button type="button" onClick={() => setEditing(true)} className="shrink-0 font-medium text-brand-600 hover:underline">
           Change
@@ -1423,8 +1416,8 @@ function ImportStatusLine({ connectionId, historyNote }: { connectionId: string;
     // our sync losing data.
     return (
       <div className="mt-1.5 space-y-1">
-        <p className="text-xs text-green-700">History imported — everything the source still offers.</p>
-        {historyNote && <p className="text-xs text-neutral-500">{historyNote}</p>}
+        <p className="text-xs text-success-ink">History imported — everything the source still offers.</p>
+        {historyNote && <p className="text-xs text-muted-foreground">{historyNote}</p>}
       </div>
     );
   }
@@ -1602,7 +1595,7 @@ function MomentInput({
         <button
           type="button"
           onClick={toggle}
-          className="relative w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 pr-9 text-left text-sm transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+          className="relative w-full rounded-control border border-input bg-white py-2 pl-3 pr-9 text-left text-sm transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
         >
           {label ? (
             <span className="block truncate text-foreground">
@@ -1637,7 +1630,7 @@ function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: 
   const orderName = (d.orderField ?? "occurredAt").replace(/^properties\./, "");
   if (d.matched === 0) {
     return (
-      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+      <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
         Nothing was removed: <span className="font-medium">{name}</span> is empty on all {d.loaded.toLocaleString()} records here, so there was nothing to match on. Pick a
         field these records actually carry.
       </p>
@@ -1649,7 +1642,7 @@ function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: 
   // receipt saying the opposite about the same step.
   if (d.removed > 0 && d.groups != null && d.matched >= 100 && d.groups < d.matched * 0.05) {
     return (
-      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+      <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
         Matching by <span className="font-medium">{name}</span> collapsed {d.removed.toLocaleString()} of {d.matched.toLocaleString()} records into just{" "}
         {d.groups.toLocaleString()} — it looks like a category, not an identity. If you meant one record per person, pick a field that identifies one (an email or an id).
       </p>
@@ -1660,14 +1653,14 @@ function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: 
   // "kept the earliest occurredAt" here would be a plain untruth.
   if (d.removed > 0 && d.ordered === 0) {
     return (
-      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+      <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
         Removed {d.removed.toLocaleString()} record{d.removed === 1 ? "" : "s"}, but <span className="font-medium">{orderName}</span> is empty on all of them — so which one survived was arbitrary. Pick a
         field that orders these records.
       </p>
     );
   }
   return (
-    <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-600">
+    <p className="rounded-control border border-border bg-neutral-50 p-2.5 text-xs text-neutral-600">
       {d.removed === 0
         ? `No duplicates found — every ${name} was different.`
         : `Removed ${d.removed.toLocaleString()} record${d.removed === 1 ? "" : "s"}, keeping the ${d.keep === "earliest" ? "earliest" : "latest"} ${orderName} of each ${name}.`}
@@ -1688,7 +1681,7 @@ function PairingOutcome({ p }: { p: { keys: number; started: number; matched: nu
   if (p.keys === 0) return null;
   if (p.started === 0) {
     return (
-      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+      <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
         Nothing was paired: none of the {p.keys.toLocaleString()} matched groups had a start time. Check the field picked for “Start the clock on”.
       </p>
     );
@@ -1697,7 +1690,7 @@ function PairingOutcome({ p }: { p: { keys: number; started: number; matched: nu
   if (p.noStop > 0) bits.push(`${p.noStop.toLocaleString()} never got one`);
   if (p.stopBeforeStart > 0) bits.push(`${p.stopBeforeStart.toLocaleString()} only had one before the start`);
   return (
-    <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-600">
+    <p className="rounded-control border border-border bg-neutral-50 p-2.5 text-xs text-neutral-600">
       {bits.join(", ")}. The rest are not in this number.
     </p>
   );
@@ -1716,7 +1709,7 @@ function CrossRefOutcome({ c }: { c: { mode: string; keyField: string; lookupFie
     // The wrong-field case throws in the engine, so reaching here means the
     // other step genuinely had no records — an empty sheet, not a mistake.
     return (
-      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+      <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
         The other step had no records, so there was nothing to check <span className="font-medium">{key}</span> against.
       </p>
     );
@@ -1739,7 +1732,7 @@ function CrossRefOutcome({ c }: { c: { mode: string; keyField: string; lookupFie
   // than saying nothing.
   const phoneNote = (c.phones ?? 0) > 0 ? " Both fields hold phone numbers, so values were matched by their last 10 digits — “+1 208-613-0936” and “2086130936” count as the same." : "";
   return (
-    <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-2.5 text-xs text-neutral-600">
+    <p className="rounded-control border border-border bg-neutral-50 p-2.5 text-xs text-neutral-600">
       Checked {c.checked.toLocaleString()} records against {c.listSize.toLocaleString()} values{listNote}. {outcome}
       {blankNote}
       {phoneNote}
@@ -1895,7 +1888,7 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
       : fallbackGroups;
 
   return (
-    <div className="space-y-2 rounded-lg border border-neutral-200 p-2.5">
+    <div className="space-y-2 rounded-control border border-border p-2.5">
       <button type="button" onClick={() => onChange({ dedupe: !on })} className="flex items-center gap-2 text-xs font-medium text-neutral-700">
         <span className={`flex h-4 w-4 items-center justify-center rounded border ${on ? "border-neutral-800 bg-neutral-800 text-white" : "border-neutral-300"}`}>
           {on ? "✓" : ""}
@@ -2016,7 +2009,7 @@ function TimePeriodSection({ cfg, groups, onChange }: { cfg: Record<string, unkn
         onChange={pick}
       />
       {enabled && (
-        <div className="space-y-2.5 rounded-lg border border-neutral-200 bg-white p-3">
+        <div className="space-y-2.5 rounded-control border border-border bg-white p-3">
           {mode === "rolling" && (
             <Field label="Number of days">
               <NumberField value={dr.days ?? 30} min={1} onChange={(n) => set({ days: n ?? 1 })} />
@@ -2038,7 +2031,7 @@ function TimePeriodSection({ cfg, groups, onChange }: { cfg: Record<string, unkn
               a-day, and it silently meant the first. Printing the resolved
               window is a permanent answer to "did this change?" that no
               one-off announcement can be. */}
-          <p className="text-xs text-neutral-500">{describeWindow(mode, dr)}</p>
+          <p className="text-xs text-muted-foreground">{describeWindow(mode, dr)}</p>
         </div>
       )}
     </div>
@@ -2088,22 +2081,22 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
       {/* F.8: when the source couldn't be re-read, the Test says so plainly
           instead of implying these numbers are freshly pulled. */}
       {t.sourceNote && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{t.sourceNote}</p>
+        <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">{t.sourceNote}</p>
       )}
       {t.dedupe && <DedupeOutcome d={t.dedupe} />}
       {t.pairing && <PairingOutcome p={t.pairing} />}
       {t.crossRef && <CrossRefOutcome c={t.crossRef} />}
       {t.truncated && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+        <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
           Only the newest 500,000 records were read, so this number is a floor, not a total. Narrow the step with a date range to measure a complete period.
         </p>
       )}
-      <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-title font-semibold text-foreground">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
+      <p className="rounded-card border border-border bg-neutral-50 p-3 text-center text-title font-semibold text-foreground">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
       ) : (
         <details>
-          <summary className="cursor-pointer text-xs text-neutral-500">View sample data</summary>
+          <summary className="cursor-pointer text-xs text-muted-foreground">View sample data</summary>
           <div className="mt-2"><BeforeAfter before={t.inputSample ?? []} after={t.sample} /></div>
         </details>
       )}

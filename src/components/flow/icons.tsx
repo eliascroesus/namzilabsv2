@@ -89,6 +89,11 @@ export const NODE_ACCENT: Record<string, string> = {
  * of operation), different glyph, so the two doors are never one face.
  */
 export function NodeIcon({ type, source, variant, size = 34 }: { type: string; source?: string | null; variant?: string; size?: number }) {
+  // PROPORTIONAL, not a token. This mark renders at 28 / 38 / 44 depending on
+  // where it is, and a fixed radius from the scale would read square at 44 and
+  // pill-like at 28. 0.3 keeps the same corner CHARACTER at every size, which
+  // is the thing being held constant — so 13px at 44 is a derived value, not a
+  // number off the radius scale that someone forgot to round.
   const radius = Math.max(6, Math.round(size * 0.3));
   // A CONNECTED Get-data step wears its app's brand mark. An unconnected one —
   // the picker's own "Get data" entry, and every step before an account is

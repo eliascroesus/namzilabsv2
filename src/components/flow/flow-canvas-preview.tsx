@@ -34,9 +34,11 @@ export function FlowNodeCard({
   const sm = STATUS_META[status];
   const type = variant.startsWith("unite") ? "unite" : variant.startsWith("formula") ? "formula" : variant;
   const source = variant === "app" ? "gsheets" : undefined;
-  // Duplicates the card box from src/components/flow/FlowNodeCard.tsx — width, padding and mark size must track that file.
+  // Duplicates the card box from src/components/flow/FlowNodeCard.tsx — width, radius, elevation, padding and mark size must track that file.
+  // The elevation is the ring-free `card` rung: the card draws a real border,
+  // and a ringed shadow under one is two hairlines reading as a dirty 2px rim.
   return (
-    <div className={`w-[300px] rounded-card border bg-card shadow-raised ${sm.border}`}>
+    <div className={`w-[300px] rounded-surface border bg-card shadow-card transition-all duration-150 hover:shadow-card-hover ${sm.border}`}>
       <div className="flex items-start gap-3 p-3.5">
         <NodeIcon type={type} source={source} variant={variant.includes("_") ? variant : undefined} size={44} />
         <span className="min-w-0 flex-1 pt-0.5">
@@ -54,8 +56,12 @@ export function FlowNodeCard({
           <span className={`h-2 w-2 rounded-full ${sm.dot}`} />
         </span>
       </div>
+      {/* 15px, not 16: the strip's bottom corners are the INSIDE of the card's,
+          so this literal is the radius minus the border and goes quietly wrong
+          the moment the radius moves — it sat at 13px through a whole radius
+          step. `bg-accent`/`text-accent-foreground` ARE brand-50/brand-700. */}
       {publishes && (
-        <div className="flex items-center gap-1.5 rounded-b-[13px] border-t border-brand-100 bg-brand-50 px-3.5 py-2 text-micro font-semibold text-brand-700">
+        <div className="flex items-center gap-1.5 rounded-b-[15px] border-t border-brand-100 bg-accent px-3.5 py-2 text-micro font-semibold text-accent-foreground">
           <LineChart size={12} strokeWidth={2.4} />
           On your dashboard
         </div>
@@ -84,8 +90,8 @@ export function CanvasPreview() {
         {/* No Connector here: the terminal "Add next step" hangs off the card at
             mt-8 (FlowNodeCard.tsx) — it is not an edge, so it has no "+". */}
         <span className="h-8 w-px border-l-2 border-dashed" style={{ borderColor: "var(--color-canvas-edge)" }} />
-        {/* Duplicates the terminal "Add next step" button from src/components/flow/FlowNodeCard.tsx — it is an opaque, raised card there, not a wash. */}
-        <div className="flex w-[300px] items-center gap-2.5 rounded-card border-2 border-dashed border-neutral-300 bg-white p-3 text-base font-semibold text-neutral-500 shadow-raised">
+        {/* Duplicates the terminal "Add next step" button from src/components/flow/FlowNodeCard.tsx — it is an opaque, raised card there, not a wash, and it carries the same corner and the same ring-free elevation as the cards above it. */}
+        <div className="flex w-[300px] items-center gap-2.5 rounded-surface border-2 border-dashed border-neutral-300 bg-white p-3 text-base font-semibold text-neutral-500 shadow-card">
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
             <Plus size={16} strokeWidth={2.5} />
           </span>
@@ -112,7 +118,7 @@ function Connector() {
       {/* Duplicates the insert control from src/components/flow/InsertEdge.tsx — size, fill and glyph must track that file. */}
       {/* shrink-0: the parent is a w-px flex row, so without it the circle is
           squeezed to an oval — the one thing the real control cannot be. */}
-      <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-600 shadow-raised">
+      <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-card text-neutral-600 shadow-card">
         <Plus size={15} strokeWidth={2.6} />
       </span>
     </span>

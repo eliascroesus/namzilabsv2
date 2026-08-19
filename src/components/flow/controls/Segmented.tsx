@@ -25,7 +25,7 @@ export function Segmented({
   disabled?: boolean;
 }) {
   return (
-    <div className="inline-flex w-full rounded-lg border border-neutral-300 bg-neutral-100 p-0.5" role="group">
+    <div className="inline-flex w-full rounded-control border border-border bg-muted p-0.5" role="group">
       {options.map((o) => {
         const active = o.value === value;
         const off = disabled || o.disabled;
@@ -38,7 +38,7 @@ export function Segmented({
             aria-pressed={active}
             onClick={() => onChange(o.value)}
             className={`min-w-0 flex-1 truncate rounded-[6px] px-2.5 py-1.5 text-small font-medium transition-colors ${
-              active ? "bg-white text-foreground shadow-sm" : "text-neutral-500 hover:text-foreground"
+              active ? "bg-card text-foreground ring-1 ring-black/[0.06]" : "text-muted-foreground hover:text-foreground"
             } ${off ? "cursor-not-allowed opacity-40" : ""}`}
           >
             {o.label}

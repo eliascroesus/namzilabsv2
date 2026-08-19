@@ -117,7 +117,7 @@ export function ReviewPublishModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 p-4 pt-16 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white flow-shadow flow-pop-in" onClick={(e) => e.stopPropagation()}>
+      <div className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-surface border border-border bg-card shadow-panel flow-pop-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
           <div>
             <h2 className="text-title font-semibold tracking-tight text-foreground">Review &amp; publish</h2>

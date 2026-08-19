@@ -31,7 +31,7 @@ export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosit
             className="group flex h-10 w-10 items-center justify-center"
           >
             <button
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-600 shadow-raised transition-all hover:scale-110 hover:border-brand-400 hover:bg-brand-500 hover:text-white"
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card text-neutral-600 shadow-card transition-all hover:scale-110 hover:border-brand-400 hover:bg-brand-500 hover:text-white"
               onClick={(e) => {
                 e.stopPropagation();
                 onInsert(id, anchorFromRect(e.currentTarget.getBoundingClientRect()));

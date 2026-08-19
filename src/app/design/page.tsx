@@ -4,6 +4,8 @@ import { CanvasPreview, FlowNodeCard } from "@/components/flow/flow-canvas-previ
 import { NodeIcon } from "@/components/flow/icons";
 import { LayoutDashboard, Workflow } from "lucide-react";
 import { ToolbarPreview } from "@/components/flow/toolbar-preview";
+import { PanelTabsPreview } from "@/components/flow/panel-preview";
+import { PANEL_SHELL } from "@/components/flow/panel-chrome";
 import { FlowList } from "@/app/dashboard/flows/FlowRow";
 import { STATUS_META, type NodeStatus } from "@/components/flow/node-meta";
 
@@ -81,8 +83,8 @@ export default function DesignPage() {
         <p className="text-micro font-semibold uppercase tracking-widest text-brand-600">Design system</p>
         <h1 className="mt-2 text-display font-semibold tracking-tight text-foreground">The Namzilabs UI kit</h1>
         <p className="mt-2 max-w-xl text-base text-neutral-500">
-          One accent, one coloured rail, seven type sizes, three radii, four elevations. Colour carries identity and state — the rail
-          is the one surface allowed to carry mood.
+          One accent, one coloured rail, seven type sizes, three radii, four elevations in two finishes. Colour carries identity and
+          state — the rail is the one surface allowed to carry mood.
         </p>
 
         <Section title="Accent" note="Every primary action, selection and focus ring. One colour, so it means something.">
@@ -146,7 +148,7 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="State" note="The only other colours. Each answers a question the user has to act on.">
+        <Section title="State" note="The only other colours. The DOT always carries the state; the border only takes colour when the step blocks publish or broke, because a canvas that outlines every working step has nothing left to point with — which is why two of these four are a plain neutral card.">
           <div className="grid grid-cols-4 gap-3">
             <StateChip status="ready" body="Ran and returned data" />
             <StateChip status="setup" body="Blocks publish" />
@@ -168,20 +170,28 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Radius and elevation" note="Three radii, four shadows — layered as a ring plus ambient plus contact, never one glow.">
+        <Section title="Radius and elevation" note="Three radii, and ONE elevation ladder in two finishes: on the page, hovered, over the canvas, modal. Which finish a surface takes is decided by whether it has a border, not by taste.">
+          {/* These swatches take the ring-free rung themselves — they are
+              bordered white boxes, which is exactly the case the row below
+              them documents. They used to carry `shadow-raised`, i.e. the kit
+              breaking its own rule in the section that states it. */}
           <div className="grid grid-cols-3 gap-3">
             {[
               { cls: "rounded-control", label: "control · 8px", body: "Inputs, buttons, nav items" },
-              { cls: "rounded-card", label: "card · 12px", body: "Step cards, tiles, sections" },
-              { cls: "rounded-surface", label: "surface · 16px", body: "Panels, modals, popovers" },
+              { cls: "rounded-card", label: "card · 12px", body: "Tiles, sections, list rows" },
+              { cls: "rounded-surface", label: "surface · 16px", body: "Step cards, panels, modals, popovers" },
             ].map((r) => (
-              <div key={r.cls} className={`${r.cls} border border-neutral-200 bg-white p-4 shadow-raised`}>
+              <div key={r.cls} className={`${r.cls} border border-neutral-200 bg-white p-4 shadow-card`}>
                 <p className="text-small font-semibold text-foreground">{r.label}</p>
                 <p className="mt-0.5 text-tiny text-neutral-500">{r.body}</p>
               </div>
             ))}
           </div>
-          <div className="mt-3 grid grid-cols-4 gap-3">
+          <p className="mb-2 mt-6 text-tiny text-neutral-500">
+            <span className="font-semibold text-foreground">Ringed</span> — each opens with a 1px spread that stands in for an edge.
+            Only for a surface with NO border of its own; these swatches have none.
+          </p>
+          <div className="grid grid-cols-4 gap-3">
             {[
               { cls: "shadow-raised", body: "On the page" },
               { cls: "shadow-lifted", body: "Hovered" },
@@ -189,6 +199,24 @@ export default function DesignPage() {
               { cls: "shadow-pop", body: "Modals" },
             ].map((e) => (
               <div key={e.cls} className={`rounded-card bg-card p-4 ${e.cls}`}>
+                <p className="text-small font-semibold text-foreground">{e.cls}</p>
+                <p className="mt-0.5 text-tiny text-muted-foreground">{e.body}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mb-2 mt-6 text-tiny text-neutral-500">
+            <span className="font-semibold text-foreground">Ring-free</span> — the same four rungs with the spread removed, for a
+            surface that draws its own border. A real border over a ring is two 1px bands in different hues, the outer one darker:
+            the rim reads 2px thick and dirty, and hovering swaps a lighter ring under a border that never moved.
+          </p>
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { cls: "shadow-card", body: "Step cards, list rows" },
+              { cls: "shadow-card-hover", body: "Hovered" },
+              { cls: "shadow-island", body: "The builder's islands" },
+              { cls: "shadow-panel", body: "The config panel" },
+            ].map((e) => (
+              <div key={e.cls} className={`rounded-card border border-border bg-card p-4 ${e.cls}`}>
                 <p className="text-small font-semibold text-foreground">{e.cls}</p>
                 <p className="mt-0.5 text-tiny text-muted-foreground">{e.body}</p>
               </div>
@@ -294,10 +322,83 @@ export default function DesignPage() {
           <CanvasPreview />
         </Section>
 
-        <Section title="Step cards" note="300px, a 44px mark, the step number as its own chip so it stops eating the title.">
-          <div className="flex flex-wrap items-start gap-4 rounded-card bg-canvas-bg p-6">
-            <FlowNodeCard variant="unite_match" title="Match" body="Needs two steps" status="setup" stepNo={3} />
-            <FlowNodeCard variant="formula_compare" title="Compare" body="38" status="ready" stepNo={4} />
+        <Section title="Step cards" note="300px, a 44px mark, the step number as its own chip so it stops eating the title. A 16px corner on the ring-free elevation — the card draws its own border — lifting on hover. Only the amber one is outlined, because only it blocks publish.">
+          <div className="relative flex flex-wrap items-start gap-4 overflow-hidden rounded-card bg-canvas-bg p-6">
+              {/* The same dot field the other two canvas specimens carry — a card
+                  judged against flat grey is judged against a surface the product
+                  does not have. */}
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
+              />
+            <span className="relative flex flex-wrap items-start gap-4">
+              <FlowNodeCard variant="unite_match" title="Match" body="Needs two steps" status="setup" stepNo={3} />
+              <FlowNodeCard variant="formula_compare" title="Compare" body="38" status="ready" stepNo={4} />
+            </span>
+          </div>
+        </Section>
+
+        <Section
+          title="Config panel"
+          note="The most-used surface in the product, and the one the kit could never show — so every change to it was made blind, twice reported done against a component nobody had touched. The shell and the tab row below are IMPORTED from panel-chrome.tsx, the same two exports ConfigPanel renders, so there is one definition of them and a change lands here or nowhere. Everything between them is sample content: a Summarize step, mid-configure."
+        >
+          {/* On the canvas colour, because that is what it floats over: a white
+              panel on a white page is an invisible box, and its border, its
+              elevation and its 16px corner are the whole point of showing it.
+
+              The real panel is `absolute inset-y-0 right-0 z-20 m-6` INSIDE the
+              canvas — position that belongs to the canvas, not to the panel,
+              which is why panel-chrome does not carry it. There is no canvas
+              here to be inset from, so the position is stripped rather than
+              fought: this box supplies the same 24px gutter with `p-6`, pins the
+              panel to the right the way the builder does, and gives it a fixed
+              height where the real one takes the canvas's. The 452px width IS
+              the real one (it yields on a narrow viewport there; here the page
+              column is wider than that, so it never has to). */}
+          <div className="relative overflow-hidden rounded-card bg-canvas-bg p-6">
+            <div
+              className="absolute inset-0"
+              style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
+            />
+            <div className="relative flex justify-end">
+              <aside className={`h-[420px] w-[452px] max-w-full ${PANEL_SHELL}`}>
+                {/* Duplicates the panel header from src/components/flow/ConfigPanel.tsx — the 38px mark, the title input's
+                    invisible-until-hovered chrome and the status pill must track that file. ONE white plane cut by hairlines:
+                    the header is not a darker band. */}
+                <div className="flex items-center justify-between gap-3 border-b border-border bg-white px-5 py-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <NodeIcon type="formula" size={38} />
+                    <input
+                      readOnly
+                      value="Summarize"
+                      className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground hover:border-border hover:bg-white focus:border-input focus:bg-white focus:outline-none"
+                    />
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-micro font-semibold ${STATUS_META.ready.cls}`}>
+                    {STATUS_META.ready.label}
+                  </span>
+                </div>
+
+                <PanelTabsPreview />
+
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <div className="space-y-4 p-5">
+                    <PanelField label="Calculation">
+                      {/* Duplicates the closed state of controls/Select.tsx. */}
+                      <div className="flex w-full items-center justify-between rounded-control border border-neutral-300 bg-white px-3 py-2 text-sm text-foreground">
+                        #&nbsp;&nbsp;Count records <span className="text-neutral-400">▾</span>
+                      </div>
+                    </PanelField>
+                    <PanelField label="Measuring">
+                      <PanelSegmented a="A number" b="A length of time" />
+                    </PanelField>
+                    <PanelField label="Result">
+                      <PanelSegmented a="One number" b="A trend" />
+                    </PanelField>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </div>
         </Section>
 
@@ -314,6 +415,33 @@ function Section({ title, note, children }: { title: string; note: string; child
       <p className="mb-4 mt-0.5 text-tiny text-neutral-500">{note}</p>
       {children}
     </section>
+  );
+}
+
+/**
+ * One sample field in the config panel, label above control.
+ *
+ * The label string is `FIELD_LABEL` from ConfigPanel.tsx, character for
+ * character: 14px semibold true black, because the label is the QUESTION and
+ * may never read lighter than its answer. That is the rule most worth being
+ * able to SEE, so it is the one thing this sample is not allowed to improvise.
+ */
+function PanelField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="block">
+      <span className="mb-1.5 block text-base font-semibold text-foreground">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/** Duplicates controls/Segmented.tsx — the panel's answer to a two-way choice. */
+function PanelSegmented({ a, b }: { a: string; b: string }) {
+  return (
+    <div className="inline-flex w-full rounded-control border border-neutral-300 bg-neutral-100 p-0.5">
+      <span className="min-w-0 flex-1 truncate rounded-[6px] bg-white px-2.5 py-1.5 text-center text-small font-medium text-foreground shadow-sm">{a}</span>
+      <span className="min-w-0 flex-1 truncate px-2.5 py-1.5 text-center text-small font-medium text-neutral-500">{b}</span>
+    </div>
   );
 }
 
