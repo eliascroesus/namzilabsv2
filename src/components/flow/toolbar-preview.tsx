@@ -43,6 +43,8 @@ export function ToolbarPreview({ panelOpen = false }: { panelOpen?: boolean }) {
       onZoomOut={noop}
       onFitView={noop}
       zoom={1}
+      onToggleEnabled={noop}
+      togglingEnabled={false}
     />
   );
 }

@@ -55,9 +55,9 @@
    * a cool graphite keeps the contrast the icons need while letting the rail
    * read as a surface rather than a hole.
    */
-  --color-ink-950: #23262d; /* rail base — graphite, not black */
-  --color-ink-900: #31353e; /* rail raised (active item) */
-  --color-ink-800: #3b404a; /* rail hover */
+  --color-ink-950: #1a1e42; /* rail base — deep navy, the 30 in 60/30/10 */
+  --color-ink-900: #242a55; /* rail raised (active item) */
+  --color-ink-800: #2e3568; /* rail hover */
   --color-ink-700: #4a5059; /* hairline on dark */
   --color-ink-400: #9aa1ae; /* muted text on dark */
   --color-ink-100: #e7e9ee; /* body text on dark */

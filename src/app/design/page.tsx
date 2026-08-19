@@ -228,8 +228,8 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Builder chrome" note="Two surfaces: everything about the flow in one top island, everything you do to the canvas in one bottom bar.">
-            <div className="relative h-64 overflow-hidden rounded-card bg-canvas-bg">
+          <Section title="Builder chrome" note="Two full-width bars with matching insets, framing the canvas: the flow above, the canvas controls below.">
+            <div className="relative h-72 overflow-hidden rounded-card bg-canvas-bg">
               <div
                 className="absolute inset-0"
                 style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 1px, transparent 1px)", backgroundSize: "26px 26px" }}
