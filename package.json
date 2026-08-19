@@ -20,12 +20,16 @@
     "@workos-inc/authkit-nextjs": "^4.2.0",
     "@workos-inc/node": "^10.7.0",
     "@xyflow/react": "^12.11.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "inngest": "^4.13.0",
+    "lucide-react": "^1.32.0",
     "next": "^16.2.10",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "server-only": "^0.0.1",
+    "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

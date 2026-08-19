@@ -1,3 +1,4 @@
+import { LineChart } from "lucide-react";
 import { STATUS_META, type NodeStatus } from "./node-meta";
 import { NodeIcon } from "./icons";
 
@@ -46,10 +47,7 @@ export function FlowNodeCard({
       </div>
       {publishes && (
         <div className="flex items-center gap-1.5 border-t border-brand-100 bg-brand-50/70 px-3 py-1.5 text-micro font-medium text-brand-700">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M3 3v18h18" />
-            <path d="M7 15l4-5 3 3 5-7" />
-          </svg>
+<LineChart size={11} strokeWidth={2.4} />
           On your dashboard
         </div>
       )}

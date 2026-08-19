@@ -280,7 +280,7 @@ export function ReviewPublishModal({
           <button
             onClick={onPublish}
             disabled={publishing || enabledCount === 0}
-            className="btn-brand w-full rounded-control px-4 py-2.5 text-base font-semibold disabled:cursor-default"
+            className="w-full rounded-control bg-primary px-4 py-2.5 text-base font-semibold text-primary-foreground transition-all hover:brightness-110 active:brightness-95 disabled:cursor-default disabled:opacity-50"
           >
             {publishing ? "Publishing…" : publishedVersion != null ? `Update dashboard (${enabledCount})` : `Publish ${enabledCount} metric${enabledCount === 1 ? "" : "s"}`}
           </button>

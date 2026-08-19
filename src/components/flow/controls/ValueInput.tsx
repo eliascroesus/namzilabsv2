@@ -2,7 +2,7 @@
 
 import { DataBrowser } from "./DataBrowser";
 import { DataPill } from "./Pill";
-import { DataIcon } from "../icons";
+import { Database } from "lucide-react";
 import type { DataGroup, FieldRef, ValueModel } from "./types";
 import { emptyValue } from "./types";
 import { fieldRefIsStale, hasAnyFields } from "./field-utils";
@@ -88,7 +88,7 @@ export function ValueInput({
               aria-label="Insert a value from your data"
               className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-brand-200 bg-brand-50 p-1 text-brand-500 transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600"
             >
-              <DataIcon />
+              <Database size={14} strokeWidth={2} />
             </button>
           )}
         </div>

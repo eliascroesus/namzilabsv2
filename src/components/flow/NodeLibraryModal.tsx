@@ -1,5 +1,7 @@
 "use client";
 
+import { Search } from "lucide-react";
+
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NODE_LIBRARY, STAGES, type LibraryEntry } from "./node-meta";
 import { NodeIcon } from "./icons";
@@ -142,10 +144,7 @@ export function NodeLibraryModal({
       >
         <div className="p-3 pb-2">
           <div className="relative">
-            <svg className="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-neutral-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <circle cx="11" cy="11" r="7" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
+<Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
             <input
               autoFocus
               value={q}

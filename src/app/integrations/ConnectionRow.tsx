@@ -1,5 +1,7 @@
 "use client";
 
+import { Pencil, Power, Trash2 } from "lucide-react";
+
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -289,9 +291,7 @@ export function ConnectionRow({
             title="Rename this connection"
             aria-label="Rename this connection"
           >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-              <path d="M11.1 2.4a1.6 1.6 0 0 1 2.3 2.3l-7.6 7.6-3 .7.7-3 7.6-7.6Z" />
-            </svg>
+<Pencil size={13} />
           </button>
         </span>
       )}
@@ -322,10 +322,7 @@ export function ConnectionRow({
           title={`Disconnect ${name} — stops syncing, keeps your data, reversible`}
           aria-label={`Disconnect ${name}`}
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-            <path d="M8 1.8v5.4" />
-            <path d="M4.6 3.6a5 5 0 1 0 6.8 0" />
-          </svg>
+<Power size={14} />
         </button>
         <DeleteButton name={name} onClick={() => setDeleting(true)} />
       </span>
@@ -383,9 +380,7 @@ function DeleteButton({ name, onClick }: { name: string; onClick: () => void }) 
       title={`Delete ${name} permanently — removes the connection and all its data`}
       aria-label={`Delete ${name} permanently`}
     >
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-        <path d="M2.5 4h11M6.5 4V2.8h3V4M4 4l.6 9.2h6.8L12 4M6.6 6.5v4.3M9.4 6.5v4.3" />
-      </svg>
+<Trash2 size={14} />
     </button>
   );
 }

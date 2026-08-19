@@ -31,7 +31,8 @@ import { computeNodeStatus, STD_META } from "./graph-utils";
 import { NumberField } from "./controls/NumberField";
 import { STATUS_META, defaultTitle, formulaExpression, formulaHandleLabels, nodeVariant, resultLabel } from "./node-meta";
 import { RecordSamplePicker, recordWhen } from "./RecordSamplePicker";
-import { DataIcon, NodeIcon } from "./icons";
+import { NodeIcon } from "./icons";
+import { Database } from "lucide-react";
 import { Select, Segmented, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
 import { hasAnyFields } from "./controls/field-utils";
 import type { DataGroup } from "./controls/types";
@@ -49,7 +50,7 @@ const W = 412;
 
 /** Shared button language for the config panel (Make.com vibe: rounded, tactile, colourful). */
 const BTN_BASE = "rounded-xl px-4 py-3 text-sm font-semibold transition-all active:scale-[0.985]";
-const BTN_PRIMARY = `${BTN_BASE} btn-brand disabled:cursor-default`;
+const BTN_PRIMARY = `${BTN_BASE} bg-primary text-primary-foreground transition-all hover:brightness-110 active:brightness-95 disabled:cursor-default disabled:bg-neutral-200 disabled:text-neutral-400`;
 const BTN_SECONDARY = `${BTN_BASE} border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50`;
 
 const AGG_LABELS: Record<string, string> = { count: "Count of records", count_distinct: "Count of distinct values", sum: "Sum of a field", avg: "Average of a field", median: "Median of a field", min: "Minimum of a field", max: "Maximum of a field" };
@@ -1158,7 +1159,7 @@ function NumberPicker({
               aria-label="Pick a number from an earlier step"
               className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-brand-200 bg-brand-50 p-1 text-brand-500 transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600"
             >
-              <DataIcon />
+              <Database size={14} strokeWidth={2} />
             </button>
           </div>
         )}

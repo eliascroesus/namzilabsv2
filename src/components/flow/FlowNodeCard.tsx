@@ -1,5 +1,7 @@
 "use client";
 
+import { LineChart, MoreVertical } from "lucide-react";
+
 import { useState, type CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { type NodeType } from "@/lib/flow/types";
@@ -34,11 +36,7 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
           title="Step actions"
           aria-label="Step actions"
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-            <circle cx="8" cy="3" r="1.4" />
-            <circle cx="8" cy="8" r="1.4" />
-            <circle cx="8" cy="13" r="1.4" />
-          </svg>
+<MoreVertical size={14} />
         </button>
       }
     >
@@ -168,10 +166,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           }`}
           title={publishes ? "This step's result becomes a tile when you publish." : "Switched off in Review & publish — this step publishes nothing."}
         >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M3 3v18h18" />
-            <path d="M7 15l4-5 3 3 5-7" />
-          </svg>
+<LineChart size={11} strokeWidth={2.4} />
           {publishes ? "On your dashboard" : "Not published"}
         </div>
       )}

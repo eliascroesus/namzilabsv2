@@ -1,5 +1,7 @@
+import { Button } from "@/components/ui/button";
 import { Sidebar } from "@/components/sidebar";
 import { FlowNodeCard } from "@/components/flow/flow-canvas-preview";
+import { NodeIcon } from "@/components/flow/icons";
 import { ToolbarPreview } from "@/components/flow/toolbar-preview";
 import { FlowList } from "@/app/dashboard/flows/FlowRow";
 
@@ -142,19 +144,24 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Buttons" note="One filled style. A second filled colour would be a second primary action.">
+          <Section title="Buttons" note="One component, five variants. Every clickable thing in the product comes from it.">
             <div className="flex flex-wrap items-center gap-3">
-              <button className="btn-brand rounded-control px-4 py-2 text-base font-semibold">
-                Review &amp; publish
-              </button>
-              <button className="rounded-control border border-neutral-200 bg-white px-4 py-2 text-base font-medium text-neutral-700">
-                Secondary
-              </button>
-              <button className="rounded-control px-3 py-2 text-base font-medium text-neutral-600">Quiet</button>
-              <button disabled className="rounded-control bg-neutral-200 px-4 py-2 text-base font-semibold text-neutral-400">
-                Disabled
-              </button>
-              <button className="rounded-control bg-red-600 px-4 py-2 text-base font-semibold text-white">Delete</button>
+              <Button>Review &amp; publish</Button>
+              <Button variant="secondary">Secondary</Button>
+              <Button variant="ghost">Quiet</Button>
+              <Button disabled>Disabled</Button>
+              <Button variant="destructive">Delete</Button>
+            </div>
+          </Section>
+
+          <Section title="Icons" note="lucide — one family, one grid, one stroke. Nothing hand-drawn anywhere in the app.">
+            <div className="flex flex-wrap gap-2">
+              {(["app", "unite", "unite_match", "filter", "paths", "formula", "formula_compare", "time_between"] as const).map((t) => (
+                <div key={t} className="flex items-center gap-2 rounded-card border border-border bg-card px-3 py-2">
+                  <NodeIcon type={t.startsWith("unite") ? "unite" : t.startsWith("formula") ? "formula" : t} variant={t.includes("_") ? t : undefined} size={28} />
+                  <code className="text-micro text-muted-foreground">{t}</code>
+                </div>
+              ))}
             </div>
           </Section>
 

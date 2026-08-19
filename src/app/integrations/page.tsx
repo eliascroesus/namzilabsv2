@@ -160,13 +160,13 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
         {entry.connect === "google" ? (
           <a
             href={`/api/oauth/google/start?source=${entry.source}`}
-            className="btn-brand inline-block rounded-control px-4 py-2 text-base font-semibold"
+            className="inline-flex h-9 items-center gap-1.5 rounded-control bg-primary px-4 text-base font-semibold text-primary-foreground transition-all hover:brightness-110"
           >
             Connect with Google
           </a>
         ) : (
           <details>
-            <summary className="btn-brand inline-block cursor-pointer rounded-control px-4 py-2 text-base font-semibold">
+            <summary className="inline-flex h-9 cursor-pointer items-center rounded-control bg-primary px-4 text-base font-semibold text-primary-foreground transition-all hover:brightness-110">
               Connect
             </summary>
             <form action={connectApiKeyAction} className="mt-3 space-y-3">

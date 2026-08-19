@@ -110,8 +110,66 @@
 }
 
 :root {
+  /* ---- shadcn semantic roles --------------------------------------------
+   * Components should never name a RAMP ("bg-brand-600"), they should name a
+   * ROLE ("bg-primary"). The ramps above are the palette; these are the
+   * vocabulary, and they are what makes a theme swap a one-file change
+   * instead of a find-and-replace across ninety components.
+   *
+   * Values point at the tokens already defined in @theme, so there is exactly
+   * one place each colour is decided.
+   */
   --background: #ffffff;
   --foreground: #0a0a0a;
+
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+
+  --primary: var(--color-brand-600);
+  --primary-foreground: #ffffff;
+
+  --secondary: var(--color-neutral-100);
+  --secondary-foreground: var(--color-neutral-900);
+
+  --muted: var(--color-neutral-100);
+  --muted-foreground: var(--color-neutral-500);
+
+  --accent: var(--color-brand-50);
+  --accent-foreground: var(--color-brand-700);
+
+  --destructive: var(--color-red-600);
+  --destructive-foreground: #ffffff;
+
+  --border: var(--color-neutral-200);
+  --input: var(--color-neutral-300);
+  --ring: var(--color-brand-400);
+}
+
+/* Roles become utilities: `bg-primary`, `text-muted-foreground`,
+   `border-border`, `ring-ring`. `inline` so they resolve to the same values
+   the CSS vars hold rather than being re-declared. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 }
 
 body {
@@ -142,29 +200,17 @@ body {
 }
 
 /**
- * THE ONE PRIMARY BUTTON — a flat fill, no gradient, no bevel.
+ * PRESS FEEDBACK, app-wide.
  *
- * It briefly had a top-lit gradient with inset highlight/shade, on the theory
- * that flat reads as unstyled. Wrong for this product: Linear's own primary
- * is a flat brand fill whose depth comes entirely from interaction
- * (`filter: brightness()` on hover), and that is the register this interface
- * is in. Kept as a class rather than utilities so every primary in the app
- * changes together, which is the actual job it was doing.
+ * Every interactive surface dips a hair on press. It is two lines of CSS and
+ * it is most of what separates an interface that feels built from one that
+ * feels rendered — the click lands somewhere instead of just happening.
  */
-.btn-brand {
-  color: #fff;
-  background-color: var(--color-brand-600);
-  transition: filter 0.15s ease, background-color 0.15s ease;
-}
-.btn-brand:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-.btn-brand:active:not(:disabled) {
-  filter: brightness(0.94);
-}
-.btn-brand:disabled {
-  background-color: var(--color-neutral-200);
-  color: var(--color-neutral-400);
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled):active,
+  [role="switch"]:not(:disabled):active {
+    transform: translateY(0.5px);
+  }
 }
 
 /*

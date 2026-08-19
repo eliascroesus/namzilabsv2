@@ -1,5 +1,8 @@
 "use client";
 
+import { Copy, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -191,28 +194,22 @@ function Row({ flow }: { flow: FlowListItem }) {
 
       <span className="flex items-center justify-end gap-1">
         {error && <span className="mr-1 truncate text-micro text-red-600" title={error}>Failed</span>}
-        <RowButton onClick={duplicate} disabled={pending} label="Duplicate">
-          <rect x="9" y="9" width="12" height="12" rx="2" />
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-        </RowButton>
+        <Button variant="ghost" size="icon" onClick={duplicate} disabled={pending} title="Duplicate" aria-label="Duplicate">
+          <Copy />
+        </Button>
         {confirming ? (
           <span className="flex items-center gap-1">
-            <button
-              onClick={del}
-              disabled={pending}
-              className="rounded-control bg-red-600 px-2 py-1 text-micro font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-            >
+            <Button variant="destructive" size="sm" onClick={del} disabled={pending}>
               {pending ? "…" : "Delete"}
-            </button>
-            <button onClick={() => setConfirming(false)} className="rounded-control px-1.5 py-1 text-micro text-neutral-500 hover:bg-neutral-100">
-              ✕
-            </button>
+            </Button>
+            <Button variant="ghost" size="iconSm" onClick={() => setConfirming(false)} aria-label="Cancel">
+              <X />
+            </Button>
           </span>
         ) : (
-          <RowButton onClick={() => setConfirming(true)} disabled={pending} label="Delete" danger>
-            <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6" />
-            <path d="M10 11v6M14 11v6" />
-          </RowButton>
+          <Button variant="destructiveGhost" size="icon" onClick={() => setConfirming(true)} disabled={pending} title="Delete" aria-label="Delete">
+            <Trash2 />
+          </Button>
         )}
       </span>
     </div>
@@ -231,43 +228,14 @@ function Toggle({ on, disabled, onChange, label }: { on: boolean; disabled?: boo
       disabled={disabled}
       onClick={onChange}
       className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-        on ? "bg-brand-600" : "bg-neutral-200"
+        on ? "bg-primary" : "bg-neutral-200"
       } ${disabled ? "cursor-not-allowed opacity-50" : "hover:brightness-105"}`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-[left] ${on ? "left-[18px]" : "left-0.5"}`}
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm ${on ? "left-[18px]" : "left-0.5"}`}
+        style={{ transition: "left .22s cubic-bezier(.34,1.56,.64,1)" }}
         aria-hidden
       />
-    </button>
-  );
-}
-
-function RowButton({
-  onClick,
-  disabled,
-  label,
-  danger,
-  children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  label: string;
-  danger?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={label}
-      aria-label={label}
-      className={`flex h-8 w-8 items-center justify-center rounded-control transition-colors disabled:opacity-40 ${
-        danger ? "text-neutral-400 hover:bg-red-50 hover:text-red-600" : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
-      }`}
-    >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        {children}
-      </svg>
     </button>
   );
 }

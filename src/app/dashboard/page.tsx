@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
@@ -204,7 +205,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 The routes stay alive so existing metrics still open and edit
                 (their tiles link to them); they are simply no longer a door
                 anyone walks through by accident. */}
-            <Link href="/dashboard/flows" className="btn-brand rounded-control px-4 py-2 text-base font-semibold">
+            <Link href="/dashboard/flows" className="flex h-9 items-center gap-1.5 rounded-control bg-primary px-4 text-base font-semibold text-primary-foreground transition-all hover:brightness-110">
+              <Plus size={16} strokeWidth={2.4} />
               New flow
             </Link>
           </div>

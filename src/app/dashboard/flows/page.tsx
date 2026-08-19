@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
@@ -89,10 +90,8 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
             </p>
           </div>
           <form action={createFlowAction}>
-            <button className="btn-brand flex shrink-0 items-center gap-1.5 rounded-control px-4 py-2 text-base font-semibold">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
-                <path d="M12 5v14M5 12h14" />
-              </svg>
+            <button className="flex h-9 shrink-0 items-center gap-1.5 rounded-control bg-primary px-4 text-base font-semibold text-primary-foreground transition-all hover:brightness-110 active:brightness-95">
+<Plus size={16} strokeWidth={2.4} />
               Create flow
             </button>
           </form>

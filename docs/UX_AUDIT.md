@@ -1038,6 +1038,42 @@ the toggle, last-updated, and duplicate/delete. The toggle is optimistic and
 reverts from the action's own answer, which is what happens on a
 never-published flow where "on" is not available.
 
+### 9i. shadcn: a real icon family, a real Button, real semantic tokens
+
+Three things were still hand-made, and hand-made is what "AI-built" actually
+looks like:
+
+**Nine hand-drawn SVG paths.** Inconsistent optical weight, mismatched stroke
+joins, and a "Calculate" mark that was three dots and a slash. Now **lucide**
+— the family shadcn ships — mapped as literally as the set allows: `Database`
+(records from a store), `Merge` (lanes into one line), `Blend` (two
+overlapping sets, which *is* what matching keeps), `Filter`, `Split`,
+`BarChart3`, `Divide`, `Timer`. Every remaining inline `<svg>` in the app went
+too: nav, toolbar, zoom cluster, kebab, search, connection row. **Zero
+hand-drawn SVGs remain.**
+
+**A dozen hand-written button class strings** — `.btn-brand`, three bordered
+secondaries, two greys, a red, an icon button re-declared in five files. They
+had already drifted on radius, disabled treatment and focus. Now one `Button`
+built with `cva`: variants `default · secondary · ghost · destructive ·
+destructiveGhost · link`, sizes `sm · default · lg · icon · iconSm`.
+Deliberately *not* a client component — it holds no state, so it renders in
+server components too, which is where half the app's buttons live.
+
+**Colours named as ramps.** Components said `bg-brand-600`; they now say
+`bg-primary`. The shadcn semantic layer (`--primary`, `--muted`, `--border`,
+`--ring`, `--destructive`…) sits over the primitives via `@theme inline`, so a
+component names a *role* and the role resolves to the ramp — which is what
+makes a theme change one file instead of a sweep across ninety components.
+
+Plus `cn()` (clsx + tailwind-merge), so a passed `className` actually
+overrides rather than racing the base class in stylesheet order.
+
+**Motion, sparingly.** Every button dips 0.5px on press behind a
+`prefers-reduced-motion` guard; the flow toggle slides on a spring curve
+rather than linearly. Two rules, and they are most of the difference between
+an interface that feels built and one that feels rendered.
+
 ---
 
 ## 10. What not to change

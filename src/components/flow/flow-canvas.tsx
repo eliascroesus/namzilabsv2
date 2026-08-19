@@ -1,5 +1,8 @@
 "use client";
 
+import { Database, Maximize2, Plug, Redo2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -1492,24 +1495,12 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
               expose the view controls that were already there. */}
           {!empty && (
             <div className="absolute bottom-4 left-4 flex overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
-              <ViewButton onClick={() => rf.zoomIn({ duration: 150 })} label="Zoom in">
-                <path d="M12 5v14M5 12h14" />
-              </ViewButton>
-              <ViewButton onClick={() => rf.zoomOut({ duration: 150 })} label="Zoom out">
-                <path d="M5 12h14" />
-              </ViewButton>
-              <ViewButton onClick={() => rf.fitView({ duration: 250, maxZoom: 1 })} label="Fit the whole flow on screen">
-                <path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" />
-              </ViewButton>
+              <ViewButton onClick={() => rf.zoomIn({ duration: 150 })} label="Zoom in"><ZoomIn /></ViewButton>
+              <ViewButton onClick={() => rf.zoomOut({ duration: 150 })} label="Zoom out"><ZoomOut /></ViewButton>
+              <ViewButton onClick={() => rf.fitView({ duration: 250, maxZoom: 1 })} label="Fit the whole flow on screen"><Maximize2 /></ViewButton>
               <span className="my-1.5 w-px bg-neutral-200" aria-hidden />
-              <ViewButton onClick={undo} disabled={hist.undo === 0} label="Undo">
-                <path d="M3 10h11a5 5 0 0 1 0 10h-3" />
-                <path d="M7 6l-4 4 4 4" />
-              </ViewButton>
-              <ViewButton onClick={redo} disabled={hist.redo === 0} label="Redo">
-                <path d="M21 10H10a5 5 0 0 0 0 10h3" />
-                <path d="M17 6l4 4-4 4" />
-              </ViewButton>
+              <ViewButton onClick={undo} disabled={hist.undo === 0} label="Undo"><Undo2 /></ViewButton>
+              <ViewButton onClick={redo} disabled={hist.redo === 0} label="Redo"><Redo2 /></ViewButton>
             </div>
           )}
 
@@ -1655,11 +1646,9 @@ function ViewButton({ onClick, disabled, label, children }: { onClick: () => voi
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-8 w-8 items-center justify-center border-r border-neutral-200 text-neutral-500 transition-colors last:border-r-0 hover:bg-neutral-50 hover:text-neutral-900 disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent"
+      className="flex h-8 w-8 items-center justify-center border-r border-neutral-200 text-neutral-500 transition-colors last:border-r-0 hover:bg-neutral-50 hover:text-neutral-900 disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[15px]"
     >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        {children}
-      </svg>
+      {children}
     </button>
   );
 }
@@ -1703,18 +1692,17 @@ function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boolean; onS
           ))}
         </ol>
         {hasConnections ? (
-          <button
-            onClick={onStart}
-            className="btn-brand mt-6 w-full rounded-control px-4 py-3 text-base font-semibold active:scale-[0.985]"
-          >
+          <Button onClick={onStart} size="lg" className="mt-6 w-full">
+            <Database />
             Start with Get data
-          </button>
+          </Button>
         ) : (
           <>
             <Link
               href="/integrations"
-              className="btn-brand mt-6 block w-full rounded-control px-4 py-3 text-center text-base font-semibold active:scale-[0.985]"
+              className="mt-6 flex w-full items-center justify-center gap-1.5 rounded-control bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition-all hover:brightness-110"
             >
+              <Plug size={16} />
               Connect an app first
             </Link>
             <p className="mt-2 text-center text-xs text-neutral-500">A flow reads records from a connected account — there aren&rsquo;t any yet.</p>

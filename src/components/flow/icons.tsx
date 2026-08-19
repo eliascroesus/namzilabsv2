@@ -1,109 +1,59 @@
 "use client";
 
+import {
+  BarChart3,
+  Blend,
+  CalendarRange,
+  Database,
+  Divide,
+  Filter,
+  LayoutGrid,
+  LayoutDashboard,
+  Merge,
+  Split,
+  Timer,
+  type LucideIcon,
+} from "lucide-react";
 import { sourceStyle } from "./controls/source-style";
 
 /**
- * A consistent monochrome glyph family for internal operations. Everything is drawn
- * with `currentColor` so the surrounding element controls the colour — colour is
- * reserved for state, never the icon itself. Data-source nodes use SourceBadge
- * (brand colour) instead of these glyphs.
+ * The step glyphs — lucide, not hand-drawn.
+ *
+ * These were nine bespoke SVG paths written by hand, and they looked it:
+ * inconsistent optical weight, stroke joins that did not match each other, a
+ * "Calculate" mark that was three dots and a slash. Hand-rolled icon sets are
+ * the single loudest tell that an interface was assembled rather than
+ * designed, because a real product uses a real family and a real family is
+ * internally consistent in ways nobody redraws by accident.
+ *
+ * lucide is the family shadcn ships with: one stroke width, one grid, one
+ * join style, ~1,600 icons — so the next step type already has its icon.
+ *
+ * Each mapping is the most literal available, because a glyph that needs
+ * explaining is doing nothing:
+ *   Database — records come out of a store
+ *   Merge    — lanes becoming one line
+ *   Blend    — two overlapping sets, which IS what matching keeps
+ *   Filter   — a funnel
+ *   Split    — one line becoming several
+ *   BarChart3— a pile of records becoming one number
+ *   Divide   — every rate, ratio and % change is one number over another
+ *   Timer    — elapsed time between two moments
  */
-const PATHS: Record<string, React.ReactNode> = {
-  app: (
-    <>
-      <ellipse cx="12" cy="6" rx="7" ry="3" />
-      <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
-      <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
-    </>
-  ),
-  filter: <path d="M4 5h16l-6 8v5l-4 2v-7z" />,
-  time: (
-    <>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M12 8v4l3 2" />
-    </>
-  ),
-  // Time between: two moments and the span connecting them.
-  time_between: (
-    <>
-      <circle cx="5.5" cy="12" r="2" />
-      <circle cx="18.5" cy="12" r="2" />
-      <path d="M7.5 12h9" />
-      <path d="M14.5 9.5l2.5 2.5-2.5 2.5" />
-    </>
-  ),
-  paths: (
-    <>
-      <circle cx="6" cy="12" r="2" />
-      <path d="M8 12h3l5-4" />
-      <path d="M11 12l5 4" />
-      <circle cx="18" cy="7" r="1.6" />
-      <circle cx="18" cy="17" r="1.6" />
-    </>
-  ),
-  // Unite (stack): the mirror of paths — two lanes flowing back into one line.
-  unite: (
-    <>
-      <circle cx="6" cy="7" r="1.6" />
-      <circle cx="6" cy="17" r="1.6" />
-      <path d="M8 7l5 4h3" />
-      <path d="M8 17l5-4" />
-      <circle cx="18" cy="12" r="2" />
-    </>
-  ),
-  // Unite (match): two overlapping sets. A Venn is the one picture everybody
-  // already reads as "only the part in both", which is exactly what this mode
-  // does — and it has to be visibly NOT the merge glyph above, because the two
-  // modes are the same node type and would otherwise wear the same face.
-  unite_match: (
-    <>
-      <circle cx="9" cy="12" r="5.5" />
-      <circle cx="15" cy="12" r="5.5" />
-    </>
-  ),
-  group: (
-    <>
-      <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
-      <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
-      <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
-      <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
-    </>
-  ),
-  // Summarize: rising bars — "a pile of records becomes one number", which is
-  // the only thing this half of Calculate does. The old glyph (two dots, a
-  // line and a slash) was trying to mean both halves at once and read as
-  // neither.
-  formula: (
-    <>
-      <path d="M5.5 20V13" />
-      <path d="M12 20V8" />
-      <path d="M18.5 20V4" />
-    </>
-  ),
-  // Compare: the division sign. Nothing needs explaining — every rate, ratio
-  // and percent change in the product is one number over another.
-  formula_compare: (
-    <>
-      <circle cx="12" cy="6.5" r="1.5" />
-      <path d="M5 12h14" />
-      <circle cx="12" cy="17.5" r="1.5" />
-    </>
-  ),
-  output: (
-    <>
-      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
-      <path d="M7.5 15l3-3 2.2 2.2L17 9" />
-    </>
-  ),
+const GLYPH: Record<string, LucideIcon> = {
+  app: Database,
+  unite: Merge,
+  unite_match: Blend,
+  filter: Filter,
+  paths: Split,
+  formula: BarChart3,
+  formula_compare: Divide,
+  time_between: Timer,
+  time: CalendarRange,
+  group: LayoutGrid,
+  output: LayoutDashboard,
+  calculate: BarChart3,
 };
-
-export function NodeGlyph({ type, className = "h-4 w-4" }: { type: string; className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      {PATHS[type] ?? PATHS.app}
-    </svg>
-  );
-}
 
 /**
  * The one colourful step icon used everywhere a step is represented — the node
@@ -129,23 +79,8 @@ export const NODE_ACCENT: Record<string, string> = {
  * "unite_match", "formula_compare". Same accent colour (they are the same kind
  * of operation), different glyph, so the two doors are never one face.
  */
-/**
- * Flat colour, like the primary button. These briefly carried a top-lit
- * gradient and an inset bevel pair; on a canvas holding a dozen of them the
- * effect read as plastic rather than crafted, and the step's IDENTITY is its
- * hue and glyph — the lighting was adding nothing the colour was not already
- * saying.
- */
-function tileStyle(color: string, size: number): React.CSSProperties {
-  return {
-    background: color,
-    width: size,
-    height: size,
-    borderRadius: Math.max(6, Math.round(size * 0.3)),
-  };
-}
-
 export function NodeIcon({ type, source, variant, size = 34 }: { type: string; source?: string | null; variant?: string; size?: number }) {
+  const radius = Math.max(6, Math.round(size * 0.3));
   // A CONNECTED Get-data step wears its app's brand mark. An unconnected one —
   // the picker's own "Get data" entry, and every step before an account is
   // chosen — used to render a grey tile reading "Ap", which looks like a
@@ -155,7 +90,7 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
     return (
       <span
         className="inline-flex shrink-0 items-center justify-center font-semibold leading-none text-white"
-        style={{ ...tileStyle(s.color, size), fontSize: Math.round(size * 0.42) }}
+        style={{ background: s.color, width: size, height: size, borderRadius: radius, fontSize: Math.round(size * 0.42) }}
         title={s.label}
         aria-hidden
       >
@@ -163,25 +98,18 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
       </span>
     );
   }
-  const key = variant && PATHS[variant] ? variant : type;
+  const key = variant && GLYPH[variant] ? variant : type;
   const color = NODE_ACCENT[type] ?? "#64748B";
-  const glyph = Math.round(size * 0.56);
+  const Icon = GLYPH[key] ?? Database;
   return (
-    <span className="inline-flex shrink-0 items-center justify-center text-white" style={tileStyle(color, size)} aria-hidden>
-      <span className="inline-flex" style={{ width: glyph, height: glyph }}>
-        <NodeGlyph type={key} className="h-full w-full" />
-      </span>
+    <span
+      className="inline-flex shrink-0 items-center justify-center text-white"
+      style={{ background: color, width: size, height: size, borderRadius: radius }}
+      aria-hidden
+    >
+      {/* Sized off the tile, and stroked a touch lighter as it grows so a
+          40px picker icon does not read heavier than a 30px card one. */}
+      <Icon size={Math.round(size * 0.54)} strokeWidth={size > 34 ? 1.9 : 2} aria-hidden />
     </span>
-  );
-}
-
-/** The little database glyph on inputs that can insert data from an earlier step. */
-export function DataIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <ellipse cx="12" cy="6" rx="7" ry="3" />
-      <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
-      <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
-    </svg>
   );
 }

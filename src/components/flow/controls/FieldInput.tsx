@@ -1,7 +1,7 @@
 "use client";
 
 import { DataBrowser } from "./DataBrowser";
-import { DataIcon } from "../icons";
+import { Database } from "lucide-react";
 import { humanizeKey } from "./field-utils";
 import type { DataGroup } from "./types";
 
@@ -51,7 +51,7 @@ export function FieldInput({
               aria-label="Pick a field from your data"
               className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-brand-200 bg-brand-50 p-1 text-brand-500 transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600"
             >
-              <DataIcon />
+              <Database size={14} strokeWidth={2} />
             </button>
           ) : (
             // Pick-only from the dataset: a plain dropdown chevron, no data icon.
