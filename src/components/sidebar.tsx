@@ -50,8 +50,8 @@ export function Sidebar({ account }: { account?: { initials: string; panel: Reac
       {/* THE WORDMARK IS THE TOP BAR'S HEIGHT.
           The rail's mark and the canvas's top island sit at the same y, so when
           they were different heights the two read as misaligned furniture. It
-          now spans the island's WHOLE band — 16px inset + 58px island + 16px —
-          so the mark's centre lands on the island's centre at y=45. Matching
+          now spans the island's WHOLE band — 24px inset + 58px island + 24px —
+          so the mark's centre lands on the island's centre at y=53. Matching
           the band's bottom edge instead (74px) put the mark 8px high: a 44px
           round mark and a 58px bar read as aligned when their middles agree,
           not their edges.
@@ -61,7 +61,7 @@ export function Sidebar({ account }: { account?: { initials: string; panel: Reac
       <Link
         href="/dashboard"
         title="Namzilabs — dashboard"
-        className="mb-[11px] flex h-[90px] w-full items-center justify-center text-title font-bold text-white transition-opacity hover:opacity-85"
+        className="mb-[11px] flex h-[106px] w-full items-center justify-center text-title font-bold text-white transition-opacity hover:opacity-85"
       >
         <span className="flex h-11 w-11 items-center justify-center rounded-card bg-white/20 ring-1 ring-white/25">N</span>
       </Link>

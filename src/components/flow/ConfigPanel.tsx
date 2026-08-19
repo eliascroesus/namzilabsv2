@@ -184,7 +184,7 @@ export function ConfigPanel({
     // instead of pushing the canvas off the left edge.
     <aside
       data-config-panel
-      className={`absolute inset-y-0 right-0 z-20 m-4 flex w-[min(452px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl bg-neutral-50 flow-shadow ${animClass}`}
+      className={`absolute inset-y-0 right-0 z-20 m-6 flex w-[min(452px,calc(100vw-3rem))] flex-col overflow-hidden rounded-2xl bg-neutral-50 flow-shadow ${animClass}`}
     >
       {/* Header — a slightly darker grey band with the step's colourful icon, so it
           reads as a distinct "what am I editing" strip above the fields. */}

@@ -1582,6 +1582,44 @@ before you debug**, and kill by port (`lsof -ti:3000`) rather than by pattern.
 
 ---
 
+### 9x. Flat rail, lavender canvas, and one margin for the floating layer
+
+**`--color-rail: #1d1a3a`, flat.** It was a three-stop gradient so a narrow
+dark column would not read as a slab; at this value it does not need the help,
+and a flat colour is one number a future edit cannot get half-right. The frame
+still paints it on one element with the rail transparent inside — that
+structure was never about the gradient, it is about there being a single
+source for the colour behind the canvas.
+
+**`--color-canvas-bg: #f6f6fb`** with **`--color-canvas-dot: #e7e4f2`** — a
+smaller delta than the grid it replaces (#dfe1e8 on #f6f6f8). A dot grid is a
+depth cue, not content: it should register as texture at a glance and vanish
+the moment you look at a card.
+
+**Those two colours are the one palette value written outside globals.css.**
+React Flow's `<Background>` takes `color` and `bgColor` as plain strings and
+writes them onto an SVG pattern, so it cannot take `var(--color-canvas-dot)`.
+That made the canvas, the page behind it and the kit's dot preview three
+places that had to agree by hand — exactly the drift class §9r is about.
+`tests/canvas-tokens.test.ts` pins them: change a token and the test fails
+until the canvas follows. It also asserts the dots stay between 6 and 30
+points of the surface, because "make the dots darker" is a regression dressed
+as a preference. Sabotage-verified.
+
+**The floating layer moved to a 24px margin, all of it together.** The two top
+islands, the bottom bar, and the config panel (`m-4` → `m-6`, with its width
+allowance following from `100vw-2rem` to `100vw-3rem`). Two things had to move
+with them or they would have broken:
+
+- The rail's logo band, from 90px to **106px** — it spans the island's whole
+  band (24 + 58 + 24), which is what keeps the mark's centre on the island's
+  centre, now y=53.
+- The canvas's error and import banners, from `top-20` to **`top-[98px]`**. A
+  58px island at a 24px inset ends at y=82, so an 80px banner would have slid
+  2px under the thing it is trying to be read beside.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

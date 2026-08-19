@@ -1452,7 +1452,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       />
 
       {publishError && !reviewOpen && (
-        <div className="absolute left-1/2 top-20 z-10 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-card border border-red-200 bg-red-50 px-4 py-3 text-small text-red-800 flow-shadow">
+        <div className="absolute left-1/2 top-[98px] z-10 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-card border border-red-200 bg-red-50 px-4 py-3 text-small text-red-800 flow-shadow">
           <p>{publishError}</p>
           {/* One line per issue, each pointing at the step that caused it. The
               whole list used to be joined into a single string with no step
@@ -1477,7 +1477,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         </div>
       )}
       {publishWarning && (
-        <div className="absolute left-1/2 top-20 z-10 flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 items-center justify-between gap-3 rounded-card border border-amber-200 bg-amber-50 px-4 py-3 text-small text-amber-800 flow-shadow">
+        <div className="absolute left-1/2 top-[98px] z-10 flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 items-center justify-between gap-3 rounded-card border border-amber-200 bg-amber-50 px-4 py-3 text-small text-amber-800 flow-shadow">
           <span>{publishWarning}</span>
           <button onClick={() => setPublishWarning(null)} className="text-amber-700 hover:text-amber-900">
             Dismiss
@@ -1517,7 +1517,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           >
             {/* A soft grey canvas with a faint, wide-spaced dot grid — calm and
                 smooth while panning, not a busy pattern. */}
-            <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="#dfe1e8" bgColor="#f6f6f8" />
+            <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="#e7e4f2" bgColor="#f6f6fb" />
           </ReactFlow>
 
         </div>

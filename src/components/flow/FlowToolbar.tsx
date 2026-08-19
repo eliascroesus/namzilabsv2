@@ -47,7 +47,7 @@ import { Button } from "@/components/ui/button";
  * ghost button it was beside Publish.
  *
  * Geometry is measured, not chosen: 7px island padding plus a 1px border
- * around 42px controls gives a 58px-tall island, 16px from every viewport edge
+ * around 42px controls gives a 58px-tall island, 24px from every viewport edge
  * (top, left, right and bottom all the same, which they were not), one
  * hairline divider between groups. Glyphs are 26px and near-black beside 15px
  * text — Miro's toolbar icons read as objects; 17px grey was a toolbar
@@ -159,7 +159,7 @@ export function FlowToolbar({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   /** The right island and the bottom bar both step aside for the config panel. */
-  const panelInset = panelOpen ? "calc(min(452px, 100vw - 2rem) + 1.75rem)" : "1rem";
+  const panelInset = panelOpen ? "calc(min(452px, 100vw - 3rem) + 2.25rem)" : "1.5rem";
 
   return (
     <>
@@ -170,7 +170,7 @@ export function FlowToolbar({
           editable name itself, so the thing you rename is the thing you are
           reading. The name grows with what you type and stops well short of
           the right island, which holds the primary it must never reach. */}
-      <div className="pointer-events-none absolute left-4 top-4 z-10 flex max-w-[min(62vw,760px)] items-center">
+      <div className="pointer-events-none absolute left-6 top-6 z-10 flex max-w-[min(62vw,760px)] items-center">
         <Island className="min-w-0 gap-1">
           <Link
             href="/dashboard/flows"
@@ -214,7 +214,7 @@ export function FlowToolbar({
           the same inset as the bottom bar so the config panel never opens on
           top of the primary action — the two surfaces slide together. */}
       <div
-        className="pointer-events-none absolute top-4 z-10 flex justify-end transition-[right] duration-200 ease-out"
+        className="pointer-events-none absolute top-6 z-10 flex justify-end transition-[right] duration-200 ease-out"
         style={{ right: panelInset }}
       >
         <Island>
@@ -289,8 +289,8 @@ export function FlowToolbar({
           Make's bar. Run first as a filled primary, then the quiet controls
           behind a divider — under your hands, not tucked in a corner. */}
       <div
-        className="pointer-events-none absolute bottom-4 z-10 flex justify-center transition-[right] duration-200 ease-out"
-        style={{ left: "1rem", right: panelInset }}
+        className="pointer-events-none absolute bottom-6 z-10 flex justify-center transition-[right] duration-200 ease-out"
+        style={{ left: "1.5rem", right: panelInset }}
       >
         <Island>
           {showTestAll && (

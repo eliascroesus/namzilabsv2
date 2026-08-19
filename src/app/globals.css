@@ -67,8 +67,11 @@
    * The flow builder's working surface. Kept as tokens so the dot grid, the
    * page behind it and the edge colour can never drift apart again.
    */
-  --color-canvas-bg: #f6f6f8;
-  --color-canvas-dot: #dfe1e8;
+  --color-canvas-bg: #f6f6fb;
+  /* Subtler than the grid it replaces (#dfe1e8 on #f6f6f8). A dot grid is a
+     depth cue, not content: it should register as texture at a glance and
+     disappear the moment you look at a card. */
+  --color-canvas-dot: #e7e4f2;
   --color-canvas-edge: #aab4cb;
 
   /* --- Type scale ---------------------------------------------------------
@@ -137,7 +140,10 @@
    * bleak at this size — and far enough from #4262ff that a blue button on top
    * of it, or a white selected tile, reads instantly.
    */
-  --gradient-rail: linear-gradient(178deg, #262c63 0%, #1c204a 52%, #141733 100%);
+  /* FLAT, not a gradient. It was a three-stop wash so a 100px column would
+     not read as a slab; at this value it does not need the help, and a flat
+     colour is one number a future edit cannot get half-right. */
+  --color-rail: #1d1a3a;
 
   /* --- State, as tokens rather than raw palette picks ---------------------
    * Green/amber/red were being reached for directly all over the app, which
@@ -352,7 +358,7 @@ summary {
 
 /* The rail's wash, as a utility so only one file decides it. */
 .bg-rail {
-  background-image: var(--gradient-rail);
+  background-color: var(--color-rail);
 }
 
 /**

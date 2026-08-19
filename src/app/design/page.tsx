@@ -110,7 +110,7 @@ export default function DesignPage() {
         <Section title="Rail" note="The one place in the product allowed to be loud. Everything right of it stays neutral, which is what lets it.">
           <div className="flex items-stretch gap-4">
             {/* Duplicates the rail's item markup from src/components/sidebar.tsx — width, padding, gap, tile and label must track
-                that file. The `bg-rail` here is the swatch's own: the real rail is transparent and takes the wash from the frame
+                that file. The `bg-rail` here is the swatch's own: the real rail is transparent and takes its colour from the frame
                 behind it, which a swatch standing on white has to supply for itself. */}
             <div className="bg-rail flex w-[100px] shrink-0 flex-col items-center gap-[30px] rounded-card px-2.5 py-3">
               <span className="flex w-full flex-col items-center">
@@ -127,8 +127,8 @@ export default function DesignPage() {
               </span>
             </div>
             <div className="flex flex-1 flex-col justify-center gap-1 text-tiny text-muted-foreground">
-              <p><code className="text-foreground">--gradient-rail</code></p>
-              <p>Deep indigo-navy, darkening downward: #262c63 → #1c204a → #141733. Far enough from the accent that a blue button on top of it still reads. One declaration, so it dials back in one edit.</p>
+              <p><code className="text-foreground">--color-rail</code></p>
+              <p>Deep indigo-navy, flat: #1D1A3A. It was a three-stop gradient so a narrow column would not read as a slab; at this value it does not need the help, and a flat colour is one number a future edit cannot get half-right.</p>
               <p className="mt-1">Selected highlights the 40px tile alone — a white wash behind the glyph, the label just brightening to full white while resting items sit at 75%. Highlighting the whole item as one white pill was a heavier thing entirely.</p>
             </div>
           </div>
