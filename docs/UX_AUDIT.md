@@ -1338,6 +1338,75 @@ bar rather than as a dock.
 
 ---
 
+### 9q. The rail, measured off the reference instead of estimated
+
+The previous pass built the rail "like Make's" from memory and it was wrong on
+every axis at once. Measured properly off the reference screenshot:
+
+| | Make | Ours (before) |
+|---|---|---|
+| rail width | 80px | 76px |
+| icon-centre to icon-centre | 67px | 58px |
+| icon-centre to label-centre | 27px | 33px |
+| tile → label gap | 0 | 4px |
+
+The zero gap is the part that has to be derived rather than eyeballed: a 40px
+tile and a 15px label line put their centres 20 + 7.5 = 27.5px apart **only if
+they touch**. And the 15px line height is confirmed independently — Make's
+two-line items (MCP Toolboxes, Data stores) sit at 82px pitch, exactly one
+extra line above the 67px single-line pitch. So the construction is
+40 + 15 = 55px per block with 12px between blocks, and every number in it
+falls out of two measurements instead of taste.
+
+Verified rendered, not assumed: 80.0 width, 67/67/67 pitch across all four
+pairs with no accumulated drift, 27.5 on every item, tile tops at 79/146/213/280.
+
+**Both bars came down ~16%** — the previous pass had grown them 50% on
+request and they overshot. 7px island padding, 38px controls, 24px glyphs,
+14px text, giving a 52px island against the old 62px. The back arrow stays
+locked to the zoom glyphs' size and the zoom readout to Test flow's, because
+those two pairings were asked for explicitly and a uniform scale is the only
+way they survive a resize. The outer 16px inset is untouched — the ask was to
+shrink the bars, not the air around them. The rail's logo band tracks the
+island at 68px (16 + 52) so the two still line up across the seam.
+
+### 9r. The design page was lying, and that is a defect class
+
+The insert "+" was reported fixed and was not. `/design` renders **preview
+copies** of builder chrome, the copy had been updated, and the real
+`InsertEdge` still drew a 40%-opacity text "+" that the canvas dots showed
+through. A screenshot of the kit is only evidence if the kit is honest, so an
+audit went looking for every other instance:
+
+- The **State** swatches were still amber-500/amber-300 after needs-attention
+  moved to orange — the kit was a whole hue behind the product, on a page
+  whose entire job is catching that. Now they read `border`, `dot` and `label`
+  straight out of `STATUS_META`, so the drift cannot recur.
+- The canvas preview drew a **connector and a "+" into the ghost step**. The
+  product doesn't: the terminal "Add next step" hangs off the card at `mt-8`
+  and is not an edge, so it has no insert control.
+- Its **rhythm was 56px** where the real card-to-card gap is 160px
+  (`ROW` 232 minus a 72px card) — on the one section sold as "the rhythm
+  between them". It is 160 now.
+- The dashed run was `neutral-300`; it now takes `--color-canvas-edge`, the
+  same token `.react-flow__edge-path` strokes with.
+- It rendered a **body line on an untested card**, a shape `FlowNodeCard`
+  cannot produce, and coloured error hints grey instead of red.
+- Kit inputs were `text-base` (38px) against every real input's 36px.
+- Four pieces of **prose stated numbers that were no longer true**: a rail
+  gradient described as "violet to fuchsia" two palettes after it became
+  indigo-navy, an Ink note naming tooltips and an account panel that do not
+  use Ink, "six variants" against a seven-variant Button, and "every input is
+  8px" against a dozen 6px inputs in settings and onboarding.
+
+Every duplication point now carries a one-line comment naming the real file it
+must track. The rule this establishes: **a preview may simplify, but it may
+never differ.** Simplifying is rendering three cards instead of a live graph.
+Differing is styling the same element two ways — and that is indistinguishable
+from a fix.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

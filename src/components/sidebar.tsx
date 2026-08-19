@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LayoutDashboard, Plug, Settings, Workflow } from "lucide-react";
 
 /**
- * THE RAIL: a 76px icon column carrying the product's colour.
+ * THE RAIL: an 80px icon column carrying the product's colour.
  *
  * It has been three things now — a saturated gradient, then near-black, then
  * graphite — and the graphite was right about contrast and wrong about
@@ -41,25 +41,35 @@ const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: stri
 export function Sidebar({ account }: { account?: { initials: string; panel: ReactNode } }) {
   const pathname = usePathname() ?? "";
   return (
-    <aside className="bg-rail flex h-full w-[76px] shrink-0 flex-col items-center">
+    <aside className="bg-rail flex h-full w-[80px] shrink-0 flex-col items-center">
       {/* THE WORDMARK IS THE TOP BAR'S HEIGHT.
-          The rail's mark and the canvas's top bar sit at the same y, so when
+          The rail's mark and the canvas's top island sit at the same y, so when
           they were different heights the two read as misaligned furniture. It
-          now occupies exactly the bar's band (12px inset + 56px bar), so the
-          two line up across the seam. */}
+          now occupies exactly the island's band (16px inset + 52px island), so
+          the two line up across the seam.
+
+          The 11px beneath is Make's: its logo centre sits at y=35 and its first
+          icon centre at y=101 under a 70px band, leaving 101 - 20 - 70 = 11. */}
       <Link
         href="/dashboard"
         title="Namzilabs — dashboard"
-        className="mb-2 flex h-[80px] w-full items-center justify-center text-title font-bold text-white transition-opacity hover:opacity-85"
+        className="mb-[11px] flex h-[68px] w-full items-center justify-center text-title font-bold text-white transition-opacity hover:opacity-85"
       >
         <span className="flex h-11 w-11 items-center justify-center rounded-card bg-white/20 ring-1 ring-white/25">N</span>
       </Link>
 
-      {/* Make's rail, measured: 76px wide, a 40px rounded tile holding the
-          icon, the label beneath it at 11px, and the ACTIVE state highlighting
-          the tile only — not the label. Ours highlighted the whole item as one
-          white pill, which is a different (and heavier) thing entirely. */}
-      <nav className="flex w-full flex-col items-center gap-1.5">
+      {/* Make's rail, measured: 80px wide, a 40px rounded tile holding the
+          icon, and an 11px label on a 15px line sitting FLUSH beneath the tile
+          — no gap. That flushness is measured, not guessed: icon centre to
+          label centre is 27px, and 40/2 + 15/2 = 27.5, which only works with
+          the two touching. The 15px line is confirmed independently by items
+          whose label wraps, which grow the pitch by exactly one line (67 -> 82).
+
+          So the block is 40 + 15 = 55, and the measured 67px pitch leaves 12px
+          between blocks. The ACTIVE state highlights the tile only — not the
+          label. Ours highlighted the whole item as one white pill, which is a
+          different (and heavier) thing entirely. */}
+      <nav className="flex w-full flex-col items-center gap-3">
         {NAV.map((item) => {
           const active = item.match(pathname);
           return (
@@ -67,7 +77,7 @@ export function Sidebar({ account }: { account?: { initials: string; panel: Reac
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className="group flex w-full flex-col items-center gap-1 py-0.5"
+              className="group flex w-full flex-col items-center"
             >
               <span
                 className={`flex h-10 w-10 items-center justify-center rounded-control transition-colors ${
@@ -76,7 +86,11 @@ export function Sidebar({ account }: { account?: { initials: string; panel: Reac
               >
                 {item.icon}
               </span>
-              <span className={`text-micro font-medium leading-none transition-colors ${active ? "text-white" : "text-white/75 group-hover:text-white"}`}>
+              <span
+                className={`px-1 text-center text-micro font-medium leading-[15px] transition-colors ${
+                  active ? "text-white" : "text-white/75 group-hover:text-white"
+                }`}
+              >
                 {item.label}
               </span>
             </Link>
@@ -94,7 +108,7 @@ export function Sidebar({ account }: { account?: { initials: string; panel: Reac
 /**
  * The account control, at the rail's foot: an avatar that opens a light panel
  * beside the rail (workspace switcher + sign-out live in there). A panel
- * rather than inline controls, because a 76px column cannot hold a workspace
+ * rather than inline controls, because an 80px column cannot hold a workspace
  * name and should not try.
  */
 function RailAccount({ initials, children }: { initials: string; children: ReactNode }) {

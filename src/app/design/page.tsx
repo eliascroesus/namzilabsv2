@@ -5,6 +5,7 @@ import { NodeIcon } from "@/components/flow/icons";
 import { LayoutDashboard, Workflow } from "lucide-react";
 import { ToolbarPreview } from "@/components/flow/toolbar-preview";
 import { FlowList } from "@/app/dashboard/flows/FlowRow";
+import { STATUS_META, type NodeStatus } from "@/components/flow/node-meta";
 
 /**
  * THE UI KIT, RENDERED.
@@ -58,10 +59,14 @@ export default function DesignPage() {
         account={{
           initials: "EC",
           panel: (
-            <div className="space-y-2">
-              <p className="text-small font-semibold text-foreground">Namzilabs</p>
-              <p className="truncate text-tiny text-neutral-500">elias@namzilabs.co</p>
-              <button className="w-full rounded-control border border-neutral-200 px-3 py-1.5 text-small font-medium text-neutral-700">Sign out</button>
+            /* Duplicates the account panel from src/components/app-shell.tsx — spacing, the Workspace label and the rule above the email must track that file. */
+            <div className="space-y-3">
+              <p className="text-micro font-semibold uppercase tracking-wide text-neutral-400">Workspace</p>
+              <p className="truncate text-small font-semibold text-foreground">Namzilabs</p>
+              <button className="w-full rounded-control border border-neutral-200 px-3 py-1.5 text-small font-medium text-neutral-700 transition-colors hover:bg-neutral-50">
+                Sign out
+              </button>
+              <p className="truncate border-t border-neutral-100 pt-2 text-tiny text-neutral-500">elias@namzilabs.co</p>
             </div>
           ),
         }}
@@ -87,7 +92,7 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Ink" note="Dark surfaces: toasts, tooltips, the account panel. Four steps of elevation.">
+          <Section title="Ink" note="The dark end of the neutral scale. Only the canvas toast uses it today — the account panel is white and every tooltip is a native title. Seven steps, kept whole so a dark surface has somewhere to go.">
             <div className="flex overflow-hidden rounded-card border border-neutral-200">
               {INK.map(([name, cls]) => (
                 <div key={name} className="flex-1">
@@ -100,32 +105,35 @@ export default function DesignPage() {
 
           <Section title="Rail" note="The one place in the product allowed to be loud. Everything right of it stays neutral, which is what lets it.">
             <div className="flex items-stretch gap-4">
-              <div className="bg-rail flex w-[76px] shrink-0 flex-col items-stretch gap-1 rounded-card py-3 px-2.5">
-                {/* Selected is a SOLID white tile with the brand glyph — Miro's
-                    tinted selected tool, translated onto a coloured rail. */}
-                <span className="flex flex-col items-center gap-1.5 rounded-card bg-white px-1 py-2.5 text-brand-600 shadow-sm">
-                  <LayoutDashboard size={24} strokeWidth={2.1} />
-                  <span className="text-micro font-semibold leading-none">Active</span>
+              {/* Duplicates the rail's item markup from src/components/sidebar.tsx — width, tile and label must track that file. */}
+              <div className="bg-rail flex w-[80px] shrink-0 flex-col items-center gap-3 rounded-card py-3">
+                <span className="flex w-full flex-col items-center">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-control bg-white/22 text-white">
+                    <LayoutDashboard size={24} strokeWidth={2.1} />
+                  </span>
+                  <span className="px-1 text-center text-micro font-medium leading-[15px] text-white">Active</span>
                 </span>
-                <span className="flex flex-col items-center gap-1.5 rounded-card px-1 py-2.5 text-white/70">
-                  <Workflow size={24} strokeWidth={2.1} />
-                  <span className="text-micro font-semibold leading-none">Rest</span>
+                <span className="flex w-full flex-col items-center">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-control text-white/75">
+                    <Workflow size={24} strokeWidth={2.1} />
+                  </span>
+                  <span className="px-1 text-center text-micro font-medium leading-[15px] text-white/75">Rest</span>
                 </span>
               </div>
               <div className="flex flex-1 flex-col justify-center gap-1 text-tiny text-muted-foreground">
                 <p><code className="text-foreground">--gradient-rail</code></p>
-                <p>Brand at the top, warming through violet to fuchsia. One declaration, so it dials back in one edit.</p>
-                <p className="mt-1">Selected is solid white with the brand glyph — a translucent wash could not say &ldquo;you are here&rdquo; loudly enough on a coloured surface.</p>
+                <p>Deep indigo-navy, darkening downward: #262c63 → #1c204a → #141733. Far enough from the accent that a blue button on top of it still reads. One declaration, so it dials back in one edit.</p>
+                <p className="mt-1">Selected highlights the 40px tile alone — a white wash behind the glyph, the label just brightening to full white while resting items sit at 75%. Highlighting the whole item as one white pill was a heavier thing entirely.</p>
               </div>
             </div>
           </Section>
 
           <Section title="State" note="The only other colours. Each answers a question the user has to act on.">
             <div className="grid grid-cols-4 gap-3">
-              <StateChip tone="green" dot="bg-green-500" label="Tested" body="Ran and returned data" />
-              <StateChip tone="amber" dot="bg-amber-500" label="Needs setup" body="Blocks publish" />
-              <StateChip tone="red" dot="bg-red-500" label="Error" body="Broke on its last run" />
-              <StateChip tone="neutral" dot="bg-neutral-300" label="Not tested" body="Fine, just unrun" />
+              <StateChip status="ready" body="Ran and returned data" />
+              <StateChip status="setup" body="Blocks publish" />
+              <StateChip status="error" body="Broke on its last run" />
+              <StateChip status="untested" body="Fine, just unrun" />
             </div>
           </Section>
 
@@ -170,7 +178,7 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Buttons" note="One component, six variants. Every clickable thing in the product comes from it.">
+          <Section title="Buttons" note="One component, seven variants. Every clickable thing in the product comes from it.">
             <div className="flex flex-wrap items-center gap-3">
               <Button>Review &amp; publish</Button>
               <Button variant="secondary">Secondary</Button>
@@ -192,14 +200,14 @@ export default function DesignPage() {
             </div>
           </Section>
 
-          <Section title="Controls" note="Every input is 8px, hairline, with the same 4px brand focus ring.">
+          <Section title="Controls" note="Every control in the builder is 8px, hairline, 36px tall, with the same 4px brand focus ring. The settings and onboarding forms predate this and still use 6px.">
             <div className="grid grid-cols-2 gap-4">
               <label className="block">
                 <span className="mb-1.5 block text-small font-medium text-neutral-700">Text field</span>
                 <input
                   readOnly
                   value="Speed to lead"
-                  className="w-full rounded-control border border-neutral-300 bg-white px-3 py-2 text-base text-foreground"
+                  className="w-full rounded-control border border-neutral-300 bg-white px-3 py-2 text-sm text-foreground"
                 />
               </label>
               <label className="block">
@@ -207,7 +215,7 @@ export default function DesignPage() {
                 <input
                   readOnly
                   value="Focused state"
-                  className="w-full rounded-control border border-brand-400 bg-white px-3 py-2 text-base text-foreground ring-4 ring-brand-100"
+                  className="w-full rounded-control border border-brand-400 bg-white px-3 py-2 text-sm text-foreground ring-4 ring-brand-100"
                 />
               </label>
               <div>
@@ -221,7 +229,7 @@ export default function DesignPage() {
               </div>
               <div>
                 <span className="mb-1.5 block text-small font-medium text-neutral-700">Select</span>
-                <div className="flex w-full items-center justify-between rounded-control border border-neutral-300 bg-white px-3 py-2 text-base text-foreground">
+                <div className="flex w-full items-center justify-between rounded-control border border-neutral-300 bg-white px-3 py-2 text-sm text-foreground">
                   Last 30 days <span className="text-neutral-400">▾</span>
                 </div>
               </div>
@@ -256,7 +264,7 @@ export default function DesignPage() {
           <Section title="Step cards" note="300px, a 44px mark, the step number as its own chip so it stops eating the title.">
             <div className="flex flex-wrap items-start gap-4 rounded-card bg-canvas-bg p-6">
               <FlowNodeCard variant="unite_match" title="Match" body="Needs two steps" status="setup" stepNo={3} />
-              <FlowNodeCard variant="formula_compare" title="Compare" body="38" status="untested" stepNo={4} />
+              <FlowNodeCard variant="formula_compare" title="Compare" body="38" status="ready" stepNo={4} />
             </div>
           </Section>
 
@@ -277,18 +285,19 @@ function Section({ title, note, children }: { title: string; note: string; child
   );
 }
 
-function StateChip({ tone, dot, label, body }: { tone: string; dot: string; label: string; body: string }) {
-  const border: Record<string, string> = {
-    green: "border-green-300",
-    amber: "border-amber-300",
-    red: "border-red-300",
-    neutral: "border-neutral-300",
-  };
+/**
+ * Reads its border, dot and label straight out of STATUS_META rather than
+ * naming the colours a second time. The amber pair here had drifted a whole
+ * hue behind the product after needs-attention went orange — a swatch that is
+ * wrong about the thing it documents is worse than no swatch.
+ */
+function StateChip({ status, body }: { status: NodeStatus; body: string }) {
+  const sm = STATUS_META[status];
   return (
-    <div className={`rounded-card border ${border[tone]} bg-white p-3`}>
+    <div className={`rounded-card border ${sm.border} bg-white p-3`}>
       <span className="flex items-center gap-2">
-        <span className={`h-2 w-2 rounded-full ${dot}`} />
-        <span className="text-small font-semibold text-foreground">{label}</span>
+        <span className={`h-2 w-2 rounded-full ${sm.dot}`} />
+        <span className="text-small font-semibold text-foreground">{sm.label}</span>
       </span>
       <p className="mt-1 text-tiny text-neutral-500">{body}</p>
     </div>

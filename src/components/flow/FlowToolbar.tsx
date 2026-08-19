@@ -42,16 +42,17 @@ import { Button } from "@/components/ui/button";
  * "Test flow" is a filled primary rather than the ghost button it was beside
  * Publish.
  *
- * Geometry is measured, not chosen: 6px island padding, 36px controls, 12px
- * from every viewport edge (top, left and bottom all the same, which they were
- * not), one hairline divider between groups. Icons are 20px and near-black —
- * Miro's toolbar glyphs read as objects; 17px grey was a toolbar whispering.
+ * Geometry is measured, not chosen: 7px island padding around 38px controls
+ * gives a 52px-tall island, 16px from every viewport edge (top, left and
+ * bottom all the same, which they were not), one hairline divider between
+ * groups. Glyphs are 24px and near-black beside 14px text — Miro's toolbar
+ * icons read as objects; 17px grey was a toolbar whispering.
  */
 export type SaveState = "saved" | "saving" | "unsaved" | "error";
 
 /** One floating surface. Every island in the builder is this. */
 function Island({ className = "", children }: { className?: string; children: React.ReactNode }) {
-  return <div className={`pointer-events-auto flex items-center gap-1 rounded-card bg-white p-[9px] shadow-float ${className}`}>{children}</div>;
+  return <div className={`pointer-events-auto flex items-center gap-1 rounded-card bg-white p-[7px] shadow-float ${className}`}>{children}</div>;
 }
 
 function IslandButton({
@@ -71,14 +72,14 @@ function IslandButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[28px] [&_svg]:stroke-[2]"
+      className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[24px] [&_svg]:stroke-[2]"
     >
       {children}
     </button>
   );
 }
 
-const Divider = () => <span className="mx-1 h-6 w-px shrink-0 bg-border" aria-hidden />;
+const Divider = () => <span className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden />;
 
 export function FlowToolbar({
   name,
@@ -149,18 +150,17 @@ export function FlowToolbar({
 
           Now: the back button, then the name as the island's own content with
           the save state as a quiet dot beside it, then a hairline, then the
-          actions. And the status is a DOT unless it has something to say —
-          "Saved" is the answer to a question nobody asked, so it appears on
-          hover; "Not saved" keeps its loud red chip, because that one can
-          cost work. */}
+          actions. And the save state is a WORD, not a dot —
+          a dot needs a legend and a word does not; "Not saved" keeps its loud
+          red chip on top of that, because that one can cost work. */}
       <div className="pointer-events-none absolute left-4 top-4 z-10 flex max-w-[min(62vw,760px)] items-center">
         <Island className="min-w-0 gap-1">
           <Link
             href="/dashboard/flows"
             title="All flows"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
+            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
           >
-            <ChevronLeft size={28} strokeWidth={2} />
+            <ChevronLeft size={24} strokeWidth={2} />
           </Link>
 
           <span className="flex min-w-0 flex-1 items-center gap-2 pr-1">
@@ -169,7 +169,7 @@ export function FlowToolbar({
               onChange={(e) => onRename(e.target.value)}
               aria-label="Flow name"
               placeholder="Untitled flow"
-              className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-2.5 py-2 text-[16px] font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
+              className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-2.5 py-1.5 text-[14px] font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
             />
             <SaveChip state={saveState} onRetry={onRetrySave} />
           </span>
@@ -219,7 +219,7 @@ export function FlowToolbar({
 
           {isPublished && publishedVersion != null && (
             <span
-              className="flex shrink-0 items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1.5 text-micro font-bold text-success-ink"
+              className="flex shrink-0 items-center gap-1.5 rounded-full bg-success-soft px-2 py-1 text-micro font-bold text-success-ink"
               title="This flow is live on your dashboard"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
@@ -227,7 +227,7 @@ export function FlowToolbar({
             </span>
           )}
 
-          <Button onClick={onReview} disabled={publishing} className="ml-1 h-11 shrink-0 gap-2 px-5 text-[16px]">
+          <Button onClick={onReview} disabled={publishing} className="ml-1 h-[38px] shrink-0 gap-2 px-4 text-[14px]">
             {isPublished ? <SlidersHorizontal /> : <Rocket />}
             {isPublished ? "Edit output" : "Review & publish"}
           </Button>
@@ -248,7 +248,7 @@ export function FlowToolbar({
                 variant={runAll ? "secondary" : "default"}
                 onClick={runAll ? onStopTestAll : onTestAll}
                 title={runAll ? "Stop the run" : "Run every step, top to bottom"}
-                className="h-11 gap-2 px-5 text-[16px]"
+                className="h-[38px] gap-2 px-4 text-[14px]"
               >
                 {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
                 {runAll ? `Stop · ${runAll.at}/${runAll.of}` : "Test flow"}
@@ -275,7 +275,7 @@ export function FlowToolbar({
           <button
             onClick={onFitView}
             title="Fit the whole flow on screen"
-            className="min-w-[64px] rounded-control px-2 py-2.5 text-[16px] font-semibold tabular-nums text-foreground transition-colors hover:bg-muted"
+            className="min-w-[56px] rounded-control px-2 py-2 text-[14px] font-semibold tabular-nums text-foreground transition-colors hover:bg-muted"
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -328,7 +328,7 @@ export function FlowToolbar({
  * A failed save is the one thing here that can silently cost work, so it is
  * the only state that gets words and colour; the rest is a dot, because
  * "Saved" is the answer to a question nobody asked and does not deserve a
- * sentence in a 48px bar.
+ * sentence in a 52px island.
  */
 function FlowSwitch({ on, disabled, onChange }: { on: boolean; disabled: boolean; onChange: () => void }) {
   return (
@@ -340,12 +340,12 @@ function FlowSwitch({ on, disabled, onChange }: { on: boolean; disabled: boolean
       onClick={onChange}
       title={disabled ? "Publish this flow before turning it on" : on ? "Turn off — removes its dashboard tiles" : "Turn on"}
       aria-label={on ? "Turn flow off" : "Turn flow on"}
-      className={`relative mx-1.5 h-6 w-11 shrink-0 rounded-full transition-colors ${on ? "bg-primary" : "bg-neutral-200"} ${
+      className={`relative mx-1 h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-primary" : "bg-neutral-200"} ${
         disabled ? "cursor-not-allowed opacity-45" : "hover:brightness-105"
       }`}
     >
       <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm ${on ? "left-[22px]" : "left-0.5"}`}
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm ${on ? "left-[18px]" : "left-0.5"}`}
         style={{ transition: "left .22s cubic-bezier(.34,1.56,.64,1)" }}
         aria-hidden
       />
@@ -365,7 +365,7 @@ function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void })
     );
   }
   return (
-    <span className="shrink-0 whitespace-nowrap px-1 text-[16px] font-medium text-muted-foreground">
+    <span className="shrink-0 whitespace-nowrap px-1 text-[14px] font-medium text-muted-foreground">
       {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Unsaved"}
     </span>
   );

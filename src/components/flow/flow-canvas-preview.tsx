@@ -34,6 +34,7 @@ export function FlowNodeCard({
   const sm = STATUS_META[status];
   const type = variant.startsWith("unite") ? "unite" : variant.startsWith("formula") ? "formula" : variant;
   const source = variant === "app" ? "gsheets" : undefined;
+  // Duplicates the card box from src/components/flow/FlowNodeCard.tsx — width, padding and mark size must track that file.
   return (
     <div className={`w-[300px] rounded-card border bg-card shadow-raised ${sm.border}`}>
       <div className="flex items-start gap-3 p-3.5">
@@ -46,7 +47,7 @@ export function FlowNodeCard({
             <span className="min-w-0 truncate text-lead font-semibold text-foreground">{title}</span>
           </span>
           {body && (
-            <span className={`mt-1 block truncate text-tiny font-medium ${status === "setup" ? sm.hint : "text-muted-foreground"}`}>{body}</span>
+            <span className={`mt-1 block truncate text-tiny font-medium ${status === "setup" || status === "error" ? sm.hint : "text-neutral-500"}`}>{body}</span>
           )}
         </span>
         <span className="flex shrink-0 items-center gap-1 pt-1">
@@ -80,8 +81,11 @@ export function CanvasPreview() {
         <FlowNodeCard variant="app" title="Google Sheets" body="49 loaded" status="ready" stepNo={1} />
         <Connector />
         <FlowNodeCard variant="filter" title="Filter" body="24 passed" status="ready" stepNo={2} publishes />
-        <Connector />
-        <div className="flex w-[300px] items-center gap-2.5 rounded-card border-2 border-dashed border-neutral-300 bg-white/60 p-3 text-base font-semibold text-neutral-500">
+        {/* No Connector here: the terminal "Add next step" hangs off the card at
+            mt-8 (FlowNodeCard.tsx) — it is not an edge, so it has no "+". */}
+        <span className="h-8 w-px border-l-2 border-dashed" style={{ borderColor: "var(--color-canvas-edge)" }} />
+        {/* Duplicates the terminal "Add next step" button from src/components/flow/FlowNodeCard.tsx — it is an opaque, raised card there, not a wash. */}
+        <div className="flex w-[300px] items-center gap-2.5 rounded-card border-2 border-dashed border-neutral-300 bg-white p-3 text-base font-semibold text-neutral-500 shadow-raised">
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
             <Plus size={16} strokeWidth={2.5} />
           </span>
@@ -92,13 +96,24 @@ export function CanvasPreview() {
   );
 }
 
-/** The dashed run between two steps, with its hover "+" at the midpoint. */
+/**
+ * The dashed run between two steps, with its always-visible "+" at the midpoint.
+ *
+ * 160px because that is the real number: `ROW` is 232 (graph-utils.ts) and a
+ * card with no publish footer is 72px tall (p-3.5 around a 44px mark). This
+ * section is sold as "the rhythm between them", so a convenient 56px would be
+ * the one thing on the page that lies about the canvas. Colour comes from
+ * `--color-canvas-edge`, the same token `.react-flow__edge-path` strokes with.
+ */
 function Connector() {
   return (
-    <span className="relative flex h-14 w-px items-center justify-center">
-      <span className="absolute inset-y-0 w-px border-l-2 border-dashed border-neutral-300" />
-      <span className="relative flex h-6 w-6 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-400 shadow-sm">
-        <Plus size={13} strokeWidth={2.5} />
+    <span className="relative flex h-[160px] w-px items-center justify-center">
+      <span className="absolute inset-y-0 w-px border-l-2 border-dashed" style={{ borderColor: "var(--color-canvas-edge)" }} />
+      {/* Duplicates the insert control from src/components/flow/InsertEdge.tsx — size, fill and glyph must track that file. */}
+      {/* shrink-0: the parent is a w-px flex row, so without it the circle is
+          squeezed to an oval — the one thing the real control cannot be. */}
+      <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-600 shadow-raised">
+        <Plus size={15} strokeWidth={2.6} />
       </span>
     </span>
   );
