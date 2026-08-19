@@ -53,7 +53,7 @@ function Disclosure({ summary, children }: { summary: string; children: ReactNod
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-md py-1 text-xs font-medium text-neutral-500 transition-colors hover:text-neutral-800"
+        className="flex items-center gap-1.5 rounded-md py-1 text-xs font-medium text-neutral-500 transition-colors hover:text-foreground"
       >
         <span className={`transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>
           ›
@@ -113,14 +113,14 @@ export function ReviewPublishModal({
   const enabledCount = metrics.filter((m) => m.enabled).length;
 
   const inputCls =
-    "w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-sm text-neutral-800 transition-colors focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
+    "w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-sm text-foreground transition-colors focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 p-4 pt-16 backdrop-blur-sm" onClick={onClose}>
       <div className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white flow-shadow flow-pop-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
           <div>
-            <h2 className="text-title font-semibold tracking-tight text-neutral-900">Review &amp; publish</h2>
+            <h2 className="text-title font-semibold tracking-tight text-foreground">Review &amp; publish</h2>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700" aria-label="Close">
             ✕
@@ -154,7 +154,7 @@ export function ReviewPublishModal({
                 <label className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
                     <input type="checkbox" checked={m.enabled} onChange={(e) => set(ep.nodeId, { enabled: e.target.checked })} className="h-4 w-4 accent-brand-600" />
-                    <span className="truncate text-sm font-semibold text-neutral-800">{ep.title}</span>
+                    <span className="truncate text-sm font-semibold text-foreground">{ep.title}</span>
                   </span>
                   <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-neutral-400">metric</span>
                 </label>

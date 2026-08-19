@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ChevronLeft,
+  Workflow,
   Copy,
   Maximize2,
   MoreHorizontal,
@@ -71,7 +72,7 @@ function IslandButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-black transition-colors hover:bg-muted disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[22px] [&_svg]:stroke-[2.25]"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[23px] [&_svg]:stroke-[2.1]"
     >
       {children}
     </button>
@@ -154,12 +155,16 @@ export function FlowToolbar({
           <Link
             href="/dashboard/flows"
             title="All flows"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-black transition-colors hover:bg-muted"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
           >
-            <ChevronLeft size={22} strokeWidth={2.25} />
+            <ChevronLeft size={23} strokeWidth={2.1} />
           </Link>
 
-          <span className="flex min-w-0 flex-1 items-center gap-1.5 pr-1">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-brand-50 text-brand-600" aria-hidden>
+            <Workflow size={18} strokeWidth={2.1} />
+          </span>
+
+          <span className="flex min-w-0 flex-1 items-center gap-2 pr-1">
             <input
               value={name}
               onChange={(e) => onRename(e.target.value)}
@@ -217,7 +222,7 @@ export function FlowToolbar({
             </span>
           )}
 
-          <Button onClick={onReview} disabled={publishing} className="ml-0.5 h-9 shrink-0">
+          <Button onClick={onReview} disabled={publishing} className="ml-1 h-10 shrink-0">
             {isPublished ? <SlidersHorizontal /> : <Rocket />}
             {isPublished ? "Edit output" : "Review & publish"}
           </Button>
@@ -238,7 +243,7 @@ export function FlowToolbar({
                 variant={runAll ? "secondary" : "default"}
                 onClick={runAll ? onStopTestAll : onTestAll}
                 title={runAll ? "Stop the run" : "Run every step, top to bottom"}
-                className="h-9"
+                className="h-10"
               >
                 {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
                 {runAll ? `Stop · ${runAll.at}/${runAll.of}` : "Test flow"}
@@ -265,7 +270,7 @@ export function FlowToolbar({
           <button
             onClick={onFitView}
             title="Fit the whole flow on screen"
-            className="min-w-[52px] rounded-control px-1 py-1.5 text-tiny font-semibold tabular-nums text-neutral-600 transition-colors hover:bg-muted hover:text-foreground"
+            className="min-w-[54px] rounded-control px-1 py-2 text-tiny font-bold tabular-nums text-foreground transition-colors hover:bg-muted"
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -331,23 +336,9 @@ function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void })
       </span>
     );
   }
-  const saved = state === "saved";
   return (
-    <span
-      className="group/save flex shrink-0 items-center gap-1.5"
-      title={saved ? "All changes saved" : state === "saving" ? "Saving…" : "Unsaved changes"}
-    >
-      <span className={`h-2 w-2 rounded-full ${saved ? "bg-success" : "bg-warn"}`} aria-hidden />
-      {/* At rest the word is redundant with the dot, and it was the thing
-          making the island read as a jumble. In flight it is not redundant at
-          all, so it stays — and hovering brings it back on demand. */}
-      <span
-        className={`overflow-hidden whitespace-nowrap text-micro font-semibold text-neutral-400 transition-all ${
-          saved ? "max-w-0 opacity-0 group-hover/save:max-w-[52px] group-hover/save:opacity-100" : "max-w-[64px] opacity-100"
-        }`}
-      >
-        {state === "saving" ? "Saving…" : saved ? "Saved" : "Unsaved"}
-      </span>
+    <span className="shrink-0 whitespace-nowrap text-tiny font-medium text-muted-foreground">
+      {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Unsaved"}
     </span>
   );
 }

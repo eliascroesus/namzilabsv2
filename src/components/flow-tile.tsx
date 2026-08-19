@@ -86,7 +86,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
     return (
       <div className="rounded-lg border border-neutral-200 p-5">
         <div className="flex items-start justify-between">
-          <h3 className="font-medium text-neutral-800">{stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
+          <h3 className="font-medium text-foreground">{stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
           <Link href={`/dashboard/flows/${row.flowId}`} className="text-xs text-blue-600 hover:underline">
             Open →
           </Link>
@@ -107,14 +107,14 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
       <div className="flex items-start justify-between">
         {/* A row whose tile jsonb is null has never computed successfully, so
             there is no stored name — the output id is the only honest handle. */}
-        <h3 className="font-medium text-neutral-800">{t.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
+        <h3 className="font-medium text-foreground">{t.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
         <div className="flex items-center gap-2">
           <Freshness status={row.status} />
           <form action={refreshFlowAction}>
             <input type="hidden" name="flowId" value={row.flowId} />
             <button
               type="submit"
-              className="text-xs text-neutral-500 hover:text-neutral-800 hover:underline"
+              className="text-xs text-neutral-500 hover:text-foreground hover:underline"
               title="Recompute this tile now"
             >
               Refresh

@@ -69,12 +69,12 @@ export default async function ConnectionPage({
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <Link href="/integrations" className="text-sm text-neutral-500 hover:text-neutral-800">
+        <Link href="/integrations" className="text-sm text-neutral-500 hover:text-foreground">
           &larr; Integrations
         </Link>
         <div className="mt-3 flex items-center justify-between">
           <div>
-            <h1 className="text-display font-semibold tracking-tight text-neutral-900">{conn.name}</h1>
+            <h1 className="text-display font-semibold tracking-tight text-foreground">{conn.name}</h1>
             <p className="text-sm text-neutral-500">{entry?.name ?? conn.source}</p>
           </div>
           <StatusBadge status={conn.status} />
@@ -395,7 +395,7 @@ function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-neutral-500">{label}</dt>
-      <dd className="mt-0.5 font-medium text-neutral-800">{value}</dd>
+      <dd className="mt-0.5 font-medium text-foreground">{value}</dd>
     </div>
   );
 }

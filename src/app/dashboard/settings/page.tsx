@@ -51,7 +51,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <h1 className="text-display font-semibold tracking-tight text-neutral-900">Workspace settings</h1>
+        <h1 className="text-display font-semibold tracking-tight text-foreground">Workspace settings</h1>
 
         {invited && (
           <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
@@ -78,7 +78,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <div className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
             {members.map((m) => (
               <div key={m.id} className="flex items-center justify-between px-4 py-3 text-sm">
-                <span className="text-neutral-800">
+                <span className="text-foreground">
                   {m.email}
                   {m.userId === userId && <span className="ml-2 text-xs text-neutral-400">(you)</span>}
                 </span>
@@ -116,7 +116,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               {pending.map((inv) => (
                 <div key={inv.id} className="px-4 py-3 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-neutral-800">
+                    <span className="text-foreground">
                       {inv.email}
                       {inv.expiresAt && (
                         <span className="ml-2 text-xs text-neutral-400">

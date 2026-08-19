@@ -59,7 +59,7 @@ export default function DesignPage() {
           initials: "EC",
           panel: (
             <div className="space-y-2">
-              <p className="text-small font-semibold text-neutral-800">Namzilabs</p>
+              <p className="text-small font-semibold text-foreground">Namzilabs</p>
               <p className="truncate text-tiny text-neutral-500">elias@namzilabs.co</p>
               <button className="w-full rounded-control border border-neutral-200 px-3 py-1.5 text-small font-medium text-neutral-700">Sign out</button>
             </div>
@@ -70,7 +70,7 @@ export default function DesignPage() {
       <main className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl px-10 py-12">
           <p className="text-micro font-semibold uppercase tracking-widest text-brand-600">Design system</p>
-          <h1 className="mt-2 text-display font-semibold tracking-tight text-neutral-900">The Namzilabs UI kit</h1>
+          <h1 className="mt-2 text-display font-semibold tracking-tight text-foreground">The Namzilabs UI kit</h1>
           <p className="mt-2 max-w-xl text-base text-neutral-500">
             One accent, one coloured rail, seven type sizes, three radii, four elevations. Colour carries identity and state — the rail
             is the one surface allowed to carry mood.
@@ -133,7 +133,7 @@ export default function DesignPage() {
             <div className="divide-y divide-neutral-100 rounded-card border border-neutral-200">
               {TYPE.map((t) => (
                 <div key={t.token} className="flex items-baseline gap-4 px-4 py-3">
-                  <span className={`${t.cls} min-w-0 flex-1 font-medium text-neutral-900`}>Speed to lead</span>
+                  <span className={`${t.cls} min-w-0 flex-1 font-medium text-foreground`}>Speed to lead</span>
                   <code className="shrink-0 text-micro text-neutral-400">{t.token}</code>
                   <span className="w-10 shrink-0 text-right text-micro text-neutral-400">{t.px}</span>
                   <span className="w-56 shrink-0 text-tiny text-neutral-500">{t.use}</span>
@@ -150,7 +150,7 @@ export default function DesignPage() {
                 { cls: "rounded-surface", label: "surface · 16px", body: "Panels, modals, popovers" },
               ].map((r) => (
                 <div key={r.cls} className={`${r.cls} border border-neutral-200 bg-white p-4 shadow-raised`}>
-                  <p className="text-small font-semibold text-neutral-800">{r.label}</p>
+                  <p className="text-small font-semibold text-foreground">{r.label}</p>
                   <p className="mt-0.5 text-tiny text-neutral-500">{r.body}</p>
                 </div>
               ))}
@@ -199,7 +199,7 @@ export default function DesignPage() {
                 <input
                   readOnly
                   value="Speed to lead"
-                  className="w-full rounded-control border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-800"
+                  className="w-full rounded-control border border-neutral-300 bg-white px-3 py-2 text-base text-foreground"
                 />
               </label>
               <label className="block">
@@ -207,13 +207,13 @@ export default function DesignPage() {
                 <input
                   readOnly
                   value="Focused state"
-                  className="w-full rounded-control border border-brand-400 bg-white px-3 py-2 text-base text-neutral-800 ring-4 ring-brand-100"
+                  className="w-full rounded-control border border-brand-400 bg-white px-3 py-2 text-base text-foreground ring-4 ring-brand-100"
                 />
               </label>
               <div>
                 <span className="mb-1.5 block text-small font-medium text-neutral-700">Segmented</span>
                 <div className="inline-flex w-full rounded-control border border-neutral-300 bg-neutral-100 p-0.5">
-                  <span className="flex-1 rounded-[6px] bg-white px-2.5 py-1.5 text-center text-small font-medium text-neutral-900 shadow-sm">
+                  <span className="flex-1 rounded-[6px] bg-white px-2.5 py-1.5 text-center text-small font-medium text-foreground shadow-sm">
                     A number
                   </span>
                   <span className="flex-1 px-2.5 py-1.5 text-center text-small font-medium text-neutral-500">A length of time</span>
@@ -221,7 +221,7 @@ export default function DesignPage() {
               </div>
               <div>
                 <span className="mb-1.5 block text-small font-medium text-neutral-700">Select</span>
-                <div className="flex w-full items-center justify-between rounded-control border border-neutral-300 bg-white px-3 py-2 text-base text-neutral-800">
+                <div className="flex w-full items-center justify-between rounded-control border border-neutral-300 bg-white px-3 py-2 text-base text-foreground">
                   Last 30 days <span className="text-neutral-400">▾</span>
                 </div>
               </div>
@@ -270,7 +270,7 @@ export default function DesignPage() {
 function Section({ title, note, children }: { title: string; note: string; children: React.ReactNode }) {
   return (
     <section className="mt-12">
-      <h2 className="text-title font-semibold tracking-tight text-neutral-900">{title}</h2>
+      <h2 className="text-title font-semibold tracking-tight text-foreground">{title}</h2>
       <p className="mb-4 mt-0.5 text-tiny text-neutral-500">{note}</p>
       {children}
     </section>
@@ -288,7 +288,7 @@ function StateChip({ tone, dot, label, body }: { tone: string; dot: string; labe
     <div className={`rounded-card border ${border[tone]} bg-white p-3`}>
       <span className="flex items-center gap-2">
         <span className={`h-2 w-2 rounded-full ${dot}`} />
-        <span className="text-small font-semibold text-neutral-800">{label}</span>
+        <span className="text-small font-semibold text-foreground">{label}</span>
       </span>
       <p className="mt-1 text-tiny text-neutral-500">{body}</p>
     </div>

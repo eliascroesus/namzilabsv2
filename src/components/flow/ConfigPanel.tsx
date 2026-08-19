@@ -195,7 +195,7 @@ export function ConfigPanel({
             value={node.data.label ?? ""}
             onChange={(e) => onRename(e.target.value)}
             placeholder={`${stepNo != null ? `${stepNo}. ` : ""}${defaultTitle(type, node.data)}`}
-            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-neutral-900 hover:border-neutral-200 hover:bg-white focus:border-neutral-300 focus:bg-white focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground hover:border-neutral-200 hover:bg-white focus:border-neutral-300 focus:bg-white focus:outline-none"
           />
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-1 text-micro font-semibold ${sm.cls}`}>{sm.label}</span>
@@ -210,7 +210,7 @@ export function ConfigPanel({
               key={t}
               onClick={() => setTab(t)}
               className={`-mb-px border-b-2 py-3 text-sm capitalize transition-colors ${
-                activeTab === t ? "border-brand-500 font-semibold text-neutral-900" : "border-transparent font-medium text-neutral-500 hover:text-neutral-800"
+                activeTab === t ? "border-brand-500 font-semibold text-foreground" : "border-transparent font-medium text-neutral-500 hover:text-foreground"
               }`}
             >
               {t}
@@ -832,7 +832,7 @@ function NodeConfig({
                   const avail = datasetCandidates.find((c) => !laneIds.includes(c.id));
                   if (avail) setLanes([...laneIds, avail.id]);
                 }}
-                className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-xs text-neutral-600 hover:border-neutral-400 hover:text-neutral-800"
+                className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-xs text-neutral-600 hover:border-neutral-400 hover:text-foreground"
               >
                 <span className="text-sm leading-none">+</span> Add another step
               </button>
@@ -1133,7 +1133,7 @@ function NumberPicker({
           <div className="relative">
             {desc ? (
               <div className="flex w-full items-center justify-between gap-2 rounded-md border border-neutral-300 bg-neutral-50 py-1.5 pl-2 pr-14 text-sm">
-                <span className="min-w-0 truncate text-neutral-800">{chosenLabel}</span>
+                <span className="min-w-0 truncate text-foreground">{chosenLabel}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -1605,7 +1605,7 @@ function MomentInput({
           className="relative w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 pr-9 text-left text-sm transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
         >
           {label ? (
-            <span className="block truncate text-neutral-800">
+            <span className="block truncate text-foreground">
               {from ? <span className="text-neutral-400">{from} › </span> : null}
               {label}
             </span>
@@ -2098,7 +2098,7 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
           Only the newest 500,000 records were read, so this number is a floor, not a total. Narrow the step with a date range to measure a complete period.
         </p>
       )}
-      <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-title font-semibold text-neutral-900">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
+      <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-center text-title font-semibold text-foreground">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
       ) : (

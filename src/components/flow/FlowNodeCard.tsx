@@ -126,7 +126,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
      * (the same trap `flow-pop-in` documents for the config panel). So the
      * rule is simply: this box does not clip.
      */
-    <div className={`group/card w-[300px] rounded-card border bg-card shadow-raised transition-all duration-150 hover:shadow-lifted ${border}`}>
+    <div className={`group/card w-[300px] rounded-card border shadow-raised transition-all duration-150 hover:shadow-lifted ${border}`}>
       {isCompare ? (
         <>
           {/* Both number inputs anchor at top-centre; the edges enter straight down (no

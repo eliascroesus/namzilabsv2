@@ -165,7 +165,7 @@ function Row({ flow }: { flow: FlowListItem }) {
       <Link href={`/dashboard/flows/${flow.id}`} className="flex min-w-0 items-center gap-3">
         <NodeIcon type="app" source={flow.source ?? undefined} size={34} />
         <span className="min-w-0">
-          <span className="block truncate text-base font-semibold text-neutral-900">{flow.name}</span>
+          <span className="block truncate text-base font-semibold text-foreground">{flow.name}</span>
           <span className="block truncate text-tiny text-neutral-500">{flow.summary}</span>
         </span>
       </Link>

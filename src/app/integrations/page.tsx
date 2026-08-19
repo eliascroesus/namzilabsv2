@@ -53,7 +53,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <h1 className="text-display font-semibold tracking-tight text-neutral-900">Integrations</h1>
+        <h1 className="text-display font-semibold tracking-tight text-foreground">Integrations</h1>
         <p className="mt-1 text-sm text-neutral-500">
           Connect a tool and its data flows into your unified dashboard. Connect an account, then
           preview the latest records to confirm it&rsquo;s live.

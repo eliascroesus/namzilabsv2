@@ -123,7 +123,7 @@ export function Select({
           aria-expanded={open}
           className={`${BTN} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
         >
-          <span className={`min-w-0 truncate ${current ? "text-neutral-800" : "text-neutral-400"}`}>{current?.label ?? placeholder}</span>
+          <span className={`min-w-0 truncate ${current ? "text-foreground" : "text-neutral-400"}`}>{current?.label ?? placeholder}</span>
           <span className="shrink-0 text-neutral-400">▾</span>
         </button>
       }
@@ -139,7 +139,7 @@ export function Select({
             }}
             onKeyDown={onKey}
             placeholder="Search…"
-            className="mb-1 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-sm text-neutral-800 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+            className="mb-1 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-sm text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
           />
         )}
         {filtered.length === 0 && <p className="p-2 text-center text-xs text-neutral-400">No matches</p>}
@@ -161,10 +161,10 @@ export function Select({
                     if (!o.disabled) pick(o.value);
                   }}
                   onMouseEnter={() => setActive(i)}
-                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-brand-50" : ""}`}
+                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-brand-50 text-brand-700" : ""}`}
                 >
                   <span className="min-w-0">
-                    <span className={`block ${o.disabled ? "" : "truncate"} ${o.value === value ? "font-medium text-neutral-900" : "text-neutral-700"}`}>{o.label}</span>
+                    <span className={`block ${o.disabled ? "" : "truncate"} ${o.value === value ? "font-medium text-foreground" : "text-neutral-700"}`}>{o.label}</span>
                     {o.hint && <span className={`block text-micro text-neutral-400 ${o.disabled ? "whitespace-normal" : "truncate"}`}>{o.hint}</span>}
                   </span>
                   {o.value === value && <span className="shrink-0 text-neutral-500">✓</span>}

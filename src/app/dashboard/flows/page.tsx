@@ -84,7 +84,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
         )}
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-display font-semibold tracking-tight text-neutral-900">Flows</h1>
+            <h1 className="text-display font-semibold tracking-tight text-foreground">Flows</h1>
             <p className="mt-1 text-base text-neutral-500">
               Build metrics visually: connect an app, filter and aggregate, then output to your dashboard.
             </p>

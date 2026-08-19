@@ -49,7 +49,7 @@ export function OnboardingChecklist({
   const next = steps.findIndex((s) => !s.done);
   return (
     <div className="mt-8 rounded-lg border border-dashed border-neutral-300 p-8">
-      <h2 className="text-lg font-semibold text-neutral-800">Get your first metric live</h2>
+      <h2 className="text-lg font-semibold text-foreground">Get your first metric live</h2>
       <p className="mt-1 text-sm text-neutral-500">Three steps — the first takes about a minute.</p>
       <ol className="mt-5 space-y-4">
         {steps.map((step, i) => (
@@ -68,7 +68,7 @@ export function OnboardingChecklist({
               </span>
             )}
             <div>
-              <p className={`font-medium ${step.done ? "text-neutral-400 line-through" : "text-neutral-800"}`}>{step.title}</p>
+              <p className={`font-medium ${step.done ? "text-neutral-400 line-through" : "text-foreground"}`}>{step.title}</p>
               {!step.done && (
                 <p className="mt-0.5 text-sm text-neutral-500">
                   {step.detail}{" "}

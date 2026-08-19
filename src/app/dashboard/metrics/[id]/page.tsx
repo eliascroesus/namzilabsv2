@@ -58,12 +58,12 @@ export default async function MetricDrillPage({
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-4xl px-6 py-10">
-        <Link href="/dashboard" className="text-sm text-neutral-500 hover:text-neutral-800">
+        <Link href="/dashboard" className="text-sm text-neutral-500 hover:text-foreground">
           &larr; Dashboard
         </Link>
         <div className="mt-3 flex items-center justify-between">
           <div>
-            <h1 className="text-display font-semibold tracking-tight text-neutral-900">{metric.name}</h1>
+            <h1 className="text-display font-semibold tracking-tight text-foreground">{metric.name}</h1>
             <p className="text-sm text-neutral-500">
               {def.kind === "aggregate" ? "Metric" : "Funnel"} · last 30 days
             </p>

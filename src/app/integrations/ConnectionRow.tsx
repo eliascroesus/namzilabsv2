@@ -138,7 +138,7 @@ export function ConnectionRow({
     const armed = typed.trim() === name.trim();
     return (
       <div className="border-l-2 border-red-500 bg-red-50/70 px-4 py-3">
-        <p className="text-sm font-medium text-neutral-900">Permanently delete {name}?</p>
+        <p className="text-sm font-medium text-foreground">Permanently delete {name}?</p>
         <p className="mt-1 text-sm text-neutral-700">
           This removes the connection and{" "}
           <span className="font-medium">
@@ -156,7 +156,7 @@ export function ConnectionRow({
           )}
         </p>
         <label className="mt-3 block text-xs text-neutral-600" htmlFor={`confirm-${id}`}>
-          Type <span className="font-medium text-neutral-900">{name}</span> to confirm
+          Type <span className="font-medium text-foreground">{name}</span> to confirm
         </label>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <input
@@ -301,7 +301,7 @@ export function ConnectionRow({
             type="button"
             onClick={() => setShowHook((v) => !v)}
             aria-expanded={showHook}
-            className="rounded border border-neutral-200 px-2 py-0.5 text-xs font-medium text-neutral-600 hover:bg-white hover:text-neutral-900"
+            className="rounded border border-neutral-200 px-2 py-0.5 text-xs font-medium text-neutral-600 hover:bg-white hover:text-foreground"
           >
             {showHook ? "Hide webhook URL" : "Webhook URL"}
           </button>

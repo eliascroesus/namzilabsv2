@@ -184,7 +184,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <FreshnessPoller />
       <main className="mx-auto max-w-5xl px-6 py-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-display font-semibold tracking-tight text-neutral-900">Dashboard</h1>
+          <h1 className="text-display font-semibold tracking-tight text-foreground">Dashboard</h1>
           <div className="flex gap-2">
             {/* Every tile at once. The per-tile Refresh recomputes one flow,
                 which is the wrong unit when you have just changed something
@@ -329,7 +329,7 @@ function MetricTile({ tile }: { tile: Tile }) {
   return (
     <div className="rounded-lg border border-neutral-200 p-5">
       <div className="flex items-start justify-between">
-        <h3 className="font-medium text-neutral-800">{metric.name}</h3>
+        <h3 className="font-medium text-foreground">{metric.name}</h3>
         {tile.kind === "aggregate" && (
           <Link href={`/dashboard/metrics/${metric.id}`} className="text-xs text-blue-600 hover:underline">
             Drill in →

@@ -39,7 +39,7 @@ export function FieldInput({
       trigger={({ toggle }) => (
         <div className="relative">
           <button type="button" onClick={toggle} className={`${BOX} ${allowCustom ? "pr-11" : "pr-9"}`}>
-            <span className={`block truncate ${chosen ? "text-neutral-800" : "text-neutral-400"}`}>{chosen ?? placeholder}</span>
+            <span className={`block truncate ${chosen ? "text-foreground" : "text-neutral-400"}`}>{chosen ?? placeholder}</span>
           </button>
           {allowCustom ? (
             // A field that also accepts a typed value: the data icon opens the browser.

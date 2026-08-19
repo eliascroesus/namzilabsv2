@@ -15,7 +15,7 @@ export default async function Home() {
             </Link>
           ) : (
             <>
-              <a className="text-neutral-600 hover:text-neutral-900" href="/sign-in">
+              <a className="text-neutral-600 hover:text-foreground" href="/sign-in">
                 Sign in
               </a>
               <a className="rounded-md bg-neutral-900 px-4 py-2 font-medium text-white" href="/sign-up">
@@ -27,7 +27,7 @@ export default async function Home() {
       </header>
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-6 py-24 text-center">
-        <h1 className="text-4xl font-semibold tracking-tight text-neutral-900 sm:text-5xl">
+        <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
           All your tools&rsquo; data, in one reliable place.
         </h1>
         <p className="mt-6 max-w-xl text-lg text-neutral-600">
@@ -43,7 +43,7 @@ export default async function Home() {
             {user ? "Go to dashboard" : "Start free"}
           </a>
           {!user && (
-            <a className="px-6 py-3 font-medium text-neutral-700 hover:text-neutral-900" href="/sign-in">
+            <a className="px-6 py-3 font-medium text-neutral-700 hover:text-foreground" href="/sign-in">
               Sign in
             </a>
           )}
@@ -53,10 +53,10 @@ export default async function Home() {
       <footer className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 text-sm text-neutral-500">
         <span>&copy; {new Date().getFullYear()} Namzilabs</span>
         <nav className="flex gap-5">
-          <Link className="hover:text-neutral-800" href="/terms">
+          <Link className="hover:text-foreground" href="/terms">
             Terms
           </Link>
-          <Link className="hover:text-neutral-800" href="/privacy">
+          <Link className="hover:text-foreground" href="/privacy">
             Privacy
           </Link>
         </nav>

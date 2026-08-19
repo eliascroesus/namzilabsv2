@@ -8,7 +8,7 @@ import { emptyValue } from "./types";
 import { fieldRefIsStale, hasAnyFields } from "./field-utils";
 
 const INPUT =
-  "w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none";
+  "w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-foreground placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none";
 
 /**
  * A single value input that is either a typed literal ("Fixed value") or one mapped

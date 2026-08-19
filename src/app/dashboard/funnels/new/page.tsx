@@ -50,10 +50,10 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <Link href="/dashboard" className="text-sm text-neutral-500 hover:text-neutral-800">
+        <Link href="/dashboard" className="text-sm text-neutral-500 hover:text-foreground">
           &larr; Dashboard
         </Link>
-        <h1 className="mt-3 text-display font-semibold tracking-tight text-neutral-900">New funnel</h1>
+        <h1 className="mt-3 text-display font-semibold tracking-tight text-foreground">New funnel</h1>
         <p className="mt-1 text-sm text-neutral-500">
           Order the stages a lead moves through. We count distinct people reaching each stage and
           surface the biggest drop-off.

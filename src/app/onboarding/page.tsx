@@ -27,7 +27,7 @@ export default async function OnboardingPage() {
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
       {hasWorkspaces ? (
         <>
-          <h1 className="text-display font-semibold tracking-tight text-neutral-900">Choose a workspace</h1>
+          <h1 className="text-display font-semibold tracking-tight text-foreground">Choose a workspace</h1>
           <p className="mt-2 text-sm text-neutral-600">
             You already belong to {orgs.length === 1 ? "a workspace" : `${orgs.length} workspaces`}. Pick one to continue.
           </p>
@@ -47,7 +47,7 @@ export default async function OnboardingPage() {
           </div>
 
           <details className="mt-6">
-            <summary className="cursor-pointer text-sm text-neutral-500 hover:text-neutral-800">
+            <summary className="cursor-pointer text-sm text-neutral-500 hover:text-foreground">
               Create another workspace
             </summary>
             <CreateForm className="mt-4" />
@@ -55,7 +55,7 @@ export default async function OnboardingPage() {
         </>
       ) : (
         <>
-          <h1 className="text-display font-semibold tracking-tight text-neutral-900">Create your workspace</h1>
+          <h1 className="text-display font-semibold tracking-tight text-foreground">Create your workspace</h1>
           <p className="mt-2 text-sm text-neutral-600">
             A workspace is your organization&rsquo;s private space. All connected integrations and data
             live inside it.
@@ -65,7 +65,7 @@ export default async function OnboardingPage() {
       )}
 
       <form action={async () => { "use server"; await signOut(); }} className="mt-6">
-        <button type="submit" className="text-sm text-neutral-500 hover:text-neutral-800">
+        <button type="submit" className="text-sm text-neutral-500 hover:text-foreground">
           Sign out
         </button>
       </form>

@@ -1240,6 +1240,41 @@ Make's exact register and read as *theirs*. It now deepens our own accent into
 navy — `#4262ff → #2f4ce0 → #22357f` — one hue family top to bottom, so it is
 a colour with depth rather than a rainbow.
 
+### 9o. Black, 60/30/10, and Miro's selected state
+
+**Black is black.** `--foreground` was `#0a0a0a` — 96% black, which reads as
+dark grey the moment a real black sits beside it, and leaves no room at the
+top of the scale. It is `#000` now, and every `text-neutral-800/900` in the
+app (seventeen files) became `text-foreground`. Things meant to recede use
+`muted-foreground`; there is no middle any more.
+
+**The rail is the 30 in a 60/30/10 split.** White canvas is the 60, the rail
+is the 30, the blue accent is the 10 — and that only works if the rail is
+*not* the accent. It has now been Make's violet→fuchsia (read as theirs), then
+the accent blue itself (so primary buttons had nothing to pop against), and is
+now deep indigo-navy: `#262c63 → #1c204a → #141733`. Unmistakably a colour
+rather than a grey — greys read as bleak at that size — and far enough from
+`#4262ff` that a blue button or a white selected tile on top of it reads
+instantly.
+
+**The save state is words, no dot.** A dot needs a legend; a word does not.
+"Saved" / "Saving…" / "Unsaved" in muted text, and the loud red chip with
+Retry when a save actually fails.
+
+**The top island gained a board mark** — Miro's own island carries one before
+the title, and without it our flow name was a bare text field floating between
+two icon buttons, which is exactly why it read as an input rather than as the
+thing the island is *about*.
+
+**Controls at Miro's size**: 40px targets, 23px glyphs, 8px radius.
+
+**Selected is a tinted fill, not a ring.** Miro marks a selected tool by
+changing the *surface* — light blue fill, coloured glyph — and that reads
+instantly where a ring does not, because the card already carries status
+borders a ring has to compete with. Applied to the selected step card, the
+picker's hover rows and the Select's keyboard-active row, so "highlighted"
+means one thing everywhere.
+
 ---
 
 ## 10. What not to change

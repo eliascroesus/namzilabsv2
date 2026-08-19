@@ -150,7 +150,7 @@ export function NodeLibraryModal({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search steps…"
-              className="w-full rounded-xl border border-neutral-200 bg-neutral-50 py-2.5 pl-10 pr-3 text-lead text-neutral-800 placeholder:text-neutral-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100"
+              className="w-full rounded-xl border border-neutral-200 bg-neutral-50 py-2.5 pl-10 pr-3 text-lead text-foreground placeholder:text-neutral-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100"
             />
           </div>
         </div>
@@ -166,11 +166,11 @@ export function NodeLibraryModal({
                     <button
                       key={e.key}
                       onClick={() => onPick(e)}
-                      className="group flex w-full items-center gap-3.5 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-neutral-100"
+                      className="group flex w-full items-center gap-3.5 rounded-card px-2.5 py-2.5 text-left transition-colors hover:bg-brand-50"
                     >
                       <NodeIcon type={e.type} variant={e.key === "unite_match" ? "unite_match" : e.key === "formula_compare" ? "formula_compare" : undefined} size={40} />
                       <span className="min-w-0">
-                        <span className="block text-lead font-semibold leading-tight text-neutral-900">{e.label}</span>
+                        <span className="block text-lead font-semibold leading-tight text-foreground">{e.label}</span>
                         <span className="mt-0.5 block text-small leading-tight text-neutral-500">{e.blurb}</span>
                       </span>
                     </button>

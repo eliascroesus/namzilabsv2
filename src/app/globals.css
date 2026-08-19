@@ -116,14 +116,16 @@
   --shadow-pop: 0 0 0 1px rgb(15 23 42 / 0.06), 0 8px 16px -4px rgb(15 23 42 / 0.08), 0 28px 56px -12px rgb(15 23 42 / 0.2);
 
   /* --- The rail's gradient -------------------------------------------------
-   * A vertical wash, because a flat bar reads as chrome and a wash reads as a
-   * product. But it stays in the BLUE family: the first attempt ran
-   * blue→violet→fuchsia, which is Make's exact register and read as theirs
-   * rather than ours. This deepens our own accent into navy instead — same
-   * hue family top to bottom, so it is unmistakably one colour with depth
-   * rather than a rainbow. One declaration, so it dials back in one edit.
+   * THE 30 IN A 60/30/10 SPLIT. White canvas is the 60, this rail is the 30,
+   * and the blue accent is the 10 — which only works if the rail is NOT the
+   * accent. It has been Make's violet→fuchsia (theirs, not ours) and then the
+   * accent blue itself (so the primary buttons had nothing to pop against).
+   *
+   * Deep indigo-navy: unmistakably a colour rather than a grey — greys read as
+   * bleak at this size — and far enough from #4262ff that a blue button on top
+   * of it, or a white selected tile, reads instantly.
    */
-  --gradient-rail: linear-gradient(178deg, #4262ff 0%, #2f4ce0 42%, #22357f 100%);
+  --gradient-rail: linear-gradient(178deg, #262c63 0%, #1c204a 52%, #141733 100%);
 
   /* --- State, as tokens rather than raw palette picks ---------------------
    * Green/amber/red were being reached for directly all over the app, which
@@ -148,12 +150,16 @@
    * one place each colour is decided.
    */
   --background: #ffffff;
-  --foreground: #0a0a0a;
+  /* BLACK, not 96% black. Primary text, headings, button labels and icons are
+     #000; anything meant to recede uses `muted-foreground`. Splitting the
+     difference at #0a0a0a made everything read one step greyer than intended
+     and left no room at the top of the scale. */
+  --foreground: #000000;
 
   --card: #ffffff;
-  --card-foreground: #0a0a0a;
+  --card-foreground: #000000;
   --popover: #ffffff;
-  --popover-foreground: #0a0a0a;
+  --popover-foreground: #000000;
 
   --primary: var(--color-brand-600);
   --primary-foreground: #ffffff;

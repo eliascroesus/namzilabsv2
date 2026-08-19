@@ -88,11 +88,11 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <Link href="/dashboard" className="text-sm text-neutral-500 hover:text-neutral-800">
+        <Link href="/dashboard" className="text-sm text-neutral-500 hover:text-foreground">
           &larr; Dashboard
         </Link>
         <div className="mt-3 flex items-center justify-between">
-          <h1 className="text-display font-semibold tracking-tight text-neutral-900">New metric</h1>
+          <h1 className="text-display font-semibold tracking-tight text-foreground">New metric</h1>
           <Link href="/dashboard/funnels/new" className="text-sm text-blue-600 hover:underline">
             Build a funnel instead
           </Link>

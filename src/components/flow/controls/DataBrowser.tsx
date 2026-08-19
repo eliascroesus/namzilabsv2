@@ -20,7 +20,7 @@ function FieldRow({ field, onDrill, onPick }: { field: DataField; onDrill: () =>
       className="flex w-full items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 px-2.5 py-2 text-left transition-colors hover:border-brand-200 hover:bg-brand-50/50"
     >
       <span className="flex min-w-0 max-w-[55%] shrink-0 items-center gap-1.5">
-        <span className="truncate text-sm text-neutral-800">{field.label}</span>
+        <span className="truncate text-sm text-foreground">{field.label}</span>
         {field.type && field.type !== "unknown" && (
           <span className="shrink-0 rounded border border-neutral-200 bg-white px-1 text-[9px] uppercase tracking-wide text-neutral-400">{field.type}</span>
         )}
@@ -352,7 +352,7 @@ export function DataBrowser({
           >
             {/* Says what it DOES — now that search also matches values, this
                 hatch must not read as "pick the record with this email". */}
-            Use “<span className="font-medium text-neutral-800">{q.trim()}</span>” as a field path
+            Use “<span className="font-medium text-foreground">{q.trim()}</span>” as a field path
           </button>
         )}
       </>

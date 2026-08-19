@@ -17,7 +17,7 @@ export function OrgSwitcher({ orgs, currentId }: { orgs: Org[]; currentId: strin
   const current = orgs.find((o) => o.id === currentId);
 
   if (orgs.length <= 1) {
-    return <p className="truncate text-small font-semibold text-neutral-800">{current?.name ?? "Workspace"}</p>;
+    return <p className="truncate text-small font-semibold text-foreground">{current?.name ?? "Workspace"}</p>;
   }
 
   return (
@@ -25,7 +25,7 @@ export function OrgSwitcher({ orgs, currentId }: { orgs: Org[]; currentId: strin
       <select
         name="organizationId"
         defaultValue={currentId}
-        className="w-full cursor-pointer rounded-control border border-neutral-300 bg-white px-2 py-1.5 text-small font-medium text-neutral-800 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+        className="w-full cursor-pointer rounded-control border border-neutral-300 bg-white px-2 py-1.5 text-small font-medium text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
       >
         {orgs.map((o) => (
           <option key={o.id} value={o.id}>

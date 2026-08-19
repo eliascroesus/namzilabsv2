@@ -153,7 +153,7 @@ export function ConditionEditor({
       <button
         type="button"
         onClick={addRule}
-        className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-xs text-neutral-600 hover:border-neutral-400 hover:text-neutral-800"
+        className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-xs text-neutral-600 hover:border-neutral-400 hover:text-foreground"
       >
         <span className="text-sm leading-none">+</span> Add condition
       </button>

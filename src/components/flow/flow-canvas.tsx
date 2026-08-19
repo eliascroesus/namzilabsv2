@@ -1607,7 +1607,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       {pendingDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4" onClick={() => setPendingDelete(null)}>
           <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-5 flow-shadow flow-pop-in" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-semibold text-neutral-900">Delete this step?</p>
+            <p className="text-sm font-semibold text-foreground">Delete this step?</p>
             <p className="mt-1.5 text-sm text-neutral-600">{pendingDelete.message}</p>
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setPendingDelete(null)} className="rounded-lg border border-neutral-200 px-3.5 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50">
@@ -1654,7 +1654,7 @@ function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boolean; onS
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
       <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-7 flow-shadow">
-        <h2 className="text-center text-title font-semibold tracking-tight text-neutral-900">Build a metric in three moves</h2>
+        <h2 className="text-center text-title font-semibold tracking-tight text-foreground">Build a metric in three moves</h2>
         <ol className="mt-5 space-y-3">
           {steps.map((s) => (
             <li key={s.n} className="flex items-start gap-3">
@@ -1662,7 +1662,7 @@ function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boolean; onS
                 {s.n}
               </span>
               <span className="min-w-0">
-                <span className="block text-sm font-medium text-neutral-800">{s.title}</span>
+                <span className="block text-sm font-medium text-foreground">{s.title}</span>
                 <span className="block text-small leading-snug text-neutral-500">{s.detail}</span>
               </span>
             </li>
