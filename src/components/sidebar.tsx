@@ -25,17 +25,17 @@ const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: stri
   {
     href: "/dashboard",
     label: "Dashboard",
-    icon: <LayoutDashboard size={23} strokeWidth={1.9} />,
+    icon: <LayoutDashboard size={24} strokeWidth={2.1} />,
     match: (p) => p === "/dashboard" || p.startsWith("/dashboard/metrics") || p.startsWith("/dashboard/funnels"),
   },
-  { href: "/dashboard/flows", label: "Flows", icon: <Workflow size={23} strokeWidth={1.9} />, match: (p) => p.startsWith("/dashboard/flows") },
+  { href: "/dashboard/flows", label: "Flows", icon: <Workflow size={24} strokeWidth={2.1} />, match: (p) => p.startsWith("/dashboard/flows") },
   {
     href: "/integrations",
     label: "Apps",
-    icon: <Plug size={23} strokeWidth={1.9} />,
+    icon: <Plug size={24} strokeWidth={2.1} />,
     match: (p) => p.startsWith("/integrations") || p.startsWith("/connections"),
   },
-  { href: "/dashboard/settings", label: "Settings", icon: <Settings size={23} strokeWidth={1.9} />, match: (p) => p.startsWith("/dashboard/settings") },
+  { href: "/dashboard/settings", label: "Settings", icon: <Settings size={24} strokeWidth={2.1} />, match: (p) => p.startsWith("/dashboard/settings") },
 ];
 
 export function Sidebar({ account }: { account?: { initials: string; panel: ReactNode } }) {

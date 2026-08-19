@@ -1217,6 +1217,29 @@ marks the selected tool with a *filled* tinted tile, not a translucent wash;
 kit now renders the rail's active and rest states side by side, because the
 selected treatment was otherwise only checkable on an authenticated route.
 
+### 9n. Weight, grouping, and getting out of Make's palette
+
+**Icons at Miro's weight.** 22px at stroke 2.25 in true black on the toolbar,
+24px at 2.1 on the rail, 18px on the card kebab. They were 20px `neutral-900`
+at default stroke — technically dark, visually thin. Miro's glyphs read as
+objects sitting on the bar, and weight is most of how.
+
+**The top island was a jumble because of grouping, not styling.** "Saved" sat
+mid-island between the name and the ⋯, so five controls ran at one rhythm with
+nothing for the eye to land on. Now three groups with air between them: back →
+name (+ status) │ actions.
+
+And the status is a **dot unless it has something to say**. "Saved" is the
+answer to a question nobody asked — it now expands on hover, while "Saving…"
+and "Unsaved" stay visible because they are not redundant with the dot, and
+"Not saved" keeps its loud red chip because that one can cost work. That
+single removal is most of what made the island read as cluttered.
+
+**The rail left Make's palette.** It ran blue → violet → fuchsia, which is
+Make's exact register and read as *theirs*. It now deepens our own accent into
+navy — `#4262ff → #2f4ce0 → #22357f` — one hue family top to bottom, so it is
+a colour with depth rather than a rainbow.
+
 ---
 
 ## 10. What not to change

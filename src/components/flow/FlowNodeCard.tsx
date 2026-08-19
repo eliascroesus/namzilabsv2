@@ -32,11 +32,11 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
             e.stopPropagation();
             setOpen(!open);
           }}
-          className="nodrag rounded p-0.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+          className="nodrag flex h-7 w-7 items-center justify-center rounded-control text-neutral-500 transition-colors hover:bg-muted hover:text-black"
           title="Step actions"
           aria-label="Step actions"
         >
-<MoreVertical size={14} />
+<MoreVertical size={18} strokeWidth={2.25} />
         </button>
       }
     >

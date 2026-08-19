@@ -71,7 +71,7 @@ function IslandButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-neutral-900 transition-colors hover:bg-muted disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[20px]"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-black transition-colors hover:bg-muted disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[22px] [&_svg]:stroke-[2.25]"
     >
       {children}
     </button>
@@ -137,26 +137,40 @@ export function FlowToolbar({
 
   return (
     <>
-      {/* ── Top-left: WHICH FLOW IS THIS ────────────────────────────────── */}
-      <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[min(62vw,720px)] items-center">
-        <Island className="min-w-0">
+      {/* ── Top-left: WHICH FLOW IS THIS ──────────────────────────────
+          Three groups with air between them, not six controls in a row.
+          It read as a jumble because "Saved" floated mid-island between the
+          name and the ⋯, so the eye had no grouping to land on: back, name,
+          status, menu and the primary all sat at one rhythm.
+
+          Now: the back button, then the name as the island's own content with
+          the save state as a quiet dot beside it, then a hairline, then the
+          actions. And the status is a DOT unless it has something to say —
+          "Saved" is the answer to a question nobody asked, so it appears on
+          hover; "Not saved" keeps its loud red chip, because that one can
+          cost work. */}
+      <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[min(62vw,700px)] items-center">
+        <Island className="min-w-0 gap-1">
           <Link
             href="/dashboard/flows"
             title="All flows"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-neutral-900 transition-colors hover:bg-muted"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-black transition-colors hover:bg-muted"
           >
-            <ChevronLeft size={20} />
+            <ChevronLeft size={22} strokeWidth={2.25} />
           </Link>
 
-          <input
-            value={name}
-            onChange={(e) => onRename(e.target.value)}
-            aria-label="Flow name"
-            placeholder="Untitled flow"
-            className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-2 py-1.5 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
-          />
+          <span className="flex min-w-0 flex-1 items-center gap-1.5 pr-1">
+            <input
+              value={name}
+              onChange={(e) => onRename(e.target.value)}
+              aria-label="Flow name"
+              placeholder="Untitled flow"
+              className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-2 py-1.5 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
+            />
+            <SaveChip state={saveState} onRetry={onRetrySave} />
+          </span>
 
-          <SaveChip state={saveState} onRetry={onRetrySave} />
+          <Divider />
 
           <Popover
             open={menuOpen}
@@ -177,7 +191,7 @@ export function FlowToolbar({
                 }}
                 className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-foreground transition-colors hover:bg-muted"
               >
-                <Copy size={15} />
+                <Copy size={16} />
                 Duplicate flow
               </button>
               <button
@@ -187,13 +201,11 @@ export function FlowToolbar({
                 }}
                 className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-destructive transition-colors hover:bg-red-50"
               >
-                <Trash2 size={15} />
+                <Trash2 size={16} />
                 Delete flow
               </button>
             </div>
           </Popover>
-
-          <Divider />
 
           {isPublished && publishedVersion != null && (
             <span
@@ -201,11 +213,11 @@ export function FlowToolbar({
               title="This flow is live on your dashboard"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-              Live · v{publishedVersion}
+              v{publishedVersion}
             </span>
           )}
 
-          <Button onClick={onReview} disabled={publishing} className="h-9 shrink-0">
+          <Button onClick={onReview} disabled={publishing} className="ml-0.5 h-9 shrink-0">
             {isPublished ? <SlidersHorizontal /> : <Rocket />}
             {isPublished ? "Edit output" : "Review & publish"}
           </Button>
@@ -311,7 +323,7 @@ export function FlowToolbar({
 function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
   if (state === "error") {
     return (
-      <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1.5 text-micro font-bold text-destructive">
+      <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-micro font-bold text-destructive">
         Not saved
         <button type="button" onClick={onRetry} className="underline underline-offset-2 hover:no-underline">
           Retry
@@ -319,13 +331,23 @@ function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void })
       </span>
     );
   }
+  const saved = state === "saved";
   return (
     <span
-      className="flex shrink-0 items-center gap-1.5 px-1.5 text-tiny font-medium text-neutral-400"
-      title={state === "saving" ? "Saving…" : state === "saved" ? "All changes saved" : "Unsaved changes"}
+      className="group/save flex shrink-0 items-center gap-1.5"
+      title={saved ? "All changes saved" : state === "saving" ? "Saving…" : "Unsaved changes"}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${state === "saved" ? "bg-success" : "bg-warn"}`} aria-hidden />
-      <span className="hidden sm:inline">{state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Unsaved"}</span>
+      <span className={`h-2 w-2 rounded-full ${saved ? "bg-success" : "bg-warn"}`} aria-hidden />
+      {/* At rest the word is redundant with the dot, and it was the thing
+          making the island read as a jumble. In flight it is not redundant at
+          all, so it stays — and hovering brings it back on demand. */}
+      <span
+        className={`overflow-hidden whitespace-nowrap text-micro font-semibold text-neutral-400 transition-all ${
+          saved ? "max-w-0 opacity-0 group-hover/save:max-w-[52px] group-hover/save:opacity-100" : "max-w-[64px] opacity-100"
+        }`}
+      >
+        {state === "saving" ? "Saving…" : saved ? "Saved" : "Unsaved"}
+      </span>
     </span>
   );
 }

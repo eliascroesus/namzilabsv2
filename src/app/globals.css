@@ -116,12 +116,14 @@
   --shadow-pop: 0 0 0 1px rgb(15 23 42 / 0.06), 0 8px 16px -4px rgb(15 23 42 / 0.08), 0 28px 56px -12px rgb(15 23 42 / 0.2);
 
   /* --- The rail's gradient -------------------------------------------------
-   * Make's rail is a vertical violet→magenta wash and it is the single thing
-   * that makes their app read as a PRODUCT rather than a tool. Anchored on
-   * our own brand at the top so it stays ours, then warming through violet to
-   * fuchsia. One place, so it can be dialled back in one edit.
+   * A vertical wash, because a flat bar reads as chrome and a wash reads as a
+   * product. But it stays in the BLUE family: the first attempt ran
+   * blue→violet→fuchsia, which is Make's exact register and read as theirs
+   * rather than ours. This deepens our own accent into navy instead — same
+   * hue family top to bottom, so it is unmistakably one colour with depth
+   * rather than a rainbow. One declaration, so it dials back in one edit.
    */
-  --gradient-rail: linear-gradient(175deg, #4b52e0 0%, #6d3fe0 38%, #9333ea 72%, #b026c9 100%);
+  --gradient-rail: linear-gradient(178deg, #4262ff 0%, #2f4ce0 42%, #22357f 100%);
 
   /* --- State, as tokens rather than raw palette picks ---------------------
    * Green/amber/red were being reached for directly all over the app, which

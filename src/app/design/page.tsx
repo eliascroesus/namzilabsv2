@@ -104,11 +104,11 @@ export default function DesignPage() {
                 {/* Selected is a SOLID white tile with the brand glyph — Miro's
                     tinted selected tool, translated onto a coloured rail. */}
                 <span className="flex flex-col items-center gap-1.5 rounded-card bg-white px-1 py-2.5 text-brand-600 shadow-sm">
-                  <LayoutDashboard size={23} strokeWidth={1.9} />
+                  <LayoutDashboard size={24} strokeWidth={2.1} />
                   <span className="text-micro font-semibold leading-none">Active</span>
                 </span>
                 <span className="flex flex-col items-center gap-1.5 rounded-card px-1 py-2.5 text-white/70">
-                  <Workflow size={23} strokeWidth={1.9} />
+                  <Workflow size={24} strokeWidth={2.1} />
                   <span className="text-micro font-semibold leading-none">Rest</span>
                 </span>
               </div>
