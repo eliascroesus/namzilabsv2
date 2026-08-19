@@ -61,9 +61,18 @@ const GLYPH: Record<string, LucideIcon> = {
  * accent (Make.com's coloured module tiles); a Get-data step instead shows its
  * connected app's brand colour + initials, so a Sheets step reads as Sheets.
  */
+/**
+ * NINE DISTINCT HUES, none of them grey.
+ *
+ * `app` was slate — the one step every flow starts with, wearing the colour of
+ * something switched off, in a picker where it sits first. A step's tile is
+ * its identity and grey is the absence of one. Every entry is now a saturated
+ * hue with a clear neighbour distance, so no two steps read as the same family
+ * at a glance on a canvas.
+ */
 export const NODE_ACCENT: Record<string, string> = {
-  app: "#475569", // slate — the generic source glyph, before an app is chosen
-  unite: "#0EA5E9", // sky — a Data step
+  app: "#10B981", // emerald — where records come IN
+  unite: "#0EA5E9", // sky — bringing lanes together
   filter: "#3B82F6", // blue — Conditions
   paths: "#EC4899", // pink — Conditions (split)
   formula: "#8B5CF6", // violet — Calculation
@@ -71,7 +80,7 @@ export const NODE_ACCENT: Record<string, string> = {
   time: "#F59E0B", // amber — Conditions (date)
   time_between: "#14B8A6", // teal — Calculation (pairing)
   group: "#F97316", // orange — Calculation (legacy)
-  output: "#0F172A", // slate — Dashboard
+  output: "#6366F1", // indigo — Dashboard
 };
 
 /**

@@ -41,18 +41,25 @@ const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: stri
 export function Sidebar({ account }: { account?: { initials: string; panel: ReactNode } }) {
   const pathname = usePathname() ?? "";
   return (
-    <aside className="bg-rail flex h-full w-[76px] shrink-0 flex-col items-center py-3">
-      {/* The wordmark: a glass tile on the wash rather than another coloured
-          square, which on a coloured rail would be a colour on a colour. */}
+    <aside className="bg-rail flex h-full w-[76px] shrink-0 flex-col items-center">
+      {/* THE WORDMARK IS THE TOP BAR'S HEIGHT.
+          The rail's mark and the canvas's top bar sit at the same y, so when
+          they were different heights the two read as misaligned furniture. It
+          now occupies exactly the bar's band (12px inset + 56px bar), so the
+          two line up across the seam. */}
       <Link
         href="/dashboard"
         title="Namzilabs — dashboard"
-        className="mb-3 flex h-11 w-11 items-center justify-center rounded-card bg-white/20 text-title font-bold text-white ring-1 ring-white/25 backdrop-blur-sm transition-all hover:bg-white/30"
+        className="mb-2 flex h-[80px] w-full items-center justify-center text-title font-bold text-white transition-opacity hover:opacity-85"
       >
-        N
+        <span className="flex h-11 w-11 items-center justify-center rounded-card bg-white/20 ring-1 ring-white/25">N</span>
       </Link>
 
-      <nav className="flex w-full flex-1 flex-col items-stretch gap-1 px-2.5">
+      {/* Make's rail, measured: 76px wide, a 40px rounded tile holding the
+          icon, the label beneath it at 11px, and the ACTIVE state highlighting
+          the tile only — not the label. Ours highlighted the whole item as one
+          white pill, which is a different (and heavier) thing entirely. */}
+      <nav className="flex w-full flex-col items-center gap-1.5">
         {NAV.map((item) => {
           const active = item.match(pathname);
           return (
@@ -60,18 +67,26 @@ export function Sidebar({ account }: { account?: { initials: string; panel: Reac
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className={`group flex flex-col items-center gap-1.5 rounded-card px-1 py-2.5 transition-all ${
-                active ? "bg-white text-brand-600 shadow-sm" : "text-white/70 hover:bg-white/15 hover:text-white"
-              }`}
+              className="group flex w-full flex-col items-center gap-1 py-0.5"
             >
-              {item.icon}
-              <span className="text-micro font-semibold leading-none">{item.label}</span>
+              <span
+                className={`flex h-10 w-10 items-center justify-center rounded-control transition-colors ${
+                  active ? "bg-white/22 text-white" : "text-white/75 group-hover:bg-white/12 group-hover:text-white"
+                }`}
+              >
+                {item.icon}
+              </span>
+              <span className={`text-micro font-medium leading-none transition-colors ${active ? "text-white" : "text-white/75 group-hover:text-white"}`}>
+                {item.label}
+              </span>
             </Link>
           );
         })}
       </nav>
 
-      {account && <RailAccount initials={account.initials}>{account.panel}</RailAccount>}
+      <span className="flex-1" />
+
+      <span className="pb-4">{account && <RailAccount initials={account.initials}>{account.panel}</RailAccount>}</span>
     </aside>
   );
 }

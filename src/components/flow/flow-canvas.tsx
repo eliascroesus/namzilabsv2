@@ -21,7 +21,7 @@ import {
 import { isDatasetFormulaOp, seedMetricFormat, type NodeType } from "@/lib/flow/types";
 import { isBinaryCalc, outputShapeOf, producesDataset, producesNumber, readsRecords, recordsSourceOf } from "@/lib/flow/shapes";
 import { useRouter } from "next/navigation";
-import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, duplicateFlowAction, deleteFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
+import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, duplicateFlowAction, deleteFlowAction, setFlowEnabledAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 
 /**
  * Poll a handed-off Test run until it settles (bounded; ~90s of 800ms ticks).
@@ -892,6 +892,26 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
    * vanishing.
    */
   const router = useRouter();
+  /**
+   * The toolbar switch. Same server action and same three-state model as the
+   * flows list, so the two screens cannot disagree about what "on" means.
+   * Optimistic, then corrected from the server's own answer — which will
+   * refuse for a flow that has never been published.
+   */
+  const [togglingEnabled, setTogglingEnabled] = useState(false);
+  const toggleEnabled = useCallback(async () => {
+    const next = publishState.status !== "published";
+    setTogglingEnabled(true);
+    setPublishState((p) => ({ ...p, status: next ? "published" : "draft" }));
+    const r = await setFlowEnabledAction(flowId, next);
+    if (r.ok) setPublishState((p) => ({ ...p, status: r.state === "active" ? "published" : "draft" }));
+    else {
+      setPublishState((p) => ({ ...p, status: next ? "draft" : "published" }));
+      setToast({ message: r.error });
+    }
+    setTogglingEnabled(false);
+  }, [flowId, publishState.status]);
+
   const duplicateFlow = useCallback(async () => {
     const r = await duplicateFlowAction(flowId);
     if (r.ok) router.push(`/dashboard/flows/${r.id}`);
@@ -1427,6 +1447,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         onZoomOut={() => rf.zoomOut({ duration: 150 })}
         onFitView={() => rf.fitView({ duration: 250, maxZoom: 1 })}
         zoom={zoom}
+        onToggleEnabled={toggleEnabled}
+        togglingEnabled={togglingEnabled}
       />
 
       {publishError && !reviewOpen && (

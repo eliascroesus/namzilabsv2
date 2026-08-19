@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   ChevronLeft,
-  Workflow,
   Copy,
   Maximize2,
   MoreHorizontal,
@@ -52,7 +51,7 @@ export type SaveState = "saved" | "saving" | "unsaved" | "error";
 
 /** One floating surface. Every island in the builder is this. */
 function Island({ className = "", children }: { className?: string; children: React.ReactNode }) {
-  return <div className={`pointer-events-auto flex items-center gap-0.5 rounded-card bg-white p-1.5 shadow-float ${className}`}>{children}</div>;
+  return <div className={`pointer-events-auto flex items-center gap-1 rounded-card bg-white p-[9px] shadow-float ${className}`}>{children}</div>;
 }
 
 function IslandButton({
@@ -72,7 +71,7 @@ function IslandButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[23px] [&_svg]:stroke-[2.1]"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[28px] [&_svg]:stroke-[2]"
     >
       {children}
     </button>
@@ -105,6 +104,8 @@ export function FlowToolbar({
   onZoomOut,
   onFitView,
   zoom,
+  onToggleEnabled,
+  togglingEnabled,
 }: {
   name: string;
   onRename: (v: string) => void;
@@ -129,12 +130,14 @@ export function FlowToolbar({
   onZoomOut: () => void;
   onFitView: () => void;
   zoom: number;
+  onToggleEnabled: () => void;
+  togglingEnabled: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   /** The right island and the bottom bar both step aside for the config panel. */
-  const panelInset = panelOpen ? "calc(min(452px, 100vw - 2rem) + 1.75rem)" : "0.75rem";
+  const panelInset = panelOpen ? "calc(min(452px, 100vw - 2rem) + 1.75rem)" : "1rem";
 
   return (
     <>
@@ -150,19 +153,15 @@ export function FlowToolbar({
           "Saved" is the answer to a question nobody asked, so it appears on
           hover; "Not saved" keeps its loud red chip, because that one can
           cost work. */}
-      <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[min(62vw,700px)] items-center">
+      <div className="pointer-events-none absolute left-4 top-4 z-10 flex max-w-[min(62vw,760px)] items-center">
         <Island className="min-w-0 gap-1">
           <Link
             href="/dashboard/flows"
             title="All flows"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
           >
-            <ChevronLeft size={23} strokeWidth={2.1} />
+            <ChevronLeft size={28} strokeWidth={2} />
           </Link>
-
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-brand-50 text-brand-600" aria-hidden>
-            <Workflow size={18} strokeWidth={2.1} />
-          </span>
 
           <span className="flex min-w-0 flex-1 items-center gap-2 pr-1">
             <input
@@ -170,7 +169,7 @@ export function FlowToolbar({
               onChange={(e) => onRename(e.target.value)}
               aria-label="Flow name"
               placeholder="Untitled flow"
-              className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-2 py-1.5 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
+              className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-2.5 py-2 text-[16px] font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
             />
             <SaveChip state={saveState} onRetry={onRetrySave} />
           </span>
@@ -212,6 +211,12 @@ export function FlowToolbar({
             </div>
           </Popover>
 
+          {/* The flow's own on/off switch, where Zapier puts a Zap's. It cannot
+              be turned on before the flow has ever been published — there
+              would be nothing to turn on — so it sits inactive until the first
+              publish, which flips it on by itself. */}
+          <FlowSwitch on={isPublished} disabled={publishedVersion == null || togglingEnabled} onChange={onToggleEnabled} />
+
           {isPublished && publishedVersion != null && (
             <span
               className="flex shrink-0 items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1.5 text-micro font-bold text-success-ink"
@@ -222,7 +227,7 @@ export function FlowToolbar({
             </span>
           )}
 
-          <Button onClick={onReview} disabled={publishing} className="ml-1 h-10 shrink-0">
+          <Button onClick={onReview} disabled={publishing} className="ml-1 h-11 shrink-0 gap-2 px-5 text-[16px]">
             {isPublished ? <SlidersHorizontal /> : <Rocket />}
             {isPublished ? "Edit output" : "Review & publish"}
           </Button>
@@ -233,8 +238,8 @@ export function FlowToolbar({
           Make's bar. Run first as a filled primary, then the quiet controls
           behind a divider — under your hands, not tucked in a corner. */}
       <div
-        className="pointer-events-none absolute bottom-3 z-10 flex justify-center transition-[right] duration-200 ease-out"
-        style={{ left: "0.75rem", right: panelInset }}
+        className="pointer-events-none absolute bottom-4 z-10 flex justify-center transition-[right] duration-200 ease-out"
+        style={{ left: "1rem", right: panelInset }}
       >
         <Island>
           {showTestAll && (
@@ -243,7 +248,7 @@ export function FlowToolbar({
                 variant={runAll ? "secondary" : "default"}
                 onClick={runAll ? onStopTestAll : onTestAll}
                 title={runAll ? "Stop the run" : "Run every step, top to bottom"}
-                className="h-10"
+                className="h-11 gap-2 px-5 text-[16px]"
               >
                 {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
                 {runAll ? `Stop · ${runAll.at}/${runAll.of}` : "Test flow"}
@@ -270,7 +275,7 @@ export function FlowToolbar({
           <button
             onClick={onFitView}
             title="Fit the whole flow on screen"
-            className="min-w-[54px] rounded-control px-1 py-2 text-tiny font-bold tabular-nums text-foreground transition-colors hover:bg-muted"
+            className="min-w-[64px] rounded-control px-2 py-2.5 text-[16px] font-semibold tabular-nums text-foreground transition-colors hover:bg-muted"
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -325,6 +330,29 @@ export function FlowToolbar({
  * "Saved" is the answer to a question nobody asked and does not deserve a
  * sentence in a 48px bar.
  */
+function FlowSwitch({ on, disabled, onChange }: { on: boolean; disabled: boolean; onChange: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={onChange}
+      title={disabled ? "Publish this flow before turning it on" : on ? "Turn off — removes its dashboard tiles" : "Turn on"}
+      aria-label={on ? "Turn flow off" : "Turn flow on"}
+      className={`relative mx-1.5 h-6 w-11 shrink-0 rounded-full transition-colors ${on ? "bg-primary" : "bg-neutral-200"} ${
+        disabled ? "cursor-not-allowed opacity-45" : "hover:brightness-105"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm ${on ? "left-[22px]" : "left-0.5"}`}
+        style={{ transition: "left .22s cubic-bezier(.34,1.56,.64,1)" }}
+        aria-hidden
+      />
+    </button>
+  );
+}
+
 function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
   if (state === "error") {
     return (
@@ -337,7 +365,7 @@ function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void })
     );
   }
   return (
-    <span className="shrink-0 whitespace-nowrap text-tiny font-medium text-muted-foreground">
+    <span className="shrink-0 whitespace-nowrap px-1 text-[16px] font-medium text-muted-foreground">
       {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Unsaved"}
     </span>
   );

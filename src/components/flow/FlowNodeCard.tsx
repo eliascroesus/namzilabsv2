@@ -126,7 +126,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
      * (the same trap `flow-pop-in` documents for the config panel). So the
      * rule is simply: this box does not clip.
      */
-    <div className={`group/card w-[300px] rounded-card border shadow-raised transition-all duration-150 hover:shadow-lifted ${border}`}>
+    <div className={`group/card w-[300px] rounded-card border bg-white shadow-raised transition-all duration-150 hover:shadow-lifted ${border}`}>
       {isCompare ? (
         <>
           {/* Both number inputs anchor at top-centre; the edges enter straight down (no
@@ -211,7 +211,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             (data as NodeData).onAddFrom?.(id, null, anchorFromRect(e.currentTarget.getBoundingClientRect()));
           }}
           title="Add the next step"
-          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-card border-2 border-dashed border-neutral-300 bg-white/60 p-3 text-left text-base font-semibold text-neutral-500 transition-all hover:border-primary hover:bg-brand-50/60 hover:text-primary"
+          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-card border-2 border-dashed border-neutral-300 bg-white p-3 text-left text-base font-semibold text-neutral-500 shadow-raised transition-all hover:border-primary hover:text-primary"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
             <Plus size={16} strokeWidth={2.5} />

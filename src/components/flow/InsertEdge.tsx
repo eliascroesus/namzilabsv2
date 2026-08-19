@@ -1,6 +1,7 @@
 "use client";
 
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from "@xyflow/react";
+import { Plus } from "lucide-react";
 import { anchorFromRect } from "./NodeLibraryModal";
 
 /**

@@ -809,7 +809,7 @@ function NodeConfig({
             of them"). Nothing replaced it: which of the two this step is, is
             already answered by its own name, its icon and the labels below. */}
         <div>
-          <p className="mb-1 text-xs font-medium text-neutral-600">{matching ? "Steps to check" : "Steps to combine"}</p>
+          <p className="mb-1 text-small font-semibold text-foreground">{matching ? "Steps to check" : "Steps to combine"}</p>
           <div className="space-y-1.5">
             {inputs.map((inp, idx) => (
               <div key={idx} className="flex items-center gap-2">

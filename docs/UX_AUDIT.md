@@ -1277,6 +1277,67 @@ means one thing everywhere.
 
 ---
 
+### 9p. Bigger, whiter, and switchable — measured against the reference again
+
+A second item-by-item pass against the Make/Miro screenshots, plus the two
+reversals it forced.
+
+**Both bars grew by the same amounts, together.** Island padding +50%
+(`p-[9px]`), glyphs +20% (28px inside 44px targets), and every string in the
+chrome — flow name, Saved, Review & publish, Test flow, the zoom readout — at
+16px. The outer inset is `1rem` on all four sides and `panelInset` matches, so
+the top island, the bottom bar and the config panel all sit the same distance
+from the canvas edge. The back arrow is now the same 28px as the zoom glasses;
+it had been smaller than the controls it sits above, which made the top bar
+read as the lesser of the two surfaces.
+
+**The board mark is gone** — added in 9o from Miro, removed on sight. Miro's
+mark answers *which board is this* among thousands of thumbnails; our editor
+opens exactly one flow at a time, so it was decoration in the one slot where
+the eye lands first.
+
+**Cards are `#ffffff`, and so is everything that looks like a card.** The
+selected step no longer takes a `bg-brand-50` fill (9o's tinted-fill rule
+survives for picker rows and Select's active row, where there is no competing
+status border): selection is `border-brand-500` plus a 2px halo. The ghost
+"Add next step", the `+` between nodes and the branch chips are opaque white
+too. The `+` had been `opacity-40` until hover, which on a dotted canvas made
+it a smudge with the dots showing through rather than a control.
+
+**Flows switch on and off from the top island**, between the ⋯ and Review &
+publish — a real `role="switch"`, disabled with an explanatory title until the
+flow has been published once, optimistic then corrected from
+`setFlowEnabledAction`. Publishing sets `status: "published"`, so the first
+publish flips it on by itself. Three states off two existing columns and **no
+migration**: `flowState()` reads `active` / `paused` / `draft` from `status` +
+`publishedVersion`, and both `publishedFlowTiles` and `materializeStaleAll`
+already gate on `status = 'published'`, so off means the tiles come back with
+it rather than being destroyed.
+
+**#3858FF**, exactly, as `--color-brand-600`, with the ramp rebuilt around it.
+
+**The piss-yellow is orange now.** `--color-warn` `#f97316` on `#fff1e7` with
+`#c2410c` ink, and `STATUS_META.setup` uses those tokens instead of raw
+`amber-*`, so needs-attention reads as *warm* rather than as a stain.
+
+**Nine distinct node hues.** `app` was slate `#475569` — grey, the absence of
+identity, on the one step every single flow begins with. It is emerald now;
+`output` is indigo. The picker reads as a palette rather than a list.
+
+**Every field label is one style.** `text-small font-semibold text-foreground`,
+in ConfigPanel's `Field`, the condition editor and Review & publish alike —
+previously three variants of `text-xs font-medium text-neutral-600`, which put
+the question in lighter type than the answer. Section heads are `text-micro
+font-bold` at `neutral-500`.
+
+**The rail is Make's geometry**: 76px wide, an 80px logo band that matches the
+top bar's height so the two align across the seam, a 40px rounded tile per item
+with the label beneath at 11px, and active highlighting *the tile only* — not
+the full-width row, which is what made every previous version read as a nav
+bar rather than as a dock.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

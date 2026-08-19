@@ -36,14 +36,14 @@
    * ours. `brand-600` under white text is ~4.8:1 — past AA for the 14px+
    * semibold text every button in the product uses.
    */
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #dfe6ff;
-  --color-brand-200: #c2cfff;
-  --color-brand-300: #9aafff;
-  --color-brand-400: #7089ff;
-  --color-brand-500: #5470ff;
-  --color-brand-600: #4262ff;
-  --color-brand-700: #2f4ce0;
+  --color-brand-50: #eef1ff;
+  --color-brand-100: #dde3ff;
+  --color-brand-200: #bfcaff;
+  --color-brand-300: #96a8ff;
+  --color-brand-400: #6b84ff;
+  --color-brand-500: #4a6bff;
+  --color-brand-600: #3858ff;
+  --color-brand-700: #2742d6;
 
   /* --- Ink: the navigation rail and any dark surface ----------------------
    * A four-step ladder, which is the minimum a dark surface needs to express
@@ -134,9 +134,9 @@
   --color-success: #16a34a;
   --color-success-soft: #dcfce7;
   --color-success-ink: #15803d;
-  --color-warn: #f59e0b;
-  --color-warn-soft: #fef3c7;
-  --color-warn-ink: #b45309;
+  --color-warn: #f97316;
+  --color-warn-soft: #fff1e7;
+  --color-warn-ink: #c2410c;
 }
 
 :root {
@@ -212,9 +212,9 @@
   --color-success: #16a34a;
   --color-success-soft: #dcfce7;
   --color-success-ink: #15803d;
-  --color-warn: #f59e0b;
-  --color-warn-soft: #fef3c7;
-  --color-warn-ink: #b45309;
+  --color-warn: #f97316;
+  --color-warn-soft: #fff1e7;
+  --color-warn-ink: #c2410c;
 }
 
 body {

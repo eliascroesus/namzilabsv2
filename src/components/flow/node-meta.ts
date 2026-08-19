@@ -355,7 +355,7 @@ export function resultLabel(
 export type NodeStatus = "ready" | "setup" | "untested" | "updating" | "error";
 export const STATUS_META: Record<NodeStatus, { label: string; cls: string; border: string; dot: string; hint: string }> = {
   ready: { label: "Tested", cls: "bg-green-100 text-green-700", border: "border-green-300", dot: "bg-green-500", hint: "text-neutral-500" },
-  setup: { label: "Needs setup", cls: "bg-amber-100 text-amber-800", border: "border-amber-300", dot: "bg-amber-500", hint: "text-amber-700" },
+  setup: { label: "Needs setup", cls: "bg-warn-soft text-warn-ink", border: "border-warn/45", dot: "bg-warn", hint: "text-warn-ink" },
   untested: { label: "Not tested", cls: "bg-neutral-100 text-neutral-500", border: "border-neutral-300", dot: "bg-neutral-300", hint: "text-neutral-400" },
   updating: { label: "Testing…", cls: "bg-blue-100 text-blue-700", border: "border-blue-300", dot: "bg-blue-500", hint: "text-blue-600" },
   error: { label: "Error", cls: "bg-red-100 text-red-700", border: "border-red-300", dot: "bg-red-500", hint: "text-red-600" },
