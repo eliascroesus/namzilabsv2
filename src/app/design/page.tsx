@@ -273,7 +273,7 @@ export default function DesignPage() {
           <div className="relative h-64 overflow-hidden rounded-card bg-canvas-bg">
             <div
               className="absolute inset-0"
-              style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 1px, transparent 1px)", backgroundSize: "26px 26px" }}
+              style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
             />
             <ToolbarPreview />
           </div>

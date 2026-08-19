@@ -1591,10 +1591,30 @@ still paints it on one element with the rail transparent inside — that
 structure was never about the gradient, it is about there being a single
 source for the colour behind the canvas.
 
-**`--color-canvas-bg: #f6f6fb`** with **`--color-canvas-dot: #e7e4f2`** — a
-smaller delta than the grid it replaces (#dfe1e8 on #f6f6f8). A dot grid is a
-depth cue, not content: it should register as texture at a glance and vanish
-the moment you look at a card.
+**`--color-canvas-bg: #f6f6fb`** with **`--color-canvas-dot: #d9d5e8`**, and
+the dot diameter up from 1px to 1.6px.
+
+The first attempt at this was #e7e4f2 at 1px, chosen because it measured as
+pleasantly subtle — **at 100% zoom**. The report back was "there's no dots on
+the canvas", and it was right: React Flow scales the dot pattern with the
+viewport, so by 83% — which is simply where you sit when you want to see a
+whole flow — a 1px dot is sub-pixel and a 15-point delta antialiases into
+nothing. The canvas was a flat lavender field.
+
+The fix was to stop guessing and render React Flow's own pattern maths, four
+candidate values × two zooms, in one image, and pick by looking. That image is
+the whole lesson: at 100% every option looked fine, and at 83% the shipped one
+was invisible. **A value chosen at 100% is not chosen.**
+
+The pin now carries a floor as well as a ceiling — greater than 20 points so
+it survives being zoomed out, less than 45 so it never competes with a card's
+own border — and the comment says why the floor exists, so nobody softens it
+back on taste. Sabotage-verified in both directions.
+
+One more thing that fell out: the kit had been drawing the dots **twice as
+big** as the product. `radial-gradient(colour 1px, …)` takes a RADIUS, while
+React Flow's `size` is a DIAMETER, so the kit's 1px was the product's 2px.
+Both previews are 0.8px now.
 
 **Those two colours are the one palette value written outside globals.css.**
 React Flow's `<Background>` takes `color` and `bgColor` as plain strings and

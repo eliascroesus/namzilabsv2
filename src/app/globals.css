@@ -68,10 +68,16 @@
    * page behind it and the edge colour can never drift apart again.
    */
   --color-canvas-bg: #f6f6fb;
-  /* Subtler than the grid it replaces (#dfe1e8 on #f6f6f8). A dot grid is a
-     depth cue, not content: it should register as texture at a glance and
-     disappear the moment you look at a card. */
-  --color-canvas-dot: #e7e4f2;
+  /* CHOSEN AT 83% ZOOM, NOT AT 100%.
+     React Flow scales the dot pattern with the viewport, so a 1px dot is
+     already sub-pixel by the time you have zoomed out enough to see a whole
+     flow — which is where people actually work. A first pass at #e7e4f2/1px
+     measured as pleasantly subtle at 100% and rendered as literally nothing
+     at 83%: a flat lavender field, no texture at all. This value was picked by
+     rendering React Flow's own pattern maths at both zooms and looking.
+     It is still a depth cue, not content — it should read as texture at a
+     glance and vanish the moment you look at a card. */
+  --color-canvas-dot: #d9d5e8;
   --color-canvas-edge: #aab4cb;
 
   /* --- Type scale ---------------------------------------------------------

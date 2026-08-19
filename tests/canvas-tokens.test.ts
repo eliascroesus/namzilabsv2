@@ -50,7 +50,12 @@ describe("the canvas Background matches the theme tokens", () => {
     const [br, bgn, bb] = hex(token("color-canvas-bg"));
     const [dr, dg, db] = hex(token("color-canvas-dot"));
     const delta = Math.max(br - dr, bgn - dg, bb - db);
-    expect(delta).toBeGreaterThan(6); // still visible
-    expect(delta).toBeLessThan(30); // still subtle
+    // The floor is what a first pass got wrong: #e7e4f2 measured as tastefully
+    // subtle at 100% and rendered as a flat, dotless field at 83%, because
+    // React Flow scales the pattern with the viewport. The ceiling keeps the
+    // grid lighter than a card's own border, so a dot can never be mistaken
+    // for an edge.
+    expect(delta).toBeGreaterThan(20); // survives being zoomed out
+    expect(delta).toBeLessThan(45); // never competes with a border
   });
 });

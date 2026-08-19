@@ -75,7 +75,7 @@ export function CanvasPreview() {
     <div className="relative overflow-hidden rounded-card bg-canvas-bg p-8">
       <div
         className="absolute inset-0"
-        style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 1px, transparent 1px)", backgroundSize: "26px 26px" }}
+        style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
       />
       <div className="relative flex flex-col items-center">
         <FlowNodeCard variant="app" title="Google Sheets" body="49 loaded" status="ready" stepNo={1} />

@@ -1517,7 +1517,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           >
             {/* A soft grey canvas with a faint, wide-spaced dot grid — calm and
                 smooth while panning, not a busy pattern. */}
-            <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="#e7e4f2" bgColor="#f6f6fb" />
+            {/* size is a DIAMETER and it scales with zoom — see --color-canvas-dot. */}
+            <Background variant={BackgroundVariant.Dots} gap={26} size={1.6} color="#d9d5e8" bgColor="#f6f6fb" />
           </ReactFlow>
 
         </div>
