@@ -1472,6 +1472,83 @@ labels 12px on a 16px line flush under the tile, logo band 74, both islands
 
 ---
 
+### 9u. The canvas sits in the rail, and the top bar splits in two
+
+**One gradient, not two declarations.** The ask was for the canvas to have
+rounded left corners with the rail's colour behind it, "always correlated and
+the exact same". The rail's wash is a *gradient*, so two elements carrying the
+same class would resolve it over different widths and would not match. So it
+is structural instead: a new `AppFrame` paints `--gradient-rail` on the outer
+element, the rail sits inside it **transparent**, and the content `<main>` is
+`rounded-l-surface` — the 16px cut at its two left corners is what reveals the
+wash. There is nothing to keep in sync because there is only one painted
+surface. All three places that rendered the rail — the app shell, the builder
+page, `/design` — went through it, so `<Sidebar>` now has exactly one call
+site.
+
+Verified by pixel readback, not by reading CSS: the notch at (102,2) reads
+`rgb(37,43,98)` and the rail at (50,2) reads `rgb(37,43,98)` — identical, and
+the boundary goes wash→white in a single pixel with no seam.
+
+**The top bar is two islands.** Identity on the left (back arrow, a `Flows /`
+breadcrumb, the editable name as the last crumb), state and actions on the
+right (saved, ⋯, the switch, the version, Review & publish), with the canvas
+showing through 88px of seam between them. Both carry shadcn's surface — a
+hairline border and a shadow — with the border paid for out of the padding
+(1 + 7 + 42 + 7 + 1 = 58) so the measured island height survives.
+
+Two things in the reference were deliberately not copied: the **green dot** on
+the save state, because an earlier round asked explicitly for words and no
+dot; and the **bell**, because we have no notifications and a bell that never
+rings is furniture. Both are commented at the call site so neither gets
+"restored" from the mock.
+
+### 9v. tailwind-merge was deleting our colours
+
+The visual review found the builder's primary buttons rendering **black text
+on accent blue** — `Test flow` and `Edit output` both computed `rgb(0,0,0)` on
+`rgb(56,88,255)`, about 4:1. I doubted it, because the tokens were right
+(`--primary-foreground: #ffffff`) and the source read correctly. Probing it
+directly proved the review right and me wrong.
+
+The cause is general and invisible at every call site. `cn()` runs
+tailwind-merge, which resolves `text-*` by asking "is this a known font size?"
+and treating anything else as a **text colour**. It ships Tailwind's default
+scale; ours is `micro tiny small lead title display`. So
+`cn("text-primary-foreground", "text-lead")` looked like two colours in a row
+and the first was dropped. Every `<Button className="text-lead">` in the
+product silently lost its foreground.
+
+It appeared exactly when the bars moved from arbitrary `text-[14px]` to the
+`text-lead` token — the same edit that also imported the token's 24px
+line-height and made the bottom bar 2px too tall. **Two distinct bugs from one
+"tidy-up" that looked like a no-op.**
+
+Fixed at the merger rather than the symptom: `cn` now registers our scale as a
+font-size group. Pinned by `tests/cn-merge.test.ts`, which checks all six
+tokens, the real `buttonVariants` composition, and that sizes still override
+sizes and colours still override colours — sabotage-verified by reverting to a
+bare `twMerge`, which fails those tests alone.
+
+**Three more the review caught, all real:**
+
+- **A doubled rim.** `shadow-float` opens with a 1px spread ring that stands in
+  for an edge; under the island's new real border that became two adjacent 1px
+  bands of different hue, the outer one *darker*, so the ramp was
+  non-monotonic and the edge read 2px thick and dirty. Added `--shadow-island`
+  — the same elevation without the ring — for surfaces that draw their own
+  border.
+- **The flow name hard-clipped.** It was an `<input>` at its intrinsic ~198px,
+  cut mid-glyph with no ellipsis, while 88px of empty canvas sat beside it and
+  the wrapper's 760px cap was never approached. It sizes to its value now,
+  floored at 13ch and capped at 34ch.
+- **The rail mark sat 8px high.** The logo band matched the island's *bottom*
+  edge (16 + 58 = 74). A 44px round mark and a 58px bar read as aligned when
+  their middles agree, so the band is the island's whole band now — 16 + 58 +
+  16 = 90 — putting both centres on y=45.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

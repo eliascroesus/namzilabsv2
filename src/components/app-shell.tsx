@@ -2,8 +2,8 @@ import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import { inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { connections, flows } from "@/db/schema";
+import { AppFrame } from "./app-frame";
 import { OrgSwitcher } from "./org-switcher";
-import { Sidebar } from "./sidebar";
 import { signOutAction } from "@/app/actions";
 
 /**
@@ -67,34 +67,35 @@ export async function AppShell({
   const initials = (userEmail ?? "?").slice(0, 2).toUpperCase();
 
   return (
-    <div className="flex h-screen bg-white">
-      <Sidebar
-        account={{
-          initials,
-          // Rendered on the server, opened by the client rail: the light
-          // panel beside the avatar. Workspace first, then identity, then
-          // the way out.
-          panel: (
-            <div className="space-y-3">
-              <div>
-                <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">Workspace</p>
-                <OrgSwitcher orgs={orgs} currentId={orgId} />
-              </div>
-              {userEmail && <p className="truncate border-t border-neutral-100 pt-2 text-tiny text-neutral-500">{userEmail}</p>}
-              <form action={signOutAction}>
-                <button
-                  type="submit"
-                  className="w-full rounded-control border border-neutral-200 px-3 py-1.5 text-small font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
-                >
-                  Sign out
-                </button>
-              </form>
+    // The rail is fixed; only the canvas column scrolls, and it clips so its
+    // rounded left corners cut the content rather than let it run past them.
+    <AppFrame
+      surface="overflow-y-auto bg-white"
+      account={{
+        initials,
+        // Rendered on the server, opened by the client rail: the light
+        // panel beside the avatar. Workspace first, then identity, then
+        // the way out.
+        panel: (
+          <div className="space-y-3">
+            <div>
+              <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">Workspace</p>
+              <OrgSwitcher orgs={orgs} currentId={orgId} />
             </div>
-          ),
-        }}
-      />
-      {/* The rail is fixed; only this column scrolls. */}
-      <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
-    </div>
+            {userEmail && <p className="truncate border-t border-neutral-100 pt-2 text-tiny text-neutral-500">{userEmail}</p>}
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="w-full rounded-control border border-neutral-200 px-3 py-1.5 text-small font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
+        ),
+      }}
+    >
+      {children}
+    </AppFrame>
   );
 }

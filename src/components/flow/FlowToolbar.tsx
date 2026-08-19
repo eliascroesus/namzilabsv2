@@ -34,25 +34,46 @@ import { Button } from "@/components/ui/button";
  *    bottom centre: "Run once" as a filled primary, a divider, then quiet icon
  *    controls.
  *
- * So there are two surfaces, not four. Everything ABOUT the flow — where it
- * came from, what it is called, whether it saved, what you can do to it, and
- * shipping it — is one top island, because Publish alone in the far corner
- * read as an afterthought stranded across the screen. Everything you do to the
- * CANVAS — run, undo, zoom, fit — is one bottom bar under your hands, where
- * "Test flow" is a filled primary rather than the ghost button it was beside
- * Publish.
+ * So the top splits along the seam between IDENTITY and ACTION, with the
+ * canvas showing through the gap. On the LEFT: where you came from and what
+ * this is called — the way back, then "Flows / <name>" as a breadcrumb, the
+ * name itself still the editable thing it always was. On the RIGHT: whether it
+ * saved, what you can do to it, and shipping it. One island holding all of
+ * that had the primary action reading as one more item in a list of six;
+ * pushed to its own corner it reads as the end of the sentence.
  *
- * Geometry is measured, not chosen: 8px island padding around 42px controls
- * gives a 58px-tall island, 16px from every viewport edge (top, left and
- * bottom all the same, which they were not), one hairline divider between
- * groups. Glyphs are 26px and near-black beside 15px text — Miro's toolbar
- * icons read as objects; 17px grey was a toolbar whispering.
+ * Everything you do to the CANVAS — run, undo, zoom, fit — is the bottom bar
+ * under your hands, where "Test flow" is a filled primary rather than the
+ * ghost button it was beside Publish.
+ *
+ * Geometry is measured, not chosen: 7px island padding plus a 1px border
+ * around 42px controls gives a 58px-tall island, 16px from every viewport edge
+ * (top, left, right and bottom all the same, which they were not), one
+ * hairline divider between groups. Glyphs are 26px and near-black beside 15px
+ * text — Miro's toolbar icons read as objects; 17px grey was a toolbar
+ * whispering.
  */
 export type SaveState = "saved" | "saving" | "unsaved" | "error";
 
-/** One floating surface. Every island in the builder is this. */
+/**
+ * One floating surface. Every island in the builder is this.
+ *
+ * A floating surface is a hairline border AND a shadow — the shadow alone
+ * dissolves against a light canvas, which is why shadcn draws both. The border
+ * is paid for out of the padding rather than added to the outside, because the
+ * 58px island height is measured against everything else on screen:
+ * 1 + 7 + 42 (control) + 7 + 1 = 58. p-[7px] is not a typo for p-[8px].
+ *
+ * The elevation is `shadow-island`, not `shadow-float`, for the same reason:
+ * float opens with a 1px spread ring, and under a real border that becomes two
+ * hairlines of different hue — a 2px dirty rim rather than one crisp edge.
+ */
 function Island({ className = "", children }: { className?: string; children: React.ReactNode }) {
-  return <div className={`pointer-events-auto flex items-center gap-1 rounded-card bg-white p-[8px] shadow-float ${className}`}>{children}</div>;
+  return (
+    <div className={`pointer-events-auto flex items-center gap-1 rounded-card border border-border bg-white p-[7px] shadow-island ${className}`}>
+      {children}
+    </div>
+  );
 }
 
 function IslandButton({
@@ -143,16 +164,12 @@ export function FlowToolbar({
   return (
     <>
       {/* ── Top-left: WHICH FLOW IS THIS ──────────────────────────────
-          Three groups with air between them, not six controls in a row.
-          It read as a jumble because "Saved" floated mid-island between the
-          name and the ⋯, so the eye had no grouping to land on: back, name,
-          status, menu and the primary all sat at one rhythm.
-
-          Now: the back button, then the name as the island's own content with
-          the save state as a quiet dot beside it, then a hairline, then the
-          actions. And the save state is a WORD, not a dot —
-          a dot needs a legend and a word does not; "Not saved" keeps its loud
-          red chip on top of that, because that one can cost work. */}
+          Identity only: the way back, then the trail that got you here. The
+          breadcrumb says out loud what the bare back arrow only implied — that
+          this flow sits inside a list of them — and the last crumb is the
+          editable name itself, so the thing you rename is the thing you are
+          reading. The name grows with what you type and stops well short of
+          the right island, which holds the primary it must never reach. */}
       <div className="pointer-events-none absolute left-4 top-4 z-10 flex max-w-[min(62vw,760px)] items-center">
         <Island className="min-w-0 gap-1">
           <Link
@@ -163,16 +180,48 @@ export function FlowToolbar({
             <ChevronLeft size={26} strokeWidth={2} />
           </Link>
 
-          <span className="flex min-w-0 flex-1 items-center gap-2 pr-1">
+          <span className="flex min-w-0 flex-1 items-center gap-1 pr-1">
+            <Link
+              href="/dashboard/flows"
+              className="shrink-0 whitespace-nowrap px-1 text-lead font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Flows
+            </Link>
+            <span className="shrink-0 text-lead text-neutral-300" aria-hidden>
+              /
+            </span>
+            {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
+                At the old fixed width a long name was cut mid-glyph, hard against
+                the padding with no ellipsis — while 87px of empty canvas sat to
+                its right and the wrapper's own max-width was never reached. The
+                floor keeps an empty field clickable; the ceiling keeps this
+                island clear of the one on the right. */}
             <input
               value={name}
               onChange={(e) => onRename(e.target.value)}
               aria-label="Flow name"
               placeholder="Untitled flow"
-              className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
+              title={name}
+              style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
+              className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
             />
-            <SaveChip state={saveState} onRetry={onRetrySave} />
           </span>
+        </Island>
+      </div>
+
+      {/* ── Top-right: STATE AND ACTIONS ──────────────────────────────
+          Whether it saved, what you can do to it, and shipping it. It rides
+          the same inset as the bottom bar so the config panel never opens on
+          top of the primary action — the two surfaces slide together. */}
+      <div
+        className="pointer-events-none absolute top-4 z-10 flex justify-end transition-[right] duration-200 ease-out"
+        style={{ right: panelInset }}
+      >
+        <Island>
+          {/* Words, no dot. The reference this island copies has a green dot,
+              and it is deliberately not here: a dot needs a legend and a word
+              does not. Do not "restore" it. */}
+          <SaveChip state={saveState} onRetry={onRetrySave} />
 
           <Divider />
 
@@ -227,7 +276,9 @@ export function FlowToolbar({
             </span>
           )}
 
-          <Button onClick={onReview} disabled={publishing} className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-lead">
+          {/* 18px, not the Button's shared 16px: a 26px standalone glyph sits one
+              control away, and 16 beside it read as two different icon sets. */}
+          <Button onClick={onReview} disabled={publishing} className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-lead [&_svg]:size-[18px]">
             {isPublished ? <SlidersHorizontal /> : <Rocket />}
             {isPublished ? "Edit output" : "Review & publish"}
           </Button>
@@ -248,7 +299,7 @@ export function FlowToolbar({
                 variant={runAll ? "secondary" : "default"}
                 onClick={runAll ? onStopTestAll : onTestAll}
                 title={runAll ? "Stop the run" : "Run every step, top to bottom"}
-                className="h-[42px] gap-2 px-[18px] text-lead"
+                className="h-[42px] gap-2 px-[18px] text-lead [&_svg]:size-[18px]"
               >
                 {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
                 {runAll ? `Stop · ${runAll.at}/${runAll.of}` : "Test flow"}
@@ -322,14 +373,6 @@ export function FlowToolbar({
   );
 }
 
-/**
- * The save state, as a chip inside the island.
- *
- * A failed save is the one thing here that can silently cost work, so it is
- * the only state that gets words and colour; the rest is a dot, because
- * "Saved" is the answer to a question nobody asked and does not deserve a
- * sentence in a 58px island.
- */
 function FlowSwitch({ on, disabled, onChange }: { on: boolean; disabled: boolean; onChange: () => void }) {
   return (
     <button
@@ -354,6 +397,14 @@ function FlowSwitch({ on, disabled, onChange }: { on: boolean; disabled: boolean
   );
 }
 
+/**
+ * The save state, in words — no dot, no chip, no colour.
+ *
+ * A failed save is the one thing here that can silently cost work, so it is
+ * the only state that gets a chip and a colour, and a Retry to go with it.
+ * Everything else is one quiet word: a status light needs a legend and
+ * "Saved" does not.
+ */
 function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
   if (state === "error") {
     return (

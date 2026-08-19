@@ -19,6 +19,11 @@ import { LayoutDashboard, Plug, Settings, Workflow } from "lucide-react";
  * right of it stays neutral, which is exactly what lets the rail carry colour
  * without the app becoming noisy.
  *
+ * The rail no longer PAINTS that wash — it sits on it, transparent, and
+ * AppFrame paints it for both the rail and the notches at the canvas's left
+ * corners. One gradient rather than two identical declarations, so the two
+ * cannot drift apart at the seam.
+ *
  * The active item is derived from the path; no page passes it in.
  */
 const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: string) => boolean }> = [
@@ -41,19 +46,22 @@ const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: stri
 export function Sidebar({ account }: { account?: { initials: string; panel: ReactNode } }) {
   const pathname = usePathname() ?? "";
   return (
-    <aside className="bg-rail flex h-full w-[100px] shrink-0 flex-col items-center px-2.5">
+    <aside className="flex h-full w-[100px] shrink-0 flex-col items-center px-2.5">
       {/* THE WORDMARK IS THE TOP BAR'S HEIGHT.
           The rail's mark and the canvas's top island sit at the same y, so when
           they were different heights the two read as misaligned furniture. It
-          now occupies exactly the island's band (16px inset + 58px island), so
-          the two line up across the seam.
+          now spans the island's WHOLE band — 16px inset + 58px island + 16px —
+          so the mark's centre lands on the island's centre at y=45. Matching
+          the band's bottom edge instead (74px) put the mark 8px high: a 44px
+          round mark and a 58px bar read as aligned when their middles agree,
+          not their edges.
 
           The 11px beneath is Make's: its logo centre sits at y=35 and its first
           icon centre at y=101 under a 70px band, leaving 101 - 20 - 70 = 11. */}
       <Link
         href="/dashboard"
         title="Namzilabs — dashboard"
-        className="mb-[11px] flex h-[74px] w-full items-center justify-center text-title font-bold text-white transition-opacity hover:opacity-85"
+        className="mb-[11px] flex h-[90px] w-full items-center justify-center text-title font-bold text-white transition-opacity hover:opacity-85"
       >
         <span className="flex h-11 w-11 items-center justify-center rounded-card bg-white/20 ring-1 ring-white/25">N</span>
       </Link>

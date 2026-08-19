@@ -5,7 +5,7 @@ import { getFlow } from "@/lib/flow/store";
 import { listConnections } from "@/lib/connections";
 import { parseGraph } from "@/lib/flow/types";
 import { FlowCanvas, type ConnMeta } from "@/components/flow/flow-canvas";
-import { Sidebar } from "@/components/sidebar";
+import { AppFrame } from "@/components/app-frame";
 
 export const dynamic = "force-dynamic";
 
@@ -41,24 +41,23 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
   }));
 
   return (
-    // The icon rail, then the canvas. The chrome that belongs to the FLOW
-    // floats on the canvas (FlowToolbar); the chrome that belongs to the APP
-    // is the same 76px rail every other screen has — hiding it here left the
-    // editor with a bare left edge and navigation buried in a ⋮ menu.
+    // The same frame every other screen has. The chrome that belongs to the
+    // FLOW floats on the canvas (FlowToolbar); the chrome that belongs to the
+    // APP is the rail — hiding it here left the editor with a bare left edge
+    // and navigation buried in a ⋮ menu.
+    // The builder does not scroll: the canvas pans itself, so this surface
+    // clips rather than scrolls, and sits on the canvas grey rather than white.
     // No account panel: it would cost a WorkOS membership fetch per editor
     // load for a control the dashboard is one click away from.
-    <div className="flex h-screen">
-      <Sidebar />
-      <div className="relative min-w-0 flex-1">
-        <FlowCanvas
-          flowId={flow.id}
-          name={flow.name}
-          status={flow.status}
-          publishedVersion={flow.publishedVersion}
-          initialGraph={parseGraph(flow.draftGraph)}
-          connections={connections}
-        />
-      </div>
-    </div>
+    <AppFrame surface="overflow-hidden bg-canvas-bg">
+      <FlowCanvas
+        flowId={flow.id}
+        name={flow.name}
+        status={flow.status}
+        publishedVersion={flow.publishedVersion}
+        initialGraph={parseGraph(flow.draftGraph)}
+        connections={connections}
+      />
+    </AppFrame>
   );
 }
