@@ -6,6 +6,7 @@
  */
 export { Popover } from "./Popover";
 export { Select, type Option } from "./Select";
+export { Segmented } from "./Segmented";
 export { SourceBadge, DataPill } from "./Pill";
 export { OperatorSelect } from "./OperatorSelect";
 export { DataBrowser } from "./DataBrowser";

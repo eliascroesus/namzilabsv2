@@ -122,18 +122,27 @@ function isNumberProducer(n: FNode): boolean {
 }
 
 /** Short "what to do next" hint shown inside a step that needs setup. */
+/**
+ * The one thing missing from this step, in as few words as fit on a card.
+ *
+ * These were sentences — "Wire in the two steps to check against each other."
+ * — inside about twenty characters of usable width, so they arrived as "Wire
+ * in the ...", which is worse than no hint at all: it takes the space, draws
+ * the eye, and withholds the answer. A fragment with no full stop reads as a
+ * label, which is what this is.
+ */
 function setupHint(type: string, cfg: Record<string, unknown>, inputCount: number): string {
-  if (type === "app") return cfg.connectionId ? "Choose what data to pull." : "Choose an account to load data.";
+  if (type === "app") return cfg.connectionId ? "Pick what to pull" : "Pick an account";
   if (type === "unite") {
-    if (String(cfg.mode ?? "stack") !== "match") return "Pick the lanes to bring together.";
-    return inputCount < 2 ? "Wire in the two steps to check against each other." : "Pick whose records continue, and the fields to match.";
+    if (String(cfg.mode ?? "stack") !== "match") return "Pick the steps to combine";
+    return inputCount < 2 ? "Needs two steps" : "Pick the fields to match";
   }
-  if (type === "time_between") return "Pick the matching field and the start/end conditions.";
-  if (type === "filter") return inputCount === 0 ? "Connect an input." : "Add a condition — with none, this step passes every record.";
-  if (type === "formula") return isDatasetFormulaOp(cfg.op ?? "percentage") ? "Connect an input." : "Pick or type a First and Second number.";
-  if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? "Pick a First and Second number." : "Connect an input.";
-  if (type === "output") return inputCount === 0 ? "Connect an input." : "Name this metric.";
-  return "Connect an input.";
+  if (type === "time_between") return "Pick a key and both times";
+  if (type === "filter") return inputCount === 0 ? "Needs a step above" : "Add a condition";
+  if (type === "formula") return isDatasetFormulaOp(cfg.op ?? "percentage") ? "Needs a step above" : "Pick two numbers";
+  if (type === "calculate") return String(cfg.mode ?? "number") === "compare" ? "Pick two numbers" : "Needs a step above";
+  if (type === "output") return inputCount === 0 ? "Needs a step above" : "Name it";
+  return "Needs a step above";
 }
 
 const nodeTypes = Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])) as Record<string, typeof FlowNodeCard>;

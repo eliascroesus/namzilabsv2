@@ -5,7 +5,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { type NodeType } from "@/lib/flow/types";
 import { isBinaryCalc } from "@/lib/flow/shapes";
 import type { FNode, NodeData } from "./graph-utils";
-import { STATUS_META, nodeTitle, pathHandles, resultLabel, type NodeStatus } from "./node-meta";
+import { STATUS_META, nodeTitle, nodeVariant, pathHandles, resultLabel, type NodeStatus } from "./node-meta";
 import { NodeIcon } from "./icons";
 import { anchorFromRect } from "./NodeLibraryModal";
 import { Popover } from "./controls/Popover";
@@ -83,11 +83,12 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const freeHandles = (data.freeHandles as Array<{ id: string; label: string }> | undefined) ?? [];
 
   // The single body line: the plain output when ready, a hint when setup, else nothing.
+  // Its colour follows the status dot, so the amber pair reads as one signal.
   const bodyLine =
     status === "error" && test?.status === "error"
-      ? { text: test.error, cls: "text-red-600" }
+      ? { text: test.error, cls: sm.hint }
       : status === "setup" && data.issue
-        ? { text: data.issue, cls: "text-neutral-400" }
+        ? { text: data.issue, cls: sm.hint }
         : status === "ready" && test?.status === "ok"
           ? { text: resultLabel(t, test, data.config as Record<string, unknown>), cls: "text-neutral-500" }
           : null;
@@ -125,7 +126,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       ) : null}
 
       <div className="flex items-center gap-2.5 px-3 py-2.5">
-        <NodeIcon type={t} source={String(data.config.source ?? "")} size={30} />
+        <NodeIcon type={t} source={String(data.config.source ?? "")} variant={nodeVariant(t, data.config as Record<string, unknown>)} size={30} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium text-neutral-800">
             {data.stepNo != null ? `${data.stepNo}. ` : ""}
@@ -135,7 +136,12 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           {refLine && <span className="block truncate text-xs text-indigo-600" title={refLine}>{refLine}</span>}
           {sourceLine && <span className="block truncate text-xs text-amber-700" title={sourceLine}>{sourceLine}</span>}
         </span>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${sm.cls}`}>{sm.label}</span>
+        {/* A DOT, NOT A BADGE. "Needs setup" is 72px of a 256px card, and it
+            was taking them from the title — a step read "2. Match ..." while
+            spending most of its width on a word the border colour and the
+            amber hint line already say. The full label lives in the tooltip
+            and, in full, in the config panel's header, where there is room. */}
+        <span className={`h-2 w-2 shrink-0 rounded-full ${sm.dot}`} title={sm.label} aria-label={sm.label} />
         <NodeMenu id={id} data={data} />
       </div>
 
@@ -151,7 +157,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             <path d="M3 3v18h18" />
             <path d="M7 15l4-5 3 3 5-7" />
           </svg>
-          {publishes ? "Goes to your dashboard" : "Not published"}
+          {publishes ? "On your dashboard" : "Not published"}
         </div>
       )}
 

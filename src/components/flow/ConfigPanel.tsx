@@ -29,10 +29,10 @@ import {
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
 import { computeNodeStatus, STD_META } from "./graph-utils";
 import { NumberField } from "./controls/NumberField";
-import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, resultLabel, stepSummaryLines } from "./node-meta";
+import { STATUS_META, datasetCalcExpression, defaultTitle, formulaExpression, formulaHandleLabels, nodeVariant, resultLabel, stepSummaryLines } from "./node-meta";
 import { RecordSamplePicker, recordWhen } from "./RecordSamplePicker";
 import { DataIcon, NodeIcon } from "./icons";
-import { Select, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
+import { Select, Segmented, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
 import { hasAnyFields } from "./controls/field-utils";
 import type { DataGroup } from "./controls/types";
 import { prepareGroups, toDataGroups, momentGroups } from "./field-groups";
@@ -206,7 +206,7 @@ export function ConfigPanel({
           reads as a distinct "what am I editing" strip above the fields. */}
       <div className="flex items-center justify-between gap-3 border-b border-neutral-200/70 bg-neutral-100 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} size={38} />
+          <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} variant={nodeVariant(type, cfg)} size={38} />
           <input
             value={node.data.label ?? ""}
             onChange={(e) => onRename(e.target.value)}
@@ -288,10 +288,7 @@ export function ConfigPanel({
               ) : (
                 !err && (
                   <div className="rounded-xl border border-dashed border-neutral-200 bg-neutral-50/60 p-6 text-center">
-                    <p className="text-sm font-medium text-neutral-700">{status === "setup" ? "Finish setting up this step first." : "Run the test to preview this step’s data."}</p>
-                    <p className="mt-1 text-xs text-neutral-500">
-                      {status === "setup" ? "Fill in the fields on the Configure tab." : "See exactly what this step returns before you continue."}
-                    </p>
+                    <p className="text-sm font-medium text-neutral-700">{status === "setup" ? "Finish the Configure tab first." : "Test to see this step’s data."}</p>
                   </div>
                 )
               )}
@@ -370,7 +367,7 @@ function Footer({
     // Untestable steps (split hub) continue straight on; the rest advance to Test.
     return (
       <button onClick={supportsTest ? onContinueToTest : () => onAddNext()} disabled={status === "setup"} className={`${BTN_PRIMARY} w-full`}>
-        {status === "setup" ? "Fill in the fields above" : "Continue"}
+        {status === "setup" ? "Finish the fields above" : "Continue"}
       </button>
     );
   }
@@ -739,10 +736,9 @@ function NodeConfig({
         </div>
         {datasetOp ? (
           <>
-            <Field label="What are you calculating?">
-              <Select
+            <Field label="Measuring">
+              <Segmented
                 value={String(cfg.resultKind ?? "number")}
-                width={W}
                 options={[
                   { value: "number", label: "A number" },
                   { value: "duration", label: "A length of time" },
@@ -790,11 +786,10 @@ function NodeConfig({
               </>
             ) : (
               <>
-                <Field label="Split over time?">
-                  <Select
+                <Field label="Result">
+                  <Segmented
                     value={gb?.type === "time" ? "time" : "none"}
-                    width={W}
-                    options={[{ value: "none", label: "No — one total number" }, { value: "time", label: "Yes — a trend over time" }]}
+                    options={[{ value: "none", label: "One number" }, { value: "time", label: "A trend" }]}
                     onChange={(m) => onChange({ groupBy: m === "time" ? { type: "time", unit: "day" } : null })}
                   />
                 </Field>
@@ -831,9 +826,14 @@ function NodeConfig({
     };
     return (
       <div className="space-y-4">
-        <p className="text-xs text-neutral-500">Brings branches and other data steps back together — later steps see records from all of them.</p>
+        {/* The paragraph that used to sit here described STACKING, and it was
+            rendered in both modes — so a step set to "Keep only records that
+            match" opened with a sentence promising the opposite ("later steps
+            see records from all of them"). The summary box above now says what
+            the step actually does, in whichever mode it is in, so there is
+            nothing left for a standing paragraph to add. */}
         <div>
-          <p className="mb-1 text-xs font-medium text-neutral-600">Steps to combine</p>
+          <p className="mb-1 text-xs font-medium text-neutral-600">{matching ? "Steps to check" : "Steps to combine"}</p>
           <div className="space-y-1.5">
             {inputs.map((inp, idx) => (
               <div key={idx} className="flex items-center gap-2">
@@ -869,20 +869,22 @@ function NodeConfig({
             so this control is for CHANGING one into the other rather than for
             discovering the second one exists — which is what a checkbox
             buried under the lane list was being asked to do. */}
-        <Field label="What should this step do?">
-          <Select
+        {/* Two pills rather than a full-width dropdown with two long options:
+            the choice is binary, both answers fit, and a segmented control
+            shows the alternative instead of hiding it behind a click. */}
+        <Field label="Mode">
+          <Segmented
             value={matching ? "match" : "stack"}
-            width={W}
             options={[
-              { value: "stack", label: "Put all their records on one line", hint: "Later steps see every lane's records together." },
-              { value: "match", label: "Keep only records that match", hint: "Like a lookup: keep one step's records only when a value also exists in the other." },
+              { value: "stack", label: "Stack" },
+              { value: "match", label: "Match" },
             ]}
             onChange={(v) => onChange({ mode: v })}
           />
         </Field>
         {matching && inputs.length !== 2 && (
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
-            Matching compares exactly two steps — this Combine has {inputs.length} wired in.
+            Match needs exactly 2 steps — {inputs.length} wired in.
           </p>
         )}
         {matching && inputs.length === 2 && <CombineMatchFields cfg={cfg} groups={groups} inputs={inputs} datasetCandidates={datasetCandidates} laneScopes={laneScopes} onChange={onChange} />}
@@ -898,7 +900,6 @@ function NodeConfig({
     const setLabel = (i: number, label: string) => onChange({ paths: paths.map((p, j) => (j === i ? { ...p, label } : p)) });
     return (
       <div className="space-y-4">
-        <p className="text-xs text-neutral-500">Splits the flow into branches. Each branch’s rules live in its own <b>Path conditions</b> step.</p>
         {paths.map((p, i) => (
           <div key={p.id} className="flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50/40 px-2 py-1.5">
             <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-pink-700">Branch {i + 1}</span>
@@ -1058,11 +1059,10 @@ function CalcNumber({ cfg, groups, onChange }: { cfg: Record<string, unknown>; g
       </Field>
       {aggregationInputs(agg).numberField && <NumberFieldList cfg={cfg} groups={groups} onChange={onChange} />}
       {aggregationInputs(agg).distinctField && <Field label="Distinct by"><FieldInput value={(cfg.distinctField as string) ?? "subject"} groups={groups} onChange={(v) => onChange({ distinctField: v })} /></Field>}
-      <Field label="Split over time?">
-        <Select
+      <Field label="Result">
+        <Segmented
           value={gb?.type === "time" ? "time" : "none"}
-          width={W}
-          options={[{ value: "none", label: "No — one total number" }, { value: "time", label: "Yes — a trend over time" }]}
+          options={[{ value: "none", label: "One number" }, { value: "time", label: "A trend" }]}
           onChange={(m) => onChange({ groupBy: m === "time" ? { type: "time", unit: "day" } : null })}
         />
       </Field>
@@ -1498,11 +1498,16 @@ function CombineMatchFields({
   };
   return (
     <div className="space-y-4">
-      <Field label="Keep records from">
+      {/* Four questions that read top to bottom as one sentence: keep THESE
+          records, matched on THIS field, when it IS (or isn't) in THAT one.
+          The labels were carrying the sentence on their own ("Keep a record
+          when its value", "In 3. Google Sheets's field") and had grown longer
+          than the controls under them. */}
+      <Field label="Keep from">
         <Select
           value={keepPicked ? keepId : ""}
           width={W}
-          placeholder="Choose whose records continue…"
+          placeholder="Whose records continue…"
           options={inputs.map((i) => ({ value: i.nodeId, label: stepLabel(i.nodeId) }))}
           // Flipping sides swaps BOTH lanes, so both picked fields go with it.
           onChange={(v) => onChange({ keepNodeId: v, keyField: "", lookupField: "" })}
@@ -1510,27 +1515,26 @@ function CombineMatchFields({
       </Field>
       {keepPicked && (
         <>
-          <Field label="Matching on its field">
-            <FieldInput value={String(cfg.keyField ?? "")} groups={scopeFor(keepId)} onChange={(v) => onChange({ keyField: v })} placeholder="Pick the field to look up…" />
+          <Field label="Match on">
+            <FieldInput value={String(cfg.keyField ?? "")} groups={scopeFor(keepId)} onChange={(v) => onChange({ keyField: v })} placeholder="Field to look up…" />
           </Field>
-          <Field label="Keep a record when its value">
-            <Select
+          <Field label="Keep when it">
+            <Segmented
               value={matchMode}
-              width={W}
               options={[
-                { value: "appears", label: `Appears in ${other ? stepLabel(other.nodeId) : "the other step"}` },
-                { value: "missing", label: `Doesn't appear in ${other ? stepLabel(other.nodeId) : "the other step"}` },
+                { value: "appears", label: "Is in", hint: `Keep records that appear in ${other ? stepLabel(other.nodeId) : "the other step"}` },
+                { value: "missing", label: "Is not in", hint: `Keep records that do NOT appear in ${other ? stepLabel(other.nodeId) : "the other step"}` },
               ]}
               onChange={(v) => onChange({ matchMode: v })}
             />
           </Field>
           {other && (
-            <Field label={`In ${stepLabel(other.nodeId)}’s field`}>
-              <FieldInput value={String(cfg.lookupField ?? "")} groups={scopeFor(other.nodeId)} onChange={(v) => onChange({ lookupField: v })} placeholder="Pick the field holding the values…" />
+            <Field label={stepLabel(other.nodeId)}>
+              <FieldInput value={String(cfg.lookupField ?? "")} groups={scopeFor(other.nodeId)} onChange={(v) => onChange({ lookupField: v })} placeholder="Field holding the values…" />
             </Field>
           )}
           <p className="text-xs text-neutral-400">
-            Matching ignores capitalization and extra spaces. A record with a blank value can never match{matchMode === "appears" ? ", so it is dropped." : ", so it is kept."}
+            Ignores capitalization and extra spaces. A blank value can never match{matchMode === "appears" ? ", so it is dropped." : ", so it is kept."}
           </p>
         </>
       )}
@@ -1910,7 +1914,7 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
         <span className={`flex h-4 w-4 items-center justify-center rounded border ${on ? "border-neutral-800 bg-neutral-800 text-white" : "border-neutral-300"}`}>
           {on ? "✓" : ""}
         </span>
-        Keep one record per…
+        Remove duplicates
       </button>
       {on ? (
         <>
@@ -1947,7 +1951,7 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
           )}
         </>
       ) : (
-        <p className="text-xs text-neutral-400">Collapse records that share a value down to one, right as they load.</p>
+        <p className="text-xs text-neutral-400">Collapse records sharing a value down to one.</p>
       )}
     </div>
   );

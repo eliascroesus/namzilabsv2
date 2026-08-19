@@ -62,6 +62,19 @@ export type LibraryEntry = {
   config?: Record<string, unknown>;
 };
 
+/**
+ * ONE WORD WHERE ONE WORD WILL DO.
+ *
+ * These labels are read in three places, and the narrowest one governs: a
+ * 256px canvas card, which also carries a step number, an icon, a status and
+ * a menu. "Match against a list" left about eleven characters of room, so a
+ * card read "2. Match ..." and told the user nothing at all — the label was
+ * long enough to be helpful everywhere except where it was actually needed.
+ *
+ * The blurb underneath does the explaining, and it only has to do it once,
+ * in the picker, at the moment of choosing. After that the user knows what
+ * they added and the card is a reminder, not an introduction.
+ */
 export const NODE_LIBRARY: LibraryEntry[] = [
   {
     key: "app",
@@ -74,7 +87,7 @@ export const NODE_LIBRARY: LibraryEntry[] = [
   {
     key: "unite",
     type: "unite",
-    label: "Combine data",
+    label: "Combine",
     blurb: "Put several steps’ records on one line",
     stage: "Data",
     keywords: "unite combine merge together branches lanes sources union bring back stack join",
@@ -88,8 +101,8 @@ export const NODE_LIBRARY: LibraryEntry[] = [
     // something else, then finding a checkbox in it.
     key: "unite_match",
     type: "unite",
-    label: "Match against a list",
-    blurb: "Keep only records that appear (or don’t) in another step",
+    label: "Match",
+    blurb: "Keep only records that appear in another step",
     stage: "Data",
     keywords: "match cross reference lookup intersect appears exists in both vlookup check against missing not in compare lists filter by another step",
     config: { mode: "match" },
@@ -97,24 +110,24 @@ export const NODE_LIBRARY: LibraryEntry[] = [
   {
     key: "filter",
     type: "filter",
-    label: "Filter records",
+    label: "Filter",
     blurb: "Keep only the records you want",
     stage: "Conditions",
-    keywords: "condition where keep only match date range filter narrow exclude remove",
+    keywords: "condition where keep only match date range filter narrow exclude remove period",
   },
   {
     key: "paths",
     type: "paths",
-    label: "Split into paths",
-    blurb: "Send records down different branches",
+    label: "Split",
+    blurb: "Send records down separate branches",
     stage: "Conditions",
     keywords: "split branch route condition paths segment separate",
   },
   {
     key: "formula_dataset",
     type: "formula",
-    label: "Summarise records",
-    blurb: "Count, total or average them into one number",
+    label: "Summarize",
+    blurb: "Count, total or average into one number",
     stage: "Calculation",
     keywords: "count sum average total maximum minimum median distinct unique aggregate how many number summarise summarize records",
     config: { op: "count" },
@@ -122,8 +135,8 @@ export const NODE_LIBRARY: LibraryEntry[] = [
   {
     key: "formula_compare",
     type: "formula",
-    label: "Compare two numbers",
-    blurb: "A rate, a ratio or a % change from two earlier steps",
+    label: "Compare",
+    blurb: "A rate, ratio or % change from two steps",
     stage: "Calculation",
     keywords: "compare rate ratio percentage percent change difference divide conversion share of formula two numbers",
     config: { op: "percentage" },
@@ -132,11 +145,21 @@ export const NODE_LIBRARY: LibraryEntry[] = [
     key: "time_between",
     type: "time_between",
     label: "Time between",
-    blurb: "Measure how long from one event to another, per record",
+    blurb: "How long from one event to another",
     stage: "Calculation",
     keywords: "speed to lead time between duration gap first call response elapsed how long pair match latency",
   },
 ];
+
+/**
+ * The step's JOB, for the icon — where one node type is two of them. Same
+ * accent, different glyph; see NodeIcon.
+ */
+export function nodeVariant(type: NodeType, cfg: Record<string, unknown>): string | undefined {
+  if (type === "unite") return String(cfg.mode ?? "stack") === "match" ? "unite_match" : undefined;
+  if (type === "formula") return isDatasetFormulaOp(cfg.op ?? "percentage") ? undefined : "formula_compare";
+  return undefined;
+}
 
 // (Source badge styling lives in controls/source-style.ts — the one copy.)
 
@@ -192,8 +215,8 @@ export function defaultTitle(type: NodeType, data: NodeData): string {
   const c = data.config;
   if (type === "app") return (c.connectionName as string) || "Get data";
   if (type === "output") return (c.name as string) || "New metric";
-  if (type === "formula") return isDatasetFormulaOp(c.op ?? "percentage") ? "Summarise records" : "Compare two numbers";
-  if (type === "unite") return String(c.mode ?? "stack") === "match" ? "Match against a list" : "Combine data";
+  if (type === "formula") return isDatasetFormulaOp(c.op ?? "percentage") ? "Summarize" : "Compare";
+  if (type === "unite") return String(c.mode ?? "stack") === "match" ? "Match" : "Combine";
   return NODE_LABELS[type];
 }
 export function nodeTitle(type: NodeType, data: NodeData): string {
@@ -339,8 +362,17 @@ export function stepSummaryLines(
   }
 
   if (type === "unite") {
-    if (String(cfg.mode ?? "stack") === "match") return [];
     const n = ctx.inputCount ?? 0;
+    if (String(cfg.mode ?? "stack") === "match") {
+      // A half-answered Match has no honest sentence — naming only the side
+      // that IS chosen would read as a complete rule that keeps the wrong
+      // records. The setup hint on the card covers the unfinished case.
+      const key = String(cfg.keyField ?? "");
+      const lookup = String(cfg.lookupField ?? "");
+      if (!key || !lookup) return [];
+      const verb = String(cfg.matchMode ?? "appears") === "missing" ? "is not in" : "is in";
+      return [`Keeps records whose ${labelOf(key)} ${verb} the other step’s ${labelOf(lookup)}.`];
+    }
     return n === 0 ? ["Pick the steps whose records should flow on together."] : [`Records from ${n} step${n === 1 ? "" : "s"}, continuing as one list.`];
   }
 
@@ -455,12 +487,12 @@ export function resultLabel(
  * do next — the footer button already says what to do next.
  */
 export type NodeStatus = "ready" | "setup" | "untested" | "updating" | "error";
-export const STATUS_META: Record<NodeStatus, { label: string; cls: string; border: string }> = {
-  ready: { label: "Tested", cls: "bg-green-100 text-green-700", border: "border-green-300" },
-  setup: { label: "Needs setup", cls: "bg-amber-100 text-amber-800", border: "border-amber-300" },
-  untested: { label: "Not tested", cls: "bg-neutral-100 text-neutral-500", border: "border-neutral-300" },
-  updating: { label: "Testing…", cls: "bg-blue-100 text-blue-700", border: "border-blue-300" },
-  error: { label: "Error", cls: "bg-red-100 text-red-700", border: "border-red-300" },
+export const STATUS_META: Record<NodeStatus, { label: string; cls: string; border: string; dot: string; hint: string }> = {
+  ready: { label: "Tested", cls: "bg-green-100 text-green-700", border: "border-green-300", dot: "bg-green-500", hint: "text-neutral-500" },
+  setup: { label: "Needs setup", cls: "bg-amber-100 text-amber-800", border: "border-amber-300", dot: "bg-amber-500", hint: "text-amber-700" },
+  untested: { label: "Not tested", cls: "bg-neutral-100 text-neutral-500", border: "border-neutral-300", dot: "bg-neutral-300", hint: "text-neutral-400" },
+  updating: { label: "Testing…", cls: "bg-blue-100 text-blue-700", border: "border-blue-300", dot: "bg-blue-500", hint: "text-blue-600" },
+  error: { label: "Error", cls: "bg-red-100 text-red-700", border: "border-red-300", dot: "bg-red-500", hint: "text-red-600" },
 };
 
 export function pathHandles(data: NodeData): Array<{ id: string; label: string }> {

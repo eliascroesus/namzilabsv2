@@ -5,12 +5,13 @@ backend, engine, connector or ingestion change is proposed anywhere in this
 document.** Every recommendation is a component, a layout, a piece of copy, or
 a rule about which existing thing is shown when.
 
-> **Status — all five stages shipped; every defect closed.** All twenty items
-> in §9 and all fourteen defects in §8 have landed, each marked ✅ below. The
-> verification bar was met after every stage: `typecheck`, **1,396 tests / 112
-> files**, `build`, `check:orphans`. Behavioural changes are sabotage-verified
-> in the repo's convention — the pin is broken, confirmed to fail alone, and
-> restored.
+> **Status — all five stages shipped, every defect closed, plus a density
+> pass.** All twenty items in §9 and all fourteen defects in §8 have landed,
+> each marked ✅ below; §9b covers the label/icon/density round that followed
+> the first screenshots. The verification bar was met after every stage:
+> `typecheck`, **1,399 tests / 112 files**, `build`, `check:orphans`.
+> Behavioural changes are sabotage-verified in the repo's convention — the pin
+> is broken, confirmed to fail alone, and restored.
 >
 > §10 (what not to change) still stands, and is the part of this document with
 > the longest shelf life.
@@ -724,6 +725,60 @@ editable, plausible, and inert. `ALL_TYPES` now derives from `NODE_TYPES`.
 **Now run your user tests.** The mechanical friction that would otherwise have
 dominated the feedback is gone; what surfaces from here will be about the
 model, which is what is actually worth learning.
+
+---
+
+## 9b. The density pass (after the first round of screenshots)
+
+A screenshot of the Match panel caught what a code read had not: the step's
+own copy contradicted the mode it was in. That triggered a pass over every
+label in the builder, on one rule — **the shortest wording that still means
+one thing.**
+
+**A bug the split had left behind.** The Combine panel opened with a standing
+paragraph — *"Brings branches and other data steps back together — later steps
+see records from all of them"* — rendered in **both** modes. So a step set to
+"Keep only records that match" led with a sentence promising the opposite. The
+paragraph is gone; the summary box (§6.3) states the actual rule in whichever
+mode the step is in, including the direction: *"Keeps records whose Email is in
+the other step's Email."* A half-answered Match says nothing at all, because
+naming only the side that IS chosen would read as a complete rule that keeps
+the wrong records.
+
+**Labels cut to fit the narrowest place they appear.** A canvas card is 256px
+and already spends most of it on a step number, an icon, a status and a menu.
+"Match against a list" left about eleven characters, so the card read
+`2. Match ...` — worse than nothing, because it takes the space, draws the eye
+and withholds the answer. Now: Get data, Combine, **Match**, Filter, Split,
+**Summarize**, **Compare**, Time between. The picker's blurb does the
+explaining, once, at the moment of choosing. `NODE_LABELS` moved with them so
+validation messages and cards can't drift apart. Pinned at ≤13 characters.
+
+**The status badge became a dot.** "Needs setup" was 72px of a 256px card,
+taken from the title, to say something the border colour and the (now amber)
+hint line already said. The dot carries the state, the hint says what to do —
+which is strictly more useful than the word "Needs setup" — and the full label
+is in the tooltip and in the panel header, where there is room.
+
+**Setup hints became fragments.** They were sentences inside twenty characters
+of usable width, arriving as "Wire in the ...". *Pick an account. Needs two
+steps. Add a condition. Pick two numbers.* No full stops — these are labels,
+not prose.
+
+**A new `Segmented` control** replaces the full-width dropdown on every binary
+choice: Stack/Match, A number/A length of time, One number/A trend, Is in/Is
+not in. A dropdown for two options costs a click to reveal an answer that would
+have fitted on screen, and hides the alternative — which is the half that
+teaches what the control is for. Longer or growing lists stay a `Select`.
+
+**Icons now distinguish the two doors of each merged step**, since they share a
+node type and would otherwise share a face: Combine keeps the merge arrows,
+Match gets a Venn — the one picture everyone already reads as "only the part in
+both". Summarize gets rising bars ("records become one number"), Compare gets
+the division sign. The old Calculate glyph was trying to mean both halves at
+once and read as neither. And an unconfigured Get data step — the picker's own
+entry included — used to render a grey tile reading **"Ap"**, which looks like
+a failed image; it now shows the database glyph until an app is chosen.
 
 ---
 

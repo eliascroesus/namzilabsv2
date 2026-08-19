@@ -23,8 +23,23 @@ describe("validation speaks plain English", () => {
   it("input errors name the step like the picker does, never cap(node.type)", () => {
     const g = parseGraph({ nodes: [{ id: "u", type: "unite", data: { config: {} } }], edges: [] });
     const issues = validateGraph(g);
-    // "Combine data", not "Unite" — the label the user actually saw.
-    expect(issues.some((i) => i.message === "Combine data needs a step before it.")).toBe(true);
+    // "Combine", not "Unite" — the label the user actually saw on the card.
+    expect(issues.some((i) => i.message === "Combine needs a step before it.")).toBe(true);
+  });
+
+  /**
+   * A card is 256px wide and already spends most of it on a step number, an
+   * icon, a status and a menu. A label long enough to be helpful in the picker
+   * arrives on the canvas as "2. Match ...", which is worse than nothing: it
+   * takes the space, draws the eye and withholds the answer. The blurb does
+   * the explaining, once, where there is room for it.
+   */
+  it("step labels stay short enough to survive a canvas card", () => {
+    for (const entry of NODE_LIBRARY) {
+      expect({ key: entry.key, len: entry.label.length <= 13 }).toEqual({ key: entry.key, len: true });
+      // …and the blurb carries the meaning the label no longer spells out.
+      expect(entry.blurb.length).toBeGreaterThan(entry.label.length);
+    }
   });
 
   it("every node type has a plain-English label for messages to use", () => {
@@ -87,6 +102,17 @@ describe("validation speaks plain English", () => {
   it("a blocking step status never looks like a non-blocking one", () => {
     expect(STATUS_META.setup.cls).not.toBe(STATUS_META.untested.cls);
     expect(STATUS_META.setup.border).not.toBe(STATUS_META.untested.border);
+    // The DOT is now the canvas signal — the card shows no status words at
+    // all — so it carries the same burden the badge used to. Sabotage: give
+    // setup and untested one colour and a half-built flow goes back to
+    // looking finished.
+    expect(STATUS_META.setup.dot).not.toBe(STATUS_META.untested.dot);
+    // Every status has a dot and a hint tone; a missing one renders an
+    // invisible marker rather than an obviously broken card.
+    for (const s of Object.values(STATUS_META)) {
+      expect(s.dot.length).toBeGreaterThan(0);
+      expect(s.hint.length).toBeGreaterThan(0);
+    }
     // And a status states what IS, never what to do next — the footer button
     // already owns the instruction.
     for (const s of Object.values(STATUS_META)) expect(s.label).not.toMatch(/^Ready to /);
@@ -175,6 +201,23 @@ describe("a step says what it does, in words", () => {
         recordType: "Lead created",
       }),
     ).toEqual(["Lead created from Acme (Close). One record per Subject, keeping the earliest."]);
+  });
+
+  it("a Match step states its rule, in the direction it is set to", () => {
+    const cfg = { mode: "match", keepNodeId: "a", keyField: "subject", lookupField: "properties.amount" };
+    // Sabotage: return [] for match mode as it used to and the panel opens on
+    // a standing paragraph about STACKING — the copy promising the opposite
+    // of what the step does, which is what the screenshot caught.
+    expect(stepSummaryLines("unite", cfg, labelOf)).toEqual(["Keeps records whose Subject is in the other step’s Amount."]);
+    expect(stepSummaryLines("unite", { ...cfg, matchMode: "missing" }, labelOf)).toEqual([
+      "Keeps records whose Subject is not in the other step’s Amount.",
+    ]);
+  });
+
+  it("a half-answered Match says nothing rather than a rule it isn't following", () => {
+    // Naming only the side that IS chosen would read as a complete rule that
+    // keeps the wrong records.
+    expect(stepSummaryLines("unite", { mode: "match", keyField: "subject" }, labelOf)).toEqual([]);
   });
 
   it("a step with nothing configured yet says nothing rather than half a sentence", () => {

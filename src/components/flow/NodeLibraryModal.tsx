@@ -169,7 +169,7 @@ export function NodeLibraryModal({
                       onClick={() => onPick(e)}
                       className="group flex w-full items-center gap-3.5 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-neutral-100"
                     >
-                      <NodeIcon type={e.type} size={40} />
+                      <NodeIcon type={e.type} variant={e.key === "unite_match" ? "unite_match" : e.key === "formula_compare" ? "formula_compare" : undefined} size={40} />
                       <span className="min-w-0">
                         <span className="block text-[15px] font-semibold leading-tight text-neutral-900">{e.label}</span>
                         <span className="mt-0.5 block text-[13px] leading-tight text-neutral-500">{e.blurb}</span>

@@ -232,7 +232,7 @@ export function DataBrowser({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {!anyFields && (
-            <p className="px-2 py-6 text-center text-xs text-neutral-400">No data yet. Test an earlier step to bring its fields here.</p>
+            <p className="px-2 py-6 text-center text-xs text-neutral-400">No fields yet — test an earlier step.</p>
           )}
 
           {/* Drilled-in view: children of the current container field. */}
@@ -336,7 +336,7 @@ export function DataBrowser({
             the list entirely. Both readings have to survive this sentence. */}
         {!drill && anyFields && groups.length > 0 && (
           <p className="border-t border-neutral-100 px-3 py-2 text-[11px] leading-snug text-neutral-400">
-            Filters and date windows add no columns of their own — their records&rsquo; fields stay under the step that produced them.
+            Filters and date windows add no columns — a record&rsquo;s fields stay under the step that produced them.
           </p>
         )}
 
@@ -352,7 +352,7 @@ export function DataBrowser({
           >
             {/* Says what it DOES — now that search also matches values, this
                 hatch must not read as "pick the record with this email". */}
-            Use “<span className="font-medium text-neutral-800">{q.trim()}</span>” as a field path, exactly as typed
+            Use “<span className="font-medium text-neutral-800">{q.trim()}</span>” as a field path
           </button>
         )}
       </>

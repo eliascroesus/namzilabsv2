@@ -214,13 +214,13 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
       // requirements are covered by the generic dataset checks above.
       if (cfg.success && cfg.data.mode === "match") {
         if (ins.length !== 2) {
-          issues.push({ nodeId: node.id, message: "Combine's matching compares exactly two steps — wire in the records to keep and the list to check them against." });
+          issues.push({ nodeId: node.id, message: "Match needs exactly two steps — the records to keep, and the list to check them against." });
         } else if (!cfg.data.keepNodeId || !cfg.data.keyField || !cfg.data.lookupField) {
-          issues.push({ nodeId: node.id, message: "Combine's matching isn't finished — open the step and pick whose records to keep and which fields to compare." });
+          issues.push({ nodeId: node.id, message: "Match isn't finished — open it and pick whose records to keep, and which fields to compare." });
         } else if (!ins.includes(cfg.data.keepNodeId)) {
           // The kept step was rewired away; running would throw. Raised
           // before publish instead of after.
-          issues.push({ nodeId: node.id, message: "Combine's matching points at a step that is no longer wired into it — open it and pick again." });
+          issues.push({ nodeId: node.id, message: "Match points at a step that is no longer wired into it — open it and pick again." });
         }
       }
     }
@@ -257,7 +257,7 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
     if (node.type === "paths") {
       const cfg = PathsConfigSchema.safeParse(node.data.config ?? {});
       if (!cfg.success || cfg.data.paths.length === 0) {
-        issues.push({ nodeId: node.id, message: "Split into paths needs at least one branch." });
+        issues.push({ nodeId: node.id, message: "Split needs at least one branch." });
       } else if (cfg.data.paths.reduce((a, p) => a + mappedRuleGaps(p.filters), 0) > 0) {
         issues.push({ nodeId: node.id, message: "A path condition compares against a field, but no field is chosen." });
       }

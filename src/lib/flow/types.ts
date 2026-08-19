@@ -41,10 +41,10 @@ export type NodeType = (typeof NODE_TYPES)[number];
  */
 export const NODE_LABELS: Record<NodeType, string> = {
   app: "Get data",
-  filter: "Filter records",
+  filter: "Filter",
   output: "Show on dashboard",
-  paths: "Split into paths",
-  unite: "Combine data",
+  paths: "Split",
+  unite: "Combine",
   group: "Group into categories",
   formula: "Calculate",
   time: "Date range",
