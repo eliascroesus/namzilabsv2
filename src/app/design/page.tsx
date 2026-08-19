@@ -51,15 +51,16 @@ export default function DesignPage() {
   return (
     <div className="flex h-screen bg-white">
       <Sidebar
-        footer={
-          <div className="flex items-center gap-2.5 rounded-control px-2 py-1.5">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ink-800 text-micro font-semibold text-ink-100">EC</span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-tiny font-medium text-ink-100">Namzilabs</span>
-              <span className="block truncate text-micro text-ink-400">elias@namzilabs.co</span>
-            </span>
-          </div>
-        }
+        account={{
+          initials: "EC",
+          panel: (
+            <div className="space-y-2">
+              <p className="text-small font-semibold text-neutral-800">Namzilabs</p>
+              <p className="truncate text-tiny text-neutral-500">elias@namzilabs.co</p>
+              <button className="w-full rounded-control border border-neutral-200 px-3 py-1.5 text-small font-medium text-neutral-700">Sign out</button>
+            </div>
+          ),
+        }}
       />
 
       <main className="min-w-0 flex-1 overflow-y-auto">
@@ -142,7 +143,7 @@ export default function DesignPage() {
 
           <Section title="Buttons" note="One filled style. A second filled colour would be a second primary action.">
             <div className="flex flex-wrap items-center gap-3">
-              <button className="rounded-control bg-brand-600 px-4 py-2 text-base font-semibold text-white shadow-sm shadow-brand-600/20">
+              <button className="btn-brand rounded-control px-4 py-2 text-base font-semibold">
                 Review &amp; publish
               </button>
               <button className="rounded-control border border-neutral-200 bg-white px-4 py-2 text-base font-medium text-neutral-700">

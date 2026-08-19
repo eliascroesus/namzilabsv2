@@ -183,7 +183,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <FreshnessPoller />
       <main className="mx-auto max-w-5xl px-6 py-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <h1 className="text-display font-semibold tracking-tight text-neutral-900">Dashboard</h1>
           <div className="flex gap-2">
             {/* Every tile at once. The per-tile Refresh recomputes one flow,
                 which is the wrong unit when you have just changed something
@@ -191,7 +191,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <form action={refreshAllFlowsAction}>
               <button
                 type="submit"
-                className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+                className="rounded-control border border-neutral-200 px-4 py-2 text-base font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
                 title="Recompute every published metric now"
               >
                 Refresh
@@ -204,7 +204,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 The routes stay alive so existing metrics still open and edit
                 (their tiles link to them); they are simply no longer a door
                 anyone walks through by accident. */}
-            <Link href="/dashboard/flows" className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+            <Link href="/dashboard/flows" className="btn-brand rounded-control px-4 py-2 text-base font-semibold">
               New flow
             </Link>
           </div>

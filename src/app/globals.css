@@ -22,18 +22,27 @@
  * user. A canvas where everything is coloured can point at nothing.
  * ========================================================================== */
 @theme {
+  /* The app's typeface, wired through Tailwind so `font-sans` means Inter. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
   /* --- Brand / accent -----------------------------------------------------
    * One accent, used for every primary action, every selection, every focus
    * ring. `brand-600` is the button; 500 is hover-on-dark; 50/100 are tints.
+   *
+   * NOT Tailwind's stock indigo. #4f46e5 is the default palette every
+   * unstyled project ships with, and it reads that way. This ramp is
+   * hand-tuned around a violet-iris hue (near Radix "iris", near Linear's
+   * lavender family) — close enough to feel familiar, chosen enough to feel
+   * chosen. 600 keeps ~5:1 contrast under white text.
    */
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-300: #a5b4fc;
-  --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
+  --color-brand-50: #f3f3fd;
+  --color-brand-100: #e8e7fc;
+  --color-brand-200: #d3d3f9;
+  --color-brand-300: #b2b1f4;
+  --color-brand-400: #908fed;
+  --color-brand-500: #7472e4;
+  --color-brand-600: #5b58d6;
+  --color-brand-700: #4b48c0;
 
   /* --- Ink: the navigation rail and any dark surface ----------------------
    * A four-step ladder, which is the minimum a dark surface needs to express
@@ -103,12 +112,57 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
   /* Type rendering is part of the kit: without these, the same 13px label is
      visibly heavier on macOS than the design was drawn at. */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* Inter at UI sizes wants a touch of negative tracking — Linear runs
+     -0.011em at 15px and -0.013em at 14px; anything past that is the limit
+     the four reference products never cross. */
+  letter-spacing: -0.008em;
+  /* Linear's typographic identity, verbatim from their live CSS: cv01
+     (alternate a) + ss03 (rounded r). Without these you get default Inter,
+     which is exactly the "every AI project" look this kit exists to shed. */
+  font-feature-settings: "cv01", "ss03";
+}
+
+/* Tabular numerals, opt-in per element — never global, per every reference
+   product (Stripe: "tnum" on metric spans only). For numbers that update in
+   place: a metric that reflows as it ticks reads as jitter, not change. */
+.tnum {
+  font-feature-settings: "cv01", "ss03", "tnum";
+  font-variant-numeric: tabular-nums;
+}
+
+/**
+ * THE ONE PRIMARY BUTTON. A flat single-colour fill is the tell of an
+ * unstyled product; the products this one is measured against light their
+ * primaries from the top (a one-step vertical gradient) and seat them with an
+ * inset hairline highlight above and shade below. Kept as a class because it
+ * is a recipe, not a palette entry — utilities can't express the inset pair.
+ */
+.btn-brand {
+  color: #fff;
+  background: linear-gradient(to bottom, var(--color-brand-500), var(--color-brand-600));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    inset 0 -1px 0 rgb(0 0 0 / 0.1),
+    0 0 0 1px rgb(75 72 192 / 0.9),
+    0 1px 2px rgb(75 72 192 / 0.35);
+  transition: filter 0.15s ease;
+}
+.btn-brand:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+.btn-brand:active:not(:disabled) {
+  filter: brightness(0.96);
+}
+.btn-brand:disabled {
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-400);
+  box-shadow: none;
 }
 
 /*
@@ -162,7 +216,7 @@ body {
 }
 .react-flow__edge:hover .react-flow__edge-path,
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #818cf8;
+  stroke: var(--color-brand-400);
 }
 
 /*
@@ -182,11 +236,16 @@ summary {
  * config panel, so every floating surface feels like the same system.
  */
 .flow-shadow {
-  /* Even on all sides — no offset/direction — so a floating surface reads as
-     lifted uniformly above the canvas. */
+  /* Figma UI3's floating-panel elevation, near-verbatim: a hairline ring
+     (their 0.5px outline layer, here a 1px ring so it survives non-retina),
+     one big soft ambient, one tight contact shadow. The old value was a
+     36px non-directional glow, which reads as haze; this reads as height.
+     The ring replaces any border — a border PLUS this ring is a double
+     hairline, which is exactly the mud it replaces. */
   box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.06),
-    0 0 36px 2px rgba(15, 23, 42, 0.18);
+    0 0 0 1px rgba(15, 23, 42, 0.08),
+    0 10px 16px rgba(15, 23, 42, 0.1),
+    0 2px 5px rgba(15, 23, 42, 0.12);
 }
 
 /* A springy scale "pop" — grows from ~0.9 with a slight overshoot, so surfaces

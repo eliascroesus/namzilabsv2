@@ -79,7 +79,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const isCompare =
     isBinaryCalc(t, data.config as Record<string, unknown>) ||
     (t === "calculate" && String(data.config.mode ?? "") === "compare");
-  const border = selected ? "border-blue-400 ring-2 ring-blue-500" : sm.border;
+  const border = selected ? "border-brand-400 ring-2 ring-brand-500" : sm.border;
   const freeHandles = (data.freeHandles as Array<{ id: string; label: string }> | undefined) ?? [];
 
   // The single body line: the plain output when ready, a hint when setup, else nothing.
@@ -148,7 +148,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             {nodeTitle(t, data)}
           </span>
           {bodyLine && <span className={`block truncate text-xs ${bodyLine.cls}`} title={bodyLine.text}>{bodyLine.text}</span>}
-          {refLine && <span className="block truncate text-xs text-indigo-600" title={refLine}>{refLine}</span>}
+          {refLine && <span className="block truncate text-xs text-brand-600" title={refLine}>{refLine}</span>}
           {sourceLine && <span className="block truncate text-xs text-amber-700" title={sourceLine}>{sourceLine}</span>}
         </span>
         {/* A DOT, NOT A BADGE. "Needs setup" is 72px of a 256px card, and it
@@ -164,7 +164,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       {publishes != null && (
         <div
           className={`flex items-center gap-1.5 border-t px-3 py-1.5 text-micro font-medium ${
-            publishes ? "border-indigo-100 bg-indigo-50/70 text-indigo-700" : "border-neutral-100 bg-neutral-50 text-neutral-400"
+            publishes ? "border-brand-100 bg-brand-50/70 text-brand-700" : "border-neutral-100 bg-neutral-50 text-neutral-400"
           }`}
           title={publishes ? "This step's result becomes a tile when you publish." : "Switched off in Review & publish — this step publishes nothing."}
         >

@@ -132,7 +132,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
         <GroupBars groups={t.groups} tile={t} />
       ) : (
         <>
-          <p className="mt-2 text-4xl font-semibold">{fmt(t.value, t)}</p>
+          <p className="tnum mt-2 text-4xl font-semibold">{fmt(t.value, t)}</p>
           {t.target != null && <TargetBar value={t.value ?? 0} target={t.target} tile={t} />}
         </>
       )}
@@ -210,7 +210,7 @@ function Sparkbars({ series, label, tile }: { series: Array<{ bucket: string; va
   const max = Math.max(1, ...series.map((s) => s.value));
   return (
     <>
-      <p className="mt-2 text-2xl font-semibold">{label}</p>
+      <p className="tnum mt-2 text-2xl font-semibold">{label}</p>
       <div className="mt-3 flex h-16 items-end gap-1">
         {series.map((s) => (
           <div
@@ -237,7 +237,7 @@ function GroupBars({ groups, tile }: { groups: Array<{ label: string; value: num
       {/* The metric over EVERY record. Bars alone read as "these six are the
           whole number", and the cut-note below needs a visible total to be
           about. */}
-      {tile.value != null && <p className="mt-2 text-2xl font-semibold">{fmt(tile.value, tile)}</p>}
+      {tile.value != null && <p className="tnum mt-2 text-2xl font-semibold">{fmt(tile.value, tile)}</p>}
       <div className="mt-3 space-y-1.5">
         {shown.map((g) => (
           <div key={g.label}>

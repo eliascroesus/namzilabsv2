@@ -24,10 +24,8 @@ export function ToolbarPreview({ panelOpen = false }: { panelOpen?: boolean }) {
       onRename={setName}
       saveState="saved"
       onRetrySave={noop}
-      onUndo={noop}
-      onRedo={noop}
-      canUndo
-      canRedo={false}
+      onDuplicate={noop}
+      onDelete={noop}
       onTestAll={noop}
       onStopTestAll={noop}
       runAll={null}

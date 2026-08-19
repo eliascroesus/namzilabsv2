@@ -6,7 +6,7 @@ import { humanizeKey } from "./field-utils";
 import type { DataGroup } from "./types";
 
 const BOX =
-  "w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 text-left text-sm transition-colors hover:border-neutral-400 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100";
+  "w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 text-left text-sm transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
 
 /**
  * The one field chooser used by every step (Filter conditions, Calculate's
@@ -49,7 +49,7 @@ export function FieldInput({
               tabIndex={-1}
               title="Pick a field from your data"
               aria-label="Pick a field from your data"
-              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 p-1 text-indigo-500 transition-colors hover:border-indigo-300 hover:bg-indigo-100 hover:text-indigo-600"
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-brand-200 bg-brand-50 p-1 text-brand-500 transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600"
             >
               <DataIcon />
             </button>

@@ -9,31 +9,31 @@ type Org = { id: string; name: string };
  * the user isn't a member of.
  */
 /**
- * Styled for the dark rail, which is now the only place it renders. A
- * one-workspace user — almost everyone — sees just the name, so the control
- * costs nothing until there is actually something to switch between.
+ * Lives in the rail's light account panel. A one-workspace user — almost
+ * everyone — sees just the name, so the control costs nothing until there is
+ * actually something to switch between.
  */
 export function OrgSwitcher({ orgs, currentId }: { orgs: Org[]; currentId: string }) {
   const current = orgs.find((o) => o.id === currentId);
 
   if (orgs.length <= 1) {
-    return <span className="block truncate text-tiny font-medium text-ink-100">{current?.name ?? "Workspace"}</span>;
+    return <p className="truncate text-small font-semibold text-neutral-800">{current?.name ?? "Workspace"}</p>;
   }
 
   return (
-    <form action={switchOrgAction}>
+    <form action={switchOrgAction} className="space-y-1.5">
       <select
         name="organizationId"
         defaultValue={currentId}
-        className="w-full cursor-pointer rounded-control border border-ink-700 bg-ink-900 px-1.5 py-1 text-tiny font-medium text-ink-100 focus:border-brand-500 focus:outline-none"
+        className="w-full cursor-pointer rounded-control border border-neutral-300 bg-white px-2 py-1.5 text-small font-medium text-neutral-800 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
       >
         {orgs.map((o) => (
-          <option key={o.id} value={o.id} className="bg-ink-900 text-ink-100">
+          <option key={o.id} value={o.id}>
             {o.name}
           </option>
         ))}
       </select>
-      <button type="submit" className="mt-1 text-micro font-medium text-brand-400 hover:text-brand-300">
+      <button type="submit" className="text-micro font-semibold text-brand-600 hover:text-brand-700">
         Switch workspace
       </button>
     </form>

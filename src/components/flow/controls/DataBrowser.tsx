@@ -17,7 +17,7 @@ function FieldRow({ field, onDrill, onPick }: { field: DataField; onDrill: () =>
     <button
       type="button"
       onClick={field.container ? onDrill : onPick}
-      className="flex w-full items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 px-2.5 py-2 text-left transition-colors hover:border-indigo-200 hover:bg-indigo-50/50"
+      className="flex w-full items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 px-2.5 py-2 text-left transition-colors hover:border-brand-200 hover:bg-brand-50/50"
     >
       <span className="flex min-w-0 max-w-[55%] shrink-0 items-center gap-1.5">
         <span className="truncate text-sm text-neutral-800">{field.label}</span>
@@ -138,7 +138,7 @@ export function DataBrowser({
     <button
       type="button"
       onClick={() => setShowAll((prev) => new Set(prev).add(k))}
-      className="mt-1 w-full rounded-lg px-2.5 py-1.5 text-left text-micro font-medium text-indigo-600 hover:bg-indigo-50"
+      className="mt-1 w-full rounded-lg px-2.5 py-1.5 text-left text-micro font-medium text-brand-600 hover:bg-brand-50"
     >
       Show all {hidden + VISIBLE} fields
     </button>
@@ -170,7 +170,7 @@ export function DataBrowser({
     >
       <>
         {/* Left-edge resize handle. */}
-        <div onPointerDown={startResize} title="Drag to resize" className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-ew-resize transition-colors hover:bg-indigo-200/70" />
+        <div onPointerDown={startResize} title="Drag to resize" className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-ew-resize transition-colors hover:bg-brand-200/70" />
 
         <div className="space-y-2 border-b border-neutral-100 p-2.5">
           <div className="flex items-center gap-1.5">
@@ -179,7 +179,7 @@ export function DataBrowser({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search names or values…"
-              className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-100"
+              className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100"
             />
             {/* On a narrow viewport this flyout covers the config panel, so
                 the trigger that opened it is underneath — "click outside" is
@@ -204,7 +204,7 @@ export function DataBrowser({
                 type="button"
                 onClick={() => setTypeFilter(t.key)}
                 className={`rounded-full px-2.5 py-1 text-micro font-medium transition-colors ${
-                  typeFilter === t.key ? "bg-indigo-600 text-white" : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
+                  typeFilter === t.key ? "bg-brand-600 text-white" : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
                 }`}
               >
                 {t.label}

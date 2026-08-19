@@ -71,15 +71,15 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
           <details
             key={i}
             className={`group overflow-hidden rounded-lg border transition-colors ${
-              selected ? "border-indigo-200 bg-indigo-50/60 ring-1 ring-indigo-200" : "border-neutral-100 bg-neutral-50 hover:border-indigo-200 hover:bg-indigo-50/40"
+              selected ? "border-brand-200 bg-brand-50/60 ring-1 ring-brand-200" : "border-neutral-100 bg-neutral-50 hover:border-brand-200 hover:bg-brand-50/40"
             }`}
           >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-xs">
               <span className="flex min-w-0 items-center gap-1.5">
                 {selected && (
-                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[9px] font-bold text-white">★</span>
+                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[9px] font-bold text-white">★</span>
                 )}
-                <span className={`truncate font-medium ${selected ? "text-indigo-900" : "text-neutral-700"}`}>{title || `Record ${i + 1}`}</span>
+                <span className={`truncate font-medium ${selected ? "text-brand-900" : "text-neutral-700"}`}>{title || `Record ${i + 1}`}</span>
               </span>
               <span className="shrink-0 text-micro text-neutral-400">
                 {recordWhen(rec.occurredAt) && <span className="mr-1.5">{recordWhen(rec.occurredAt)}</span>}
@@ -101,7 +101,7 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
                 className={`mt-2.5 w-full rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
                   selected
                     ? "cursor-default border-transparent bg-white text-neutral-400"
-                    : "border-indigo-200 text-indigo-700 hover:border-indigo-600 hover:bg-indigo-600 hover:text-white"
+                    : "border-brand-200 text-brand-700 hover:border-brand-600 hover:bg-brand-600 hover:text-white"
                 }`}
               >
                 {selected ? "Used as sample" : "Use this record as sample"}

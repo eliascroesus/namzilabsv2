@@ -29,12 +29,12 @@ export function ReferenceEdge({ id, sourceX, sourceY, targetX, targetY, sourcePo
   const label = (data as { label?: string } | undefined)?.label;
   return (
     <>
-      <BaseEdge id={id} path={edgePath} style={{ stroke: "#818cf8", strokeWidth: 1.5, strokeDasharray: "5 4" }} />
+      <BaseEdge id={id} path={edgePath} style={{ stroke: "var(--color-brand-400)", strokeWidth: 1.5, strokeDasharray: "5 4" }} />
       {label && (
         <EdgeLabelRenderer>
           <div
             style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: "none" }}
-            className="whitespace-nowrap rounded-full border border-indigo-200 bg-white px-2 py-0.5 text-micro font-semibold text-indigo-600 shadow-sm"
+            className="whitespace-nowrap rounded-full border border-brand-200 bg-white px-2 py-0.5 text-micro font-semibold text-brand-600 shadow-sm"
           >
             {label}
           </div>

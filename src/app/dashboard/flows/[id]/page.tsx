@@ -5,6 +5,7 @@ import { getFlow } from "@/lib/flow/store";
 import { listConnections } from "@/lib/connections";
 import { parseGraph } from "@/lib/flow/types";
 import { FlowCanvas, type ConnMeta } from "@/components/flow/flow-canvas";
+import { Sidebar } from "@/components/sidebar";
 
 export const dynamic = "force-dynamic";
 
@@ -40,18 +41,24 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
   }));
 
   return (
-    // NO SHELL HERE. The editor is a canvas, and the app's rail plus a
-    // full-width bar was spending roughly a fifth of the screen framing the
-    // one page whose entire value is room to work. Its chrome floats on the
-    // canvas instead (FlowToolbar), Miro-style, with the way back to the rest
-    // of the app in the toolbar's own menu.
-    <FlowCanvas
-      flowId={flow.id}
-      name={flow.name}
-      status={flow.status}
-      publishedVersion={flow.publishedVersion}
-      initialGraph={parseGraph(flow.draftGraph)}
-      connections={connections}
-    />
+    // The icon rail, then the canvas. The chrome that belongs to the FLOW
+    // floats on the canvas (FlowToolbar); the chrome that belongs to the APP
+    // is the same 76px rail every other screen has — hiding it here left the
+    // editor with a bare left edge and navigation buried in a ⋮ menu.
+    // No account panel: it would cost a WorkOS membership fetch per editor
+    // load for a control the dashboard is one click away from.
+    <div className="flex h-screen">
+      <Sidebar />
+      <div className="relative min-w-0 flex-1">
+        <FlowCanvas
+          flowId={flow.id}
+          name={flow.name}
+          status={flow.status}
+          publishedVersion={flow.publishedVersion}
+          initialGraph={parseGraph(flow.draftGraph)}
+          connections={connections}
+        />
+      </div>
+    </div>
   );
 }

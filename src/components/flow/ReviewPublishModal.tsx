@@ -113,7 +113,7 @@ export function ReviewPublishModal({
   const enabledCount = metrics.filter((m) => m.enabled).length;
 
   const inputCls =
-    "w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-sm text-neutral-800 transition-colors focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100";
+    "w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-sm text-neutral-800 transition-colors focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 p-4 pt-16 backdrop-blur-sm" onClick={onClose}>
@@ -150,10 +150,10 @@ export function ReviewPublishModal({
             const m = byId.get(ep.nodeId);
             if (!m) return null;
             return (
-              <div key={ep.nodeId} className={`rounded-xl border p-3.5 transition-colors ${m.enabled ? "border-indigo-200 bg-indigo-50/40" : "border-neutral-100 bg-white opacity-80"}`}>
+              <div key={ep.nodeId} className={`rounded-xl border p-3.5 transition-colors ${m.enabled ? "border-brand-200 bg-brand-50/40" : "border-neutral-100 bg-white opacity-80"}`}>
                 <label className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
-                    <input type="checkbox" checked={m.enabled} onChange={(e) => set(ep.nodeId, { enabled: e.target.checked })} className="h-4 w-4 accent-indigo-600" />
+                    <input type="checkbox" checked={m.enabled} onChange={(e) => set(ep.nodeId, { enabled: e.target.checked })} className="h-4 w-4 accent-brand-600" />
                     <span className="truncate text-sm font-semibold text-neutral-800">{ep.title}</span>
                   </span>
                   <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-neutral-400">metric</span>
@@ -280,7 +280,7 @@ export function ReviewPublishModal({
           <button
             onClick={onPublish}
             disabled={publishing || enabledCount === 0}
-            className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50"
+            className="btn-brand w-full rounded-control px-4 py-2.5 text-base font-semibold disabled:cursor-default"
           >
             {publishing ? "Publishing…" : publishedVersion != null ? `Update dashboard (${enabledCount})` : `Publish ${enabledCount} metric${enabledCount === 1 ? "" : "s"}`}
           </button>

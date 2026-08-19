@@ -63,7 +63,7 @@ export default async function MetricDrillPage({
         </Link>
         <div className="mt-3 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{metric.name}</h1>
+            <h1 className="text-display font-semibold tracking-tight text-neutral-900">{metric.name}</h1>
             <p className="text-sm text-neutral-500">
               {def.kind === "aggregate" ? "Metric" : "Funnel"} · last 30 days
             </p>

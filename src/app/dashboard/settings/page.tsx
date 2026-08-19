@@ -51,7 +51,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <h1 className="text-2xl font-semibold tracking-tight">Workspace settings</h1>
+        <h1 className="text-display font-semibold tracking-tight text-neutral-900">Workspace settings</h1>
 
         {invited && (
           <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">

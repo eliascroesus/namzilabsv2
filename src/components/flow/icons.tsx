@@ -129,8 +129,24 @@ export const NODE_ACCENT: Record<string, string> = {
  * "unite_match", "formula_compare". Same accent colour (they are the same kind
  * of operation), different glyph, so the two doors are never one face.
  */
+/**
+ * A flat colour tile is a coloured rectangle; a top-lit one is an OBJECT.
+ * The gradient is one step (16% toward white at the top), the inset pair is
+ * a hairline of light above and shade below — the same recipe as .btn-brand,
+ * because it is the same illusion: everything in this interface is lit from
+ * the top, consistently, which is most of what "crafted" means.
+ */
+function tileStyle(color: string, size: number): React.CSSProperties {
+  return {
+    background: `linear-gradient(to bottom, color-mix(in srgb, ${color} 84%, white), ${color})`,
+    boxShadow: "inset 0 1px 0 rgb(255 255 255 / 0.25), inset 0 -1px 0 rgb(0 0 0 / 0.12)",
+    width: size,
+    height: size,
+    borderRadius: Math.max(6, Math.round(size * 0.3)),
+  };
+}
+
 export function NodeIcon({ type, source, variant, size = 34 }: { type: string; source?: string | null; variant?: string; size?: number }) {
-  const radius = Math.max(6, Math.round(size * 0.3));
   // A CONNECTED Get-data step wears its app's brand mark. An unconnected one —
   // the picker's own "Get data" entry, and every step before an account is
   // chosen — used to render a grey tile reading "Ap", which looks like a
@@ -140,7 +156,7 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
     return (
       <span
         className="inline-flex shrink-0 items-center justify-center font-semibold leading-none text-white"
-        style={{ background: s.color, width: size, height: size, borderRadius: radius, fontSize: Math.round(size * 0.42) }}
+        style={{ ...tileStyle(s.color, size), fontSize: Math.round(size * 0.42) }}
         title={s.label}
         aria-hidden
       >
@@ -152,11 +168,7 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
   const color = NODE_ACCENT[type] ?? "#64748B";
   const glyph = Math.round(size * 0.56);
   return (
-    <span
-      className="inline-flex shrink-0 items-center justify-center text-white"
-      style={{ background: color, width: size, height: size, borderRadius: radius }}
-      aria-hidden
-    >
+    <span className="inline-flex shrink-0 items-center justify-center text-white" style={tileStyle(color, size)} aria-hidden>
       <span className="inline-flex" style={{ width: glyph, height: glyph }}>
         <NodeGlyph type={key} className="h-full w-full" />
       </span>

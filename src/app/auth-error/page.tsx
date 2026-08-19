@@ -16,7 +16,7 @@ import Link from "next/link";
 export default function AuthErrorPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-16">
-      <h1 className="text-2xl font-semibold tracking-tight">That sign-in didn&rsquo;t finish</h1>
+      <h1 className="text-display font-semibold tracking-tight text-neutral-900">That sign-in didn&rsquo;t finish</h1>
       <p className="mt-3 text-sm text-neutral-600">
         Something interrupted the last step. It&rsquo;s almost always one of these:
       </p>

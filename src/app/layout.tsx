@@ -1,5 +1,15 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+/**
+ * THE FONT IS THE BRAND. The app shipped on ui-sans-serif, which renders as
+ * whatever the OS defaults to — the single loudest "nobody chose this" signal
+ * an interface can send. Inter is what the products this one is measured
+ * against (Linear, Figma, Vercel) actually run on, and next/font self-hosts
+ * it at build time: no runtime fetch, no layout shift, no third-party request.
+ */
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import type { UserInfo, NoUserInfo } from "@workos-inc/authkit-nextjs";
@@ -22,7 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en">
-      <body>
+      <body className={inter.variable}>
         <AuthKitProvider initialAuth={initialAuth}>{children}</AuthKitProvider>
       </body>
     </html>

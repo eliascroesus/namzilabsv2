@@ -16,7 +16,8 @@ import {
 } from "@xyflow/react";
 import { isDatasetFormulaOp, seedMetricFormat, type NodeType } from "@/lib/flow/types";
 import { isBinaryCalc, outputShapeOf, producesDataset, producesNumber, readsRecords, recordsSourceOf } from "@/lib/flow/shapes";
-import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
+import { useRouter } from "next/navigation";
+import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, duplicateFlowAction, deleteFlowAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
 
 /**
  * Poll a handed-off Test run until it settles (bounded; ~90s of 800ms ticks).
@@ -222,8 +223,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [metrics, setMetrics] = useState<MetricSpecT[]>(initialGraph.metrics ?? []);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ message: string; run: () => void } | null>(null);
-  /** Transient "step deleted — Undo" notice. Cheaper than a confirm dialog on an action people take often. */
-  const [toast, setToast] = useState<string | null>(null);
+  /** Transient notice: a step delete (with Undo), or a flow-action error (without). */
+  const [toast, setToast] = useState<{ message: string; undoable?: boolean } | null>(null);
   /** Running a whole flow: which step number we are on, out of how many. */
   const [runAll, setRunAll] = useState<{ at: number; of: number } | null>(null);
 
@@ -735,7 +736,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       // them is worse than the mistake. Undo already existed (⌘Z and the
       // toolbar); nothing had ever told anyone it was there.
       deleteAndReconnect(id);
-      setToast(`“${nodeTitle(String(node.type) as NodeType, node.data)}” deleted.`);
+      setToast({ message: `“${nodeTitle(String(node.type) as NodeType, node.data)}” deleted.`, undoable: true });
     },
     [nodes, sEdges, commit, setNodes, setEdges, removeBranch, setFallback, deleteAndReconnect],
   );
@@ -877,6 +878,24 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     }
     setPublishing(false);
   }, [flowId, toGraph]);
+
+  /**
+   * Duplicate and delete belong to the toolbar now (they were a ⋮ away on the
+   * flows LIST, and nowhere at all in the editor). Both are server actions;
+   * both navigate on success, and a failure lands in the toast rather than
+   * vanishing.
+   */
+  const router = useRouter();
+  const duplicateFlow = useCallback(async () => {
+    const r = await duplicateFlowAction(flowId);
+    if (r.ok) router.push(`/dashboard/flows/${r.id}`);
+    else setToast({ message: r.error });
+  }, [flowId, router]);
+  const deleteFlow = useCallback(async () => {
+    const r = await deleteFlowAction(flowId);
+    if (r.ok) router.push("/dashboard/flows");
+    else setToast({ message: r.error });
+  }, [flowId, router]);
 
   const onRename = useCallback(
     (v: string) => {
@@ -1383,10 +1402,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         onRename={onRename}
         saveState={saveState}
         onRetrySave={saveNow}
-        onUndo={undo}
-        onRedo={redo}
-        canUndo={hist.undo > 0}
-        canRedo={hist.redo > 0}
+        onDuplicate={duplicateFlow}
+        onDelete={deleteFlow}
         onTestAll={testAll}
         onStopTestAll={cancelTest}
         runAll={runAll}
@@ -1484,6 +1501,15 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
               <ViewButton onClick={() => rf.fitView({ duration: 250, maxZoom: 1 })} label="Fit the whole flow on screen">
                 <path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" />
               </ViewButton>
+              <span className="my-1.5 w-px bg-neutral-200" aria-hidden />
+              <ViewButton onClick={undo} disabled={hist.undo === 0} label="Undo">
+                <path d="M3 10h11a5 5 0 0 1 0 10h-3" />
+                <path d="M7 6l-4 4 4 4" />
+              </ViewButton>
+              <ViewButton onClick={redo} disabled={hist.redo === 0} label="Redo">
+                <path d="M21 10H10a5 5 0 0 0 0 10h3" />
+                <path d="M17 6l4 4-4 4" />
+              </ViewButton>
             </div>
           )}
 
@@ -1578,17 +1604,19 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       {/* Bottom-centre, over the canvas, out of the config panel's way. */}
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-xl bg-neutral-900 py-2.5 pl-4 pr-2.5 text-sm text-white flow-shadow flow-pop-in">
-            <span>{toast}</span>
-            <button
-              onClick={() => {
-                undo();
-                setToast(null);
-              }}
-              className="rounded-lg px-2.5 py-1 text-sm font-semibold text-white/90 transition-colors hover:bg-white/15 hover:text-white"
-            >
-              Undo
-            </button>
+          <div className="pointer-events-auto flex items-center gap-3 rounded-card bg-ink-900 py-2.5 pl-4 pr-2.5 text-base text-ink-50 flow-shadow flow-pop-in">
+            <span>{toast.message}</span>
+            {toast.undoable && (
+              <button
+                onClick={() => {
+                  undo();
+                  setToast(null);
+                }}
+                className="rounded-control px-2.5 py-1 text-base font-semibold text-white/90 transition-colors hover:bg-white/15 hover:text-white"
+              >
+                Undo
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1620,13 +1648,14 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 }
 
 /** One square icon button in the canvas view-controls cluster. */
-function ViewButton({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) {
+function ViewButton({ onClick, disabled, label, children }: { onClick: () => void; disabled?: boolean; label: string; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-8 w-8 items-center justify-center border-r border-neutral-200 text-neutral-500 transition-colors last:border-r-0 hover:bg-neutral-50 hover:text-neutral-900"
+      className="flex h-8 w-8 items-center justify-center border-r border-neutral-200 text-neutral-500 transition-colors last:border-r-0 hover:bg-neutral-50 hover:text-neutral-900 disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent"
     >
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         {children}
@@ -1676,7 +1705,7 @@ function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boolean; onS
         {hasConnections ? (
           <button
             onClick={onStart}
-            className="mt-6 w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition-all hover:bg-indigo-700 active:scale-[0.985]"
+            className="btn-brand mt-6 w-full rounded-control px-4 py-3 text-base font-semibold active:scale-[0.985]"
           >
             Start with Get data
           </button>
@@ -1684,7 +1713,7 @@ function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boolean; onS
           <>
             <Link
               href="/integrations"
-              className="mt-6 block w-full rounded-xl bg-indigo-600 px-4 py-3 text-center text-sm font-semibold text-white shadow-sm shadow-indigo-600/20 transition-all hover:bg-indigo-700 active:scale-[0.985]"
+              className="btn-brand mt-6 block w-full rounded-control px-4 py-3 text-center text-base font-semibold active:scale-[0.985]"
             >
               Connect an app first
             </Link>

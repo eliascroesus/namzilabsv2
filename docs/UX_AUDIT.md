@@ -948,6 +948,54 @@ which is precisely the class of failure that shipped three times before the
 loop existed. And `/design` now renders the *real* `FlowToolbar`, so the
 builder's chrome is checkable without a session.
 
+### 9g. The de-genericization pass
+
+The owner's verdict on the first full look: "super AI and boring." Fair — and
+diagnosable. What reads as "AI-built" is the absence of choices: system font,
+stock Tailwind indigo, flat single-colour fills, uniform glow shadows. This
+pass replaced each with a choice, grounded in live-extracted CSS from Linear,
+Vercel, Stripe, Raycast, tldraw and Figma (three research agents pulled the
+actual stylesheets).
+
+**Inter, with Linear's identity settings.** `font-feature-settings: "cv01",
+"ss03"` — verbatim from linear.app's live CSS; without those two features
+"you get generic Inter." Body tracking −0.008em (Linear runs −0.011 to
+−0.013em at UI sizes; no reference product goes further). Tabular numerals
+are opt-in per element (`.tnum`), never global — Stripe's rule — applied to
+the dashboard tiles whose numbers update in place.
+
+**A chosen brand ramp.** Stock indigo-600 `#4f46e5` is the default of every
+unstyled project. The new ramp is hand-tuned around a violet-iris hue
+(`brand-600 #5b58d6`), and the sweep retired every `indigo-*` class in the
+product — plus the flow builder's selection ring, which had been *blue* in an
+indigo product since before the kit existed.
+
+**Surfaces lit from the top.** `.btn-brand`: one-step vertical gradient,
+inset highlight above, inset shade below, a darker seat-ring (the cross-brand
+synthesis recipe — Raycast and Stripe ship near-identical structures). The
+same treatment on every step-icon tile, so the whole interface shares one
+light source — which is most of what "crafted" means. `.flow-shadow` was a
+36px non-directional glow (haze); it is now Figma UI3's elevation-400,
+near-verbatim: hairline ring + soft ambient + tight contact shadow (height).
+Islands carry no `border` — the ring in the shadow IS the hairline, the
+tldraw/Vercel border-as-shadow pattern.
+
+**The rail became the 76px icon rail** (Make's size), on every screen
+including the editor — which had dropped navigation into a ⋮ menu and left
+the canvas with a bare left edge. Account moved to an avatar at the rail's
+foot opening a light panel (workspace switcher, email, sign-out).
+
+**The toolbar islands lost the ⋮** — a menu with two items is a drawer in
+front of two buttons. Duplicate and Delete are now buttons on the left island
+(delete confirms in a popover; both are the existing server actions, wired
+with navigation on success and the toast on failure). Undo/redo moved to the
+bottom-left cluster with zoom — canvas controls with canvas controls.
+
+**Found while looking:** Next's dev-tools indicator renders at bottom-left —
+the exact pixels of the rail's account avatar — and swallowed its clicks in
+every dev session. Moved to bottom-right in `next.config.mjs`. This is the
+fourth defect the screenshot loop has caught that reading code could not.
+
 ---
 
 ## 10. What not to change

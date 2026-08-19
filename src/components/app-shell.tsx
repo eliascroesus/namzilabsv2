@@ -69,27 +69,29 @@ export async function AppShell({
   return (
     <div className="flex h-screen bg-white">
       <Sidebar
-        footer={
-          <div className="space-y-2">
-            <div className="flex items-center gap-2.5 px-1">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-800 text-micro font-semibold text-ink-100">
-                {initials}
-              </span>
-              <span className="min-w-0 flex-1">
+        account={{
+          initials,
+          // Rendered on the server, opened by the client rail: the light
+          // panel beside the avatar. Workspace first, then identity, then
+          // the way out.
+          panel: (
+            <div className="space-y-3">
+              <div>
+                <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">Workspace</p>
                 <OrgSwitcher orgs={orgs} currentId={orgId} />
-                {userEmail && <span className="block truncate text-micro text-ink-400">{userEmail}</span>}
-              </span>
+              </div>
+              {userEmail && <p className="truncate border-t border-neutral-100 pt-2 text-tiny text-neutral-500">{userEmail}</p>}
+              <form action={signOutAction}>
+                <button
+                  type="submit"
+                  className="w-full rounded-control border border-neutral-200 px-3 py-1.5 text-small font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
+                >
+                  Sign out
+                </button>
+              </form>
             </div>
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                className="w-full rounded-control px-2 py-1.5 text-left text-tiny font-medium text-ink-400 transition-colors hover:bg-ink-800 hover:text-ink-100"
-              >
-                Sign out
-              </button>
-            </form>
-          </div>
-        }
+          ),
+        }}
       />
       {/* The rail is fixed; only this column scrolls. */}
       <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>

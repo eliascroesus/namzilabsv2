@@ -53,7 +53,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
+        <h1 className="text-display font-semibold tracking-tight text-neutral-900">Integrations</h1>
         <p className="mt-1 text-sm text-neutral-500">
           Connect a tool and its data flows into your unified dashboard. Connect an account, then
           preview the latest records to confirm it&rsquo;s live.
@@ -160,13 +160,13 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
         {entry.connect === "google" ? (
           <a
             href={`/api/oauth/google/start?source=${entry.source}`}
-            className="inline-block rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+            className="btn-brand inline-block rounded-control px-4 py-2 text-base font-semibold"
           >
             Connect with Google
           </a>
         ) : (
           <details>
-            <summary className="cursor-pointer rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+            <summary className="btn-brand inline-block cursor-pointer rounded-control px-4 py-2 text-base font-semibold">
               Connect
             </summary>
             <form action={connectApiKeyAction} className="mt-3 space-y-3">

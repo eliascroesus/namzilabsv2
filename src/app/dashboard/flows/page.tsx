@@ -41,13 +41,13 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
         )}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Metric flows</h1>
+            <h1 className="text-display font-semibold tracking-tight text-neutral-900">Flows</h1>
             <p className="mt-1 text-sm text-neutral-500">
               Build metrics visually: connect an app, filter and aggregate, then output to your dashboard.
             </p>
           </div>
           <form action={createFlowAction}>
-            <button className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+            <button className="btn-brand rounded-control px-4 py-2 text-base font-semibold">
               New flow
             </button>
           </form>

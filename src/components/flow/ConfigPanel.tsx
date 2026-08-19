@@ -44,12 +44,12 @@ export type StepRef = { id: string; title: string; stepNo?: number };
 /** Branch-head context: how records enter this Paths branch (mode lives on the hub). */
 export type BranchCtx = { mode: string; siblingHasFallback: boolean; siblingHasAlways: boolean; set: (mode: string) => void };
 
-const INPUT = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm transition-colors focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100";
+const INPUT = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm transition-colors focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
 const W = 412;
 
 /** Shared button language for the config panel (Make.com vibe: rounded, tactile, colourful). */
 const BTN_BASE = "rounded-xl px-4 py-3 text-sm font-semibold transition-all active:scale-[0.985]";
-const BTN_PRIMARY = `${BTN_BASE} bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 hover:bg-indigo-700 disabled:cursor-default disabled:bg-neutral-200 disabled:text-neutral-400 disabled:shadow-none`;
+const BTN_PRIMARY = `${BTN_BASE} btn-brand disabled:cursor-default`;
 const BTN_SECONDARY = `${BTN_BASE} border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50`;
 
 const AGG_LABELS: Record<string, string> = { count: "Count of records", count_distinct: "Count of distinct values", sum: "Sum of a field", avg: "Average of a field", median: "Median of a field", min: "Minimum of a field", max: "Maximum of a field" };
@@ -209,7 +209,7 @@ export function ConfigPanel({
               key={t}
               onClick={() => setTab(t)}
               className={`-mb-px border-b-2 py-3 text-sm capitalize transition-colors ${
-                activeTab === t ? "border-indigo-500 font-semibold text-neutral-900" : "border-transparent font-medium text-neutral-500 hover:text-neutral-800"
+                activeTab === t ? "border-brand-500 font-semibold text-neutral-900" : "border-transparent font-medium text-neutral-500 hover:text-neutral-800"
               }`}
             >
               {t}
@@ -699,7 +699,7 @@ function NodeConfig({
             aggregation just restated the dropdown directly below it ("Count
             of records" over a select reading "Count of records"). */}
         {!datasetOp && (
-          <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-medium text-indigo-900">
+          <div className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-medium text-brand-900">
             {formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}
           </div>
         )}
@@ -708,7 +708,7 @@ function NodeConfig({
             one source. Doing it silently would be worse than the error it
             replaces, so the step says where its records came from. */}
         {datasetOp && recordSourceNote && (
-          <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">Reads records from {recordSourceNote}</p>
+          <p className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs text-brand-800">Reads records from {recordSourceNote}</p>
         )}
         {datasetOp ? (
           <>
@@ -1065,7 +1065,7 @@ function CalcCompare({ cfg, inputs, numberGroups, onChange, onSetInput }: { cfg:
       <Field label="Calculation">
         <Select value={op} width={W} options={BINARY_OP_OPTIONS} onChange={(v) => onChange({ op: v })} />
       </Field>
-      <div className="rounded border border-indigo-200 bg-indigo-50 p-2 text-xs text-indigo-900">
+      <div className="rounded border border-brand-200 bg-brand-50 p-2 text-xs text-brand-900">
         <p className="font-medium">{formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}</p>
       </div>
       <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} fixed={aFixed} fieldPath={typeof cfg.aField === "string" ? cfg.aField : null} onSetInput={onSetInput} onSetFixed={(n) => onChange({ aFixed: n })} onSetField={(path) => onChange({ aField: path })} />
@@ -1156,7 +1156,7 @@ function NumberPicker({
               onClick={toggle}
               title="Use a number from an earlier step"
               aria-label="Pick a number from an earlier step"
-              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 p-1 text-indigo-500 transition-colors hover:border-indigo-300 hover:bg-indigo-100 hover:text-indigo-600"
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-brand-200 bg-brand-50 p-1 text-brand-500 transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600"
             >
               <DataIcon />
             </button>
@@ -1369,7 +1369,7 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
     return (
       <p className="flex items-center gap-2 text-xs text-neutral-500">
         <span className="min-w-0 truncate">{note}</span>
-        <button type="button" onClick={() => setEditing(true)} className="shrink-0 font-medium text-indigo-600 hover:underline">
+        <button type="button" onClick={() => setEditing(true)} className="shrink-0 font-medium text-brand-600 hover:underline">
           Change
         </button>
       </p>
@@ -1601,7 +1601,7 @@ function MomentInput({
         <button
           type="button"
           onClick={toggle}
-          className="relative w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 pr-9 text-left text-sm transition-colors hover:border-neutral-400 focus:border-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-100"
+          className="relative w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 pr-9 text-left text-sm transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
         >
           {label ? (
             <span className="block truncate text-neutral-800">
