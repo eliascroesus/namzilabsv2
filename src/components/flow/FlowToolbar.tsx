@@ -166,165 +166,186 @@ export function FlowToolbar({
 
   return (
     <>
-      {/* ── ONE BAR ────────────────────────────────────────────────────
-          Everything the builder offers, on one surface, in the order you use
-          it: where you are, what you do to the canvas, then whether it saved
-          and how you ship it. It was three islands — identity top-left,
-          actions top-right, canvas controls along the foot — and three
-          surfaces for one toolbar is two more than the job needs.
+      {/* ── ONE BAR, THREE JOBS ────────────────────────────────────────
+          It stretches the full width and holds three groups, each a different
+          KIND of thing, in a grid so the middle is dead-centre rather than
+          wherever the ends happen to leave it:
 
-          It hugs its content rather than stretching, like every other island
-          here, and the config panel opens in the band BELOW it, so nothing
-          ever has to move out of anything's way. */}
-      <div className="pointer-events-none absolute left-6 top-6 z-10 flex max-w-[calc(100%-3rem)] items-center">
-        <Island className="min-w-0 gap-1">
-          <Link
-            href="/dashboard/flows"
-            title="All flows"
-            className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
-          >
-            <ChevronLeft size={26} strokeWidth={2} />
-          </Link>
+            LEFT   what this flow is and what state it is in
+            CENTRE what you do to the VIEW — undo, redo, zoom
+            RIGHT  what you do with the flow — run it, ship it
 
-          <span className="flex min-w-0 flex-1 items-center gap-1 pr-1">
-            <Link
-              href="/dashboard/flows"
-              className="shrink-0 whitespace-nowrap px-1 text-lead font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Flows
-            </Link>
-            <span className="shrink-0 text-lead text-neutral-300" aria-hidden>
-              /
-            </span>
-            {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
-                At the old fixed width a long name was cut mid-glyph, hard against
-                the padding with no ellipsis — while 87px of empty canvas sat to
-                its right and the wrapper's own max-width was never reached. The
-                floor keeps an empty field clickable; the ceiling keeps this
-                island clear of the one on the right. */}
-            <input
-              value={name}
-              onChange={(e) => onRename(e.target.value)}
-              aria-label="Flow name"
-              placeholder="Untitled flow"
-              title={name}
-              style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
-              className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
-            />
-          </span>
+          It was three separate surfaces (identity, actions, canvas controls)
+          and then one bar that hugged its content, leaving the right half of
+          the canvas empty while the actions sat mid-screen.
 
-          <Divider />
-
-          {showTestAll && (
-            <>
-              <Button
-                variant={runAll ? "secondary" : "default"}
-                onClick={runAll ? onStopTestAll : onTestAll}
-                title={runAll ? "Stop the run" : "Run every step, top to bottom"}
-                className="h-[42px] gap-2 px-[18px] text-lead [&_svg]:size-[18px]"
+          The config panel opens in the band BELOW it, so nothing ever has to
+          move out of anything's way. */}
+      <div className="pointer-events-none absolute inset-x-6 top-6 z-10">
+        <Island className="w-full">
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+            {/* WHAT THIS FLOW IS, AND HOW IT IS DOING */}
+            <span className="flex min-w-0 items-center gap-1">
+              <Link
+                href="/dashboard/flows"
+                title="All flows"
+                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
               >
-                {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
-                {runAll ? `Stop · ${runAll.at}/${runAll.of}` : "Test flow"}
-              </Button>
+                <ChevronLeft size={26} strokeWidth={2} />
+              </Link>
+
+              <span className="flex min-w-0 flex-1 items-center gap-1 pr-1">
+                <Link
+                  href="/dashboard/flows"
+                  className="shrink-0 whitespace-nowrap px-1 text-lead font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Flows
+                </Link>
+                <span className="shrink-0 text-lead text-neutral-300" aria-hidden>
+                  /
+                </span>
+                {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
+                    At the old fixed width a long name was cut mid-glyph, hard against
+                    the padding with no ellipsis — while 87px of empty canvas sat to
+                    its right and the wrapper's own max-width was never reached. The
+                    floor keeps an empty field clickable; the ceiling keeps this
+                    island clear of the one on the right. */}
+                <input
+                  value={name}
+                  onChange={(e) => onRename(e.target.value)}
+                  aria-label="Flow name"
+                  placeholder="Untitled flow"
+                  title={name}
+                  style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
+                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
+                />
+              </span>
+
+
               <Divider />
-            </>
-          )}
 
-          <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
-            <Undo2 />
-          </IslandButton>
-          <IslandButton onClick={onRedo} disabled={!canRedo} label="Redo">
-            <Redo2 />
-          </IslandButton>
+              {/* Words, no dot. The reference this island copies has a green dot,
+                  and it is deliberately not here: a dot needs a legend and a word
+                  does not. Do not "restore" it. */}
+              <SaveChip state={saveState} onRetry={onRetrySave} />
 
-          <Divider />
-
-          <IslandButton onClick={onZoomOut} label="Zoom out">
-            <ZoomOut />
-          </IslandButton>
-          {/* Miro puts the zoom READOUT between its controls and it earns the
-              space: after a pinch you have no idea where you are. Clicking it
-              fits the flow, which is the only thing anyone wants next. */}
-          <button
-            onClick={onFitView}
-            title="Fit the whole flow on screen"
-            className="h-[42px] min-w-[62px] rounded-control px-2 text-lead font-semibold tabular-nums text-foreground transition-colors hover:bg-muted"
-          >
-            {zoomPct}%
-          </button>
-          <IslandButton onClick={onZoomIn} label="Zoom in">
-            <ZoomIn />
-          </IslandButton>
-          <IslandButton onClick={onFitView} label="Fit the whole flow on screen">
-            <Maximize2 />
-          </IslandButton>
-
-          <Divider />
-
-          {/* Words, no dot. The reference this island copies has a green dot,
-              and it is deliberately not here: a dot needs a legend and a word
-              does not. Do not "restore" it. */}
-          <SaveChip state={saveState} onRetry={onRetrySave} />
-
-          <Divider />
-
-          <Popover
-            open={menuOpen}
-            setOpen={setMenuOpen}
-            width={210}
-            align="left"
-            anchor={
-              <IslandButton onClick={() => setMenuOpen(!menuOpen)} label="Flow actions">
-                <MoreHorizontal />
-              </IslandButton>
-            }
-          >
-            <div className="p-1.5">
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDuplicate();
-                }}
-                className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-foreground transition-colors hover:bg-muted"
+              <Popover
+                open={menuOpen}
+                setOpen={setMenuOpen}
+                width={210}
+                align="left"
+                anchor={
+                  <IslandButton onClick={() => setMenuOpen(!menuOpen)} label="Flow actions">
+                    <MoreHorizontal />
+                  </IslandButton>
+                }
               >
-                <Copy size={16} />
-                Duplicate flow
-              </button>
-              <button
-                onClick={() => {
-                  setMenuOpen(false);
-                  setConfirmingDelete(true);
-                }}
-                className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-destructive transition-colors hover:bg-red-50"
-              >
-                <Trash2 size={16} />
-                Delete flow
-              </button>
-            </div>
-          </Popover>
+                <div className="p-1.5">
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDuplicate();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-foreground transition-colors hover:bg-muted"
+                  >
+                    <Copy size={16} />
+                    Duplicate flow
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setConfirmingDelete(true);
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-destructive transition-colors hover:bg-red-50"
+                  >
+                    <Trash2 size={16} />
+                    Delete flow
+                  </button>
+                </div>
+              </Popover>
 
-          {/* The flow's own on/off switch, where Zapier puts a Zap's. It cannot
-              be turned on before the flow has ever been published — there
-              would be nothing to turn on — so it sits inactive until the first
-              publish, which flips it on by itself. */}
-          <FlowSwitch on={isPublished} disabled={publishedVersion == null || togglingEnabled} onChange={onToggleEnabled} />
+              {/* The flow's own on/off switch, where Zapier puts a Zap's. It cannot
+                  be turned on before the flow has ever been published — there
+                  would be nothing to turn on — so it sits inactive until the
+                  first publish, which flips it on by itself. It lives beside
+                  the name and the save state because all three answer the same
+                  question: what IS this flow right now. */}
+              <FlowSwitch on={isPublished} disabled={publishedVersion == null || togglingEnabled} onChange={onToggleEnabled} />
 
-          {isPublished && publishedVersion != null && (
-            <span
-              className="flex shrink-0 items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-micro font-bold text-success-ink"
-              title="This flow is live on your dashboard"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-              v{publishedVersion}
+              {isPublished && publishedVersion != null && (
+                <span
+                  className="flex shrink-0 items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-micro font-bold text-success-ink"
+                  title="This flow is live on your dashboard"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
+                  v{publishedVersion}
+                </span>
+              )}
             </span>
-          )}
 
-          {/* 18px, not the Button's shared 16px: a 26px standalone glyph sits one
-              control away, and 16 beside it read as two different icon sets. */}
-          <Button onClick={onReview} disabled={publishing} className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-lead [&_svg]:size-[18px]">
-            {isPublished ? <SlidersHorizontal /> : <Rocket />}
-            {isPublished ? "Edit output" : "Review & publish"}
-          </Button>
+            {/* WHAT YOU DO TO THE VIEW. Centred by the grid, so it stays put as
+                the flow name grows instead of drifting with it. */}
+            <span className="flex items-center gap-1">
+              <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
+                <Undo2 />
+              </IslandButton>
+              <IslandButton onClick={onRedo} disabled={!canRedo} label="Redo">
+                <Redo2 />
+              </IslandButton>
+
+              <Divider />
+
+              <IslandButton onClick={onZoomOut} label="Zoom out">
+                <ZoomOut />
+              </IslandButton>
+              {/* Miro puts the zoom READOUT between its controls and it earns the
+                  space: after a pinch you have no idea where you are. Clicking it
+                  fits the flow, which is the only thing anyone wants next. */}
+              <button
+                onClick={onFitView}
+                title="Fit the whole flow on screen"
+                className="h-[42px] min-w-[62px] rounded-control px-2 text-lead font-semibold tabular-nums text-foreground transition-colors hover:bg-muted"
+              >
+                {zoomPct}%
+              </button>
+              <IslandButton onClick={onZoomIn} label="Zoom in">
+                <ZoomIn />
+              </IslandButton>
+              <IslandButton onClick={onFitView} label="Fit the whole flow on screen">
+                <Maximize2 />
+              </IslandButton>
+            </span>
+
+            {/* WHAT YOU DO WITH THE FLOW. Run and ship, side by side, because
+                they are the same kind of act at two different stages. */}
+            <span className="flex items-center justify-end gap-2">
+              {showTestAll && (
+                <Button
+                  variant={runAll ? "secondary" : "success"}
+                  onClick={runAll ? onStopTestAll : onTestAll}
+                  title={runAll ? "Stop the run" : "Run every step, top to bottom"}
+                  aria-label={runAll ? "Stop the run" : "Test flow"}
+                  className={`h-[42px] shrink-0 text-lead [&_svg]:size-[18px] ${runAll ? "gap-2 px-[18px]" : "w-[42px] px-0"}`}
+                >
+                  {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
+                  {/* Icon only at rest — the play glyph IS the word, and a green
+                      one beside a blue primary reads as a different kind of act
+                      without spelling it out. While a run is going it earns its
+                      words back: "Stop · 2/6" is a receipt, and dropping the
+                      count to stay square would be hiding progress to keep a
+                      shape. */}
+                  {runAll ? `Stop · ${runAll.at}/${runAll.of}` : null}
+                </Button>
+              )}
+
+              {/* 18px, not the Button's shared 16px: a 26px standalone glyph sits one
+                  control away, and 16 beside it read as two different icon sets. */}
+              <Button onClick={onReview} disabled={publishing} className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-lead [&_svg]:size-[18px]">
+                {isPublished ? <SlidersHorizontal /> : <Rocket />}
+                {isPublished ? "Edit output" : "Review & publish"}
+              </Button>
+            </span>
+          </div>
         </Island>
       </div>
 

@@ -283,10 +283,11 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Builder chrome" note="One bar, in the order you use it: where you are, what you do to the canvas, then whether it saved and how you ship it. It was three surfaces — identity, actions, canvas controls — which is two more than one toolbar needs. It hugs its content at 1116px and the config panel opens in the band below it, so nothing ever moves out of anything's way.">
+        <Section title="Builder chrome" note="One bar, full width, three groups by KIND. Left: what this flow is and what state it is in. Centre, held dead-centre by the grid so it does not drift as the name grows: what you do to the view. Right: what you do with the flow — run it, ship it. The run button is a green play glyph and nothing else at rest, and earns its words back while a run is going, because 'Stop · 2/6' is a receipt.">
           {/* THE INNER CANVAS IS 1292px BECAUSE A REAL ONE IS — a 1440 viewport
-              minus the 100px rail minus the two 24px insets. The bar hugs its
-              content at 1116px, so 176px is left over and nothing truncates.
+              minus the 100px rail minus the two 24px insets. The bar fills it:
+              1244px, with the centre group measured dead-centre (470px of bar
+              on each side of it).
 
               Rendered at this page's own 816px column it was a lie: the bar hit
               its max-width, squeezed, and showed a flow name clipped in a way

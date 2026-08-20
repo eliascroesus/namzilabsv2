@@ -46,8 +46,10 @@ describe("the chrome band", () => {
   // Island(): `p-[7px]` around a 42px control, plus 1px of border on each side.
   const pad = Number(one(toolbar, /rounded-card border border-border bg-white p-\[(\d+)px\]/, "the island's padding"));
   const control = Number(one(toolbar, /flex h-\[(\d+)px\] w-\[\d+px\] shrink-0 items-center justify-center rounded-control text-foreground/, "the island's control height"));
-  // The top island's own distance from the viewport edge.
-  const inset = Number(one(toolbar, /absolute left-6 top-(\d+) z-10 flex max-w-/, "the top island's inset")) * SPACING_STEP;
+  // The bar's own distance from the viewport edge. It is full-width now, so
+  // `inset-x-6` carries the horizontal one and `top-6` the vertical; the band
+  // is built from the vertical.
+  const inset = Number(one(toolbar, /absolute inset-x-6 top-(\d+) z-10/, "the bar's inset")) * SPACING_STEP;
 
   it("equals inset + island + inset", () => {
     const island = 1 + pad + control + pad + 1;

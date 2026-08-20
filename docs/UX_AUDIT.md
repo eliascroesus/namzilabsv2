@@ -1886,6 +1886,40 @@ another and the badge starts lying with nothing on screen looking wrong.
 
 ---
 
+### 10i. The bar fills the width, and the groups mean something
+
+**Full width, three groups, grouped by KIND rather than by history.** It hugged
+its content at 1116px, which left the right half of the canvas empty while the
+actions sat mid-screen. It now spans the canvas (1244px inside a 1292px
+canvas) as a grid:
+
+| | |
+|---|---|
+| **Left** | what this flow IS and what state it is in — back, `Flows / name`, Saved, ⋯, the on/off switch, the version chip |
+| **Centre** | what you do to the VIEW — undo, redo, zoom out, the readout, zoom in, fit |
+| **Right** | what you do WITH the flow — run it, ship it |
+
+The middle sits in an `auto` column between two equal `minmax(0,1fr)` ones, so
+it is dead-centre and *stays* there as the flow name grows — measured at 470px
+of bar on each side of it. With `justify-between` it would have drifted every
+time you typed.
+
+The grouping is the point. Saved, ⋯ and the switch all answer *what is this
+flow right now*, so they belong beside the name, not stranded in a separate
+corner. Run and ship are the same kind of act at two different stages, so they
+sit together.
+
+**The run button is a green play glyph and nothing else.** `success` is the
+variant that already existed for exactly this reason — running something is a
+different KIND of act from publishing it — and beside a blue primary it reads
+as different without spelling it out. At rest the glyph IS the word.
+
+It earns its words back the moment a run starts: `Stop · 2/6`. Dropping the
+count to keep a square shape would be hiding progress to preserve a silhouette,
+which is the wrong trade — the receipt matters more than the outline.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:
