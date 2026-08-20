@@ -105,11 +105,10 @@ import {
 } from "./graph-utils";
 import type { DataField, DataGroup } from "./controls/types";
 import { formatSample } from "./controls/field-utils";
-import { ALL_TYPES, defaultConfig, formulaExpression, formulaHandleLabels, nodeTitle, pathHandles } from "./node-meta";
+import { ALL_TYPES, defaultConfig, formulaExpression, nodeTitle, pathHandles } from "./node-meta";
 import { serializeGraph } from "./graph-serialize";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
-import { ReferenceEdge } from "./ReferenceEdge";
 import { FlowToolbar } from "./FlowToolbar";
 import { ConfigPanel, type StepRef } from "./ConfigPanel";
 import { NodeLibraryModal, anchorFromRect, type PickerAnchor } from "./NodeLibraryModal";
@@ -157,7 +156,7 @@ function setupHint(type: string, cfg: Record<string, unknown>, inputCount: numbe
 }
 
 const nodeTypes = Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])) as Record<string, typeof FlowNodeCard>;
-const edgeTypes = { insert: InsertEdge, reference: ReferenceEdge };
+const edgeTypes = { insert: InsertEdge };
 
 export function FlowCanvas(props: {
   flowId: string;
@@ -1409,16 +1408,14 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     const seen = new Set<string>();
     const out: Edge[] = [];
     for (const e of edges) {
-      // A compare step's number references are picked in the panel — drawn only
-      // while that step is selected, so the default canvas stays a clean column
-      // and the wiring appears exactly when someone is looking for it.
-      if (compareIds.has(e.target) && (e.targetHandle === "a" || e.targetHandle === "b")) {
-        if (e.target !== selectedId) continue;
-        const target = nodes.find((n) => n.id === e.target);
-        const labels = formulaHandleLabels(String((target?.data.config as { op?: unknown })?.op ?? "percentage"));
-        out.push({ ...e, type: "reference", zIndex: 5, data: { label: e.targetHandle === "a" ? labels.a : labels.b } });
-        continue;
-      }
+      // A Calculate step's number references are NOT drawn. They used to appear
+      // as a violet bezier while the step was selected, labelled "Count this" /
+      // "Out of this" — and every time it looked like the connector had a hover
+      // state, because a line changing colour when you click a card elsewhere is
+      // indistinguishable from one reacting to the pointer. The relationship is
+      // still on the card (`refLine`, "3. Filter ÷ 2. Filter × 100") and named in
+      // the panel's two slots, which is where someone actually reads it.
+      if (compareIds.has(e.target) && (e.targetHandle === "a" || e.targetHandle === "b")) continue;
       // Collapse duplicate lines between the same two nodes (chain + reference pair).
       const key = `${e.source}::${e.sourceHandle ?? ""}->${e.target}`;
       if (seen.has(key)) continue;

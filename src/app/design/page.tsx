@@ -283,7 +283,7 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Builder chrome" note="One bar, full width, three groups by KIND. Left: what this flow is and what state it is in. Centre, held dead-centre by the grid so it does not drift as the name grows: what you do to the view. Right: what you do with the flow — run it, ship it. The run button is a green play glyph and nothing else at rest, and earns its words back while a run is going, because 'Stop · 2/6' is a receipt.">
+        <Section title="Builder chrome" note="Two surfaces. The bar spans the top: back and the step menu on the left, the flow's NAME dead-centre — the one thing here that is about the flow rather than about what you can do to it — then saved, on/off, undo, redo, run and ship on the right. Zoom and fit are the only controls about LOOKING rather than about the flow, so they sit apart in their own column at the foot.">
           {/* THE INNER CANVAS IS 1292px BECAUSE A REAL ONE IS — a 1440 viewport
               minus the 100px rail minus the two 24px insets. The bar fills it:
               1244px, with the centre group measured dead-centre (470px of bar
@@ -296,7 +296,7 @@ export default function DesignPage() {
               is the clearance for one 58px bar at a 24px inset, with canvas
               below it. */}
           <div className="-mx-24 overflow-x-auto overflow-y-hidden rounded-card">
-            <div className="relative h-64 w-[1292px] bg-canvas-bg">
+            <div className="relative h-[380px] w-[1292px] bg-canvas-bg">
               <div
                 className="absolute inset-0"
                 style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
@@ -347,7 +347,7 @@ export default function DesignPage() {
           <CanvasPreview />
         </Section>
 
-        <Section title="Step cards" note="300px, a 44px mark, and 4px of the step's own colour down the leading edge — the mark sits inside the card, so without it a column of steps is a column of white rectangles. Same 16px corner and same shadow as every other floating surface. The status border still colours only when a step blocks publish or broke.">
+        <Section title="Step cards" note="300px, a 44px mark, the step number as its own chip. One hairline in one grey, always — the border carried status and a canvas of healthy steps was a wall of outlines, while a card changing its edge as you clicked around read as the card reacting to the pointer. Status is the dot and the hint line. Same 16px corner and same shadow as every other floating surface.">
           <div className="relative flex flex-wrap items-start gap-4 overflow-hidden rounded-card bg-canvas-bg p-6">
               {/* The same dot field the other two canvas specimens carry — a card
                   judged against flat grey is judged against a surface the product

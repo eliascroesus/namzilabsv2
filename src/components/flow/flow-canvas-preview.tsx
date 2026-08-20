@@ -1,7 +1,6 @@
 import { LineChart, Plus } from "lucide-react";
 import { STATUS_META, type NodeStatus } from "./node-meta";
 import { NodeIcon } from "./icons";
-import { nodeAccent } from "./node-accent";
 
 /**
  * A step card for the UI kit page — layout only.
@@ -40,8 +39,7 @@ export function FlowNodeCard({
   // and a ringed shadow under one is two hairlines reading as a dirty 2px rim.
   return (
     <div
-      style={{ borderLeftWidth: 4, borderLeftColor: nodeAccent(type, source) }}
-      className={`w-[300px] rounded-surface border bg-card shadow-surface transition-all duration-150 hover:shadow-card-hover ${sm.border}`}
+      className="w-[300px] rounded-surface border border-border bg-card shadow-surface transition-all duration-150 hover:shadow-card-hover"
     >
       <div className="flex items-start gap-3 p-3.5">
         <NodeIcon type={type} source={source} variant={variant.includes("_") ? variant : undefined} size={44} />

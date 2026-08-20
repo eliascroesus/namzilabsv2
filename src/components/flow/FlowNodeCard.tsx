@@ -9,7 +9,6 @@ import { isBinaryCalc } from "@/lib/flow/shapes";
 import type { FNode, NodeData } from "./graph-utils";
 import { STATUS_META, nodeTitle, nodeVariant, pathHandles, resultLabel, type NodeStatus } from "./node-meta";
 import { NodeIcon } from "./icons";
-import { nodeAccent } from "./node-accent";
 import { anchorFromRect } from "./NodeLibraryModal";
 import { Popover } from "./controls/Popover";
 
@@ -141,15 +140,6 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
        * bearing.
        */
     <div
-      /* The step's own colour, worn on the edge you read first. The 44px mark is
-         the only thing carrying type today and it sits INSIDE the card, so a
-         column of steps is a column of white rectangles until you look at each
-         one. Four pixels down the leading edge tells a Filter from a Calculate
-         at a glance, at any zoom, without reading a word.
-
-         A left BORDER rather than an inner strip: the radius clips it for free,
-         and nothing inside the card can knock it out of alignment. */
-      style={{ borderLeftWidth: 4, borderLeftColor: nodeAccent(t, String(data.config.source ?? "")) }}
       className={`group/card w-[300px] rounded-surface border bg-white shadow-surface transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-surface ${border}`}
     >
       {isCompare ? (

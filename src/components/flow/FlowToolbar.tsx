@@ -109,8 +109,6 @@ function IslandButton({
   );
 }
 
-const Divider = () => <span className="mx-1 h-6 w-px shrink-0 bg-border" aria-hidden />;
-
 export function FlowToolbar({
   name,
   onRename,
@@ -199,24 +197,6 @@ export function FlowToolbar({
               {/* No "Flows /" crumb. The back arrow beside it already goes there
                   and already says so on hover; a breadcrumb whose only parent is
                   the button next to it is a word for its own sake. */}
-              <span className="flex min-w-0 items-center gap-1 pr-1">
-                {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
-                    At the old fixed width a long name was cut mid-glyph, hard against
-                    the padding with no ellipsis — while 87px of empty canvas sat to
-                    its right and the wrapper's own max-width was never reached. The
-                    floor keeps an empty field clickable; the ceiling keeps this
-                    island clear of the one on the right. */}
-                <input
-                  value={name}
-                  onChange={(e) => onRename(e.target.value)}
-                  aria-label="Flow name"
-                  placeholder="Untitled flow"
-                  title={name}
-                  style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
-                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
-                />
-              </span>
-
 
               <Popover
                 open={menuOpen}
@@ -253,40 +233,30 @@ export function FlowToolbar({
                 </div>
               </Popover>
 
-
             </span>
 
-            {/* WHAT YOU DO TO THE VIEW. Centred by the grid, so it stays put as
-                the flow name grows instead of drifting with it. */}
-            <span className="flex items-center gap-1">
-              <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
-                <Undo2 />
-              </IslandButton>
-              <IslandButton onClick={onRedo} disabled={!canRedo} label="Redo">
-                <Redo2 />
-              </IslandButton>
-
-              <Divider />
-
-              <IslandButton onClick={onZoomOut} label="Zoom out">
-                <ZoomOut />
-              </IslandButton>
-              {/* Miro puts the zoom READOUT between its controls and it earns the
-                  space: after a pinch you have no idea where you are. Clicking it
-                  fits the flow, which is the only thing anyone wants next. */}
-              <button
-                onClick={onFitView}
-                title="Fit the whole flow on screen"
-                className="h-[42px] min-w-[62px] rounded-control px-2 text-lead font-semibold tabular-nums text-foreground transition-colors hover:bg-muted"
-              >
-                {zoomPct}%
-              </button>
-              <IslandButton onClick={onZoomIn} label="Zoom in">
-                <ZoomIn />
-              </IslandButton>
-              <IslandButton onClick={onFitView} label="Fit the whole flow on screen">
-                <Maximize2 />
-              </IslandButton>
+            {/* THE NAME, DEAD CENTRE. It is the one thing on this bar that is
+                about the flow rather than about what you can do to it, and the
+                grid's auto column keeps it centred no matter how long it gets
+                or what appears either side of it. */}
+            <span className="flex min-w-0 items-center justify-center">
+              <span className="flex min-w-0 items-center gap-1 pr-1">
+                {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
+                    At the old fixed width a long name was cut mid-glyph, hard against
+                    the padding with no ellipsis — while 87px of empty canvas sat to
+                    its right and the wrapper's own max-width was never reached. The
+                    floor keeps an empty field clickable; the ceiling keeps this
+                    island clear of the one on the right. */}
+                <input
+                  value={name}
+                  onChange={(e) => onRename(e.target.value)}
+                  aria-label="Flow name"
+                  placeholder="Untitled flow"
+                  title={name}
+                  style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
+                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
+                />
+              </span>
             </span>
 
             {/* WHAT YOU DO WITH THE FLOW. Run and ship, side by side, because
@@ -297,7 +267,6 @@ export function FlowToolbar({
                   does not. Do not "restore" it. */}
               <SaveChip state={saveState} onRetry={onRetrySave} />
 
-
               {/* The flow's own on/off switch, where Zapier puts a Zap's. It cannot
                   be turned on before the flow has ever been published — there
                   would be nothing to turn on — so it sits inactive until the
@@ -305,6 +274,13 @@ export function FlowToolbar({
                   the name and the save state because all three answer the same
                   question: what IS this flow right now. */}
               <FlowSwitch on={isPublished} disabled={publishedVersion == null || togglingEnabled} onChange={onToggleEnabled} />
+
+              <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
+                <Undo2 />
+              </IslandButton>
+              <IslandButton onClick={onRedo} disabled={!canRedo} label="Redo">
+                <Redo2 />
+              </IslandButton>
 
               {showTestAll && (
                 <Button
@@ -333,6 +309,35 @@ export function FlowToolbar({
               </Button>
             </span>
           </div>
+        </Island>
+      </div>
+
+      {/* ── THE VIEW, ITS OWN LITTLE BAR ───────────────────────────────
+          Zoom and fit are the only controls here that are about looking rather
+          than about the flow, so they sit apart from it — bottom-left, out of
+          the way of both the top bar and the config panel, stacked because a
+          column of four is a smaller target area to skip over than a row. */}
+      <div className="pointer-events-none absolute bottom-6 left-6 z-10">
+        <Island className="flex-col">
+          <IslandButton onClick={onZoomOut} label="Zoom out">
+            <ZoomOut />
+          </IslandButton>
+          {/* Miro puts the zoom READOUT between its controls and it earns the
+              space: after a pinch you have no idea where you are. Clicking it
+              fits the flow, which is the only thing anyone wants next. */}
+          <button
+            onClick={onFitView}
+            title="Fit the whole flow on screen"
+            className="h-[42px] w-[42px] rounded-control text-base font-semibold tabular-nums text-foreground transition-colors hover:bg-muted"
+          >
+            {zoomPct}%
+          </button>
+          <IslandButton onClick={onZoomIn} label="Zoom in">
+            <ZoomIn />
+          </IslandButton>
+          <IslandButton onClick={onFitView} label="Fit the whole flow on screen">
+            <Maximize2 />
+          </IslandButton>
         </Island>
       </div>
 

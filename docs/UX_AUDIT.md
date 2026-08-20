@@ -2019,6 +2019,55 @@ too.
 
 ---
 
+### 10o. The connector stops reacting, and the card stops shouting
+
+**`ReferenceEdge` is deleted.** It drew a violet bezier from a Calculate step's
+two inputs, labelled "Count this" / "Out of this", *while that step was
+selected*. It was reported as a hover state three times, and the third time it
+finally landed why: **a line that changes colour when you click a card
+elsewhere is indistinguishable from a line reacting to the pointer.** The
+intent was good and the mechanism was invisible. The relationship is still on
+the card (`refLine` — "3. Filter ÷ 2. Filter × 100") and named in the panel's
+two slots, which is where it is actually read.
+
+**The card's border no longer carries state.** It was the status colour, so a
+canvas of healthy steps was a wall of green outlines and a card changed its
+edge as you clicked around — the same objection, one surface over. One hairline
+in one grey, always. Status is the dot and the hint line, which say it in words
+or in one small mark. Selection still shows, because you have to know which
+step is open.
+
+The 4px accent edge added one commit earlier went with it, for the same reason
+it was asked for: it was a coloured border.
+
+**The kebab is always visible.** Hidden until hover, the only route to Duplicate
+and Delete was invisible until you happened to be over the right card — and on
+a touch screen, invisible full stop.
+
+**The marks got genuinely brighter**, and the method is the point. The first
+pass held saturation moderate and solved for lightness; it came back as "too
+mundane and boring and dark". So: push saturation near the top of the gamut
+first, *then* binary-search lightness down to the highest value that still
+clears 3.05:1 against white. **Vividness is what reads as bright, not
+luminance.** Every one of the nine is solved for rather than picked, which is
+why yellow-green and blue land on very different lightnesses.
+
+### 10p. Two surfaces, split by what they are about
+
+The bar is about the FLOW: back and the step menu left, the **name dead-centre**
+— the one thing there that is about the flow rather than about what you can do
+to it — then saved, on/off, undo, redo, run and ship on the right.
+
+Zoom and fit are about LOOKING, not about the flow, so they moved out into their
+own column at the bottom-left. Stacked, because a column of four is a smaller
+area to skip past than a row.
+
+`check:orphans` earned its keep in the same pass: removing the accent edge left
+`nodeAccent()` referenced nowhere, and the scan named it before the commit
+rather than after.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:
