@@ -131,7 +131,7 @@ export default function DesignPage() {
             </div>
             <div className="flex flex-1 flex-col justify-center gap-1 text-tiny text-muted-foreground">
               <p><code className="text-foreground">--color-rail</code></p>
-              <p>A wash down the column: #3A32A8 → #262A6E → #10606B. Indigo into teal rather than Make&rsquo;s purple into magenta — the same idea, a different axis of the wheel, so it is not their rail in a new hue. Flat read as the one dead surface once the step marks got their own colour.</p>
+              <p>Deep indigo-navy, flat: #1D1A3A. It was a three-stop gradient so a narrow column would not read as a slab; at this value it does not need the help, and a flat colour is one number a future edit cannot get half-right.</p>
               <p className="mt-1">Selected highlights the 40px tile alone — a white wash behind the glyph, the label just brightening to full white while resting items sit at 75%. Highlighting the whole item as one white pill was a heavier thing entirely.</p>
             </div>
           </div>

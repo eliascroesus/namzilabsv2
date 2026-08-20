@@ -180,13 +180,6 @@
      not read as a slab; at this value it does not need the help, and a flat
      colour is one number a future edit cannot get half-right. */
   --color-rail: #1d1a3a;
-  /* A wash, not a slab. Deep indigo warming into teal down the column —
-     Make gets its life from a gradient and so does this, but along a
-     different axis of the wheel — indigo to teal, not purple to magenta — so
-     it is not the same rail in a new hue. Bright enough to be the loud thing
-     it is meant to be; every stop still clears 6:1 against white.
-     Anchored on --color-rail so the flat value and the wash cannot drift. */
-  --gradient-rail: linear-gradient(168deg, #3A32A8 0%, #262A6E 48%, #10606B 100%);
 
   /* --- State, as tokens rather than raw palette picks ---------------------
    * Green/amber/red were being reached for directly all over the app, which
@@ -414,7 +407,6 @@ summary {
 /* The rail's wash, as a utility so only one file decides it. */
 .bg-rail {
   background-color: var(--color-rail);
-  background-image: var(--gradient-rail);
 }
 
 /**

@@ -1955,24 +1955,20 @@ two-number one and it is a Compare. One list is what lets you change your mind
 without deleting the step. "Compare" named only half of that, so the step is
 **Calculate** now.
 
-### 10m. Colour, depth, and one type vocabulary
+### 10m. One type vocabulary (and a colour pass that was reverted)
 
-**One hue per job.** The old set had `unite` sky, `filter` blue and `output`
-indigo — three blues for three unrelated jobs, which on a canvas of small marks
-is no signal at all. The new set runs around the wheel at a single saturation:
-green in, cyan for combining, blue for filtering, rose for splitting, amber and
-teal for time, violet for maths, indigo out.
+The same round tried a visual pass — one hue per job on the step marks, a
+sheen and an accent-tinted shadow on each, and a brighter indigo-to-teal wash
+on the rail. All of it was reverted on sight: the marks are flat accents again
+and the rail is flat `#1d1a3a`.
 
-**The marks are objects, not swatches.** A diagonal sheen, a hairline of the
-colour's own light end inside the top edge, and a drop shadow tinted with the
-accent rather than grey — a coloured object casting a neutral shadow looks
-pasted on. All three derive from the one accent value via `color-mix`, so
-adding a step type stays a one-line change.
-
-**The rail is a wash again**: #3A32A8 → #262A6E → #10606B. Indigo into teal
-rather than Make's purple into magenta — the same idea on a different axis of
-the wheel. Flat was right while the rail was the only colour on screen; once
-the step marks got their own, it read as the one dead surface.
+Worth recording because it is now the second time a colour-and-depth pass has
+been rejected while a *structural* change in the same commit was kept. The
+lesson is not "no gradients" — it is that changes to what things MEAN (grouping,
+naming, removing a state that lied) survive, and changes to how they LOOK are
+the user's call and should ship on their own so they can be taken back without
+dragging anything else with them. This revert was clean only because the type
+sweep, the bar and the connector fix touched different lines.
 
 **One type vocabulary.** 279 raw `text-xs` / `text-sm` across 33 files became
 `text-tiny` / `text-base` — the same pixels either way, so it is a vocabulary
