@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { serializeGraph } from "@/components/flow/graph-serialize";
 import type { FNode } from "@/components/flow/graph-utils";
+import type { NodeTestDTO } from "@/lib/flow/test-run";
+
+/** A real result shape, so the fixture cannot drift from what a Test returns. */
+const OK_TEST: NodeTestDTO = { status: "ok", recordsIn: 12, recordsOut: 9, sample: [], inputSample: [], outputSchema: [], value: 9 };
 
 /**
  * CLICKING A STEP IS NOT AN EDIT.
@@ -75,7 +79,7 @@ describe("serializeGraph drops session state", () => {
     const renamed = serializeGraph([node("a", { data: { config: { op: "count" }, label: "Renamed", lastTest: null, dirty: false } } as Partial<FNode>)], edges, metrics);
     const moved = serializeGraph([node("a", { position: { x: 40, y: 120 } })], edges, metrics);
     const tested = serializeGraph(
-      [node("a", { data: { config: { op: "count" }, label: "Filter", lastTest: { status: "ok", value: 9 }, dirty: false } } as Partial<FNode>)],
+      [node("a", { data: { config: { op: "count" }, label: "Filter", lastTest: OK_TEST, dirty: false } } as Partial<FNode>)],
       edges,
       metrics,
     );

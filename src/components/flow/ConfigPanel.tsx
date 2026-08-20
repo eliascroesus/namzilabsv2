@@ -107,7 +107,7 @@ export function ConfigPanel({
   onCancelTest,
   onTestUpstream,
   onAddNext,
-  animClass = "flow-pop-in",
+  animClass = "flow-panel-in",
   branch,
   onSetInput,
   onSetSources,
@@ -193,7 +193,7 @@ export function ConfigPanel({
     // the right as everything else floating over the canvas.
     <aside
       data-config-panel
-      className={`absolute right-6 top-chrome-band bottom-chrome-band z-20 w-[min(452px,calc(100vw-3rem))] ${PANEL_SHELL} ${animClass}`}
+      className={`absolute right-6 top-chrome-band bottom-6 z-20 w-[min(452px,calc(100vw-3rem))] ${PANEL_SHELL} ${animClass}`}
     >
       {/* Header — no longer a darker band. The panel is ONE white surface cut by
           hairlines, the way every other island in the builder is; three stacked

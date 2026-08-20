@@ -139,7 +139,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
        * and outranks the `:hover` rule on specificity, so order is not load-
        * bearing.
        */
-    <div className={`group/card w-[300px] rounded-surface border bg-white shadow-card transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-card ${border}`}>
+    <div className={`group/card flow-node-in w-[300px] rounded-surface border bg-white shadow-card transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-card ${border}`}>
       {isCompare ? (
         <>
           {/* Both number inputs anchor at top-centre; the edges enter straight down (no
