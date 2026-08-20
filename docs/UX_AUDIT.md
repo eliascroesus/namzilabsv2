@@ -2120,6 +2120,39 @@ specific line after.
 
 ---
 
+### 10s. Right-to-left by how often, and two things already true
+
+**The bar's right cluster now reads: Saved · Review & publish · run · on-off ·
+undo · redo · ⋮.** Ship first because it is the destination; the step menu last
+at the far edge, because it is the rarest thing there and the only one that
+*opens* something rather than doing something. The left group is the back arrow
+alone — the name is centred and everything you can do sits at the other end.
+
+**Two of the four asks were already satisfied, and were checked rather than
+re-implemented:**
+
+- The view column measures **58px wide** against the top bar's **58px tall** —
+  they are the same construction (1px border + 7px + a 42px control + 7px +
+  1px), so they match by derivation and not by coincidence.
+- The flow name is **15px semibold**, already the same `text-lead` a node title
+  uses.
+
+Measuring first is the point. Both would have been "fixed" into something
+slightly wrong.
+
+**Time between is orange and Calculate is violet** — and violet is *Summarize's*
+violet, so those two now share a colour deliberately. That is a reversal of the
+respacing two commits ago, and it is the better answer: they are one node type
+whose operator decides its job, so one colour says "same step, different
+question" and the glyph says which. The palette is still keyed by variant, which
+is what makes sharing a value a decision rather than a limitation.
+
+The yellow went with it, and so did the case that motivated `glyphInk()`. The
+function stays: it is measured, not hard-coded, so the moment a hue that cannot
+hold white is added again it does the right thing without anyone remembering.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

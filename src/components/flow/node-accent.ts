@@ -6,25 +6,31 @@
  * nodeAccent() from the server". Colour is data, not behaviour.
  *
  * SPACED BY WHAT IS ACTUALLY ON SCREEN. The picker offers seven steps, so those
- * seven are what the wheel is divided between — an even split across ten keys
- * would have spent three of its gaps on legacy types nobody can add, and left
- * Summarize and Calculate a shade apart because they happen to share a node
- * type. They are keyed by VARIANT where a type has two jobs.
+ * are what the wheel is divided between — an even split across ten keys would
+ * have spent three of its gaps on legacy types nobody can add. Keyed by VARIANT
+ * where a type has two jobs, which is what lets Summarize and Calculate be
+ * addressed separately even though they are one type; today they are set to the
+ * same value, and the mechanism is what makes that a decision rather than a
+ * limitation.
  *
  * Saturation is pushed near the top of the gamut and lightness is then solved
  * down to the highest value that still clears 3.05:1 against white. That order
  * matters: vividness is what reads as bright, not luminance.
  */
 export const NODE_ACCENT: Record<string, string> = {
-  formula_compare: "#F66700", // 25° orange — Calculate
-  time_between: "#F2C200", // 50° yellow — how long between two events
+  time_between: "#F66700", // 25° orange — how long between two events
   app: "#0EAB0E", // 120° green — records come IN
   unite: "#009ED3", // 195° blue — several steps onto one line
   filter: "#8176F9", // 245° indigo — keep only what counts
+  // Summarize and Calculate SHARE a colour, on purpose and on request. They are
+  // one node type whose operator decides its job — pick a dataset operator and
+  // it is a Summarize, pick a two-number one and it is a Calculate — so one
+  // colour says "same step, different question" and the glyph says which.
   formula: "#D95FF2", // 290° violet — Summarize
+  formula_compare: "#D95FF2", // 290° violet — Calculate
   paths: "#F856A7", // 330° pink — split into branches
   // Retired types, kept so an existing flow still draws. Off the wheel above.
-  calculate: "#F66700",
+  calculate: "#D95FF2",
   time: "#C88600",
   group: "#71A20D",
   output: "#F76262",

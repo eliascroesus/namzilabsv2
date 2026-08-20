@@ -184,7 +184,8 @@ export function FlowToolbar({
       <div className="pointer-events-none absolute inset-x-6 top-6 z-10">
         <Island className="w-full">
           <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
-            {/* WHAT THIS FLOW IS, AND HOW IT IS DOING */}
+            {/* WHERE YOU CAME FROM. Nothing else: the name is centred and
+                everything you can DO sits at the other end. */}
             <span className="flex min-w-0 items-center gap-1">
               <Link
                 href="/dashboard/flows"
@@ -198,6 +199,68 @@ export function FlowToolbar({
                   and already says so on hover; a breadcrumb whose only parent is
                   the button next to it is a word for its own sake. */}
 
+            </span>
+
+            {/* THE NAME, DEAD CENTRE. It is the one thing on this bar that is
+                about the flow rather than about what you can do to it, and the
+                grid's auto column keeps it centred no matter how long it gets
+                or what appears either side of it. */}
+            <span className="flex min-w-0 items-center justify-center">
+              <span className="flex min-w-0 items-center gap-1 pr-1">
+                {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
+                    At the old fixed width a long name was cut mid-glyph, hard against
+                    the padding with no ellipsis — while 87px of empty canvas sat to
+                    its right and the wrapper's own max-width was never reached. The
+                    floor keeps an empty field clickable; the ceiling keeps this
+                    island clear of the one on the right. */}
+                <input
+                  value={name}
+                  onChange={(e) => onRename(e.target.value)}
+                  aria-label="Flow name"
+                  placeholder="Untitled flow"
+                  title={name}
+                  style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
+                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
+                />
+              </span>
+            </span>
+
+            {/* EVERYTHING YOU DO, RIGHT TO LEFT BY HOW OFTEN.
+                Ship first because it is the destination, then run, then the
+                on/off switch, then undo and redo, and the step menu last at the
+                far edge — the rarest thing here and the only one that opens
+                something rather than doing something. */}
+            <span className="flex items-center justify-end gap-2">
+              <SaveChip state={saveState} onRetry={onRetrySave} />
+              <Button onClick={onReview} disabled={publishing} className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-lead [&_svg]:size-[18px]">
+                {isPublished ? <SlidersHorizontal /> : <Rocket />}
+                {isPublished ? "Edit output" : "Review & publish"}
+              </Button>
+              {showTestAll && (
+                <Button
+                  variant="secondary"
+                  onClick={runAll ? onStopTestAll : onTestAll}
+                  title={runAll ? "Stop the run" : "Run every step, top to bottom"}
+                  aria-label={runAll ? "Stop the run" : "Test flow"}
+                  className={`h-[42px] shrink-0 text-lead [&_svg]:size-[18px] ${runAll ? "gap-2 px-[18px]" : "w-[42px] px-0"}`}
+                >
+                  {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
+                  {/* Icon only at rest — the play glyph IS the word. Quiet grey
+                      rather than a colour: a test run is a rehearsal, and the one
+                      saturated thing in this bar should be the act that actually
+                      ships. While a run is going it earns its words back:
+                      "Stop · 2/6" is a receipt, and dropping the count to stay
+                      square would be hiding progress to keep a shape. */}
+                  {runAll ? `Stop · ${runAll.at}/${runAll.of}` : null}
+                </Button>
+              )}
+              <FlowSwitch on={isPublished} disabled={publishedVersion == null || togglingEnabled} onChange={onToggleEnabled} />
+              <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
+                <Undo2 />
+              </IslandButton>
+              <IslandButton onClick={onRedo} disabled={!canRedo} label="Redo">
+                <Redo2 />
+              </IslandButton>
               <Popover
                 open={menuOpen}
                 setOpen={setMenuOpen}
@@ -232,40 +295,9 @@ export function FlowToolbar({
                   </button>
                 </div>
               </Popover>
-
-            </span>
-
-            {/* THE NAME, DEAD CENTRE. It is the one thing on this bar that is
-                about the flow rather than about what you can do to it, and the
-                grid's auto column keeps it centred no matter how long it gets
-                or what appears either side of it. */}
-            <span className="flex min-w-0 items-center justify-center">
-              <span className="flex min-w-0 items-center gap-1 pr-1">
-                {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
-                    At the old fixed width a long name was cut mid-glyph, hard against
-                    the padding with no ellipsis — while 87px of empty canvas sat to
-                    its right and the wrapper's own max-width was never reached. The
-                    floor keeps an empty field clickable; the ceiling keeps this
-                    island clear of the one on the right. */}
-                <input
-                  value={name}
-                  onChange={(e) => onRename(e.target.value)}
-                  aria-label="Flow name"
-                  placeholder="Untitled flow"
-                  title={name}
-                  style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
-                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
-                />
-              </span>
-            </span>
-
-            {/* WHAT YOU DO WITH THE FLOW. Run and ship, side by side, because
-                they are the same kind of act at two different stages. */}
-            <span className="flex items-center justify-end gap-2">
               {/* Words, no dot. The reference this island copies has a green dot,
                   and it is deliberately not here: a dot needs a legend and a word
                   does not. Do not "restore" it. */}
-              <SaveChip state={saveState} onRetry={onRetrySave} />
 
               {/* The flow's own on/off switch, where Zapier puts a Zap's. It cannot
                   be turned on before the flow has ever been published — there
@@ -273,40 +305,9 @@ export function FlowToolbar({
                   first publish, which flips it on by itself. It lives beside
                   the name and the save state because all three answer the same
                   question: what IS this flow right now. */}
-              <FlowSwitch on={isPublished} disabled={publishedVersion == null || togglingEnabled} onChange={onToggleEnabled} />
-
-              <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
-                <Undo2 />
-              </IslandButton>
-              <IslandButton onClick={onRedo} disabled={!canRedo} label="Redo">
-                <Redo2 />
-              </IslandButton>
-
-              {showTestAll && (
-                <Button
-                  variant="secondary"
-                  onClick={runAll ? onStopTestAll : onTestAll}
-                  title={runAll ? "Stop the run" : "Run every step, top to bottom"}
-                  aria-label={runAll ? "Stop the run" : "Test flow"}
-                  className={`h-[42px] shrink-0 text-lead [&_svg]:size-[18px] ${runAll ? "gap-2 px-[18px]" : "w-[42px] px-0"}`}
-                >
-                  {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
-                  {/* Icon only at rest — the play glyph IS the word. Quiet grey
-                      rather than a colour: a test run is a rehearsal, and the one
-                      saturated thing in this bar should be the act that actually
-                      ships. While a run is going it earns its words back:
-                      "Stop · 2/6" is a receipt, and dropping the count to stay
-                      square would be hiding progress to keep a shape. */}
-                  {runAll ? `Stop · ${runAll.at}/${runAll.of}` : null}
-                </Button>
-              )}
 
               {/* 18px, not the Button's shared 16px: a 26px standalone glyph sits one
                   control away, and 16 beside it read as two different icon sets. */}
-              <Button onClick={onReview} disabled={publishing} className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-lead [&_svg]:size-[18px]">
-                {isPublished ? <SlidersHorizontal /> : <Rocket />}
-                {isPublished ? "Edit output" : "Review & publish"}
-              </Button>
             </span>
           </div>
         </Island>
