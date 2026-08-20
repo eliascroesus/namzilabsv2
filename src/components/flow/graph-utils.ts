@@ -741,3 +741,30 @@ export function describeInputs(opts: { selectedId: string; nodes: FNode[]; edges
       };
     });
 }
+
+/**
+ * WHAT "100%" MEANS ON THIS CANVAS.
+ *
+ * 1:1 is not the resting size here. A step card is 300px wide holding a 44px
+ * mark, a chip and two short lines; at 1.0 on a laptop it is a small object in
+ * a large field, and a two-step flow reads as a diagram OF something rather
+ * than the thing itself. 1.3 is where it sits right.
+ *
+ * So 1.3 is the unit, not a zoom level: a flow opens at it, "fit" returns to
+ * it, and the readout calls it 100% — because to the person using it, that IS
+ * normal size, and a badge reading 130% at rest invites them to "fix" it.
+ * Everything else is a percentage OF this, so the bounds below read as the
+ * 50%–200% anyone expects.
+ *
+ * The three uses — fitView's cap, React Flow's min/max, and the readout — must
+ * all come from here or the number in the corner stops meaning anything.
+ * Pinned by tests/zoom-scale.test.ts.
+ */
+export const BASE_ZOOM = 1.3;
+export const MIN_ZOOM = BASE_ZOOM * 0.5;
+export const MAX_ZOOM = BASE_ZOOM * 2;
+
+/** Raw React Flow zoom -> the percentage the toolbar shows. */
+export function zoomPercent(zoom: number): number {
+  return Math.round((zoom / BASE_ZOOM) * 100);
+}

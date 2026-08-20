@@ -41,7 +41,7 @@ export function ToolbarPreview() {
       onZoomIn={noop}
       onZoomOut={noop}
       onFitView={noop}
-      zoom={1}
+      zoomPct={100}
       onToggleEnabled={noop}
       togglingEnabled={false}
     />

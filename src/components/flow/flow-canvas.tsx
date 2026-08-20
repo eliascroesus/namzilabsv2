@@ -98,6 +98,10 @@ import {
   type InputDescriptor,
   type LibraryCtx,
   type MetricSpecT,
+  BASE_ZOOM,
+  MIN_ZOOM,
+  MAX_ZOOM,
+  zoomPercent,
 } from "./graph-utils";
 import type { DataField, DataGroup } from "./controls/types";
 import { formatSample } from "./controls/field-utils";
@@ -1450,8 +1454,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         canRedo={hist.redo > 0}
         onZoomIn={() => rf.zoomIn({ duration: 150 })}
         onZoomOut={() => rf.zoomOut({ duration: 150 })}
-        onFitView={() => rf.fitView({ duration: 250, maxZoom: 1.3 })}
-        zoom={zoom}
+        onFitView={() => rf.fitView({ duration: 250, maxZoom: BASE_ZOOM })}
+        zoomPct={zoomPercent(zoom)}
         onToggleEnabled={toggleEnabled}
         togglingEnabled={togglingEnabled}
       />
@@ -1512,7 +1516,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             // two steps opens looking like a diagram of something rather than the
             // thing itself. The cap still exists — it just sits where the canvas
             // actually reads.
-            fitViewOptions={{ maxZoom: 1.3 }}
+            fitViewOptions={{ maxZoom: BASE_ZOOM }}
+            minZoom={MIN_ZOOM}
+            maxZoom={MAX_ZOOM}
             deleteKeyCode={null}
             // Scroll/two-finger pans the canvas; pinch (or ⌘/Ctrl+scroll) zooms.
             panOnScroll

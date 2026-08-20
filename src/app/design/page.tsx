@@ -283,28 +283,25 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Builder chrome" note="Three islands, grouped by job. Left: where you came from and what this is called. Right: whether it saved, what you can do to it, and shipping it — the canvas showing through the seam between them. Bottom: everything you do to the canvas.">
-          {/* 256px is a clearance, not a look: 24px inset + a 58px island at the
-              top, 24px inset + the 58px bottom bar, leaving 92px of canvas
-              between them. These numbers move when the islands do — the last
-              version of this comment still said 16px and 108px, and claimed to
-              have been re-measured, which is worse than saying nothing.
+        <Section title="Builder chrome" note="One bar, in the order you use it: where you are, what you do to the canvas, then whether it saved and how you ship it. It was three surfaces — identity, actions, canvas controls — which is two more than one toolbar needs. It hugs its content at 1116px and the config panel opens in the band below it, so nothing ever moves out of anything's way.">
+          {/* THE INNER CANVAS IS 1292px BECAUSE A REAL ONE IS — a 1440 viewport
+              minus the 100px rail minus the two 24px insets. The bar hugs its
+              content at 1116px, so 176px is left over and nothing truncates.
 
-              Width is what the split added. This column makes the box 816px and
-              the two top islands measure 324 and 373, so 87px of canvas sits
-              between them and nothing overlaps. They meet below 729px — and they
-              meet here before they would in the app, because the left island
-              truncates against 62vw and this box is a little over half the
-              viewport. So in a window narrow enough to shrink this column they
-              touch: that is the preview being narrower than a viewport, not the
-              toolbar being broken, and the column is not widening past the page's
-              measure to hide it. */}
-          <div className="relative h-64 overflow-hidden rounded-card bg-canvas-bg">
-            <div
-              className="absolute inset-0"
-              style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
-            />
-            <ToolbarPreview />
+              Rendered at this page's own 816px column it was a lie: the bar hit
+              its max-width, squeezed, and showed a flow name clipped in a way
+              the product does not do at any width a laptop has. So the box
+              scrolls sideways rather than compressing the specimen. 256px tall
+              is the clearance for one 58px bar at a 24px inset, with canvas
+              below it. */}
+          <div className="-mx-24 overflow-x-auto overflow-y-hidden rounded-card">
+            <div className="relative h-64 w-[1292px] bg-canvas-bg">
+              <div
+                className="absolute inset-0"
+                style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
+              />
+              <ToolbarPreview />
+            </div>
           </div>
         </Section>
 

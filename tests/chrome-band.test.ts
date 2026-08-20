@@ -19,7 +19,7 @@ import { describe, expect, it } from "vitest";
  * It also pins the token's ONLY reference. Tailwind v4 emits a theme variable
  * to :root only when a generated utility uses it, so `--spacing-chrome-band`
  * exists in the stylesheet purely because ConfigPanel writes
- * `top-chrome-band bottom-chrome-band`. Replace that with arbitrary values and
+ * `top-chrome-band`. Replace that with an arbitrary value and
  * the variable vanishes from the build — a failure that already cost an
  * afternoon once on `--radius-frame`, where the class was on the element, the
  * token was missing from :root, and it looked exactly like a scanner bug.
@@ -57,16 +57,20 @@ describe("the chrome band", () => {
 
   it("is referenced by the panel, which is the only thing that emits it", () => {
     // Tailwind v4 drops an unreferenced theme variable from the stylesheet.
+    // ONE reference now that everything lives in a single top bar and the foot
+    // of the canvas is free — so this pin matters more, not less: delete that
+    // one class name and the variable leaves the build entirely.
     expect(panel).toMatch(/\btop-chrome-band\b/);
-    expect(panel).toMatch(/\bbottom-chrome-band\b/);
   });
 
-  it("keeps the panel clear of both bars", () => {
-    // The panel is positioned by the band alone: no inset-y-0, no margin that
-    // would put it back over the chrome.
+  it("starts below the bar and runs to the foot of the canvas", () => {
+    // The band is a TOP measurement: there is one bar and it is at the top, so
+    // the foot takes the plain 24px inset like every other floating edge.
     const aside = one(panel, /(<aside[\s\S]{0,600}?data-config-panel[\s\S]{0,600}?>)/, "the panel's <aside>");
     expect(aside).not.toMatch(/\binset-y-0\b/);
     expect(aside).toMatch(/\bright-6\b/);
+    expect(aside).toMatch(/\btop-chrome-band\b/);
+    expect(aside).toMatch(/\bbottom-6\b/);
   });
 
   it("leaves the chrome nailed down — nothing slides for the panel", () => {

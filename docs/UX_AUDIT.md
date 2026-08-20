@@ -1851,6 +1851,41 @@ had never seen. Typecheck goes last, after every file exists.
 
 ---
 
+### 10h. One bar, and 1.3 becomes the unit
+
+**Three surfaces became one.** Identity top-left, actions top-right, canvas
+controls along the foot — three islands for one toolbar, which is two more than
+the job needs. It is now a single island that hugs its content at 1116px, in
+the order you actually use it: where you are → what you do to the canvas →
+whether it saved and how you ship it.
+
+It fits a 1292px canvas (a 1440 viewport minus the rail and the two insets)
+with 176px to spare, and still fits at 1280. Below that the flow name truncates,
+which is the right thing to give up first.
+
+The config panel takes the foot back: `top-chrome-band bottom-6`. The band is a
+TOP measurement now, and its pin matters more rather than less — `top-chrome-band`
+is the token's *only* reference, so deleting that one class name removes the
+variable from the build.
+
+**And 1.3 is the unit, not a zoom level.** I resisted this twice on the grounds
+that relabelling the readout would be "a lie about the viewport". That was the
+wrong frame. 1:1 is not the resting size of this canvas — a 300px card holding
+a 44px mark reads as a diagram *of* something at 1.0 and as the thing itself at
+1.3. So 1.3 is what "normal size" means here, and a badge reading 130% at rest
+invites the user to correct something that is already right.
+
+`BASE_ZOOM = 1.3` is now the single source: the canvas opens at it, "fit"
+returns to it, `MIN_ZOOM`/`MAX_ZOOM` are half and double it so the bounds read
+as the 50%–200% anyone expects, and `zoomPercent()` divides by it. 1:1 is a
+zoomed-out view now and says 77%, which is true.
+
+`tests/zoom-scale.test.ts` pins it, including that no literal `1.3` survives
+anywhere in the canvas — cap the fit with one number and scale the readout with
+another and the badge starts lying with nothing on screen looking wrong.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:
