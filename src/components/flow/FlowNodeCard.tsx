@@ -9,6 +9,7 @@ import { isBinaryCalc } from "@/lib/flow/shapes";
 import type { FNode, NodeData } from "./graph-utils";
 import { STATUS_META, nodeTitle, nodeVariant, pathHandles, resultLabel, type NodeStatus } from "./node-meta";
 import { NodeIcon } from "./icons";
+import { nodeAccent } from "./node-accent";
 import { anchorFromRect } from "./NodeLibraryModal";
 import { Popover } from "./controls/Popover";
 
@@ -77,10 +78,21 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const isCompare =
     isBinaryCalc(t, data.config as Record<string, unknown>) ||
     (t === "calculate" && String(data.config.mode ?? "") === "compare");
-  // Selection is a halo, not a second card. A 2px ring at the accent's own
-  // saturation was louder than the step it was marking, so the ring drops to a
-  // tint and the accent stays on the border where it reads as one edge.
-  const border = selected ? "border-primary ring-2 ring-primary/20" : sm.border;
+  /**
+   * ONE HAIRLINE, ONE GREY, ALWAYS — and selection is a HALO, not a border.
+   *
+   * The border used to carry status (`sm.border`: orange for needs-setup, green
+   * for tested), so a canvas of healthy steps was a wall of outlines and a card
+   * changed its edge as you clicked around. Status is the dot and the hint line
+   * under the title instead — both say it, neither shouts it.
+   *
+   * Selection was then a second border in a second colour, which against the
+   * accent edge on the left gave the card two rims of different colours meeting
+   * at one corner. So the border NEVER changes: the halo sits outside it, and
+   * the card keeps exactly one edge in every state.
+   */
+  const border = selected ? "border-border ring-[3px] ring-primary/40" : "border-border";
+  const accent = nodeAccent(t, nodeVariant(t, data.config as Record<string, unknown>));
   const freeHandles = (data.freeHandles as Array<{ id: string; label: string }> | undefined) ?? [];
 
   // The single body line: the plain output when ready, a hint when setup, else nothing.
@@ -140,6 +152,12 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
        * bearing.
        */
     <div
+      /* The step's own colour on the edge you read first. The 44px mark carries
+         type but sits INSIDE the card, so a column of steps was a column of
+         white rectangles until you read each one. A left BORDER rather than an
+         inner strip: the radius clips it for free and nothing inside the card
+         can knock it out of alignment. */
+      style={{ borderLeftWidth: 4, borderLeftColor: accent }}
       className={`group/card w-[300px] rounded-surface border bg-white shadow-surface transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-surface ${border}`}
     >
       {isCompare ? (

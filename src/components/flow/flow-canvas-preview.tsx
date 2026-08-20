@@ -1,6 +1,7 @@
 import { LineChart, Plus } from "lucide-react";
 import { STATUS_META, type NodeStatus } from "./node-meta";
 import { NodeIcon } from "./icons";
+import { nodeAccent } from "./node-accent";
 
 /**
  * A step card for the UI kit page — layout only.
@@ -34,11 +35,13 @@ export function FlowNodeCard({
   const sm = STATUS_META[status];
   const type = variant.startsWith("unite") ? "unite" : variant.startsWith("formula") ? "formula" : variant;
   const source = variant === "app" ? "gsheets" : undefined;
+  const accent = nodeAccent(type, variant.includes("_") ? variant : undefined);
   // Duplicates the card box from src/components/flow/FlowNodeCard.tsx — width, radius, elevation, padding and mark size must track that file.
   // The elevation is the ring-free `card` rung: the card draws a real border,
   // and a ringed shadow under one is two hairlines reading as a dirty 2px rim.
   return (
     <div
+      style={{ borderLeftWidth: 4, borderLeftColor: accent }}
       className="w-[300px] rounded-surface border border-border bg-card shadow-surface transition-all duration-150 hover:shadow-card-hover"
     >
       <div className="flex items-start gap-3 p-3.5">

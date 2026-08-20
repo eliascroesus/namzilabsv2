@@ -2068,6 +2068,58 @@ rather than after.
 
 ---
 
+### 10q. The palette, respaced by what is actually on screen
+
+**Keyed by VARIANT, not just by type.** Summarize and Calculate are one node
+type, so they shared one accent and sat a shade apart on the canvas. The
+palette now keys on the variant where a type has two jobs.
+
+**Spaced across the seven steps you can actually add**, not across ten keys.
+Three of those keys are retired types nobody can pick, and dividing the wheel
+by ten spent gaps on steps that never appear. The visible seven now sit at
+25° / 50° / 120° / 195° / 245° / 290° / 330°.
+
+**The white glyph was capping how bright any tile could be.** Real yellow under
+white text is about 2:1, so "make Time between yellow" could only ever have
+produced olive — the solver returned `#AA9300` and it was not yellow. Rather
+than compromise the colour, the rule is now stated and measured:
+
+> The glyph is white unless white cannot be read on that hue, in which case it
+> takes the hue's own dark end.
+
+`glyphInk()` computes it from the accent, so the next bright colour added does
+the right thing without anyone remembering this. Time between is `#F2C200` —
+actually yellow.
+
+**The step's tile beat the vendor's brand.** A connected Get-data step drew its
+mark in Google's own green while the picker drew the same step in
+`NODE_ACCENT.app` — the same step in two colours, one row apart, which is
+exactly what was noticed. The short label still says which app it is; the
+colour says which STEP it is, and that is the thing the canvas is about.
+
+### 10r. One rim, in every state
+
+The accent edge came back and the status border went, which sounds
+contradictory until you separate what each was doing. The accent edge says
+*what kind of step this is* — constant, never changes, four pixels of the
+step's own colour. The status border said *how this step is doing* — and a
+border that changes as you click around is the same complaint as the connector
+that lit on selection.
+
+Selection then had to move too: `border-primary` on top of an accent edge gave
+the card **two rims of different colours meeting at one corner**. It is a halo
+now (`ring-[3px] ring-primary/40`) sitting outside a border that never changes,
+so the card wears exactly one edge in every state.
+
+**A process note.** The status border was reported removed one commit earlier
+and was not: the edit landed, and a later slice-and-rewrite of the same file in
+the same session silently restored the old text. Grepping for `sm.border`
+afterwards is what caught it. Writing a file from a computed slice does not
+compose with earlier edits to that file — re-read before slicing, or verify the
+specific line after.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

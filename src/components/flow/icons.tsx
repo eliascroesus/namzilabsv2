@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { sourceStyle } from "./controls/source-style";
-import { NODE_ACCENT } from "./node-accent";
+import { NODE_ACCENT, glyphInk, nodeAccent } from "./node-accent";
 
 /**
  * The step glyphs — lucide, not hand-drawn.
@@ -92,8 +92,12 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
     const s = sourceStyle(source);
     return (
       <span
-        className="inline-flex shrink-0 items-center justify-center font-semibold leading-none text-white"
-        style={{ background: s.color, width: size, height: size, borderRadius: radius, fontSize: Math.round(size * 0.42) }}
+        className="inline-flex shrink-0 items-center justify-center font-semibold leading-none"
+        /* The STEP's green, not the vendor's. The picker draws Get data in
+           NODE_ACCENT.app and the canvas drew the connected one in Google's
+           own brand green — the same step in two colours, one row apart. The
+           short label still says which app it is. */
+        style={{ background: NODE_ACCENT.app, color: glyphInk(NODE_ACCENT.app), width: size, height: size, borderRadius: radius, fontSize: Math.round(size * 0.42) }}
         title={s.label}
         aria-hidden
       >
@@ -102,12 +106,12 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
     );
   }
   const key = variant && GLYPH[variant] ? variant : type;
-  const color = NODE_ACCENT[type] ?? "#64748B";
+  const color = nodeAccent(type, variant);
   const Icon = GLYPH[key] ?? Database;
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center text-white"
-      style={{ background: color, width: size, height: size, borderRadius: radius }}
+      className="inline-flex shrink-0 items-center justify-center"
+      style={{ background: color, color: glyphInk(color), width: size, height: size, borderRadius: radius }}
       aria-hidden
     >
       {/* Sized off the tile, and stroked a touch lighter as it grows so a

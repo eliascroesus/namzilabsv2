@@ -347,7 +347,7 @@ export default function DesignPage() {
           <CanvasPreview />
         </Section>
 
-        <Section title="Step cards" note="300px, a 44px mark, the step number as its own chip. One hairline in one grey, always — the border carried status and a canvas of healthy steps was a wall of outlines, while a card changing its edge as you clicked around read as the card reacting to the pointer. Status is the dot and the hint line. Same 16px corner and same shadow as every other floating surface.">
+        <Section title="Step cards" note="300px, a 44px mark, the step number as its own chip, and 4px of the step's own colour on the leading edge. The rest of the border is one grey and never changes — it used to carry status, so a canvas of healthy steps was a wall of outlines and a card changed its edge as you clicked around. Status is the dot and the hint line; selection is a halo outside the border, so the card never wears two rims at once.">
           <div className="relative flex flex-wrap items-start gap-4 overflow-hidden rounded-card bg-canvas-bg p-6">
               {/* The same dot field the other two canvas specimens carry — a card
                   judged against flat grey is judged against a surface the product
