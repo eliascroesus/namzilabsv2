@@ -84,18 +84,19 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
   const t: Tile = windowed && !unavailable ? { ...stored, value: windowed.value, series: windowed.series, groups: windowed.groups } : stored;
   if (unavailable) {
     return (
-      <div className="rounded-lg border border-neutral-200 p-5">
+      <div className="rounded-card border border-border bg-card p-5 shadow-card">
         <div className="flex items-start justify-between">
-          <h3 className="font-medium text-foreground">{stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
-          <Link href={`/dashboard/flows/${row.flowId}`} className="text-tiny text-blue-600 hover:underline">
+          <h3 className="text-base font-semibold text-foreground">{stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
+          <Link href={`/dashboard/flows/${row.flowId}`} className="text-tiny text-primary hover:underline">
             Open →
           </Link>
         </div>
         {/* An em-dash, not a 0: "no answer for this period" and "the answer is
             zero" are different facts, and the tile that conflates them is the
-            one nobody can trust. */}
-        <p className="mt-2 text-4xl font-semibold text-neutral-300">—</p>
-        <p className="mt-2 text-base text-neutral-500">No data for this period.</p>
+            one nobody can trust. Same stat size as a real number, so switching
+            ranges never makes the tile jump. */}
+        <p className="tnum mt-2 text-stat font-semibold text-neutral-300">—</p>
+        <p className="mt-2 text-base text-muted-foreground">No data for this period.</p>
         <p className="mt-1 text-tiny text-neutral-400" title={unavailable}>
           {unavailable.length > 120 ? `${unavailable.slice(0, 120)}…` : unavailable}
         </p>
@@ -103,24 +104,24 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
     );
   }
   return (
-    <div className="rounded-lg border border-neutral-200 p-5">
+    <div className="rounded-card border border-border bg-card p-5 shadow-card">
       <div className="flex items-start justify-between">
         {/* A row whose tile jsonb is null has never computed successfully, so
             there is no stored name — the output id is the only honest handle. */}
-        <h3 className="font-medium text-foreground">{t.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
+        <h3 className="text-base font-semibold text-foreground">{t.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
         <div className="flex items-center gap-2">
           <Freshness status={row.status} />
           <form action={refreshFlowAction}>
             <input type="hidden" name="flowId" value={row.flowId} />
             <button
               type="submit"
-              className="text-tiny text-neutral-500 hover:text-foreground hover:underline"
+              className="text-tiny text-muted-foreground hover:text-foreground hover:underline"
               title="Recompute this tile now"
             >
               Refresh
             </button>
           </form>
-          <Link href={`/dashboard/flows/${row.flowId}`} className="text-tiny text-blue-600 hover:underline">
+          <Link href={`/dashboard/flows/${row.flowId}`} className="text-tiny text-primary hover:underline">
             Open →
           </Link>
         </div>
@@ -132,7 +133,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
         <GroupBars groups={t.groups} tile={t} />
       ) : (
         <>
-          <p className="tnum mt-2 text-4xl font-semibold">{fmt(t.value, t)}</p>
+          <p className="tnum mt-2 text-stat font-semibold">{fmt(t.value, t)}</p>
           {t.target != null && <TargetBar value={t.value ?? 0} target={t.target} tile={t} />}
         </>
       )}
@@ -169,7 +170,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
       {/* The honesty marker (G.3): every materialized number says WHEN it was
           true. A stale tile's timestamp shows exactly how far behind it is. */}
       {row.computedAt && (
-        <p className="mt-3 text-tiny text-neutral-400" title={new Date(row.computedAt).toLocaleString()}>
+        <p className="mt-3 text-tiny text-muted-foreground" title={new Date(row.computedAt).toLocaleString()}>
           Updated {relativeTime(new Date(row.computedAt))}
         </p>
       )}
@@ -181,7 +182,9 @@ function Freshness({ status }: { status: string }) {
   // Plain English, not internal states — "stale" reads as broken to a
   // customer when it means "a refresh is on its way".
   const meta: Record<string, { cls: string; label: string }> = {
-    fresh: { cls: "bg-green-100 text-green-700", label: "Up to date" },
+    // The kit's success pair, not a hand-picked green — this pill and the
+    // flows list's "Active" pill must be the same green or one reads as off.
+    fresh: { cls: "bg-success-soft text-success-ink", label: "Up to date" },
     stale: { cls: "bg-amber-100 text-amber-700", label: "Refreshing soon" },
     computing: { cls: "bg-blue-100 text-blue-700", label: "Computing…" },
     error: { cls: "bg-red-100 text-red-700", label: "Error" },
@@ -194,12 +197,12 @@ function TargetBar({ value, target, tile }: { value: number; target: number; til
   const pct = target > 0 ? Math.min(Math.round((value / target) * 100), 100) : 0;
   return (
     <div className="mt-3">
-      <div className="mb-1 flex justify-between text-tiny text-neutral-500">
+      <div className="mb-1 flex justify-between text-tiny text-muted-foreground">
         {/* The goal is shown in the metric's own format ("Goal: 90%", "Goal: $1,500"). */}
-        <span>Goal: {fmt(target, tile)}</span>
-        <span>{pct}%</span>
+        <span className="tnum">Goal: {fmt(target, tile)}</span>
+        <span className="tnum">{pct}%</span>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded bg-neutral-100">
+      <div className="h-2 w-full overflow-hidden rounded bg-muted">
         <div className={`h-full ${pct >= 100 ? "bg-green-500" : "bg-neutral-800"}`} style={{ width: `${Math.max(pct, 2)}%` }} />
       </div>
     </div>
@@ -210,7 +213,7 @@ function Sparkbars({ series, label, tile }: { series: Array<{ bucket: string; va
   const max = Math.max(1, ...series.map((s) => s.value));
   return (
     <>
-      <p className="tnum mt-2 text-2xl font-semibold">{label}</p>
+      <p className="tnum mt-2 text-display font-semibold">{label}</p>
       <div className="mt-3 flex h-16 items-end gap-1">
         {series.map((s) => (
           <div
@@ -237,15 +240,15 @@ function GroupBars({ groups, tile }: { groups: Array<{ label: string; value: num
       {/* The metric over EVERY record. Bars alone read as "these six are the
           whole number", and the cut-note below needs a visible total to be
           about. */}
-      {tile.value != null && <p className="tnum mt-2 text-2xl font-semibold">{fmt(tile.value, tile)}</p>}
+      {tile.value != null && <p className="tnum mt-2 text-display font-semibold">{fmt(tile.value, tile)}</p>}
       <div className="mt-3 space-y-1.5">
         {shown.map((g) => (
           <div key={g.label}>
             <div className="mb-0.5 flex justify-between text-base">
               <span className="text-neutral-700">{g.label}</span>
-              <span className="text-neutral-500">{fmt(g.value, tile)}</span>
+              <span className="tnum text-muted-foreground">{fmt(g.value, tile)}</span>
             </div>
-            <div className="h-2 w-full overflow-hidden rounded bg-neutral-100">
+            <div className="h-2 w-full overflow-hidden rounded bg-muted">
               <div className="h-full bg-neutral-800" style={{ width: `${Math.max((g.value / max) * 100, 2)}%` }} />
             </div>
           </div>

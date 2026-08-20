@@ -854,3 +854,28 @@ export const rankAssignments = pgTable(
     index("rank_assignments_org_rank_idx").on(t.orgId, t.rankId),
   ],
 );
+
+/**
+ * WHO OWNS THE WORKSPACE — recorded by US, at creation, because the identity
+ * provider will not say. WorkOS seeds every environment with a default
+ * `member` role and mints an `admin` slug only when roles are configured in
+ * its dashboard, which a self-serve workspace never does — so the very first
+ * deployment of ranks shipped an admin gate NOBODY could pass, owner
+ * included. The apps this product measures itself against (Slack, Notion,
+ * Linear) all resolve it the same way: the application's own database records
+ * the creator as owner and the IdP only authenticates.
+ *
+ * One row per org, written the moment the org is created. Orgs older than
+ * this table are backfilled lazily: the first settings visit claims the
+ * EARLIEST-created active membership — which is the creator, since our
+ * onboarding creates the org and its first membership in one action. `source`
+ * says which path wrote the row, because a backfilled guess and a
+ * creation-time fact deserve different trust when someone asks "why is X the
+ * owner?".
+ */
+export const workspaceOwners = pgTable("workspace_owners", {
+  orgId: text("org_id").primaryKey(),
+  userId: text("user_id").notNull(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }).defaultNow().notNull(),
+  source: text("source", { enum: ["created", "backfill_earliest"] }).notNull(),
+});

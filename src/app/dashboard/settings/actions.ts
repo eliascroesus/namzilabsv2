@@ -10,7 +10,7 @@ import { getDb } from "@/db/client";
 import { rankAssignments, workspaceRanks } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { invitationBelongsToOrg } from "@/lib/org-invites";
-import { PERMISSIONS, type RankRow } from "@/lib/permissions";
+import { PERMISSIONS, type RankRow, canManageRanks } from "@/lib/permissions";
 
 /**
  * Team invitations, riding entirely on WorkOS: `sendInvitation` sends the
@@ -85,7 +85,7 @@ export async function revokeInviteAction(formData: FormData): Promise<void> {
  * ranks restrict members, and the people who edit ranks must be un-restrictable
  * by construction or a bad edit could lock the editors out of the editor.
  */
-const ADMIN_ONLY = "Only admins can manage ranks.";
+const ADMIN_ONLY = "Your rank doesn\u2019t allow managing ranks.";
 
 const KNOWN_PERMISSION_KEYS = new Set<string>(PERMISSIONS.map((p) => p.key));
 
@@ -97,8 +97,9 @@ function rankErrorMessage(e: unknown): string {
 }
 
 export async function createRankAction(name: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const { orgId, role } = await requireOrg();
-  if (role !== "admin") return { ok: false, error: ADMIN_ONLY };
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (!(await canManageRanks(getDb(), ctx))) return { ok: false, error: ADMIN_ONLY };
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, error: "Give the rank a name." };
 
@@ -118,8 +119,9 @@ export async function updateRankAction(
   rankId: string,
   patch: Partial<Pick<RankRow, "name" | "allPermissions" | "permissions" | "allMetrics" | "metricKeys" | "inherits">>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { orgId, role } = await requireOrg();
-  if (role !== "admin") return { ok: false, error: ADMIN_ONLY };
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (!(await canManageRanks(getDb(), ctx))) return { ok: false, error: ADMIN_ONLY };
 
   // Validate before touching the row: a patch is applied whole or not at all.
   if (patch.name !== undefined && !patch.name.trim()) return { ok: false, error: "Give the rank a name." };
@@ -169,8 +171,9 @@ export async function updateRankAction(
 }
 
 export async function deleteRankAction(rankId: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { orgId, role } = await requireOrg();
-  if (role !== "admin") return { ok: false, error: ADMIN_ONLY };
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (!(await canManageRanks(getDb(), ctx))) return { ok: false, error: ADMIN_ONLY };
   const db = getDb();
 
   const deleted = await db
@@ -205,8 +208,9 @@ export async function assignRankAction(
   memberUserId: string,
   rankId: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { orgId, role } = await requireOrg();
-  if (role !== "admin") return { ok: false, error: ADMIN_ONLY };
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (!(await canManageRanks(getDb(), ctx))) return { ok: false, error: ADMIN_ONLY };
   if (!memberUserId) return { ok: false, error: "Missing member." };
   const db = getDb();
 

@@ -7,6 +7,7 @@ import { unresolvedDeadLetterCountsByConnection } from "@/lib/dead-letter";
 import { requireOrg } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { AppShell } from "@/components/app-shell";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
@@ -195,6 +196,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     return `/dashboard?${p.toString()}`;
   };
 
+  // One voice for every filter chip on the page. Selected is the kit's accent
+  // — the old black pill was the only black element on a violet-accented app,
+  // so "selected" and "primary" disagreed about what the brand colour is.
+  const chipOn = "rounded-full px-3 py-1 text-small font-medium bg-primary text-primary-foreground";
+  const chipOff = "rounded-full px-3 py-1 text-small font-medium border border-border bg-card text-foreground hover:bg-muted";
+
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       {/* G.4: refresh the server-rendered tiles when the org's results move. */}
@@ -207,13 +214,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 which is the wrong unit when you have just changed something
                 upstream and want the whole board to agree with reality. */}
             <form action={refreshAllFlowsAction}>
-              <button
-                type="submit"
-                className="rounded-control border border-neutral-200 px-4 py-2 text-base font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
-                title="Recompute every published metric now"
-              >
+              <Button type="submit" variant="secondary" title="Recompute every published metric now">
                 Refresh
-              </button>
+              </Button>
             </form>
             {/* ONE way to build a metric. The retired form builder was still
                 advertised here as "Classic metric", and "classic" reads as
@@ -222,7 +225,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 The routes stay alive so existing metrics still open and edit
                 (their tiles link to them); they are simply no longer a door
                 anyone walks through by accident. */}
-            <Link href="/dashboard/flows" className="flex h-9 items-center gap-1.5 rounded-control bg-primary px-4 text-base font-semibold text-primary-foreground transition-all hover:brightness-110">
+            {/* A Link wearing the Button's clothes: navigation, not a submit,
+                so it stays an <a> and takes the shared classes instead. */}
+            <Link href="/dashboard/flows" className={buttonVariants()}>
               <Plus size={16} strokeWidth={2.4} />
               New flow
             </Link>
@@ -230,36 +235,28 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
 
         {/* Filters */}
-        <div className="mt-5 flex flex-wrap items-center gap-2 text-base">
+        <div className="mt-5 flex flex-wrap items-center gap-2">
           {RANGE_OPTIONS.map((r) => (
-            <Link
-              key={r.key}
-              href={qs({ range: r.key })}
-              className={`rounded-full px-3 py-1 ${rangeKey === r.key ? "bg-neutral-900 text-white" : "border border-neutral-300 hover:bg-neutral-50"}`}
-            >
+            <Link key={r.key} href={qs({ range: r.key })} className={rangeKey === r.key ? chipOn : chipOff}>
               {r.label}
             </Link>
           ))}
-          <span className="mx-1 h-4 w-px bg-neutral-200" />
-          <Link href={qs({ source: "" })} className={`rounded-full px-3 py-1 ${!boardSource ? "bg-neutral-900 text-white" : "border border-neutral-300 hover:bg-neutral-50"}`}>
+          <span className="mx-1 h-4 w-px bg-border" />
+          <Link href={qs({ source: "" })} className={!boardSource ? chipOn : chipOff}>
             All sources
           </Link>
           {/* The connector's own name, not its storage key: this row read
               "gsheets · close · webhook" while every other screen in the
               product says "Google Sheets", "Close CRM", "Custom Webhook". */}
           {sources.map((srcName) => (
-            <Link
-              key={srcName}
-              href={qs({ source: srcName })}
-              className={`rounded-full px-3 py-1 ${boardSource === srcName ? "bg-neutral-900 text-white" : "border border-neutral-300 hover:bg-neutral-50"}`}
-            >
+            <Link key={srcName} href={qs({ source: srcName })} className={boardSource === srcName ? chipOn : chipOff}>
               {catalogEntry(srcName)?.name ?? srcName}
             </Link>
           ))}
         </div>
 
         {loadError && (
-          <div className="mt-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-base text-amber-800">
+          <div className="mt-6 rounded-card border border-amber-300 bg-amber-50 p-4 text-base text-amber-800">
             Some dashboard data could not be loaded ({loadError}). Refresh to retry — your data is intact.
           </div>
         )}
@@ -284,8 +281,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         {/* Condensed workspace activity */}
         <section className="mt-12">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold uppercase tracking-wide text-neutral-500">Recent activity</h2>
-            <span className="text-tiny text-neutral-500">
+            <h2 className="text-micro font-semibold uppercase tracking-wide text-neutral-400">Recent activity</h2>
+            <span className="text-tiny text-muted-foreground">
               {connCount} connection{connCount === 1 ? "" : "s"} ·{" "}
               {dlqByConnection.length > 0 ? (
                 // Each count links to the connection page that hosts the
@@ -293,7 +290,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 dlqByConnection.map((d, i) => (
                   <span key={d.connectionId}>
                     {i > 0 && ", "}
-                    <Link href={`/connections/${d.connectionId}`} className="text-red-600 hover:underline">
+                    <Link href={`/connections/${d.connectionId}`} className="text-destructive hover:underline">
                       {d.count} in dead-letter on {d.name} →
                     </Link>
                   </span>
@@ -304,13 +301,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             </span>
           </div>
           {recentEvents.length === 0 ? (
-            <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-base text-neutral-500">
-              No events ingested yet. <Link href="/integrations" className="text-blue-600 hover:underline">Connect a source</Link>.
+            <p className="rounded-card border border-border bg-neutral-50 p-4 text-base text-muted-foreground">
+              No events ingested yet. <Link href="/integrations" className="text-primary hover:underline">Connect a source</Link>.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-md border border-neutral-200">
+            <div className="overflow-x-auto rounded-card border border-border bg-card shadow-card">
               <table className="w-full text-left text-base">
-                <thead className="bg-neutral-50 text-tiny uppercase tracking-wide text-neutral-500">
+                <thead className="bg-neutral-50 text-micro uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 font-medium">Source</th>
                     <th className="px-3 py-2 font-medium">Type</th>
@@ -324,11 +321,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                       The raw type rides along in the title attribute, because
                       it IS what a Filter step matches on. */}
                   {recentEvents.map((e) => (
-                    <tr key={e.id} className="border-t border-neutral-100">
+                    <tr key={e.id} className="border-t border-border">
                       <td className="px-3 py-2">{catalogEntry(e.source)?.name ?? e.source}</td>
                       <td className="px-3 py-2" title={e.eventType}>{eventTypeLabel(e.source, e.eventType)}</td>
                       <td className="px-3 py-2 text-neutral-700">{e.subject ?? "—"}</td>
-                      <td className="px-3 py-2 text-neutral-500">{new Date(e.occurredAt).toLocaleString()}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{new Date(e.occurredAt).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -344,11 +341,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 function MetricTile({ tile }: { tile: Tile }) {
   const { metric } = tile;
   return (
-    <div className="rounded-lg border border-neutral-200 p-5">
+    <div className="rounded-card border border-border bg-card p-5 shadow-card">
       <div className="flex items-start justify-between">
-        <h3 className="font-medium text-foreground">{metric.name}</h3>
+        <h3 className="text-base font-semibold text-foreground">{metric.name}</h3>
         {tile.kind === "aggregate" && (
-          <Link href={`/dashboard/metrics/${metric.id}`} className="text-tiny text-blue-600 hover:underline">
+          <Link href={`/dashboard/metrics/${metric.id}`} className="text-tiny text-primary hover:underline">
             Drill in →
           </Link>
         )}
@@ -364,9 +361,9 @@ function MetricTile({ tile }: { tile: Tile }) {
               renderings, side by side. A legacy metric stores no precision,
               so an integer keeps none and a real decimal keeps two rather
               than being silently rounded away. */}
-          <p className="mt-2 text-4xl font-semibold">
+          <p className="tnum mt-2 text-stat font-semibold">
             {formatMetricValue(tile.result.value, { format: "number", precision: Number.isInteger(tile.result.value) ? 0 : 2 })}
-            {metric.unit && <span className="ml-2 text-base font-normal text-neutral-500">{metric.unit}</span>}
+            {metric.unit && <span className="ml-2 text-base font-normal text-muted-foreground">{metric.unit}</span>}
           </p>
           {metric.target != null && <TargetBar value={tile.result.value} target={Number(metric.target)} />}
         </>
@@ -387,11 +384,11 @@ function TargetBar({ value, target }: { value: number; target: number }) {
   const pct = target > 0 ? Math.min(Math.round((value / target) * 100), 100) : 0;
   return (
     <div className="mt-3">
-      <div className="mb-1 flex justify-between text-tiny text-neutral-500">
-        <span>Goal: {target}</span>
-        <span>{pct}%</span>
+      <div className="mb-1 flex justify-between text-tiny text-muted-foreground">
+        <span className="tnum">Goal: {target}</span>
+        <span className="tnum">{pct}%</span>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded bg-neutral-100">
+      <div className="h-2 w-full overflow-hidden rounded bg-muted">
         <div className={`h-full ${pct >= 100 ? "bg-green-500" : "bg-neutral-800"}`} style={{ width: `${Math.max(pct, 2)}%` }} />
       </div>
     </div>
@@ -405,7 +402,7 @@ function Sparkbars({ series }: { series: Array<{ bucket: string; value: number }
     <>
       {/* Same formatter as everywhere else — this headline is a sum, so it can
           reach the thousands where the raw print loses its separators. */}
-      <p className="mt-2 text-2xl font-semibold">{formatMetricValue(total, { format: "number", precision: Number.isInteger(total) ? 0 : 2 })}</p>
+      <p className="tnum mt-2 text-display font-semibold">{formatMetricValue(total, { format: "number", precision: Number.isInteger(total) ? 0 : 2 })}</p>
       <div className="mt-3 flex h-16 items-end gap-1">
         {series.map((s) => (
           <div

@@ -1,6 +1,8 @@
 "use server";
 
 import { getWorkOS, withAuth, switchToOrganization, signOut } from "@workos-inc/authkit-nextjs";
+import { getDb } from "@/db/client";
+import { workspaceOwners } from "@/db/schema";
 
 /**
  * Create a new WorkOS organization (the tenant/workspace), add the current user
@@ -33,10 +35,31 @@ export async function createOrganizationAction(formData: FormData): Promise<void
   }
 
   const org = await workos.organizations.createOrganization({ name });
-  await workos.userManagement.createOrganizationMembership({
+  const membership = await workos.userManagement.createOrganizationMembership({
     organizationId: org.id,
     userId: auth.user.id,
   });
+
+  // THE CREATOR IS THE OWNER, recorded by US at the only moment the fact is
+  // certain. WorkOS seeds every environment with a default `member` role and
+  // has an `admin` slug only when roles are configured in its dashboard — so
+  // authority has to be our database's fact, the way Slack/Notion/Linear do
+  // it, with the IdP only authenticating. Best-effort, never fatal: a
+  // workspace with no owner row still works (canManageRanks falls back to
+  // unranked members) and the settings page backfills on its next visit.
+  try {
+    await getDb().insert(workspaceOwners).values({ orgId: org.id, userId: auth.user.id, source: "created" }).onConflictDoNothing();
+  } catch (e) {
+    console.error(`[onboarding] owner row failed for ${org.id}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  // If the environment DOES define an admin role, wear it too — it makes the
+  // zero-query admin short-circuit true for the creator. Roles are dashboard
+  // config we cannot assume, so failure here is expected and silent.
+  try {
+    await workos.userManagement.updateOrganizationMembership(membership.id, { roleSlug: "admin" });
+  } catch {
+    /* no admin role configured — the workspace_owners row is the authority */
+  }
 
   await switchToOrganization(org.id, { returnTo: "/dashboard" });
 }

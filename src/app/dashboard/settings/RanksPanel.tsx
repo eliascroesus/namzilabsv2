@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PERMISSIONS, type RankRow } from "@/lib/permissions";
 import { assignRankAction, createRankAction, deleteRankAction, updateRankAction } from "./actions";
 
@@ -135,23 +136,23 @@ export function RanksPanel({
 
   return (
     <div>
-      <p className="mb-3 text-tiny text-neutral-500">
+      <p className="mb-3 text-tiny text-muted-foreground">
         A rank limits what its members can do and which metrics they see. Members without a rank have
         full access — restrictions begin when you assign one.
       </p>
 
       {toast && (
-        <p role="status" className="mb-2 text-tiny font-medium text-red-600">
+        <p role="status" className="mb-2 text-tiny font-medium text-destructive">
           {toast}
         </p>
       )}
 
       {ranks.length === 0 ? (
-        <p className="rounded-md border border-dashed border-neutral-200 px-4 py-6 text-center text-small text-neutral-500">
+        <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-small text-muted-foreground">
           No ranks yet — everyone has full access. Create one to start limiting what members see.
         </p>
       ) : (
-        <div className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
+        <div className="divide-y divide-border rounded-card border border-border bg-card shadow-card">
           {ranks.map((r) => {
             const open = expandedId === r.id;
             const holders = memberCounts[r.id] ?? 0;
@@ -164,11 +165,11 @@ export function RanksPanel({
                     setExpandedId(open ? null : r.id);
                     setConfirmingDelete(null);
                   }}
-                  className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-neutral-50"
+                  className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-muted"
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-base font-semibold text-foreground">{r.name}</span>
-                    <span className="text-tiny text-neutral-500">
+                    <span className="text-tiny text-muted-foreground">
                       {count(holders, "member")} · {summary(r)}
                     </span>
                   </span>
@@ -179,7 +180,7 @@ export function RanksPanel({
                 </button>
 
                 {open && (
-                  <div className="border-t border-neutral-100 px-4 pb-4 pt-3">
+                  <div className="border-t border-border px-4 pb-4 pt-3">
                     <Group label="Permissions">
                       <ToggleRow
                         bold
@@ -214,7 +215,7 @@ export function RanksPanel({
                         onChange={() => save(r.id, { allMetrics: !r.allMetrics })}
                       />
                       {catalogue.length === 0 ? (
-                        <p className="py-1.5 text-tiny text-neutral-500">
+                        <p className="py-1.5 text-tiny text-muted-foreground">
                           Publish a flow and its metrics appear here.
                         </p>
                       ) : (
@@ -232,7 +233,7 @@ export function RanksPanel({
 
                     <Group label="Inherit from">
                       {others.length === 0 ? (
-                        <p className="py-1.5 text-tiny text-neutral-500">
+                        <p className="py-1.5 text-tiny text-muted-foreground">
                           Create a second rank and it appears here.
                         </p>
                       ) : (
@@ -253,30 +254,21 @@ export function RanksPanel({
                         <div className="flex flex-wrap items-center justify-between gap-3 py-1.5">
                           <p className="text-small text-neutral-600">{deleteLine(holders)}</p>
                           <span className="flex shrink-0 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setConfirmingDelete(null)}
-                              className="rounded-md border border-neutral-300 px-3 py-1.5 text-small font-medium text-foreground hover:bg-neutral-50"
-                            >
+                            <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmingDelete(null)}>
                               Cancel
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => destroy(r.id)}
-                              className="rounded-md bg-red-600 px-3 py-1.5 text-small font-medium text-white hover:bg-red-700"
-                            >
+                            </Button>
+                            <Button type="button" variant="destructive" size="sm" onClick={() => destroy(r.id)}>
                               Delete rank
-                            </button>
+                            </Button>
                           </span>
                         </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmingDelete(r.id)}
-                          className="py-1.5 text-base font-medium text-red-600 hover:underline"
-                        >
+                        /* destructiveGhost: the Danger label already names the
+                           stakes, so the trigger stays quiet until hovered —
+                           the confirm step is where the red lives. */
+                        <Button type="button" variant="destructiveGhost" size="sm" onClick={() => setConfirmingDelete(r.id)}>
                           Delete rank
-                        </button>
+                        </Button>
                       )}
                     </Group>
                   </div>
@@ -294,15 +286,11 @@ export function RanksPanel({
           required
           placeholder="New rank name"
           aria-label="New rank name"
-          className="w-full max-w-sm rounded-md border border-neutral-300 px-3 py-2 text-base focus:border-neutral-500 focus:outline-none"
+          className="w-full max-w-sm rounded-control border border-input bg-card px-3 py-2 text-base text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
         />
-        <button
-          type="submit"
-          disabled={creating || newName.trim() === ""}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-base font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={creating || newName.trim() === ""}>
           Create
-        </button>
+        </Button>
       </form>
     </div>
   );
@@ -346,7 +334,7 @@ export function MemberRankSelect({
   return (
     <span className="flex items-center gap-2">
       {error && (
-        <span role="status" className="text-tiny font-medium text-red-600">
+        <span role="status" className="text-tiny font-medium text-destructive">
           {error}
         </span>
       )}
@@ -354,7 +342,7 @@ export function MemberRankSelect({
         value={value}
         onChange={(e) => change(e.target.value)}
         aria-label="Rank"
-        className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-tiny text-foreground focus:border-neutral-500 focus:outline-none"
+        className="rounded-control border border-input bg-card px-2 py-1 text-tiny text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
       >
         <option value="">Full access</option>
         {ranks.map((r) => (
@@ -396,7 +384,7 @@ function ToggleRow({
     <div className={`flex items-center justify-between gap-4 py-1.5 ${implied ? "opacity-45" : ""}`}>
       <span className="min-w-0">
         <span className={`block truncate text-base ${bold ? "font-semibold" : ""} text-foreground`}>{label}</span>
-        {blurb && <span className="block text-tiny text-neutral-500">{blurb}</span>}
+        {blurb && <span className="block text-tiny text-muted-foreground">{blurb}</span>}
       </span>
       <Switch on={implied || on} disabled={implied} onChange={onChange} label={label} />
     </div>

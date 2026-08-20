@@ -81,6 +81,7 @@ const TABLES: Record<string, Classification> = {
     kind: "bounded",
     by: "at most one row per (org, member) — the composite PK enforces it; assignment is an upsert, never an append",
   },
+  workspace_owners: { kind: "bounded", by: "exactly one row per org — the org id IS the primary key" },
 
   // ── Known gaps ────────────────────────────────────────────────────────────
   raw_events: {

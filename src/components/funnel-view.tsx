@@ -19,7 +19,8 @@ export function FunnelView({ result }: { result: FunnelResult }) {
                   </span>
                 )}
               </span>
-              <span className="text-neutral-500">
+              {/* tnum on the row, so the counts sit in columns as ranges flip. */}
+              <span className="tnum text-muted-foreground">
                 {stage.count}
                 {i > 0 && (
                   <span className="ml-2 text-tiny text-neutral-400">
@@ -28,7 +29,7 @@ export function FunnelView({ result }: { result: FunnelResult }) {
                 )}
               </span>
             </div>
-            <div className="h-6 w-full overflow-hidden rounded bg-neutral-100">
+            <div className="h-6 w-full overflow-hidden rounded bg-muted">
               <div
                 className={`h-full ${isBottleneck ? "bg-red-400" : "bg-neutral-800"}`}
                 style={{ width: `${Math.max(pct, 2)}%` }}

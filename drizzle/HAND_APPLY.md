@@ -726,3 +726,38 @@ columns — a clean run after the paste is still a screen of `ok`.
 > **Numbering note.** 0016 is still reserved by the unmerged
 > `batch5/retention-purge` branch, and the snapshot-chain warning under 0018
 > applies here too at merge time.
+
+## 0025 — `workspace_owners` (the creator IS the owner — apply with/after 0024)
+
+One tiny table, nothing altered. Why it exists: WorkOS seeds only a default
+`member` role — the `admin` slug appears only when roles are configured in the
+WorkOS dashboard, which a self-serve workspace never does. So "the creator is
+always the owner" has to be OUR fact, recorded at creation, the way Slack /
+Notion / Linear do it: the app's database owns membership authority, the IdP
+only authenticates.
+
+Written at org creation from `createOrganizationAction`. Existing orgs are
+backfilled lazily on their next settings visit: the earliest-created active
+membership is claimed as owner (`source = 'backfill_earliest'`) — which is the
+creator, because onboarding creates the org and its first membership in one
+action. Empty table changes nothing until then: the unranked-member fallback
+in `canManageRanks` keeps the rank editor reachable either way.
+
+```sql
+CREATE TABLE IF NOT EXISTS "workspace_owners" (
+  "org_id"     text PRIMARY KEY NOT NULL,
+  "user_id"    text NOT NULL,
+  "claimed_at" timestamp with time zone DEFAULT now() NOT NULL,
+  "source"     text NOT NULL
+);
+```
+
+Verify (expect 1, 4):
+
+```sql
+SELECT
+  (SELECT count(*) FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='workspace_owners')  AS tables_should_be_1,
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='workspace_owners')  AS columns_should_be_4;
+```

@@ -81,7 +81,7 @@
   --color-canvas-edge: #aab4cb;
 
   /* --- Type scale ---------------------------------------------------------
-   * SEVEN SIZES, AND NOTHING BETWEEN THEM. The app had accumulated 9px, 10px,
+   * EIGHT SIZES, AND NOTHING BETWEEN THEM. The app had accumulated 9px, 10px,
    * 11px, 12px, 13px, 14px, 15px, 17px and 24px, mostly as one-off arbitrary
    * values, so two labels doing the same job in two panels were different
    * sizes. Anything below `micro` is unreadable at a glance and was being
@@ -101,6 +101,12 @@
   --text-title--line-height: 1.5rem;
   --text-display: 1.5rem; /* 24px — page headings */
   --text-display--line-height: 2rem;
+  /* The metric numeral — the dashboard's one size above display, because a
+     tile's number is the product's payoff and 24px reads as a label. It exists
+     as a token so the number can never drift per-tile again, and it is always
+     set with .tnum. */
+  --text-stat: 2.25rem; /* 36px — the tile's headline number, nothing else */
+  --text-stat--line-height: 2.5rem;
 
   /* --- Radius -------------------------------------------------------------
    * Three steps. Controls, cards, floating surfaces. Everything else was a

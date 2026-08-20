@@ -2200,6 +2200,47 @@ BEFORE deploying — `effectiveAccess` reads them the moment it ships.
 
 ---
 
+### 10u. The creator is the owner — our fact, not the IdP's
+
+The rank editor shipped behind `role === "admin"` and **nobody could see it,
+owner included**: WorkOS seeds every environment with a default `member` role
+and mints an `admin` slug only when roles are configured in its dashboard,
+which a self-serve workspace never does. The user's own screenshot was the bug
+report — both members tagged MEMBER.
+
+Researched against how the reference products do it (and what WorkOS actually
+offers): roles CAN be created and assigned via WorkOS APIs, but they are
+environment config — exactly the manual step being avoided. Slack, Notion and
+Linear all resolve this the same way: **the application's database records the
+creator as owner at creation time; the identity provider only authenticates.**
+
+So: `workspace_owners`, one row per org (HAND_APPLY §0025).
+
+- **Written at creation** by `createOrganizationAction`, the only moment the
+  fact is certain. Best-effort and never fatal. It also *tries* to wear the
+  WorkOS admin slug, silently accepting failure — if roles ever get
+  configured, the zero-query short-circuit starts working by itself.
+- **Backfilled lazily** for older orgs: the first settings visit claims the
+  earliest-created active membership (the creator — onboarding makes the org
+  and its first membership in one action). Idempotent via the PK: one writer
+  wins, every later call sees the winner, a wrong candidate list cannot
+  re-decide. The claim writes through the WRITE handle on an otherwise
+  read-only page — a recorded fact must not be swallowed by a replica.
+- **The lockout rule**: the owner is never restricted. A rank assigned to the
+  owner — slip or malice — changes nothing, checked inside `effectiveAccess`
+  on the ranked path only, so the two common paths stay cheap. Without this,
+  anyone who could reach `assignRankAction` could depose the creator.
+- The interim fallback (unranked members may manage ranks) stays underneath,
+  so a legacy org is functional even before its first settings visit.
+- The member list shows OWNER on the owner's row.
+
+Tested against real SQL (PGlite + the production migrations), because the
+properties that matter are database properties: earliest-wins, idempotent
+claim, org scoping, and the lockout rule — which is sabotage-verified by
+deleting the owner check and watching exactly that test fail.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

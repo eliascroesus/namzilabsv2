@@ -2,9 +2,11 @@ import Link from "next/link";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import { and, eq } from "drizzle-orm";
 import { requireOrg } from "@/lib/auth";
-import { getReadDb } from "@/db/client";
+import { canManageRanks, claimOwnerIfMissing } from "@/lib/permissions";
+import { getDb, getReadDb } from "@/db/client";
 import { flows, metrics, rankAssignments, workspaceRanks } from "@/db/schema";
 import { AppShell } from "@/components/app-shell";
+import { Button } from "@/components/ui/button";
 import { CopyField } from "@/components/copy-field";
 import { inviteMemberAction, revokeInviteAction } from "./actions";
 import { MemberRankSelect, RanksPanel } from "./RanksPanel";
@@ -29,23 +31,24 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v 
  * and deliberately not built — it would need its own table, a public /join
  * route, and member caps, for no need the personal link doesn't cover.
  *
- * RANKS: org-local ACL — named permission/metric bundles an admin assigns per
- * member (src/lib/permissions.ts is the model). The editor renders only for
- * role === "admin", but that gate is UX, not security: every rank action
- * re-checks admin on the server before touching a row.
+ * RANKS: org-local ACL — named permission/metric bundles assigned per member
+ * (src/lib/permissions.ts is the model). The editor renders for anyone who
+ * may MANAGE ranks — WorkOS admins, and unranked members, because a
+ * self-serve workspace has no admin slug until WorkOS roles are configured
+ * and the owner would otherwise be locked out of the feature's own editor.
+ * That render gate is UX, not security: every rank action re-checks
+ * canManageRanks on the server before touching a row.
  */
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { orgId, userId, role, auth } = await requireOrg();
   const sp = await searchParams;
   const invited = one(sp.invited);
   const inviteError = one(sp.invite_error);
-  const isAdmin = role === "admin";
-
   const workos = getWorkOS();
   const db = getReadDb(); // read-only page load: rides the DB_DRIVER_READ soak seam (B.3)
   // Emails via one org-scoped listUsers, not a getUser per membership: the
   // N+1 here would be one WorkOS round trip per member on every page view.
-  const [memberships, orgUsers, invitations, rankRows, assignments, publishedFlows, metricRows] = await Promise.all([
+  const [memberships, orgUsers, invitations, rankRows, assignments] = await Promise.all([
     workos.userManagement.listOrganizationMemberships({ organizationId: orgId, statuses: ["active"], limit: 100 }),
     workos.userManagement.listUsers({ organizationId: orgId, limit: 100 }),
     workos.userManagement.listInvitations({ organizationId: orgId, limit: 100 }),
@@ -69,9 +72,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       .select({ userId: rankAssignments.userId, rankId: rankAssignments.rankId })
       .from(rankAssignments)
       .where(eq(rankAssignments.orgId, orgId)),
-    // The metric catalogue only feeds the admin-only editor, so non-admin
-    // loads skip both queries entirely. Published flows only: a draft has no
-    // dashboard tile, so there is nothing to show or hide yet.
+  ]);
+
+  // ORGS OLDER THAN workspace_owners GET THEIR OWNER STAMPED HERE — the first
+  // settings visit claims the earliest-created active membership (the creator;
+  // onboarding makes the org and its first membership in one action). Writes
+  // through the WRITE handle: the page is otherwise read-only, but a claim is
+  // a fact being recorded, and the read replica must not swallow it. Runs
+  // BEFORE canManageRanks so a legacy owner sees the rank editor on their
+  // very first visit, ranked or not.
+  const ownerUserId = await claimOwnerIfMissing(
+    getDb(),
+    orgId,
+    memberships.data.map((m) => ({ userId: m.userId, createdAt: m.createdAt })),
+  );
+  const isAdmin = await canManageRanks(db, { orgId, userId, role });
+
+  // The metric catalogue only feeds the admin-only editor, so non-admin loads
+  // skip both queries entirely. Published flows only: a draft has no dashboard
+  // tile, so there is nothing to show or hide yet.
+  const [publishedFlows, metricRows] = await Promise.all([
     isAdmin
       ? db
           .select({ id: flows.id, name: flows.name })
@@ -85,7 +105,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     id: m.id,
     userId: m.userId,
     email: emailByUser.get(m.userId) ?? m.userId,
-    role: m.role?.slug ?? "member",
+    role: m.userId === ownerUserId ? "owner" : (m.role?.slug ?? "member"),
   }));
   const pending = invitations.data.filter((i) => i.state === "pending");
 
@@ -109,7 +129,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <h1 className="text-display font-semibold tracking-tight text-foreground">Workspace settings</h1>
 
         {invited && (
-          <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-green-200 bg-green-50 p-4 text-base text-green-800">
+          <div className="mt-6 flex items-start justify-between gap-4 rounded-card border border-green-200 bg-green-50 p-4 text-base text-green-800">
             <p>
               Invitation created for <b>{invited}</b> — they&rsquo;ll get an email with a join link. Or copy the
               same link under <b>Pending invitations</b> below and send it to them yourself.
@@ -120,7 +140,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </div>
         )}
         {inviteError && (
-          <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-base text-red-800">
+          <div className="mt-6 flex items-start justify-between gap-4 rounded-card border border-red-200 bg-red-50 p-4 text-base text-red-800">
             <p>{inviteError}</p>
             <Link href="/dashboard/settings" aria-label="Dismiss" className="font-semibold text-red-400 hover:text-red-700">
               ✕
@@ -129,8 +149,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         )}
 
         <section className="mt-8">
-          <h2 className="mb-3 text-base font-semibold uppercase tracking-wide text-neutral-500">Members</h2>
-          <div className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
+          <h2 className="mb-3 text-micro font-semibold uppercase tracking-wide text-neutral-400">Members</h2>
+          <div className="divide-y divide-border rounded-card border border-border bg-card shadow-card">
             {members.map((m) => {
               const rankName = rankNameById.get(rankIdByUser.get(m.userId) ?? "");
               return (
@@ -153,7 +173,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     ) : (
                       rankName && <span className="text-tiny text-neutral-400">{rankName}</span>
                     )}
-                    <span className="text-tiny uppercase tracking-wide text-neutral-400">{m.role}</span>
+                    <span className="text-micro uppercase tracking-wide text-neutral-400">{m.role}</span>
                   </span>
                 </div>
               );
@@ -163,26 +183,24 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
         {isAdmin && (
           <section className="mt-8">
-            <h2 className="mb-3 text-base font-semibold uppercase tracking-wide text-neutral-500">Ranks</h2>
+            <h2 className="mb-3 text-micro font-semibold uppercase tracking-wide text-neutral-400">Ranks</h2>
             <RanksPanel ranks={rankRows} memberCounts={memberCounts} catalogue={catalogue} />
           </section>
         )}
 
         <section className="mt-8">
-          <h2 className="mb-3 text-base font-semibold uppercase tracking-wide text-neutral-500">Invite a teammate</h2>
+          <h2 className="mb-3 text-micro font-semibold uppercase tracking-wide text-neutral-400">Invite a teammate</h2>
           <form action={inviteMemberAction} className="flex gap-2">
             <input
               type="email"
               name="email"
               required
               placeholder="teammate@company.com"
-              className="w-full max-w-sm rounded-md border border-neutral-300 px-3 py-2 text-base focus:border-neutral-500 focus:outline-none"
+              className="w-full max-w-sm rounded-control border border-input bg-card px-3 py-2 text-base text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
             />
-            <button type="submit" className="rounded-md bg-neutral-900 px-4 py-2 text-base font-medium text-white hover:bg-neutral-800">
-              Send invite
-            </button>
+            <Button type="submit">Send invite</Button>
           </form>
-          <p className="mt-2 text-tiny text-neutral-500">
+          <p className="mt-2 text-tiny text-muted-foreground">
             An email with a join link goes out automatically. Rather send it yourself? The same link appears
             under <b>Pending invitations</b> the moment you press Send — copy it into Slack, a text, anywhere.
             Invites expire automatically.
@@ -191,8 +209,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
         {pending.length > 0 && (
           <section className="mt-8">
-            <h2 className="mb-3 text-base font-semibold uppercase tracking-wide text-neutral-500">Pending invitations</h2>
-            <div className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
+            <h2 className="mb-3 text-micro font-semibold uppercase tracking-wide text-neutral-400">Pending invitations</h2>
+            <div className="divide-y divide-border rounded-card border border-border bg-card shadow-card">
               {pending.map((inv) => (
                 <div key={inv.id} className="px-4 py-3 text-base">
                   <div className="flex items-center justify-between">
@@ -206,9 +224,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     </span>
                     <form action={revokeInviteAction}>
                       <input type="hidden" name="invitationId" value={inv.id} />
-                      <button type="submit" className="text-base font-medium text-red-600 hover:underline">
+                      {/* destructiveGhost, not destructive: revoking is a real
+                          action but never the point of this list — quiet until
+                          hovered, then unmistakably red. */}
+                      <Button type="submit" variant="destructiveGhost" size="sm">
                         Revoke
-                      </button>
+                      </Button>
                     </form>
                   </div>
                   {/* The link WorkOS emailed, surfaced for hand-delivery. It was

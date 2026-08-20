@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (17 tables, 185 columns).
+-- QUERY 1 — tables and columns (18 tables, 189 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -202,6 +202,10 @@ WITH expected (tbl, col) AS (
     ('usage_ledger', 'errors'),
     ('usage_ledger', 'observed_limit'),
     ('usage_ledger', 'updated_at'),
+    ('workspace_owners', 'org_id'),
+    ('workspace_owners', 'user_id'),
+    ('workspace_owners', 'claimed_at'),
+    ('workspace_owners', 'source'),
     ('workspace_ranks', 'id'),
     ('workspace_ranks', 'org_id'),
     ('workspace_ranks', 'name'),
