@@ -1,4 +1,4 @@
-import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs, PollResult, ListOptionsArgs, SourceOption } from "./types";
+import type { Connector, CanonicalEvent, VerifyArgs, PollArgs, PollResult, ListOptionsArgs, SourceOption } from "./types";
 import { hmacSha256Hex, safeEqual } from "@/lib/signatures";
 import { fetchJson } from "@/lib/http-client";
 import { str } from "./field-utils";

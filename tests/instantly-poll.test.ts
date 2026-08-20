@@ -39,8 +39,6 @@ afterEach(() => {
  * database, and here a faked JS `Date` would disagree with PGlite's own `now()`
  * inside the sync lease.
  */
-const BASE = Date.now();
-const T = (mins: number) => new Date(BASE + mins * 60_000).toISOString();
 
 const CFG = (over: Record<string, unknown> = {}) => ({ campaignId: "camp-1", ...over });
 

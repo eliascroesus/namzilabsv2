@@ -86,14 +86,6 @@ async function sqlMatches(rule: CompiledRule): Promise<string[]> {
 }
 
 /** Rows the JS ORACLE keeps. */
-async function jsMatches(rule: CompiledRule): Promise<string[]> {
-  const rows = await db.select().from(events).where(and(eq(events.orgId, ORG), isNull(events.deletedAt)));
-  return rows
-    .map(eventToRecord)
-    .filter((rec) => evalRule(rec, rule))
-    .map((rec) => String((rec.properties as Record<string, unknown>).__label ?? ""))
-    .sort();
-}
 
 /** Same, but labelled by eventId so both sides are comparable. */
 async function bothMatch(rule: CompiledRule): Promise<{ js: string[]; compiled: string[] }> {

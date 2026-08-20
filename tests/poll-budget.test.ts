@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 /** N pages of Close events, each carrying a cursor to the next. */
-function stubClosePages(pages: number) {
+function stubClosePages(_pages: number) {
   let calls = 0;
   vi.stubGlobal(
     "fetch",

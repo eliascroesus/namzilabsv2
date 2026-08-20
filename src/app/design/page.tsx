@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { AppFrame } from "@/components/app-frame";
 import { CanvasPreview, FlowNodeCard } from "@/components/flow/flow-canvas-preview";
+import { EmptyCanvasPreview } from "@/components/flow/empty-canvas-preview";
 import { NodeIcon } from "@/components/flow/icons";
 import { LayoutDashboard, Workflow } from "lucide-react";
 import { ToolbarPreview } from "@/components/flow/toolbar-preview";
@@ -316,6 +317,32 @@ export default function DesignPage() {
               { id: "4", name: "Meetings booked", state: "draft", updatedAt: "2026-08-14T16:05:00Z", summary: "2 steps · Calendly", source: "calendly" },
             ]}
           />
+        </Section>
+
+        {/* THE FIRST THING ANYONE EVER SEES, and until now the one surface the
+            kit never showed. That is not a coincidence: the line rendering it
+            was deleted by accident and every new flow opened onto a blank grid
+            for days, because nothing looked at it — not the kit, not
+            check:orphans (it is not an exported function), not the type
+            checker (it was not asked). All three gaps are closed now; this is
+            the third. */}
+        <Section title="Empty flow" note="Both states of the first screen. With an account connected the button MAKES a Get data step and opens its panel — the old version opened the full picker, from which a first-timer could choose a step that needs an input there is no way to give it.">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="relative h-[420px] overflow-hidden rounded-card bg-canvas-bg">
+              <div
+                className="absolute inset-0"
+                style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
+              />
+              <EmptyCanvasPreview hasConnections />
+            </div>
+            <div className="relative h-[420px] overflow-hidden rounded-card bg-canvas-bg">
+              <div
+                className="absolute inset-0"
+                style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
+              />
+              <EmptyCanvasPreview hasConnections={false} />
+            </div>
+          </div>
         </Section>
 
         <Section title="The canvas" note="Cards, connectors and the ghost next-step — the rhythm between them is most of what a canvas is.">

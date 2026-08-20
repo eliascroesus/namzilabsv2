@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
-import { connections, sourceStreams } from "@/db/schema";
+import { sourceStreams } from "@/db/schema";
 import { reconcileConnection } from "@/ingestion/reconcile";
 import { primeStream } from "@/lib/sync/streams";
 import { releaseConnectionSyncLock, tryConnectionSyncLock } from "@/lib/sync/locks";

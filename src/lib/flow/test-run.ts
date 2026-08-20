@@ -5,7 +5,7 @@ import { appFieldUnion, headlineValue, runFlow, type NodeExec } from "./engine";
 import type { FieldInfo } from "./schema-infer";
 import { compileEnabled } from "./compile/flags";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
-import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
+import { hasStreamConfig } from "@/lib/sync/stream-hash";
 import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { primeStream } from "@/lib/sync/streams";
 import { primeConnection } from "@/lib/sync/resync";

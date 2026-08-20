@@ -9,6 +9,15 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    // A component can be written, wired up, and then quietly orphaned by an
+    // unrelated edit. `EmptyCanvas` was: the one line that rendered it sat
+    // inside a block deleted while restructuring the toolbar, and every new
+    // flow opened onto a blank grid with no way to add a first step. Nothing
+    // caught it — check:orphans only reads EXPORTED functions, and this one
+    // is local to its file. These two flags are what the compiler already
+    // knew and was not being asked.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",

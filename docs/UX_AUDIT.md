@@ -1805,6 +1805,52 @@ tailwind-merge reorder classes freely.
 
 ---
 
+### 10f. A new flow opened onto nothing, for a day
+
+`EmptyCanvas` — the only screen that explains what a flow IS, and the only way
+to add a first step — was defined, styled, commented, and **never rendered**.
+Every new flow opened onto a blank dotted grid with no affordance at all.
+
+I did it, in `8980c17`, restructuring the toolbar into islands: the single line
+`{empty && <EmptyCanvas … />}` sat inside a block I deleted wholesale. It went
+unnoticed from 19 Aug 19:18 until it was reported.
+
+**Three separate guards should have caught it and none did**, which is the part
+worth fixing:
+
+- **The kit never showed it.** The first screen of the product was the one
+  surface `/design` had no section for. It has one now — both states, rendering
+  the real component through a thin client wrapper, no copy of its markup.
+- **`check:orphans` only reads EXPORTED functions.** `EmptyCanvas` was local to
+  its file, so the scan never looked at it.
+- **The compiler knew and was not asked.** `noUnusedLocals` reports exactly
+  this — "'EmptyCanvas' is declared but its value is never read" — and it was
+  off. It is on now, with `noUnusedParameters`. Sabotage-verified by
+  reproducing the original deletion: the build fails on that line.
+
+That third one is the real lesson. A custom script was written to catch dead
+code while a compiler flag that catches strictly more of it sat switched off.
+
+**What turning it on found**, all of it genuinely dead: five lucide imports in
+`flow-canvas` left behind when the chrome moved to `FlowToolbar`;
+`onTestUpstream` threaded into the panel's inner component and never read there
+(the prompt it feeds is rendered by the outer one); `fieldLabel` and the three
+locals behind it, orphaned in `7228148` when the summary line they fed was
+deleted; two dead type imports in `test-run` and `google-sheets`; and six
+unused locals across the tests. Plus `NODE_ACCENT`, exported but only ever used
+inside its own file.
+
+No dead CSS: every class in `globals.css` is referenced.
+
+### 10g. Run typecheck LAST
+
+`f6efeeb` was reported green when it did not typecheck. The bar had been run as
+typecheck → (write a new test file) → test → build → orphans, and `next build`
+typechecks `src/` but not `tests/`, so the failure was in a file the green run
+had never seen. Typecheck goes last, after every file exists.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

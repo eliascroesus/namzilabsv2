@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
-import { backfillJobs, connections, flowResults, flowVersions, flows, sourceStreams } from "@/db/schema";
+import { flowResults, flowVersions, flows, sourceStreams } from "@/db/schema";
 import { importProgressByStreamRef, requestBackfill, checkpointJob, finishJob, startJob } from "@/lib/backfill/jobs";
 import { markStaleForSource, resultsVersion } from "@/lib/flow/materialize";
 import { importProgressNote } from "@/lib/sync/streams";

@@ -1,6 +1,6 @@
 "use client";
 
-import { Database, Maximize2, Plug, Redo2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { Database, Plug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import "@xyflow/react/dist/style.css";
@@ -1530,6 +1530,17 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             <Background variant={BackgroundVariant.Dots} gap={26} size={1.6} color="#d9d5e8" bgColor="#f6f6fb" />
           </ReactFlow>
 
+          {/* THE EMPTY STATE. It sits here, a sibling of <ReactFlow> inside the
+              canvas box, rather than as a child — React Flow renders children
+              into its transformed viewport, so a child would pan and zoom with
+              the canvas instead of staying put over it.
+
+              This line was deleted by accident once (8980c17, restructuring the
+              toolbar: it sat inside a block that went wholesale) and a new flow
+              opened onto a blank grid with no way to add anything. Nothing
+              caught it — `EmptyCanvas` is not exported, so check:orphans never
+              looked at it. It does now. */}
+          {empty && <EmptyCanvas hasConnections={connections.length > 0} onStart={() => createNode("app", null)} />}
         </div>
 
         {/* Config panel — mounted through a host so it can scale OUT on deselect,
@@ -1677,7 +1688,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
  * accounts yet" inside that panel — so the button goes to Integrations
  * instead, which is the actual next thing to do.
  */
-function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boolean; onStart: () => void }) {
+export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boolean; onStart: () => void }) {
   const steps = [
     { n: 1, title: "Get the records", detail: "from an app you've connected" },
     { n: 2, title: "Narrow them down", detail: "keep only the ones that count" },

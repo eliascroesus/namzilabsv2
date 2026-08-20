@@ -15,7 +15,6 @@ import type { ImportStatus } from "@/lib/sync/import-status";
 import type { SourceOption } from "@/connectors/types";
 import {
   AGGREGATIONS,
-  aggregationFields,
   aggregationInputs,
   DURATION_UNITS,
   fieldNamesItsUnit,
@@ -242,7 +241,6 @@ export function ConfigPanel({
                 laneScopes={laneScopes}
                 branch={branch}
                 onChange={onChange}
-                onTestUpstream={onTestUpstream}
                 onSetInput={onSetInput}
                 onSetSources={onSetSources}
                 onAddBranch={onAddBranch}
@@ -462,7 +460,6 @@ function NodeConfig({
   branch,
   recordSourceNote,
   onChange,
-  onTestUpstream,
   onSetInput,
   onSetSources,
   onAddBranch,
@@ -480,7 +477,6 @@ function NodeConfig({
   branch: BranchCtx | null;
   recordSourceNote?: string | null;
   onChange: (patch: Record<string, unknown>) => void;
-  onTestUpstream?: () => void;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
   onAddBranch: () => void;
@@ -672,12 +668,6 @@ function NodeConfig({
     const aFixed = typeof cfg.aFixed === "number" ? cfg.aFixed : null;
     const bFixed = typeof cfg.bFixed === "number" ? cfg.bFixed : null;
     const gb = (cfg.groupBy as { type?: string; unit?: string; field?: string; topN?: number | null } | null) ?? null;
-    const useDistinct = aggregationInputs(op).distinctField;
-    const fieldPath = String((useDistinct ? cfg.distinctField : cfg.field) ?? (useDistinct ? "subject" : "value"));
-    const labelOf = (p: string) => groups.flatMap((g) => g.fields).find((f) => f.path === p)?.label ?? humanizeKey(p);
-    // "Sum of CRM + Your phone" — the summary line names EVERY column being
-    // totalled, so a second field can never be added invisibly.
-    const fieldLabel = useDistinct ? labelOf(fieldPath) : aggregationFields(cfg).map(labelOf).join(" + ");
     const setOp = (v: string) => {
       // Numbers play no part in a dataset aggregation — clear any wired slots so
       // stray a/b reference edges never linger on the canvas. The picked
