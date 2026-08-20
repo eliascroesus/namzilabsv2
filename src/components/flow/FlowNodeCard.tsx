@@ -129,7 +129,17 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
      * (the same trap `flow-pop-in` documents for the config panel). So the
      * rule is simply: this box does not clip.
      */
-    <div className={`group/card w-[300px] rounded-surface border bg-white shadow-card transition-all duration-150 hover:shadow-card-hover ${border}`}>
+    /*
+       * `has-[[data-add-btn]:hover]:shadow-card` is not a flourish. The "Add
+       * next step" ghost and the branch chips are absolutely positioned CHILDREN
+       * of this box — they have to be, a React Flow node is one element — so
+       * hovering them satisfies this element's own `:hover` and lit the card
+       * above them. You reached for empty canvas and a step lifted. `:has()`
+       * pins the resting elevation back while the pointer is on one of them,
+       * and outranks the `:hover` rule on specificity, so order is not load-
+       * bearing.
+       */
+    <div className={`group/card w-[300px] rounded-surface border bg-white shadow-card transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-card ${border}`}>
       {isCompare ? (
         <>
           {/* Both number inputs anchor at top-centre; the edges enter straight down (no

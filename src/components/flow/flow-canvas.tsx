@@ -102,6 +102,7 @@ import {
 import type { DataField, DataGroup } from "./controls/types";
 import { formatSample } from "./controls/field-utils";
 import { ALL_TYPES, defaultConfig, formulaExpression, formulaHandleLabels, nodeTitle, pathHandles } from "./node-meta";
+import { serializeGraph } from "./graph-serialize";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
 import { ReferenceEdge } from "./ReferenceEdge";
@@ -252,43 +253,48 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     syncHist();
   }, [snapshot, syncHist]);
 
-  const toGraph = useCallback((): Graph => {
-    return {
-      nodes: nodes.map((n) => ({ id: n.id, type: String(n.type), position: n.position, data: { config: n.data.config, label: n.data.label, lastTest: n.data.lastTest ?? undefined } })),
-      edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null })),
-      // A non-finite number fails the graph schema, which fails the autosave
-      // of this edit and every edit after it. The inputs can no longer produce
-      // one; this is the belt, so no future input can either.
-      // Clamped to what MetricSpecSchema actually accepts — int, 0..6. A bare
-      // Number.isFinite check let 20 and 1.5 through, and those throw inside
-      // parseGraph just as loudly as NaN did, reopening the same silent
-      // save-death this belt exists to close.
-      metrics: metrics.map((m) => ({
-        ...m,
-        precision: Number.isFinite(m.precision) ? Math.min(6, Math.max(0, Math.round(m.precision))) : 0,
-        target: m.target != null && Number.isFinite(m.target) ? m.target : null,
-      })),
-    };
-  }, [nodes, edges, metrics]);
+  const toGraph = useCallback((): Graph => serializeGraph(nodes, edges, metrics), [nodes, edges, metrics]);
+
+  /**
+   * WHAT IS ALREADY ON THE SERVER, as its serialised form.
+   *
+   * The autosave used to watch the node array, and React Flow replaces that
+   * array on every SELECTION change — so clicking a step woke the autosave and
+   * wrote a draft byte-identical to the stored one. The flow announced
+   * "Saving…" because you looked at it, and every click cost a round trip.
+   * Comparing the payload instead of the array it came from is the whole fix:
+   * `serializeGraph` deliberately drops `selected`, `dragging` and `dirty`, so
+   * a click produces the same string and this effect has nothing to do.
+   */
+  const savedSnapshot = useRef<string | null>(null);
 
   /** Save immediately, for the Retry the failure banner offers. */
   const saveNow = useCallback(async () => {
     setSaveState("saving");
-    const r = await saveDraftAction(flowId, toGraph());
+    const graph = toGraph();
+    const r = await saveDraftAction(flowId, graph);
+    if (r.ok) savedSnapshot.current = JSON.stringify(graph);
     setSaveState(r.ok ? "saved" : "error");
   }, [flowId, toGraph]);
 
   // Autosave the draft (debounced). Never affects the published version.
-  const firstRun = useRef(true);
   useEffect(() => {
-    if (firstRun.current) {
-      firstRun.current = false;
+    const graph = toGraph();
+    const snapshot = JSON.stringify(graph);
+    // First render: what is on screen IS what is on the server.
+    if (savedSnapshot.current === null) {
+      savedSnapshot.current = snapshot;
       return;
     }
+    // Selection, hover, a test marking descendants dirty — anything that moves
+    // the array without changing the flow. Nothing to persist, and nothing to
+    // say about it.
+    if (snapshot === savedSnapshot.current) return;
     setSaveState("unsaved");
     const t = setTimeout(async () => {
       setSaveState("saving");
-      const r = await saveDraftAction(flowId, toGraph());
+      const r = await saveDraftAction(flowId, graph);
+      if (r.ok) savedSnapshot.current = snapshot;
       setSaveState(r.ok ? "saved" : "error");
     }, 900);
     return () => clearTimeout(t);
@@ -1444,7 +1450,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         canRedo={hist.redo > 0}
         onZoomIn={() => rf.zoomIn({ duration: 150 })}
         onZoomOut={() => rf.zoomOut({ duration: 150 })}
-        onFitView={() => rf.fitView({ duration: 250, maxZoom: 1 })}
+        onFitView={() => rf.fitView({ duration: 250, maxZoom: 1.3 })}
         zoom={zoom}
         onToggleEnabled={toggleEnabled}
         togglingEnabled={togglingEnabled}
@@ -1500,9 +1506,13 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             nodesDraggable={false}
             nodesConnectable={false}
             fitView
-            // Never zoom IN past 100% when fitting — so the very first node (or a
-            // tiny flow) sits at natural size instead of filling the screen.
-            fitViewOptions={{ maxZoom: 1 }}
+            // 1.3 is the resting size of this canvas, not 1. A step card is 300px
+            // wide and holds a 44px mark, a chip and two short lines; at 1:1 on a
+            // 1440px screen it is a small object in a large field, and a flow of
+            // two steps opens looking like a diagram of something rather than the
+            // thing itself. The cap still exists — it just sits where the canvas
+            // actually reads.
+            fitViewOptions={{ maxZoom: 1.3 }}
             deleteKeyCode={null}
             // Scroll/two-finger pans the canvas; pinch (or ⌘/Ctrl+scroll) zooms.
             panOnScroll

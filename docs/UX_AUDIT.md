@@ -1754,6 +1754,57 @@ verified is worse than one that says nothing.
 
 ---
 
+### 10a. Clicking a step was writing to the database
+
+Reported as "whenever I click on a node and open the config tab it says saving
+even though no change has been made". It was exactly that, and the cause is
+worth writing down because it is invisible in the source.
+
+The autosave effect depends on `[nodes, edges, flowId, toGraph]`. **React Flow
+replaces the node array on every selection change** — a `select` change
+produces a new array with `selected: true` on one node — so clicking a step
+created a new array reference, woke the effect, and wrote a draft
+byte-identical to the one already stored. The flow announced "Saving…" because
+you looked at it. Nothing in the effect was wrong; the dependency was telling
+the truth about *the array* and lying about *the flow*.
+
+The fix compares the **payload** between renders rather than the array it came
+from. That only works while the payload carries no session state, so the
+mapping moved out to `graph-serialize.ts` where that promise has a name and a
+test: `selected`, `dragging`, `measured` and our own client-only `dirty` mark
+must not survive serialisation. `tests/graph-serialize.test.ts` pins both
+directions — a click produces an identical string, and a rename, a move, a
+config edit and a test result all produce a different one, because a guard that
+swallows real work is a worse bug than the one it fixed. Sabotage-verified:
+leaking `selected` back into the mapping fails it alone.
+
+Worth noting it is not only cosmetic. Every canvas click was a `saveDraftAction`
+round trip and a row write.
+
+### 10b. The canvas opens at 130%
+
+`fitViewOptions={{ maxZoom: 1 }}` capped the opening zoom at 1:1, so a two-step
+flow opened as a small object in a large field. 1.3 is the resting size of this
+canvas: a 300px card holding a 44px mark, a chip and two short lines needs it
+to read as the thing itself rather than as a diagram of the thing. The cap
+still exists — it just sits where the canvas actually reads. The readout tells
+the truth and says 130%; rescaling it to display 100% would have been a lie
+about the viewport that every zoom step afterwards would have to keep.
+
+### 10c. Hovering empty canvas lit the step above it
+
+The "Add next step" ghost and the branch chips are absolutely positioned
+**children** of the card — they have to be, a React Flow node is one element —
+so hovering them satisfied the card's own `:hover` and raised its elevation.
+You reached for empty canvas and a step lifted.
+
+`has-[[data-add-btn]:hover]:shadow-card` pins the resting elevation back while
+the pointer is on one of them. `:has()` outranks `:hover` on specificity, so
+class order is not load-bearing — which matters, because `cn()` and
+tailwind-merge reorder classes freely.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:
