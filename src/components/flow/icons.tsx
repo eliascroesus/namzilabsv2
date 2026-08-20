@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { sourceStyle } from "./controls/source-style";
+import { NODE_ACCENT } from "./node-accent";
 
 /**
  * The step glyphs — lucide, not hand-drawn.
@@ -70,18 +71,6 @@ const GLYPH: Record<string, LucideIcon> = {
  * hue with a clear neighbour distance, so no two steps read as the same family
  * at a glance on a canvas.
  */
-const NODE_ACCENT: Record<string, string> = {
-  app: "#10B981", // emerald — where records come IN
-  unite: "#0EA5E9", // sky — bringing lanes together
-  filter: "#3B82F6", // blue — Conditions
-  paths: "#EC4899", // pink — Conditions (split)
-  formula: "#8B5CF6", // violet — Calculation
-  calculate: "#8B5CF6", // violet — Calculation (legacy)
-  time: "#F59E0B", // amber — Conditions (date)
-  time_between: "#14B8A6", // teal — Calculation (pairing)
-  group: "#F97316", // orange — Calculation (legacy)
-  output: "#6366F1", // indigo — Dashboard
-};
 
 /**
  * `variant` is the step's JOB, where one node type has two of them —

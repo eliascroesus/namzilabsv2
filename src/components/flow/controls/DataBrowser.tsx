@@ -165,7 +165,7 @@ export function DataBrowser({
         const top = tabs ? tabs.getBoundingClientRect().top : pr.top;
         return new DOMRect(pr.left, top, pr.width, pr.bottom - top);
       }}
-      panelClassName="rounded-surface border border-border bg-card shadow-island"
+      panelClassName="rounded-surface border border-border bg-card shadow-surface"
       anchor={trigger({ open, toggle })}
     >
       <>

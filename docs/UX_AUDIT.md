@@ -1979,6 +1979,46 @@ printing 8.
 
 ---
 
+### 10n. Brown rail, violet accent, an even rainbow, one surface
+
+**`--color-rail: #413735`, and the accent goes violet.** A neutral-cool rail
+under a purple accent read as two different products; a warm dark brown is the
+one family of dark that lets violet sit on it as a decision rather than as a
+clash. The brand ramp is rebuilt around `#7a37e8`.
+
+**`--color-canvas-bg: #f0f0f0`** with `#d9d9d9` dots — a 23-point delta, inside
+the floor and ceiling the pin already enforces.
+
+**The step palette is an even rainbow.** Nine types, forty degrees apart, all
+the way round, so no two marks are a shade of each other and hue alone tells
+you the kind of step from across the canvas. Lightness is tuned per band and
+deliberately *not* constant: yellow-green at the lightness that suits blue is
+unreadable under a white glyph. Every value clears 3:1 against white, checked
+rather than eyeballed.
+
+**Four pixels of that colour on the card's leading edge.** The 44px mark is the
+only thing carrying type and it sits *inside* the card, so a column of steps
+was a column of white rectangles until you read each one. It is a left
+`border`, not an inner strip — the radius clips it for free and nothing inside
+the card can knock it out of alignment.
+
+**One radius and one shadow, everywhere.** `rounded-surface` (16px) and
+`--shadow-surface` now cover the bar, the step cards, the config panel, the
+step picker, every Popover and data browser, both canvas banners, the toast and
+the flow-list table. They were spread across four radii and four elevations; a
+canvas where every floating thing sits at the same height is the point, and one
+token each is how it stays that way.
+
+**A React error worth recording.** `nodeAccent()` first lived in `icons.tsx`,
+which is `"use client"`, and the design page is a server component — so calling
+it there threw *"Attempted to call nodeAccent() from the server but nodeAccent
+is on the client"*. Colour is data, not behaviour: the palette moved to
+`node-accent.ts`, a plain module either side can read. A `"use client"` file is
+not just a rendering boundary, it is an import boundary for plain functions
+too.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

@@ -1,6 +1,7 @@
 import { LineChart, Plus } from "lucide-react";
 import { STATUS_META, type NodeStatus } from "./node-meta";
 import { NodeIcon } from "./icons";
+import { nodeAccent } from "./node-accent";
 
 /**
  * A step card for the UI kit page — layout only.
@@ -38,7 +39,10 @@ export function FlowNodeCard({
   // The elevation is the ring-free `card` rung: the card draws a real border,
   // and a ringed shadow under one is two hairlines reading as a dirty 2px rim.
   return (
-    <div className={`w-[300px] rounded-surface border bg-card shadow-card transition-all duration-150 hover:shadow-card-hover ${sm.border}`}>
+    <div
+      style={{ borderLeftWidth: 4, borderLeftColor: nodeAccent(type, source) }}
+      className={`w-[300px] rounded-surface border bg-card shadow-surface transition-all duration-150 hover:shadow-card-hover ${sm.border}`}
+    >
       <div className="flex items-start gap-3 p-3.5">
         <NodeIcon type={type} source={source} variant={variant.includes("_") ? variant : undefined} size={44} />
         <span className="min-w-0 flex-1 pt-0.5">
@@ -91,7 +95,7 @@ export function CanvasPreview() {
             mt-8 (FlowNodeCard.tsx) — it is not an edge, so it has no "+". */}
         <span className="h-8 w-px border-l-2 border-dashed" style={{ borderColor: "var(--color-canvas-edge)" }} />
         {/* Duplicates the terminal "Add next step" button from src/components/flow/FlowNodeCard.tsx — it is an opaque, raised card there, not a wash, and it carries the same corner and the same ring-free elevation as the cards above it. */}
-        <div className="flex w-[300px] items-center gap-2.5 rounded-surface border-2 border-dashed border-neutral-300 bg-white p-3 text-base font-semibold text-neutral-500 shadow-card">
+        <div className="flex w-[300px] items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-white p-3 text-base font-semibold text-muted-foreground shadow-surface">
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
             <Plus size={16} strokeWidth={2.5} />
           </span>

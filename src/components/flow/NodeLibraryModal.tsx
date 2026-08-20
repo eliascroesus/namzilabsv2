@@ -140,7 +140,7 @@ export function NodeLibraryModal({
         ref={panelRef}
         onClick={(e) => e.stopPropagation()}
         style={style}
-        className={`pointer-events-auto flex max-h-[74vh] flex-col overflow-hidden rounded-2xl bg-white flow-shadow ${closing ? "flow-pop-out" : "flow-pop-in"}`}
+        className={`pointer-events-auto flex max-h-[74vh] flex-col overflow-hidden rounded-surface border border-border bg-white shadow-surface ${closing ? "flow-pop-out" : "flow-pop-in"}`}
       >
         <div className="p-3 pb-2">
           <div className="relative">

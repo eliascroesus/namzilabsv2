@@ -93,7 +93,7 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
         )}
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-card border border-border bg-card shadow-card">
+      <div className="mt-4 overflow-hidden rounded-surface border border-border bg-card shadow-surface">
         <div className="grid grid-cols-[1fr_150px_180px_120px] items-center gap-4 border-b border-neutral-200 bg-neutral-50/70 px-4 py-2.5 text-micro font-semibold uppercase tracking-wide text-neutral-500">
           <span>Flow name</span>
           <span>Status</span>

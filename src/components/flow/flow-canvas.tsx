@@ -1461,7 +1461,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       />
 
       {publishError && !reviewOpen && (
-        <div className="absolute left-1/2 top-[98px] z-10 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-card border border-red-200 bg-red-50 px-4 py-3 text-small text-red-800 shadow-island">
+        <div className="absolute left-1/2 top-[98px] z-10 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-surface border border-red-200 bg-red-50 px-4 py-3 text-small text-red-800 shadow-surface">
           <p>{publishError}</p>
           {/* One line per issue, each pointing at the step that caused it. The
               whole list used to be joined into a single string with no step
@@ -1486,7 +1486,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         </div>
       )}
       {publishWarning && (
-        <div className="absolute left-1/2 top-[98px] z-10 flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 items-center justify-between gap-3 rounded-card border border-amber-200 bg-amber-50 px-4 py-3 text-small text-amber-800 shadow-island">
+        <div className="absolute left-1/2 top-[98px] z-10 flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 items-center justify-between gap-3 rounded-surface border border-amber-200 bg-amber-50 px-4 py-3 text-small text-amber-800 shadow-surface">
           <span>{publishWarning}</span>
           <button onClick={() => setPublishWarning(null)} className="text-amber-700 hover:text-amber-900">
             Dismiss
@@ -1533,7 +1533,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             {/* A soft grey canvas with a faint, wide-spaced dot grid — calm and
                 smooth while panning, not a busy pattern. */}
             {/* size is a DIAMETER and it scales with zoom — see --color-canvas-dot. */}
-            <Background variant={BackgroundVariant.Dots} gap={26} size={1.6} color="#d9d5e8" bgColor="#f6f6fb" />
+            <Background variant={BackgroundVariant.Dots} gap={26} size={1.6} color="#d9d9d9" bgColor="#f0f0f0" />
           </ReactFlow>
 
           {/* THE EMPTY STATE. It sits here, a sibling of <ReactFlow> inside the
@@ -1636,7 +1636,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       {/* Bottom-centre, over the canvas, out of the config panel's way. */}
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-card bg-ink-900 py-2.5 pl-4 pr-2.5 text-base text-ink-50 flow-shadow flow-pop-in">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-surface bg-ink-900 py-2.5 pl-4 pr-2.5 text-base text-ink-50 shadow-surface flow-pop-in">
             <span>{toast.message}</span>
             {toast.undoable && (
               <button

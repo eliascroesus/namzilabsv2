@@ -44,7 +44,7 @@ function one(source: string, re: RegExp, what: string): string {
 describe("the chrome band", () => {
   const band = Number(one(css, /--spacing-chrome-band:\s*(\d+)px\s*;/, "--spacing-chrome-band"));
   // Island(): `p-[7px]` around a 42px control, plus 1px of border on each side.
-  const pad = Number(one(toolbar, /rounded-card border border-border bg-white p-\[(\d+)px\]/, "the island's padding"));
+  const pad = Number(one(toolbar, /rounded-surface border border-border bg-white p-\[(\d+)px\]/, "the island's padding"));
   const control = Number(one(toolbar, /flex h-\[(\d+)px\] w-\[\d+px\] shrink-0 items-center justify-center rounded-control text-foreground/, "the island's control height"));
   // The bar's own distance from the viewport edge. It is full-width now, so
   // `inset-x-6` carries the horizontal one and `top-6` the vertical; the band

@@ -71,13 +71,15 @@ export type SaveState = "saved" | "saving" | "unsaved" | "error";
  * 58px island height is measured against everything else on screen:
  * 1 + 7 + 42 (control) + 7 + 1 = 58. p-[7px] is not a typo for p-[8px].
  *
- * The elevation is `shadow-island`, not `shadow-float`, for the same reason:
- * float opens with a 1px spread ring, and under a real border that becomes two
- * hairlines of different hue — a 2px dirty rim rather than one crisp edge.
+ * The elevation is `shadow-surface` — the ONE shadow every floating thing in
+ * the builder uses, so the bar, the step cards, the config panel and the step
+ * picker all sit at the same height. It is ring-free on purpose: this box
+ * draws a real border, and a ringed shadow under one is two hairlines of
+ * different hue, a 2px dirty rim instead of a crisp edge.
  */
 function Island({ className = "", children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={`pointer-events-auto flex items-center gap-1 rounded-card border border-border bg-white p-[7px] shadow-island ${className}`}>
+    <div className={`pointer-events-auto flex items-center gap-1 rounded-surface border border-border bg-white p-[7px] shadow-surface ${className}`}>
       {children}
     </div>
   );

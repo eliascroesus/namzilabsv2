@@ -19,7 +19,7 @@
  * this string into a client reference, and /design is a server component that
  * needs to read it as a string.
  */
-export const PANEL_SHELL = "flex flex-col overflow-hidden rounded-surface border border-border bg-card shadow-island";
+export const PANEL_SHELL = "flex flex-col overflow-hidden rounded-surface border border-border bg-card shadow-surface";
 
 /** Set the step up, then run it. A step that cannot be run offers only the first. */
 export type PanelTab = "configure" | "test";

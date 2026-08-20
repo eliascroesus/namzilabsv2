@@ -88,7 +88,7 @@ export default function DesignPage() {
           state — the rail is the one surface allowed to carry mood.
         </p>
 
-        <Section title="Accent" note="Every primary action, selection and focus ring. One colour, so it means something.">
+        <Section title="Accent" note="Every primary action, selection and focus ring. Violet, on a warm brown rail and a neutral canvas — the only saturated thing outside the step marks, so it always means 'this is the thing to press'.">
           <div className="flex overflow-hidden rounded-card border border-neutral-200">
             {BRAND.map(([name, cls]) => (
               <div key={name} className="flex-1">
@@ -131,7 +131,7 @@ export default function DesignPage() {
             </div>
             <div className="flex flex-1 flex-col justify-center gap-1 text-tiny text-muted-foreground">
               <p><code className="text-foreground">--color-rail</code></p>
-              <p>Deep indigo-navy, flat: #1D1A3A. It was a three-stop gradient so a narrow column would not read as a slab; at this value it does not need the help, and a flat colour is one number a future edit cannot get half-right.</p>
+              <p>Warm dark brown, flat: #413735. A neutral-cool rail under a purple accent read as two different products; brown is the one family of dark that lets violet sit on it as a decision rather than as a clash.</p>
               <p className="mt-1">Selected highlights the 40px tile alone — a white wash behind the glyph, the label just brightening to full white while resting items sit at 75%. Highlighting the whole item as one white pill was a heavier thing entirely.</p>
             </div>
           </div>
@@ -347,7 +347,7 @@ export default function DesignPage() {
           <CanvasPreview />
         </Section>
 
-        <Section title="Step cards" note="300px, a 44px mark, the step number as its own chip so it stops eating the title. A 16px corner on the ring-free elevation — the card draws its own border — lifting on hover. Only the amber one is outlined, because only it blocks publish.">
+        <Section title="Step cards" note="300px, a 44px mark, and 4px of the step's own colour down the leading edge — the mark sits inside the card, so without it a column of steps is a column of white rectangles. Same 16px corner and same shadow as every other floating surface. The status border still colours only when a step blocks publish or broke.">
           <div className="relative flex flex-wrap items-start gap-4 overflow-hidden rounded-card bg-canvas-bg p-6">
               {/* The same dot field the other two canvas specimens carry — a card
                   judged against flat grey is judged against a surface the product

@@ -9,6 +9,7 @@ import { isBinaryCalc } from "@/lib/flow/shapes";
 import type { FNode, NodeData } from "./graph-utils";
 import { STATUS_META, nodeTitle, nodeVariant, pathHandles, resultLabel, type NodeStatus } from "./node-meta";
 import { NodeIcon } from "./icons";
+import { nodeAccent } from "./node-accent";
 import { anchorFromRect } from "./NodeLibraryModal";
 import { Popover } from "./controls/Popover";
 
@@ -139,7 +140,18 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
        * and outranks the `:hover` rule on specificity, so order is not load-
        * bearing.
        */
-    <div className={`group/card w-[300px] rounded-surface border bg-white shadow-card transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-card ${border}`}>
+    <div
+      /* The step's own colour, worn on the edge you read first. The 44px mark is
+         the only thing carrying type today and it sits INSIDE the card, so a
+         column of steps is a column of white rectangles until you look at each
+         one. Four pixels down the leading edge tells a Filter from a Calculate
+         at a glance, at any zoom, without reading a word.
+
+         A left BORDER rather than an inner strip: the radius clips it for free,
+         and nothing inside the card can knock it out of alignment. */
+      style={{ borderLeftWidth: 4, borderLeftColor: nodeAccent(t, String(data.config.source ?? "")) }}
+      className={`group/card w-[300px] rounded-surface border bg-white shadow-surface transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-surface ${border}`}
+    >
       {isCompare ? (
         <>
           {/* Both number inputs anchor at top-centre; the edges enter straight down (no
@@ -231,7 +243,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             (data as NodeData).onAddFrom?.(id, null, anchorFromRect(e.currentTarget.getBoundingClientRect()));
           }}
           title="Add the next step"
-          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-white p-3 text-left text-base font-semibold text-muted-foreground transition-all hover:border-primary hover:text-primary"
+          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-white p-3 text-left text-base font-semibold text-muted-foreground shadow-surface transition-all hover:border-primary hover:text-primary"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
             <Plus size={16} strokeWidth={2.5} />

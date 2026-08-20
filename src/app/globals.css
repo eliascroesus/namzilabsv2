@@ -36,14 +36,14 @@
    * ours. `brand-600` under white text is ~4.8:1 — past AA for the 14px+
    * semibold text every button in the product uses.
    */
-  --color-brand-50: #eef1ff;
-  --color-brand-100: #dde3ff;
-  --color-brand-200: #bfcaff;
-  --color-brand-300: #96a8ff;
-  --color-brand-400: #6b84ff;
-  --color-brand-500: #4a6bff;
-  --color-brand-600: #3858ff;
-  --color-brand-700: #2742d6;
+  --color-brand-50: #f6f3ff;
+  --color-brand-100: #ece5ff;
+  --color-brand-200: #dbcdff;
+  --color-brand-300: #c0a6fd;
+  --color-brand-400: #a37bfa;
+  --color-brand-500: #8b55f4;
+  --color-brand-600: #7a37e8;
+  --color-brand-700: #6425c4;
 
   /* --- Ink: the navigation rail and any dark surface ----------------------
    * A four-step ladder, which is the minimum a dark surface needs to express
@@ -67,7 +67,7 @@
    * The flow builder's working surface. Kept as tokens so the dot grid, the
    * page behind it and the edge colour can never drift apart again.
    */
-  --color-canvas-bg: #f6f6fb;
+  --color-canvas-bg: #f0f0f0;
   /* CHOSEN AT 83% ZOOM, NOT AT 100%.
      React Flow scales the dot pattern with the viewport, so a 1px dot is
      already sub-pixel by the time you have zoomed out enough to see a whole
@@ -77,7 +77,7 @@
      rendering React Flow's own pattern maths at both zooms and looking.
      It is still a depth cue, not content — it should read as texture at a
      glance and vanish the moment you look at a card. */
-  --color-canvas-dot: #d9d5e8;
+  --color-canvas-dot: #d9d9d9;
   --color-canvas-edge: #aab4cb;
 
   /* --- Type scale ---------------------------------------------------------
@@ -165,6 +165,12 @@
      as an edge. The config panel takes `shadow-island`: it is another
      surface floating on the canvas, exactly like the toolbar islands. */
   --shadow-panel: 0 8px 16px -4px rgb(15 23 42 / 0.08), 0 28px 56px -12px rgb(15 23 42 / 0.2);
+  /* THE ONE SHADOW EVERY FLOATING SURFACE USES — the step picker's own
+     elevation, minus its 1px ring because all of them draw a real border.
+     The top bar, the step cards, the config panel and the picker were on
+     four different rungs; a canvas where every floating thing sits at the
+     same height is the point, and one token is how it stays that way. */
+  --shadow-surface: 0 6px 12px -3px rgb(15 23 42 / 0.07), 0 20px 40px -10px rgb(15 23 42 / 0.16);
 
   /* --- The rail's gradient -------------------------------------------------
    * THE 30 IN A 60/30/10 SPLIT. White canvas is the 60, this rail is the 30,
@@ -179,7 +185,7 @@
   /* FLAT, not a gradient. It was a three-stop wash so a 100px column would
      not read as a slab; at this value it does not need the help, and a flat
      colour is one number a future edit cannot get half-right. */
-  --color-rail: #1d1a3a;
+  --color-rail: #413735;
 
   /* --- State, as tokens rather than raw palette picks ---------------------
    * Green/amber/red were being reached for directly all over the app, which

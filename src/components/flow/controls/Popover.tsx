@@ -124,7 +124,7 @@ export function Popover({
       {anchor}
       {open && (
         <div
-          className={`z-30 flex flex-col overflow-hidden ${panelClassName ?? "rounded-card border border-border bg-card shadow-island"} ${
+          className={`z-30 flex flex-col overflow-hidden ${panelClassName ?? "rounded-surface border border-border bg-card shadow-surface"} ${
             fixed ? "" : `absolute mt-1 ${align === "right" ? "right-0" : "left-0"}`
           }`}
           style={panelStyle}
