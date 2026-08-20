@@ -2,6 +2,7 @@ import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import { inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { connections, flows } from "@/db/schema";
+import { effectiveAccess } from "@/lib/permissions";
 import { AppFrame } from "./app-frame";
 import { OrgSwitcher } from "./org-switcher";
 import { signOutAction } from "@/app/actions";
@@ -64,6 +65,20 @@ export async function AppShell({
     }
   }
 
+  // The rail's Apps item follows the same rank gate as /integrations itself.
+  // Role comes from the membership list already fetched above (the same WorkOS
+  // fact the session's `role` carries — the shell isn't handed the session).
+  // Hiding is a courtesy: the /integrations page gate is the real wall, so on
+  // any hiccup the frame shows the full rail rather than failing.
+  let hide: string[] | undefined;
+  try {
+    const role = memberships.data.find((m) => m.organizationId === orgId)?.role?.slug;
+    const access = await effectiveAccess(getDb(), { orgId, userId, role });
+    if (!access.can("view_integrations")) hide = ["Apps"];
+  } catch {
+    // Full rail on failure — never a broken frame.
+  }
+
   const initials = (userEmail ?? "?").slice(0, 2).toUpperCase();
 
   return (
@@ -71,6 +86,7 @@ export async function AppShell({
     // rounded left corners cut the content rather than let it run past them.
     <AppFrame
       surface="overflow-y-auto bg-white"
+      hide={hide}
       account={{
         initials,
         // Rendered on the server, opened by the client rail: the light

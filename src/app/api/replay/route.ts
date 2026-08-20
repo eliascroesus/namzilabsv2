@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { replayRawEvent } from "@/ingestion/pipeline";
 import { getOrgContext } from "@/lib/auth";
+import { effectiveAccess } from "@/lib/permissions";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,13 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const ctx = await getOrgContext();
   if (!ctx) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  // replayDeadLetterAction gates this same work on connect_integrations; a
+  // route that skips the gate is a second door to the first door's room.
+  {
+    const access = await effectiveAccess(getDb(), ctx);
+    if (!access.can("connect_integrations")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   let body: { rawEventId?: string };
   try {

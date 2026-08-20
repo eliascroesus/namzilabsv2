@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (15 tables, 172 columns).
+-- QUERY 1 — tables and columns (17 tables, 185 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -135,6 +135,10 @@ WITH expected (tbl, col) AS (
     ('metrics', 'target'),
     ('metrics', 'definition'),
     ('metrics', 'created_at'),
+    ('rank_assignments', 'org_id'),
+    ('rank_assignments', 'user_id'),
+    ('rank_assignments', 'rank_id'),
+    ('rank_assignments', 'assigned_at'),
     ('raw_events', 'id'),
     ('raw_events', 'org_id'),
     ('raw_events', 'connection_id'),
@@ -197,7 +201,16 @@ WITH expected (tbl, col) AS (
     ('usage_ledger', 'throttled'),
     ('usage_ledger', 'errors'),
     ('usage_ledger', 'observed_limit'),
-    ('usage_ledger', 'updated_at')
+    ('usage_ledger', 'updated_at'),
+    ('workspace_ranks', 'id'),
+    ('workspace_ranks', 'org_id'),
+    ('workspace_ranks', 'name'),
+    ('workspace_ranks', 'all_permissions'),
+    ('workspace_ranks', 'permissions'),
+    ('workspace_ranks', 'all_metrics'),
+    ('workspace_ranks', 'metric_keys'),
+    ('workspace_ranks', 'inherits'),
+    ('workspace_ranks', 'created_at')
 ),
 checked AS (
   SELECT
@@ -222,7 +235,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (34 expected).
+-- QUERY 2 (optional) — indexes (37 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -253,6 +266,7 @@ WITH expected (tbl, idx) AS (
     ('flow_versions', 'flow_versions_org_idx'),
     ('flows', 'flows_org_idx'),
     ('metrics', 'metrics_org_idx'),
+    ('rank_assignments', 'rank_assignments_org_rank_idx'),
     ('raw_events', 'raw_events_conn_received_idx'),
     ('source_streams', 'source_streams_conn_cfg_uq'),
     ('source_streams', 'source_streams_org_idx'),
@@ -261,7 +275,9 @@ WITH expected (tbl, idx) AS (
     ('test_runs', 'test_runs_org_idx'),
     ('test_runs', 'test_runs_created_idx'),
     ('usage_ledger', 'usage_ledger_bucket_uq'),
-    ('usage_ledger', 'usage_ledger_window_idx')
+    ('usage_ledger', 'usage_ledger_window_idx'),
+    ('workspace_ranks', 'workspace_ranks_org_idx'),
+    ('workspace_ranks', 'workspace_ranks_org_name_uq')
 )
 SELECT
   e.tbl AS "table",

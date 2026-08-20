@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getOrgContext } from "@/lib/auth";
+import { effectiveAccess } from "@/lib/permissions";
+import { getDb } from "@/db/client";
 import { exchangeGoogleCode } from "@/lib/google-oauth";
 import { createConnection } from "@/lib/connections";
 import { CapError } from "@/lib/limits";
@@ -16,6 +18,15 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   const ctx = await getOrgContext();
   if (!ctx) return NextResponse.redirect(new URL("/", req.url));
+
+  // Gated HERE, not only at /start: the callback is what writes the
+  // connection, and OAuth can be entered without our start URL.
+  {
+    const access = await effectiveAccess(getDb(), ctx);
+    if (!access.can("connect_integrations")) {
+      return NextResponse.redirect(new URL("/integrations?error=rank_forbidden", req.url));
+    }
+  }
 
   const url = new URL(req.url);
   const code = url.searchParams.get("code");

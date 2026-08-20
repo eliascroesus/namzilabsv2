@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
+import { and, eq } from "drizzle-orm";
 import { requireOrg } from "@/lib/auth";
+import { getReadDb } from "@/db/client";
+import { flows, metrics, rankAssignments, workspaceRanks } from "@/db/schema";
 import { AppShell } from "@/components/app-shell";
 import { CopyField } from "@/components/copy-field";
 import { inviteMemberAction, revokeInviteAction } from "./actions";
+import { MemberRankSelect, RanksPanel } from "./RanksPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -24,20 +28,57 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v 
  * leaked link is inert. An "anyone with the link joins" token was considered
  * and deliberately not built — it would need its own table, a public /join
  * route, and member caps, for no need the personal link doesn't cover.
+ *
+ * RANKS: org-local ACL — named permission/metric bundles an admin assigns per
+ * member (src/lib/permissions.ts is the model). The editor renders only for
+ * role === "admin", but that gate is UX, not security: every rank action
+ * re-checks admin on the server before touching a row.
  */
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<SP> }) {
-  const { orgId, userId, auth } = await requireOrg();
+  const { orgId, userId, role, auth } = await requireOrg();
   const sp = await searchParams;
   const invited = one(sp.invited);
   const inviteError = one(sp.invite_error);
+  const isAdmin = role === "admin";
 
   const workos = getWorkOS();
+  const db = getReadDb(); // read-only page load: rides the DB_DRIVER_READ soak seam (B.3)
   // Emails via one org-scoped listUsers, not a getUser per membership: the
   // N+1 here would be one WorkOS round trip per member on every page view.
-  const [memberships, orgUsers, invitations] = await Promise.all([
+  const [memberships, orgUsers, invitations, rankRows, assignments, publishedFlows, metricRows] = await Promise.all([
     workos.userManagement.listOrganizationMemberships({ organizationId: orgId, statuses: ["active"], limit: 100 }),
     workos.userManagement.listUsers({ organizationId: orgId, limit: 100 }),
     workos.userManagement.listInvitations({ organizationId: orgId, limit: 100 }),
+    // Ranks + assignments load for EVERYONE: non-admins see teammates' ranks
+    // as text in the Members list. Columns are listed out, not select() —
+    // this page renders every rank field but should never ride along when
+    // someone adds a wide column to the table (Neon egress is metered).
+    db
+      .select({
+        id: workspaceRanks.id,
+        name: workspaceRanks.name,
+        allPermissions: workspaceRanks.allPermissions,
+        permissions: workspaceRanks.permissions,
+        allMetrics: workspaceRanks.allMetrics,
+        metricKeys: workspaceRanks.metricKeys,
+        inherits: workspaceRanks.inherits,
+      })
+      .from(workspaceRanks)
+      .where(eq(workspaceRanks.orgId, orgId)),
+    db
+      .select({ userId: rankAssignments.userId, rankId: rankAssignments.rankId })
+      .from(rankAssignments)
+      .where(eq(rankAssignments.orgId, orgId)),
+    // The metric catalogue only feeds the admin-only editor, so non-admin
+    // loads skip both queries entirely. Published flows only: a draft has no
+    // dashboard tile, so there is nothing to show or hide yet.
+    isAdmin
+      ? db
+          .select({ id: flows.id, name: flows.name })
+          .from(flows)
+          .where(and(eq(flows.orgId, orgId), eq(flows.status, "published")))
+      : [],
+    isAdmin ? db.select({ id: metrics.id, name: metrics.name }).from(metrics).where(eq(metrics.orgId, orgId)) : [],
   ]);
   const emailByUser = new Map(orgUsers.data.map((u) => [u.id, u.email]));
   const members = memberships.data.map((m) => ({
@@ -47,6 +88,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     role: m.role?.slug ?? "member",
   }));
   const pending = invitations.data.filter((i) => i.state === "pending");
+
+  const rankNameById = new Map(rankRows.map((r) => [r.id, r.name]));
+  const rankIdByUser = new Map(assignments.map((a) => [a.userId, a.rankId]));
+  const rankOptions = rankRows.map((r) => ({ id: r.id, name: r.name }));
+  // Member counts per rank — the list summaries and the delete confirm both
+  // need "how many people would this touch".
+  const memberCounts: Record<string, number> = {};
+  for (const a of assignments) memberCounts[a.rankId] = (memberCounts[a.rankId] ?? 0) + 1;
+  // The metric-visibility catalogue, keyed exactly as effectiveAccess checks:
+  // a flow tile is "flow:<flowId>", a classic metric tile is "metric:<metricId>".
+  const catalogue = [
+    ...publishedFlows.map((f) => ({ key: `flow:${f.id}`, name: f.name })),
+    ...metricRows.map((m) => ({ key: `metric:${m.id}`, name: m.name })),
+  ];
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
@@ -76,17 +131,42 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <section className="mt-8">
           <h2 className="mb-3 text-base font-semibold uppercase tracking-wide text-neutral-500">Members</h2>
           <div className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
-            {members.map((m) => (
-              <div key={m.id} className="flex items-center justify-between px-4 py-3 text-base">
-                <span className="text-foreground">
-                  {m.email}
-                  {m.userId === userId && <span className="ml-2 text-tiny text-neutral-400">(you)</span>}
-                </span>
-                <span className="text-tiny uppercase tracking-wide text-neutral-400">{m.role}</span>
-              </div>
-            ))}
+            {members.map((m) => {
+              const rankName = rankNameById.get(rankIdByUser.get(m.userId) ?? "");
+              return (
+                <div key={m.id} className="flex items-center justify-between px-4 py-3 text-base">
+                  <span className="text-foreground">
+                    {m.email}
+                    {m.userId === userId && <span className="ml-2 text-tiny text-neutral-400">(you)</span>}
+                  </span>
+                  <span className="flex items-center gap-3">
+                    {/* Admins assign ranks in place; everyone else just sees
+                        them. An admin picking a rank for another admin is
+                        allowed and harmless — admins are never restricted,
+                        even with a rank assigned. */}
+                    {isAdmin ? (
+                      <MemberRankSelect
+                        memberUserId={m.userId}
+                        rankId={rankIdByUser.get(m.userId) ?? null}
+                        ranks={rankOptions}
+                      />
+                    ) : (
+                      rankName && <span className="text-tiny text-neutral-400">{rankName}</span>
+                    )}
+                    <span className="text-tiny uppercase tracking-wide text-neutral-400">{m.role}</span>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </section>
+
+        {isAdmin && (
+          <section className="mt-8">
+            <h2 className="mb-3 text-base font-semibold uppercase tracking-wide text-neutral-500">Ranks</h2>
+            <RanksPanel ranks={rankRows} memberCounts={memberCounts} catalogue={catalogue} />
+          </section>
+        )}
 
         <section className="mt-8">
           <h2 className="mb-3 text-base font-semibold uppercase tracking-wide text-neutral-500">Invite a teammate</h2>

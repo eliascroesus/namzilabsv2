@@ -39,17 +39,20 @@ export function AppFrame({
   account,
   surface,
   framed = false,
+  hide,
   children,
 }: {
   account?: { initials: string; panel: ReactNode };
   surface: string;
   /** Cut the canvas into the rail's wash. The flow builder, and nothing else. */
   framed?: boolean;
+  /** Rail items (by label) this viewer shouldn't see; AppShell decides. */
+  hide?: string[];
   children: ReactNode;
 }) {
   return (
     <div className="bg-rail flex h-screen">
-      <Sidebar account={account} />
+      <Sidebar account={account} hide={hide} />
       {/* `relative` so anything a page floats over the canvas is measured
           against the canvas, not the viewport. It belongs here rather than in
           a wrapper each page remembers to add — the builder had exactly such a

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireOrg } from "@/lib/auth";
+import { effectiveAccess } from "@/lib/permissions";
 import { getDb } from "@/db/client";
 import { getFlow } from "@/lib/flow/store";
 import { listConnections } from "@/lib/connections";
@@ -23,10 +24,16 @@ export const maxDuration = 60;
 
 export default async function FlowEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { orgId } = await requireOrg();
+  const { orgId, userId, role } = await requireOrg();
 
   const flow = await getFlow(getDb(), orgId, id);
   if (!flow) notFound();
+  // Same 404 as a flow that is not there, on purpose: for a rank-restricted
+  // member a hidden flow DOES NOT EXIST, and a 403 would confirm it does.
+  // The editor renders every step's last computed value, so this page is
+  // where "hidden on the dashboard" would otherwise quietly leak.
+  const access = await effectiveAccess(getDb(), { orgId, userId, role });
+  if (!access.canSeeMetric(`flow:${id}`)) notFound();
 
   const conns = await listConnections(orgId).catch(() => []);
   // Record types are NOT loaded here: the Configure panel fetches them fresh

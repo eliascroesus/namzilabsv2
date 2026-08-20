@@ -644,3 +644,85 @@ SELECT
 Numbering note: 0016 remains reserved by the unmerged `batch5/retention-purge`
 branch (see the notes under 0015/0017); the snapshot-chain warning there still
 applies at merge time.
+
+---
+
+## 0024 — `workspace_ranks` + `rank_assignments` (ranks — apply BEFORE the permissions code lands)
+
+Two new tables, nothing altered. Same ordering rule as 0017/0018/0019 and the
+same reason: declaring a table in `schema.ts` is enough for the drift check to
+demand it, and the settings page, `effectiveAccess` and the assignment actions
+all read these the moment they deploy.
+
+**The model.** A rank is a named bundle of permissions + visible metric keys
+(`flow:<flowId>` / `metric:<metricId>`) that an admin assigns to members.
+`inherits` holds OTHER rank ids whose EFFECTIVE sets union in at read time —
+live inheritance, resolved per access check by `resolveRank`
+(src/lib/permissions.ts), never copied: edit the parent and every inheritor
+follows. Resolution is cycle-safe and skips deleted parents, so the id lists
+carry no foreign keys.
+
+**Why applying this changes no behaviour.** Access rules make the empty state a
+no-op: admins are never restricted, and a member with NO assignment row keeps
+FULL access — restrictions begin only when a rank is assigned. Empty tables
+mean nobody has an assignment, so every existing workspace works exactly as
+before with zero setup.
+
+The composite primary key on `rank_assignments` is the rule "one rank per
+member", enforced in the database: an assignment is an upsert, never a second
+row, so "your rank" always has exactly one answer.
+
+```sql
+CREATE TABLE IF NOT EXISTS "workspace_ranks" (
+  "id"              text PRIMARY KEY NOT NULL,
+  "org_id"          text NOT NULL,
+  "name"            text NOT NULL,
+  "all_permissions" boolean DEFAULT false NOT NULL,
+  "permissions"     jsonb DEFAULT '[]'::jsonb NOT NULL,
+  "all_metrics"     boolean DEFAULT false NOT NULL,
+  "metric_keys"     jsonb DEFAULT '[]'::jsonb NOT NULL,
+  "inherits"        jsonb DEFAULT '[]'::jsonb NOT NULL,
+  "created_at"      timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "rank_assignments" (
+  "org_id"      text NOT NULL,
+  "user_id"     text NOT NULL,
+  "rank_id"     text NOT NULL,
+  "assigned_at" timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT "rank_assignments_pk" PRIMARY KEY ("org_id","user_id")
+);
+
+CREATE INDEX IF NOT EXISTS "workspace_ranks_org_idx"
+  ON "workspace_ranks" USING btree ("org_id");
+
+CREATE UNIQUE INDEX IF NOT EXISTS "workspace_ranks_org_name_uq"
+  ON "workspace_ranks" USING btree ("org_id","name");
+
+CREATE INDEX IF NOT EXISTS "rank_assignments_org_rank_idx"
+  ON "rank_assignments" USING btree ("org_id","rank_id");
+```
+
+Verify:
+
+```sql
+SELECT
+  (SELECT count(*) FROM information_schema.tables
+    WHERE table_schema='public'
+      AND table_name IN ('workspace_ranks','rank_assignments'))        AS tables_should_be_2,
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='workspace_ranks')      AS columns_should_be_9,
+  (SELECT count(*) FROM pg_indexes
+    WHERE schemaname='public' AND indexname IN
+      ('workspace_ranks_org_idx','workspace_ranks_org_name_uq',
+       'rank_assignments_org_rank_idx','rank_assignments_pk'))         AS indexes_should_be_4;
+```
+
+Expect 2, 9, 4 (the primary key counts as an index).
+
+`scripts/schema-audit.sql` was regenerated alongside this: 17 tables, 185
+columns — a clean run after the paste is still a screen of `ok`.
+
+> **Numbering note.** 0016 is still reserved by the unmerged
+> `batch5/retention-purge` branch, and the snapshot-chain warning under 0018
+> applies here too at merge time.

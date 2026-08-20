@@ -184,8 +184,9 @@ export function FlowToolbar({
       <div className="pointer-events-none absolute inset-x-6 top-6 z-10">
         <Island className="w-full">
           <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
-            {/* WHERE YOU CAME FROM. Nothing else: the name is centred and
-                everything you can DO sits at the other end. */}
+            {/* WHERE YOU CAME FROM, THEN WHAT YOU DO WITH THE FLOW.
+                Ship, run, on/off — the three acts, together at the reading
+                edge; the name stays centred by the grid regardless. */}
             <span className="flex min-w-0 items-center gap-1">
               <Link
                 href="/dashboard/flows"
@@ -194,6 +195,30 @@ export function FlowToolbar({
               >
                 <ChevronLeft size={26} strokeWidth={2} />
               </Link>
+
+              <Button onClick={onReview} disabled={publishing} className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-lead [&_svg]:size-[18px]">
+                {isPublished ? <SlidersHorizontal /> : <Rocket />}
+                {isPublished ? "Edit output" : "Review & publish"}
+              </Button>
+              {showTestAll && (
+                <Button
+                  variant="secondary"
+                  onClick={runAll ? onStopTestAll : onTestAll}
+                  title={runAll ? "Stop the run" : "Run every step, top to bottom"}
+                  aria-label={runAll ? "Stop the run" : "Test flow"}
+                  className={`h-[42px] shrink-0 text-lead [&_svg]:size-[18px] ${runAll ? "gap-2 px-[18px]" : "w-[42px] px-0"}`}
+                >
+                  {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
+                  {/* Icon only at rest — the play glyph IS the word. Quiet grey
+                      rather than a colour: a test run is a rehearsal, and the one
+                      saturated thing in this bar should be the act that actually
+                      ships. While a run is going it earns its words back:
+                      "Stop · 2/6" is a receipt, and dropping the count to stay
+                      square would be hiding progress to keep a shape. */}
+                  {runAll ? `Stop · ${runAll.at}/${runAll.of}` : null}
+                </Button>
+              )}
+              <FlowSwitch on={isPublished} disabled={publishedVersion == null || togglingEnabled} onChange={onToggleEnabled} />
 
               {/* No "Flows /" crumb. The back arrow beside it already goes there
                   and already says so on hover; a breadcrumb whose only parent is
@@ -225,36 +250,12 @@ export function FlowToolbar({
               </span>
             </span>
 
-            {/* EVERYTHING YOU DO, RIGHT TO LEFT BY HOW OFTEN.
-                Ship first because it is the destination, then run, then the
-                on/off switch, then undo and redo, and the step menu last at the
-                far edge — the rarest thing here and the only one that opens
-                something rather than doing something. */}
+            {/* QUIET STATE AND HISTORY. The acts moved to the left edge with
+                the back arrow; what stays here is what you rarely touch —
+                whether it saved, undo/redo, and the step menu at the far
+                corner. */}
             <span className="flex items-center justify-end gap-2">
               <SaveChip state={saveState} onRetry={onRetrySave} />
-              <Button onClick={onReview} disabled={publishing} className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-lead [&_svg]:size-[18px]">
-                {isPublished ? <SlidersHorizontal /> : <Rocket />}
-                {isPublished ? "Edit output" : "Review & publish"}
-              </Button>
-              {showTestAll && (
-                <Button
-                  variant="secondary"
-                  onClick={runAll ? onStopTestAll : onTestAll}
-                  title={runAll ? "Stop the run" : "Run every step, top to bottom"}
-                  aria-label={runAll ? "Stop the run" : "Test flow"}
-                  className={`h-[42px] shrink-0 text-lead [&_svg]:size-[18px] ${runAll ? "gap-2 px-[18px]" : "w-[42px] px-0"}`}
-                >
-                  {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
-                  {/* Icon only at rest — the play glyph IS the word. Quiet grey
-                      rather than a colour: a test run is a rehearsal, and the one
-                      saturated thing in this bar should be the act that actually
-                      ships. While a run is going it earns its words back:
-                      "Stop · 2/6" is a receipt, and dropping the count to stay
-                      square would be hiding progress to keep a shape. */}
-                  {runAll ? `Stop · ${runAll.at}/${runAll.of}` : null}
-                </Button>
-              )}
-              <FlowSwitch on={isPublished} disabled={publishedVersion == null || togglingEnabled} onChange={onToggleEnabled} />
               <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
                 <Undo2 />
               </IslandButton>

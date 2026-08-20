@@ -2153,6 +2153,53 @@ hold white is added again it does the right thing without anyone remembering.
 
 ---
 
+### 10t. Ranks: who sees what, who may do what
+
+The workspace grows roles — "ranks" — in Settings, admin-only. A rank is a
+bundle of PERMISSION toggles (build flows & metrics, view integrations, manage
+integrations), METRIC visibility toggles (per dashboard tile, with an
+All-metrics master), and INHERITANCE (a Manager rank toggles on "everything
+Closer can see and do" and follows live when Closer changes — a rank id in a
+list, resolved by union at read time, cycle-safe, no copying to drift).
+
+The three access rules, encoded once in `src/lib/permissions.ts`:
+- **Admins are never restricted**, even if assigned a rank.
+- **No rank assigned → full access.** Restriction begins at assignment, so
+  existing workspaces keep working with zero setup and the migration strands
+  nobody. A dangling assignment to a deleted rank also resolves to full
+  access — never a lockout.
+- **A rank grants exactly its resolved sets.**
+
+**Enforcement is server-side, at every door.** The adversarial pass attacked
+its own feature and found seven holes the happy path never shows, all closed:
+
+- The **Google OAuth start AND callback routes** landed real connections with
+  no permission check — a member denied `connect_integrations` could connect an
+  account by opening a URL. Both gated (the callback too: OAuth can be entered
+  without our start URL).
+- **`/api/replay`** did the work its settings twin gates.
+- **`streamDateColumnAction`** wrote shared stream config ungated — a mutation
+  wearing a picker's clothes.
+- **Metric drill-in pages** rendered a hidden metric's name, headline and 100
+  raw rows to anyone with the URL. Now `notFound()` — the same 404 as a metric
+  that does not exist, because a 403 confirms existence and URL secrecy is not
+  a control.
+- **Metric CRUD had no gate at all** — create/delete now require the same
+  `create_flows` the user's own phrasing bundled ("create new flows/metrics"),
+  and delete additionally requires the metric to be visible.
+- **The flow editor leaked hidden numbers** (every card renders its last test
+  value). The rule is now uniform: for a rank-restricted member **a hidden
+  flow does not exist** — filtered from the list, 404 in the editor, and
+  rejected in every flowId-carrying action via one shared gate.
+- **Test/field tools were "read paths" that mutate** — `startNodeTestAction`
+  takes an arbitrary browser-built graph and returns computed values; it and
+  `listAppFieldsAction` now require build permission.
+
+Migration: `drizzle/HAND_APPLY.md` §0024 (two tables, idempotent), apply
+BEFORE deploying — `effectiveAccess` reads them the moment it ships.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

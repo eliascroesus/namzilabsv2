@@ -162,6 +162,13 @@
       "when": 1786152140094,
       "tag": "0023_conn_type_live_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787184000000,
+      "tag": "0024_workspace_ranks",
+      "breakpoints": true
     }
   ]
 }

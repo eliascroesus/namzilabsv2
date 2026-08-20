@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
+import { effectiveAccess } from "@/lib/permissions";
 import { AppShell } from "@/components/app-shell";
 import { getReadDb } from "@/db/client";
 import { flowState, listFlows } from "@/lib/flow/store";
@@ -67,13 +68,30 @@ function summarize(f: { id: string; name: string; status: string; publishedVersi
 }
 
 export default async function FlowsPage({ searchParams }: { searchParams: Promise<SP> }) {
-  const { orgId, userId, auth } = await requireOrg();
+  const { orgId, userId, role, auth } = await requireOrg();
   const sp = await searchParams;
-  const flows = await listFlows(getReadDb(), orgId).catch(() => []);
+  // The list stays readable — viewing is not editing — but only of the flows
+  // the member's rank can SEE. The editor shows a flow's computed numbers
+  // (lastTest on every card), so "hidden tile, visible flow" was a leak with a
+  // corridor to it; for a rank-restricted member a hidden flow does not exist
+  // here, in the editor, or in any action. Create follows create_flows; the
+  // action itself is gated server-side, the button is the courtesy.
+  const access = await effectiveAccess(getReadDb(), { orgId, userId, role });
+  const canCreate = access.can("create_flows");
+  const allFlows = await listFlows(getReadDb(), orgId).catch(() => []);
+  const flows = allFlows.filter((f) => access.canSeeMetric(`flow:${f.id}`));
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-5xl px-8 py-10">
+        {one(sp.error) === "rank" && (
+          <div className="mb-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-base text-red-800">
+            <p>Your rank doesn&rsquo;t allow editing flows.</p>
+            <Link href="/dashboard/flows" aria-label="Dismiss" className="font-semibold text-red-400 hover:text-red-700">
+              ✕
+            </Link>
+          </div>
+        )}
         {one(sp.error) === "flow_limit" && (
           <div className="mb-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-base text-red-800">
             <p>This workspace has reached its flow limit, so nothing was created. Contact us and we&rsquo;ll raise it.</p>
@@ -89,12 +107,14 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
               Build metrics visually: connect an app, filter and aggregate, then output to your dashboard.
             </p>
           </div>
-          <form action={createFlowAction}>
-            <button className="flex h-9 shrink-0 items-center gap-1.5 rounded-control bg-primary px-4 text-base font-semibold text-primary-foreground transition-all hover:brightness-110 active:brightness-95">
-<Plus size={16} strokeWidth={2.4} />
-              Create flow
-            </button>
-          </form>
+          {canCreate && (
+            <form action={createFlowAction}>
+              <button className="flex h-9 shrink-0 items-center gap-1.5 rounded-control bg-primary px-4 text-base font-semibold text-primary-foreground transition-all hover:brightness-110 active:brightness-95">
+                <Plus size={16} strokeWidth={2.4} />
+                Create flow
+              </button>
+            </form>
+          )}
         </div>
 
         {flows.length === 0 ? (

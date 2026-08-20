@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { requireOrg } from "@/lib/auth";
+import { effectiveAccess } from "@/lib/permissions";
+import { getDb } from "@/db/client";
 import { createMetric, deleteMetric } from "@/lib/metrics/store";
 import { MetricDefinitionSchema } from "@/lib/metrics/types";
 
@@ -14,7 +16,14 @@ function numOrNull(v: string): number | null {
 
 /** Create an aggregate metric (count / sum / distinct, optional filters + trend). */
 export async function createAggregateMetricAction(fd: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  // "Create & edit flows" covers metrics — they were one clause in the ask
+  // ("create new flows/metrics") and they are one bundle of build power here.
+  {
+    const access = await effectiveAccess(getDb(), ctx);
+    if (!access.can("create_flows")) redirect("/dashboard?error=rank");
+  }
 
   const rules: Array<{ field: string; op: string; value: string }> = [];
   for (let i = 0; i < 2; i++) {
@@ -47,7 +56,14 @@ export async function createAggregateMetricAction(fd: FormData): Promise<void> {
 
 /** Create a funnel metric from ordered stages. */
 export async function createFunnelMetricAction(fd: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  // "Create & edit flows" covers metrics — they were one clause in the ask
+  // ("create new flows/metrics") and they are one bundle of build power here.
+  {
+    const access = await effectiveAccess(getDb(), ctx);
+    if (!access.can("create_flows")) redirect("/dashboard?error=rank");
+  }
 
   const stages: Array<{ label: string; eventType: string; source: string | null; filters: unknown }> = [];
   for (let i = 0; i < 6; i++) {
@@ -66,8 +82,21 @@ export async function createFunnelMetricAction(fd: FormData): Promise<void> {
 }
 
 export async function deleteMetricAction(fd: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  // "Create & edit flows" covers metrics — they were one clause in the ask
+  // ("create new flows/metrics") and they are one bundle of build power here.
+  {
+    const access = await effectiveAccess(getDb(), ctx);
+    if (!access.can("create_flows")) redirect("/dashboard?error=rank");
+  }
   const id = s(fd, "id");
-  if (id) await deleteMetric(orgId, id);
+  // You cannot delete what your rank cannot see — a hidden metric must not be
+  // enumerable or destructible by POSTing ids.
+  if (id) {
+    const access = await effectiveAccess(getDb(), ctx);
+    if (!access.canSeeMetric(`metric:${id}`)) redirect("/dashboard");
+    await deleteMetric(orgId, id);
+  }
   redirect("/dashboard");
 }

@@ -76,6 +76,11 @@ const TABLES: Record<string, Classification> = {
     kind: "bounded",
     by: "one row per historical import, so it grows with imports rather than with polling. Revisit if re-imports become routine",
   },
+  workspace_ranks: { kind: "bounded", by: "one row per rank an admin defined" },
+  rank_assignments: {
+    kind: "bounded",
+    by: "at most one row per (org, member) — the composite PK enforces it; assignment is an upsert, never an append",
+  },
 
   // ── Known gaps ────────────────────────────────────────────────────────────
   raw_events: {

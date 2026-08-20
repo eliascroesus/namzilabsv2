@@ -5,6 +5,7 @@ import { getReadDb } from "@/db/client";
 import { connections, events, flows } from "@/db/schema";
 import { unresolvedDeadLetterCountsByConnection } from "@/lib/dead-letter";
 import { requireOrg } from "@/lib/auth";
+import { effectiveAccess } from "@/lib/permissions";
 import { AppShell } from "@/components/app-shell";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { FunnelView } from "@/components/funnel-view";
@@ -66,8 +67,13 @@ function streamRefsOfProvenance(provenance: unknown): Array<{ connectionId: stri
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  const { orgId, userId, auth } = await requireOrg();
+  const { orgId, userId, role, auth } = await requireOrg();
   const db = getReadDb(); // read-only surface: rides the DB_DRIVER_READ soak seam (B.3)
+
+  // Rank-based metric visibility, resolved once for the whole page. Admins and
+  // members with no rank short-circuit to allow-all inside effectiveAccess, so
+  // the common case costs at most one assignment lookup.
+  const access = await effectiveAccess(db, { orgId, userId, role });
 
   const rangeKey = one(sp.range) || "7d";
   const { range } = resolveRange(rangeKey);
@@ -108,6 +114,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     loadError = err instanceof Error ? err.message : String(err);
   }
 
+  // Filter the SOURCE list, not the rendering: every classic-metric surface on
+  // this page (aggregate tiles, funnel tiles, drill-in links) derives from
+  // `metrics`, so a hidden metric cannot leak through any section — and its
+  // compute below is never even run.
+  if (!access.admin) {
+    metrics = metrics.filter((m) => access.canSeeMetric(`metric:${m.id}`));
+  }
+
   const tiles: Tile[] = await Promise.all(
     metrics.map(async (metric): Promise<Tile> => {
       try {
@@ -125,7 +139,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // Published-flow tiles come from stored (materialized) results — no live recompute.
   let flowTiles: FlowResultRow[] = [];
   try {
-    const rows = await publishedFlowTiles(db, orgId);
+    const allRows = await publishedFlowTiles(db, orgId);
+    // Same as the metrics filter above: drop hidden flows at the source, so
+    // neither the tiles nor the import-badge join below ever see them.
+    const rows = access.admin ? allRows : allRows.filter((r) => access.canSeeMetric(`flow:${r.flowId}`));
 
     /**
      * Phase 8 — import state is joined HERE, at read time, and deliberately not

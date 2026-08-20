@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireOrg } from "@/lib/auth";
+import { effectiveAccess } from "@/lib/permissions";
 import { AppShell } from "@/components/app-shell";
 import { FunnelView } from "@/components/funnel-view";
 import { getDb } from "@/db/client";
@@ -24,10 +25,15 @@ export default async function MetricDrillPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const { orgId, userId, auth } = await requireOrg();
+  const { orgId, userId, role, auth } = await requireOrg();
 
   const metric = await getMetric(orgId, id);
   if (!metric) notFound();
+  // A hidden metric's drill-in is its name, headline and 100 raw rows — the
+  // exact data the hidden tile hides. Same 404 as a missing metric: a 403
+  // would confirm existence, and URL secrecy is not a control.
+  const access = await effectiveAccess(getDb(), { orgId, userId, role });
+  if (!access.canSeeMetric(`metric:${id}`)) notFound();
 
   const { range } = resolveRange(one(sp.range) || "30d");
   const def = parseDefinition(metric.definition);

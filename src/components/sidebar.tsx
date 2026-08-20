@@ -43,7 +43,14 @@ const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: stri
   { href: "/dashboard/settings", label: "Settings", icon: <Settings size={24} strokeWidth={2.1} />, match: (p) => p.startsWith("/dashboard/settings") },
 ];
 
-export function Sidebar({ account }: { account?: { initials: string; panel: ReactNode } }) {
+export function Sidebar({
+  account,
+  hide,
+}: {
+  account?: { initials: string; panel: ReactNode };
+  /** NAV labels to omit. Dumb on purpose: the shell decides WHO sees what. */
+  hide?: string[];
+}) {
   const pathname = usePathname() ?? "";
   return (
     <aside className="flex h-full w-[100px] shrink-0 flex-col items-center px-2.5">
@@ -90,7 +97,7 @@ export function Sidebar({ account }: { account?: { initials: string; panel: Reac
           highlighted the whole item as one white pill, which is a different
           (and heavier) thing entirely. */}
       <nav className="flex w-full flex-col items-center gap-[30px]">
-        {NAV.map((item) => {
+        {NAV.filter((item) => !hide?.includes(item.label)).map((item) => {
           const active = item.match(pathname);
           return (
             <Link

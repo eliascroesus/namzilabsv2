@@ -6,7 +6,8 @@ import { revalidatePath } from "next/cache";
 import { eq, and } from "drizzle-orm";
 import { getDb, getReadDb } from "@/db/client";
 import { connections, flowResults } from "@/db/schema";
-import { requireOrg } from "@/lib/auth";
+import { requireOrg, type OrgContext } from "@/lib/auth";
+import { effectiveAccess } from "@/lib/permissions";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { dateColumnChoice, dateColumnNote, dateColumnSettings, setDateColumn, type DateColumnChoice } from "@/lib/sync/date-column";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow, getFlow, setFlowEnabled, type FlowState } from "@/lib/flow/store";
@@ -23,8 +24,37 @@ import { connectionImportStatus, type ImportStatus } from "@/lib/sync/import-sta
 import type { SourceOption } from "@/connectors/types";
 import { inngest } from "@/inngest/client";
 
+/**
+ * The rank gate, on MUTATIONS only: viewing is not editing, so the list and
+ * the Test/poll read paths stay open. Admins and rankless members resolve to
+ * allow-all inside effectiveAccess without touching the ranks table, so the
+ * common case costs one assignment lookup at most.
+ */
+const RANK_BLOCKS_FLOWS = "Your rank doesn't allow editing flows.";
+
+/**
+ * The single gate every flow mutation passes through.
+ *
+ * Two questions, not one. "create_flows" says whether this member may build at
+ * all. The optional flowId asks the second: FOR A RANK-RESTRICTED MEMBER, A
+ * HIDDEN FLOW DOES NOT EXIST — not on the dashboard, not in the list, not in
+ * the editor, and not here. Without that second check, a member who could not
+ * see a tile could still rename, republish or delete the flow behind it by
+ * calling the action directly; the review that found it called URL secrecy
+ * "not a control", and it is right.
+ */
+async function blockedFromEditingFlows(ctx: Pick<OrgContext, "orgId" | "userId" | "role">, flowId?: string): Promise<boolean> {
+  const access = await effectiveAccess(getDb(), ctx);
+  if (!access.can("create_flows")) return true;
+  return flowId != null && !access.canSeeMetric(`flow:${flowId}`);
+}
+
 export async function createFlowAction(): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  // Same channel as the cap: this action's only voice is a redirect, and the
+  // flows page renders the code as a banner.
+  if (await blockedFromEditingFlows(ctx)) redirect("/dashboard/flows?error=rank");
   let flow;
   try {
     flow = await createFlow(getDb(), orgId, "Untitled flow");
@@ -48,7 +78,9 @@ export async function setFlowEnabledAction(
   id: string,
   enabled: boolean,
 ): Promise<{ ok: true; state: FlowState } | { ok: false; error: string }> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromEditingFlows(ctx, id)) return { ok: false, error: RANK_BLOCKS_FLOWS };
   try {
     const state = await setFlowEnabled(getDb(), orgId, id, enabled);
     // The dashboard's tiles come and go with this, so it has to re-render too.
@@ -65,7 +97,9 @@ export async function setFlowEnabledAction(
  * subtlety is the cap — a duplicate is a create and counts like one.
  */
 export async function duplicateFlowAction(id: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromEditingFlows(ctx, id)) return { ok: false, error: RANK_BLOCKS_FLOWS };
   const db = getDb();
   const src = await getFlow(db, orgId, id);
   if (!src) return { ok: false, error: "Flow not found." };
@@ -84,7 +118,9 @@ export async function saveDraftAction(
   id: string,
   graph: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromEditingFlows(ctx, id)) return { ok: false, error: RANK_BLOCKS_FLOWS };
   try {
     const db = getDb();
     await saveDraft(db, orgId, id, graph);
@@ -102,12 +138,17 @@ export async function saveDraftAction(
 }
 
 export async function renameFlowAction(id: string, name: string): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  // This action has no result channel — a throw is how it already reports.
+  if (await blockedFromEditingFlows(ctx, id)) throw new Error(RANK_BLOCKS_FLOWS);
   await renameFlow(getDb(), orgId, id, name.trim() || "Untitled flow");
 }
 
 export async function deleteFlowAction(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromEditingFlows(ctx, id)) return { ok: false, error: RANK_BLOCKS_FLOWS };
   try {
     await deleteFlow(getDb(), orgId, id);
     revalidatePath("/dashboard/flows");
@@ -159,7 +200,12 @@ export type StartNodeTestResult =
  * so at worst the work is repeated — never corrupted, never double-counted.
  */
 export async function startNodeTestAction(graph: unknown, nodeId: string): Promise<StartNodeTestResult> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  // A Test is a BUILD tool, not a read: it takes an arbitrary graph from the
+  // browser, primes provider syncs, and returns computed values — exactly the
+  // number a hidden tile hides. Gated like every other edit.
+  if (await blockedFromEditingFlows(ctx)) throw new Error(RANK_BLOCKS_FLOWS);
   const db = getDb();
   const runId = await createTestRun(db, orgId);
 
@@ -203,7 +249,9 @@ export type AppFieldDTO = { path: string; label: string; type: string; example?:
 export async function listAppFieldsAction(
   config: Record<string, unknown>,
 ): Promise<{ ok: true; fields: AppFieldDTO[] } | { ok: false; error: string }> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromEditingFlows(ctx)) return { ok: false, error: RANK_BLOCKS_FLOWS };
   try {
     const db = getDb();
     const connectionId = typeof config.connectionId === "string" ? config.connectionId : null;
@@ -286,7 +334,11 @@ export async function streamDateColumnAction(
   sourceConfig: Record<string, unknown>,
   choice?: DateColumnChoice,
 ): Promise<{ ok: true; choice: DateColumnChoice; note: string } | { ok: false; error: string }> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  // Writes SHARED stream config that every flow reading the stream inherits —
+  // a mutation wearing a picker's clothes, and the audit's exact finding.
+  if (await blockedFromEditingFlows(ctx)) return { ok: false, error: RANK_BLOCKS_FLOWS };
   try {
     const db = getDb();
     const [conn] = await db
@@ -309,9 +361,20 @@ export async function streamDateColumnAction(
  * results now (org-scoped) so the tile shows current data on reload.
  */
 export async function refreshFlowAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
   const id = String(formData.get("flowId") ?? "");
-  if (id) await materializeFlow(getDb(), orgId, id);
+  // A refresh is a VIEWER's act (no create_flows needed) — but only on tiles
+  // the member can see. For a rank-restricted member a hidden flow does not
+  // exist, so refreshing it silently no-ops rather than confirming it is there.
+  if (id) {
+    const access = await effectiveAccess(getDb(), ctx);
+    if (!access.canSeeMetric(`flow:${id}`)) {
+      revalidatePath("/dashboard");
+      return;
+    }
+    await materializeFlow(getDb(), orgId, id);
+  }
   revalidatePath("/dashboard");
 }
 
@@ -337,7 +400,9 @@ export async function refreshAllFlowsAction(): Promise<void> {
 export async function publishFlowAction(
   id: string,
 ): Promise<{ ok: true; version: number; warning?: string } | { ok: false; error: string; issues?: Array<{ nodeId?: string; message: string }> }> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromEditingFlows(ctx, id)) return { ok: false, error: RANK_BLOCKS_FLOWS };
 
   // Publishing (validate + immutable version snapshot) is the only step that can
   // report failure. A validation error here means the flow was NOT published.

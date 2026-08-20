@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrgContext } from "@/lib/auth";
+import { effectiveAccess } from "@/lib/permissions";
+import { getDb } from "@/db/client";
 import { buildGoogleAuthUrl, GOOGLE_SCOPES } from "@/lib/google-oauth";
 import { createOAuthState, OAUTH_STATE_COOKIE } from "@/lib/oauth-state";
 
@@ -14,6 +16,12 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   const ctx = await getOrgContext();
   if (!ctx) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // The same wall connectApiKeyAction stands behind. Without it, this GET was
+  // a side door: any member could land a real connection by opening the URL.
+  const access = await effectiveAccess(getDb(), ctx);
+  if (!access.can("connect_integrations")) {
+    return NextResponse.redirect(new URL("/integrations?error=rank_forbidden", req.url));
+  }
 
   const source = new URL(req.url).searchParams.get("source") === "gcal" ? "gcal" : "gsheets";
   const { state, nonce } = createOAuthState(source);

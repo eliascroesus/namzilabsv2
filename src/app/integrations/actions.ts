@@ -2,7 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireOrg } from "@/lib/auth";
+import { requireOrg, type OrgContext } from "@/lib/auth";
+import { effectiveAccess } from "@/lib/permissions";
 import {
   createConnection,
   deleteConnectionPermanently,
@@ -22,12 +23,28 @@ import { replayRawEvent } from "@/ingestion/pipeline";
 import { setEventTime, type EventTimeChoice } from "@/lib/webhooks/event-time";
 
 /**
+ * The rank gate, on every MUTATION in this file: connecting, removing, syncing
+ * and renaming all require "connect_integrations" — seeing the Apps page is a
+ * separate, weaker grant ("view_integrations", gated on the page itself).
+ * Admins and rankless members resolve to allow-all inside effectiveAccess.
+ */
+const RANK_BLOCKS_INTEGRATIONS = "Your rank doesn't allow managing integrations.";
+
+async function blockedFromManagingIntegrations(ctx: Pick<OrgContext, "orgId" | "userId" | "role">): Promise<boolean> {
+  const access = await effectiveAccess(getDb(), ctx);
+  return !access.can("connect_integrations");
+}
+
+/**
  * Connect an API-key / token based source (Calendly, Close, Instantly, custom
  * webhook). Auth only — there is no "what to pull" config here; that lives on each
  * flow's Get data step.
  */
 export async function connectApiKeyAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  // Same channel as the cap and the OAuth failures: a banner code the page renders.
+  if (await blockedFromManagingIntegrations(ctx)) redirect("/integrations?error=rank_forbidden");
   const source = String(formData.get("source") ?? "");
   const entry = catalogEntry(source);
   if (!entry || entry.connect !== "apiKey") throw new Error("invalid source");
@@ -68,7 +85,10 @@ export async function connectApiKeyAction(formData: FormData): Promise<void> {
  * is the button the docs always claimed existed.
  */
 export async function replayDeadLetterAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  // This action's invalid-input channel is a throw; the gate uses the same one.
+  if (await blockedFromManagingIntegrations(ctx)) throw new Error(RANK_BLOCKS_INTEGRATIONS);
   const rawEventId = String(formData.get("rawEventId") ?? "");
   const connectionId = String(formData.get("connectionId") ?? "");
   if (!rawEventId || !connectionId) throw new Error("missing replay target");
@@ -86,7 +106,10 @@ export async function replayDeadLetterAction(formData: FormData): Promise<void> 
 
 /** Rename a connection from the Integrations list (inline edit). */
 export async function renameConnectionAction(id: string, name: string): Promise<{ ok: boolean }> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  // The only result channel here is the boolean — no error string to carry.
+  if (await blockedFromManagingIntegrations(ctx)) return { ok: false };
   await updateConnectionName(orgId, id, name);
   revalidatePath("/integrations");
   return { ok: true };
@@ -94,7 +117,9 @@ export async function renameConnectionAction(id: string, name: string): Promise<
 
 /** Pull only new records since the last sync (additive). */
 export async function syncNewAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromManagingIntegrations(ctx)) throw new Error(RANK_BLOCKS_INTEGRATIONS);
   const id = String(formData.get("id") ?? "");
   const conn = await getConnection(orgId, id);
   if (!conn) throw new Error("connection not found");
@@ -116,7 +141,9 @@ export async function syncNewAction(formData: FormData): Promise<void> {
  * promise the read can keep.
  */
 export async function fullResyncAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromManagingIntegrations(ctx)) throw new Error(RANK_BLOCKS_INTEGRATIONS);
   const id = String(formData.get("id") ?? "");
   const conn = await getConnection(orgId, id);
   if (!conn) throw new Error("connection not found");
@@ -140,7 +167,9 @@ export async function fullResyncAction(formData: FormData): Promise<void> {
  * than starting a second set. Only asking for a DEEPER window is new work.
  */
 export async function importHistoryAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromManagingIntegrations(ctx)) throw new Error(RANK_BLOCKS_INTEGRATIONS);
   const id = String(formData.get("id") ?? "");
   const conn = await getConnection(orgId, id);
   if (!conn) throw new Error("connection not found");
@@ -155,7 +184,9 @@ export async function importHistoryAction(formData: FormData): Promise<void> {
 
 /** Re-run normalization from the stored raw events (no provider calls). */
 export async function reprocessAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromManagingIntegrations(ctx)) throw new Error(RANK_BLOCKS_INTEGRATIONS);
   const id = String(formData.get("id") ?? "");
   const conn = await getConnection(orgId, id);
   if (!conn) throw new Error("connection not found");
@@ -176,7 +207,9 @@ export async function setEventTimeAction(
   connectionId: string,
   choice: EventTimeChoice,
 ): Promise<{ ok: true; changed: boolean } | { ok: false; error: string }> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromManagingIntegrations(ctx)) return { ok: false, error: RANK_BLOCKS_INTEGRATIONS };
   try {
     const res = await setEventTime(getDb(), orgId, connectionId, choice);
     return { ok: true, changed: res.changed };
@@ -186,7 +219,9 @@ export async function setEventTimeAction(
 }
 
 export async function disconnectAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromManagingIntegrations(ctx)) throw new Error(RANK_BLOCKS_INTEGRATIONS);
   const id = String(formData.get("id") ?? "");
   await disableConnection(orgId, id);
   redirect("/integrations");
@@ -205,7 +240,9 @@ export async function disconnectAction(formData: FormData): Promise<void> {
  * the page, and the row it destroys cannot be restored from anywhere.
  */
 export async function deleteConnectionAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromManagingIntegrations(ctx)) throw new Error(RANK_BLOCKS_INTEGRATIONS);
   const id = String(formData.get("id") ?? "");
   const typed = String(formData.get("confirmName") ?? "").trim();
   // The name is checked by the delete itself, not here — it is part of that
@@ -220,7 +257,9 @@ export async function deleteConnectionAction(formData: FormData): Promise<void> 
  * connector produces and are restored in place.
  */
 export async function reconnectAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromManagingIntegrations(ctx)) throw new Error(RANK_BLOCKS_INTEGRATIONS);
   const id = String(formData.get("id") ?? "");
   await reconnectConnection(orgId, id);
   redirect("/integrations");

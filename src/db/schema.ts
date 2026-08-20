@@ -10,6 +10,7 @@ import {
   numeric,
   uniqueIndex,
   index,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -787,5 +788,69 @@ export const flowResults = pgTable(
     // both filter on status with no supporting index. Tiny per row, hot per
     // tick.
     index("flow_results_status_idx").on(t.status),
+  ],
+);
+
+/**
+ * A rank: a named bundle of permissions + visible metrics an admin assigns to
+ * members. Identity stays in WorkOS (see the note at the top of this file) —
+ * this is org-local ACL state WITH readers, which is what earns a table here.
+ *
+ * `permissions` holds PermissionKey strings (src/lib/permissions.ts is the
+ * catalog); `metricKeys` holds visibility keys — "flow:<flowId>" for a flow
+ * tile, "metric:<metricId>" for a classic metric tile. `allPermissions` /
+ * `allMetrics` are blanket grants that beat the lists, so "everything" does not
+ * go stale as new flows and permissions appear.
+ *
+ * `inherits` is a list of OTHER rank ids whose EFFECTIVE sets union in at read
+ * time — live inheritance, resolved on every access check rather than copied
+ * at assignment. Edit the parent and every inheritor follows, which is the
+ * entire point of the toggle; a copy would fork the moment the parent changed.
+ * Resolution (src/lib/permissions.ts resolveRank) is cycle-safe and skips
+ * deleted parents, so the ids here need no referential enforcement.
+ */
+export const workspaceRanks = pgTable(
+  "workspace_ranks",
+  {
+    // Text, not uuid: ids are minted app-side (crypto.randomUUID) so
+    // `inherits` can hold them as plain strings and tests need no extension.
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    name: text("name").notNull(),
+    allPermissions: boolean("all_permissions").notNull().default(false),
+    permissions: jsonb("permissions").$type<string[]>().default([]).notNull(),
+    allMetrics: boolean("all_metrics").notNull().default(false),
+    metricKeys: jsonb("metric_keys").$type<string[]>().default([]).notNull(),
+    /** Rank ids whose effective grants union into this rank's, at read time. */
+    inherits: jsonb("inherits").$type<string[]>().default([]).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("workspace_ranks_org_idx").on(t.orgId),
+    // Names are how admins refer to ranks; two "Sales" in one org is a trap.
+    uniqueIndex("workspace_ranks_org_name_uq").on(t.orgId, t.name),
+  ],
+);
+
+/**
+ * Which rank a member holds. AT MOST ONE per (org, user) — the composite
+ * primary key enforces it — because "your rank" must have exactly one answer
+ * for access checks to be legible. No row means NO rank, which means FULL
+ * access: restrictions begin when a rank is assigned, so existing workspaces
+ * keep working with zero setup and the migration cannot strand anyone.
+ * `userId` is the WorkOS user id (identity lives there, not here).
+ */
+export const rankAssignments = pgTable(
+  "rank_assignments",
+  {
+    orgId: text("org_id").notNull(),
+    userId: text("user_id").notNull(),
+    rankId: text("rank_id").notNull(),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "rank_assignments_pk", columns: [t.orgId, t.userId] }),
+    // Rank deletion and "who holds this rank?" both ask by (org, rank).
+    index("rank_assignments_org_rank_idx").on(t.orgId, t.rankId),
   ],
 );

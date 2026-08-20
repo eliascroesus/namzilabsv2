@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
+import { effectiveAccess } from "@/lib/permissions";
 import { getReadDb } from "@/db/client";
 import { connectionImportStatuses, type ImportStatus } from "@/lib/sync/import-status";
 import { AppShell } from "@/components/app-shell";
@@ -26,7 +27,26 @@ type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
 
 export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<SP> }) {
-  const { orgId, userId, auth } = await requireOrg();
+  const { orgId, userId, role, auth } = await requireOrg();
+
+  // The rank gate, before any connection data is even queried: a member whose
+  // rank lacks "view_integrations" gets the page shell and one quiet card —
+  // not a stripped list that hints at what exists. Mutations are gated again
+  // in actions.ts ("connect_integrations"); this is the read wall.
+  const access = await effectiveAccess(getReadDb(), { orgId, userId, role });
+  if (!access.can("view_integrations")) {
+    return (
+      <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
+        <main className="mx-auto max-w-5xl px-6 py-10">
+          <h1 className="text-display font-semibold tracking-tight text-foreground">Integrations</h1>
+          <p className="mt-8 rounded-md border border-neutral-200 bg-neutral-50 p-4 text-base text-neutral-500">
+            Your rank doesn&rsquo;t include the Apps page.
+          </p>
+        </main>
+      </AppShell>
+    );
+  }
+
   const sp = await searchParams;
   const errorCode = one(sp.error);
   const connected = await listConnections(orgId).catch(() => []);
