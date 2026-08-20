@@ -73,7 +73,7 @@ export function EventTimePicker({
         value={value}
         disabled={busy}
         onChange={(e) => pick(e.target.value)}
-        className="mt-1 w-full max-w-sm rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
+        className="mt-1 w-full max-w-sm rounded-lg border border-neutral-300 bg-white px-3 py-2 text-base disabled:opacity-50"
       >
         <option value="__auto">Detect automatically</option>
         <option value="__none">Use delivery time (no timestamp field)</option>
@@ -83,13 +83,13 @@ export function EventTimePicker({
           </option>
         ))}
       </select>
-      <p className="mt-1.5 text-xs text-neutral-600">{note}</p>
+      <p className="mt-1.5 text-tiny text-neutral-600">{note}</p>
       {pending && (
-        <p className="mt-1 text-xs text-neutral-600">
+        <p className="mt-1 text-tiny text-neutral-600">
           Saved. Events already stored keep their current time until the next nightly pass re-derives them.
         </p>
       )}
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {error && <p className="mt-1 text-tiny text-red-600">{error}</p>}
     </div>
   );
 }

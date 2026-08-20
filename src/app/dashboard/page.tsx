@@ -213,7 +213,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
 
         {/* Filters */}
-        <div className="mt-5 flex flex-wrap items-center gap-2 text-sm">
+        <div className="mt-5 flex flex-wrap items-center gap-2 text-base">
           {RANGE_OPTIONS.map((r) => (
             <Link
               key={r.key}
@@ -242,7 +242,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
 
         {loadError && (
-          <div className="mt-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+          <div className="mt-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-base text-amber-800">
             Some dashboard data could not be loaded ({loadError}). Refresh to retry — your data is intact.
           </div>
         )}
@@ -267,8 +267,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         {/* Condensed workspace activity */}
         <section className="mt-12">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Recent activity</h2>
-            <span className="text-xs text-neutral-500">
+            <h2 className="text-base font-semibold uppercase tracking-wide text-neutral-500">Recent activity</h2>
+            <span className="text-tiny text-neutral-500">
               {connCount} connection{connCount === 1 ? "" : "s"} ·{" "}
               {dlqByConnection.length > 0 ? (
                 // Each count links to the connection page that hosts the
@@ -287,13 +287,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             </span>
           </div>
           {recentEvents.length === 0 ? (
-            <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-500">
+            <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-base text-neutral-500">
               No events ingested yet. <Link href="/integrations" className="text-blue-600 hover:underline">Connect a source</Link>.
             </p>
           ) : (
             <div className="overflow-x-auto rounded-md border border-neutral-200">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
+              <table className="w-full text-left text-base">
+                <thead className="bg-neutral-50 text-tiny uppercase tracking-wide text-neutral-500">
                   <tr>
                     <th className="px-3 py-2 font-medium">Source</th>
                     <th className="px-3 py-2 font-medium">Type</th>
@@ -331,13 +331,13 @@ function MetricTile({ tile }: { tile: Tile }) {
       <div className="flex items-start justify-between">
         <h3 className="font-medium text-foreground">{metric.name}</h3>
         {tile.kind === "aggregate" && (
-          <Link href={`/dashboard/metrics/${metric.id}`} className="text-xs text-blue-600 hover:underline">
+          <Link href={`/dashboard/metrics/${metric.id}`} className="text-tiny text-blue-600 hover:underline">
             Drill in →
           </Link>
         )}
       </div>
 
-      {tile.kind === "error" && <p className="mt-3 text-sm text-amber-700">{tile.error}</p>}
+      {tile.kind === "error" && <p className="mt-3 text-base text-amber-700">{tile.error}</p>}
 
       {tile.kind === "aggregate" && tile.result.kind === "scalar" && (
         <>
@@ -370,7 +370,7 @@ function TargetBar({ value, target }: { value: number; target: number }) {
   const pct = target > 0 ? Math.min(Math.round((value / target) * 100), 100) : 0;
   return (
     <div className="mt-3">
-      <div className="mb-1 flex justify-between text-xs text-neutral-500">
+      <div className="mb-1 flex justify-between text-tiny text-neutral-500">
         <span>Goal: {target}</span>
         <span>{pct}%</span>
       </div>

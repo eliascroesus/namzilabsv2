@@ -40,7 +40,7 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
         </button>
       }
     >
-      <div className="nodrag p-1 text-sm">
+      <div className="nodrag p-1 text-base">
         <button
           type="button"
           onClick={(e) => {

@@ -87,7 +87,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
       <div className="rounded-lg border border-neutral-200 p-5">
         <div className="flex items-start justify-between">
           <h3 className="font-medium text-foreground">{stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
-          <Link href={`/dashboard/flows/${row.flowId}`} className="text-xs text-blue-600 hover:underline">
+          <Link href={`/dashboard/flows/${row.flowId}`} className="text-tiny text-blue-600 hover:underline">
             Open →
           </Link>
         </div>
@@ -95,8 +95,8 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
             zero" are different facts, and the tile that conflates them is the
             one nobody can trust. */}
         <p className="mt-2 text-4xl font-semibold text-neutral-300">—</p>
-        <p className="mt-2 text-sm text-neutral-500">No data for this period.</p>
-        <p className="mt-1 text-xs text-neutral-400" title={unavailable}>
+        <p className="mt-2 text-base text-neutral-500">No data for this period.</p>
+        <p className="mt-1 text-tiny text-neutral-400" title={unavailable}>
           {unavailable.length > 120 ? `${unavailable.slice(0, 120)}…` : unavailable}
         </p>
       </div>
@@ -114,13 +114,13 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
             <input type="hidden" name="flowId" value={row.flowId} />
             <button
               type="submit"
-              className="text-xs text-neutral-500 hover:text-foreground hover:underline"
+              className="text-tiny text-neutral-500 hover:text-foreground hover:underline"
               title="Recompute this tile now"
             >
               Refresh
             </button>
           </form>
-          <Link href={`/dashboard/flows/${row.flowId}`} className="text-xs text-blue-600 hover:underline">
+          <Link href={`/dashboard/flows/${row.flowId}`} className="text-tiny text-blue-600 hover:underline">
             Open →
           </Link>
         </div>
@@ -141,7 +141,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           message names the failing node's error — truncated here, complete in
           the title attribute (the same trick the timestamp below uses). */}
       {row.status === "error" && row.error && (
-        <p className="mt-2 text-sm text-red-700" title={row.error}>
+        <p className="mt-2 text-base text-red-700" title={row.error}>
           {row.error.length > 200 ? `${row.error.slice(0, 200)}…` : row.error}{" "}
           <Link href={`/dashboard/flows/${row.flowId}`} className="underline">
             Fix in the editor →
@@ -154,7 +154,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           the same rule the import bar follows: a number that leaves data out
           has to admit it, or the gap reads as an answer. */}
       {windowed?.undated ? (
-        <p className="mt-2 text-xs text-amber-700">
+        <p className="mt-2 text-tiny text-amber-700">
           {windowed.undated} record{windowed.undated === 1 ? "" : "s"} carry no date, so they are counted only in All time.
         </p>
       ) : null}
@@ -169,7 +169,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
       {/* The honesty marker (G.3): every materialized number says WHEN it was
           true. A stale tile's timestamp shows exactly how far behind it is. */}
       {row.computedAt && (
-        <p className="mt-3 text-xs text-neutral-400" title={new Date(row.computedAt).toLocaleString()}>
+        <p className="mt-3 text-tiny text-neutral-400" title={new Date(row.computedAt).toLocaleString()}>
           Updated {relativeTime(new Date(row.computedAt))}
         </p>
       )}
@@ -187,14 +187,14 @@ function Freshness({ status }: { status: string }) {
     error: { cls: "bg-red-100 text-red-700", label: "Error" },
   };
   const m = meta[status] ?? { cls: "bg-neutral-100 text-neutral-600", label: status };
-  return <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${m.cls}`}>{m.label}</span>;
+  return <span className={`rounded px-1.5 py-0.5 text-tiny font-medium ${m.cls}`}>{m.label}</span>;
 }
 
 function TargetBar({ value, target, tile }: { value: number; target: number; tile: Tile }) {
   const pct = target > 0 ? Math.min(Math.round((value / target) * 100), 100) : 0;
   return (
     <div className="mt-3">
-      <div className="mb-1 flex justify-between text-xs text-neutral-500">
+      <div className="mb-1 flex justify-between text-tiny text-neutral-500">
         {/* The goal is shown in the metric's own format ("Goal: 90%", "Goal: $1,500"). */}
         <span>Goal: {fmt(target, tile)}</span>
         <span>{pct}%</span>
@@ -241,7 +241,7 @@ function GroupBars({ groups, tile }: { groups: Array<{ label: string; value: num
       <div className="mt-3 space-y-1.5">
         {shown.map((g) => (
           <div key={g.label}>
-            <div className="mb-0.5 flex justify-between text-sm">
+            <div className="mb-0.5 flex justify-between text-base">
               <span className="text-neutral-700">{g.label}</span>
               <span className="text-neutral-500">{fmt(g.value, tile)}</span>
             </div>
@@ -253,7 +253,7 @@ function GroupBars({ groups, tile }: { groups: Array<{ label: string; value: num
         {/* A cut the tile makes is a cut the tile has to admit — six bars read
             as "all of them" when there were eleven. */}
         {groups.length > shown.length && (
-          <p className="text-xs text-neutral-400">
+          <p className="text-tiny text-neutral-400">
             Showing the {shown.length} largest of {groups.length} groups{tile.value != null ? " — the number above includes them all" : ""}.
           </p>
         )}
@@ -288,7 +288,7 @@ function ImportProgress({ importing }: { importing: ImportCoverage }) {
       <div className="h-1 w-full overflow-hidden rounded-full bg-amber-100">
         <div className="h-full rounded-full bg-amber-400 transition-[width]" style={{ width: `${pct}%` }} />
       </div>
-      <p className="mt-1.5 text-xs text-amber-700">
+      <p className="mt-1.5 text-tiny text-amber-700">
         Still importing — covering {covered} of {target} days. This number can still grow.
       </p>
     </div>

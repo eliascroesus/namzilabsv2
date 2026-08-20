@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 const INPUT =
-  "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm transition-colors placeholder:text-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
+  "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-base transition-colors placeholder:text-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
 
 /**
  * A number input that can be cleared without emitting a non-number.

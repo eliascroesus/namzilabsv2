@@ -1656,10 +1656,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       {pendingDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4" onClick={() => setPendingDelete(null)}>
           <div className="w-full max-w-sm rounded-surface border border-border bg-card p-5 shadow-panel flow-pop-in" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-semibold text-foreground">Delete this step?</p>
-            <p className="mt-1.5 text-sm text-neutral-600">{pendingDelete.message}</p>
+            <p className="text-base font-semibold text-foreground">Delete this step?</p>
+            <p className="mt-1.5 text-base text-neutral-600">{pendingDelete.message}</p>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setPendingDelete(null)} className="rounded-lg border border-neutral-200 px-3.5 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50">
+              <button onClick={() => setPendingDelete(null)} className="rounded-lg border border-neutral-200 px-3.5 py-2 text-base font-medium text-neutral-700 transition-colors hover:bg-neutral-50">
                 Cancel
               </button>
               <button
@@ -1667,7 +1667,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                   pendingDelete.run();
                   setPendingDelete(null);
                 }}
-                className="rounded-lg bg-red-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
+                className="rounded-lg bg-red-600 px-3.5 py-2 text-base font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
               >
                 Delete
               </button>
@@ -1711,7 +1711,7 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
                 {s.n}
               </span>
               <span className="min-w-0">
-                <span className="block text-sm font-medium text-foreground">{s.title}</span>
+                <span className="block text-base font-medium text-foreground">{s.title}</span>
                 <span className="block text-small leading-snug text-neutral-500">{s.detail}</span>
               </span>
             </li>
@@ -1731,7 +1731,7 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
               <Plug size={16} />
               Connect an app first
             </Link>
-            <p className="mt-2 text-center text-xs text-neutral-500">A flow reads records from a connected account — there aren&rsquo;t any yet.</p>
+            <p className="mt-2 text-center text-tiny text-neutral-500">A flow reads records from a connected account — there aren&rsquo;t any yet.</p>
           </>
         )}
       </div>

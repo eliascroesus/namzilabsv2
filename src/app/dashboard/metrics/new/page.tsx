@@ -88,16 +88,16 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <Link href="/dashboard" className="text-sm text-neutral-500 hover:text-foreground">
+        <Link href="/dashboard" className="text-base text-neutral-500 hover:text-foreground">
           &larr; Dashboard
         </Link>
         <div className="mt-3 flex items-center justify-between">
           <h1 className="text-display font-semibold tracking-tight text-foreground">New metric</h1>
-          <Link href="/dashboard/funnels/new" className="text-sm text-blue-600 hover:underline">
+          <Link href="/dashboard/funnels/new" className="text-base text-blue-600 hover:underline">
             Build a funnel instead
           </Link>
         </div>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-base text-neutral-500">
           Pick what to measure. Preview updates with your live data; save when it looks right.
         </p>
 
@@ -105,7 +105,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
         <form method="get" className="mt-8 space-y-4 rounded-lg border border-neutral-200 p-5">
           <Row label="Name">
             <input name="name" defaultValue={one(sp.name)} placeholder="Booked leads this week"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm" />
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
           </Row>
           <div className="grid grid-cols-2 gap-4">
             <Row label="Source">
@@ -142,16 +142,16 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
           <div className="grid grid-cols-2 gap-4">
             <Row label="Sum field (for Sum)">
               <input name="valueField" defaultValue={one(sp.valueField) || "value"}
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm" />
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
             </Row>
             <Row label="Distinct field (for Count distinct)">
               <input name="distinctField" defaultValue={one(sp.distinctField) || "subject"}
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm" />
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
             </Row>
           </div>
 
           <fieldset className="rounded-md border border-neutral-200 p-3">
-            <legend className="px-1 text-xs font-medium text-neutral-500">Filters (optional)</legend>
+            <legend className="px-1 text-tiny font-medium text-neutral-500">Filters (optional)</legend>
             <Row label="Combine with">
               <Select name="combinator" value={one(sp.combinator) || "and"} options={["and", "or"]}
                 labels={{ and: "AND", or: "OR" }} />
@@ -159,10 +159,10 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
             {[0, 1].map((i) => (
               <div key={i} className="mt-2 grid grid-cols-3 gap-2">
                 <input name={`filter${i}_field`} defaultValue={one(sp[`filter${i}_field`])} placeholder="field (e.g. subject or properties.plan)"
-                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm" />
+                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-base" />
                 <Select name={`filter${i}_op`} value={one(sp[`filter${i}_op`])} options={["", ...FILTER_OPS]} labels={{ "": "op" }} />
                 <input name={`filter${i}_value`} defaultValue={one(sp[`filter${i}_value`])} placeholder="value"
-                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm" />
+                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-base" />
               </div>
             ))}
           </fieldset>
@@ -170,15 +170,15 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
           <div className="grid grid-cols-2 gap-4">
             <Row label="Unit (optional)">
               <input name="unit" defaultValue={one(sp.unit)} placeholder="leads"
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm" />
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
             </Row>
             <Row label="Goal / target (optional)">
               <input name="target" type="number" defaultValue={one(sp.target)} placeholder="100"
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm" />
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
             </Row>
           </div>
 
-          <button className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
+          <button className="rounded-md border border-neutral-300 px-4 py-2 text-base font-medium hover:bg-neutral-50">
             Preview
           </button>
         </form>
@@ -186,11 +186,11 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
         {/* Live preview + Save */}
         {previewed && (
           <section className="mt-6 rounded-lg border border-neutral-200 p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+            <h2 className="text-base font-semibold uppercase tracking-wide text-neutral-500">
               Live preview (last 90 days)
             </h2>
             {previewError ? (
-              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-base text-amber-800">
                 {previewError}
               </p>
             ) : (
@@ -199,13 +199,13 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
                   {previewValue}
                   {one(sp.unit) && <span className="ml-2 text-base font-normal text-neutral-500">{one(sp.unit)}</span>}
                 </p>
-                <p className="mt-4 text-xs font-medium uppercase tracking-wide text-neutral-400">
+                <p className="mt-4 text-tiny font-medium uppercase tracking-wide text-neutral-400">
                   Latest matching records
                 </p>
                 {sample.length === 0 ? (
-                  <p className="mt-1 text-sm text-neutral-500">No matching records yet.</p>
+                  <p className="mt-1 text-base text-neutral-500">No matching records yet.</p>
                 ) : (
-                  <ul className="mt-1 divide-y divide-neutral-100 text-sm">
+                  <ul className="mt-1 divide-y divide-neutral-100 text-base">
                     {sample.map((e) => (
                       <li key={e.eventId} className="flex justify-between py-1.5">
                         <span>
@@ -220,7 +220,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
                   {hiddenKeys.map((k) => (
                     <input key={k} type="hidden" name={k} value={one(sp[k])} />
                   ))}
-                  <button className="rounded-md bg-neutral-900 px-5 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+                  <button className="rounded-md bg-neutral-900 px-5 py-2 text-base font-medium text-white hover:bg-neutral-800">
                     Save metric
                   </button>
                 </form>
@@ -254,7 +254,7 @@ function Select({
   labels?: Record<string, string>;
 }) {
   return (
-    <select name={name} defaultValue={value} className="w-full rounded-md border border-neutral-300 px-2 py-2 text-sm">
+    <select name={name} defaultValue={value} className="w-full rounded-md border border-neutral-300 px-2 py-2 text-base">
       {options.map((o) => (
         <option key={o} value={o}>
           {labels[o] ?? o}

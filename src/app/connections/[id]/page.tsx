@@ -69,13 +69,13 @@ export default async function ConnectionPage({
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <Link href="/integrations" className="text-sm text-neutral-500 hover:text-foreground">
+        <Link href="/integrations" className="text-base text-neutral-500 hover:text-foreground">
           &larr; Integrations
         </Link>
         <div className="mt-3 flex items-center justify-between">
           <div>
             <h1 className="text-display font-semibold tracking-tight text-foreground">{conn.name}</h1>
-            <p className="text-sm text-neutral-500">{entry?.name ?? conn.source}</p>
+            <p className="text-base text-neutral-500">{entry?.name ?? conn.source}</p>
           </div>
           <StatusBadge status={conn.status} />
         </div>
@@ -83,20 +83,20 @@ export default async function ConnectionPage({
         {/* F.3/F.6: a paused connection is never a dead end — it says WHY and
             WHEN it resumes, and it retries itself with no human action. */}
         {conn.pausedUntil && new Date(conn.pausedUntil).getTime() > Date.now() ? (
-          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-base text-amber-900">
             <b>Paused, retrying automatically.</b>{" "}
             {conn.pausedReason ?? "Waiting before the next attempt."} Next attempt around{" "}
             {new Date(conn.pausedUntil).toLocaleTimeString()} — nothing is lost, syncing resumes on its own.
           </div>
         ) : (
           conn.lastError && (
-            <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-base text-red-800">
               {conn.lastError}
             </div>
           )
         )}
 
-        <dl className="mt-6 grid grid-cols-2 gap-4 rounded-md border border-neutral-200 p-4 text-sm">
+        <dl className="mt-6 grid grid-cols-2 gap-4 rounded-md border border-neutral-200 p-4 text-base">
           <div>
             <dt className="text-neutral-500">Data status</dt>
             <dd className="mt-0.5">
@@ -120,14 +120,14 @@ export default async function ConnectionPage({
             legacy per-email stream is an ordinary incremental walk. Rendering the
             source-wide value alone told a per-email user they had a guarantee
             they do not have. */}
-        {entry?.syncNote && <p className="mt-2 text-xs text-neutral-500">{entry.syncNote}</p>}
+        {entry?.syncNote && <p className="mt-2 text-tiny text-neutral-500">{entry.syncNote}</p>}
 
         {/* The weaker guarantee class is stated plainly, not hidden in a tooltip:
             with no list endpoint to reconcile against, a webhook this provider
             fails to deliver (downtime, expired subscription) is not recoverable
             by polling. */}
         {syncGuarantee(conn.source) === "webhook-only" && (
-          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-base text-amber-900">
             <b>Webhook-only source.</b> {entry?.name ?? conn.source} offers no reliable way to re-read
             history, so your data here is as complete as the webhooks that actually arrived. If a
             webhook is missed while the provider or endpoint is down, that event will be absent until
@@ -139,8 +139,8 @@ export default async function ConnectionPage({
             data step, so one connected account can feed many flows differently. */}
         {entry?.flowFields && entry.flowFields.length > 0 && (
           <section className="mt-8">
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Configuration</h2>
-            <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-600">
+            <h2 className="mb-2 text-base font-semibold uppercase tracking-wide text-neutral-500">Configuration</h2>
+            <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-base text-neutral-600">
               This account is connected. Choose {entry.flowFields.map((f) => f.label.toLowerCase()).join(" and ")} inside each
               flow&rsquo;s <b>Get data</b> step — every flow can pull from a different one.
             </p>
@@ -150,8 +150,8 @@ export default async function ConnectionPage({
         {/* Inbound webhook URL + secret (manual providers / custom webhook) */}
         {entry?.instant && (
           <section className="mt-8">
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Inbound webhook</h2>
-            {entry.webhookSetup && <p className="mb-2 text-sm text-neutral-600">{entry.webhookSetup}</p>}
+            <h2 className="mb-2 text-base font-semibold uppercase tracking-wide text-neutral-500">Inbound webhook</h2>
+            {entry.webhookSetup && <p className="mb-2 text-base text-neutral-600">{entry.webhookSetup}</p>}
             <CopyField label="URL" value={webhookUrl} isUrl />
             {signingSecret && <CopyField label="Signing secret" value={signingSecret} />}
             {/* Only the catch-hook has this question. Every other source reads a
@@ -178,18 +178,18 @@ export default async function ConnectionPage({
         {!isStreamScoped(conn.source) && (
           <section className="mt-8">
             <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Latest records</h2>
-              <Link href={`/connections/${conn.id}?preview=1`} className="text-sm text-blue-600 hover:underline">
+              <h2 className="text-base font-semibold uppercase tracking-wide text-neutral-500">Latest records</h2>
+              <Link href={`/connections/${conn.id}?preview=1`} className="text-base text-blue-600 hover:underline">
                 Preview latest
               </Link>
             </div>
             {preview !== "1" && (
-              <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-500">
+              <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-base text-neutral-500">
                 Click &ldquo;Preview latest&rdquo; to pull the most recent records from this source.
               </p>
             )}
             {previewError && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{previewError}</p>
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-4 text-base text-amber-800">{previewError}</p>
             )}
             {previewRows && <PreviewTable rows={previewRows} />}
           </section>
@@ -200,30 +200,30 @@ export default async function ConnectionPage({
             section implying trouble. */}
         {(deadLetters.length > 0 || replay) && (
           <section className="mt-10">
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Delivery issues</h2>
+            <h2 className="mb-2 text-base font-semibold uppercase tracking-wide text-neutral-500">Delivery issues</h2>
             {replay === "failed" && (
-              <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-base text-amber-800">
                 That replay failed again — the row stays here, nothing was lost. The error below is updated.
               </p>
             )}
             {replay === "ok" && (
-              <p className="mb-3 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+              <p className="mb-3 rounded-md border border-green-200 bg-green-50 p-3 text-base text-green-800">
                 Replayed. The payload was reprocessed from its stored raw body.
               </p>
             )}
             {deadLetters.length === 0 ? (
-              <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-500">
+              <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-base text-neutral-500">
                 No unresolved delivery issues.
               </p>
             ) : (
               <>
-                <p className="mb-2 text-sm text-neutral-500">
+                <p className="mb-2 text-base text-neutral-500">
                   These payloads were received and safely stored, but failed processing after every retry. Replaying
                   reprocesses the stored payload — nothing is re-fetched from the provider.
                 </p>
                 <div className="overflow-x-auto rounded-md border border-neutral-200">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
+                  <table className="w-full text-left text-base">
+                    <thead className="bg-neutral-50 text-tiny uppercase tracking-wide text-neutral-500">
                       <tr>
                         <th className="px-3 py-2 font-medium">Received</th>
                         <th className="px-3 py-2 font-medium">Error</th>
@@ -246,14 +246,14 @@ export default async function ConnectionPage({
                               <form action={replayDeadLetterAction}>
                                 <input type="hidden" name="connectionId" value={conn.id} />
                                 <input type="hidden" name="rawEventId" value={row.rawEventId} />
-                                <button type="submit" className="text-sm font-medium text-blue-600 hover:underline">
+                                <button type="submit" className="text-base font-medium text-blue-600 hover:underline">
                                   Replay
                                 </button>
                               </form>
                             ) : (
                               // A row with no stored raw body predates raw capture
                               // for its path; there is nothing to reprocess from.
-                              <span className="text-xs text-neutral-400" title="No stored payload to reprocess">
+                              <span className="text-tiny text-neutral-400" title="No stored payload to reprocess">
                                 not replayable
                               </span>
                             )}
@@ -270,7 +270,7 @@ export default async function ConnectionPage({
 
         {/* Data & sync controls */}
         <section className="mt-10">
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">Data &amp; sync</h2>
+          <h2 className="mb-2 text-base font-semibold uppercase tracking-wide text-neutral-500">Data &amp; sync</h2>
           <div className="rounded-md border border-neutral-200 p-4">
             <div className="grid gap-4 sm:grid-cols-3">
               {entry?.poll && (
@@ -315,20 +315,20 @@ export default async function ConnectionPage({
         <div className="mt-8 flex items-center justify-end gap-4">
           {conn.status === "disabled" ? (
             <>
-              <p className="text-right text-xs text-neutral-500">
+              <p className="text-right text-tiny text-neutral-500">
                 Disconnected. Its records are hidden, not deleted &mdash; reconnecting brings them back with no
                 re-import.
               </p>
               <form action={reconnectAction}>
                 <input type="hidden" name="id" value={conn.id} />
-                <button className="shrink-0 rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
+                <button className="shrink-0 rounded-md border border-neutral-300 px-4 py-2 text-base font-medium hover:bg-neutral-50">
                   Reconnect
                 </button>
               </form>
             </>
           ) : (
             <>
-              <p className="text-right text-xs text-neutral-500">
+              <p className="text-right text-tiny text-neutral-500">
                 Stops syncing and hides this connection&rsquo;s records from dashboards and flows.
                 {/* Reversibility is the whole point of keeping the row, and the
                     user has to know it, or they will re-add the account and get
@@ -337,7 +337,7 @@ export default async function ConnectionPage({
               </p>
               <form action={disconnectAction}>
                 <input type="hidden" name="id" value={conn.id} />
-                <button className="shrink-0 rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
+                <button className="shrink-0 rounded-md border border-red-300 px-4 py-2 text-base font-medium text-red-700 hover:bg-red-50">
                   Disconnect
                 </button>
               </form>
@@ -352,15 +352,15 @@ export default async function ConnectionPage({
 function PreviewTable({ rows }: { rows: CanonicalEvent[] }) {
   if (rows.length === 0) {
     return (
-      <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-500">
+      <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-base text-neutral-500">
         No records found yet.
       </p>
     );
   }
   return (
     <div className="overflow-x-auto rounded-md border border-neutral-200">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
+      <table className="w-full text-left text-base">
+        <thead className="bg-neutral-50 text-tiny uppercase tracking-wide text-neutral-500">
           <tr>
             <th className="px-3 py-2 font-medium">Type</th>
             <th className="px-3 py-2 font-medium">Subject</th>
@@ -408,7 +408,7 @@ function StatusBadge({ status }: { status: string }) {
       : status === "error"
         ? "bg-red-100 text-red-800"
         : "bg-neutral-100 text-neutral-700";
-  return <span className={`rounded px-2 py-0.5 text-xs font-medium ${color}`}>{status}</span>;
+  return <span className={`rounded px-2 py-0.5 text-tiny font-medium ${color}`}>{status}</span>;
 }
 
 const SYNC_STATUS_STYLES: Record<string, { label: string; className: string }> = {
@@ -421,7 +421,7 @@ const SYNC_STATUS_STYLES: Record<string, { label: string; className: string }> =
 
 function SyncStatusBadge({ status }: { status: string }) {
   const s = SYNC_STATUS_STYLES[status] ?? { label: status, className: "bg-neutral-100 text-neutral-700" };
-  return <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${s.className}`}>{s.label}</span>;
+  return <span className={`inline-block rounded px-2 py-0.5 text-tiny font-medium ${s.className}`}>{s.label}</span>;
 }
 
 function SyncControl({
@@ -438,10 +438,10 @@ function SyncControl({
   return (
     <form action={action} className="flex flex-col gap-2">
       <input type="hidden" name="id" value={id} />
-      <button className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
+      <button className="rounded-md border border-neutral-300 px-4 py-2 text-base font-medium hover:bg-neutral-50">
         {label}
       </button>
-      <p className="text-xs leading-relaxed text-neutral-500">{hint}</p>
+      <p className="text-tiny leading-relaxed text-neutral-500">{hint}</p>
     </form>
   );
 }

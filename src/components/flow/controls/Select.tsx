@@ -5,7 +5,7 @@ import { Popover } from "./Popover";
 
 export type Option = { value: string; label: string; hint?: string; group?: string; disabled?: boolean };
 
-const BTN = "flex w-full items-center justify-between gap-2 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-left text-sm transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
+const BTN = "flex w-full items-center justify-between gap-2 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-left text-base transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
 
 /**
  * A custom (non-native) select. Set `searchable` for combobox behaviour. Full keyboard
@@ -139,10 +139,10 @@ export function Select({
             }}
             onKeyDown={onKey}
             placeholder="Search…"
-            className="mb-1 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-sm text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+            className="mb-1 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-base text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
           />
         )}
-        {filtered.length === 0 && <p className="p-2 text-center text-xs text-neutral-400">No matches</p>}
+        {filtered.length === 0 && <p className="p-2 text-center text-tiny text-neutral-400">No matches</p>}
         {grouped.map(([g, opts]) => (
           <div key={g || "_"}>
             {g && <p className="px-2 pb-0.5 pt-1.5 text-micro font-semibold uppercase tracking-wide text-neutral-400">{g}</p>}
@@ -161,7 +161,7 @@ export function Select({
                     if (!o.disabled) pick(o.value);
                   }}
                   onMouseEnter={() => setActive(i)}
-                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-brand-50 text-brand-700" : ""}`}
+                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-base ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-brand-50 text-brand-700" : ""}`}
                 >
                   <span className="min-w-0">
                     <span className={`block ${o.disabled ? "" : "truncate"} ${o.value === value ? "font-medium text-foreground" : "text-neutral-700"}`}>{o.label}</span>

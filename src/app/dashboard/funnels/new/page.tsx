@@ -50,16 +50,16 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-3xl px-6 py-10">
-        <Link href="/dashboard" className="text-sm text-neutral-500 hover:text-foreground">
+        <Link href="/dashboard" className="text-base text-neutral-500 hover:text-foreground">
           &larr; Dashboard
         </Link>
         <h1 className="mt-3 text-display font-semibold tracking-tight text-foreground">New funnel</h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-base text-neutral-500">
           Order the stages a lead moves through. We count distinct people reaching each stage and
           surface the biggest drop-off.
         </p>
         {one(sp.error) === "need_two_stages" && (
-          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-base text-amber-800">
             A funnel needs at least two stages.
           </p>
         )}
@@ -68,14 +68,14 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
           <label className="block">
             <span className="mb-1 block text-base font-semibold text-foreground">Funnel name</span>
             <input name="name" defaultValue={one(sp.name)} placeholder="SMS → Booked → Showed"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm" />
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
           </label>
           {STAGES.map((i) => (
             <div key={i} className="grid grid-cols-3 gap-2">
               <input name={`stage${i}_label`} defaultValue={one(sp[`stage${i}_label`])} placeholder={`Stage ${i + 1} name`}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm" />
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-base" />
               <select name={`stage${i}_eventType`} defaultValue={one(sp[`stage${i}_eventType`])}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm">
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-base">
                 <option value="">event type…</option>
                 {/* Bound to the stage's chosen source when one is picked —
                     per-source labels are exact; unbound they fall back to the
@@ -85,7 +85,7 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
                 ))}
               </select>
               <select name={`stage${i}_source`} defaultValue={one(sp[`stage${i}_source`])}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm">
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-base">
                 <option value="">any source</option>
                 {sources.map((srcName) => (
                   <option key={srcName} value={srcName}>{srcName}</option>
@@ -93,16 +93,16 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
               </select>
             </div>
           ))}
-          <button className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
+          <button className="rounded-md border border-neutral-300 px-4 py-2 text-base font-medium hover:bg-neutral-50">
             Preview
           </button>
         </form>
 
         {previewed && (
           <section className="mt-6 rounded-lg border border-neutral-200 p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Live preview (last 90 days)</h2>
+            <h2 className="text-base font-semibold uppercase tracking-wide text-neutral-500">Live preview (last 90 days)</h2>
             {previewError ? (
-              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{previewError}</p>
+              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-base text-amber-800">{previewError}</p>
             ) : (
               funnel && (
                 <>
@@ -113,7 +113,7 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
                     {hiddenKeys.map((k) => (
                       <input key={k} type="hidden" name={k} value={one(sp[k])} />
                     ))}
-                    <button className="rounded-md bg-neutral-900 px-5 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+                    <button className="rounded-md bg-neutral-900 px-5 py-2 text-base font-medium text-white hover:bg-neutral-800">
                       Save funnel
                     </button>
                   </form>

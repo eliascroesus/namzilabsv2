@@ -135,7 +135,7 @@ export const NODE_LIBRARY: LibraryEntry[] = [
   {
     key: "formula_compare",
     type: "formula",
-    label: "Compare",
+    label: "Calculate",
     blurb: "A rate, ratio or % change from two steps",
     stage: "Calculation",
     keywords: "compare rate ratio percentage percent change difference divide conversion share of formula two numbers",
@@ -215,7 +215,11 @@ export function defaultTitle(type: NodeType, data: NodeData): string {
   const c = data.config;
   if (type === "app") return (c.connectionName as string) || "Get data";
   if (type === "output") return (c.name as string) || "New metric";
-  if (type === "formula") return isDatasetFormulaOp(c.op ?? "percentage") ? "Summarize" : "Compare";
+  // ONE STEP, TWO JOBS, and the operator picks which. Choosing a "compare two
+  // numbers" operator turns a Summarize into a Calculate and back again —
+  // which is why both offer the same list rather than two lists that would
+  // make you delete a step to change your mind.
+  if (type === "formula") return isDatasetFormulaOp(c.op ?? "percentage") ? "Summarize" : "Calculate";
   if (type === "unite") return String(c.mode ?? "stack") === "match" ? "Match" : "Combine";
   return NODE_LABELS[type];
 }

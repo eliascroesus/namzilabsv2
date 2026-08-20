@@ -1920,6 +1920,69 @@ which is the wrong trade — the receipt matters more than the outline.
 
 ---
 
+### 10j. Connectors stopped pretending to be controls
+
+`.react-flow__edge:hover` and `.react-flow__edge.selected` both painted the
+edge path brand-400. Neither earned it: edges here are managed, there is
+nothing to click and nothing to select. Worse, React Flow marks a **selected
+node's** edges `.selected` too — so picking a step lit the lines around it and
+read as "this line is hovered" on a line the pointer was nowhere near. Both
+rules are gone; a connector is drawn, not operated.
+
+### 10k. The bar, in the order it is used
+
+Back → **name** → ⋮ (vertical) │ undo, redo, zoom, fit │ Saved, switch, run,
+ship.
+
+- **The "Flows /" crumb is gone.** Its only parent was the back button sitting
+  next to it, which already goes there and already says so on hover. A
+  breadcrumb one level deep is a word for its own sake.
+- **The dots are vertical**, and they sit against the name rather than floating
+  — the name's span had `flex-1` and was pushing them to the far end of the
+  column.
+- **The version chip is gone.** The switch beside it already says whether the
+  flow is live, and a build number is not something anyone acts on.
+- **Saved and the switch moved right**, next to the things you act with.
+- **The run button is grey, not green.** A test run is a rehearsal; the one
+  saturated thing in the bar should be the act that actually ships.
+
+### 10l. Compare is Calculate, and why the operator list is shared
+
+"Summarize and Compare have the same operators — are they supposed to?" Yes,
+and the name was the problem. They are **one step type**, and its operator
+decides its job: pick a dataset operator and it is a Summarize, pick a
+two-number one and it is a Compare. One list is what lets you change your mind
+without deleting the step. "Compare" named only half of that, so the step is
+**Calculate** now.
+
+### 10m. Colour, depth, and one type vocabulary
+
+**One hue per job.** The old set had `unite` sky, `filter` blue and `output`
+indigo — three blues for three unrelated jobs, which on a canvas of small marks
+is no signal at all. The new set runs around the wheel at a single saturation:
+green in, cyan for combining, blue for filtering, rose for splitting, amber and
+teal for time, violet for maths, indigo out.
+
+**The marks are objects, not swatches.** A diagonal sheen, a hairline of the
+colour's own light end inside the top edge, and a drop shadow tinted with the
+accent rather than grey — a coloured object casting a neutral shadow looks
+pasted on. All three derive from the one accent value via `color-mix`, so
+adding a step type stays a one-line change.
+
+**The rail is a wash again**: #3A32A8 → #262A6E → #10606B. Indigo into teal
+rather than Make's purple into magenta — the same idea on a different axis of
+the wheel. Flat was right while the rail was the only colour on screen; once
+the step marks got their own, it read as the one dead surface.
+
+**One type vocabulary.** 279 raw `text-xs` / `text-sm` across 33 files became
+`text-tiny` / `text-base` — the same pixels either way, so it is a vocabulary
+change and not a visual one, and now the scale is the only way to say a size.
+The last two off-scale values (`text-[8px]`, `text-[9px]`) went to `text-micro`:
+the kit says out loud that anything under 11px is not content, and it was
+printing 8.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

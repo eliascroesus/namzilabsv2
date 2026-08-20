@@ -83,7 +83,7 @@ export function ConditionEditor({
   return (
     <div className="space-y-3">
       {rules.length > 1 && (
-        <div className="flex items-center gap-2 text-xs text-neutral-600">
+        <div className="flex items-center gap-2 text-tiny text-neutral-600">
           <span>Continue only if</span>
           <Select
             value={value.combinator}
@@ -135,13 +135,13 @@ export function ConditionEditor({
                       type="date"
                       value={rule.value2 ?? ""}
                       onChange={(e) => updateRule(i, { value2: e.target.value })}
-                      className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm focus:border-neutral-400 focus:outline-none"
+                      className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-base focus:border-neutral-400 focus:outline-none"
                     />
                   </div>
                 )}
               </div>
               <div className="mt-2 flex justify-end">
-                <button type="button" onClick={() => removeRule(i)} className="text-xs text-neutral-400 hover:text-red-600">
+                <button type="button" onClick={() => removeRule(i)} className="text-tiny text-neutral-400 hover:text-red-600">
                   Remove
                 </button>
               </div>
@@ -153,9 +153,9 @@ export function ConditionEditor({
       <button
         type="button"
         onClick={addRule}
-        className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-xs text-neutral-600 hover:border-neutral-400 hover:text-foreground"
+        className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-tiny text-neutral-600 hover:border-neutral-400 hover:text-foreground"
       >
-        <span className="text-sm leading-none">+</span> Add condition
+        <span className="text-base leading-none">+</span> Add condition
       </button>
     </div>
   );

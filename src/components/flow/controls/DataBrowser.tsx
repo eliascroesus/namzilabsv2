@@ -20,12 +20,12 @@ function FieldRow({ field, onDrill, onPick }: { field: DataField; onDrill: () =>
       className="flex w-full items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 px-2.5 py-2 text-left transition-colors hover:border-brand-200 hover:bg-brand-50/50"
     >
       <span className="flex min-w-0 max-w-[55%] shrink-0 items-center gap-1.5">
-        <span className="truncate text-sm text-foreground">{field.label}</span>
+        <span className="truncate text-base text-foreground">{field.label}</span>
         {field.type && field.type !== "unknown" && (
-          <span className="shrink-0 rounded border border-neutral-200 bg-white px-1 text-[9px] uppercase tracking-wide text-neutral-400">{field.type}</span>
+          <span className="shrink-0 rounded border border-neutral-200 bg-white px-1 text-micro uppercase tracking-wide text-neutral-400">{field.type}</span>
         )}
       </span>
-      <span className="min-w-0 flex-1 truncate text-right text-xs text-neutral-400">{sample ?? ""}</span>
+      <span className="min-w-0 flex-1 truncate text-right text-tiny text-neutral-400">{sample ?? ""}</span>
       {field.container && <span className="shrink-0 text-neutral-400" aria-hidden>›</span>}
     </button>
   );
@@ -179,7 +179,7 @@ export function DataBrowser({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search names or values…"
-              className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100"
+              className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-base focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100"
             />
             {/* On a narrow viewport this flyout covers the config panel, so
                 the trigger that opened it is underneath — "click outside" is
@@ -232,7 +232,7 @@ export function DataBrowser({
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {!anyFields && (
-            <p className="px-2 py-6 text-center text-xs text-neutral-400">No fields yet — test an earlier step.</p>
+            <p className="px-2 py-6 text-center text-tiny text-neutral-400">No fields yet — test an earlier step.</p>
           )}
 
           {/* Drilled-in view: children of the current container field. */}
@@ -253,7 +253,7 @@ export function DataBrowser({
                       : q.trim()
                         ? `No fields in here match “${q.trim()}”${typeFilter !== "all" ? " with that type" : ""}.`
                         : "No fields of that type in here.";
-                  return <p className="px-2 py-4 text-center text-xs text-neutral-400">{msg}</p>;
+                  return <p className="px-2 py-4 text-center text-tiny text-neutral-400">{msg}</p>;
                 }
                 const key = `${drill.groupId}:${drill.trail.map((t) => t.path).join(">")}`;
                 const { shown, hidden } = capped(key, kids, q.trim().length > 0 || typeFilter !== "all");
@@ -293,12 +293,12 @@ export function DataBrowser({
                   >
                     <span className={`shrink-0 text-neutral-400 transition-transform ${isOpen ? "rotate-90" : ""}`} aria-hidden>›</span>
                     {g.system ? (
-                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-neutral-200 text-[8px] font-semibold text-neutral-500" aria-hidden>⚙</span>
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-neutral-200 text-micro font-semibold text-neutral-500" aria-hidden>⚙</span>
                     ) : (
                       <SourceBadge source={g.source} size={16} />
                     )}
                     {g.stepNo != null && <span className="text-micro font-semibold text-neutral-400">{g.stepNo}.</span>}
-                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-neutral-700">{g.title}</span>
+                    <span className="min-w-0 flex-1 truncate text-tiny font-semibold text-neutral-700">{g.title}</span>
                     {/* While filtering, the count is the MATCHES — a "62" over
                         three visible rows reads as 59 fields being hidden. */}
                     <span className="shrink-0 text-micro text-neutral-400">{searching ? fields.length : g.fields.length}</span>
@@ -320,7 +320,7 @@ export function DataBrowser({
 
           {/* Search / type filter with no matches anywhere. */}
           {!drill && anyFields && (q.trim() || typeFilter !== "all") && groups.every((g) => filterFields(g.fields, q, typeFilter).length === 0) && (
-            <p className="px-2 py-4 text-center text-xs text-neutral-400">
+            <p className="px-2 py-4 text-center text-tiny text-neutral-400">
               {q.trim() ? <>No fields match “{q.trim()}”{typeFilter !== "all" ? " with that type" : ""}.</> : <>No fields of that type here.</>}
             </p>
           )}
@@ -348,7 +348,7 @@ export function DataBrowser({
               onCustom(q.trim());
               setOpen(false);
             }}
-            className="border-t border-neutral-100 px-3 py-2 text-left text-xs text-neutral-600 hover:bg-neutral-50"
+            className="border-t border-neutral-100 px-3 py-2 text-left text-tiny text-neutral-600 hover:bg-neutral-50"
           >
             {/* Says what it DOES — now that search also matches values, this
                 hatch must not read as "pick the record with this email". */}

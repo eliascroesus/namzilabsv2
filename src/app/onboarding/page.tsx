@@ -28,7 +28,7 @@ export default async function OnboardingPage() {
       {hasWorkspaces ? (
         <>
           <h1 className="text-display font-semibold tracking-tight text-foreground">Choose a workspace</h1>
-          <p className="mt-2 text-sm text-neutral-600">
+          <p className="mt-2 text-base text-neutral-600">
             You already belong to {orgs.length === 1 ? "a workspace" : `${orgs.length} workspaces`}. Pick one to continue.
           </p>
           <div className="mt-6 divide-y divide-neutral-100 rounded-md border border-neutral-200">
@@ -37,7 +37,7 @@ export default async function OnboardingPage() {
                 <input type="hidden" name="organizationId" value={o.id} />
                 <button
                   type="submit"
-                  className="flex w-full items-center justify-between px-4 py-3 text-left text-sm hover:bg-neutral-50"
+                  className="flex w-full items-center justify-between px-4 py-3 text-left text-base hover:bg-neutral-50"
                 >
                   <span className="font-medium">{o.name}</span>
                   <span className="text-neutral-400">Enter &rarr;</span>
@@ -47,7 +47,7 @@ export default async function OnboardingPage() {
           </div>
 
           <details className="mt-6">
-            <summary className="cursor-pointer text-sm text-neutral-500 hover:text-foreground">
+            <summary className="cursor-pointer text-base text-neutral-500 hover:text-foreground">
               Create another workspace
             </summary>
             <CreateForm className="mt-4" />
@@ -56,7 +56,7 @@ export default async function OnboardingPage() {
       ) : (
         <>
           <h1 className="text-display font-semibold tracking-tight text-foreground">Create your workspace</h1>
-          <p className="mt-2 text-sm text-neutral-600">
+          <p className="mt-2 text-base text-neutral-600">
             A workspace is your organization&rsquo;s private space. All connected integrations and data
             live inside it.
           </p>
@@ -65,7 +65,7 @@ export default async function OnboardingPage() {
       )}
 
       <form action={async () => { "use server"; await signOut(); }} className="mt-6">
-        <button type="submit" className="text-sm text-neutral-500 hover:text-foreground">
+        <button type="submit" className="text-base text-neutral-500 hover:text-foreground">
           Sign out
         </button>
       </form>
@@ -85,7 +85,7 @@ function CreateForm({ className }: { className?: string }) {
           name="name"
           required
           placeholder="Acme Inc"
-          className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-base"
         />
       </div>
       <button

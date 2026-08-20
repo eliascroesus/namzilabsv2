@@ -56,7 +56,7 @@ export function recordWhen(iso: string | undefined): string {
  * values — it does NOT change which records the published flow processes.
  */
 export function RecordSamplePicker({ records, selectedIndex, onSelect }: { records: unknown[]; selectedIndex: number; onSelect: (i: number) => void }) {
-  if (records.length === 0) return <p className="text-xs text-neutral-400">No records returned.</p>;
+  if (records.length === 0) return <p className="text-tiny text-neutral-400">No records returned.</p>;
   return (
     <div className="space-y-1.5">
       <p className="text-micro font-semibold uppercase tracking-wide text-neutral-400">Latest {records.length} records</p>
@@ -74,10 +74,10 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
               selected ? "border-brand-200 bg-brand-50/60 ring-1 ring-brand-200" : "border-neutral-100 bg-neutral-50 hover:border-brand-200 hover:bg-brand-50/40"
             }`}
           >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-xs">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-tiny">
               <span className="flex min-w-0 items-center gap-1.5">
                 {selected && (
-                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[9px] font-bold text-white">★</span>
+                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-600 text-micro font-bold text-white">★</span>
                 )}
                 <span className={`truncate font-medium ${selected ? "text-brand-900" : "text-neutral-700"}`}>{title || `Record ${i + 1}`}</span>
               </span>
@@ -98,7 +98,7 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
               <button
                 onClick={() => onSelect(i)}
                 disabled={selected}
-                className={`mt-2.5 w-full rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
+                className={`mt-2.5 w-full rounded-md border px-2 py-1.5 text-tiny font-medium transition-colors ${
                   selected
                     ? "cursor-default border-transparent bg-white text-neutral-400"
                     : "border-brand-200 text-brand-700 hover:border-brand-600 hover:bg-brand-600 hover:text-white"

@@ -10,11 +10,11 @@ export function FunnelView({ result }: { result: FunnelResult }) {
         const isBottleneck = result.bottleneckIndex === i;
         return (
           <div key={i}>
-            <div className="mb-1 flex items-center justify-between text-sm">
+            <div className="mb-1 flex items-center justify-between text-base">
               <span className="font-medium text-foreground">
                 {stage.label}
                 {isBottleneck && (
-                  <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
+                  <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-tiny font-medium text-red-700">
                     biggest drop-off
                   </span>
                 )}
@@ -22,7 +22,7 @@ export function FunnelView({ result }: { result: FunnelResult }) {
               <span className="text-neutral-500">
                 {stage.count}
                 {i > 0 && (
-                  <span className="ml-2 text-xs text-neutral-400">
+                  <span className="ml-2 text-tiny text-neutral-400">
                     {Math.round(stage.conversionFromPrev * 100)}% from prev
                   </span>
                 )}

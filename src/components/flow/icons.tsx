@@ -70,18 +70,52 @@ const GLYPH: Record<string, LucideIcon> = {
  * hue with a clear neighbour distance, so no two steps read as the same family
  * at a glance on a canvas.
  */
+/**
+ * ONE HUE PER JOB, spaced so no two steps are a shade apart.
+ *
+ * The old set had `unite` sky, `filter` blue and `output` indigo — three blues
+ * for three unrelated jobs, which on a canvas of small marks is no signal at
+ * all. These are picked at a single saturation and lightness so they read as
+ * one family rather than as whatever each was on its own, and they run around
+ * the wheel: green in, cyan/blue for shaping, pink/orange for branching and
+ * time, violet for maths, indigo out.
+ */
 const NODE_ACCENT: Record<string, string> = {
-  app: "#10B981", // emerald — where records come IN
-  unite: "#0EA5E9", // sky — bringing lanes together
-  filter: "#3B82F6", // blue — Conditions
-  paths: "#EC4899", // pink — Conditions (split)
-  formula: "#8B5CF6", // violet — Calculation
-  calculate: "#8B5CF6", // violet — Calculation (legacy)
-  time: "#F59E0B", // amber — Conditions (date)
-  time_between: "#14B8A6", // teal — Calculation (pairing)
-  group: "#F97316", // orange — Calculation (legacy)
-  output: "#6366F1", // indigo — Dashboard
+  app: "#12B76A", // green — records come IN
+  unite: "#06AED4", // cyan — several steps onto one line
+  filter: "#2E7CF6", // blue — keep only what counts
+  paths: "#F63D68", // rose — split into branches
+  formula: "#7A5AF8", // violet — maths
+  calculate: "#7A5AF8", // violet — maths (legacy)
+  time: "#F79009", // amber — a window of time
+  time_between: "#15B79E", // teal — how long between two events
+  group: "#EE6C20", // orange — grouping (legacy)
+  output: "#6172F3", // indigo — out to the dashboard
 };
+
+/**
+ * THE MARK'S FINISH, from one accent colour.
+ *
+ * A flat square of colour is a swatch; these are the most-looked-at objects on
+ * the canvas and they should feel like objects. Three things, all derived so
+ * adding a step type stays a one-line change to NODE_ACCENT:
+ *
+ *  - a light-to-deep sheen across the diagonal, so the tile has a top and a
+ *    bottom rather than being a fill;
+ *  - a hairline of the colour's own light end inside the top edge, which is
+ *    what makes it read as raised rather than printed;
+ *  - a drop shadow tinted with the accent instead of grey, because a coloured
+ *    object casting a neutral shadow looks pasted on.
+ *
+ * `color-mix` does the lightening in the browser, so there is no second set of
+ * hex values to keep in step with the first.
+ */
+function markStyle(color: string) {
+  return {
+    backgroundImage: `linear-gradient(148deg, color-mix(in srgb, ${color} 72%, white) 0%, ${color} 58%, color-mix(in srgb, ${color} 86%, black) 100%)`,
+    boxShadow: `inset 0 1px 0 color-mix(in srgb, ${color} 45%, white), 0 2px 6px -1px color-mix(in srgb, ${color} 55%, transparent)`,
+  };
+}
 
 /**
  * `variant` is the step's JOB, where one node type has two of them —
@@ -104,7 +138,7 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
     return (
       <span
         className="inline-flex shrink-0 items-center justify-center font-semibold leading-none text-white"
-        style={{ background: s.color, width: size, height: size, borderRadius: radius, fontSize: Math.round(size * 0.42) }}
+        style={{ ...markStyle(s.color), width: size, height: size, borderRadius: radius, fontSize: Math.round(size * 0.42) }}
         title={s.label}
         aria-hidden
       >
@@ -118,7 +152,7 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center text-white"
-      style={{ background: color, width: size, height: size, borderRadius: radius }}
+      style={{ ...markStyle(color), width: size, height: size, borderRadius: radius }}
       aria-hidden
     >
       {/* Sized off the tile, and stroked a touch lighter as it grows so a

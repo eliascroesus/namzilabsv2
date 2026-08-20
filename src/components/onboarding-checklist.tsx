@@ -50,17 +50,17 @@ export function OnboardingChecklist({
   return (
     <div className="mt-8 rounded-lg border border-dashed border-neutral-300 p-8">
       <h2 className="text-lg font-semibold text-foreground">Get your first metric live</h2>
-      <p className="mt-1 text-sm text-neutral-500">Three steps — the first takes about a minute.</p>
+      <p className="mt-1 text-base text-neutral-500">Three steps — the first takes about a minute.</p>
       <ol className="mt-5 space-y-4">
         {steps.map((step, i) => (
           <li key={step.title} className="flex items-start gap-3">
             {step.done ? (
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-100 text-sm font-semibold text-green-700">
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-100 text-base font-semibold text-green-700">
                 ✓
               </span>
             ) : (
               <span
-                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base font-semibold ${
                   i === next ? "bg-neutral-900 text-white" : "border border-neutral-300 text-neutral-400"
                 }`}
               >
@@ -70,7 +70,7 @@ export function OnboardingChecklist({
             <div>
               <p className={`font-medium ${step.done ? "text-neutral-400 line-through" : "text-foreground"}`}>{step.title}</p>
               {!step.done && (
-                <p className="mt-0.5 text-sm text-neutral-500">
+                <p className="mt-0.5 text-base text-neutral-500">
                   {step.detail}{" "}
                   {i === next && (
                     <Link href={step.href} className="whitespace-nowrap font-medium text-blue-600 hover:underline">

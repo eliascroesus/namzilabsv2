@@ -156,7 +156,7 @@ export function NodeLibraryModal({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2 pt-1">
           {items.length === 0 ? (
-            <p className="p-8 text-center text-sm text-neutral-500">No matching steps.</p>
+            <p className="p-8 text-center text-base text-neutral-500">No matching steps.</p>
           ) : (
             <div className="flex flex-col gap-0.5">
               {sections.map((sec) => (

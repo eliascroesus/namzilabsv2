@@ -138,8 +138,8 @@ export function ConnectionRow({
     const armed = typed.trim() === name.trim();
     return (
       <div className="border-l-2 border-red-500 bg-red-50/70 px-4 py-3">
-        <p className="text-sm font-medium text-foreground">Permanently delete {name}?</p>
-        <p className="mt-1 text-sm text-neutral-700">
+        <p className="text-base font-medium text-foreground">Permanently delete {name}?</p>
+        <p className="mt-1 text-base text-neutral-700">
           This removes the connection and{" "}
           <span className="font-medium">
             {records == null ? "everything synced from it" : `all ${records.toLocaleString()} records synced from it`}
@@ -147,7 +147,7 @@ export function ConnectionRow({
           , along with their original payloads and this connection&rsquo;s entire sync history. Flows reading it will
           show no data.
         </p>
-        <p className="mt-1 text-sm text-neutral-700">
+        <p className="mt-1 text-base text-neutral-700">
           <span className="font-medium">This cannot be undone.</span> Connecting the same account again starts from
           nothing and re-imports only as much history as the provider still offers — which is usually far less than you
           have now.{" "}
@@ -168,7 +168,7 @@ export function ConnectionRow({
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             placeholder={name}
-            className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm focus:border-red-400 focus:outline-none"
+            className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-base focus:border-red-400 focus:outline-none"
           />
           <button
             type="button"
@@ -176,7 +176,7 @@ export function ConnectionRow({
               setTyped("");
               setDeleting(false);
             }}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-neutral-50"
+            className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-base font-medium hover:bg-neutral-50"
           >
             Cancel
           </button>
@@ -186,7 +186,7 @@ export function ConnectionRow({
             <button
               type="submit"
               disabled={!armed}
-              className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-md bg-red-600 px-3 py-1.5 text-base font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Delete everything
             </button>
@@ -203,9 +203,9 @@ export function ConnectionRow({
   if (status === "disabled") {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <span className="min-w-0 text-sm text-neutral-500">
+        <span className="min-w-0 text-base text-neutral-500">
           <span className="font-medium text-neutral-700">{name}</span>
-          <span className="ml-2 rounded bg-neutral-100 px-1.5 py-0.5 text-xs">Disconnected</span>
+          <span className="ml-2 rounded bg-neutral-100 px-1.5 py-0.5 text-tiny">Disconnected</span>
           <span className="ml-2">Not syncing. Its records are hidden from dashboards and flows.</span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
@@ -213,7 +213,7 @@ export function ConnectionRow({
             <input type="hidden" name="id" value={id} />
             <button
               type="submit"
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50"
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-base font-medium hover:bg-neutral-50"
             >
               Reconnect
             </button>
@@ -230,7 +230,7 @@ export function ConnectionRow({
   if (confirming) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 bg-red-50/60 px-4 py-3">
-        <p className="min-w-0 text-sm text-neutral-700">
+        <p className="min-w-0 text-base text-neutral-700">
           Disconnect <span className="font-medium">{name}</span>? Its synced records stop appearing in
           dashboards and flows, and it stops syncing. Any flow reading from it will have no data.
           {/* The disconnect is reversible and the user has to be told so, or
@@ -243,7 +243,7 @@ export function ConnectionRow({
           <button
             type="button"
             onClick={() => setConfirming(false)}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-white"
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-base font-medium hover:bg-white"
           >
             Cancel
           </button>
@@ -251,7 +251,7 @@ export function ConnectionRow({
             <input type="hidden" name="id" value={id} />
             <button
               type="submit"
-              className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+              className="rounded-md bg-red-600 px-3 py-1.5 text-base font-medium text-white hover:bg-red-700"
             >
               Disconnect
             </button>
@@ -277,7 +277,7 @@ export function ConnectionRow({
               setEditing(false);
             }
           }}
-          className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-sm font-medium focus:border-neutral-400 focus:outline-none"
+          className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-base font-medium focus:border-neutral-400 focus:outline-none"
         />
       ) : (
         <span className="flex min-w-0 items-center gap-2">
@@ -298,13 +298,13 @@ export function ConnectionRow({
           </button>
         </span>
       )}
-      <span className="ml-3 flex shrink-0 items-center gap-3 text-sm text-neutral-500">
+      <span className="ml-3 flex shrink-0 items-center gap-3 text-base text-neutral-500">
         {webhookUrl && (
           <button
             type="button"
             onClick={() => setShowHook((v) => !v)}
             aria-expanded={showHook}
-            className="rounded border border-neutral-200 px-2 py-0.5 text-xs font-medium text-neutral-600 hover:bg-white hover:text-foreground"
+            className="rounded border border-neutral-200 px-2 py-0.5 text-tiny font-medium text-neutral-600 hover:bg-white hover:text-foreground"
           >
             {showHook ? "Hide webhook URL" : "Webhook URL"}
           </button>
@@ -334,24 +334,24 @@ export function ConnectionRow({
           is never a dead end, so the list says when it resolves itself. An
           `error` row keeps its red dot; this line adds the WHY beside it. */}
       {importNote && !pausedNote && !lastError && (
-        <p className="-mt-1 px-4 pb-2.5 text-xs text-amber-700">{importNote}</p>
+        <p className="-mt-1 px-4 pb-2.5 text-tiny text-amber-700">{importNote}</p>
       )}
       {(pausedNote || lastError) && (
-        <p className={`-mt-1 px-4 pb-2.5 text-xs ${pausedNote ? "text-amber-700" : "text-red-600"}`}>
+        <p className={`-mt-1 px-4 pb-2.5 text-tiny ${pausedNote ? "text-amber-700" : "text-red-600"}`}>
           {pausedNote ? <>Paused, retrying automatically. {pausedNote}</> : lastError}
         </p>
       )}
       {showHook && webhookUrl && (
         <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-3">
-          {webhookSetup && <p className="mb-2 text-xs text-neutral-600">{webhookSetup}</p>}
-          {eventTimeNote && <p className="mb-2 text-xs text-neutral-600">{eventTimeNote}</p>}
+          {webhookSetup && <p className="mb-2 text-tiny text-neutral-600">{webhookSetup}</p>}
+          {eventTimeNote && <p className="mb-2 text-tiny text-neutral-600">{eventTimeNote}</p>}
           <CopyField
             label="POST events to this URL"
             value={webhookUrl}
             isUrl
             hint="Anything this URL receives is stored and available to flows straight away."
           />
-          <Link href={`/connections/${id}`} className="text-xs text-blue-600 hover:underline">
+          <Link href={`/connections/${id}`} className="text-tiny text-blue-600 hover:underline">
             Signing secret and delivery status →
           </Link>
         </div>

@@ -6,7 +6,7 @@ import { humanizeKey } from "./field-utils";
 import type { DataGroup } from "./types";
 
 const BOX =
-  "w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 text-left text-sm transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
+  "w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 text-left text-base transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
 
 /**
  * The one field chooser used by every step (Filter conditions, Calculate's

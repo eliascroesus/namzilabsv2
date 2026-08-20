@@ -6,7 +6,7 @@ import {
   ChevronLeft,
   Copy,
   Maximize2,
-  MoreHorizontal,
+  MoreVertical,
   Play,
   Redo2,
   Rocket,
@@ -194,16 +194,10 @@ export function FlowToolbar({
                 <ChevronLeft size={26} strokeWidth={2} />
               </Link>
 
-              <span className="flex min-w-0 flex-1 items-center gap-1 pr-1">
-                <Link
-                  href="/dashboard/flows"
-                  className="shrink-0 whitespace-nowrap px-1 text-lead font-medium text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  Flows
-                </Link>
-                <span className="shrink-0 text-lead text-neutral-300" aria-hidden>
-                  /
-                </span>
+              {/* No "Flows /" crumb. The back arrow beside it already goes there
+                  and already says so on hover; a breadcrumb whose only parent is
+                  the button next to it is a word for its own sake. */}
+              <span className="flex min-w-0 items-center gap-1 pr-1">
                 {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
                     At the old fixed width a long name was cut mid-glyph, hard against
                     the padding with no ellipsis — while 87px of empty canvas sat to
@@ -222,13 +216,6 @@ export function FlowToolbar({
               </span>
 
 
-              <Divider />
-
-              {/* Words, no dot. The reference this island copies has a green dot,
-                  and it is deliberately not here: a dot needs a legend and a word
-                  does not. Do not "restore" it. */}
-              <SaveChip state={saveState} onRetry={onRetrySave} />
-
               <Popover
                 open={menuOpen}
                 setOpen={setMenuOpen}
@@ -236,7 +223,7 @@ export function FlowToolbar({
                 align="left"
                 anchor={
                   <IslandButton onClick={() => setMenuOpen(!menuOpen)} label="Flow actions">
-                    <MoreHorizontal />
+                    <MoreVertical />
                   </IslandButton>
                 }
               >
@@ -264,23 +251,7 @@ export function FlowToolbar({
                 </div>
               </Popover>
 
-              {/* The flow's own on/off switch, where Zapier puts a Zap's. It cannot
-                  be turned on before the flow has ever been published — there
-                  would be nothing to turn on — so it sits inactive until the
-                  first publish, which flips it on by itself. It lives beside
-                  the name and the save state because all three answer the same
-                  question: what IS this flow right now. */}
-              <FlowSwitch on={isPublished} disabled={publishedVersion == null || togglingEnabled} onChange={onToggleEnabled} />
 
-              {isPublished && publishedVersion != null && (
-                <span
-                  className="flex shrink-0 items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-micro font-bold text-success-ink"
-                  title="This flow is live on your dashboard"
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
-                  v{publishedVersion}
-                </span>
-              )}
             </span>
 
             {/* WHAT YOU DO TO THE VIEW. Centred by the grid, so it stays put as
@@ -319,21 +290,35 @@ export function FlowToolbar({
             {/* WHAT YOU DO WITH THE FLOW. Run and ship, side by side, because
                 they are the same kind of act at two different stages. */}
             <span className="flex items-center justify-end gap-2">
+              {/* Words, no dot. The reference this island copies has a green dot,
+                  and it is deliberately not here: a dot needs a legend and a word
+                  does not. Do not "restore" it. */}
+              <SaveChip state={saveState} onRetry={onRetrySave} />
+
+
+              {/* The flow's own on/off switch, where Zapier puts a Zap's. It cannot
+                  be turned on before the flow has ever been published — there
+                  would be nothing to turn on — so it sits inactive until the
+                  first publish, which flips it on by itself. It lives beside
+                  the name and the save state because all three answer the same
+                  question: what IS this flow right now. */}
+              <FlowSwitch on={isPublished} disabled={publishedVersion == null || togglingEnabled} onChange={onToggleEnabled} />
+
               {showTestAll && (
                 <Button
-                  variant={runAll ? "secondary" : "success"}
+                  variant="secondary"
                   onClick={runAll ? onStopTestAll : onTestAll}
                   title={runAll ? "Stop the run" : "Run every step, top to bottom"}
                   aria-label={runAll ? "Stop the run" : "Test flow"}
                   className={`h-[42px] shrink-0 text-lead [&_svg]:size-[18px] ${runAll ? "gap-2 px-[18px]" : "w-[42px] px-0"}`}
                 >
                   {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
-                  {/* Icon only at rest — the play glyph IS the word, and a green
-                      one beside a blue primary reads as a different kind of act
-                      without spelling it out. While a run is going it earns its
-                      words back: "Stop · 2/6" is a receipt, and dropping the
-                      count to stay square would be hiding progress to keep a
-                      shape. */}
+                  {/* Icon only at rest — the play glyph IS the word. Quiet grey
+                      rather than a colour: a test run is a rehearsal, and the one
+                      saturated thing in this bar should be the act that actually
+                      ships. While a run is going it earns its words back:
+                      "Stop · 2/6" is a receipt, and dropping the count to stay
+                      square would be hiding progress to keep a shape. */}
                   {runAll ? `Stop · ${runAll.at}/${runAll.of}` : null}
                 </Button>
               )}

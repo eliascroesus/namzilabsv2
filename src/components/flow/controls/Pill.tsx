@@ -48,7 +48,7 @@ export function DataPill({
   const s = fmtSample(sample);
   const tone = stale ? "border-amber-300 bg-amber-50 text-amber-800" : "border-blue-200 bg-blue-50 text-blue-900";
   return (
-    <span className={`inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-1 text-xs ${tone}`} title={stale ? "This field's source is missing — pick it again" : label}>
+    <span className={`inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-1 text-tiny ${tone}`} title={stale ? "This field's source is missing — pick it again" : label}>
       {stale ? <span className="shrink-0">⚠</span> : <SourceBadge source={source} size={14} />}
       {stepNo != null && <span className="shrink-0 opacity-60">{stepNo}.</span>}
       <button type="button" onClick={onClick} className="min-w-0 truncate font-medium hover:underline">

@@ -54,7 +54,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <h1 className="text-display font-semibold tracking-tight text-foreground">Workspace settings</h1>
 
         {invited && (
-          <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+          <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-green-200 bg-green-50 p-4 text-base text-green-800">
             <p>
               Invitation created for <b>{invited}</b> — they&rsquo;ll get an email with a join link. Or copy the
               same link under <b>Pending invitations</b> below and send it to them yourself.
@@ -65,7 +65,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </div>
         )}
         {inviteError && (
-          <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-base text-red-800">
             <p>{inviteError}</p>
             <Link href="/dashboard/settings" aria-label="Dismiss" className="font-semibold text-red-400 hover:text-red-700">
               ✕
@@ -74,35 +74,35 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         )}
 
         <section className="mt-8">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">Members</h2>
+          <h2 className="mb-3 text-base font-semibold uppercase tracking-wide text-neutral-500">Members</h2>
           <div className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
             {members.map((m) => (
-              <div key={m.id} className="flex items-center justify-between px-4 py-3 text-sm">
+              <div key={m.id} className="flex items-center justify-between px-4 py-3 text-base">
                 <span className="text-foreground">
                   {m.email}
-                  {m.userId === userId && <span className="ml-2 text-xs text-neutral-400">(you)</span>}
+                  {m.userId === userId && <span className="ml-2 text-tiny text-neutral-400">(you)</span>}
                 </span>
-                <span className="text-xs uppercase tracking-wide text-neutral-400">{m.role}</span>
+                <span className="text-tiny uppercase tracking-wide text-neutral-400">{m.role}</span>
               </div>
             ))}
           </div>
         </section>
 
         <section className="mt-8">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">Invite a teammate</h2>
+          <h2 className="mb-3 text-base font-semibold uppercase tracking-wide text-neutral-500">Invite a teammate</h2>
           <form action={inviteMemberAction} className="flex gap-2">
             <input
               type="email"
               name="email"
               required
               placeholder="teammate@company.com"
-              className="w-full max-w-sm rounded-md border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
+              className="w-full max-w-sm rounded-md border border-neutral-300 px-3 py-2 text-base focus:border-neutral-500 focus:outline-none"
             />
-            <button type="submit" className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
+            <button type="submit" className="rounded-md bg-neutral-900 px-4 py-2 text-base font-medium text-white hover:bg-neutral-800">
               Send invite
             </button>
           </form>
-          <p className="mt-2 text-xs text-neutral-500">
+          <p className="mt-2 text-tiny text-neutral-500">
             An email with a join link goes out automatically. Rather send it yourself? The same link appears
             under <b>Pending invitations</b> the moment you press Send — copy it into Slack, a text, anywhere.
             Invites expire automatically.
@@ -111,22 +111,22 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
         {pending.length > 0 && (
           <section className="mt-8">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">Pending invitations</h2>
+            <h2 className="mb-3 text-base font-semibold uppercase tracking-wide text-neutral-500">Pending invitations</h2>
             <div className="divide-y divide-neutral-100 rounded-md border border-neutral-200">
               {pending.map((inv) => (
-                <div key={inv.id} className="px-4 py-3 text-sm">
+                <div key={inv.id} className="px-4 py-3 text-base">
                   <div className="flex items-center justify-between">
                     <span className="text-foreground">
                       {inv.email}
                       {inv.expiresAt && (
-                        <span className="ml-2 text-xs text-neutral-400">
+                        <span className="ml-2 text-tiny text-neutral-400">
                           expires {new Date(inv.expiresAt).toLocaleDateString()}
                         </span>
                       )}
                     </span>
                     <form action={revokeInviteAction}>
                       <input type="hidden" name="invitationId" value={inv.id} />
-                      <button type="submit" className="text-sm font-medium text-red-600 hover:underline">
+                      <button type="submit" className="text-base font-medium text-red-600 hover:underline">
                         Revoke
                       </button>
                     </form>

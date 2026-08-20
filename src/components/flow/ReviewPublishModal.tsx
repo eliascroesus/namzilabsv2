@@ -53,7 +53,7 @@ function Disclosure({ summary, children }: { summary: string; children: ReactNod
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-md py-1 text-xs font-medium text-neutral-500 transition-colors hover:text-foreground"
+        className="flex items-center gap-1.5 rounded-md py-1 text-tiny font-medium text-neutral-500 transition-colors hover:text-foreground"
       >
         <span className={`transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>
           ›
@@ -113,7 +113,7 @@ export function ReviewPublishModal({
   const enabledCount = metrics.filter((m) => m.enabled).length;
 
   const inputCls =
-    "w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-sm text-foreground transition-colors focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
+    "w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-base text-foreground transition-colors focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 p-4 pt-16 backdrop-blur-sm" onClick={onClose}>
@@ -128,7 +128,7 @@ export function ReviewPublishModal({
         </div>
 
         <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-neutral-50/60 p-4">
-          {endpoints.length === 0 && <p className="text-sm text-neutral-500">This flow has no result step yet. Add a Calculate step, then come back.</p>}
+          {endpoints.length === 0 && <p className="text-base text-neutral-500">This flow has no result step yet. Add a Calculate step, then come back.</p>}
           {/* The one change in the reliability pass that MOVES a number, said
               at the moment of consequence rather than in a release note. */}
           {/* The bigger of the two window changes, and the one most likely to
@@ -136,13 +136,13 @@ export function ReviewPublishModal({
               instant, so a flow reading a calendar counted 9 of its 20
               matching meetings. */}
           {hasOpenEndedRange && (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-tiny text-amber-900">
               A date range with no “To” now has no end at all. It used to stop at the moment the number was computed, so anything dated in the future —
               scheduled meetings — was left out. This number may rise.
             </p>
           )}
           {hasCustomRange && (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-tiny text-amber-900">
               A custom date range now includes the whole of its “To” day. It used to stop at midnight, so this number may rise by up to a day&rsquo;s worth of records.
             </p>
           )}
@@ -154,7 +154,7 @@ export function ReviewPublishModal({
                 <label className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
                     <input type="checkbox" checked={m.enabled} onChange={(e) => set(ep.nodeId, { enabled: e.target.checked })} className="h-4 w-4 accent-brand-600" />
-                    <span className="truncate text-sm font-semibold text-foreground">{ep.title}</span>
+                    <span className="truncate text-base font-semibold text-foreground">{ep.title}</span>
                   </span>
                   <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-neutral-400">metric</span>
                 </label>
@@ -165,7 +165,7 @@ export function ReviewPublishModal({
                       <input value={m.name} onChange={(e) => set(ep.nodeId, { name: e.target.value })} placeholder="e.g. Show-up rate" className={inputCls} />
                     </label>
                     {previews[ep.nodeId] != null && (
-                      <p className="text-xs font-medium text-neutral-700">{formatMetricValue(previews[ep.nodeId], m)}</p>
+                      <p className="text-tiny font-medium text-neutral-700">{formatMetricValue(previews[ep.nodeId], m)}</p>
                     )}
                     {/* THE ONE SETTING THAT CHANGES A NUMBER STAYS IN THE OPEN.
                         Everything else here is presentation and has a correct
@@ -225,14 +225,14 @@ export function ReviewPublishModal({
                           <span className="mb-1 block text-base font-semibold text-foreground">Goal / target</span>
                           {/* The goal is in the metric's own format: % for percentages, $ for currency. */}
                           <div className="relative">
-                            {m.format === "currency" && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400">$</span>}
+                            {m.format === "currency" && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-neutral-400">$</span>}
                             <NumberField
                               value={m.target}
                               allowNull
                               onChange={(n) => set(ep.nodeId, { target: n })}
                               className={`${m.format === "currency" ? "pl-6" : ""} ${m.format === "percent" ? "pr-7" : ""}`}
                             />
-                            {m.format === "percent" && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400">%</span>}
+                            {m.format === "percent" && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-base text-neutral-400">%</span>}
                           </div>
                         </label>
                       </div>
@@ -246,7 +246,7 @@ export function ReviewPublishModal({
 
         <div className="space-y-2 border-t border-neutral-100 p-4">
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+            <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-tiny text-red-800">
               <p>{error}</p>
               {/* The per-issue list used to render only in a canvas banner
                   gated on the modal being CLOSED — and publish can only be
@@ -269,13 +269,13 @@ export function ReviewPublishModal({
               )}
             </div>
           )}
-          {warning && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{warning}</p>}
+          {warning && <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-tiny text-amber-800">{warning}</p>}
           {/* WHAT THE BUTTON DOES, BEFORE IT IS PRESSED. "Publish 1 metric" is
               accurate and says nothing about consequences, and people hesitate
               at buttons that sound one-way. Both halves here are true: it
               starts updating by itself, and none of it is permanent. */}
           {enabledCount > 0 && !publishing && (
-            <p className="text-center text-xs text-neutral-500">Updates automatically. Editable any time.</p>
+            <p className="text-center text-tiny text-neutral-500">Updates automatically. Editable any time.</p>
           )}
           <button
             onClick={onPublish}

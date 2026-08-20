@@ -8,7 +8,7 @@ export default async function Home() {
     <div className="flex min-h-screen flex-col">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
         <span className="text-lg font-semibold tracking-tight">Namzilabs</span>
-        <nav className="flex items-center gap-4 text-sm">
+        <nav className="flex items-center gap-4 text-base">
           {user ? (
             <Link className="rounded-md bg-neutral-900 px-4 py-2 font-medium text-white" href="/dashboard">
               Dashboard
@@ -50,7 +50,7 @@ export default async function Home() {
         </div>
       </main>
 
-      <footer className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 text-sm text-neutral-500">
+      <footer className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 text-base text-neutral-500">
         <span>&copy; {new Date().getFullYear()} Namzilabs</span>
         <nav className="flex gap-5">
           <Link className="hover:text-foreground" href="/terms">

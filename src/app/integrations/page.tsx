@@ -54,15 +54,15 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <main className="mx-auto max-w-5xl px-6 py-10">
         <h1 className="text-display font-semibold tracking-tight text-foreground">Integrations</h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-base text-neutral-500">
           Connect a tool and its data flows into your unified dashboard. Connect an account, then
           preview the latest records to confirm it&rsquo;s live.
         </p>
 
         {errorCode && (
-          <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <div className="mt-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-base text-red-800">
             <p>
-              {integrationsErrorMessage(errorCode)} <span className="text-xs text-red-400">({errorCode})</span>
+              {integrationsErrorMessage(errorCode)} <span className="text-tiny text-red-400">({errorCode})</span>
             </p>
             {/* Dismissal without client JS: dropping the query param re-renders
                 the page clean (this segment is force-dynamic). */}
@@ -74,7 +74,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
         {connected.length > 0 && (
           <section className="mt-8">
-            <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-neutral-500">
+            <h2 className="mb-1 text-base font-semibold uppercase tracking-wide text-neutral-500">
               Your connections
             </h2>
             {/* The two removal buttons keep two different promises, and this is
@@ -82,7 +82,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                 dialog: disconnect keeps everything and reverses; the trash is
                 immediate and total. Matches disableConnection /
                 deleteConnectionPermanently — if those change, change this. */}
-            <p className="mb-3 text-xs text-neutral-500">
+            <p className="mb-3 text-tiny text-neutral-500">
               Disconnecting a source pauses it and keeps all its data — reconnect any time and everything comes back.
               Deleting one (the trash icon) permanently removes it and everything synced from it, immediately.
             </p>
@@ -125,7 +125,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         )}
 
         <section className="mt-10">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">Add a connection</h2>
+          <h2 className="mb-3 text-base font-semibold uppercase tracking-wide text-neutral-500">Add a connection</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             {CONNECTOR_CATALOG.map((entry) => (
               <ConnectorCard key={entry.source} entry={entry} connectedCount={countBySource[entry.source] ?? 0} />
@@ -143,15 +143,15 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
       <div className="flex items-start justify-between">
         <div>
           <h3 className="font-semibold">{entry.name}</h3>
-          <p className="mt-1 text-sm text-neutral-600">{entry.description}</p>
+          <p className="mt-1 text-base text-neutral-600">{entry.description}</p>
         </div>
         {connectedCount > 0 && (
-          <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+          <span className="rounded bg-green-100 px-2 py-0.5 text-tiny font-medium text-green-800">
             {connectedCount} connected
           </span>
         )}
       </div>
-      <div className="mt-3 flex gap-2 text-xs text-neutral-500">
+      <div className="mt-3 flex gap-2 text-tiny text-neutral-500">
         {entry.instant && <span className="rounded bg-neutral-100 px-2 py-0.5">Instant webhook</span>}
         {entry.poll && <span className="rounded bg-neutral-100 px-2 py-0.5">Polling</span>}
       </div>
@@ -176,7 +176,7 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
                 <input
                   name="name"
                   placeholder={entry.name}
-                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base"
                 />
               </label>
               {entry.credentialFields.map((f) => (
@@ -187,13 +187,13 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
                     type="password"
                     autoComplete="off"
                     placeholder={f.placeholder ?? ""}
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base"
                   />
                 </label>
               ))}
               <button
                 type="submit"
-                className="w-full rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+                className="w-full rounded-md border border-neutral-300 px-4 py-2 text-base font-medium hover:bg-neutral-50"
               >
                 Save connection
               </button>
@@ -201,7 +201,7 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
                   clue that saving is only step one — the URL it mints is the
                   whole product, and it appears above once the row exists. */}
               {entry.credentialFields.length === 0 && entry.instant && (
-                <p className="text-xs text-neutral-500">
+                <p className="text-tiny text-neutral-500">
                   Saving creates the inbound URL. It appears under <b>Your connections</b> above —
                   open <b>Webhook URL</b> on the new row and point any app at it.
                 </p>

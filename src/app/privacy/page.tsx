@@ -6,11 +6,11 @@ export const metadata: Metadata = { title: "Privacy Policy — Namzilabs" };
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
-      <Link className="text-sm text-neutral-500 hover:text-foreground" href="/">
+      <Link className="text-base text-neutral-500 hover:text-foreground" href="/">
         &larr; Namzilabs
       </Link>
       <h1 className="mt-6 text-3xl font-semibold tracking-tight">Privacy Policy</h1>
-      <p className="mt-2 text-sm text-neutral-500">Last updated: July 16, 2026</p>
+      <p className="mt-2 text-base text-neutral-500">Last updated: July 16, 2026</p>
 
       <div className="mt-8 space-y-6 text-neutral-700">
         <section>
@@ -83,7 +83,7 @@ export default function PrivacyPage() {
         </section>
       </div>
 
-      <p className="mt-10 text-sm text-neutral-500">
+      <p className="mt-10 text-base text-neutral-500">
         See also our{" "}
         <Link className="text-blue-600 underline" href="/terms">
           Terms of Service
