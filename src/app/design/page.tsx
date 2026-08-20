@@ -282,27 +282,28 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Builder chrome" note="Three islands on one row, grouped by job. Left: where you came from and what this is called — the only one that shrinks. Centre: everything you do to the canvas. Right: whether it saved, what you can do to it, and shipping it. Canvas shows through both seams, and nothing moves when the config panel opens.">
-          {/* THE INNER CANVAS IS 1292px BECAUSE A REAL ONE IS.
-              That is a 1440 viewport minus the 100px rail minus nothing else —
-              the width the chrome actually has to fit into. The three islands
-              measure 276 + 463 + 375 with two 12px gaps = 1138, so 154px of
-              canvas is left over and nothing meets.
+        <Section title="Builder chrome" note="Three islands, grouped by job. Left: where you came from and what this is called. Right: whether it saved, what you can do to it, and shipping it — the canvas showing through the seam between them. Bottom: everything you do to the canvas.">
+          {/* 256px is a clearance, not a look: 24px inset + a 58px island at the
+              top, 24px inset + the 58px bottom bar, leaving 92px of canvas
+              between them. These numbers move when the islands do — the last
+              version of this comment still said 16px and 108px, and claimed to
+              have been re-measured, which is worse than saying nothing.
 
-              Rendered at this page's own 816px column it was a lie in the
-              other direction: the row overflowed and the right island fell off
-              the box, which is a thing the product does not do at any width a
-              laptop has. So the box scrolls sideways rather than squeezing the
-              specimen, and 256px tall is the clearance for one 58px row at a
-              24px inset with canvas below it. */}
-          <div className="-mx-24 overflow-x-auto overflow-y-hidden rounded-card">
-            <div className="relative h-64 w-[1292px] bg-canvas-bg">
-              <div
-                className="absolute inset-0"
-                style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
-              />
-              <ToolbarPreview />
-            </div>
+              Width is what the split added. This column makes the box 816px and
+              the two top islands measure 324 and 373, so 87px of canvas sits
+              between them and nothing overlaps. They meet below 729px — and they
+              meet here before they would in the app, because the left island
+              truncates against 62vw and this box is a little over half the
+              viewport. So in a window narrow enough to shrink this column they
+              touch: that is the preview being narrower than a viewport, not the
+              toolbar being broken, and the column is not widening past the page's
+              measure to hide it. */}
+          <div className="relative h-64 overflow-hidden rounded-card bg-canvas-bg">
+            <div
+              className="absolute inset-0"
+              style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
+            />
+            <ToolbarPreview />
           </div>
         </Section>
 

@@ -5,9 +5,9 @@ import { describe, expect, it } from "vitest";
 /**
  * THE PANEL'S TOP EDGE AND THE ISLAND'S HEIGHT ARE ONE MEASUREMENT.
  *
- * The config panel starts below the chrome row so that nothing in it has to
- * move out of the way — the right island and the canvas controls used to slide
- * left whenever the panel opened. That only holds while
+ * The config panel stops short of both chrome bars so that neither has to move
+ * out of its way — the top-right island and the bottom bar used to slide left
+ * whenever the panel opened. That only holds while
  *
  *     --spacing-chrome-band  ==  inset + island height + inset
  *
@@ -47,7 +47,7 @@ describe("the chrome band", () => {
   const pad = Number(one(toolbar, /rounded-card border border-border bg-white p-\[(\d+)px\]/, "the island's padding"));
   const control = Number(one(toolbar, /flex h-\[(\d+)px\] w-\[\d+px\] shrink-0 items-center justify-center rounded-control text-foreground/, "the island's control height"));
   // The top island's own distance from the viewport edge.
-  const inset = Number(one(toolbar, /absolute inset-x-6 top-(\d+) z-10 flex items-start/, "the chrome row's inset")) * SPACING_STEP;
+  const inset = Number(one(toolbar, /absolute left-6 top-(\d+) z-10 flex max-w-/, "the top island's inset")) * SPACING_STEP;
 
   it("equals inset + island + inset", () => {
     const island = 1 + pad + control + pad + 1;
@@ -57,20 +57,16 @@ describe("the chrome band", () => {
 
   it("is referenced by the panel, which is the only thing that emits it", () => {
     // Tailwind v4 drops an unreferenced theme variable from the stylesheet.
-    // ONE reference now that the foot is free — so this pin matters more, not
-    // less: delete that single class name and the variable leaves the build.
     expect(panel).toMatch(/\btop-chrome-band\b/);
+    expect(panel).toMatch(/\bbottom-chrome-band\b/);
   });
 
-  it("starts below the chrome row and runs to the foot of the canvas", () => {
-    // The band is a TOP measurement only. Every control moved onto one row, so
-    // there is nothing at the foot for the panel to clear — it takes the plain
-    // 24px inset there, like every other floating edge.
+  it("keeps the panel clear of both bars", () => {
+    // The panel is positioned by the band alone: no inset-y-0, no margin that
+    // would put it back over the chrome.
     const aside = one(panel, /(<aside[\s\S]{0,600}?data-config-panel[\s\S]{0,600}?>)/, "the panel's <aside>");
     expect(aside).not.toMatch(/\binset-y-0\b/);
     expect(aside).toMatch(/\bright-6\b/);
-    expect(aside).toMatch(/\btop-chrome-band\b/);
-    expect(aside).toMatch(/\bbottom-6\b/);
   });
 
   it("leaves the chrome nailed down — nothing slides for the panel", () => {

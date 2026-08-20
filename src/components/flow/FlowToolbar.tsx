@@ -170,17 +170,10 @@ export function FlowToolbar({
           breadcrumb says out loud what the bare back arrow only implied — that
           this flow sits inside a list of them — and the last crumb is the
           editable name itself, so the thing you rename is the thing you are
-          reading.
-
-          It is the ONLY island on this row that shrinks; the canvas controls
-          and the actions are fixed clusters and are `shrink-0`. The 130px floor
-          is the chevron plus a truncating crumb: with a plain `min-w-0` the box
-          collapsed to its own 16px of padding on a narrow window while its
-          contents spilled out of it, which looks like a bug rather than like a
-          tight fit. The name grows with what you type and stops well short of
+          reading. The name grows with what you type and stops well short of
           the right island, which holds the primary it must never reach. */}
-      <div className="pointer-events-none absolute inset-x-6 top-6 z-10 flex items-start justify-between gap-3">
-        <Island className="min-w-[130px] max-w-[min(46vw,620px)] gap-1">
+      <div className="pointer-events-none absolute left-6 top-6 z-10 flex max-w-[min(62vw,760px)] items-center">
+        <Island className="min-w-0 gap-1">
           <Link
             href="/dashboard/flows"
             title="All flows"
@@ -216,64 +209,15 @@ export function FlowToolbar({
             />
           </span>
         </Island>
+      </div>
 
-        {/* ── Centre: EVERYTHING YOU DO TO THE CANVAS ────────────────────
-            Make's bar, on the same line as the rest. Run first as a filled
-            primary, then the quiet controls behind a divider. It sat at the
-            foot of the canvas until the whole of the chrome came onto one
-            row — the controls did not change, only where they live. */}
-        <Island className="shrink-0">
-          {showTestAll && (
-            <>
-              <Button
-                variant={runAll ? "secondary" : "default"}
-                onClick={runAll ? onStopTestAll : onTestAll}
-                title={runAll ? "Stop the run" : "Run every step, top to bottom"}
-                className="h-[42px] gap-2 px-[18px] text-lead [&_svg]:size-[18px]"
-              >
-                {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
-                {runAll ? `Stop · ${runAll.at}/${runAll.of}` : "Test flow"}
-              </Button>
-              <Divider />
-            </>
-          )}
-
-          <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
-            <Undo2 />
-          </IslandButton>
-          <IslandButton onClick={onRedo} disabled={!canRedo} label="Redo">
-            <Redo2 />
-          </IslandButton>
-
-          <Divider />
-
-          <IslandButton onClick={onZoomOut} label="Zoom out">
-            <ZoomOut />
-          </IslandButton>
-          {/* Miro puts the zoom READOUT between its controls and it earns the
-              space: after a pinch you have no idea where you are. Clicking it
-              fits the flow, which is the only thing anyone wants next. */}
-          <button
-            onClick={onFitView}
-            title="Fit the whole flow on screen"
-            className="h-[42px] min-w-[62px] rounded-control px-2 text-lead font-semibold tabular-nums text-foreground transition-colors hover:bg-muted"
-          >
-            {Math.round(zoom * 100)}%
-          </button>
-          <IslandButton onClick={onZoomIn} label="Zoom in">
-            <ZoomIn />
-          </IslandButton>
-          <IslandButton onClick={onFitView} label="Fit the whole flow on screen">
-            <Maximize2 />
-          </IslandButton>
-        </Island>
-
-        {/* ── Right: STATE AND ACTIONS ───────────────────────────────────
+      {/* ── Top-right: STATE AND ACTIONS ──────────────────────────────
           Whether it saved, what you can do to it, and shipping it. It sits at
           the same 24px inset as everything else and STAYS there: the config
           panel now opens in the band between this island and the bottom bar,
           so neither has to slide out of its way. */}
-        <Island className="shrink-0">
+      <div className="pointer-events-none absolute right-6 top-6 z-10 flex justify-end">
+        <Island>
           {/* Words, no dot. The reference this island copies has a green dot,
               and it is deliberately not here: a dot needs a legend and a word
               does not. Do not "restore" it. */}
@@ -341,6 +285,56 @@ export function FlowToolbar({
         </Island>
       </div>
 
+      {/* ── Bottom centre: EVERYTHING YOU DO TO THE CANVAS ──────────────
+          Make's bar. Run first as a filled primary, then the quiet controls
+          behind a divider — under your hands, not tucked in a corner. */}
+      <div className="pointer-events-none absolute bottom-6 left-6 right-6 z-10 flex justify-center">
+        <Island>
+          {showTestAll && (
+            <>
+              <Button
+                variant={runAll ? "secondary" : "default"}
+                onClick={runAll ? onStopTestAll : onTestAll}
+                title={runAll ? "Stop the run" : "Run every step, top to bottom"}
+                className="h-[42px] gap-2 px-[18px] text-lead [&_svg]:size-[18px]"
+              >
+                {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
+                {runAll ? `Stop · ${runAll.at}/${runAll.of}` : "Test flow"}
+              </Button>
+              <Divider />
+            </>
+          )}
+
+          <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
+            <Undo2 />
+          </IslandButton>
+          <IslandButton onClick={onRedo} disabled={!canRedo} label="Redo">
+            <Redo2 />
+          </IslandButton>
+
+          <Divider />
+
+          <IslandButton onClick={onZoomOut} label="Zoom out">
+            <ZoomOut />
+          </IslandButton>
+          {/* Miro puts the zoom READOUT between its controls and it earns the
+              space: after a pinch you have no idea where you are. Clicking it
+              fits the flow, which is the only thing anyone wants next. */}
+          <button
+            onClick={onFitView}
+            title="Fit the whole flow on screen"
+            className="h-[42px] min-w-[62px] rounded-control px-2 text-lead font-semibold tabular-nums text-foreground transition-colors hover:bg-muted"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <IslandButton onClick={onZoomIn} label="Zoom in">
+            <ZoomIn />
+          </IslandButton>
+          <IslandButton onClick={onFitView} label="Fit the whole flow on screen">
+            <Maximize2 />
+          </IslandButton>
+        </Island>
+      </div>
 
       {/* Deleting a flow is centred and modal. It was a popover hanging off a
           menu item that had already closed, which is a lot of consequence for

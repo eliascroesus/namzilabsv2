@@ -1745,5 +1745,5 @@ function ConfigPanelHost({ data }: { data: React.ComponentProps<typeof ConfigPan
   const props = last.current;
   if (!props) return null;
   const closing = !data && visible;
-  return <ConfigPanel key={props.node.id} {...props} animClass={closing ? "flow-panel-out" : "flow-panel-in"} />;
+  return <ConfigPanel key={props.node.id} {...props} animClass={closing ? "flow-pop-out" : "flow-pop-in"} />;
 }
