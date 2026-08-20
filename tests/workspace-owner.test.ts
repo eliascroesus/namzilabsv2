@@ -61,7 +61,7 @@ describe("workspace owner", () => {
     }
   });
 
-  it("a ranked non-owner is restricted and may not manage ranks; an unranked one may", async () => {
+  it("governance is owner/admin/explicit-grant only; unranked keeps product access", async () => {
     const { db, close } = await createTestDb();
     try {
       await db.insert(workspaceOwners).values({ orgId: "org_a", userId: "user_owner", source: "created" });
@@ -81,13 +81,47 @@ describe("workspace owner", () => {
       expect(closer.canSeeMetric("flow:f2")).toBe(false);
       expect(await canManageRanks(db, { orgId: "org_a", userId: "user_closer" })).toBe(false);
 
-      // Unranked member: full access today, may manage — the self-serve
-      // fallback that keeps the editor reachable before WorkOS roles exist.
-      expect(await canManageRanks(db, { orgId: "org_a", userId: "user_unranked" })).toBe(true);
+      // Unranked member: full PRODUCT access, but NO governance. The first
+      // version fell back to "unranked may manage" and a plain member could
+      // reassign everyone's ranks — members never manage members by default.
+      const unranked = await effectiveAccess(db, { orgId: "org_a", userId: "user_unranked" });
+      expect(unranked.can("create_flows")).toBe(true);
+      expect(await canManageRanks(db, { orgId: "org_a", userId: "user_unranked" })).toBe(false);
+
+      // Governance is an EXPLICIT grant: a rank with manage_workspace governs.
+      await db.insert(workspaceRanks).values({
+        id: "rank_admin",
+        orgId: "org_a",
+        name: "Admin",
+        permissions: ["manage_workspace"],
+        metricKeys: [],
+        inherits: [],
+      });
+      await db.insert(rankAssignments).values({ orgId: "org_a", userId: "user_admin", rankId: "rank_admin" });
+      expect(await canManageRanks(db, { orgId: "org_a", userId: "user_admin" })).toBe(true);
+
+      // The Admin PRESET is just allPermissions=true — and allPermissions
+      // includes governance, so an Admin-preset holder manages the workspace
+      // without manage_workspace being separately listed.
+      await db.insert(workspaceRanks).values({
+        id: "rank_preset_admin",
+        orgId: "org_a",
+        name: "Admin (preset)",
+        allPermissions: true,
+        allMetrics: true,
+        permissions: [],
+        metricKeys: [],
+        inherits: [],
+      });
+      await db.insert(rankAssignments).values({ orgId: "org_a", userId: "user_preset", rankId: "rank_preset_admin" });
+      const preset = await effectiveAccess(db, { orgId: "org_a", userId: "user_preset" });
+      expect(preset.can("create_flows")).toBe(true);
+      expect(preset.canSeeMetric("flow:anything")).toBe(true);
+      expect(await canManageRanks(db, { orgId: "org_a", userId: "user_preset" })).toBe(true);
 
       // And the owner row is org-scoped: the same userId in another org is
-      // nobody there.
-      expect(await canManageRanks(db, { orgId: "org_b", userId: "user_closer" })).toBe(true);
+      // an unranked member there — product access, no governance.
+      expect(await canManageRanks(db, { orgId: "org_b", userId: "user_closer" })).toBe(false);
       await db.insert(workspaceRanks).values({ id: "rank_b", orgId: "org_b", name: "B", permissions: [], metricKeys: [], inherits: [] });
       await db.insert(rankAssignments).values({ orgId: "org_b", userId: "user_owner", rankId: "rank_b" });
       expect(await canManageRanks(db, { orgId: "org_b", userId: "user_owner" })).toBe(false);

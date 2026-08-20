@@ -1,7 +1,18 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import {
+  ChevronDown,
+  Eye,
+  GitBranch,
+  LineChart,
+  Plug,
+  Plus,
+  Shield,
+  ShieldCheck,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PERMISSIONS, type RankRow } from "@/lib/permissions";
 import { assignRankAction, createRankAction, deleteRankAction, updateRankAction } from "./actions";
@@ -30,6 +41,20 @@ const toggled = (list: string[], key: string) =>
 
 const count = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+// The rank marks wear the flow step accents (src/components/flow/node-accent.ts:
+// app green, unite blue, Summarize violet, time-between orange), cycled by
+// index, so the list reads like a column of step cards rather than a form.
+const RANK_ACCENTS = ["#0EAB0E", "#009ED3", "#D95FF2", "#F66700"];
+
+// One glyph per permission, so each row reads like a library row (icon +
+// title + blurb) instead of a line of prose.
+const PERMISSION_ICONS: Record<string, LucideIcon> = {
+  create_flows: Wrench,
+  view_integrations: Eye,
+  connect_integrations: Plug,
+  manage_workspace: ShieldCheck,
+};
+
 export function RanksPanel({
   ranks: initialRanks,
   memberCounts,
@@ -44,6 +69,8 @@ export function RanksPanel({
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [preset, setPreset] = useState<"admin" | undefined>(undefined);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -85,16 +112,20 @@ export function RanksPanel({
     if (!name || creating) return;
     setCreating(true);
     try {
-      const res = await createRankAction(name);
+      const res = await createRankAction(name, preset);
       if (res.ok) {
-        // A new rank grants NOTHING until switches flip — restrictive by
-        // default so creating one can never silently widen anyone's access.
+        // Blank grants NOTHING until switches flip — restrictive by default,
+        // so creating one can never silently widen anyone's access. The Admin
+        // preset is the one deliberate exception: both masters on, stated on
+        // the chip before you press Create.
+        const all = preset === "admin";
         setRanks((rs) => [
           ...rs,
-          { id: res.id, name, allPermissions: false, permissions: [], allMetrics: false, metricKeys: [], inherits: [] },
+          { id: res.id, name, allPermissions: all, permissions: [], allMetrics: all, metricKeys: [], inherits: [] },
         ]);
         setExpandedId(res.id);
         setNewName("");
+        setAdding(false);
       } else {
         showToast(res.error);
       }
@@ -147,151 +178,228 @@ export function RanksPanel({
         </p>
       )}
 
-      {ranks.length === 0 ? (
-        <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-small text-muted-foreground">
-          No ranks yet — everyone has full access. Create one to start limiting what members see.
-        </p>
-      ) : (
-        <div className="divide-y divide-border rounded-card border border-border bg-card shadow-card">
-          {ranks.map((r) => {
-            const open = expandedId === r.id;
-            const holders = memberCounts[r.id] ?? 0;
-            const others = ranks.filter((o) => o.id !== r.id);
-            return (
-              <div key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExpandedId(open ? null : r.id);
-                    setConfirmingDelete(null);
-                  }}
-                  className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-muted"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-base font-semibold text-foreground">{r.name}</span>
-                    <span className="text-tiny text-muted-foreground">
-                      {count(holders, "member")} · {summary(r)}
-                    </span>
-                  </span>
-                  <ChevronDown
-                    size={16}
-                    className={`shrink-0 text-neutral-400 transition-transform ${open ? "rotate-180" : ""}`}
-                  />
-                </button>
+      {/* Each rank is a CARD — the builder's step-card anatomy (coloured mark,
+          text-lead title, text-tiny meta), stacked with air between them like
+          steps on the canvas. Expanding one grows it into a panel-chrome-style
+          surface: hairline-divided groups on the one white plane. */}
+      <div className="flex flex-col gap-3">
+        {ranks.length === 0 && (
+          <p className="py-2 text-center text-small text-muted-foreground">
+            No ranks yet — everyone has full access. Create one to start limiting what members see.
+          </p>
+        )}
 
-                {open && (
-                  <div className="border-t border-border px-4 pb-4 pt-3">
-                    <Group label="Permissions">
+        {ranks.map((r, i) => {
+          const open = expandedId === r.id;
+          const holders = memberCounts[r.id] ?? 0;
+          const others = ranks.filter((o) => o.id !== r.id);
+          return (
+            /* overflow-hidden is safe here (nothing inside pops over the edge —
+               the delete confirm is inline) and keeps the header's hover tint
+               within the 16px corners. */
+            <div key={r.id} className="overflow-hidden rounded-surface border border-border bg-card shadow-card">
+              <button
+                type="button"
+                onClick={() => {
+                  setExpandedId(open ? null : r.id);
+                  setConfirmingDelete(null);
+                }}
+                className="flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-muted"
+              >
+                <span
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control"
+                  style={{ backgroundColor: RANK_ACCENTS[i % RANK_ACCENTS.length] }}
+                  aria-hidden
+                >
+                  <Shield size={18} strokeWidth={2.25} className="text-white" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-lead font-semibold text-foreground">{r.name}</span>
+                  <span className="block text-tiny text-muted-foreground">
+                    {count(holders, "member")} · {summary(r)}
+                  </span>
+                </span>
+                <ChevronDown
+                  size={16}
+                  className={`shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {open && (
+                <div className="divide-y divide-border border-t border-border">
+                  <Group label="Permissions" hint="What members holding this rank can do.">
+                    {/* The master carries its own hairline: "everything" is a
+                        different kind of statement from any one grant. */}
+                    <div className="mb-1 border-b border-border pb-1">
                       <ToggleRow
                         bold
                         label="All permissions"
                         on={r.allPermissions}
                         onChange={() => save(r.id, { allPermissions: !r.allPermissions })}
                       />
-                      {/* While the master is on, the rows below are IMPLIED —
-                          shown on but disabled — and the underlying array is
-                          left alone, so flipping the master off restores the
-                          exact selection it covered. */}
-                      {PERMISSIONS.map((p) => (
-                        <ToggleRow
-                          key={p.key}
-                          label={p.label}
-                          blurb={p.blurb}
-                          on={r.permissions.includes(p.key)}
-                          implied={r.allPermissions}
-                          onChange={() => save(r.id, { permissions: toggled(r.permissions, p.key) })}
-                        />
-                      ))}
-                    </Group>
+                    </div>
+                    {/* While the master is on, the rows below are IMPLIED —
+                        shown on but disabled — and the underlying array is
+                        left alone, so flipping the master off restores the
+                        exact selection it covered. */}
+                    {PERMISSIONS.map((p) => (
+                      <ToggleRow
+                        key={p.key}
+                        icon={PERMISSION_ICONS[p.key]}
+                        label={p.label}
+                        blurb={p.blurb}
+                        on={r.permissions.includes(p.key)}
+                        implied={r.allPermissions}
+                        onChange={() => save(r.id, { permissions: toggled(r.permissions, p.key) })}
+                      />
+                    ))}
+                  </Group>
 
-                    <Group label="Metrics">
-                      {/* The master stays even with an empty catalogue: the
-                          blanket grant exists so "everything" doesn't go stale
-                          as flows get published later. */}
+                  <Group label="Metrics" hint="Which dashboard tiles this rank can see.">
+                    {/* The master stays even with an empty catalogue: the
+                        blanket grant exists so "everything" doesn't go stale
+                        as flows get published later. */}
+                    <div className="mb-1 border-b border-border pb-1">
                       <ToggleRow
                         bold
                         label="All metrics"
                         on={r.allMetrics}
                         onChange={() => save(r.id, { allMetrics: !r.allMetrics })}
                       />
-                      {catalogue.length === 0 ? (
-                        <p className="py-1.5 text-tiny text-muted-foreground">
-                          Publish a flow and its metrics appear here.
-                        </p>
-                      ) : (
-                        catalogue.map((c) => (
-                          <ToggleRow
-                            key={c.key}
-                            label={c.name}
-                            on={r.metricKeys.includes(c.key)}
-                            implied={r.allMetrics}
-                            onChange={() => save(r.id, { metricKeys: toggled(r.metricKeys, c.key) })}
-                          />
-                        ))
-                      )}
-                    </Group>
+                    </div>
+                    {catalogue.length === 0 ? (
+                      <p className="py-1.5 text-tiny text-muted-foreground">
+                        Publish a flow and its metrics appear here.
+                      </p>
+                    ) : (
+                      catalogue.map((c) => (
+                        <ToggleRow
+                          key={c.key}
+                          icon={LineChart}
+                          label={c.name}
+                          on={r.metricKeys.includes(c.key)}
+                          implied={r.allMetrics}
+                          onChange={() => save(r.id, { metricKeys: toggled(r.metricKeys, c.key) })}
+                        />
+                      ))
+                    )}
+                  </Group>
 
-                    <Group label="Inherit from">
-                      {others.length === 0 ? (
-                        <p className="py-1.5 text-tiny text-muted-foreground">
-                          Create a second rank and it appears here.
-                        </p>
-                      ) : (
-                        others.map((o) => (
-                          <ToggleRow
-                            key={o.id}
-                            label={o.name}
-                            blurb={`Gets everything ${o.name} can see and do, and follows when ${o.name} changes`}
-                            on={r.inherits.includes(o.id)}
-                            onChange={() => save(r.id, { inherits: toggled(r.inherits, o.id) })}
-                          />
-                        ))
-                      )}
-                    </Group>
+                  <Group label="Inherit from" hint="Stack another rank's grants on top of this one.">
+                    {others.length === 0 ? (
+                      <p className="py-1.5 text-tiny text-muted-foreground">
+                        Create a second rank and it appears here.
+                      </p>
+                    ) : (
+                      others.map((o) => (
+                        <ToggleRow
+                          key={o.id}
+                          icon={GitBranch}
+                          label={o.name}
+                          blurb={`Gets everything ${o.name} can see and do, and follows when ${o.name} changes`}
+                          on={r.inherits.includes(o.id)}
+                          onChange={() => save(r.id, { inherits: toggled(r.inherits, o.id) })}
+                        />
+                      ))
+                    )}
+                  </Group>
 
-                    <Group label="Danger">
-                      {confirmingDelete === r.id ? (
-                        <div className="flex flex-wrap items-center justify-between gap-3 py-1.5">
-                          <p className="text-small text-neutral-600">{deleteLine(holders)}</p>
-                          <span className="flex shrink-0 gap-2">
-                            <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmingDelete(null)}>
-                              Cancel
-                            </Button>
-                            <Button type="button" variant="destructive" size="sm" onClick={() => destroy(r.id)}>
-                              Delete rank
-                            </Button>
-                          </span>
-                        </div>
-                      ) : (
-                        /* destructiveGhost: the Danger label already names the
-                           stakes, so the trigger stays quiet until hovered —
-                           the confirm step is where the red lives. */
-                        <Button type="button" variant="destructiveGhost" size="sm" onClick={() => setConfirmingDelete(r.id)}>
-                          Delete rank
-                        </Button>
-                      )}
-                    </Group>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                  <Group label="Danger" hint="Deleting a rank returns its members to full access.">
+                    {confirmingDelete === r.id ? (
+                      <div className="flex flex-wrap items-center justify-between gap-3 py-1.5">
+                        <p className="text-small text-muted-foreground">{deleteLine(holders)}</p>
+                        <span className="flex shrink-0 gap-2">
+                          <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmingDelete(null)}>
+                            Cancel
+                          </Button>
+                          <Button type="button" variant="destructive" size="sm" onClick={() => destroy(r.id)}>
+                            Delete rank
+                          </Button>
+                        </span>
+                      </div>
+                    ) : (
+                      /* destructiveGhost: the Danger label already names the
+                         stakes, so the trigger stays quiet until hovered —
+                         the confirm step is where the red lives. */
+                      <Button type="button" variant="destructiveGhost" size="sm" onClick={() => setConfirmingDelete(r.id)}>
+                        Delete rank
+                      </Button>
+                    )}
+                  </Group>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
-      <form onSubmit={create} className="mt-3 flex gap-2">
-        <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          required
-          placeholder="New rank name"
-          aria-label="New rank name"
-          className="w-full max-w-sm rounded-control border border-input bg-card px-3 py-2 text-base text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
-        />
-        <Button type="submit" disabled={creating || newName.trim() === ""}>
-          Create
-        </Button>
-      </form>
+        {/* The list's foot: the builder's "Add next step" ghost, until it is
+            clicked — then the same spot holds the name input and Create. */}
+        {adding ? (
+          <form
+            onSubmit={create}
+            className="space-y-3 rounded-surface border border-border bg-card p-3 shadow-card"
+          >
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setAdding(false);
+                }}
+                required
+                placeholder="New rank name"
+                aria-label="New rank name"
+                className="w-full max-w-sm rounded-control border border-input bg-card px-3 py-2 text-base text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+              />
+              <Button type="submit" disabled={creating || newName.trim() === ""}>
+                Create
+              </Button>
+            </div>
+            {/* Whop's presets, reduced to the one that earns its place: Admin.
+                A preset is a STARTING POINT — it creates an ordinary rank with
+                both masters on, fully editable after — so the chip says what it
+                does rather than hiding it behind a name. */}
+            <div className="flex items-center gap-2">
+              {(
+                [
+                  { value: undefined, label: "Start blank", blurb: "grants nothing until you flip switches" },
+                  { value: "admin" as const, label: "Admin preset", blurb: "all permissions and all metrics, on" },
+                ] as const
+              ).map((o) => (
+                <button
+                  key={o.label}
+                  type="button"
+                  onClick={() => setPreset(o.value)}
+                  aria-pressed={preset === o.value}
+                  className={`rounded-full px-3 py-1.5 text-small font-medium transition-colors ${
+                    preset === o.value
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border bg-card text-foreground hover:bg-muted"
+                  }`}
+                  title={o.blurb}
+                >
+                  {o.label}
+                </button>
+              ))}
+              <span className="text-tiny text-muted-foreground">
+                {preset === "admin" ? "All permissions and all metrics, on — editable after." : "Grants nothing until you flip switches."}
+              </span>
+            </div>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="flex w-full items-center gap-2.5 rounded-surface border-2 border-dashed border-border p-3 text-left text-base font-semibold text-muted-foreground transition-all hover:border-primary hover:text-primary"
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
+              <Plus size={15} strokeWidth={2.5} />
+            </span>
+            New rank
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -342,7 +450,7 @@ export function MemberRankSelect({
         value={value}
         onChange={(e) => change(e.target.value)}
         aria-label="Rank"
-        className="rounded-control border border-input bg-card px-2 py-1 text-tiny text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+        className="h-8 rounded-control border border-input bg-card px-2.5 text-small text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
       >
         <option value="">Full access</option>
         {ranks.map((r) => (
@@ -355,16 +463,23 @@ export function MemberRankSelect({
   );
 }
 
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * One hairline-divided group of the expanded editor, shaped like the config
+ * panel's fields: a bold black label that IS the question, one muted line of
+ * explainer under it, then the rows.
+ */
+function Group({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
   return (
-    <div className="mt-4 first:mt-0">
-      <p className="mb-1 text-tiny font-semibold uppercase tracking-wide text-neutral-400">{label}</p>
-      {children}
+    <div className="px-4 py-4">
+      <p className="text-base font-semibold text-foreground">{label}</p>
+      <p className="mt-0.5 text-tiny text-muted-foreground">{hint}</p>
+      <div className="mt-2">{children}</div>
     </div>
   );
 }
 
 function ToggleRow({
+  icon: Icon,
   label,
   blurb,
   on,
@@ -372,6 +487,8 @@ function ToggleRow({
   bold = false,
   onChange,
 }: {
+  /** The row's glyph, in a 28px muted tile. Master rows go without. */
+  icon?: LucideIcon;
   label: string;
   blurb?: string;
   on: boolean;
@@ -381,9 +498,16 @@ function ToggleRow({
   onChange: () => void;
 }) {
   return (
-    <div className={`flex items-center justify-between gap-4 py-1.5 ${implied ? "opacity-45" : ""}`}>
-      <span className="min-w-0">
-        <span className={`block truncate text-base ${bold ? "font-semibold" : ""} text-foreground`}>{label}</span>
+    <div className={`flex items-center gap-3 py-2 ${implied ? "opacity-45" : ""}`}>
+      {Icon && (
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-muted text-muted-foreground" aria-hidden>
+          <Icon size={15} strokeWidth={2} />
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className={`block truncate text-base ${bold ? "font-semibold" : "font-medium"} text-foreground`}>
+          {label}
+        </span>
         {blurb && <span className="block text-tiny text-muted-foreground">{blurb}</span>}
       </span>
       <Switch on={implied || on} disabled={implied} onChange={onChange} label={label} />
@@ -392,11 +516,12 @@ function ToggleRow({
 }
 
 /**
- * FlowSwitch's geometry (src/components/flow/FlowToolbar.tsx), one size down —
+ * FlowSwitch's geometry (src/components/flow/FlowToolbar.tsx), exactly —
  * settings must feel like the same product as the builder, so the knob rides
- * the same spring. 16px knob in a 36px track: 18px = 36 − 16 − the 2px inset
- * it rests in when off. No opacity here when disabled — the implied row dims
- * as a whole, and dimming twice reads as broken rather than covered.
+ * the same spring in the same track: 20px knob in a 40px track, 18px = 40 −
+ * 20 − the 2px inset it rests in when off. No opacity here when disabled —
+ * the implied row dims as a whole, and dimming twice reads as broken rather
+ * than covered.
  */
 function Switch({
   on,
@@ -417,12 +542,12 @@ function Switch({
       disabled={disabled}
       onClick={onChange}
       aria-label={label}
-      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-primary" : "bg-neutral-200"} ${
+      className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${on ? "bg-primary" : "bg-neutral-200"} ${
         disabled ? "cursor-not-allowed" : "hover:brightness-105"
       }`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm ${on ? "left-[18px]" : "left-0.5"}`}
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm ${on ? "left-[18px]" : "left-0.5"}`}
         style={{ transition: "left .22s cubic-bezier(.34,1.56,.64,1)" }}
         aria-hidden
       />

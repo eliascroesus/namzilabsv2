@@ -2241,6 +2241,40 @@ deleting the owner check and watching exactly that test fail.
 
 ---
 
+### 10v. Governance is a grant, and the tab looks like the product
+
+**The hole:** a plain unranked member could open Settings and reassign
+everyone's ranks — the bug report was a screenshot of exactly that. The cause
+was the bootstrap fallback ("unranked may manage"), which the owner table had
+already made obsolete.
+
+**The researched rule** (Whop / Canva / Miro / Notion all draw the same line):
+*can use everything* and *can govern everyone* are different trusts. Members
+never manage members by default. So: owner and WorkOS admins always govern;
+everyone else only through an explicit **Manage workspace** permission on
+their rank; an unranked member keeps full PRODUCT access and zero governance.
+Inviting members is governance too — gated server-side, form hidden.
+
+**The Admin preset** is Whop's pattern reduced to the one preset that earns
+its place: "Start blank / Admin preset" chips on the create row. A preset is a
+STARTING POINT — it writes an ordinary rank with both masters on, fully
+editable after, so there is no second code path for presets to drift from.
+All-permissions includes governance, and the chip says what it does before
+you press Create.
+
+**WorkOS needs no configuration, ever.** The `role === "admin"` check stays as
+a free compatibility path for a future enterprise that configures roles for
+SSO reasons; nothing in the product depends on it.
+
+**The tab wears the builder's anatomy now:** members and ranks as cards with a
+36px mark (initials avatars, the owner's solid violet — the one accent in the
+list, like the rail's N; Shield marks tinted from the node accents for ranks),
+title + one quiet meta line, hairline-divided editor groups with bold black
+labels and icon-tile permission rows, FlowSwitch-geometry switches, and "New
+rank" as the builder's dashed ghost row.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

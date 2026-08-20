@@ -17,9 +17,15 @@ export const PERMISSIONS = [
   { key: "create_flows", label: "Build flows & metrics", blurb: "Create, edit, publish and delete flows and dashboard metrics" },
   { key: "view_integrations", label: "View integrations", blurb: "Open the Apps page and see connections" },
   { key: "connect_integrations", label: "Manage integrations", blurb: "Connect and remove app accounts" },
+  // GOVERNANCE, not product access. Consulted only through canManageRanks —
+  // deliberately NOT satisfied by the unranked member's full-product-access
+  // default, because "can use everything" and "can govern everyone" are
+  // different trusts everywhere this was researched (Whop's admin preset,
+  // Canva's team admin, Notion's membership admin, Miro's team admin).
+  { key: "manage_workspace", label: "Manage workspace", blurb: "Invite members, create ranks and assign them" },
 ] as const;
 
-export type PermissionKey = "create_flows" | "view_integrations" | "connect_integrations";
+export type PermissionKey = "create_flows" | "view_integrations" | "connect_integrations" | "manage_workspace";
 
 /** One rank as stored: a bundle of grants plus the rank ids it inherits from. */
 export type RankRow = {
@@ -146,49 +152,49 @@ export async function effectiveAccess(
 }
 
 /**
- * WHO MAY MANAGE RANKS.
+ * WHO MAY GOVERN THE WORKSPACE — manage ranks, assign them, invite members.
  *
- * The first gate was `role === "admin"` — and nobody could see the feature,
- * because WorkOS hands out the `admin` slug only when roles are configured in
- * the WorkOS dashboard, which a self-serve workspace has never done. Both
- * members of the very org this shipped to were plain "member", owner included.
- *
- * So the rule matches the product's actual trust model instead of a config
- * nobody has set: a WorkOS admin may always manage ranks, and otherwise any
- * member who is UNRANKED may — the same people who already hold full access
- * to everything else. The moment a member is assigned a rank they lose the
- * ability to touch the rank system (a restricted member must not be able to
- * unassign their own restriction), and configuring real admin roles in WorkOS
- * tightens the whole thing at any time with no code change.
+ * Owner and WorkOS admins always; everyone else only through an EXPLICIT
+ * `manage_workspace` grant on their rank. An UNRANKED member gets full
+ * PRODUCT access (that default keeps zero-setup workspaces working) but NO
+ * governance — the first version fell back to "unranked may manage", and the
+ * bug report was a screenshot of a plain member reassigning everyone's ranks.
+ * "Can use everything" and "can govern everyone" are different trusts in
+ * every product this was measured against (Whop, Canva, Notion, Miro):
+ * members never manage members by default.
  */
 export async function canManageRanks(db: DB, ctx: { orgId: string; userId: string; role?: string }): Promise<boolean> {
   if (ctx.role === "admin") return true;
-  // The creator, recorded by us at org creation (workspace_owners) — the
-  // durable answer to "who is in charge here" that WorkOS's default config
-  // cannot give. Ranked or not, the owner may always manage ranks.
   const [owner] = await db
     .select({ userId: workspaceOwners.userId })
     .from(workspaceOwners)
     .where(eq(workspaceOwners.orgId, ctx.orgId))
     .limit(1);
   if (owner?.userId === ctx.userId) return true;
-  // Unranked = may manage. Checked against the assignment row directly rather
-  // than Access.admin, which is deliberately false for unranked members (they
-  // hold full access without being administrators). A dangling assignment to
-  // a deleted rank counts as unranked here for the same reason it does in
-  // effectiveAccess: a deleted rank must never lock anyone out.
+
   const [assignment] = await db
     .select({ rankId: rankAssignments.rankId })
     .from(rankAssignments)
     .where(and(eq(rankAssignments.orgId, ctx.orgId), eq(rankAssignments.userId, ctx.userId)))
     .limit(1);
-  if (!assignment) return true;
-  const [rank] = await db
-    .select({ id: workspaceRanks.id })
+  if (!assignment) return false;
+
+  const rows = await db
+    .select({
+      id: workspaceRanks.id,
+      name: workspaceRanks.name,
+      allPermissions: workspaceRanks.allPermissions,
+      permissions: workspaceRanks.permissions,
+      allMetrics: workspaceRanks.allMetrics,
+      metricKeys: workspaceRanks.metricKeys,
+      inherits: workspaceRanks.inherits,
+    })
     .from(workspaceRanks)
-    .where(and(eq(workspaceRanks.orgId, ctx.orgId), eq(workspaceRanks.id, assignment.rankId)))
-    .limit(1);
-  return !rank;
+    .where(eq(workspaceRanks.orgId, ctx.orgId));
+  const ranks = new Map<string, RankRow>(rows.map((r) => [r.id, r]));
+  if (!ranks.has(assignment.rankId)) return false;
+  const resolved = resolveRank(ranks, assignment.rankId);
+  return resolved.allPermissions || resolved.permissions.has("manage_workspace");
 }
 
 /**

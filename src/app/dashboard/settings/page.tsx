@@ -16,6 +16,13 @@ export const dynamic = "force-dynamic";
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
 
+/** The avatar tile's two letters, from the email's local part — display only. */
+const initials = (email: string) => {
+  const parts = (email.split("@")[0] ?? "").split(/[^a-zA-Z0-9]+/).filter(Boolean);
+  const s = parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : (parts[0] ?? email).slice(0, 2);
+  return (s || "?").toUpperCase();
+};
+
 /**
  * Workspace settings — today that means MEMBERS. Tenancy in this product IS
  * the organization, and until this page existed the product could create a
@@ -148,32 +155,50 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </div>
         )}
 
-        <section className="mt-8">
+        <section className="mt-10">
           <h2 className="mb-3 text-micro font-semibold uppercase tracking-wide text-neutral-400">Members</h2>
-          <div className="divide-y divide-border rounded-card border border-border bg-card shadow-card">
+          <div className="divide-y divide-border rounded-surface border border-border bg-card shadow-card">
             {members.map((m) => {
               const rankName = rankNameById.get(rankIdByUser.get(m.userId) ?? "");
               return (
-                <div key={m.id} className="flex items-center justify-between px-4 py-3 text-base">
-                  <span className="text-foreground">
-                    {m.email}
-                    {m.userId === userId && <span className="ml-2 text-tiny text-neutral-400">(you)</span>}
+                /* The builder-card anatomy: a round mark, a semibold title, one
+                   muted meta line. The OWNER's avatar is the list's single
+                   solid-violet accent — like the rail's N. */
+                <div key={m.id} className="flex items-center gap-3 px-4 py-3">
+                  <span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-tiny font-semibold ${
+                      m.role === "owner" ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+                    }`}
+                    aria-hidden
+                  >
+                    {initials(m.email)}
                   </span>
-                  <span className="flex items-center gap-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-1.5">
+                      <span className="truncate text-base font-semibold text-foreground">{m.email}</span>
+                      {m.userId === userId && <span className="shrink-0 text-tiny text-muted-foreground">(you)</span>}
+                    </span>
+                    <span className="block text-tiny text-muted-foreground">{rankName ?? "Full access"}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-3">
                     {/* Admins assign ranks in place; everyone else just sees
-                        them. An admin picking a rank for another admin is
-                        allowed and harmless — admins are never restricted,
-                        even with a rank assigned. */}
-                    {isAdmin ? (
+                        them (the meta line above). An admin picking a rank for
+                        another admin is allowed and harmless — admins are
+                        never restricted, even with a rank assigned. */}
+                    {isAdmin && (
                       <MemberRankSelect
                         memberUserId={m.userId}
                         rankId={rankIdByUser.get(m.userId) ?? null}
                         ranks={rankOptions}
                       />
-                    ) : (
-                      rankName && <span className="text-tiny text-neutral-400">{rankName}</span>
                     )}
-                    <span className="text-micro uppercase tracking-wide text-neutral-400">{m.role}</span>
+                    {m.role === "owner" ? (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-micro font-bold uppercase text-primary">
+                        {m.role}
+                      </span>
+                    ) : (
+                      <span className="text-micro uppercase tracking-wide text-neutral-400">{m.role}</span>
+                    )}
                   </span>
                 </div>
               );
@@ -182,47 +207,58 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </section>
 
         {isAdmin && (
-          <section className="mt-8">
+          <section className="mt-10">
             <h2 className="mb-3 text-micro font-semibold uppercase tracking-wide text-neutral-400">Ranks</h2>
             <RanksPanel ranks={rankRows} memberCounts={memberCounts} catalogue={catalogue} />
           </section>
         )}
 
-        <section className="mt-8">
+        {/* Inviting is governance — hidden with the rank editor. The action
+            re-checks server-side; this is the courtesy. */}
+        {isAdmin && (
+        <section className="mt-10">
           <h2 className="mb-3 text-micro font-semibold uppercase tracking-wide text-neutral-400">Invite a teammate</h2>
-          <form action={inviteMemberAction} className="flex gap-2">
-            <input
-              type="email"
-              name="email"
-              required
-              placeholder="teammate@company.com"
-              className="w-full max-w-sm rounded-control border border-input bg-card px-3 py-2 text-base text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
-            />
-            <Button type="submit">Send invite</Button>
-          </form>
-          <p className="mt-2 text-tiny text-muted-foreground">
-            An email with a join link goes out automatically. Rather send it yourself? The same link appears
-            under <b>Pending invitations</b> the moment you press Send — copy it into Slack, a text, anywhere.
-            Invites expire automatically.
-          </p>
+          <div className="rounded-surface border border-border bg-card p-4 shadow-card">
+            <form action={inviteMemberAction} className="flex gap-2">
+              <input
+                type="email"
+                name="email"
+                required
+                placeholder="teammate@company.com"
+                className="w-full max-w-sm rounded-control border border-input bg-card px-3 py-2 text-base text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+              />
+              <Button type="submit">Send invite</Button>
+            </form>
+            <p className="mt-2.5 text-tiny text-muted-foreground">
+              An email with a join link goes out automatically — the same link appears under{" "}
+              <b>Pending invitations</b> for you to copy into Slack, a text, anywhere. Invites expire automatically.
+            </p>
+          </div>
         </section>
+        )}
 
         {pending.length > 0 && (
-          <section className="mt-8">
+          <section className="mt-10">
             <h2 className="mb-3 text-micro font-semibold uppercase tracking-wide text-neutral-400">Pending invitations</h2>
-            <div className="divide-y divide-border rounded-card border border-border bg-card shadow-card">
+            <div className="divide-y divide-border rounded-surface border border-border bg-card shadow-card">
               {pending.map((inv) => (
-                <div key={inv.id} className="px-4 py-3 text-base">
-                  <div className="flex items-center justify-between">
-                    <span className="text-foreground">
-                      {inv.email}
-                      {inv.expiresAt && (
-                        <span className="ml-2 text-tiny text-neutral-400">
-                          expires {new Date(inv.expiresAt).toLocaleDateString()}
-                        </span>
-                      )}
+                <div key={inv.id} className="px-4 py-3">
+                  {/* Same recipe as the Members card: avatar mark, semibold
+                      title, one muted meta line, quiet action at the edge. */}
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-tiny font-semibold text-primary"
+                      aria-hidden
+                    >
+                      {initials(inv.email)}
                     </span>
-                    <form action={revokeInviteAction}>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-base font-semibold text-foreground">{inv.email}</span>
+                      <span className="block text-tiny text-muted-foreground">
+                        {inv.expiresAt ? `Invited · expires ${new Date(inv.expiresAt).toLocaleDateString()}` : "Invited"}
+                      </span>
+                    </span>
+                    <form action={revokeInviteAction} className="shrink-0">
                       <input type="hidden" name="invitationId" value={inv.id} />
                       {/* destructiveGhost, not destructive: revoking is a real
                           action but never the point of this list — quiet until
@@ -238,7 +274,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                       like a missing feature instead of a missing <CopyField>.
                       Not `isUrl`: that flag exists to catch an unset APP_BASE_URL
                       on OUR urls; this one is WorkOS-hosted and never malformed. */}
-                  <div className="mt-2">
+                  <div className="mt-2 pl-12">
                     <CopyField
                       label="Invite link — send it any way you like"
                       value={inv.acceptInvitationUrl}

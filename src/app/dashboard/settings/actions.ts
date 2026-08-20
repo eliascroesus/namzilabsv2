@@ -31,7 +31,11 @@ import { PERMISSIONS, type RankRow, canManageRanks } from "@/lib/permissions";
 const emailSchema = z.string().trim().toLowerCase().email();
 
 export async function inviteMemberAction(formData: FormData): Promise<void> {
-  const { orgId, userId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId, userId } = ctx;
+  // Inviting is GOVERNANCE, same tier as ranks: members never add members in
+  // any of the products this model was measured against.
+  if (!(await canManageRanks(getDb(), ctx))) redirect("/dashboard/settings?invite_error=Your rank doesn't allow inviting members.");
   const parsed = emailSchema.safeParse(formData.get("email"));
   if (!parsed.success) redirect("/dashboard/settings?invite_error=That doesn't look like an email address.");
 
@@ -52,7 +56,9 @@ export async function inviteMemberAction(formData: FormData): Promise<void> {
 }
 
 export async function revokeInviteAction(formData: FormData): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (!(await canManageRanks(getDb(), ctx))) redirect("/dashboard/settings?invite_error=Your rank doesn't allow managing invitations.");
   const invitationId = String(formData.get("invitationId") ?? "");
   if (!invitationId) redirect("/dashboard/settings?invite_error=Missing invitation.");
 
@@ -96,7 +102,16 @@ function rankErrorMessage(e: unknown): string {
   return msg.slice(0, 200);
 }
 
-export async function createRankAction(name: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+export async function createRankAction(
+  name: string,
+  /**
+   * "admin" creates the Whop-style preset: every permission and every metric,
+   * on. It is a STARTING POINT, not a special kind — the row it writes is an
+   * ordinary rank whose masters are switched on, fully editable afterwards,
+   * so there is no second code path for presets to drift from.
+   */
+  preset?: "admin",
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const ctx = await requireOrg();
   const { orgId } = ctx;
   if (!(await canManageRanks(getDb(), ctx))) return { ok: false, error: ADMIN_ONLY };
@@ -107,7 +122,9 @@ export async function createRankAction(name: string): Promise<{ ok: true; id: st
   // plain strings — see the schema comment on workspace_ranks.
   const id = randomUUID();
   try {
-    await getDb().insert(workspaceRanks).values({ id, orgId, name: trimmed });
+    await getDb()
+      .insert(workspaceRanks)
+      .values({ id, orgId, name: trimmed, allPermissions: preset === "admin", allMetrics: preset === "admin" });
   } catch (e) {
     return { ok: false, error: rankErrorMessage(e) };
   }
