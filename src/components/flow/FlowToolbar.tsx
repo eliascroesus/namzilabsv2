@@ -52,6 +52,13 @@ import { Button } from "@/components/ui/button";
  * hairline divider between groups. Glyphs are 26px and near-black beside 15px
  * text — Miro's toolbar icons read as objects; 17px grey was a toolbar
  * whispering.
+ *
+ * Nothing here moves. The right island and the bottom bar used to slide left
+ * whenever the config panel opened, because the panel ran the full height of
+ * the viewport and would otherwise have covered the primary action. The panel
+ * now stops at `--spacing-chrome-band` — the 58px island plus its insets, top
+ * and bottom — so the chrome can hold still and the eye keeps the primary
+ * action and "Test flow" exactly where it left them.
  */
 export type SaveState = "saved" | "saving" | "unsaved" | "error";
 
@@ -117,7 +124,6 @@ export function FlowToolbar({
   isPublished,
   publishing,
   onReview,
-  panelOpen,
   onUndo,
   onRedo,
   canUndo,
@@ -143,7 +149,6 @@ export function FlowToolbar({
   isPublished: boolean;
   publishing: boolean;
   onReview: () => void;
-  panelOpen: boolean;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -157,9 +162,6 @@ export function FlowToolbar({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-
-  /** The right island and the bottom bar both step aside for the config panel. */
-  const panelInset = panelOpen ? "calc(min(452px, 100vw - 3rem) + 2.25rem)" : "1.5rem";
 
   return (
     <>
@@ -210,13 +212,11 @@ export function FlowToolbar({
       </div>
 
       {/* ── Top-right: STATE AND ACTIONS ──────────────────────────────
-          Whether it saved, what you can do to it, and shipping it. It rides
-          the same inset as the bottom bar so the config panel never opens on
-          top of the primary action — the two surfaces slide together. */}
-      <div
-        className="pointer-events-none absolute top-6 z-10 flex justify-end transition-[right] duration-200 ease-out"
-        style={{ right: panelInset }}
-      >
+          Whether it saved, what you can do to it, and shipping it. It sits at
+          the same 24px inset as everything else and STAYS there: the config
+          panel now opens in the band between this island and the bottom bar,
+          so neither has to slide out of its way. */}
+      <div className="pointer-events-none absolute right-6 top-6 z-10 flex justify-end">
         <Island>
           {/* Words, no dot. The reference this island copies has a green dot,
               and it is deliberately not here: a dot needs a legend and a word
@@ -288,10 +288,7 @@ export function FlowToolbar({
       {/* ── Bottom centre: EVERYTHING YOU DO TO THE CANVAS ──────────────
           Make's bar. Run first as a filled primary, then the quiet controls
           behind a divider — under your hands, not tucked in a corner. */}
-      <div
-        className="pointer-events-none absolute bottom-6 z-10 flex justify-center transition-[right] duration-200 ease-out"
-        style={{ left: "1.5rem", right: panelInset }}
-      >
+      <div className="pointer-events-none absolute bottom-6 left-6 right-6 z-10 flex justify-center">
         <Island>
           {showTestAll && (
             <>

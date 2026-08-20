@@ -15,7 +15,7 @@ import { FlowToolbar } from "./FlowToolbar";
  * The name is real state so the field can be typed in, which is the only part
  * of this toolbar worth exercising on a static page.
  */
-export function ToolbarPreview({ panelOpen = false }: { panelOpen?: boolean }) {
+export function ToolbarPreview() {
   const [name, setName] = useState("Speed to lead");
   const noop = () => {};
   return (
@@ -34,7 +34,6 @@ export function ToolbarPreview({ panelOpen = false }: { panelOpen?: boolean }) {
       isPublished
       publishing={false}
       onReview={noop}
-      panelOpen={panelOpen}
       onUndo={noop}
       onRedo={noop}
       canUndo

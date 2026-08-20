@@ -183,9 +183,17 @@ export function ConfigPanel({
     // Fixed at 452px, which on a 13" laptop is 35% of the screen before the
     // field browser opens beside it. It now yields on a narrow viewport
     // instead of pushing the canvas off the left edge.
+    //
+    // It stops short of the top island and the bottom bar — `chrome-band` is
+    // their 58px height plus the 24px inset above and the 24px gap below — so
+    // the chrome never has to move out of its way. It used to run the full
+    // viewport height and open straight over "Review & publish", which meant
+    // both bars slid sideways every time a step was selected; the panel keeping
+    // to the space between them is what makes that unnecessary. Same 24px on
+    // the right as everything else floating over the canvas.
     <aside
       data-config-panel
-      className={`absolute inset-y-0 right-0 z-20 m-6 w-[min(452px,calc(100vw-3rem))] ${PANEL_SHELL} ${animClass}`}
+      className={`absolute right-6 top-chrome-band bottom-chrome-band z-20 w-[min(452px,calc(100vw-3rem))] ${PANEL_SHELL} ${animClass}`}
     >
       {/* Header — no longer a darker band. The panel is ONE white surface cut by
           hairlines, the way every other island in the builder is; three stacked

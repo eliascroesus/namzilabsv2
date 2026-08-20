@@ -7,9 +7,10 @@
 /**
  * The panel's surface, and nothing about where it sits.
  *
- * What the canvas adds on top of this (`absolute inset-y-0 right-0 z-20 m-6`
- * and the width clamped against that margin) is a fact about the canvas, not
- * about the panel — a kit page has no toolbar to be inset from. What is left
+ * What the canvas adds on top of this (`absolute right-6 top-chrome-band
+ * bottom-chrome-band z-20` and the width clamped against that inset) is a fact
+ * about the canvas, not about the panel — a kit page has neither a toolbar to
+ * be inset from nor a chrome band to stop short of. What is left
  * here is the panel itself: ONE white plane, a real hairline, and an elevation
  * with no ring in it, because a ring under a border is two hairlines of
  * different hue reading as a 2px dirty rim (see `--shadow-panel`).

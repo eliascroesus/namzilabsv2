@@ -119,6 +119,19 @@
      it read as a rounded box rather than as the app sitting in its chrome. */
   --radius-frame: 2rem;
 
+  /* --- Chrome band --------------------------------------------------------
+   * How far the builder's floating panels must stay clear of the chrome
+   * islands: 24px viewport inset + 58px island + 24px gap = 106px, measured
+   * from the top edge and mirrored at the foot.
+   *
+   * It is a token because it is ONE measurement written in two files — the
+   * island's height lives in FlowToolbar, the panel's top and bottom live in
+   * ConfigPanel — and nothing but this variable keeps them agreeing. Change the
+   * island's padding or control size and this is the number that follows.
+   * Spacing namespace, so it reaches the `top-`/`bottom-` utilities that use it.
+   */
+  --spacing-chrome-band: 106px;
+
   /* --- Elevation ----------------------------------------------------------
    * One ladder in two finishes. A surface that is merely on the page uses the
    * `raised` rung, one being dragged or hovered the `lifted` rung, one over

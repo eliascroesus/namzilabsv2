@@ -63,7 +63,12 @@ export function Sidebar({ account }: { account?: { initials: string; panel: Reac
         title="Namzilabs — dashboard"
         className="mb-[11px] flex h-[106px] w-full items-center justify-center text-title font-bold text-white transition-opacity hover:opacity-85"
       >
-        <span className="flex h-11 w-11 items-center justify-center rounded-card bg-white/20 ring-1 ring-white/25">N</span>
+        {/* THE MARK IS NOT A NAV TILE. It used to be a white wash like the
+            active item's, and once resting glyphs stopped dimming it became the
+            only washed tile on an unselected rail — so it read as a selected
+            fifth item. The accent makes it unmistakably the product rather than
+            a destination, and it is the one spot of brand colour on the rail. */}
+        <span className="flex h-11 w-11 items-center justify-center rounded-card bg-primary text-primary-foreground">N</span>
       </Link>
 
       {/* Make's rail, measured: 80px wide, a 40px rounded tile holding the
@@ -94,9 +99,13 @@ export function Sidebar({ account }: { account?: { initials: string; panel: Reac
               aria-current={active ? "page" : undefined}
               className="group flex w-full flex-col items-center"
             >
+              {/* The GLYPH is full white at every state — it is the item's
+                  identifier, and an identifier you have to squint at is a poor
+                  one. Selection is carried by the two things around it: the
+                  tile's wash and the label's step up from 75% to full. */}
               <span
-                className={`flex h-10 w-10 items-center justify-center rounded-control transition-colors ${
-                  active ? "bg-white/22 text-white" : "text-white/75 group-hover:bg-white/12 group-hover:text-white"
+                className={`flex h-10 w-10 items-center justify-center rounded-control text-white transition-colors ${
+                  active ? "bg-white/22" : "group-hover:bg-white/12"
                 }`}
               >
                 {item.icon}

@@ -1702,6 +1702,58 @@ rename.
 
 ---
 
+### 9z. Nothing moves for the panel any more
+
+**The chrome holds still.** The config panel ran `inset-y-0 … m-6` — full
+height — which put it straight through the band the top-right island and the
+bottom bar live in. To avoid the collision, FlowToolbar slid both of them
+leftwards whenever a step was selected. So opening a step moved the primary
+action and the whole zoom cluster, every time.
+
+The panel now stops short of both bars: `top-chrome-band bottom-chrome-band
+right-6`, where the band is **106px = 24px inset + 58px island + 24px gap**.
+The gap above the panel is therefore exactly the gap above Review & publish,
+which is what was asked for. And with no collision left to dodge, the entire
+step-aside is gone — `panelInset`, both inline `style` overrides, both
+`transition-[right]`, and the `panelOpen` prop itself.
+
+**The price, stated rather than discovered:** the panel is 164px shorter than
+it was (728px instead of 892px at a 940px viewport). It scrolls internally, so
+nothing is lost — but that is the cost of the chrome not moving, and it should
+be a choice.
+
+**`tests/chrome-band.test.ts` pins the relationship**, because the band lives
+in globals.css while the three numbers it is derived from live in FlowToolbar
+as Tailwind classes, and nothing else connects them: grow the islands and the
+panel silently overlaps the chrome again with no error anywhere. It also pins
+the token's *only* reference — Tailwind v4 emits a theme variable to `:root`
+only when a generated utility uses it, so `--spacing-chrome-band` exists in the
+build purely because ConfigPanel writes those two class names. That is the same
+failure mode that cost an afternoon on `--radius-frame`, where the class was on
+the element, the variable was absent from `:root`, and it looked exactly like a
+scanner bug. Sabotage-verified on both halves.
+
+**Rail glyphs are full white at every state.** Three of the four were
+`text-white/75` and read as grey. Selection is now carried by the tile wash and
+the label's step down to 75% — the two cues Make uses — rather than by dimming
+the icon.
+
+That change had a consequence worth recording: with no glyph dimmed, **the
+wordmark's white wash became the only washed tile on an unselected rail**, so
+the "N" scanned as a selected fifth nav item. It is `bg-primary` now — the one
+spot of brand colour on the rail, and unmistakably the product rather than a
+destination.
+
+**And the kit had drifted again, in the file whose job is catching drift.** Its
+rail swatch still rendered the resting glyph at `text-white/75` — the exact
+thing the change abolished, shown as canon — while the prose beside it already
+described the new rule. Its Builder-chrome comment also still claimed 16px
+insets and 108px of clearance, and claimed to have been *re-measured*; both
+were false after the chrome moved to 24px. A comment that asserts it was
+verified is worse than one that says nothing.
+
+---
+
 ## 10. What not to change
 
 Explicitly, so nobody optimises these away later:

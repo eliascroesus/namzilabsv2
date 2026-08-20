@@ -122,7 +122,7 @@ export default function DesignPage() {
                 <span className="px-1 text-center text-tiny font-medium leading-4 text-white">Active</span>
               </span>
               <span className="flex w-full flex-col items-center">
-                <span className="flex h-10 w-10 items-center justify-center rounded-control text-white/75">
+                <span className="flex h-10 w-10 items-center justify-center rounded-control text-white">
                   <Workflow size={24} strokeWidth={2.1} />
                 </span>
                 <span className="px-1 text-center text-tiny font-medium leading-4 text-white/75">Rest</span>
@@ -283,11 +283,11 @@ export default function DesignPage() {
         </Section>
 
         <Section title="Builder chrome" note="Three islands, grouped by job. Left: where you came from and what this is called. Right: whether it saved, what you can do to it, and shipping it — the canvas showing through the seam between them. Bottom: everything you do to the canvas.">
-          {/* 256px is a clearance, not a look: 16px inset + a 58px island at the
-              top, 16px inset + the 58px bottom bar, leaving 108px of canvas
-              between them. Re-measured against the real islands in
-              src/components/flow/FlowToolbar.tsx and still exact — these numbers
-              move when the islands do.
+          {/* 256px is a clearance, not a look: 24px inset + a 58px island at the
+              top, 24px inset + the 58px bottom bar, leaving 92px of canvas
+              between them. These numbers move when the islands do — the last
+              version of this comment still said 16px and 108px, and claimed to
+              have been re-measured, which is worse than saying nothing.
 
               Width is what the split added. This column makes the box 816px and
               the two top islands measure 324 and 373, so 87px of canvas sits
@@ -346,22 +346,27 @@ export default function DesignPage() {
               panel on a white page is an invisible box, and its border, its
               elevation and its 16px corner are the whole point of showing it.
 
-              The real panel is `absolute inset-y-0 right-0 z-20 m-6` INSIDE the
-              canvas — position that belongs to the canvas, not to the panel,
-              which is why panel-chrome does not carry it. There is no canvas
-              here to be inset from, so the position is stripped rather than
-              fought: this box supplies the same 24px gutter with `p-6`, pins the
-              panel to the right the way the builder does, and gives it a fixed
-              height where the real one takes the canvas's. The 452px width IS
-              the real one (it yields on a narrow viewport there; here the page
-              column is wider than that, so it never has to). */}
+              The real panel is `absolute right-6 top-chrome-band
+              bottom-chrome-band z-20` INSIDE the canvas: 24px off the right
+              edge, and 106px clear of the top and the bottom, which is the
+              58px chrome island plus a 24px inset above it and a 24px gap
+              below — the toolbar and the bottom bar keep their band, and the
+              panel never makes them move. That position belongs to the canvas,
+              not to the panel, which is why panel-chrome does not carry it.
+              There is no canvas here to be inset from, so the position is
+              stripped rather than fought: this box supplies a 24px gutter with
+              `p-6`, pins the panel to the right the way the builder does, and
+              gives it a fixed height where the real one takes the band between
+              the two bars. The 452px width IS the real one (it yields on a
+              narrow viewport there; here the page column is wider than that, so
+              it never has to). */}
           <div className="relative overflow-hidden rounded-card bg-canvas-bg p-6">
             <div
               className="absolute inset-0"
               style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
             />
             <div className="relative flex justify-end">
-              <aside className={`h-[420px] w-[452px] max-w-full ${PANEL_SHELL}`}>
+              <aside className={`h-[440px] w-[452px] max-w-full ${PANEL_SHELL}`}>
                 {/* Duplicates the panel header from src/components/flow/ConfigPanel.tsx — the 38px mark, the title input's
                     invisible-until-hovered chrome and the status pill must track that file. ONE white plane cut by hairlines:
                     the header is not a darker band. */}

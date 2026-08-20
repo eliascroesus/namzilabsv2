@@ -1438,7 +1438,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         isPublished={publishState.status === "published"}
         publishing={publishing}
         onReview={openReview}
-        panelOpen={selectedId != null}
         onUndo={undo}
         onRedo={redo}
         canUndo={hist.undo > 0}
