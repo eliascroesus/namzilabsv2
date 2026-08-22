@@ -1,5 +1,9 @@
 "use client";
 
+import { Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { fieldClasses } from "@/components/ui/input";
+import { FieldLabel } from "@/components/ui/field";
 import { OperatorSelect } from "./OperatorSelect";
 import { Select } from "./Select";
 import { ValueInput } from "./ValueInput";
@@ -10,8 +14,6 @@ import type { DataGroup, ValueModel } from "./types";
 import { NO_VALUE_FILTER_OPS, type FilterConfig } from "@/lib/flow/types";
 
 type Rule = FilterConfig["rules"][number];
-
-const LABEL = "mb-1 block text-base font-semibold text-foreground";
 
 /** Convert a stored rule's value side into the ValueInput model (looking up display info). */
 function ruleToValue(rule: Rule, groups: DataGroup[]): ValueModel {
@@ -83,7 +85,7 @@ export function ConditionEditor({
   return (
     <div className="space-y-3">
       {rules.length > 1 && (
-        <div className="flex items-center gap-2 text-tiny text-neutral-600">
+        <div className="flex items-center gap-2 text-tiny text-muted-foreground">
           <span>Continue only if</span>
           <Select
             value={value.combinator}
@@ -104,22 +106,22 @@ export function ConditionEditor({
           const noValue = NO_VALUE_FILTER_OPS.includes(rule.op);
           const isBetween = rule.op === "between";
           return (
-            <div key={i} className="rounded-xl border border-neutral-200 bg-neutral-100 p-3">
+            <div key={i} className="rounded-card border border-border bg-muted/40 p-3">
               {i > 0 && (
-                <div className="-mt-1 mb-1.5 text-micro font-semibold uppercase tracking-wide text-neutral-400">{value.combinator === "or" ? "or" : "and"}</div>
+                <div className="-mt-1 mb-1.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground">{value.combinator === "or" ? "or" : "and"}</div>
               )}
               <div className="grid grid-cols-1 gap-3">
                 <div>
-                  <label className={LABEL}>Field</label>
+                  <FieldLabel>Field</FieldLabel>
                   <FieldInput value={rule.field} groups={groups} onChange={(path) => pickField(i, path)} allowCustom={false} />
                 </div>
                 <div>
-                  <label className={LABEL}>Condition</label>
+                  <FieldLabel>Condition</FieldLabel>
                   <OperatorSelect value={rule.op} fieldType={ftype} onChange={(op) => updateRule(i, { op: op as Rule["op"] })} />
                 </div>
                 {!noValue && (
                   <div>
-                    <label className={LABEL}>{isBetween ? "From" : "Value"}</label>
+                    <FieldLabel>{isBetween ? "From" : "Value"}</FieldLabel>
                     <ValueInput
                       value={ruleToValue(rule, groups)}
                       onChange={(v) => updateRule(i, valueToRule(v))}
@@ -130,18 +132,22 @@ export function ConditionEditor({
                 )}
                 {isBetween && (
                   <div>
-                    <label className={LABEL}>To</label>
+                    <FieldLabel>To</FieldLabel>
                     <input
                       type="date"
                       value={rule.value2 ?? ""}
                       onChange={(e) => updateRule(i, { value2: e.target.value })}
-                      className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-base focus:border-neutral-400 focus:outline-none"
+                      className={cn(fieldClasses, "px-2 py-1.5 hover:border-ring/50")}
                     />
                   </div>
                 )}
               </div>
               <div className="mt-2 flex justify-end">
-                <button type="button" onClick={() => removeRule(i)} className="text-tiny text-neutral-400 hover:text-red-600">
+                <button
+                  type="button"
+                  onClick={() => removeRule(i)}
+                  className="rounded-control text-tiny text-muted-foreground outline-none transition-colors hover:text-danger-ink focus-visible:ring-4 focus-visible:ring-ring/40"
+                >
                   Remove
                 </button>
               </div>
@@ -153,9 +159,9 @@ export function ConditionEditor({
       <button
         type="button"
         onClick={addRule}
-        className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-tiny text-neutral-600 hover:border-neutral-400 hover:text-foreground"
+        className="inline-flex items-center gap-1 rounded-control border border-dashed border-border px-2.5 py-1.5 text-tiny text-muted-foreground outline-none transition-colors hover:border-ring/50 hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
       >
-        <span className="text-base leading-none">+</span> Add condition
+        <Plus size={14} strokeWidth={2.25} aria-hidden /> Add condition
       </button>
     </div>
   );

@@ -9,12 +9,12 @@ export default function PrivacyPage() {
       <Link className="text-base text-neutral-500 hover:text-foreground" href="/">
         &larr; Namzilabs
       </Link>
-      <h1 className="mt-6 text-3xl font-semibold tracking-tight">Privacy Policy</h1>
+      <h1 className="mt-6 text-display font-semibold tracking-tight text-foreground">Privacy Policy</h1>
       <p className="mt-2 text-base text-neutral-500">Last updated: July 16, 2026</p>
 
       <div className="mt-8 space-y-6 text-neutral-700">
         <section>
-          <h2 className="text-lg font-semibold text-foreground">Overview</h2>
+          <h2 className="text-title font-semibold text-foreground">Overview</h2>
           <p className="mt-2">
             Namzilabs (&ldquo;we&rdquo;) helps you consolidate data from the tools you connect into
             a single dashboard. This policy explains what we collect, how we use it, and the
@@ -22,7 +22,7 @@ export default function PrivacyPage() {
           </p>
         </section>
         <section>
-          <h2 className="text-lg font-semibold text-foreground">Information we collect</h2>
+          <h2 className="text-title font-semibold text-foreground">Information we collect</h2>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>Account information (name and email) used to sign in.</li>
             <li>
@@ -33,7 +33,7 @@ export default function PrivacyPage() {
           </ul>
         </section>
         <section>
-          <h2 className="text-lg font-semibold text-foreground">Google user data</h2>
+          <h2 className="text-title font-semibold text-foreground">Google user data</h2>
           <p className="mt-2">
             If you connect a Google account, we request read access to the Google Sheets and Google
             Drive files you choose. We use this access solely to read the spreadsheet data you ask
@@ -51,28 +51,28 @@ export default function PrivacyPage() {
           </p>
         </section>
         <section>
-          <h2 className="text-lg font-semibold text-foreground">How we use data</h2>
+          <h2 className="text-title font-semibold text-foreground">How we use data</h2>
           <p className="mt-2">
             We use connected data only to provide the Service to your organization: to display
             unified metrics and dashboards. We do not sell your data or use it for advertising.
           </p>
         </section>
         <section>
-          <h2 className="text-lg font-semibold text-foreground">Storage &amp; security</h2>
+          <h2 className="text-title font-semibold text-foreground">Storage &amp; security</h2>
           <p className="mt-2">
             Credentials and access tokens are encrypted at rest. Data is isolated per organization,
             and access is scoped to your authenticated session.
           </p>
         </section>
         <section>
-          <h2 className="text-lg font-semibold text-foreground">Your choices</h2>
+          <h2 className="text-title font-semibold text-foreground">Your choices</h2>
           <p className="mt-2">
             You can disconnect any integration at any time, which stops further data collection from
             that source. You may request deletion of your data by contacting us.
           </p>
         </section>
         <section>
-          <h2 className="text-lg font-semibold text-foreground">Contact</h2>
+          <h2 className="text-title font-semibold text-foreground">Contact</h2>
           <p className="mt-2">
             Questions or deletion requests? Email{" "}
             <a className="text-blue-600 underline" href="mailto:support@namzilabs.com">

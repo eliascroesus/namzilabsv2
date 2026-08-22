@@ -20,6 +20,13 @@ import { authkit, handleAuthkitHeaders } from "@workos-inc/authkit-nextjs";
  * Routes also enforce auth themselves (requireOrg / getOrgContext) — this
  * layer is the outer wall, not the only one.
  */
+/**
+ * `/design` is deliberately NOT here. It renders no customer data — it is the
+ * brand kit drawn with fixtures — and scripts/screenshot.mjs can only reach
+ * routes that need no session. Putting the kit page behind auth costs the one
+ * tool in the repo that can see a colour resolving to nothing, and buys
+ * hiding a style guide.
+ */
 const PROTECTED_PAGE_PREFIXES = ["/dashboard", "/onboarding", "/integrations", "/connections"];
 const PROTECTED_API_PREFIXES = ["/api/replay", "/api/results-version", "/api/oauth"];
 

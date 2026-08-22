@@ -1,6 +1,5 @@
-import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
-import { eventTypeOptions } from "@/connectors/catalog";
+import { catalogEntry, eventTypeOptions } from "@/connectors/catalog";
 import { AppShell } from "@/components/app-shell";
 import { getDb } from "@/db/client";
 import { computeFunnel, distinctSources, distinctEventTypes } from "@/lib/metrics/compute";
@@ -8,12 +7,20 @@ import { FunnelSchema } from "@/lib/metrics/types";
 import { resolveRange } from "@/lib/metrics/range";
 import { createFunnelMetricAction } from "@/app/dashboard/metrics/actions";
 import { FunnelView } from "@/components/funnel-view";
+import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input, NativeSelect } from "@/components/ui/input";
+import { FieldLabel } from "@/components/ui/field";
 
 export const dynamic = "force-dynamic";
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
 const STAGES = [0, 1, 2, 3];
+
+// The stage grid is placeholder-labelled, so the column meaning lives here.
+const STAGE_COLUMNS = ["Stage name", "Event", "Source"];
 
 export default async function NewFunnelPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -49,80 +56,102 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
-      <main className="mx-auto max-w-3xl px-6 py-10">
-        <Link href="/dashboard" className="text-base text-neutral-500 hover:text-foreground">
-          &larr; Dashboard
-        </Link>
-        <h1 className="mt-3 text-display font-semibold tracking-tight text-foreground">New funnel</h1>
-        <p className="mt-1 text-base text-neutral-500">
-          Order the stages a lead moves through. We count distinct people reaching each stage and
-          surface the biggest drop-off.
-        </p>
+      <PageContainer width="narrow">
+        <PageHeader
+          back={{ href: "/dashboard", label: "Dashboard" }}
+          title="New funnel"
+          lede="Order the stages a lead moves through. We count distinct people reaching each stage and surface the biggest drop-off."
+        />
         {one(sp.error) === "need_two_stages" && (
-          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-base text-amber-800">
+          <p className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
             A funnel needs at least two stages.
           </p>
         )}
 
-        <form method="get" className="mt-8 space-y-4 rounded-lg border border-neutral-200 p-5">
-          <label className="block">
-            <span className="mb-1 block text-base font-semibold text-foreground">Funnel name</span>
-            <input name="name" defaultValue={one(sp.name)} placeholder="SMS → Booked → Showed"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
-          </label>
-          {STAGES.map((i) => (
-            <div key={i} className="grid grid-cols-3 gap-2">
-              <input name={`stage${i}_label`} defaultValue={one(sp[`stage${i}_label`])} placeholder={`Stage ${i + 1} name`}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-base" />
-              <select name={`stage${i}_eventType`} defaultValue={one(sp[`stage${i}_eventType`])}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-base">
-                <option value="">event type…</option>
-                {/* Bound to the stage's chosen source when one is picked —
-                    per-source labels are exact; unbound they fall back to the
-                    neutral humanizer on any cross-source disagreement. */}
-                {eventTypeOptions(one(sp[`stage${i}_source`]) || null, eventTypes, one(sp[`stage${i}_eventType`]) || null).map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-              <select name={`stage${i}_source`} defaultValue={one(sp[`stage${i}_source`])}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-base">
-                <option value="">any source</option>
-                {sources.map((srcName) => (
-                  <option key={srcName} value={srcName}>{srcName}</option>
-                ))}
-              </select>
+        <Card variant="surface" className="mt-8">
+          <form method="get" className="space-y-4">
+            <div>
+              <FieldLabel htmlFor="funnel-name">Funnel name</FieldLabel>
+              <Input
+                id="funnel-name"
+                name="name"
+                defaultValue={one(sp.name)}
+                placeholder="SMS → Booked → Showed"
+              />
             </div>
-          ))}
-          <button className="rounded-md border border-neutral-300 px-4 py-2 text-base font-medium hover:bg-neutral-50">
-            Preview
-          </button>
-        </form>
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-2">
+                {STAGE_COLUMNS.map((col) => (
+                  <span key={col} className="text-tiny font-medium text-muted-foreground">
+                    {col}
+                  </span>
+                ))}
+              </div>
+              {STAGES.map((i) => (
+                <div key={i} className="grid grid-cols-3 gap-2">
+                  <Input
+                    name={`stage${i}_label`}
+                    defaultValue={one(sp[`stage${i}_label`])}
+                    placeholder={`Stage ${i + 1} name`}
+                    className="h-8 px-2 text-small"
+                  />
+                  <NativeSelect
+                    name={`stage${i}_eventType`}
+                    defaultValue={one(sp[`stage${i}_eventType`])}
+                    className="[&_select]:h-8 [&_select]:pl-2 [&_select]:pr-7 [&_select]:text-small"
+                  >
+                    <option value="">event type…</option>
+                    {/* Bound to the stage's chosen source when one is picked —
+                        per-source labels are exact; unbound they fall back to the
+                        neutral humanizer on any cross-source disagreement. */}
+                    {eventTypeOptions(one(sp[`stage${i}_source`]) || null, eventTypes, one(sp[`stage${i}_eventType`]) || null).map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </NativeSelect>
+                  <NativeSelect
+                    name={`stage${i}_source`}
+                    defaultValue={one(sp[`stage${i}_source`])}
+                    className="[&_select]:h-8 [&_select]:pl-2 [&_select]:pr-7 [&_select]:text-small"
+                  >
+                    <option value="">any source</option>
+                    {sources.map((srcName) => (
+                      <option key={srcName} value={srcName}>
+                        {catalogEntry(srcName)?.name ?? srcName}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </div>
+              ))}
+            </div>
+            <Button variant="secondary">Preview</Button>
+          </form>
+        </Card>
 
         {previewed && (
-          <section className="mt-6 rounded-lg border border-neutral-200 p-5">
-            <h2 className="text-base font-semibold uppercase tracking-wide text-neutral-500">Live preview (last 90 days)</h2>
-            {previewError ? (
-              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-base text-amber-800">{previewError}</p>
-            ) : (
-              funnel && (
-                <>
-                  <div className="mt-3">
+          <section className="mt-8">
+            <Card variant="surface">
+              <SectionHeading>Live preview (last 90 days)</SectionHeading>
+              {previewError ? (
+                <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
+                  {previewError}
+                </p>
+              ) : (
+                funnel && (
+                  <>
                     <FunnelView result={funnel} />
-                  </div>
-                  <form action={createFunnelMetricAction} className="mt-5">
-                    {hiddenKeys.map((k) => (
-                      <input key={k} type="hidden" name={k} value={one(sp[k])} />
-                    ))}
-                    <button className="rounded-md bg-neutral-900 px-5 py-2 text-base font-medium text-white hover:bg-neutral-800">
-                      Save funnel
-                    </button>
-                  </form>
-                </>
-              )
-            )}
+                    <form action={createFunnelMetricAction} className="mt-5">
+                      {hiddenKeys.map((k) => (
+                        <input key={k} type="hidden" name={k} value={one(sp[k])} />
+                      ))}
+                      <Button>Save funnel</Button>
+                    </form>
+                  </>
+                )
+              )}
+            </Card>
           </section>
         )}
-      </main>
+      </PageContainer>
     </AppShell>
   );
 }

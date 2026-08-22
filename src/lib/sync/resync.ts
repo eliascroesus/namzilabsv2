@@ -1,5 +1,6 @@
 import { and, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 import { connections, events, sourceStreams, syncState, rawEvents } from "@/db/schema";
+import { formatTime } from "@/lib/format";
 import type { DB } from "@/db/types";
 import { getConnector } from "@/connectors/registry";
 import { isStreamScoped, isMirrorSource } from "@/connectors/catalog";
@@ -642,7 +643,7 @@ export async function primeConnection(db: DB, orgId: string, connectionId: strin
   if (isStreamScoped(conn.source) || !getConnector(conn.source)?.poll) return { ok: true, refreshed: false };
 
   if (isPaused(conn)) {
-    const when = conn.pausedUntil ? ` Retrying around ${conn.pausedUntil.toLocaleTimeString()}.` : "";
+    const when = conn.pausedUntil ? ` Retrying around ${formatTime(conn.pausedUntil)}.` : "";
     return {
       ok: true,
       refreshed: false,

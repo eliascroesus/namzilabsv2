@@ -1,12 +1,13 @@
 "use client";
 
 import { DataBrowser } from "./DataBrowser";
-import { Database } from "lucide-react";
+import { ChevronDown, Database } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { fieldClasses } from "@/components/ui/input";
 import { humanizeKey } from "./field-utils";
 import type { DataGroup } from "./types";
 
-const BOX =
-  "w-full rounded-lg border border-neutral-300 bg-white py-2 pl-3 text-left text-base transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
+const BOX = cn(fieldClasses, "py-2 pl-3 text-left hover:border-ring/50");
 
 /**
  * The one field chooser used by every step (Filter conditions, Calculate's
@@ -38,8 +39,8 @@ export function FieldInput({
       onCustom={allowCustom ? (text) => onChange(text) : undefined}
       trigger={({ toggle }) => (
         <div className="relative">
-          <button type="button" onClick={toggle} className={`${BOX} ${allowCustom ? "pr-11" : "pr-9"}`}>
-            <span className={`block truncate ${chosen ? "text-foreground" : "text-neutral-400"}`}>{chosen ?? placeholder}</span>
+          <button type="button" onClick={toggle} className={cn(BOX, allowCustom ? "pr-11" : "pr-9")}>
+            <span className={`block truncate ${chosen ? "text-foreground" : "text-muted-foreground"}`}>{chosen ?? placeholder}</span>
           </button>
           {allowCustom ? (
             // A field that also accepts a typed value: the data icon opens the browser.
@@ -49,15 +50,17 @@ export function FieldInput({
               tabIndex={-1}
               title="Pick a field from your data"
               aria-label="Pick a field from your data"
-              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-brand-200 bg-brand-50 p-1 text-brand-500 transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600"
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-200 bg-brand-50 p-1 text-brand-500 outline-none transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600 focus-visible:ring-4 focus-visible:ring-ring/40"
             >
               <Database size={14} strokeWidth={2} />
             </button>
           ) : (
             // Pick-only from the dataset: a plain dropdown chevron, no data icon.
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400" aria-hidden>
-              ▾
-            </span>
+            <ChevronDown
+              size={16}
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
           )}
         </div>
       )}

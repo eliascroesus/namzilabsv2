@@ -1,5 +1,6 @@
 "use client";
 
+import { AlertTriangle, X } from "lucide-react";
 import { sourceStyle } from "./source-style";
 
 /** A small brand-coloured badge for a data source (app icon stand-in). */
@@ -7,7 +8,7 @@ export function SourceBadge({ source, size = 16 }: { source?: string | null; siz
   const s = sourceStyle(source);
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center rounded font-semibold leading-none text-white"
+      className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold leading-none text-white"
       style={{ background: s.color, width: size, height: size, fontSize: Math.round(size * 0.5) }}
       title={s.label}
       aria-hidden
@@ -46,18 +47,28 @@ export function DataPill({
   onClear?: () => void;
 }) {
   const s = fmtSample(sample);
-  const tone = stale ? "border-amber-300 bg-amber-50 text-amber-800" : "border-blue-200 bg-blue-50 text-blue-900";
+  const tone = stale ? "border-warn-soft bg-warn-soft/50 text-warn-ink" : "border-border bg-muted/50 text-foreground";
   return (
-    <span className={`inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-1 text-tiny ${tone}`} title={stale ? "This field's source is missing — pick it again" : label}>
-      {stale ? <span className="shrink-0">⚠</span> : <SourceBadge source={source} size={14} />}
+    <span className={`inline-flex max-w-full items-center gap-1 rounded-control border px-1.5 py-1 text-tiny ${tone}`} title={stale ? "This field's source is missing — pick it again" : label}>
+      {stale ? <AlertTriangle size={12} strokeWidth={2.25} className="shrink-0" aria-hidden /> : <SourceBadge source={source} size={14} />}
       {stepNo != null && <span className="shrink-0 opacity-60">{stepNo}.</span>}
-      <button type="button" onClick={onClick} className="min-w-0 truncate font-medium hover:underline">
+      <button
+        type="button"
+        onClick={onClick}
+        className="min-w-0 truncate rounded-control font-medium outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+      >
         {label}
       </button>
       {!stale && s && <span className="min-w-0 truncate opacity-70">· {s}</span>}
       {onClear && (
-        <button type="button" onClick={onClear} className="ml-0.5 shrink-0 opacity-60 hover:opacity-100" title="Clear" aria-label="Clear">
-          ✕
+        <button
+          type="button"
+          onClick={onClear}
+          className="ml-0.5 flex shrink-0 items-center justify-center rounded-full p-0.5 opacity-60 outline-none transition-opacity hover:opacity-100 focus-visible:ring-4 focus-visible:ring-ring/40"
+          title="Clear"
+          aria-label="Clear"
+        >
+          <X size={12} strokeWidth={2.25} />
         </button>
       )}
     </span>

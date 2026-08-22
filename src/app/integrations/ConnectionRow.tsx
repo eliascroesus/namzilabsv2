@@ -7,6 +7,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CopyField } from "@/components/copy-field";
 import { renameConnectionAction, disconnectAction, reconnectAction, deleteConnectionAction } from "./actions";
+import { catalogEntry } from "@/connectors/catalog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { FieldLabel } from "@/components/ui/field";
+import { formatMetricValue } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 /**
  * One row in "Your connections": links to the connection page, with an inline
@@ -137,59 +144,63 @@ export function ConnectionRow({
   if (deleting) {
     const armed = typed.trim() === name.trim();
     return (
-      <div className="border-l-2 border-red-500 bg-red-50/70 px-4 py-3">
-        <p className="text-base font-medium text-foreground">Permanently delete {name}?</p>
-        <p className="mt-1 text-base text-neutral-700">
+      <div className="border-l-2 border-danger bg-danger-soft/40 px-4 py-3">
+        <p className="text-base font-semibold text-foreground">Permanently delete {name}?</p>
+        <p className="mt-1 text-base text-muted-foreground">
           This removes the connection and{" "}
-          <span className="font-medium">
-            {records == null ? "everything synced from it" : `all ${records.toLocaleString()} records synced from it`}
+          <span className="font-semibold text-foreground">
+            {records == null ? (
+              "everything synced from it"
+            ) : (
+              <>
+                all <span className="tnum">{formatMetricValue(records, { format: "number" })}</span> records synced from
+                it
+              </>
+            )}
           </span>
           , along with their original payloads and this connection&rsquo;s entire sync history. Flows reading it will
           show no data.
         </p>
-        <p className="mt-1 text-base text-neutral-700">
-          <span className="font-medium">This cannot be undone.</span> Connecting the same account again starts from
-          nothing and re-imports only as much history as the provider still offers — which is usually far less than you
-          have now.{" "}
+        <p className="mt-1 text-base text-muted-foreground">
+          <span className="font-semibold text-foreground">This cannot be undone.</span> Connecting the same account
+          again starts from nothing and re-imports only as much history as the provider still offers — which is usually
+          far less than you have now.{" "}
           {status !== "disabled" && (
             <>Disconnect instead if you only want it to stop syncing; that keeps everything and can be reversed.</>
           )}
         </p>
-        <label className="mt-3 block text-base font-semibold text-foreground" htmlFor={`confirm-${id}`}>
+        <FieldLabel className="mt-3" htmlFor={`confirm-${id}`}>
           {/* The name carries no weight of its own: the label is already
               semibold, so any inner weight could only be LIGHTER, thinning
               out the one string the user has to type exactly. */}
           Type {name} to confirm
-        </label>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <input
+        </FieldLabel>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
             id={`confirm-${id}`}
             autoFocus
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             placeholder={name}
-            className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-base focus:border-red-400 focus:outline-none"
+            className="h-8 min-w-0 flex-1 text-small"
           />
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => {
               setTyped("");
               setDeleting(false);
             }}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-base font-medium hover:bg-neutral-50"
           >
             Cancel
-          </button>
+          </Button>
           <form action={deleteConnectionAction}>
             <input type="hidden" name="id" value={id} />
             <input type="hidden" name="confirmName" value={typed} />
-            <button
-              type="submit"
-              disabled={!armed}
-              className="rounded-md bg-red-600 px-3 py-1.5 text-base font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40"
-            >
+            <Button type="submit" variant="destructive" size="sm" disabled={!armed}>
               Delete everything
-            </button>
+            </Button>
           </form>
         </div>
       </div>
@@ -203,20 +214,17 @@ export function ConnectionRow({
   if (status === "disabled") {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <span className="min-w-0 text-base text-neutral-500">
-          <span className="font-medium text-neutral-700">{name}</span>
-          <span className="ml-2 rounded bg-neutral-100 px-1.5 py-0.5 text-tiny">Disconnected</span>
+        <span className="min-w-0 text-base text-muted-foreground">
+          <span className="text-base font-semibold text-foreground">{name}</span>
+          <Badge className="ml-2">Disconnected</Badge>
           <span className="ml-2">Not syncing. Its records are hidden from dashboards and flows.</span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
           <form action={reconnectAction}>
             <input type="hidden" name="id" value={id} />
-            <button
-              type="submit"
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-base font-medium hover:bg-neutral-50"
-            >
+            <Button type="submit" variant="secondary" size="sm">
               Reconnect
-            </button>
+            </Button>
           </form>
           {/* Reachable here too, and deliberately: a disconnected integration is
               exactly where someone goes to get rid of one for good, and without
@@ -229,32 +237,25 @@ export function ConnectionRow({
 
   if (confirming) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-red-50/60 px-4 py-3">
-        <p className="min-w-0 text-base text-neutral-700">
-          Disconnect <span className="font-medium">{name}</span>? Its synced records stop appearing in
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-danger-soft/40 px-4 py-3">
+        <p className="min-w-0 text-base text-muted-foreground">
+          Disconnect <span className="font-semibold text-foreground">{name}</span>? Its synced records stop appearing in
           dashboards and flows, and it stops syncing. Any flow reading from it will have no data.
           {/* The disconnect is reversible and the user has to be told so, or
               they will do the destructive thing instead: add the account again,
               which imports a second copy of everything rather than restoring
               this one. */}{" "}
-          <span className="font-medium">You can reconnect it later and your data comes back.</span>
+          <span className="font-semibold text-foreground">You can reconnect it later and your data comes back.</span>
         </p>
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setConfirming(false)}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-base font-medium hover:bg-white"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={() => setConfirming(false)}>
             Cancel
-          </button>
+          </Button>
           <form action={disconnectAction}>
             <input type="hidden" name="id" value={id} />
-            <button
-              type="submit"
-              className="rounded-md bg-red-600 px-3 py-1.5 text-base font-medium text-white hover:bg-red-700"
-            >
+            <Button type="submit" variant="destructive" size="sm">
               Disconnect
-            </button>
+            </Button>
           </form>
         </div>
       </div>
@@ -263,96 +264,106 @@ export function ConnectionRow({
 
   return (
     <div className="group">
-      <div className="flex items-center justify-between px-4 py-3 hover:bg-neutral-50">
-      {editing ? (
-        <input
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => void save()}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void save();
-            if (e.key === "Escape") {
-              setDraft(name);
-              setEditing(false);
-            }
-          }}
-          className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-base font-medium focus:border-neutral-400 focus:outline-none"
-        />
-      ) : (
-        <span className="flex min-w-0 items-center gap-2">
-          <Link href={`/connections/${id}`} className="truncate font-medium hover:underline">
-            {saving ? draft : name}
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              setDraft(name);
-              setEditing(true);
+      <div className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-muted">
+        {editing ? (
+          <Input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => void save()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void save();
+              if (e.key === "Escape") {
+                setDraft(name);
+                setEditing(false);
+              }
             }}
-            className="shrink-0 rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
-            title="Rename this connection"
-            aria-label="Rename this connection"
-          >
-<Pencil size={13} />
-          </button>
-        </span>
-      )}
-      <span className="ml-3 flex shrink-0 items-center gap-3 text-base text-neutral-500">
-        {webhookUrl && (
-          <button
-            type="button"
-            onClick={() => setShowHook((v) => !v)}
-            aria-expanded={showHook}
-            className="rounded border border-neutral-200 px-2 py-0.5 text-tiny font-medium text-neutral-600 hover:bg-white hover:text-foreground"
-          >
-            {showHook ? "Hide webhook URL" : "Webhook URL"}
-          </button>
+            className="h-8 min-w-0 flex-1 text-base font-semibold"
+          />
+        ) : (
+          <span className="flex min-w-0 items-center gap-2">
+            <Link
+              href={`/connections/${id}`}
+              className="truncate rounded-control text-base font-semibold text-foreground outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+            >
+              {saving ? draft : name}
+            </Link>
+            <Button
+              type="button"
+              variant="ghost"
+              size="iconSm"
+              onClick={() => {
+                setDraft(name);
+                setEditing(true);
+              }}
+              title="Rename this connection"
+              aria-label="Rename this connection"
+            >
+              <Pencil size={14} strokeWidth={2.25} />
+            </Button>
+          </span>
         )}
-        <span>{source}</span>
-        <StatusDot status={status} />
-        {/* TWO destructive actions, and the icons have to carry the difference.
-            Disconnect is a POWER symbol — stop it, reversibly. Delete is the
-            trash, which is what people already read as "gone for good"; leaving
-            the trash on the reversible one and inventing a symbol for the
-            permanent one would put the familiar icon on the wrong promise. The
-            mis-click risk that swap creates is answered by the typed
-            confirmation, which a slip cannot complete. */}
-        <button
-          type="button"
-          onClick={() => setConfirming(true)}
-          className="rounded p-1 text-neutral-400 opacity-0 transition-opacity hover:bg-amber-50 hover:text-amber-700 focus:opacity-100 focus-visible:outline focus-visible:outline-2 group-hover:opacity-100"
-          title={`Disconnect ${name} — stops syncing, keeps your data, reversible`}
-          aria-label={`Disconnect ${name}`}
-        >
-<Power size={14} />
-        </button>
-        <DeleteButton name={name} onClick={() => setDeleting(true)} />
-      </span>
+        <span className="ml-3 flex shrink-0 items-center gap-3 text-base text-muted-foreground">
+          {webhookUrl && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowHook((v) => !v)}
+              aria-expanded={showHook}
+            >
+              {showHook ? "Hide webhook URL" : "Webhook URL"}
+            </Button>
+          )}
+          <span>{catalogEntry(source)?.name ?? source}</span>
+          <StatusDot status={status} />
+          {/* TWO destructive actions, and the icons have to carry the difference.
+              Disconnect is a POWER symbol — stop it, reversibly. Delete is the
+              trash, which is what people already read as "gone for good"; leaving
+              the trash on the reversible one and inventing a symbol for the
+              permanent one would put the familiar icon on the wrong promise. The
+              mis-click risk that swap creates is answered by the typed
+              confirmation, which a slip cannot complete. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="iconSm"
+            onClick={() => setConfirming(true)}
+            className="opacity-0 transition-opacity hover:bg-warn-soft hover:text-warn-ink focus-visible:opacity-100 group-hover:opacity-100"
+            title={`Disconnect ${name} — stops syncing, keeps your data, reversible`}
+            aria-label={`Disconnect ${name}`}
+          >
+            <Power size={14} strokeWidth={2.25} />
+          </Button>
+          <DeleteButton name={name} onClick={() => setDeleting(true)} />
+        </span>
       </div>
       {/* Same promise as the connection page's amber banner (F.3/F.6): a pause
           is never a dead end, so the list says when it resolves itself. An
           `error` row keeps its red dot; this line adds the WHY beside it. */}
       {importNote && !pausedNote && !lastError && (
-        <p className="-mt-1 px-4 pb-2.5 text-tiny text-amber-700">{importNote}</p>
+        <p className="-mt-1 px-4 pb-2.5 text-tiny text-warn-ink">{importNote}</p>
       )}
       {(pausedNote || lastError) && (
-        <p className={`-mt-1 px-4 pb-2.5 text-tiny ${pausedNote ? "text-amber-700" : "text-red-600"}`}>
+        <p className={cn("-mt-1 px-4 pb-2.5 text-tiny", pausedNote ? "text-warn-ink" : "text-danger-ink")}>
           {pausedNote ? <>Paused, retrying automatically. {pausedNote}</> : lastError}
         </p>
       )}
       {showHook && webhookUrl && (
-        <div className="border-t border-neutral-100 bg-neutral-50/60 px-4 py-3">
-          {webhookSetup && <p className="mb-2 text-tiny text-neutral-600">{webhookSetup}</p>}
-          {eventTimeNote && <p className="mb-2 text-tiny text-neutral-600">{eventTimeNote}</p>}
+        <div className="border-t border-border bg-muted/40 px-4 py-3">
+          {webhookSetup && <p className="mb-2 text-tiny text-muted-foreground">{webhookSetup}</p>}
+          {eventTimeNote && <p className="mb-2 text-tiny text-muted-foreground">{eventTimeNote}</p>}
           <CopyField
             label="POST events to this URL"
             value={webhookUrl}
             isUrl
             hint="Anything this URL receives is stored and available to flows straight away."
           />
-          <Link href={`/connections/${id}`} className="text-tiny text-blue-600 hover:underline">
-            Signing secret and delivery status →
+          <Link
+            href={`/connections/${id}`}
+            className="rounded-control text-tiny text-primary outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+          >
+            Signing secret and delivery status
           </Link>
         </div>
       )}
@@ -361,8 +372,9 @@ export function ConnectionRow({
 }
 
 function StatusDot({ status }: { status: string }) {
-  const color = status === "active" ? "bg-green-500" : status === "error" ? "bg-red-500" : "bg-neutral-300";
-  return <span className={`inline-block h-2 w-2 rounded-full ${color}`} aria-label={status} />;
+  const color = status === "active" ? "bg-success" : status === "error" ? "bg-danger" : "bg-neutral-300";
+  const label = status === "active" ? "Connected" : status === "error" ? "Needs attention" : "Not syncing";
+  return <span className={cn("inline-block size-2 rounded-full", color)} aria-label={label} />;
 }
 
 /**
@@ -376,14 +388,15 @@ function StatusDot({ status }: { status: string }) {
  */
 function DeleteButton({ name, onClick }: { name: string; onClick: () => void }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="destructiveGhost"
+      size="iconSm"
       onClick={onClick}
-      className="rounded p-1 text-neutral-400 transition-opacity hover:bg-red-50 hover:text-red-600 focus-visible:outline focus-visible:outline-2"
       title={`Delete ${name} permanently — removes the connection and all its data`}
       aria-label={`Delete ${name} permanently`}
     >
-<Trash2 size={14} />
-    </button>
+      <Trash2 size={14} strokeWidth={2.25} />
+    </Button>
   );
 }

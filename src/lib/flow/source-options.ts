@@ -3,6 +3,7 @@ import { connections } from "@/db/schema";
 import { getConnector } from "@/connectors/registry";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
+import { formatTime } from "@/lib/format";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import type { SourceOption } from "@/connectors/types";
 import type { DB } from "@/db/types";
@@ -51,7 +52,7 @@ export async function listSourceOptions(
   // this, because paused sweeps leave the minute's buckets empty. Same check
   // primeStream and primeConnection make before their claims.
   if (isPaused(conn)) {
-    const when = conn.pausedUntil ? ` — it retries around ${conn.pausedUntil.toLocaleTimeString()}` : "";
+    const when = conn.pausedUntil ? ` — it retries around ${formatTime(conn.pausedUntil)}` : "";
     return { ok: false, error: `Syncing is paused (${conn.pausedReason ?? "provider limit"})${when}. Type the value manually or try again shortly.` };
   }
   const claim = await claimCalls(db, conn, pollOperation(conn.source, config), 1, new Date(), "interactive");

@@ -5,6 +5,7 @@ import { connections, flows } from "@/db/schema";
 import { effectiveAccess } from "@/lib/permissions";
 import { AppFrame } from "./app-frame";
 import { OrgSwitcher } from "./org-switcher";
+import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/actions";
 
 /**
@@ -95,17 +96,14 @@ export async function AppShell({
         panel: (
           <div className="space-y-3">
             <div>
-              <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-neutral-400">Workspace</p>
+              <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Workspace</p>
               <OrgSwitcher orgs={orgs} currentId={orgId} />
             </div>
-            {userEmail && <p className="truncate border-t border-neutral-100 pt-2 text-tiny text-neutral-500">{userEmail}</p>}
+            {userEmail && <p className="truncate border-t border-border pt-2 text-tiny text-muted-foreground">{userEmail}</p>}
             <form action={signOutAction}>
-              <button
-                type="submit"
-                className="w-full rounded-control border border-neutral-200 px-3 py-1.5 text-small font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
-              >
+              <Button type="submit" variant="secondary" size="sm" className="w-full">
                 Sign out
-              </button>
+              </Button>
             </form>
           </div>
         ),

@@ -85,5 +85,28 @@ export function relativeTime(then: Date, now: Date = new Date()): string {
   if (h < 24) return `${h} hour${h === 1 ? "" : "s"} ago`;
   const d = Math.floor(h / 24);
   if (d < 7) return `${d} day${d === 1 ? "" : "s"} ago`;
-  return then.toLocaleDateString();
+  return formatDate(then);
+}
+
+/* --- Dates, said one way everywhere ---------------------------------------
+ * The app had a dozen bare `toLocaleString()` calls, some rendered on the
+ * server and some in the browser — so the same timestamp wore the server's
+ * locale on one page and the visitor's on the next. These three are the only
+ * sanctioned spellings, en-US-pinned like every number above, and the same
+ * string no matter which side renders it.
+ */
+
+/** "Aug 21, 2026" — list rows, facts, anywhere a day is enough. */
+export function formatDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+/** "3:07 PM" — when the day is already on screen. */
+export function formatTime(d: Date): string {
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+/** "Aug 21, 2026, 3:07 PM" — audit trails, previews, event tables. */
+export function formatDateTime(d: Date): string {
+  return `${formatDate(d)}, ${formatTime(d)}`;
 }

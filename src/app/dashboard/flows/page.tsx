@@ -1,8 +1,12 @@
-import { Plus } from "lucide-react";
+import { Plus, Workflow, X } from "lucide-react";
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { AppShell } from "@/components/app-shell";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer, PageHeader } from "@/components/ui/page";
+import { cn } from "@/lib/utils";
 import { getReadDb } from "@/db/client";
 import { flowState, listFlows } from "@/lib/flow/store";
 import { parseGraph } from "@/lib/flow/types";
@@ -81,53 +85,70 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
   const allFlows = await listFlows(getReadDb(), orgId).catch(() => []);
   const flows = allFlows.filter((f) => access.canSeeMetric(`flow:${f.id}`));
 
+  const createForm = canCreate ? (
+    <form action={createFlowAction}>
+      <Button>
+        <Plus size={16} strokeWidth={2} />
+        Create flow
+      </Button>
+    </form>
+  ) : null;
+
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
-      <main className="mx-auto max-w-5xl px-8 py-10">
+      <PageContainer>
         {one(sp.error) === "rank" && (
-          <div className="mb-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-base text-red-800">
+          <div className="mb-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-base text-danger-ink">
             <p>Your rank doesn&rsquo;t allow editing flows.</p>
-            <Link href="/dashboard/flows" aria-label="Dismiss" className="font-semibold text-red-400 hover:text-red-700">
-              ✕
+            <Link
+              href="/dashboard/flows"
+              aria-label="Dismiss"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "iconSm" }),
+                "text-danger-ink/70 hover:bg-danger-soft hover:text-danger-ink",
+              )}
+            >
+              <X />
             </Link>
           </div>
         )}
         {one(sp.error) === "flow_limit" && (
-          <div className="mb-6 flex items-start justify-between gap-4 rounded-md border border-red-200 bg-red-50 p-4 text-base text-red-800">
+          <div className="mb-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-base text-danger-ink">
             <p>This workspace has reached its flow limit, so nothing was created. Contact us and we&rsquo;ll raise it.</p>
-            <Link href="/dashboard/flows" aria-label="Dismiss" className="font-semibold text-red-400 hover:text-red-700">
-              ✕
+            <Link
+              href="/dashboard/flows"
+              aria-label="Dismiss"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "iconSm" }),
+                "text-danger-ink/70 hover:bg-danger-soft hover:text-danger-ink",
+              )}
+            >
+              <X />
             </Link>
           </div>
         )}
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-display font-semibold tracking-tight text-foreground">Flows</h1>
-            <p className="mt-1 text-base text-neutral-500">
-              Build metrics visually: connect an app, filter and aggregate, then output to your dashboard.
-            </p>
-          </div>
-          {canCreate && (
-            <form action={createFlowAction}>
-              <button className="flex h-9 shrink-0 items-center gap-1.5 rounded-control bg-primary px-4 text-base font-semibold text-primary-foreground transition-all hover:brightness-110 active:brightness-95">
-                <Plus size={16} strokeWidth={2.4} />
-                Create flow
-              </button>
-            </form>
-          )}
-        </div>
+        <PageHeader
+          title="Flows"
+          lede="Build metrics visually: connect an app, filter and aggregate, then output to your dashboard."
+          actions={createForm}
+        />
 
         {flows.length === 0 ? (
-          <div className="mt-8 rounded-card border border-dashed border-neutral-300 p-10 text-center">
-            <p className="text-base text-neutral-600">No flows yet.</p>
-            <p className="mt-1 text-small text-neutral-500">
-              Press <b>Create flow</b> to build one step by step.
-            </p>
-          </div>
+          <EmptyState
+            className="mt-8"
+            icon={<Workflow />}
+            title="No flows yet"
+            description={
+              <>
+                Press <span className="font-semibold text-foreground">Create flow</span> to build one step by step.
+              </>
+            }
+            action={createForm}
+          />
         ) : (
           <FlowList flows={flows.map(summarize)} />
         )}
-      </main>
+      </PageContainer>
     </AppShell>
   );
 }

@@ -1,22 +1,36 @@
-import { Button } from "@/components/ui/button";
+import type { ReactNode } from "react";
+import { Inbox, LayoutDashboard, Plug, Plus, Settings, Workflow } from "lucide-react";
 import { AppFrame } from "@/components/app-frame";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge, StatusPill } from "@/components/ui/badge";
+import { Chip } from "@/components/ui/chip";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FieldError, FieldHint, FieldLabel } from "@/components/ui/field";
+import { Input, NativeSelect, Textarea } from "@/components/ui/input";
+import { ModalTitle } from "@/components/ui/modal";
+import { PageHeader, SectionHeading } from "@/components/ui/page";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { formatDate } from "@/lib/format";
 import { CanvasPreview, FlowNodeCard } from "@/components/flow/flow-canvas-preview";
 import { EmptyCanvasPreview } from "@/components/flow/empty-canvas-preview";
 import { NodeIcon } from "@/components/flow/icons";
-import { LayoutDashboard, Workflow } from "lucide-react";
 import { ToolbarPreview } from "@/components/flow/toolbar-preview";
 import { PanelTabsPreview } from "@/components/flow/panel-preview";
 import { PANEL_SHELL } from "@/components/flow/panel-chrome";
 import { FlowList } from "@/app/dashboard/flows/FlowRow";
-import { STATUS_META, type NodeStatus } from "@/components/flow/node-meta";
 
 /**
- * THE UI KIT, RENDERED.
+ * THE BRAND KIT, RENDERED.
  *
  * A design system that only exists as tokens in a stylesheet is a system
  * nobody checks. This page is the check: every colour, size, radius and
  * component in one scroll, built from the SAME tokens and the SAME components
  * the product uses — so a drift shows up here before a customer finds it.
+ * The written half is docs/BRAND_KIT.md; the tokens in globals.css win over
+ * both when they disagree.
  *
  * Deliberately public (it is not under /dashboard, /integrations or
  * /connections, the proxy's protected prefixes) and it reads no data, touches
@@ -26,33 +40,46 @@ import { STATUS_META, type NodeStatus } from "@/components/flow/node-meta";
  */
 export const metadata = { title: "Namzilabs — UI kit" };
 
-const BRAND: Array<[string, string]> = [
-  ["50", "bg-brand-50"],
-  ["100", "bg-brand-100"],
-  ["200", "bg-brand-200"],
-  ["300", "bg-brand-300"],
-  ["400", "bg-brand-400"],
-  ["500", "bg-brand-500"],
-  ["600", "bg-brand-600"],
-  ["700", "bg-brand-700"],
+const BRAND: Array<{ step: string; cls: string; hex: string }> = [
+  { step: "50", cls: "bg-brand-50", hex: "#eef2ff" },
+  { step: "100", cls: "bg-brand-100", hex: "#e0e7ff" },
+  { step: "200", cls: "bg-brand-200", hex: "#c7d2fe" },
+  { step: "300", cls: "bg-brand-300", hex: "#a5b4fc" },
+  { step: "400", cls: "bg-brand-400", hex: "#818cf8" },
+  { step: "500", cls: "bg-brand-500", hex: "#6366f1" },
+  { step: "600", cls: "bg-brand-600", hex: "#4f46e5" },
+  { step: "700", cls: "bg-brand-700", hex: "#4338ca" },
 ];
-const INK: Array<[string, string]> = [
-  ["950", "bg-ink-950"],
-  ["900", "bg-ink-900"],
-  ["800", "bg-ink-800"],
-  ["700", "bg-ink-700"],
-  ["400", "bg-ink-400"],
-  ["100", "bg-ink-100"],
-  ["50", "bg-ink-50"],
+const INK: Array<{ step: string; cls: string; hex: string }> = [
+  { step: "950", cls: "bg-ink-950", hex: "#23262d" },
+  { step: "900", cls: "bg-ink-900", hex: "#31353e" },
+  { step: "800", cls: "bg-ink-800", hex: "#3b404a" },
+  { step: "700", cls: "bg-ink-700", hex: "#4a5059" },
+  { step: "400", cls: "bg-ink-400", hex: "#9aa1ae" },
+  { step: "100", cls: "bg-ink-100", hex: "#e7e9ee" },
+  { step: "50", cls: "bg-ink-50", hex: "#f7f8fa" },
 ];
-const TYPE: Array<{ token: string; cls: string; px: string; use: string }> = [
-  { token: "text-display", cls: "text-display", px: "24px", use: "Page headings" },
-  { token: "text-title", cls: "text-title", px: "17px", use: "Section and modal titles" },
-  { token: "text-lead", cls: "text-lead", px: "15px", use: "Panel titles, navigation" },
-  { token: "text-base", cls: "text-base", px: "14px", use: "Body, field labels — the default" },
-  { token: "text-small", cls: "text-small", px: "13px", use: "Dense UI: menu items, options" },
-  { token: "text-tiny", cls: "text-tiny", px: "12px", use: "Helper text, captions, rail labels" },
-  { token: "text-micro", cls: "text-micro", px: "11px", use: "Badges, chips, micro-labels" },
+const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample: string }> = [
+  { token: "text-stat", cls: "tnum text-stat font-semibold", px: "36px", use: "Headline numbers, via formatMetricValue — nothing else", sample: "1,204" },
+  { token: "text-display", cls: "text-display font-semibold tracking-tight", px: "24px", use: "Page titles (PageHeader)", sample: "Speed to lead" },
+  { token: "text-title", cls: "text-title font-semibold tracking-tight", px: "17px", use: "Card and modal titles", sample: "Speed to lead" },
+  { token: "text-lead", cls: "text-lead font-semibold", px: "15px", use: "Panel titles, hero list rows", sample: "Speed to lead" },
+  { token: "text-base", cls: "text-base", px: "14px", use: "Body, field labels — the default", sample: "Speed to lead" },
+  { token: "text-small", cls: "text-small", px: "13px", use: "Dense UI: menu items, options", sample: "Speed to lead" },
+  { token: "text-tiny", cls: "text-tiny", px: "12px", use: "Helper text, captions, rail labels", sample: "Speed to lead" },
+  { token: "text-micro", cls: "text-micro font-semibold uppercase tracking-wide", px: "11px", use: "Badges, chips, section eyebrows", sample: "Speed to lead" },
+];
+const RADII: Array<{ cls: string; label: string; body: string }> = [
+  { cls: "rounded-control", label: "control · 8px", body: "Buttons, inputs, nav tiles" },
+  { cls: "rounded-card", label: "card · 12px", body: "Tiles, sections, list rows" },
+  { cls: "rounded-surface", label: "surface · 16px", body: "Panels, modals, tables, step cards" },
+  { cls: "rounded-frame", label: "frame · 32px", body: "The app-shell notch only" },
+];
+const SHADOWS: Array<{ cls: string; body: string }> = [
+  { cls: "shadow-card", body: "Rest" },
+  { cls: "shadow-card-hover", body: "Hover, drag" },
+  { cls: "shadow-surface", body: "Floating over the canvas" },
+  { cls: "shadow-panel", body: "Modals" },
 ];
 
 export default function DesignPage() {
@@ -64,222 +91,389 @@ export default function DesignPage() {
     // section below says plainly that only the builder gets it.
     <AppFrame
       framed
-      surface="overflow-y-auto bg-white"
+      surface="overflow-y-auto bg-card"
       account={{
         initials: "EC",
+        // Tracks the real panel in src/components/app-shell.tsx: workspace,
+        // then identity, then the way out.
         panel: (
-          /* Duplicates the account panel from src/components/app-shell.tsx — spacing, the Workspace label and the rule above the email must track that file. */
           <div className="space-y-3">
-            <p className="text-micro font-semibold uppercase tracking-wide text-neutral-400">Workspace</p>
-            <p className="truncate text-small font-semibold text-foreground">Namzilabs</p>
-            <button className="w-full rounded-control border border-neutral-200 px-3 py-1.5 text-small font-medium text-neutral-700 transition-colors hover:bg-neutral-50">
+            <div>
+              <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Workspace</p>
+              <p className="truncate text-small font-semibold text-foreground">Namzilabs</p>
+            </div>
+            <p className="truncate border-t border-border pt-2 text-tiny text-muted-foreground">elias@namzilabs.co</p>
+            <Button variant="secondary" size="sm" className="w-full">
               Sign out
-            </button>
-            <p className="truncate border-t border-neutral-100 pt-2 text-tiny text-neutral-500">elias@namzilabs.co</p>
+            </Button>
           </div>
         ),
       }}
     >
-      <div className="mx-auto max-w-4xl px-10 py-12">
-        <p className="text-micro font-semibold uppercase tracking-widest text-brand-600">Design system</p>
-        <h1 className="mt-2 text-display font-semibold tracking-tight text-foreground">The Namzilabs UI kit</h1>
-        <p className="mt-2 max-w-xl text-base text-neutral-500">
-          One accent, one coloured rail, seven type sizes, three radii, four elevations in two finishes. Colour carries identity and
-          state — the rail is the one surface allowed to carry mood.
-        </p>
+      <div className="mx-auto max-w-4xl px-6 py-12">
+        <p className="text-micro font-semibold uppercase tracking-widest text-primary">Brand kit</p>
+        {/* The h1 comes from PageHeader like every other page's — a kit page
+            that re-typed the title recipe would be the first thing on it that
+            had drifted. */}
+        <PageHeader
+          className="mt-2"
+          title="The Namzilabs UI kit"
+          lede={
+            <span className="block max-w-xl">
+              Every token and primitive in one scroll, rendered from the components the product ships. The written half
+              is docs/BRAND_KIT.md; when the two disagree, the tokens in globals.css win and both of us are bugs.
+            </span>
+          }
+        />
 
-        <Section title="Accent" note="Every primary action, selection and focus ring. Violet, on a warm brown rail and a neutral canvas — the only saturated thing outside the step marks, so it always means 'this is the thing to press'.">
-          <div className="flex overflow-hidden rounded-card border border-neutral-200">
-            {BRAND.map(([name, cls]) => (
-              <div key={name} className="flex-1">
-                <div className={`h-16 ${cls}`} />
-                <p className="border-t border-neutral-200 px-2 py-1.5 text-micro text-neutral-500">{name}</p>
+        <Section
+          title="Colour"
+          note="One accent: deep indigo. brand-600 is every primary action and link, brand-400 the focus ring, 50/100 the selection washes. Ink is the dark end of the neutral scale — the rail sits on ink-950, the toast on ink-900. Everything else is a role (bg-card, border-border, text-muted-foreground) or a state trio."
+        >
+          <p className="mb-2 text-tiny font-medium text-muted-foreground">Accent — indigo, brand-*</p>
+          <div className="flex overflow-hidden rounded-card border border-border">
+            {BRAND.map((s) => (
+              <div key={s.step} className="min-w-0 flex-1">
+                <div className={`h-16 ${s.cls}`} />
+                <div className="border-t border-border px-2 py-1.5">
+                  <p className="text-micro font-medium text-foreground">{s.step}</p>
+                  <p className="truncate font-mono text-micro text-muted-foreground">{s.hex}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mb-2 mt-5 text-tiny font-medium text-muted-foreground">Ink — dark surfaces, ink-*</p>
+          <div className="flex overflow-hidden rounded-card border border-border">
+            {INK.map((s) => (
+              <div key={s.step} className="min-w-0 flex-1">
+                <div className={`h-16 ${s.cls}`} />
+                <div className="border-t border-border px-2 py-1.5">
+                  <p className="text-micro font-medium text-foreground">{s.step}</p>
+                  <p className="truncate font-mono text-micro text-muted-foreground">{s.hex}</p>
+                </div>
               </div>
             ))}
           </div>
         </Section>
 
-        <Section title="Ink" note="The dark end of the neutral scale. Only the canvas toast uses it today — the account panel is white and every tooltip is a native title. Seven steps, kept whole so a dark surface has somewhere to go.">
-          <div className="flex overflow-hidden rounded-card border border-neutral-200">
-            {INK.map(([name, cls]) => (
-              <div key={name} className="flex-1">
-                <div className={`h-16 ${cls}`} />
-                <p className="border-t border-neutral-200 px-2 py-1.5 text-micro text-neutral-500">{name}</p>
-              </div>
-            ))}
+        <Section
+          title="State"
+          note="StatusPill wears state; Badge states facts. Five tones and no more — pending is deliberately neutral and replaces every blue 'testing / updating' state, so nothing competes with the accent. Labels are plain English, never raw enums."
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill tone="success" dot>
+              Active
+            </StatusPill>
+            <StatusPill tone="warn" dot>
+              Needs attention
+            </StatusPill>
+            <StatusPill tone="danger" dot>
+              Failing
+            </StatusPill>
+            <StatusPill tone="pending" dot>
+              Updating
+            </StatusPill>
+            <StatusPill tone="brand" dot>
+              Selected
+            </StatusPill>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Badge>6 steps</Badge>
+            <Badge>Google Sheets</Badge>
+            <Badge className="tnum">12</Badge>
           </div>
         </Section>
 
-        <Section title="Rail" note="The one place in the product allowed to be loud. Everything right of it stays neutral, which is what lets it.">
+        <Section title="Type" note="Eight sizes in-app and nothing between them. Weights stop at font-semibold — font-bold does not exist here.">
+          <Card padding="none" className="divide-y divide-border">
+            {TYPE.map((t) => (
+              <div key={t.token} className="flex items-baseline gap-4 px-4 py-3">
+                <span className={`${t.cls} min-w-0 flex-1 truncate text-foreground`}>{t.sample}</span>
+                <code className="shrink-0 font-mono text-micro text-muted-foreground">{t.token}</code>
+                <span className="tnum w-10 shrink-0 text-right text-micro text-muted-foreground">{t.px}</span>
+                <span className="w-56 shrink-0 text-tiny text-muted-foreground">{t.use}</span>
+              </div>
+            ))}
+          </Card>
+          <p className="mt-2 text-tiny text-muted-foreground">
+            Plus text-hero (40px) — marketing and the landing page only, never in-app.
+          </p>
+        </Section>
+
+        <Section
+          title="Radius and elevation"
+          note="Four radius tokens plus rounded-full for pills, avatars and switches — stock rounded/-md/-lg/-xl are banned and do not compile. One elevation ladder: hairline borders carry structure, shadows only say how far a surface floats."
+        >
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {RADII.map((r) => (
+              <div key={r.cls} className={`${r.cls} border border-border bg-card p-4 shadow-card`}>
+                <p className="text-small font-semibold text-foreground">{r.label}</p>
+                <p className="mt-0.5 text-tiny text-muted-foreground">{r.body}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {/* The real Card, with only its shadow overridden — cn resolves the
+                rung, so each tile is the product's surface at a different
+                height rather than four re-typed boxes. */}
+            {SHADOWS.map((e) => (
+              <Card key={e.cls} padding="compact" className={e.cls}>
+                <p className="text-small font-semibold text-foreground">{e.cls}</p>
+                <p className="mt-0.5 text-tiny text-muted-foreground">{e.body}</p>
+              </Card>
+            ))}
+          </div>
+          <p className="mt-2 text-tiny text-muted-foreground">
+            Each rung has a ringed twin (raised, lifted, float, pop) whose 1px spread stands in for an edge — for
+            borderless surfaces only. Under a real border the rim reads 2px thick and dirty.
+          </p>
+        </Section>
+
+        <Section title="Buttons" note="One component, eight variants, five sizes — every clickable thing in the product comes from it. Links dressed as buttons compose buttonVariants() rather than re-typing the string.">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button>Publish flow</Button>
+            <Button variant="secondary">Secondary</Button>
+            <Button variant="ghost">Quiet</Button>
+            <Button variant="destructive">Delete</Button>
+            <Button variant="success">Run test</Button>
+            <Button variant="destructiveGhost">Remove</Button>
+            <Button variant="destructiveOutline">Disconnect</Button>
+            <Button variant="link">Learn more</Button>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button size="sm">Small</Button>
+            <Button>Default</Button>
+            <Button size="lg">Large</Button>
+            <Button size="icon" variant="secondary" aria-label="Settings">
+              <Settings />
+            </Button>
+            <Button size="iconSm" variant="secondary" aria-label="Add">
+              <Plus />
+            </Button>
+            <Button disabled>Disabled</Button>
+          </div>
+        </Section>
+
+        <Section
+          title="Controls"
+          note="One field recipe: 36px tall, hairline border, and the same 4px ring on focus — fields show it whenever they hold focus, buttons only for keyboard users. The label is the question and never reads lighter than its answer."
+        >
+          <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+            <div>
+              <FieldLabel htmlFor="kit-input">Flow name</FieldLabel>
+              <Input id="kit-input" defaultValue="Speed to lead" />
+            </div>
+            <div>
+              <FieldLabel htmlFor="kit-input-disabled">Disabled</FieldLabel>
+              <Input id="kit-input-disabled" disabled defaultValue="Locked while running" />
+            </div>
+            <div>
+              <FieldLabel htmlFor="kit-select">Source</FieldLabel>
+              <NativeSelect id="kit-select" defaultValue="close">
+                <option value="close">Close CRM</option>
+                <option value="gsheets">Google Sheets</option>
+                <option value="calendly">Calendly</option>
+              </NativeSelect>
+            </div>
+            <div>
+              <FieldLabel htmlFor="kit-textarea">Description</FieldLabel>
+              <Textarea id="kit-textarea" placeholder="What this flow measures, in a sentence" />
+            </div>
+            <div>
+              <FieldLabel htmlFor="kit-hint">Workspace name</FieldLabel>
+              <Input id="kit-hint" defaultValue="Namzilabs" />
+              <FieldHint>Shown to teammates in the account panel.</FieldHint>
+            </div>
+            <div>
+              <FieldLabel htmlFor="kit-error">Webhook URL</FieldLabel>
+              <Input id="kit-error" aria-invalid defaultValue="not-a-url" />
+              <FieldError>Enter a full https:// URL.</FieldError>
+            </div>
+          </div>
+          <div className="mt-6 flex flex-wrap items-center gap-x-10 gap-y-5">
+            <div>
+              <p className="mb-2 text-tiny font-medium text-muted-foreground">Switch — both sizes</p>
+              <div className="flex items-center gap-3">
+                <Switch checked />
+                <Switch checked={false} />
+                <Switch checked size="sm" />
+                <Switch checked={false} size="sm" />
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-tiny font-medium text-muted-foreground">Chip — a question with one answer showing</p>
+              <div className="flex items-center gap-2">
+                <Chip active count={12}>
+                  Active
+                </Chip>
+                <Chip count={4}>Paused</Chip>
+                <Chip>Drafts</Chip>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 max-w-sm">
+            <p className="mb-2 text-tiny font-medium text-muted-foreground">Skeleton — sized at the call site to hold its content&apos;s shape</p>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          </div>
+        </Section>
+
+        <Section
+          title="Surfaces"
+          note="Two rungs of Card carry every boxed thing that is not a button: card for tiles in the page flow, surface for the bigger pieces — tables, panels, places rather than items. Both draw a real border and take the ring-free shadow."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card>
+              <p className="text-base font-semibold text-foreground">Card</p>
+              <p className="mt-1 text-tiny text-muted-foreground">variant=&quot;card&quot; — rounded-card, shadow-card. Tiles and sections.</p>
+            </Card>
+            <Card variant="surface">
+              <p className="text-base font-semibold text-foreground">Surface</p>
+              <p className="mt-1 text-tiny text-muted-foreground">variant=&quot;surface&quot; — rounded-surface. Panels, tables, modals.</p>
+            </Card>
+          </div>
+
+          <TableShell className="mt-4">
+            <Table>
+              <THead>
+                <TR static>
+                  <TH>Flow</TH>
+                  <TH>Status</TH>
+                  <TH>Last run</TH>
+                </TR>
+              </THead>
+              <TBody>
+                <TR>
+                  <TD className="font-medium text-foreground">Speed to lead</TD>
+                  <TD>
+                    <StatusPill tone="success" dot>
+                      Active
+                    </StatusPill>
+                  </TD>
+                  <TD className="text-muted-foreground">{formatDate(new Date("2026-08-19T14:45:00Z"))}</TD>
+                </TR>
+                <TR>
+                  <TD className="font-medium text-foreground">Pickup rate</TD>
+                  <TD>
+                    <StatusPill tone="warn" dot>
+                      Needs attention
+                    </StatusPill>
+                  </TD>
+                  <TD className="text-muted-foreground">{formatDate(new Date("2026-08-18T11:20:00Z"))}</TD>
+                </TR>
+                <TR>
+                  <TD className="font-medium text-foreground">Meetings booked</TD>
+                  <TD>
+                    <StatusPill tone="pending">Draft</StatusPill>
+                  </TD>
+                  <TD className="text-muted-foreground">—</TD>
+                </TR>
+              </TBody>
+            </Table>
+          </TableShell>
+
+          <EmptyState
+            className="mt-4"
+            icon={<Inbox />}
+            title="No flows yet"
+            description="Connect an app, then build your first flow from its data."
+            action={
+              <Button size="sm">
+                <Plus />
+                New flow
+              </Button>
+            }
+          />
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <Card variant="surface" className="shadow-panel">
+                <ModalTitle>Delete this flow?</ModalTitle>
+                <p className="mt-2 text-base text-muted-foreground">Its steps and run history go with it. This cannot be undone.</p>
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button variant="secondary" size="sm">
+                    Cancel
+                  </Button>
+                  <Button variant="destructive" size="sm">
+                    Delete flow
+                  </Button>
+                </div>
+              </Card>
+              <p className="mt-2 text-tiny text-muted-foreground">
+                The modal, shown flat. The real one floats on the one scrim — neutral-950/30 with backdrop blur — and
+                closes on Escape or an outside press.
+              </p>
+            </div>
+            <div>
+              <div className="inline-flex items-center gap-3 rounded-surface bg-ink-900 px-4 py-2.5 text-base text-ink-50">
+                Flow published
+              </div>
+              <p className="mt-2 text-tiny text-muted-foreground">
+                The toast, shown flat. The real one is fixed bottom-centre and dark on purpose — it floats over the
+                working area as chrome, not content.
+              </p>
+            </div>
+          </div>
+        </Section>
+
+        <Section
+          title="Rail"
+          note="The 30 of the 60/30/10 split: ink-950 graphite carrying a 100px icon column, so primary indigo has something to pop against. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else."
+        >
           <div className="flex items-stretch gap-4">
-            {/* Duplicates the rail's item markup from src/components/sidebar.tsx — width, padding, gap, tile and label must track
-                that file. The `bg-rail` here is the swatch's own: the real rail is transparent and takes its colour from the frame
-                behind it, which a swatch standing on white has to supply for itself. */}
-            <div className="bg-rail flex w-[100px] shrink-0 flex-col items-center gap-[30px] rounded-card px-2.5 py-3">
-              <span className="flex w-full flex-col items-center">
-                <span className="flex h-10 w-10 items-center justify-center rounded-control bg-white/22 text-white">
-                  <LayoutDashboard size={24} strokeWidth={2.1} />
+            <div className="bg-rail inline-flex items-start gap-3 rounded-card px-5 py-4">
+              <span className="flex w-14 flex-col items-center">
+                <span className="flex size-10 items-center justify-center rounded-control bg-white/15 text-white">
+                  <LayoutDashboard size={24} strokeWidth={2} />
                 </span>
                 <span className="px-1 text-center text-tiny font-medium leading-4 text-white">Active</span>
               </span>
-              <span className="flex w-full flex-col items-center">
-                <span className="flex h-10 w-10 items-center justify-center rounded-control text-white">
-                  <Workflow size={24} strokeWidth={2.1} />
+              <span className="flex w-14 flex-col items-center">
+                <span className="flex size-10 items-center justify-center rounded-control bg-white/10 text-white">
+                  <Workflow size={24} strokeWidth={2} />
+                </span>
+                <span className="px-1 text-center text-tiny font-medium leading-4 text-white">Hover</span>
+              </span>
+              <span className="flex w-14 flex-col items-center">
+                <span className="flex size-10 items-center justify-center rounded-control text-white">
+                  <Plug size={24} strokeWidth={2} />
                 </span>
                 <span className="px-1 text-center text-tiny font-medium leading-4 text-white/75">Rest</span>
               </span>
             </div>
             <div className="flex flex-1 flex-col justify-center gap-1 text-tiny text-muted-foreground">
-              <p><code className="text-foreground">--color-rail</code></p>
-              <p>Warm dark brown, flat: #413735. A neutral-cool rail under a purple accent read as two different products; brown is the one family of dark that lets violet sit on it as a decision rather than as a clash.</p>
-              <p className="mt-1">Selected highlights the 40px tile alone — a white wash behind the glyph, the label just brightening to full white while resting items sit at 75%. Highlighting the whole item as one white pill was a heavier thing entirely.</p>
+              <p>
+                <code className="font-mono text-foreground">--color-rail</code> = ink-950. Flat, not a gradient.
+              </p>
+              <p>
+                Selection highlights the 40px tile alone — white/15 behind the glyph, white/10 on hover, and the label
+                steps from 75% to full white. Glyphs stay full white at every state.
+              </p>
             </div>
           </div>
         </Section>
 
-        <Section title="Frame" note="The builder only. A canvas is a workspace you look into, so the app cuts 32px out of it and shows its own colour through the notch; a list of flows runs flush off the rail, square. One element paints the wash — the rail is transparent inside it and the surface sits on top opaque — so the colour behind the canvas and the colour of the rail are not two values kept in sync, they are one gradient and cannot drift.">
-          {/* The frame at figure size: the wash on the outer box, the rail's own
-              100px of it left bare, and the surface cut 16px at its two left
-              corners so the wash shows through them. Only the left corners — the
-              other three edges run flush to the viewport, because a card inset on
-              all four sides is a smaller-feeling app than this one. */}
+        <Section
+          title="Frame"
+          note="The builder only. A canvas is a workspace you look into, so the app cuts the 32px frame radius out of its left corners and lets the rail's wash show through; list pages run flush off the rail, square. AppFrame paints the wash once — the rail is transparent on top of it — so the two colours cannot drift."
+        >
           <div className="bg-rail flex h-40 overflow-hidden rounded-card">
             <div className="w-[100px] shrink-0" />
-            <div className="flex-1 rounded-l-surface bg-white" />
+            <div className="flex-1 rounded-l-frame bg-card" />
           </div>
         </Section>
 
-        <Section title="State" note="The only other colours. The DOT always carries the state; the border only takes colour when the step blocks publish or broke, because a canvas that outlines every working step has nothing left to point with — which is why two of these four are a plain neutral card.">
-          <div className="grid grid-cols-4 gap-3">
-            <StateChip status="ready" body="Ran and returned data" />
-            <StateChip status="setup" body="Blocks publish" />
-            <StateChip status="error" body="Broke on its last run" />
-            <StateChip status="untested" body="Fine, just unrun" />
-          </div>
-        </Section>
-
-        <Section title="Type" note="Seven sizes and nothing between them. Anything smaller than 11px is not content.">
-          <div className="divide-y divide-neutral-100 rounded-card border border-neutral-200">
-            {TYPE.map((t) => (
-              <div key={t.token} className="flex items-baseline gap-4 px-4 py-3">
-                <span className={`${t.cls} min-w-0 flex-1 font-medium text-foreground`}>Speed to lead</span>
-                <code className="shrink-0 text-micro text-neutral-400">{t.token}</code>
-                <span className="w-10 shrink-0 text-right text-micro text-neutral-400">{t.px}</span>
-                <span className="w-56 shrink-0 text-tiny text-neutral-500">{t.use}</span>
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <Section title="Radius and elevation" note="Three radii, and ONE elevation ladder in two finishes: on the page, hovered, over the canvas, modal. Which finish a surface takes is decided by whether it has a border, not by taste.">
-          {/* These swatches take the ring-free rung themselves — they are
-              bordered white boxes, which is exactly the case the row below
-              them documents. They used to carry `shadow-raised`, i.e. the kit
-              breaking its own rule in the section that states it. */}
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { cls: "rounded-control", label: "control · 8px", body: "Inputs, buttons, nav items" },
-              { cls: "rounded-card", label: "card · 12px", body: "Tiles, sections, list rows" },
-              { cls: "rounded-surface", label: "surface · 16px", body: "Step cards, panels, modals, popovers" },
-            ].map((r) => (
-              <div key={r.cls} className={`${r.cls} border border-neutral-200 bg-white p-4 shadow-card`}>
-                <p className="text-small font-semibold text-foreground">{r.label}</p>
-                <p className="mt-0.5 text-tiny text-neutral-500">{r.body}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mb-2 mt-6 text-tiny text-neutral-500">
-            <span className="font-semibold text-foreground">Ringed</span> — each opens with a 1px spread that stands in for an edge.
-            Only for a surface with NO border of its own; these swatches have none.
-          </p>
-          <div className="grid grid-cols-4 gap-3">
-            {[
-              { cls: "shadow-raised", body: "On the page" },
-              { cls: "shadow-lifted", body: "Hovered" },
-              { cls: "shadow-float", body: "Over the canvas" },
-              { cls: "shadow-pop", body: "Modals" },
-            ].map((e) => (
-              <div key={e.cls} className={`rounded-card bg-card p-4 ${e.cls}`}>
-                <p className="text-small font-semibold text-foreground">{e.cls}</p>
-                <p className="mt-0.5 text-tiny text-muted-foreground">{e.body}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mb-2 mt-6 text-tiny text-neutral-500">
-            <span className="font-semibold text-foreground">Ring-free</span> — the same four rungs with the spread removed, for a
-            surface that draws its own border. A real border over a ring is two 1px bands in different hues, the outer one darker:
-            the rim reads 2px thick and dirty, and hovering swaps a lighter ring under a border that never moved.
-          </p>
-          <div className="grid grid-cols-4 gap-3">
-            {[
-              { cls: "shadow-card", body: "Step cards, list rows" },
-              { cls: "shadow-card-hover", body: "Hovered" },
-              { cls: "shadow-island", body: "The builder's islands" },
-              { cls: "shadow-panel", body: "The config panel" },
-            ].map((e) => (
-              <div key={e.cls} className={`rounded-card border border-border bg-card p-4 ${e.cls}`}>
-                <p className="text-small font-semibold text-foreground">{e.cls}</p>
-                <p className="mt-0.5 text-tiny text-muted-foreground">{e.body}</p>
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <Section title="Buttons" note="One component, seven variants. Every clickable thing in the product comes from it.">
-          <div className="flex flex-wrap items-center gap-3">
-            <Button>Review &amp; publish</Button>
-            <Button variant="secondary">Secondary</Button>
-            <Button variant="ghost">Quiet</Button>
-            <Button variant="success">Success</Button>
-            <Button disabled>Disabled</Button>
-            <Button variant="destructive">Delete</Button>
-          </div>
-        </Section>
-
-        <Section title="Icons" note="lucide — one family, one grid, one stroke. Nothing hand-drawn anywhere in the app.">
+        <Section title="Step icons" note="The step marks — one family, one grid, drawn from node-accent's own colours. Everything else iconographic is lucide: 14 dense, 16 default, 18 toolbar, 24 rail.">
           <div className="flex flex-wrap gap-2">
             {(["app", "unite", "unite_match", "filter", "paths", "formula", "formula_compare", "time_between"] as const).map((t) => (
               <div key={t} className="flex items-center gap-2 rounded-card border border-border bg-card px-3 py-2">
                 <NodeIcon type={t.startsWith("unite") ? "unite" : t.startsWith("formula") ? "formula" : t} variant={t.includes("_") ? t : undefined} size={28} />
-                <code className="text-micro text-muted-foreground">{t}</code>
+                <code className="font-mono text-micro text-muted-foreground">{t}</code>
               </div>
             ))}
-          </div>
-        </Section>
-
-        <Section title="Controls" note="Every control in the builder is 8px, hairline, 36px tall, with the same 4px brand focus ring. The settings and onboarding forms predate this and still use 6px. The label matches the Configure tab — 14px semibold, true black — because a label is the question and may never be lighter than its answer.">
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block">
-              <span className="mb-1.5 block text-base font-semibold text-foreground">Text field</span>
-              <input
-                readOnly
-                value="Speed to lead"
-                className="w-full rounded-control border border-neutral-300 bg-white px-3 py-2 text-base text-foreground"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-base font-semibold text-foreground">Focused</span>
-              <input
-                readOnly
-                value="Focused state"
-                className="w-full rounded-control border border-brand-400 bg-white px-3 py-2 text-base text-foreground ring-4 ring-brand-100"
-              />
-            </label>
-            <div>
-              <span className="mb-1.5 block text-base font-semibold text-foreground">Segmented</span>
-              <div className="inline-flex w-full rounded-control border border-neutral-300 bg-neutral-100 p-0.5">
-                <span className="flex-1 rounded-[6px] bg-white px-2.5 py-1.5 text-center text-small font-medium text-foreground shadow-sm">
-                  A number
-                </span>
-                <span className="flex-1 px-2.5 py-1.5 text-center text-small font-medium text-neutral-500">A length of time</span>
-              </div>
-            </div>
-            <div>
-              <span className="mb-1.5 block text-base font-semibold text-foreground">Select</span>
-              <div className="flex w-full items-center justify-between rounded-control border border-neutral-300 bg-white px-3 py-2 text-base text-foreground">
-                Last 30 days <span className="text-neutral-400">▾</span>
-              </div>
-            </div>
           </div>
         </Section>
 
@@ -289,12 +483,10 @@ export default function DesignPage() {
               1244px, with the centre group measured dead-centre (470px of bar
               on each side of it).
 
-              Rendered at this page's own 816px column it was a lie: the bar hit
+              Rendered at this page's own column it was a lie: the bar hit
               its max-width, squeezed, and showed a flow name clipped in a way
               the product does not do at any width a laptop has. So the box
-              scrolls sideways rather than compressing the specimen. 256px tall
-              is the clearance for one 58px bar at a 24px inset, with canvas
-              below it. */}
+              scrolls sideways rather than compressing the specimen. */}
           <div className="-mx-24 overflow-x-auto overflow-y-hidden rounded-card">
             <div className="relative h-[380px] w-[1292px] bg-canvas-bg">
               <div
@@ -347,15 +539,15 @@ export default function DesignPage() {
           <CanvasPreview />
         </Section>
 
-        <Section title="Step cards" note="300px, a 44px mark, the step number as its own chip, and 4px of the step's own colour on the leading edge. The rest of the border is one grey and never changes — it used to carry status, so a canvas of healthy steps was a wall of outlines and a card changed its edge as you clicked around. Status is the dot and the hint line; selection is a halo outside the border, so the card never wears two rims at once.">
+        <Section title="Step cards" note="300px, a 44px mark, the step number as its own chip, and 4px of the step's own colour on the leading edge. The rest of the border is one grey and never changes — status is the dot and the hint line; selection is a halo outside the border, so the card never wears two rims at once.">
           <div className="relative flex flex-wrap items-start gap-4 overflow-hidden rounded-card bg-canvas-bg p-6">
-              {/* The same dot field the other two canvas specimens carry — a card
-                  judged against flat grey is judged against a surface the product
-                  does not have. */}
-              <div
-                className="pointer-events-none absolute inset-0"
-                style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
-              />
+            {/* The same dot field the other canvas specimens carry — a card
+                judged against flat grey is judged against a surface the product
+                does not have. */}
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
+            />
             <span className="relative flex flex-wrap items-start gap-4">
               <FlowNodeCard variant="unite_match" title="Match" body="Needs two steps" status="setup" stepNo={3} />
               <FlowNodeCard variant="formula_compare" title="Calculate" body="38" status="ready" stepNo={4} />
@@ -365,26 +557,13 @@ export default function DesignPage() {
 
         <Section
           title="Config panel"
-          note="The most-used surface in the product, and the one the kit could never show — so every change to it was made blind, twice reported done against a component nobody had touched. The shell and the tab row below are IMPORTED from panel-chrome.tsx, the same two exports ConfigPanel renders, so there is one definition of them and a change lands here or nowhere. Everything between them is sample content: a Summarize step, mid-configure."
+          note="The most-used surface in the product. The shell and the tab row are IMPORTED from panel-chrome.tsx — the same two exports ConfigPanel renders, so there is one definition of them and a change lands here or nowhere. Everything between them is sample content built from the kit's own fields: a Summarize step, mid-configure."
         >
           {/* On the canvas colour, because that is what it floats over: a white
               panel on a white page is an invisible box, and its border, its
               elevation and its 16px corner are the whole point of showing it.
-
-              The real panel is `absolute right-6 top-chrome-band
-              bottom-chrome-band z-20` INSIDE the canvas: 24px off the right
-              edge, and 106px clear of the top and the bottom, which is the
-              58px chrome island plus a 24px inset above it and a 24px gap
-              below — the toolbar and the bottom bar keep their band, and the
-              panel never makes them move. That position belongs to the canvas,
-              not to the panel, which is why panel-chrome does not carry it.
-              There is no canvas here to be inset from, so the position is
-              stripped rather than fought: this box supplies a 24px gutter with
-              `p-6`, pins the panel to the right the way the builder does, and
-              gives it a fixed height where the real one takes the band between
-              the two bars. The 452px width IS the real one (it yields on a
-              narrow viewport there; here the page column is wider than that, so
-              it never has to). */}
+              The 452px width IS the real one; the fixed height stands in for
+              the band between the builder's two chrome bars. */}
           <div className="relative overflow-hidden rounded-card bg-canvas-bg p-6">
             <div
               className="absolute inset-0"
@@ -392,39 +571,40 @@ export default function DesignPage() {
             />
             <div className="relative flex justify-end">
               <aside className={`h-[440px] w-[452px] max-w-full ${PANEL_SHELL}`}>
-                {/* Duplicates the panel header from src/components/flow/ConfigPanel.tsx — the 38px mark, the title input's
-                    invisible-until-hovered chrome and the status pill must track that file. ONE white plane cut by hairlines:
-                    the header is not a darker band. */}
-                <div className="flex items-center justify-between gap-3 border-b border-border bg-white px-5 py-4">
+                <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-5 py-4">
                   <div className="flex min-w-0 items-center gap-3">
                     <NodeIcon type="formula" size={38} />
-                    <input
-                      readOnly
-                      value="Summarize"
-                      className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground hover:border-border hover:bg-white focus:border-input focus:bg-white focus:outline-none"
-                    />
+                    <p className="truncate text-title font-semibold tracking-tight text-foreground">Summarize</p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-micro font-semibold ${STATUS_META.ready.cls}`}>
-                    {STATUS_META.ready.label}
-                  </span>
+                  <StatusPill tone="success">Tested</StatusPill>
                 </div>
 
                 <PanelTabsPreview />
 
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <div className="space-y-4 p-5">
-                    <PanelField label="Calculation">
-                      {/* Duplicates the closed state of controls/Select.tsx. */}
-                      <div className="flex w-full items-center justify-between rounded-control border border-neutral-300 bg-white px-3 py-2 text-base text-foreground">
-                        #&nbsp;&nbsp;Count records <span className="text-neutral-400">▾</span>
-                      </div>
-                    </PanelField>
-                    <PanelField label="Measuring">
-                      <PanelSegmented a="A number" b="A length of time" />
-                    </PanelField>
-                    <PanelField label="Result">
-                      <PanelSegmented a="One number" b="A trend" />
-                    </PanelField>
+                    <div>
+                      <FieldLabel htmlFor="kit-panel-calc">Calculation</FieldLabel>
+                      <NativeSelect id="kit-panel-calc" defaultValue="count">
+                        <option value="count">Count records</option>
+                        <option value="sum">Sum a field</option>
+                        <option value="avg">Average a field</option>
+                      </NativeSelect>
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor="kit-panel-measure">Measuring</FieldLabel>
+                      <NativeSelect id="kit-panel-measure" defaultValue="number">
+                        <option value="number">A number</option>
+                        <option value="duration">A length of time</option>
+                      </NativeSelect>
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor="kit-panel-result">Result</FieldLabel>
+                      <NativeSelect id="kit-panel-result" defaultValue="one">
+                        <option value="one">One number</option>
+                        <option value="trend">A trend</option>
+                      </NativeSelect>
+                    </div>
                   </div>
                 </div>
               </aside>
@@ -438,58 +618,12 @@ export default function DesignPage() {
   );
 }
 
-function Section({ title, note, children }: { title: string; note: string; children: React.ReactNode }) {
+function Section({ title, note, children }: { title: string; note: string; children: ReactNode }) {
   return (
     <section className="mt-12">
-      <h2 className="text-title font-semibold tracking-tight text-foreground">{title}</h2>
-      <p className="mb-4 mt-0.5 text-tiny text-neutral-500">{note}</p>
+      <SectionHeading className="mb-0">{title}</SectionHeading>
+      <p className="mb-4 mt-1 text-tiny text-muted-foreground">{note}</p>
       {children}
     </section>
-  );
-}
-
-/**
- * One sample field in the config panel, label above control.
- *
- * The label string is `FIELD_LABEL` from ConfigPanel.tsx, character for
- * character: 14px semibold true black, because the label is the QUESTION and
- * may never read lighter than its answer. That is the rule most worth being
- * able to SEE, so it is the one thing this sample is not allowed to improvise.
- */
-function PanelField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="block">
-      <span className="mb-1.5 block text-base font-semibold text-foreground">{label}</span>
-      {children}
-    </div>
-  );
-}
-
-/** Duplicates controls/Segmented.tsx — the panel's answer to a two-way choice. */
-function PanelSegmented({ a, b }: { a: string; b: string }) {
-  return (
-    <div className="inline-flex w-full rounded-control border border-neutral-300 bg-neutral-100 p-0.5">
-      <span className="min-w-0 flex-1 truncate rounded-[6px] bg-white px-2.5 py-1.5 text-center text-small font-medium text-foreground shadow-sm">{a}</span>
-      <span className="min-w-0 flex-1 truncate px-2.5 py-1.5 text-center text-small font-medium text-neutral-500">{b}</span>
-    </div>
-  );
-}
-
-/**
- * Reads its border, dot and label straight out of STATUS_META rather than
- * naming the colours a second time. The amber pair here had drifted a whole
- * hue behind the product after needs-attention went orange — a swatch that is
- * wrong about the thing it documents is worse than no swatch.
- */
-function StateChip({ status, body }: { status: NodeStatus; body: string }) {
-  const sm = STATUS_META[status];
-  return (
-    <div className={`rounded-card border ${sm.border} bg-white p-3`}>
-      <span className="flex items-center gap-2">
-        <span className={`h-2 w-2 rounded-full ${sm.dot}`} />
-        <span className="text-small font-semibold text-foreground">{sm.label}</span>
-      </span>
-      <p className="mt-1 text-tiny text-neutral-500">{body}</p>
-    </div>
   );
 }

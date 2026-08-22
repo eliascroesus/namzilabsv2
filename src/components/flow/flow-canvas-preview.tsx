@@ -49,25 +49,25 @@ export function FlowNodeCard({
         <span className="min-w-0 flex-1 pt-0.5">
           <span className="flex items-center gap-1.5">
             {stepNo != null && (
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-micro font-bold tabular-nums text-muted-foreground">{stepNo}</span>
+              <span className="tnum rounded-control bg-muted px-1.5 py-0.5 text-micro font-semibold text-muted-foreground">{stepNo}</span>
             )}
             <span className="min-w-0 truncate text-lead font-semibold text-foreground">{title}</span>
           </span>
           {body && (
-            <span className={`mt-1 block truncate text-tiny font-medium ${status === "setup" || status === "error" ? sm.hint : "text-neutral-500"}`}>{body}</span>
+            <span className={`mt-1 block truncate text-tiny font-medium ${status === "setup" || status === "error" ? sm.hint : "text-muted-foreground"}`}>{body}</span>
           )}
         </span>
         <span className="flex shrink-0 items-center gap-1 pt-1">
           <span className={`h-2 w-2 rounded-full ${sm.dot}`} />
         </span>
       </div>
-      {/* 15px, not 16: the strip's bottom corners are the INSIDE of the card's,
-          so this literal is the radius minus the border and goes quietly wrong
-          the moment the radius moves — it sat at 13px through a whole radius
-          step. `bg-accent`/`text-accent-foreground` ARE brand-50/brand-700. */}
+      {/* The strip's bottom corners are the INSIDE of the card's, so they are
+          written as the radius minus the border rather than as a literal — a
+          literal sat at 13px through a whole radius step.
+          `bg-accent`/`text-accent-foreground` ARE brand-50/brand-700. */}
       {publishes && (
-        <div className="flex items-center gap-1.5 rounded-b-[15px] border-t border-brand-100 bg-accent px-3.5 py-2 text-micro font-semibold text-accent-foreground">
-          <LineChart size={12} strokeWidth={2.4} />
+        <div className="flex items-center gap-1.5 rounded-b-[calc(var(--radius-surface)-1px)] border-t border-brand-100 bg-accent px-3.5 py-2 text-micro font-semibold text-accent-foreground">
+          <LineChart size={14} strokeWidth={2.25} />
           On your dashboard
         </div>
       )}
@@ -96,9 +96,9 @@ export function CanvasPreview() {
             mt-8 (FlowNodeCard.tsx) — it is not an edge, so it has no "+". */}
         <span className="h-8 w-px border-l-2 border-dashed" style={{ borderColor: "var(--color-canvas-edge)" }} />
         {/* Duplicates the terminal "Add next step" button from src/components/flow/FlowNodeCard.tsx — it is an opaque, raised card there, not a wash, and it carries the same corner and the same ring-free elevation as the cards above it. */}
-        <div className="flex w-[300px] items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-white p-3 text-base font-semibold text-muted-foreground shadow-surface">
+        <div className="flex w-[300px] items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-base font-semibold text-muted-foreground shadow-surface">
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
-            <Plus size={16} strokeWidth={2.5} />
+            <Plus size={16} strokeWidth={2} />
           </span>
           Add next step
         </div>
@@ -123,8 +123,8 @@ function Connector() {
       {/* Duplicates the insert control from src/components/flow/InsertEdge.tsx — size, fill and glyph must track that file. */}
       {/* shrink-0: the parent is a w-px flex row, so without it the circle is
           squeezed to an oval — the one thing the real control cannot be. */}
-      <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-card text-neutral-600 shadow-card">
-        <Plus size={15} strokeWidth={2.6} />
+      <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-card">
+        <Plus size={14} strokeWidth={2.25} />
       </span>
     </span>
   );

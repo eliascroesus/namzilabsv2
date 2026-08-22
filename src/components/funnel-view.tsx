@@ -1,3 +1,6 @@
+import { StatusPill } from "@/components/ui/badge";
+import { formatMetricValue } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { FunnelResult } from "@/lib/metrics/compute";
 
 /** Horizontal funnel: each stage's distinct count, conversion bar, and the bottleneck flagged. */
@@ -14,24 +17,24 @@ export function FunnelView({ result }: { result: FunnelResult }) {
               <span className="font-medium text-foreground">
                 {stage.label}
                 {isBottleneck && (
-                  <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-tiny font-medium text-red-700">
-                    biggest drop-off
-                  </span>
+                  <StatusPill tone="danger" className="ml-2">
+                    Biggest drop-off
+                  </StatusPill>
                 )}
               </span>
               {/* tnum on the row, so the counts sit in columns as ranges flip. */}
               <span className="tnum text-muted-foreground">
-                {stage.count}
+                {formatMetricValue(stage.count, { format: "number" })}
                 {i > 0 && (
-                  <span className="ml-2 text-tiny text-neutral-400">
+                  <span className="ml-2 text-tiny text-muted-foreground">
                     {Math.round(stage.conversionFromPrev * 100)}% from prev
                   </span>
                 )}
               </span>
             </div>
-            <div className="h-6 w-full overflow-hidden rounded bg-muted">
+            <div className="h-6 w-full overflow-hidden rounded-control bg-muted">
               <div
-                className={`h-full ${isBottleneck ? "bg-red-400" : "bg-neutral-800"}`}
+                className={cn("h-full", isBottleneck ? "bg-danger" : "bg-brand-600")}
                 style={{ width: `${Math.max(pct, 2)}%` }}
               />
             </div>

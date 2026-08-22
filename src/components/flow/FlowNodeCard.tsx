@@ -33,11 +33,11 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
             e.stopPropagation();
             setOpen(!open);
           }}
-          className="nodrag flex h-7 w-7 items-center justify-center rounded-control text-neutral-500 transition-colors hover:bg-muted hover:text-black"
+          className="nodrag flex h-7 w-7 items-center justify-center rounded-control text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
           title="Step actions"
           aria-label="Step actions"
         >
-<MoreVertical size={18} strokeWidth={2.25} />
+          <MoreVertical size={18} strokeWidth={2} />
         </button>
       }
     >
@@ -49,7 +49,7 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
             setOpen(false);
             data.onDuplicateNode?.(id);
           }}
-          className="block w-full rounded px-2 py-1.5 text-left hover:bg-neutral-100"
+          className="block w-full rounded-control px-2 py-1.5 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
         >
           Duplicate
         </button>
@@ -60,7 +60,7 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
             setOpen(false);
             data.onDeleteNode?.(id);
           }}
-          className="block w-full rounded px-2 py-1.5 text-left text-red-600 hover:bg-red-50"
+          className="block w-full rounded-control px-2 py-1.5 text-left text-destructive outline-none transition-colors hover:bg-danger-soft/60 focus-visible:ring-4 focus-visible:ring-ring/40"
         >
           Delete
         </button>
@@ -103,7 +103,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       : status === "setup" && data.issue
         ? { text: data.issue, cls: sm.hint }
         : status === "ready" && test?.status === "ok"
-          ? { text: resultLabel(t, test, data.config as Record<string, unknown>), cls: "text-neutral-500" }
+          ? { text: resultLabel(t, test, data.config as Record<string, unknown>), cls: "text-muted-foreground" }
           : null;
 
   // A second line, only when the source itself has something to say — today
@@ -158,7 +158,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
          inner strip: the radius clips it for free and nothing inside the card
          can knock it out of alignment. */
       style={{ borderLeftWidth: 4, borderLeftColor: accent }}
-      className={`group/card w-[300px] rounded-surface border bg-white shadow-surface transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-surface ${border}`}
+      className={`group/card w-[300px] rounded-surface border bg-card shadow-surface transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-surface ${border}`}
     >
       {isCompare ? (
         <>
@@ -182,7 +182,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         <span className="min-w-0 flex-1 pt-0.5">
           <span className="flex items-center gap-1.5">
             {data.stepNo != null && (
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-micro font-bold tabular-nums text-muted-foreground">{data.stepNo}</span>
+              <span className="tnum rounded-control bg-muted px-1.5 py-0.5 text-micro font-semibold text-muted-foreground">{data.stepNo}</span>
             )}
             <span className="min-w-0 truncate text-lead font-semibold text-foreground">{nodeTitle(t, data)}</span>
           </span>
@@ -215,21 +215,21 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       </div>
 
       {/* The publish rule, said on the canvas instead of only at the gate.
-          The strip's own bottom corners have to be the INSIDE of the card's:
-          16px radius − 1px border = 15px. Tailwind can't do that subtraction,
-          so it is a literal that goes quietly wrong the moment the card's
-          radius moves — which is exactly what happened, this sat at 13px (the
-          inside of 12px) for a whole radius step after the card grew.
+          The strip's own bottom corners have to be the INSIDE of the card's —
+          the surface radius minus the 1px border — so it is written as that
+          subtraction rather than as a literal. A literal sat at 13px (the
+          inside of 12px) for a whole radius step after the card grew;
+          `calc(var(--radius-surface) - 1px)` cannot fall behind.
           `bg-accent`/`text-accent-foreground` ARE brand-50/brand-700; the
           hairline between them has no token at the 100 step, so it stays raw. */}
       {publishes != null && (
         <div
-          className={`flex items-center gap-1.5 rounded-b-[15px] border-t px-3.5 py-2 text-micro font-semibold ${
-            publishes ? "border-brand-100 bg-accent text-accent-foreground" : "border-neutral-100 bg-neutral-50 text-neutral-400"
+          className={`flex items-center gap-1.5 rounded-b-[calc(var(--radius-surface)-1px)] border-t px-3.5 py-2 text-micro font-semibold ${
+            publishes ? "border-brand-100 bg-accent text-accent-foreground" : "border-border bg-muted/50 text-muted-foreground"
           }`}
           title={publishes ? "This step's result becomes a tile when you publish." : "Switched off in Review & publish — this step publishes nothing."}
         >
-          <LineChart size={12} strokeWidth={2.4} />
+          <LineChart size={14} strokeWidth={2.25} />
           {publishes ? "On your dashboard" : "Not published"}
         </div>
       )}
@@ -251,10 +251,10 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             (data as NodeData).onAddFrom?.(id, null, anchorFromRect(e.currentTarget.getBoundingClientRect()));
           }}
           title="Add the next step"
-          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-white p-3 text-left text-base font-semibold text-muted-foreground shadow-surface transition-all hover:border-primary hover:text-primary"
+          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-left text-base font-semibold text-muted-foreground shadow-surface outline-none transition-all hover:border-primary hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
-            <Plus size={16} strokeWidth={2.5} />
+            <Plus size={16} strokeWidth={2} />
           </span>
           Add next step
         </button>
@@ -272,9 +272,9 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
                 (data as NodeData).onAddFrom?.(id, h.id, anchorFromRect(e.currentTarget.getBoundingClientRect()));
               }}
               title={`Add a step to “${h.label}”`}
-              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-border bg-white px-3 py-1.5 text-tiny font-semibold text-muted-foreground transition-all hover:border-primary hover:text-primary"
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-border bg-card px-3 py-1.5 text-tiny font-semibold text-muted-foreground outline-none transition-all hover:border-primary hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
             >
-              <Plus size={13} strokeWidth={2.5} />
+              <Plus size={14} strokeWidth={2.25} />
               {h.label}
             </button>
           ))}

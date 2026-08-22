@@ -1,6 +1,10 @@
 import Link from "next/link";
-import { formatMetricValue, relativeTime } from "@/lib/format";
+import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
 import { refreshFlowAction } from "@/app/dashboard/flows/actions";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { StatusPill, type StatusPillProps } from "@/components/ui/badge";
+import { GroupBars, ImportProgress, Sparkbars, TargetBar } from "@/components/charts";
 import type { ImportCoverage } from "@/connectors/types";
 
 /**
@@ -84,27 +88,27 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
   const t: Tile = windowed && !unavailable ? { ...stored, value: windowed.value, series: windowed.series, groups: windowed.groups } : stored;
   if (unavailable) {
     return (
-      <div className="rounded-card border border-border bg-card p-5 shadow-card">
+      <Card variant="card" className="lift">
         <div className="flex items-start justify-between">
           <h3 className="text-base font-semibold text-foreground">{stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
           <Link href={`/dashboard/flows/${row.flowId}`} className="text-tiny text-primary hover:underline">
-            Open →
+            Open
           </Link>
         </div>
         {/* An em-dash, not a 0: "no answer for this period" and "the answer is
             zero" are different facts, and the tile that conflates them is the
             one nobody can trust. Same stat size as a real number, so switching
             ranges never makes the tile jump. */}
-        <p className="tnum mt-2 text-stat font-semibold text-neutral-300">—</p>
+        <p className="tnum mt-2 text-stat font-semibold text-muted-foreground/50">—</p>
         <p className="mt-2 text-base text-muted-foreground">No data for this period.</p>
-        <p className="mt-1 text-tiny text-neutral-400" title={unavailable}>
+        <p className="mt-1 text-tiny text-muted-foreground" title={unavailable}>
           {unavailable.length > 120 ? `${unavailable.slice(0, 120)}…` : unavailable}
         </p>
-      </div>
+      </Card>
     );
   }
   return (
-    <div className="rounded-card border border-border bg-card p-5 shadow-card">
+    <Card variant="card" className="lift">
       <div className="flex items-start justify-between">
         {/* A row whose tile jsonb is null has never computed successfully, so
             there is no stored name — the output id is the only honest handle. */}
@@ -113,28 +117,32 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           <Freshness status={row.status} />
           <form action={refreshFlowAction}>
             <input type="hidden" name="flowId" value={row.flowId} />
-            <button
+            {/* The Button's `link` variant, sized down to sit level with the
+                "Open" link beside it — a submit, so it stays a real button. */}
+            <Button
               type="submit"
-              className="text-tiny text-muted-foreground hover:text-foreground hover:underline"
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-tiny"
               title="Recompute this tile now"
             >
               Refresh
-            </button>
+            </Button>
           </form>
           <Link href={`/dashboard/flows/${row.flowId}`} className="text-tiny text-primary hover:underline">
-            Open →
+            Open
           </Link>
         </div>
       </div>
 
       {t.series && t.series.length > 0 ? (
-        <Sparkbars series={t.series} label={fmt(t.value, t)} tile={t} />
+        <Sparkbars series={t.series} label={fmt(t.value, t)} format={t} />
       ) : t.groups && t.groups.length > 0 ? (
-        <GroupBars groups={t.groups} tile={t} />
+        <GroupBars groups={t.groups} total={t.value} format={t} />
       ) : (
         <>
           <p className="tnum mt-2 text-stat font-semibold">{fmt(t.value, t)}</p>
-          {t.target != null && <TargetBar value={t.value ?? 0} target={t.target} tile={t} />}
+          {t.target != null && <TargetBar value={t.value ?? 0} target={t.target} format={t} />}
         </>
       )}
 
@@ -142,10 +150,10 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           message names the failing node's error — truncated here, complete in
           the title attribute (the same trick the timestamp below uses). */}
       {row.status === "error" && row.error && (
-        <p className="mt-2 text-base text-red-700" title={row.error}>
+        <p className="mt-2 text-base text-danger-ink" title={row.error}>
           {row.error.length > 200 ? `${row.error.slice(0, 200)}…` : row.error}{" "}
           <Link href={`/dashboard/flows/${row.flowId}`} className="underline">
-            Fix in the editor →
+            Fix in the editor
           </Link>
         </p>
       )}
@@ -155,7 +163,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           the same rule the import bar follows: a number that leaves data out
           has to admit it, or the gap reads as an answer. */}
       {windowed?.undated ? (
-        <p className="mt-2 text-tiny text-amber-700">
+        <p className="mt-2 text-tiny text-warn-ink">
           {windowed.undated} record{windowed.undated === 1 ? "" : "s"} carry no date, so they are counted only in All time.
         </p>
       ) : null}
@@ -170,130 +178,24 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
       {/* The honesty marker (G.3): every materialized number says WHEN it was
           true. A stale tile's timestamp shows exactly how far behind it is. */}
       {row.computedAt && (
-        <p className="mt-3 text-tiny text-muted-foreground" title={new Date(row.computedAt).toLocaleString()}>
+        <p className="mt-3 text-tiny text-muted-foreground" title={formatDateTime(new Date(row.computedAt))}>
           Updated {relativeTime(new Date(row.computedAt))}
         </p>
       )}
-    </div>
+    </Card>
   );
 }
 
 function Freshness({ status }: { status: string }) {
   // Plain English, not internal states — "stale" reads as broken to a
-  // customer when it means "a refresh is on its way".
-  const meta: Record<string, { cls: string; label: string }> = {
-    // The kit's success pair, not a hand-picked green — this pill and the
-    // flows list's "Active" pill must be the same green or one reads as off.
-    fresh: { cls: "bg-success-soft text-success-ink", label: "Up to date" },
-    stale: { cls: "bg-amber-100 text-amber-700", label: "Refreshing soon" },
-    computing: { cls: "bg-blue-100 text-blue-700", label: "Computing…" },
-    error: { cls: "bg-red-100 text-red-700", label: "Error" },
+  // customer when it means "a refresh is on its way". Transient states are
+  // `pending` (neutral), never blue.
+  const meta: Record<string, { tone: StatusPillProps["tone"]; label: string }> = {
+    fresh: { tone: "success", label: "Up to date" },
+    stale: { tone: "warn", label: "Refreshing soon" },
+    computing: { tone: "pending", label: "Computing…" },
+    error: { tone: "danger", label: "Error" },
   };
-  const m = meta[status] ?? { cls: "bg-neutral-100 text-neutral-600", label: status };
-  return <span className={`rounded px-1.5 py-0.5 text-tiny font-medium ${m.cls}`}>{m.label}</span>;
-}
-
-function TargetBar({ value, target, tile }: { value: number; target: number; tile: Tile }) {
-  const pct = target > 0 ? Math.min(Math.round((value / target) * 100), 100) : 0;
-  return (
-    <div className="mt-3">
-      <div className="mb-1 flex justify-between text-tiny text-muted-foreground">
-        {/* The goal is shown in the metric's own format ("Goal: 90%", "Goal: $1,500"). */}
-        <span className="tnum">Goal: {fmt(target, tile)}</span>
-        <span className="tnum">{pct}%</span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded bg-muted">
-        <div className={`h-full ${pct >= 100 ? "bg-green-500" : "bg-neutral-800"}`} style={{ width: `${Math.max(pct, 2)}%` }} />
-      </div>
-    </div>
-  );
-}
-
-function Sparkbars({ series, label, tile }: { series: Array<{ bucket: string; value: number }>; label: string; tile: Tile }) {
-  const max = Math.max(1, ...series.map((s) => s.value));
-  return (
-    <>
-      <p className="tnum mt-2 text-display font-semibold">{label}</p>
-      <div className="mt-3 flex h-16 items-end gap-1">
-        {series.map((s) => (
-          <div
-            key={s.bucket}
-            // The bar's own value, in the tile's own format. A raw number here
-            // contradicted the headline directly above it — "4h 44m" over bars
-            // whose tooltips read "284.6", the same quantity said two ways.
-            title={`${s.bucket}: ${fmt(s.value, tile)}`}
-            className="flex-1 rounded-t bg-neutral-800"
-            style={{ height: `${Math.max((s.value / max) * 100, 4)}%` }}
-          />
-        ))}
-      </div>
-    </>
-  );
-}
-
-function GroupBars({ groups, tile }: { groups: Array<{ label: string; value: number }>; tile: Tile }) {
-  const SHOW = 6;
-  const shown = groups.slice(0, SHOW);
-  const max = Math.max(1, ...shown.map((g) => g.value));
-  return (
-    <>
-      {/* The metric over EVERY record. Bars alone read as "these six are the
-          whole number", and the cut-note below needs a visible total to be
-          about. */}
-      {tile.value != null && <p className="tnum mt-2 text-display font-semibold">{fmt(tile.value, tile)}</p>}
-      <div className="mt-3 space-y-1.5">
-        {shown.map((g) => (
-          <div key={g.label}>
-            <div className="mb-0.5 flex justify-between text-base">
-              <span className="text-neutral-700">{g.label}</span>
-              <span className="tnum text-muted-foreground">{fmt(g.value, tile)}</span>
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded bg-muted">
-              <div className="h-full bg-neutral-800" style={{ width: `${Math.max((g.value / max) * 100, 2)}%` }} />
-            </div>
-          </div>
-        ))}
-        {/* A cut the tile makes is a cut the tile has to admit — six bars read
-            as "all of them" when there were eleven. */}
-        {groups.length > shown.length && (
-          <p className="text-tiny text-neutral-400">
-            Showing the {shown.length} largest of {groups.length} groups{tile.value != null ? " — the number above includes them all" : ""}.
-          </p>
-        )}
-      </div>
-    </>
-  );
-}
-
-/**
- * "Still importing — covering 12 of 90 days."
- *
- * Days rather than a percentage of records, for the reason the plan gives: the
- * denominator of a record count is how many exist in the window, which is
- * unknowable until the import finishes. Days covered is a number we actually
- * have.
- *
- * The bar is clamped to the target so a stream that reached further than asked
- * cannot render past its own end.
- */
-function ImportProgress({ importing }: { importing: ImportCoverage }) {
-  const day = 86_400_000;
-  const target = Math.max(1, Math.round(importing.targetMs / day));
-  // Floored, like the Test note: rounding the numerator renders a 100%-full bar
-  // captioned "still importing", which is a contradiction the user has to
-  // resolve, and they resolve it by believing the bar.
-  const covered = Math.min(target, Math.max(0, Math.floor(importing.coveredMs / day)));
-  // The bar itself is capped below full for the same reason — an import that is
-  // still running has not finished, whatever the rounding says.
-  const pct = Math.min(99, Math.max(0, Math.round((covered / target) * 100)));
-  return (
-    <div className="mt-3">
-      <div className="h-1 w-full overflow-hidden rounded-full bg-amber-100">
-        <div className="h-full rounded-full bg-amber-400 transition-[width]" style={{ width: `${pct}%` }} />
-      </div>
-      <p className="mt-1.5 text-tiny text-amber-700">
-        Still importing — covering {covered} of {target} days. This number can still grow.
-      </p>
-    </div>
-  );
+  const m = meta[status] ?? { tone: "pending", label: status };
+  return <StatusPill tone={m.tone}>{m.label}</StatusPill>;
 }

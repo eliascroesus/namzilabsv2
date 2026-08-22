@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { requireOrg } from "@/lib/auth";
-import { eventTypeOptions } from "@/connectors/catalog";
+import { catalogEntry, eventTypeLabel, eventTypeOptions } from "@/connectors/catalog";
 import { AppShell } from "@/components/app-shell";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FieldLabel } from "@/components/ui/field";
+import { Input, NativeSelect } from "@/components/ui/input";
+import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
+import { formatDateTime, formatMetricValue } from "@/lib/format";
 import { getDb } from "@/db/client";
 import { computeAggregate, queryEvents, distinctSources, distinctEventTypes } from "@/lib/metrics/compute";
 import { AggregateSchema, FILTER_OPS, type AggregateDefinition } from "@/lib/metrics/types";
@@ -87,131 +93,139 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
-      <main className="mx-auto max-w-3xl px-6 py-10">
-        <Link href="/dashboard" className="text-base text-neutral-500 hover:text-foreground">
-          &larr; Dashboard
-        </Link>
-        <div className="mt-3 flex items-center justify-between">
-          <h1 className="text-display font-semibold tracking-tight text-foreground">New metric</h1>
-          <Link href="/dashboard/funnels/new" className="text-base text-blue-600 hover:underline">
-            Build a funnel instead
-          </Link>
-        </div>
-        <p className="mt-1 text-base text-neutral-500">
-          Pick what to measure. Preview updates with your live data; save when it looks right.
-        </p>
+      <PageContainer width="narrow">
+        <PageHeader
+          back={{ href: "/dashboard", label: "Dashboard" }}
+          title="New metric"
+          lede="Pick what to measure. Preview updates with your live data; save when it looks right."
+          actions={
+            <Link href="/dashboard/funnels/new" className="text-base text-primary hover:underline">
+              Build a funnel instead
+            </Link>
+          }
+        />
 
         {/* Builder: GET form updates the live preview */}
-        <form method="get" className="mt-8 space-y-4 rounded-lg border border-neutral-200 p-5">
-          <Row label="Name">
-            <input name="name" defaultValue={one(sp.name)} placeholder="Booked leads this week"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
-          </Row>
-          <div className="grid grid-cols-2 gap-4">
-            <Row label="Source">
-              <Select name="source" value={one(sp.source)} options={["", ...sources]} labels={{ "": "All sources" }} />
+        <Card variant="surface" padding="default" className="mt-8">
+          <form method="get" className="space-y-4">
+            <Row htmlFor="name" label="Name">
+              <Input id="name" name="name" defaultValue={one(sp.name)} placeholder="Booked leads this week" />
             </Row>
-            <Row label="Event type">
-              {/* Values stay the stored strings (the definition matches them
-                  with `=`); eventTypeOptions curates: hidden noise dropped,
-                  a saved value kept, labels humanized, sorted by label. */}
-              {(() => {
-                const opts = eventTypeOptions(one(sp.source) || null, eventTypes, one(sp.eventType) || null);
-                return (
-                  <Select
-                    name="eventType"
-                    value={one(sp.eventType)}
-                    options={["", ...opts.map((o) => o.value)]}
-                    labels={{ "": "Any", ...Object.fromEntries(opts.map((o) => [o.value, o.label])) }}
-                  />
-                );
-              })()}
-            </Row>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Row label="Aggregation">
-              <Select name="aggregation" value={one(sp.aggregation) || "count"}
-                options={["count", "sum", "count_distinct"]}
-                labels={{ count: "Count", sum: "Sum of value", count_distinct: "Count distinct" }} />
-            </Row>
-            <Row label="Trend by">
-              <Select name="timeBucket" value={one(sp.timeBucket)} options={["", "day", "week", "month"]}
-                labels={{ "": "No trend (single number)", day: "Day", week: "Week", month: "Month" }} />
-            </Row>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Row label="Sum field (for Sum)">
-              <input name="valueField" defaultValue={one(sp.valueField) || "value"}
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
-            </Row>
-            <Row label="Distinct field (for Count distinct)">
-              <input name="distinctField" defaultValue={one(sp.distinctField) || "subject"}
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
-            </Row>
-          </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Row htmlFor="source" label="Source">
+                {/* Storage keys stay the VALUES (the definition matches on
+                    them); only the reading is humanized, exactly as the
+                    event-type select and the sample list below already do. */}
+                <Select
+                  name="source"
+                  value={one(sp.source)}
+                  options={["", ...sources]}
+                  labels={{
+                    "": "All sources",
+                    ...Object.fromEntries(sources.map((s) => [s, catalogEntry(s)?.name ?? s])),
+                  }}
+                />
+              </Row>
+              <Row htmlFor="eventType" label="Event type">
+                {/* Values stay the stored strings (the definition matches them
+                    with `=`); eventTypeOptions curates: hidden noise dropped,
+                    a saved value kept, labels humanized, sorted by label. */}
+                {(() => {
+                  const opts = eventTypeOptions(one(sp.source) || null, eventTypes, one(sp.eventType) || null);
+                  return (
+                    <Select
+                      name="eventType"
+                      value={one(sp.eventType)}
+                      options={["", ...opts.map((o) => o.value)]}
+                      labels={{ "": "Any", ...Object.fromEntries(opts.map((o) => [o.value, o.label])) }}
+                    />
+                  );
+                })()}
+              </Row>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Row htmlFor="aggregation" label="Aggregation">
+                <Select name="aggregation" value={one(sp.aggregation) || "count"}
+                  options={["count", "sum", "count_distinct"]}
+                  labels={{ count: "Count", sum: "Sum of value", count_distinct: "Count distinct" }} />
+              </Row>
+              <Row htmlFor="timeBucket" label="Trend by">
+                <Select name="timeBucket" value={one(sp.timeBucket)} options={["", "day", "week", "month"]}
+                  labels={{ "": "No trend (single number)", day: "Day", week: "Week", month: "Month" }} />
+              </Row>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Row htmlFor="valueField" label="Sum field (for Sum)">
+                <Input id="valueField" name="valueField" defaultValue={one(sp.valueField) || "value"} />
+              </Row>
+              <Row htmlFor="distinctField" label="Distinct field (for Count distinct)">
+                <Input id="distinctField" name="distinctField" defaultValue={one(sp.distinctField) || "subject"} />
+              </Row>
+            </div>
 
-          <fieldset className="rounded-md border border-neutral-200 p-3">
-            <legend className="px-1 text-tiny font-medium text-neutral-500">Filters (optional)</legend>
-            <Row label="Combine with">
-              <Select name="combinator" value={one(sp.combinator) || "and"} options={["and", "or"]}
-                labels={{ and: "AND", or: "OR" }} />
-            </Row>
-            {[0, 1].map((i) => (
-              <div key={i} className="mt-2 grid grid-cols-3 gap-2">
-                <input name={`filter${i}_field`} defaultValue={one(sp[`filter${i}_field`])} placeholder="field (e.g. subject or properties.plan)"
-                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-base" />
-                <Select name={`filter${i}_op`} value={one(sp[`filter${i}_op`])} options={["", ...FILTER_OPS]} labels={{ "": "op" }} />
-                <input name={`filter${i}_value`} defaultValue={one(sp[`filter${i}_value`])} placeholder="value"
-                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-base" />
-              </div>
-            ))}
-          </fieldset>
+            <fieldset className="rounded-card border border-border p-3">
+              <legend className="px-1 text-tiny font-medium text-muted-foreground">Filters (optional)</legend>
+              <Row htmlFor="combinator" label="Combine with">
+                <Select name="combinator" value={one(sp.combinator) || "and"} options={["and", "or"]}
+                  labels={{ and: "AND", or: "OR" }} />
+              </Row>
+              {[0, 1].map((i) => (
+                <div key={i} className="mt-2 grid grid-cols-3 gap-2">
+                  <Input name={`filter${i}_field`} defaultValue={one(sp[`filter${i}_field`])}
+                    placeholder="field (e.g. subject or properties.plan)" className="h-8 px-2 text-small" />
+                  <Select name={`filter${i}_op`} value={one(sp[`filter${i}_op`])} options={["", ...FILTER_OPS]} labels={{ "": "op" }} />
+                  <Input name={`filter${i}_value`} defaultValue={one(sp[`filter${i}_value`])} placeholder="value"
+                    className="h-8 px-2 text-small" />
+                </div>
+              ))}
+            </fieldset>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Row label="Unit (optional)">
-              <input name="unit" defaultValue={one(sp.unit)} placeholder="leads"
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
-            </Row>
-            <Row label="Goal / target (optional)">
-              <input name="target" type="number" defaultValue={one(sp.target)} placeholder="100"
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base" />
-            </Row>
-          </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Row htmlFor="unit" label="Unit (optional)">
+                <Input id="unit" name="unit" defaultValue={one(sp.unit)} placeholder="leads" />
+              </Row>
+              <Row htmlFor="target" label="Goal / target (optional)">
+                <Input id="target" name="target" type="number" defaultValue={one(sp.target)} placeholder="100" />
+              </Row>
+            </div>
 
-          <button className="rounded-md border border-neutral-300 px-4 py-2 text-base font-medium hover:bg-neutral-50">
-            Preview
-          </button>
-        </form>
+            <Button type="submit" variant="secondary">
+              Preview
+            </Button>
+          </form>
+        </Card>
 
         {/* Live preview + Save */}
         {previewed && (
-          <section className="mt-6 rounded-lg border border-neutral-200 p-5">
-            <h2 className="text-base font-semibold uppercase tracking-wide text-neutral-500">
-              Live preview (last 90 days)
-            </h2>
+          <Card variant="surface" padding="default" className="mt-6">
+            <SectionHeading>Live preview (last 90 days)</SectionHeading>
             {previewError ? (
-              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-base text-amber-800">
+              <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
                 {previewError}
               </p>
             ) : (
               <>
-                <p className="mt-2 text-4xl font-semibold">
-                  {previewValue}
-                  {one(sp.unit) && <span className="ml-2 text-base font-normal text-neutral-500">{one(sp.unit)}</span>}
+                {/* Same formatter and recipe as the dashboard tile this metric
+                    will become — the preview must not print "1234.5" for a
+                    number the board will render as "1,234.5". */}
+                <p className="tnum text-stat font-semibold">
+                  {formatMetricValue(previewValue, { format: "number", precision: Number.isInteger(previewValue) ? 0 : 2 })}
+                  {one(sp.unit) && <span className="ml-2 text-base font-normal text-muted-foreground">{one(sp.unit)}</span>}
                 </p>
-                <p className="mt-4 text-tiny font-medium uppercase tracking-wide text-neutral-400">
+                <p className="mt-4 text-tiny font-medium uppercase tracking-wide text-muted-foreground">
                   Latest matching records
                 </p>
                 {sample.length === 0 ? (
-                  <p className="mt-1 text-base text-neutral-500">No matching records yet.</p>
+                  <p className="mt-1 text-base text-muted-foreground">No matching records yet.</p>
                 ) : (
-                  <ul className="mt-1 divide-y divide-neutral-100 text-base">
+                  <ul className="mt-1 divide-y divide-border text-base">
                     {sample.map((e) => (
                       <li key={e.eventId} className="flex justify-between py-1.5">
-                        <span>
-                          {e.source} · {e.eventType} {e.subject ? `· ${e.subject}` : ""}
+                        <span title={e.eventType}>
+                          {catalogEntry(e.source)?.name ?? e.source} · {eventTypeLabel(e.source, e.eventType)}
+                          {e.subject ? ` · ${e.subject}` : ""}
                         </span>
-                        <span className="text-neutral-400">{new Date(e.occurredAt).toLocaleString()}</span>
+                        <span className="text-muted-foreground">{formatDateTime(new Date(e.occurredAt))}</span>
                       </li>
                     ))}
                   </ul>
@@ -220,25 +234,33 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
                   {hiddenKeys.map((k) => (
                     <input key={k} type="hidden" name={k} value={one(sp[k])} />
                   ))}
-                  <button className="rounded-md bg-neutral-900 px-5 py-2 text-base font-medium text-white hover:bg-neutral-800">
-                    Save metric
-                  </button>
+                  <Button type="submit">Save metric</Button>
                 </form>
               </>
             )}
-          </section>
+          </Card>
         )}
-      </main>
+      </PageContainer>
     </AppShell>
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * A labelled field. `htmlFor` is the control's `name`, which is unique per
+ * form — so the pair cannot drift, and `Select` below derives its own `id`
+ * from the same string rather than being told twice.
+ *
+ * It matters that this is a real association and not just text above a box:
+ * this helper used to be a `<label>` WRAPPING its control, which labelled it
+ * implicitly. Splitting the label out to style it lost that, and a select
+ * with no accessible name is announced as an unnamed combo box.
+ */
+function Row({ htmlFor, label, children }: { htmlFor: string; label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-base font-semibold text-foreground">{label}</span>
+    <div>
+      <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -254,12 +276,12 @@ function Select({
   labels?: Record<string, string>;
 }) {
   return (
-    <select name={name} defaultValue={value} className="w-full rounded-md border border-neutral-300 px-2 py-2 text-base">
+    <NativeSelect id={name} name={name} defaultValue={value}>
       {options.map((o) => (
         <option key={o} value={o}>
           {labels[o] ?? o}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
 }

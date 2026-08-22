@@ -24,26 +24,48 @@
  * everything is coloured can point at nothing.
  * ========================================================================== */
 @theme {
+  /* --- The stock scales, cleared ------------------------------------------
+   * Tailwind ships its own type, radius and elevation scales, and for as long
+   * as they resolved alongside ours the app had BOTH: `text-lg` beside
+   * `text-title` (17px vs 18px — near-misses, which read as sloppiness rather
+   * than hierarchy), `rounded-lg` beside `rounded-control` (the same 8px under
+   * two names), `shadow-sm` beside a four-rung ladder built on purpose.
+   *
+   * `initial` empties the namespace, so the only sizes, radii and shadows that
+   * COMPILE are the ones below. A drifting class stops being a review comment
+   * and starts being a missing style you can see — which is the only kind of
+   * rule that survives contact with a deadline.
+   *
+   * NOT cleared: `--color-*`, because the neutral ramp, `white`, `black` and
+   * `transparent` all live there and the kit's roles are built ON them. Colour
+   * discipline is enforced by scripts/check-ui.ts instead.
+   */
+  --text-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+
   /* The app's typeface, wired through Tailwind so `font-sans` means Inter. */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* IDs, API keys, webhook URLs, code. System mono — nothing to load, and
+     technical strings stop wearing the browser's fallback serif-mono mix. */
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
   /* --- Brand / accent -----------------------------------------------------
    * One accent, used for every primary action, every selection, every focus
    * ring. `brand-600` is the button; 500 is hover-on-dark; 50/100 are tints.
    *
-   * Miro's primary blue, matched. The ramp has walked from stock indigo to
-   * blue-violet to here: a true, bright blue with just enough violet to stay
-   * ours. `brand-600` under white text is ~4.8:1 — past AA for the 14px+
-   * semibold text every button in the product uses.
+   * Deep indigo — Stripe/Linear territory, the settled hue of tools people
+   * trust with their data. `brand-600` under white text is ~6.3:1 — past AA
+   * even for normal-weight body text, not just the semibold buttons use.
    */
-  --color-brand-50: #f6f3ff;
-  --color-brand-100: #ece5ff;
-  --color-brand-200: #dbcdff;
-  --color-brand-300: #c0a6fd;
-  --color-brand-400: #a37bfa;
-  --color-brand-500: #8b55f4;
-  --color-brand-600: #7a37e8;
-  --color-brand-700: #6425c4;
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
 
   /* --- Ink: the navigation rail and any dark surface ----------------------
    * A four-step ladder, which is the minimum a dark surface needs to express
@@ -107,6 +129,9 @@
      set with .tnum. */
   --text-stat: 2.25rem; /* 36px — the tile's headline number, nothing else */
   --text-stat--line-height: 2.5rem;
+  /* Marketing only — the landing hero. In-app nothing goes past `stat`. */
+  --text-hero: 2.5rem; /* 40px */
+  --text-hero--line-height: 2.75rem;
 
   /* --- Radius -------------------------------------------------------------
    * Three steps. Controls, cards, floating surfaces. Everything else was a
@@ -178,24 +203,29 @@
      same height is the point, and one token is how it stays that way. */
   --shadow-surface: 0 6px 12px -3px rgb(15 23 42 / 0.07), 0 20px 40px -10px rgb(15 23 42 / 0.16);
 
-  /* --- The rail's gradient -------------------------------------------------
+  /* --- The rail ------------------------------------------------------------
    * THE 30 IN A 60/30/10 SPLIT. White canvas is the 60, this rail is the 30,
-   * and the blue accent is the 10 — which only works if the rail is NOT the
-   * accent. It has been Make's violet→fuchsia (theirs, not ours) and then the
-   * accent blue itself (so the primary buttons had nothing to pop against).
+   * and the indigo accent is the 10 — which only works if the rail is NOT the
+   * accent. It has been Make's violet→fuchsia (theirs, not ours), the accent
+   * itself (so primary buttons had nothing to pop against), and a warm brown
+   * that matched nothing else in the palette.
    *
-   * Deep indigo-navy: unmistakably a colour rather than a grey — greys read as
-   * bleak at this size — and far enough from #4262ff that a blue button on top
-   * of it, or a white selected tile, reads instantly.
+   * Now it IS the ink ladder's base: the cool graphite the ladder was built
+   * around, so the rail and every dark surface (the canvas toast) are the same
+   * material by construction rather than by coincidence.
    */
   /* FLAT, not a gradient. It was a three-stop wash so a 100px column would
      not read as a slab; at this value it does not need the help, and a flat
      colour is one number a future edit cannot get half-right. */
-  --color-rail: #413735;
+  --color-rail: var(--color-ink-950);
 
   /* --- State, as tokens rather than raw palette picks ---------------------
    * Green/amber/red were being reached for directly all over the app, which
-   * is how three different greens end up on one screen.
+   * is how three different greens end up on one screen. Each state is a trio:
+   * the colour itself (dots, strokes), a soft wash (badge/banner fill), and
+   * an ink (text ON the wash). Pending/transient state takes `muted` +
+   * `muted-foreground` — deliberately NOT blue, so nothing competes with the
+   * indigo accent.
    */
   --color-success: #16a34a;
   --color-success-soft: #dcfce7;
@@ -203,6 +233,9 @@
   --color-warn: #f97316;
   --color-warn-soft: #fff1e7;
   --color-warn-ink: #c2410c;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fee2e2;
+  --color-danger-ink: #b91c1c;
 }
 
 :root {
@@ -280,17 +313,6 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-}
-
-@theme {
-  /* State tokens re-declared here so `bg-success-soft` / `text-warn-ink`
-     become real utilities rather than raw CSS vars at every call site. */
-  --color-success: #16a34a;
-  --color-success-soft: #dcfce7;
-  --color-success-ink: #15803d;
-  --color-warn: #f97316;
-  --color-warn-soft: #fff1e7;
-  --color-warn-ink: #c2410c;
 }
 
 body {
@@ -377,7 +399,7 @@ body {
  * Make.com. Brightens to indigo when the edge is hovered or selected.
  */
 .react-flow__edge-path {
-  stroke: #aab4cb;
+  stroke: var(--color-canvas-edge);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-dasharray: 6 7;

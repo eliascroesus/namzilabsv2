@@ -635,7 +635,7 @@ async function execApp(ctx: EngineCtx, node: FlowNode, graph?: FlowGraph): Promi
       // next occurrence has to name itself.
       const cause = e instanceof Error ? e.message : String(e);
       throw new Error(
-        `Couldn't load this step's records — the read failed partway through${rows.length > 0 ? ` (after ${rows.length.toLocaleString()} records)` : ""}. Narrowing the Record type usually fixes it. Cause: ${cause.slice(0, 200)}`,
+        `Couldn't load this step's records — the read failed partway through${rows.length > 0 ? ` (after ${rows.length.toLocaleString("en-US")} records)` : ""}. Narrowing the Record type usually fixes it. Cause: ${cause.slice(0, 200)}`,
       );
     }
 
@@ -1145,7 +1145,7 @@ function matchUnite(node: FlowNode, inputs: ResolvedInput[], cfg: { keepNodeId: 
   // in "missing" mode, keep everything).
   if (referenceRecords.length > 0 && list.size === 0) {
     throw new Error(
-      `Nothing to check against: "${cfg.lookupField.replace(/^properties\./, "")}" is empty on all ${referenceRecords.length.toLocaleString()} records from the other step. Pick the field that actually holds the value there.`,
+      `Nothing to check against: "${cfg.lookupField.replace(/^properties\./, "")}" is empty on all ${referenceRecords.length.toLocaleString("en-US")} records from the other step. Pick the field that actually holds the value there.`,
     );
   }
 
@@ -1313,7 +1313,7 @@ function scalarAt(inputs: ResolvedInput[], handle: "a" | "b", fixed?: number | n
        */
       if (found.shape.records.length > 1) {
         throw new Error(
-          `Input ${handle.toUpperCase()} reads "${fieldPath}" from a step holding ${found.shape.records.length.toLocaleString()} records, so there is no single value to take. To total that column across every record, use a Calculate set to Sum — it can add several columns at once. To read one value, narrow that step to a single record first.`,
+          `Input ${handle.toUpperCase()} reads "${fieldPath}" from a step holding ${found.shape.records.length.toLocaleString("en-US")} records, so there is no single value to take. To total that column across every record, use a Calculate set to Sum — it can add several columns at once. To read one value, narrow that step to a single record first.`,
         );
       }
       const v = toNumber(getField(rec, fieldPath));
@@ -1981,7 +1981,7 @@ function assertFieldHasValues(records: FlowRecord[], cfg: AggregateConfig): void
       }
       if (!present) {
         throw new Error(
-          `Can't ${cfg.aggregation} "${f.replace(/^properties\./, "")}" — none of the ${records.length.toLocaleString()} records here have that field at all. It may have been renamed at the source; pick it again, or remove it from this step.`,
+          `Can't ${cfg.aggregation} "${f.replace(/^properties\./, "")}" — none of the ${records.length.toLocaleString("en-US")} records here have that field at all. It may have been renamed at the source; pick it again, or remove it from this step.`,
         );
       }
     }
@@ -2028,7 +2028,7 @@ class EmptyFieldError extends Error {
   constructor(field: string, count: number, what: string) {
     const name = field.replace(/^properties\./, "") || "(no field chosen)";
     super(
-      `Can't ${what} "${name}" — none of the ${count.toLocaleString()} records here have a value in that field. Pick the field that holds the number.`,
+      `Can't ${what} "${name}" — none of the ${count.toLocaleString("en-US")} records here have a value in that field. Pick the field that holds the number.`,
     );
   }
 }

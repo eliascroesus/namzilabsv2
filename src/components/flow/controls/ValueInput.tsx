@@ -3,12 +3,13 @@
 import { DataBrowser } from "./DataBrowser";
 import { DataPill } from "./Pill";
 import { Database } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { fieldClasses } from "@/components/ui/input";
 import type { DataGroup, FieldRef, ValueModel } from "./types";
 import { emptyValue } from "./types";
 import { fieldRefIsStale, hasAnyFields } from "./field-utils";
 
-const INPUT =
-  "w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-base text-foreground placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none";
+const INPUT = cn(fieldClasses, "px-2 py-1.5 hover:border-ring/50");
 
 /**
  * A single value input that is either a typed literal ("Fixed value") or one mapped
@@ -78,7 +79,7 @@ export function ValueInput({
             disabled={disabled}
             onChange={(e) => onChange({ mode: "fixed", text: e.target.value, field: null })}
             placeholder={placeholder}
-            className={`${INPUT} ${canInsert ? "pr-11" : ""} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+            className={cn(INPUT, canInsert && "pr-11")}
           />
           {canInsert && (
             <button
@@ -86,7 +87,7 @@ export function ValueInput({
               onClick={toggle}
               title="Insert a value from your data"
               aria-label="Insert a value from your data"
-              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-brand-200 bg-brand-50 p-1 text-brand-500 transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600"
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-200 bg-brand-50 p-1 text-brand-500 outline-none transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600 focus-visible:ring-4 focus-visible:ring-ring/40"
             >
               <Database size={14} strokeWidth={2} />
             </button>

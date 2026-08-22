@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setEventTimeAction } from "@/app/integrations/actions";
 import type { EventTimeChoice } from "@/lib/webhooks/event-time";
+import { FieldError, FieldHint, FieldLabel } from "@/components/ui/field";
+import { NativeSelect } from "@/components/ui/input";
 
 /**
  * Which key of an incoming payload holds the event time.
@@ -65,15 +67,13 @@ export function EventTimePicker({
 
   return (
     <div className="mt-4">
-      <label className="block text-base font-semibold text-foreground" htmlFor="event-time-key">
-        Event time
-      </label>
-      <select
+      <FieldLabel htmlFor="event-time-key">Event time</FieldLabel>
+      <NativeSelect
         id="event-time-key"
         value={value}
         disabled={busy}
         onChange={(e) => pick(e.target.value)}
-        className="mt-1 w-full max-w-sm rounded-lg border border-neutral-300 bg-white px-3 py-2 text-base disabled:opacity-50"
+        className="max-w-sm"
       >
         <option value="__auto">Detect automatically</option>
         <option value="__none">Use delivery time (no timestamp field)</option>
@@ -82,14 +82,14 @@ export function EventTimePicker({
             {k}
           </option>
         ))}
-      </select>
-      <p className="mt-1.5 text-tiny text-neutral-600">{note}</p>
+      </NativeSelect>
+      <FieldHint>{note}</FieldHint>
       {pending && (
-        <p className="mt-1 text-tiny text-neutral-600">
+        <FieldHint>
           Saved. Events already stored keep their current time until the next nightly pass re-derives them.
-        </p>
+        </FieldHint>
       )}
-      {error && <p className="mt-1 text-tiny text-red-600">{error}</p>}
+      {error && <FieldError>{error}</FieldError>}
     </div>
   );
 }

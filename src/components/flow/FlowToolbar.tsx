@@ -19,6 +19,9 @@ import {
 } from "lucide-react";
 import { Popover } from "./controls/Popover";
 import { Button } from "@/components/ui/button";
+import { Modal, ModalTitle } from "@/components/ui/modal";
+import { StatusPill } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 /**
  * THE BUILDER'S CHROME — islands grouped by JOB, not by corner.
@@ -79,7 +82,7 @@ export type SaveState = "saved" | "saving" | "unsaved" | "error";
  */
 function Island({ className = "", children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={`pointer-events-auto flex items-center gap-1 rounded-surface border border-border bg-white p-[7px] shadow-surface ${className}`}>
+    <div className={`pointer-events-auto flex items-center gap-1 rounded-surface border border-border bg-card p-[7px] shadow-surface ${className}`}>
       {children}
     </div>
   );
@@ -102,7 +105,7 @@ function IslandButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:text-neutral-300 disabled:hover:bg-transparent [&_svg]:size-[26px] [&_svg]:stroke-[2]"
+      className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent [&_svg]:size-[26px] [&_svg]:stroke-[2]"
     >
       {children}
     </button>
@@ -191,7 +194,7 @@ export function FlowToolbar({
               <Link
                 href="/dashboard/flows"
                 title="All flows"
-                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
+                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
               >
                 <ChevronLeft size={26} strokeWidth={2} />
               </Link>
@@ -218,7 +221,20 @@ export function FlowToolbar({
                   {runAll ? `Stop · ${runAll.at}/${runAll.of}` : null}
                 </Button>
               )}
-              <FlowSwitch on={isPublished} disabled={publishedVersion == null || togglingEnabled} onChange={onToggleEnabled} />
+              <Switch
+                checked={isPublished}
+                disabled={publishedVersion == null || togglingEnabled}
+                onClick={onToggleEnabled}
+                title={
+                  publishedVersion == null
+                    ? "Publish this flow before turning it on"
+                    : isPublished
+                      ? "Turn off — removes its dashboard tiles"
+                      : "Turn on"
+                }
+                aria-label={isPublished ? "Turn flow off" : "Turn flow on"}
+                className="mx-1"
+              />
 
               {/* No "Flows /" crumb. The back arrow beside it already goes there
                   and already says so on hover; a breadcrumb whose only parent is
@@ -245,7 +261,7 @@ export function FlowToolbar({
                   placeholder="Untitled flow"
                   title={name}
                   style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
-                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus:border-ring focus:bg-white focus:outline-none focus:ring-4 focus:ring-ring/25"
+                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/25"
                 />
               </span>
             </span>
@@ -279,7 +295,7 @@ export function FlowToolbar({
                       setMenuOpen(false);
                       onDuplicate();
                     }}
-                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-foreground transition-colors hover:bg-muted"
+                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
                   >
                     <Copy size={16} />
                     Duplicate flow
@@ -289,7 +305,7 @@ export function FlowToolbar({
                       setMenuOpen(false);
                       setConfirmingDelete(true);
                     }}
-                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-destructive transition-colors hover:bg-red-50"
+                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-destructive outline-none transition-colors hover:bg-danger-soft/60 focus-visible:ring-4 focus-visible:ring-ring/40"
                   >
                     <Trash2 size={16} />
                     Delete flow
@@ -330,7 +346,7 @@ export function FlowToolbar({
           <button
             onClick={onFitView}
             title="Fit the whole flow on screen"
-            className="h-[42px] w-[42px] rounded-control text-base font-semibold tabular-nums text-foreground transition-colors hover:bg-muted"
+            className="tnum h-[42px] w-[42px] rounded-control text-base font-semibold text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
           >
             {zoomPct}%
           </button>
@@ -347,57 +363,28 @@ export function FlowToolbar({
           menu item that had already closed, which is a lot of consequence for
           a surface that small. */}
       {confirmingDelete && (
-        <div
-          className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4 backdrop-blur-sm"
-          onClick={() => setConfirmingDelete(false)}
-        >
-          <div className="w-full max-w-sm rounded-surface bg-white p-5 shadow-pop flow-pop-in" onClick={(e) => e.stopPropagation()}>
-            <p className="text-title font-semibold text-foreground">Delete this flow?</p>
-            <p className="mt-1.5 text-small text-muted-foreground">
-              {isPublished ? "Its dashboard metrics are removed too. " : ""}This can’t be undone.
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setConfirmingDelete(false)}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  setConfirmingDelete(false);
-                  onDelete();
-                }}
-              >
-                Delete flow
-              </Button>
-            </div>
+        <Modal onClose={() => setConfirmingDelete(false)}>
+          <ModalTitle>Delete this flow?</ModalTitle>
+          <p className="mt-1.5 text-small text-muted-foreground">
+            {isPublished ? "Its dashboard metrics are removed too. " : ""}This can’t be undone.
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setConfirmingDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setConfirmingDelete(false);
+                onDelete();
+              }}
+            >
+              Delete flow
+            </Button>
           </div>
-        </div>
+        </Modal>
       )}
     </>
-  );
-}
-
-function FlowSwitch({ on, disabled, onChange }: { on: boolean; disabled: boolean; onChange: () => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      disabled={disabled}
-      onClick={onChange}
-      title={disabled ? "Publish this flow before turning it on" : on ? "Turn off — removes its dashboard tiles" : "Turn on"}
-      aria-label={on ? "Turn flow off" : "Turn flow on"}
-      className={`relative mx-1 h-6 w-10 shrink-0 rounded-full transition-colors ${on ? "bg-primary" : "bg-neutral-200"} ${
-        disabled ? "cursor-not-allowed opacity-45" : "hover:brightness-105"
-      }`}
-    >
-      {/* 18px = 40px track − 20px knob − the 2px inset it rests in when off. */}
-      <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm ${on ? "left-[18px]" : "left-0.5"}`}
-        style={{ transition: "left .22s cubic-bezier(.34,1.56,.64,1)" }}
-        aria-hidden
-      />
-    </button>
   );
 }
 
@@ -412,12 +399,16 @@ function FlowSwitch({ on, disabled, onChange }: { on: boolean; disabled: boolean
 function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
   if (state === "error") {
     return (
-      <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-micro font-bold text-destructive">
+      <StatusPill tone="danger">
         Not saved
-        <button type="button" onClick={onRetry} className="underline underline-offset-2 hover:no-underline">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded-control underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-4 focus-visible:ring-ring/40"
+        >
           Retry
         </button>
-      </span>
+      </StatusPill>
     );
   }
   return (

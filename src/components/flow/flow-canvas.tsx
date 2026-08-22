@@ -1,7 +1,10 @@
 "use client";
 
-import { Database, Plug } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Database, Plug, X } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Modal, ModalTitle } from "@/components/ui/modal";
+import { Toast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1458,7 +1461,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       />
 
       {publishError && !reviewOpen && (
-        <div className="absolute left-1/2 top-[98px] z-10 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-surface border border-red-200 bg-red-50 px-4 py-3 text-small text-red-800 shadow-surface">
+        <div className="absolute left-1/2 top-chrome-band z-10 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-surface border border-danger-soft bg-danger-soft/50 px-4 py-3 text-small text-danger-ink shadow-surface">
           <p>{publishError}</p>
           {/* One line per issue, each pointing at the step that caused it. The
               whole list used to be joined into a single string with no step
@@ -1470,7 +1473,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
                   <button
                     type="button"
                     onClick={() => { setSelectedId(iss.nodeId!); setPublishError(null); }}
-                    className="text-left underline underline-offset-2 hover:no-underline"
+                    className="rounded-control text-left underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-4 focus-visible:ring-ring/40"
                   >
                     {iss.message}
                   </button>
@@ -1483,11 +1486,18 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         </div>
       )}
       {publishWarning && (
-        <div className="absolute left-1/2 top-[98px] z-10 flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 items-center justify-between gap-3 rounded-surface border border-amber-200 bg-amber-50 px-4 py-3 text-small text-amber-800 shadow-surface">
+        <div className="absolute left-1/2 top-chrome-band z-10 flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 items-center justify-between gap-3 rounded-surface border border-warn-soft bg-warn-soft/50 px-4 py-3 text-small text-warn-ink shadow-surface">
           <span>{publishWarning}</span>
-          <button onClick={() => setPublishWarning(null)} className="text-amber-700 hover:text-amber-900">
-            Dismiss
-          </button>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            onClick={() => setPublishWarning(null)}
+            aria-label="Dismiss"
+            title="Dismiss"
+            className="-mr-1 shrink-0 text-warn-ink hover:bg-warn-soft hover:text-warn-ink"
+          >
+            <X />
+          </Button>
         </div>
       )}
 
@@ -1530,7 +1540,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             {/* A soft grey canvas with a faint, wide-spaced dot grid — calm and
                 smooth while panning, not a busy pattern. */}
             {/* size is a DIAMETER and it scales with zoom — see --color-canvas-dot. */}
-            <Background variant={BackgroundVariant.Dots} gap={26} size={1.6} color="#d9d9d9" bgColor="#f0f0f0" />
+            <Background variant={BackgroundVariant.Dots} gap={26} size={1.6} color="var(--color-canvas-dot)" bgColor="var(--color-canvas-bg)" />
           </ReactFlow>
 
           {/* THE EMPTY STATE. It sits here, a sibling of <ReactFlow> inside the
@@ -1632,45 +1642,42 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
       {/* Bottom-centre, over the canvas, out of the config panel's way. */}
       {toast && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-surface bg-ink-900 py-2.5 pl-4 pr-2.5 text-base text-ink-50 shadow-surface flow-pop-in">
-            <span>{toast.message}</span>
-            {toast.undoable && (
-              <button
-                onClick={() => {
-                  undo();
-                  setToast(null);
-                }}
-                className="rounded-control px-2.5 py-1 text-base font-semibold text-white/90 transition-colors hover:bg-white/15 hover:text-white"
-              >
-                Undo
-              </button>
-            )}
-          </div>
-        </div>
+        <Toast
+          action={
+            toast.undoable
+              ? {
+                  label: "Undo",
+                  onClick: () => {
+                    undo();
+                    setToast(null);
+                  },
+                }
+              : undefined
+          }
+        >
+          <span>{toast.message}</span>
+        </Toast>
       )}
 
       {pendingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4" onClick={() => setPendingDelete(null)}>
-          <div className="w-full max-w-sm rounded-surface border border-border bg-card p-5 shadow-panel flow-pop-in" onClick={(e) => e.stopPropagation()}>
-            <p className="text-base font-semibold text-foreground">Delete this step?</p>
-            <p className="mt-1.5 text-base text-neutral-600">{pendingDelete.message}</p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setPendingDelete(null)} className="rounded-lg border border-neutral-200 px-3.5 py-2 text-base font-medium text-neutral-700 transition-colors hover:bg-neutral-50">
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  pendingDelete.run();
-                  setPendingDelete(null);
-                }}
-                className="rounded-lg bg-red-600 px-3.5 py-2 text-base font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
-              >
-                Delete
-              </button>
-            </div>
+        <Modal onClose={() => setPendingDelete(null)}>
+          <ModalTitle>Delete this step?</ModalTitle>
+          <p className="mt-1.5 text-base text-muted-foreground">{pendingDelete.message}</p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                pendingDelete.run();
+                setPendingDelete(null);
+              }}
+            >
+              Delete
+            </Button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -1704,12 +1711,12 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
         <ol className="mt-5 space-y-3">
           {steps.map((s) => (
             <li key={s.n} className="flex items-start gap-3">
-              <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-micro font-semibold text-neutral-500">
+              <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-micro font-semibold text-muted-foreground">
                 {s.n}
               </span>
               <span className="min-w-0">
                 <span className="block text-base font-medium text-foreground">{s.title}</span>
-                <span className="block text-small leading-snug text-neutral-500">{s.detail}</span>
+                <span className="block text-small leading-snug text-muted-foreground">{s.detail}</span>
               </span>
             </li>
           ))}
@@ -1721,14 +1728,11 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
           </Button>
         ) : (
           <>
-            <Link
-              href="/integrations"
-              className="mt-6 flex w-full items-center justify-center gap-1.5 rounded-control bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition-all hover:brightness-110"
-            >
+            <Link href="/integrations" className={cn(buttonVariants({ size: "lg" }), "mt-6 w-full")}>
               <Plug size={16} />
               Connect an app first
             </Link>
-            <p className="mt-2 text-center text-tiny text-neutral-500">A flow reads records from a connected account — there aren&rsquo;t any yet.</p>
+            <p className="mt-2 text-center text-tiny text-muted-foreground">A flow reads records from a connected account — there aren&rsquo;t any yet.</p>
           </>
         )}
       </div>

@@ -35,6 +35,9 @@ const buttonVariants = cva(
         // A destructive action that is not the point of the screen: quiet
         // until hovered, then unmistakable.
         destructiveGhost: "text-neutral-400 hover:bg-red-50 hover:text-destructive",
+        // The bordered delete: present enough to find, calm enough to sit
+        // beside content. Confirm steps and inline "Disconnect"s live here.
+        destructiveOutline: "border border-red-200 bg-card text-danger-ink hover:bg-danger-soft/60",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

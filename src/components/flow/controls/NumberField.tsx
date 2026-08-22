@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
+import { fieldClasses } from "@/components/ui/input";
 
-const INPUT =
-  "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-base transition-colors placeholder:text-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
+const INPUT = cn(fieldClasses, "px-3 py-2 hover:border-ring/50");
 
 /**
  * A number input that can be cleared without emitting a non-number.
@@ -71,7 +72,7 @@ export function NumberField({
          */
         setText(value == null ? "" : String(value));
       }}
-      className={`${INPUT} ${className ?? ""}`}
+      className={cn(INPUT, className)}
     />
   );
 }

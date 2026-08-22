@@ -30,17 +30,17 @@ const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: stri
   {
     href: "/dashboard",
     label: "Dashboard",
-    icon: <LayoutDashboard size={24} strokeWidth={2.1} />,
+    icon: <LayoutDashboard size={24} strokeWidth={2} />,
     match: (p) => p === "/dashboard" || p.startsWith("/dashboard/metrics") || p.startsWith("/dashboard/funnels"),
   },
-  { href: "/dashboard/flows", label: "Flows", icon: <Workflow size={24} strokeWidth={2.1} />, match: (p) => p.startsWith("/dashboard/flows") },
+  { href: "/dashboard/flows", label: "Flows", icon: <Workflow size={24} strokeWidth={2} />, match: (p) => p.startsWith("/dashboard/flows") },
   {
     href: "/integrations",
     label: "Apps",
-    icon: <Plug size={24} strokeWidth={2.1} />,
+    icon: <Plug size={24} strokeWidth={2} />,
     match: (p) => p.startsWith("/integrations") || p.startsWith("/connections"),
   },
-  { href: "/dashboard/settings", label: "Settings", icon: <Settings size={24} strokeWidth={2.1} />, match: (p) => p.startsWith("/dashboard/settings") },
+  { href: "/dashboard/settings", label: "Settings", icon: <Settings size={24} strokeWidth={2} />, match: (p) => p.startsWith("/dashboard/settings") },
 ];
 
 export function Sidebar({
@@ -68,7 +68,7 @@ export function Sidebar({
       <Link
         href="/dashboard"
         title="Namzilabs — dashboard"
-        className="mb-[11px] flex h-[106px] w-full items-center justify-center text-title font-bold text-white transition-opacity hover:opacity-85"
+        className="mb-[11px] flex h-[106px] w-full items-center justify-center rounded-card text-title font-semibold text-white outline-none transition-opacity hover:opacity-85 focus-visible:ring-4 focus-visible:ring-white/25"
       >
         {/* THE MARK IS NOT A NAV TILE. It used to be a white wash like the
             active item's, and once resting glyphs stopped dimming it became the
@@ -104,7 +104,7 @@ export function Sidebar({
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className="group flex w-full flex-col items-center"
+              className="group flex w-full flex-col items-center rounded-control outline-none focus-visible:ring-4 focus-visible:ring-white/25"
             >
               {/* The GLYPH is full white at every state — it is the item's
                   identifier, and an identifier you have to squint at is a poor
@@ -112,7 +112,7 @@ export function Sidebar({
                   tile's wash and the label's step up from 75% to full. */}
               <span
                 className={`flex h-10 w-10 items-center justify-center rounded-control text-white transition-colors ${
-                  active ? "bg-white/22" : "group-hover:bg-white/12"
+                  active ? "bg-white/15" : "group-hover:bg-white/10"
                 }`}
               >
                 {item.icon}
@@ -169,14 +169,16 @@ function RailAccount({ initials, children }: { initials: string; children: React
         title="Account"
         aria-label="Account"
         aria-expanded={open}
-        className={`flex h-9 w-9 items-center justify-center rounded-full text-micro font-bold ring-1 ring-white/25 transition-all ${
-          open ? "bg-white/35 text-white" : "bg-white/20 text-white hover:bg-white/30"
+        className={`flex h-9 w-9 items-center justify-center rounded-full text-micro font-semibold text-white outline-none ring-1 ring-white/25 transition-all focus-visible:ring-4 focus-visible:ring-white/25 ${
+          open ? "bg-white/25" : "bg-white/15 hover:bg-white/25"
         }`}
       >
         {initials}
       </button>
+      {/* `shadow-panel`, not `pop`: this popover draws a real border, and
+          pop's 1px spread ring under one reads as a second, darker hairline. */}
       {open && (
-        <div className="absolute bottom-0 left-full z-50 ml-3 w-64 rounded-surface bg-white p-3 shadow-pop">
+        <div className="absolute bottom-0 left-full z-50 ml-3 w-64 rounded-surface border border-border bg-card p-3 shadow-panel">
           {children}
         </div>
       )}

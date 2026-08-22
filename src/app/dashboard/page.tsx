@@ -8,6 +8,10 @@ import { requireOrg } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { AppShell } from "@/components/app-shell";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
+import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
@@ -26,7 +30,8 @@ import {
 } from "@/lib/metrics/compute";
 import { resolveRange, RANGE_OPTIONS } from "@/lib/metrics/range";
 import { catalogEntry, eventTypeLabel } from "@/connectors/catalog";
-import { formatMetricValue } from "@/lib/format";
+import { formatDateTime, formatMetricValue } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { ImportCoverage } from "@/connectors/types";
 
 export const dynamic = "force-dynamic";
@@ -196,67 +201,72 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     return `/dashboard?${p.toString()}`;
   };
 
-  // One voice for every filter chip on the page. Selected is the kit's accent
-  // — the old black pill was the only black element on a violet-accented app,
-  // so "selected" and "primary" disagreed about what the brand colour is.
-  const chipOn = "rounded-full px-3 py-1 text-small font-medium bg-primary text-primary-foreground";
-  const chipOff = "rounded-full px-3 py-1 text-small font-medium border border-border bg-card text-foreground hover:bg-muted";
+  // One voice for every filter chip on the page — the Chip recipe, worn by
+  // links. These chips navigate (range and source live in the URL), so they
+  // stay anchors and take the Chip component's exact classes instead.
+  const chip = (active: boolean) =>
+    cn(
+      "inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-small font-medium outline-none transition-colors focus-visible:ring-4 focus-visible:ring-ring/40",
+      active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+    );
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       {/* G.4: refresh the server-rendered tiles when the org's results move. */}
       <FreshnessPoller />
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-display font-semibold tracking-tight text-foreground">Dashboard</h1>
-          <div className="flex gap-2">
-            {/* Every tile at once. The per-tile Refresh recomputes one flow,
-                which is the wrong unit when you have just changed something
-                upstream and want the whole board to agree with reality. */}
-            <form action={refreshAllFlowsAction}>
-              <Button type="submit" variant="secondary" title="Recompute every published metric now">
-                Refresh
-              </Button>
-            </form>
-            {/* ONE way to build a metric. The retired form builder was still
-                advertised here as "Classic metric", and "classic" reads as
-                "the stable one" — so a first-time user took it, produced a
-                `metrics` row instead of a flow, and never saw the canvas.
-                The routes stay alive so existing metrics still open and edit
-                (their tiles link to them); they are simply no longer a door
-                anyone walks through by accident. */}
-            {/* A Link wearing the Button's clothes: navigation, not a submit,
-                so it stays an <a> and takes the shared classes instead. */}
-            <Link href="/dashboard/flows" className={buttonVariants()}>
-              <Plus size={16} strokeWidth={2.4} />
-              New flow
-            </Link>
-          </div>
-        </div>
+      <PageContainer>
+        <PageHeader
+          title="Dashboard"
+          actions={
+            <>
+              {/* Every tile at once. The per-tile Refresh recomputes one flow,
+                  which is the wrong unit when you have just changed something
+                  upstream and want the whole board to agree with reality. */}
+              <form action={refreshAllFlowsAction}>
+                <Button type="submit" variant="secondary" title="Recompute every published metric now">
+                  Refresh
+                </Button>
+              </form>
+              {/* ONE way to build a metric. The retired form builder was still
+                  advertised here as "Classic metric", and "classic" reads as
+                  "the stable one" — so a first-time user took it, produced a
+                  `metrics` row instead of a flow, and never saw the canvas.
+                  The routes stay alive so existing metrics still open and edit
+                  (their tiles link to them); they are simply no longer a door
+                  anyone walks through by accident. */}
+              {/* A Link wearing the Button's clothes: navigation, not a submit,
+                  so it stays an <a> and takes the shared classes instead. */}
+              <Link href="/dashboard/flows" className={cn(buttonVariants())}>
+                <Plus size={16} />
+                New flow
+              </Link>
+            </>
+          }
+        />
 
         {/* Filters */}
         <div className="mt-5 flex flex-wrap items-center gap-2">
           {RANGE_OPTIONS.map((r) => (
-            <Link key={r.key} href={qs({ range: r.key })} className={rangeKey === r.key ? chipOn : chipOff}>
+            <Link key={r.key} href={qs({ range: r.key })} className={chip(rangeKey === r.key)}>
               {r.label}
             </Link>
           ))}
           <span className="mx-1 h-4 w-px bg-border" />
-          <Link href={qs({ source: "" })} className={!boardSource ? chipOn : chipOff}>
+          <Link href={qs({ source: "" })} className={chip(!boardSource)}>
             All sources
           </Link>
           {/* The connector's own name, not its storage key: this row read
               "gsheets · close · webhook" while every other screen in the
               product says "Google Sheets", "Close CRM", "Custom Webhook". */}
           {sources.map((srcName) => (
-            <Link key={srcName} href={qs({ source: srcName })} className={boardSource === srcName ? chipOn : chipOff}>
+            <Link key={srcName} href={qs({ source: srcName })} className={chip(boardSource === srcName)}>
               {catalogEntry(srcName)?.name ?? srcName}
             </Link>
           ))}
         </div>
 
         {loadError && (
-          <div className="mt-6 rounded-card border border-amber-300 bg-amber-50 p-4 text-base text-amber-800">
+          <div className="mt-6 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
             Some dashboard data could not be loaded ({loadError}). Refresh to retry — your data is intact.
           </div>
         )}
@@ -281,7 +291,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         {/* Condensed workspace activity */}
         <section className="mt-12">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-micro font-semibold uppercase tracking-wide text-neutral-400">Recent activity</h2>
+            <SectionHeading className="mb-0">Recent activity</SectionHeading>
             <span className="text-tiny text-muted-foreground">
               {connCount} connection{connCount === 1 ? "" : "s"} ·{" "}
               {dlqByConnection.length > 0 ? (
@@ -290,8 +300,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 dlqByConnection.map((d, i) => (
                   <span key={d.connectionId}>
                     {i > 0 && ", "}
-                    <Link href={`/connections/${d.connectionId}`} className="text-destructive hover:underline">
-                      {d.count} in dead-letter on {d.name} →
+                    <Link href={`/connections/${d.connectionId}`} className="text-danger-ink hover:underline">
+                      {d.count} in dead-letter on {d.name}
                     </Link>
                   </span>
                 ))
@@ -301,39 +311,39 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             </span>
           </div>
           {recentEvents.length === 0 ? (
-            <p className="rounded-card border border-border bg-neutral-50 p-4 text-base text-muted-foreground">
+            <Card variant="card" padding="compact" className="text-base text-muted-foreground">
               No events ingested yet. <Link href="/integrations" className="text-primary hover:underline">Connect a source</Link>.
-            </p>
+            </Card>
           ) : (
-            <div className="overflow-x-auto rounded-card border border-border bg-card shadow-card">
-              <table className="w-full text-left text-base">
-                <thead className="bg-neutral-50 text-micro uppercase tracking-wide text-muted-foreground">
+            <TableShell>
+              <Table>
+                <THead>
                   <tr>
-                    <th className="px-3 py-2 font-medium">Source</th>
-                    <th className="px-3 py-2 font-medium">Type</th>
-                    <th className="px-3 py-2 font-medium">Subject</th>
-                    <th className="px-3 py-2 font-medium">Occurred</th>
+                    <TH>Source</TH>
+                    <TH>Type</TH>
+                    <TH>Subject</TH>
+                    <TH>Occurred</TH>
                   </tr>
-                </thead>
-                <tbody>
+                </THead>
+                <TBody>
                   {/* Humanised the way the builder's own pickers do it —
                       "Close CRM · Lead created", not "close · lead_created".
                       The raw type rides along in the title attribute, because
                       it IS what a Filter step matches on. */}
                   {recentEvents.map((e) => (
-                    <tr key={e.id} className="border-t border-border">
-                      <td className="px-3 py-2">{catalogEntry(e.source)?.name ?? e.source}</td>
-                      <td className="px-3 py-2" title={e.eventType}>{eventTypeLabel(e.source, e.eventType)}</td>
-                      <td className="px-3 py-2 text-neutral-700">{e.subject ?? "—"}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{new Date(e.occurredAt).toLocaleString()}</td>
-                    </tr>
+                    <TR key={e.id} static>
+                      <TD>{catalogEntry(e.source)?.name ?? e.source}</TD>
+                      <TD title={e.eventType}>{eventTypeLabel(e.source, e.eventType)}</TD>
+                      <TD>{e.subject ?? "—"}</TD>
+                      <TD className="text-muted-foreground">{formatDateTime(new Date(e.occurredAt))}</TD>
+                    </TR>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </TBody>
+              </Table>
+            </TableShell>
           )}
         </section>
-      </main>
+      </PageContainer>
     </AppShell>
   );
 }
@@ -341,17 +351,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 function MetricTile({ tile }: { tile: Tile }) {
   const { metric } = tile;
   return (
-    <div className="rounded-card border border-border bg-card p-5 shadow-card">
+    <Card variant="card" className="lift">
       <div className="flex items-start justify-between">
         <h3 className="text-base font-semibold text-foreground">{metric.name}</h3>
         {tile.kind === "aggregate" && (
           <Link href={`/dashboard/metrics/${metric.id}`} className="text-tiny text-primary hover:underline">
-            Drill in →
+            Drill in
           </Link>
         )}
       </div>
 
-      {tile.kind === "error" && <p className="mt-3 text-base text-amber-700">{tile.error}</p>}
+      {tile.kind === "error" && <p className="mt-3 text-base text-warn-ink">{tile.error}</p>}
 
       {tile.kind === "aggregate" && tile.result.kind === "scalar" && (
         <>
@@ -360,59 +370,43 @@ function MetricTile({ tile }: { tile: Tile }) {
               a flow tile reading "1,234.5" — the same quantity, two
               renderings, side by side. A legacy metric stores no precision,
               so an integer keeps none and a real decimal keeps two rather
-              than being silently rounded away. */}
+              than losing its fraction on the way to the tile. */}
           <p className="tnum mt-2 text-stat font-semibold">
             {formatMetricValue(tile.result.value, { format: "number", precision: Number.isInteger(tile.result.value) ? 0 : 2 })}
             {metric.unit && <span className="ml-2 text-base font-normal text-muted-foreground">{metric.unit}</span>}
           </p>
-          {metric.target != null && <TargetBar value={tile.result.value} target={Number(metric.target)} />}
+          {metric.target != null && (
+            <TargetBar
+              value={tile.result.value}
+              target={Number(metric.target)}
+              format={{ format: "number", precision: Number.isInteger(Number(metric.target)) ? 0 : 2 }}
+            />
+          )}
         </>
       )}
 
-      {tile.kind === "aggregate" && tile.result.kind === "series" && <Sparkbars series={tile.result.series} />}
+      {tile.kind === "aggregate" && tile.result.kind === "series" && <SeriesTile series={tile.result.series} />}
 
       {tile.kind === "funnel" && (
         <div className="mt-3">
           <FunnelView result={tile.result} />
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
-function TargetBar({ value, target }: { value: number; target: number }) {
-  const pct = target > 0 ? Math.min(Math.round((value / target) * 100), 100) : 0;
-  return (
-    <div className="mt-3">
-      <div className="mb-1 flex justify-between text-tiny text-muted-foreground">
-        <span className="tnum">Goal: {target}</span>
-        <span className="tnum">{pct}%</span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded bg-muted">
-        <div className={`h-full ${pct >= 100 ? "bg-green-500" : "bg-neutral-800"}`} style={{ width: `${Math.max(pct, 2)}%` }} />
-      </div>
-    </div>
-  );
-}
-
-function Sparkbars({ series }: { series: Array<{ bucket: string; value: number }> }) {
-  const max = Math.max(1, ...series.map((s) => s.value));
+function SeriesTile({ series }: { series: Array<{ bucket: string; value: number }> }) {
+  // The headline is a sum over the window, through the same formatter as
+  // everywhere else — it can reach the thousands where a raw print loses its
+  // separators. A legacy metric stores no precision, so tooltips keep up to
+  // two decimals rather than silently rounding a real decimal away.
   const total = series.reduce((a, b) => a + b.value, 0);
   return (
-    <>
-      {/* Same formatter as everywhere else — this headline is a sum, so it can
-          reach the thousands where the raw print loses its separators. */}
-      <p className="tnum mt-2 text-display font-semibold">{formatMetricValue(total, { format: "number", precision: Number.isInteger(total) ? 0 : 2 })}</p>
-      <div className="mt-3 flex h-16 items-end gap-1">
-        {series.map((s) => (
-          <div
-            key={s.bucket}
-            title={`${s.bucket}: ${s.value}`}
-            className="flex-1 rounded-t bg-neutral-800"
-            style={{ height: `${Math.max((s.value / max) * 100, 4)}%` }}
-          />
-        ))}
-      </div>
-    </>
+    <Sparkbars
+      series={series}
+      label={formatMetricValue(total, { format: "number", precision: Number.isInteger(total) ? 0 : 2 })}
+      format={{ format: "number", precision: 2 }}
+    />
   );
 }

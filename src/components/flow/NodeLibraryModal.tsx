@@ -5,6 +5,8 @@ import { Search } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NODE_LIBRARY, STAGES, type LibraryEntry } from "./node-meta";
 import { NodeIcon } from "./icons";
+import { fieldClasses } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 /** Where to anchor the picker: the button's right edge + vertical centre (and its
  *  left edge, used when the card has to flip to the button's other side). */
@@ -140,38 +142,38 @@ export function NodeLibraryModal({
         ref={panelRef}
         onClick={(e) => e.stopPropagation()}
         style={style}
-        className={`pointer-events-auto flex max-h-[74vh] flex-col overflow-hidden rounded-surface border border-border bg-white shadow-surface ${closing ? "flow-pop-out" : "flow-pop-in"}`}
+        className={`pointer-events-auto flex max-h-[74vh] flex-col overflow-hidden rounded-surface border border-border bg-card shadow-surface ${closing ? "flow-pop-out" : "flow-pop-in"}`}
       >
         <div className="p-3 pb-2">
           <div className="relative">
-<Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
             <input
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search steps…"
-              className="w-full rounded-xl border border-neutral-200 bg-neutral-50 py-2.5 pl-10 pr-3 text-lead text-foreground placeholder:text-neutral-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100"
+              className={cn(fieldClasses, "h-9 pl-9 pr-3")}
             />
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2 pt-1">
           {items.length === 0 ? (
-            <p className="p-8 text-center text-base text-neutral-500">No matching steps.</p>
+            <p className="p-8 text-center text-base text-muted-foreground">No matching steps.</p>
           ) : (
             <div className="flex flex-col gap-0.5">
               {sections.map((sec) => (
                 <div key={sec.stage}>
-                  <p className="px-2.5 pb-1 pt-2 text-micro font-semibold uppercase tracking-wide text-neutral-400">{sec.stage}</p>
+                  <p className="px-2.5 pb-1 pt-2 text-micro font-semibold uppercase tracking-wide text-muted-foreground">{sec.stage}</p>
                   {sec.items.map((e) => (
                     <button
                       key={e.key}
                       onClick={() => onPick(e)}
-                      className="group flex w-full items-center gap-3.5 rounded-card px-2.5 py-2.5 text-left transition-colors hover:bg-brand-50"
+                      className="group flex w-full items-center gap-3.5 rounded-card px-2.5 py-2.5 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-4 focus-visible:ring-ring/40"
                     >
                       <NodeIcon type={e.type} variant={e.key === "unite_match" ? "unite_match" : e.key === "formula_compare" ? "formula_compare" : undefined} size={40} />
                       <span className="min-w-0">
                         <span className="block text-lead font-semibold leading-tight text-foreground">{e.label}</span>
-                        <span className="mt-0.5 block text-small leading-tight text-neutral-500">{e.blurb}</span>
+                        <span className="mt-0.5 block text-small leading-tight text-muted-foreground">{e.blurb}</span>
                       </span>
                     </button>
                   ))}

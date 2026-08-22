@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * Where a failed sign-in lands. PUBLIC on purpose (matched by the proxy,
@@ -17,31 +19,25 @@ export default function AuthErrorPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-16">
       <h1 className="text-display font-semibold tracking-tight text-foreground">That sign-in didn&rsquo;t finish</h1>
-      <p className="mt-3 text-base text-neutral-600">
+      <p className="mt-3 text-base text-muted-foreground">
         Something interrupted the last step. It&rsquo;s almost always one of these:
       </p>
-      <ul className="mt-4 list-disc space-y-2 pl-5 text-base text-neutral-600">
+      <ul className="mt-4 list-disc space-y-2 pl-5 text-base text-muted-foreground">
         <li>
-          <b>Joining from an invite?</b> Open the invite link again and finish in one go — and make sure you
-          sign in with <b>the same email address the invite was sent to</b>.
+          <b className="font-semibold">Joining from an invite?</b> Open the invite link again and finish in one go —
+          and make sure you sign in with <b className="font-semibold">the same email address the invite was sent to</b>.
         </li>
         <li>The page sat open a while before you finished. Just start again — it takes seconds.</li>
       </ul>
       <div className="mt-6 flex gap-3">
-        <Link
-          href="/sign-in"
-          className="rounded-md bg-neutral-900 px-4 py-2 text-base font-medium text-white hover:bg-neutral-800"
-        >
+        <Link href="/sign-in" className={cn(buttonVariants())}>
           Try signing in again
         </Link>
-        <Link
-          href="/"
-          className="rounded-md border border-neutral-300 px-4 py-2 text-base font-medium hover:bg-neutral-50"
-        >
+        <Link href="/" className={cn(buttonVariants({ variant: "secondary" }))}>
           Back to home
         </Link>
       </div>
-      <p className="mt-6 text-tiny text-neutral-400">
+      <p className="mt-6 text-tiny text-muted-foreground">
         Still stuck? Ask the person who invited you to send a fresh link — invites expire and can be re-sent
         in seconds.
       </p>

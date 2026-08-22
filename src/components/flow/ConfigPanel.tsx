@@ -28,11 +28,18 @@ import {
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
 import { computeNodeStatus, STD_META } from "./graph-utils";
 import { NumberField } from "./controls/NumberField";
-import { STATUS_META, defaultTitle, formulaExpression, formulaHandleLabels, nodeVariant, resultLabel } from "./node-meta";
+import { STATUS_META, defaultTitle, formulaExpression, formulaHandleLabels, nodeVariant, resultLabel, type NodeStatus } from "./node-meta";
 import { RecordSamplePicker, recordWhen } from "./RecordSamplePicker";
 import { NodeIcon } from "./icons";
+import { nodeAccent } from "./node-accent";
 import { PANEL_SHELL, PanelTabs } from "./panel-chrome";
-import { Database } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Database, Plus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { StatusPill } from "@/components/ui/badge";
+import { FieldLabel } from "@/components/ui/field";
+import { fieldClasses } from "@/components/ui/input";
+import { SectionHeading } from "@/components/ui/page";
+import { cn } from "@/lib/utils";
 import { Select, Segmented, DataBrowser, FieldInput, ConditionEditor, humanizeKey } from "./controls";
 import { hasAnyFields } from "./controls/field-utils";
 import type { DataGroup } from "./controls/types";
@@ -45,13 +52,22 @@ export type StepRef = { id: string; title: string; stepNo?: number };
 /** Branch-head context: how records enter this Paths branch (mode lives on the hub). */
 export type BranchCtx = { mode: string; siblingHasFallback: boolean; siblingHasAlways: boolean; set: (mode: string) => void };
 
-const INPUT = "w-full rounded-control border border-input bg-white px-3 py-2 text-base transition-colors focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
+const INPUT = cn(fieldClasses, "h-9 px-3");
 const W = 412;
 
-/** Shared button language for the config panel (Make.com vibe: rounded, tactile, colourful). */
-const BTN_BASE = "rounded-card px-4 py-3 text-base font-semibold transition-all active:scale-[0.985]";
-const BTN_PRIMARY = `${BTN_BASE} bg-primary text-primary-foreground transition-all hover:brightness-110 active:brightness-95 disabled:cursor-default disabled:bg-neutral-200 disabled:text-neutral-400`;
-const BTN_SECONDARY = `${BTN_BASE} border border-border bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50`;
+/** The panel's THREE note boxes — every callout is exactly one of these. */
+const NOTE_WARN = "rounded-card border border-warn-soft bg-warn-soft/50 p-3 text-tiny text-warn-ink";
+const NOTE_BRAND = "rounded-card border border-brand-100 bg-accent p-3 text-tiny text-accent-foreground";
+const NOTE_NEUTRAL = "rounded-card border border-border bg-muted/50 p-3 text-tiny text-muted-foreground";
+
+/** The pill tone each step status wears — labels come from STATUS_META. */
+const STATUS_TONE: Record<NodeStatus, "success" | "warn" | "danger" | "pending"> = {
+  ready: "success",
+  setup: "warn",
+  untested: "pending",
+  updating: "pending",
+  error: "danger",
+};
 
 const AGG_LABELS: Record<string, string> = { count: "Count of records", count_distinct: "Count of distinct values", sum: "Sum of a field", avg: "Average of a field", median: "Median of a field", min: "Minimum of a field", max: "Maximum of a field" };
 const FORMULA_LABELS: Record<string, string> = {
@@ -199,17 +215,17 @@ export function ConfigPanel({
           greys was the last place still separating regions by tint. What marks
           this strip as "what am I editing" is the step's own colourful icon and
           the rule under it, neither of which needed a second grey to work. */}
-      <div className="flex items-center justify-between gap-3 border-b border-border bg-white px-5 py-4">
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} variant={nodeVariant(type, cfg)} size={38} />
           <input
             value={node.data.label ?? ""}
             onChange={(e) => onRename(e.target.value)}
             placeholder={`${stepNo != null ? `${stepNo}. ` : ""}${defaultTitle(type, node.data)}`}
-            className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground hover:border-border hover:bg-white focus:border-input focus:bg-white focus:outline-none"
+            className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground outline-none transition-colors hover:border-border hover:bg-card focus-visible:border-ring focus-visible:bg-card focus-visible:ring-4 focus-visible:ring-ring/25"
           />
         </div>
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-micro font-semibold ${sm.cls}`}>{sm.label}</span>
+        <StatusPill tone={STATUS_TONE[status]} className="shrink-0">{sm.label}</StatusPill>
       </div>
 
       <PanelTabs tabs={supportsTest ? ["configure", "test"] : ["configure"]} active={activeTab} onSelect={setTab} />
@@ -249,13 +265,13 @@ export function ConfigPanel({
             </div>
           ) : (
             <div className="space-y-4">
-              {err && <div className="rounded-control border border-red-200 bg-red-50 p-3 text-base text-red-800">{err}</div>}
+              {err && <div className="rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-base text-danger-ink">{err}</div>}
               {node.data.lastTest?.status === "ok" ? (
                 <TestResults node={node} onChange={onChange} />
               ) : (
                 !err && (
-                  <div className="rounded-card border border-dashed border-border bg-neutral-50/60 p-6 text-center">
-                    <p className="text-base font-medium text-neutral-700">{status === "setup" ? "Finish the Configure tab first." : "Test to see this step’s data."}</p>
+                  <div className="rounded-card border border-dashed border-border bg-muted/50 p-6 text-center">
+                    <p className="text-base font-medium text-muted-foreground">{status === "setup" ? "Finish the Configure tab first." : "Test to see this step’s data."}</p>
                   </div>
                 )
               )}
@@ -268,7 +284,7 @@ export function ConfigPanel({
           when the whole panel was, and left alone it would be the one slab of
           neutral in an otherwise white surface. The rule above it is what
           holds the action apart from the fields. */}
-      <div className="border-t border-border bg-white p-4">
+      <div className="border-t border-border bg-card p-4">
         <Footer
           tab={activeTab}
           status={status}
@@ -337,9 +353,9 @@ function Footer({
   if (tab === "configure") {
     // Untestable steps (split hub) continue straight on; the rest advance to Test.
     return (
-      <button onClick={supportsTest ? onContinueToTest : () => onAddNext()} disabled={status === "setup"} className={`${BTN_PRIMARY} w-full`}>
+      <Button type="button" size="lg" className="w-full" onClick={supportsTest ? onContinueToTest : () => onAddNext()} disabled={status === "setup"}>
         {status === "setup" ? "Finish the fields above" : "Continue"}
-      </button>
+      </Button>
     );
   }
 
@@ -347,26 +363,27 @@ function Footer({
   if (tested) {
     return (
       <div className="flex gap-3">
-        <button onClick={onTest} className={`${BTN_SECONDARY} flex-1`}>
+        <Button type="button" variant="secondary" size="lg" className="flex-1" onClick={onTest}>
           Retest
-        </button>
-        <button onClick={() => onAddNext()} className={`${BTN_PRIMARY} flex-1`}>
+        </Button>
+        <Button type="button" size="lg" className="flex-1" onClick={() => onAddNext()}>
           Continue
-        </button>
+        </Button>
       </div>
     );
   }
   if (status === "setup") {
     return (
-      <button onClick={onBackToConfigure} className={`${BTN_SECONDARY} w-full`}>
-        ← Back to Configure
-      </button>
+      <Button type="button" variant="secondary" size="lg" className="w-full" onClick={onBackToConfigure}>
+        <ArrowLeft />
+        Back to Configure
+      </Button>
     );
   }
   return (
-    <button onClick={onTest} className={`${BTN_PRIMARY} w-full`}>
+    <Button type="button" size="lg" className="w-full" onClick={onTest}>
       {hasTest ? "Test again" : "Test"}
-    </button>
+    </Button>
   );
 }
 
@@ -392,20 +409,20 @@ function TestingFooter({ onCancelTest }: { onCancelTest?: () => void }) {
   }, []);
   if (secs < 8 || !onCancelTest) {
     return (
-      <button disabled className={`${BTN_PRIMARY} w-full`}>
+      <Button type="button" size="lg" className="w-full" disabled>
         Testing…
-      </button>
+      </Button>
     );
   }
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
-        <button disabled className={`${BTN_PRIMARY} flex-1`}>
+        <Button type="button" size="lg" className="flex-1" disabled>
           Testing… {secs}s
-        </button>
-        <button onClick={onCancelTest} className={BTN_SECONDARY}>
+        </Button>
+        <Button type="button" variant="secondary" size="lg" onClick={onCancelTest}>
           Stop
-        </button>
+        </Button>
       </div>
       {secs >= 30 && (
         <p className="text-center text-tiny text-muted-foreground">Large date ranges take longer. You can narrow this step and try again.</p>
@@ -427,22 +444,24 @@ function TestingFooter({ onCancelTest }: { onCancelTest?: () => void }) {
 function UpstreamPrompt({ onTestUpstream }: { onTestUpstream: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
-    <div className="rounded-card border border-amber-200 bg-amber-50 p-3.5">
-      <p className="text-small font-medium text-amber-900">No fields to choose from yet</p>
-      <p className="mt-1 text-tiny leading-snug text-amber-800">
+    <div className={NOTE_WARN}>
+      <p className="text-small font-medium">No fields to choose from yet</p>
+      <p className="mt-1 leading-snug">
         The step above hasn&rsquo;t been tested, so we don&rsquo;t know what its records look like.
       </p>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
+        className="mt-2.5"
         disabled={busy}
         onClick={() => {
           setBusy(true);
           onTestUpstream();
         }}
-        className="mt-2.5 rounded-control border border-amber-300 bg-white px-3 py-1.5 text-tiny font-semibold text-amber-900 transition-colors hover:bg-amber-100 disabled:opacity-60"
       >
         {busy ? "Testing the previous step…" : "Test the previous step"}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -494,7 +513,10 @@ function NodeConfig({
             value={connId}
             width={W}
             placeholder="Choose an account…"
-            options={connections.map((c) => ({ value: c.id, label: c.name, hint: c.source }))}
+            // The hint says WHICH APP the account belongs to, in the app's own
+            // name — `c.source` is our storage key ("gsheets"), which nobody
+            // connected an account to.
+            options={connections.map((c) => ({ value: c.id, label: c.name, hint: catalogEntry(c.source)?.name ?? c.source }))}
             onChange={(v) => {
               const c = connections.find((x) => x.id === v);
               // A different account invalidates the resource selection (its spreadsheet
@@ -513,7 +535,7 @@ function NodeConfig({
             }}
           />
           {connections.length === 0 && (
-            <p className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-tiny text-amber-800">
+            <p className={cn(NOTE_WARN, "mt-1.5")}>
               No connected accounts yet. Connect one in <a className="underline" href="/integrations">Integrations</a>.
             </p>
           )}
@@ -607,7 +629,7 @@ function NodeConfig({
             </div>
           </div>
         ) : (
-          <p className="rounded-control border border-border bg-neutral-50 p-3 text-small text-neutral-600">
+          <p className={cn(NOTE_NEUTRAL, "text-small")}>
             {bmode === "always" ? "Every record continues." : "Gets what no other path matched."}
           </p>
         )}
@@ -650,7 +672,7 @@ function NodeConfig({
             <Field label="To (optional)"><input type="date" value={(cfg.to as string) ?? ""} onChange={(e) => onChange({ to: e.target.value })} className={INPUT} /></Field>
           </div>
         )}
-        <p className="text-tiny text-neutral-400">{describeWindow(mode, cfg as { preset?: string; days?: number; from?: string; to?: string })}</p>
+        <p className="text-tiny text-muted-foreground">{describeWindow(mode, cfg as { preset?: string; days?: number; from?: string; to?: string })}</p>
       </div>
     );
   }
@@ -691,7 +713,7 @@ function NodeConfig({
             aggregation just restated the dropdown directly below it ("Count
             of records" over a select reading "Count of records"). */}
         {!datasetOp && (
-          <div className="rounded-control border border-brand-200 bg-brand-50 px-3 py-2 text-tiny font-medium text-brand-900">
+          <div className={cn(NOTE_BRAND, "font-medium")}>
             {formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}
           </div>
         )}
@@ -700,7 +722,7 @@ function NodeConfig({
             one source. Doing it silently would be worse than the error it
             replaces, so the step says where its records came from. */}
         {datasetOp && recordSourceNote && (
-          <p className="rounded-control border border-brand-200 bg-brand-50 px-3 py-2 text-tiny text-brand-800">Reads records from {recordSourceNote}</p>
+          <p className={NOTE_BRAND}>Reads records from {recordSourceNote}</p>
         )}
         {datasetOp ? (
           <>
@@ -800,7 +822,7 @@ function NodeConfig({
             of them"). Nothing replaced it: which of the two this step is, is
             already answered by its own name, its icon and the labels below. */}
         <div>
-          <p className="mb-1 text-base font-semibold text-foreground">{matching ? "Steps to check" : "Steps to combine"}</p>
+          <FieldLabel>{matching ? "Steps to check" : "Steps to combine"}</FieldLabel>
           <div className="space-y-1.5">
             {inputs.map((inp, idx) => (
               <div key={idx} className="flex items-center gap-2">
@@ -811,9 +833,9 @@ function NodeConfig({
                   options={datasetCandidates.filter((c) => c.id === inp.nodeId || !laneIds.includes(c.id)).map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
                   onChange={(v) => setLanes(laneIds.map((x, i) => (i === idx ? v : x)))}
                 />
-                <button type="button" onClick={() => setLanes(laneIds.filter((_, i) => i !== idx))} className="shrink-0 text-tiny text-neutral-400 hover:text-destructive">
+                <Button type="button" variant="destructiveGhost" size="sm" className="shrink-0" onClick={() => setLanes(laneIds.filter((_, i) => i !== idx))}>
                   Remove
-                </button>
+                </Button>
               </div>
             ))}
             {laneIds.length < datasetCandidates.length && !(matching && laneIds.length >= 2) && (
@@ -823,12 +845,12 @@ function NodeConfig({
                   const avail = datasetCandidates.find((c) => !laneIds.includes(c.id));
                   if (avail) setLanes([...laneIds, avail.id]);
                 }}
-                className="inline-flex items-center gap-1 rounded-md border border-dashed border-neutral-300 px-2.5 py-1.5 text-tiny text-neutral-600 hover:border-neutral-400 hover:text-foreground"
+                className="inline-flex items-center gap-1 rounded-control border border-dashed border-border px-2.5 py-1.5 text-tiny text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
               >
-                <span className="text-base leading-none">+</span> Add another step
+                <Plus size={14} strokeWidth={2.25} /> Add another step
               </button>
             )}
-            {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-tiny text-neutral-400">Add a Get data step first, then combine it here.</p>}
+            {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-tiny text-muted-foreground">Add a Get data step first, then combine it here.</p>}
           </div>
         </div>
 
@@ -837,7 +859,7 @@ function NodeConfig({
             discovering the second one exists — which is what a checkbox
             buried under the lane list was being asked to do. */}
         {matching && inputs.length !== 2 && (
-          <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-tiny text-amber-900">
+          <p className={NOTE_WARN}>
             Match needs exactly 2 steps — {inputs.length} wired in.
           </p>
         )}
@@ -852,21 +874,47 @@ function NodeConfig({
     // "Path conditions" step — exactly where the rules live.
     const paths = (cfg.paths as Array<{ id: string; label: string; mode?: string }>) ?? [];
     const setLabel = (i: number, label: string) => onChange({ paths: paths.map((p, j) => (j === i ? { ...p, label } : p)) });
+    // The branch rows wear the Split step's own identity colour — imported,
+    // never copied, so the panel and the canvas can only ever agree.
+    const accent = nodeAccent("paths");
+    const accentInk = `color-mix(in srgb, ${accent} 72%, black)`;
     return (
       <div className="space-y-4">
         {paths.map((p, i) => (
-          <div key={p.id} className="flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50/40 px-2 py-1.5">
-            <span className="shrink-0 text-micro font-semibold uppercase tracking-wide text-pink-700">Branch {i + 1}</span>
-            <input value={p.label} onChange={(e) => setLabel(i, e.target.value)} className="min-w-0 flex-1 rounded-md border border-input px-2 py-1 text-tiny font-medium" />
+          <div
+            key={p.id}
+            className="flex items-center gap-2 rounded-card border px-2 py-1.5"
+            style={{ borderColor: `color-mix(in srgb, ${accent} 30%, white)`, backgroundColor: `color-mix(in srgb, ${accent} 5%, white)` }}
+          >
+            <span className="shrink-0 text-micro font-semibold uppercase tracking-wide" style={{ color: accentInk }}>Branch {i + 1}</span>
+            <input value={p.label} onChange={(e) => setLabel(i, e.target.value)} className={cn(fieldClasses, "min-w-0 flex-1 px-2 py-1 text-tiny font-medium")} />
             {(p.mode ?? "custom") !== "custom" && (
-              <span className="shrink-0 rounded bg-pink-100 px-1.5 py-0.5 text-micro font-medium text-pink-700">{p.mode === "always" ? "always runs" : "fallback"}</span>
+              <span
+                className="shrink-0 rounded-full px-1.5 py-0.5 text-micro font-medium"
+                style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, white)`, color: accentInk }}
+              >
+                {p.mode === "always" ? "always runs" : "fallback"}
+              </span>
             )}
             {paths.length > 1 && (
-              <button onClick={() => onRemoveBranch(p.id)} className="shrink-0 text-micro text-destructive hover:underline" title="Remove this branch and its steps">Remove</button>
+              <button
+                type="button"
+                onClick={() => onRemoveBranch(p.id)}
+                className="shrink-0 rounded-control text-micro text-destructive outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+                title="Remove this branch and its steps"
+              >
+                Remove
+              </button>
             )}
           </div>
         ))}
-        <button onClick={onAddBranch} className="w-full rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-base hover:bg-neutral-50">+ Add branch</button>
+        <button
+          type="button"
+          onClick={onAddBranch}
+          className="inline-flex w-full items-center justify-center gap-1 rounded-control border border-dashed border-border px-3 py-1.5 text-base text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
+        >
+          <Plus size={16} /> Add branch
+        </button>
       </div>
     );
   }
@@ -968,7 +1016,7 @@ function NumberFieldList({
         <FieldInput value={String(cfg.field ?? "value")} groups={groups} onChange={(v) => onChange({ field: v })} placeholder="Pick the number field…" />
         {extra.map((f, i) => (
           <div key={i} className="flex items-center gap-1.5">
-            <span className="text-base text-neutral-400">+</span>
+            <Plus size={14} strokeWidth={2.25} className="shrink-0 text-muted-foreground" aria-hidden />
             <div className="min-w-0 flex-1">
               <FieldInput
                 value={f}
@@ -980,16 +1028,20 @@ function NumberFieldList({
             <button
               type="button"
               onClick={() => setExtra(extra.filter((_, j) => j !== i))}
-              className="rounded p-1 text-neutral-400 hover:text-neutral-700"
+              className="rounded-control p-1 text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
               title="Remove this field"
               aria-label="Remove this field"
             >
-              ✕
+              <X size={14} strokeWidth={2.25} />
             </button>
           </div>
         ))}
-        <button type="button" onClick={() => setExtra([...extra, ""])} className="text-tiny font-medium text-blue-600 hover:underline">
-          + Add another field
+        <button
+          type="button"
+          onClick={() => setExtra([...extra, ""])}
+          className="inline-flex items-center gap-1 rounded-control text-tiny font-medium text-primary outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+        >
+          <Plus size={14} strokeWidth={2.25} /> Add another field
         </button>
         {/* The "+" between the pickers already says these are added; what it
             cannot say is the ORDER — per record first, then across records —
@@ -1057,7 +1109,7 @@ function CalcCompare({ cfg, inputs, numberGroups, onChange, onSetInput }: { cfg:
       <Field label="Calculation">
         <Select value={op} width={W} options={BINARY_OP_OPTIONS} onChange={(v) => onChange({ op: v })} />
       </Field>
-      <div className="rounded border border-brand-200 bg-brand-50 p-2 text-tiny text-brand-900">
+      <div className={NOTE_BRAND}>
         <p className="font-medium">{formulaExpression(op, inA?.title ?? (aFixed != null ? String(aFixed) : "First number"), inB?.title ?? (bFixed != null ? String(bFixed) : "Second number"))}</p>
       </div>
       <NumberPicker handle="a" label={labels.a} desc={inA} groups={numberGroups} fixed={aFixed} fieldPath={typeof cfg.aField === "string" ? cfg.aField : null} onSetInput={onSetInput} onSetFixed={(n) => onChange({ aFixed: n })} onSetField={(path) => onChange({ aField: path })} />
@@ -1123,7 +1175,7 @@ function NumberPicker({
         trigger={({ toggle }) => (
           <div className="relative">
             {desc ? (
-              <div className="flex w-full items-center justify-between gap-2 rounded-md border border-input bg-neutral-50 py-1.5 pl-2 pr-14 text-base">
+              <div className="flex w-full items-center justify-between gap-2 rounded-control border border-input bg-muted/50 py-1.5 pl-2 pr-14 text-base">
                 <span className="min-w-0 truncate text-foreground">{chosenLabel}</span>
                 <button
                   type="button"
@@ -1133,11 +1185,11 @@ function NumberPicker({
                     // different step must not inherit a column it never had.
                     onSetField(null);
                   }}
-                  className="absolute right-8 top-1/2 -translate-y-1/2 rounded p-1 text-neutral-400 hover:text-neutral-700"
+                  className="absolute right-8 top-1/2 -translate-y-1/2 rounded-control p-1 text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
                   title="Clear — type a number instead"
                   aria-label="Clear the picked step"
                 >
-                  ✕
+                  <X size={14} strokeWidth={2.25} />
                 </button>
               </div>
             ) : (
@@ -1148,7 +1200,7 @@ function NumberPicker({
               onClick={toggle}
               title="Use a number from an earlier step"
               aria-label="Pick a number from an earlier step"
-              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-brand-200 bg-brand-50 p-1 text-brand-500 transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600"
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-100 bg-accent p-1 text-primary outline-none transition-colors hover:bg-brand-100 focus-visible:ring-4 focus-visible:ring-ring/40"
             >
               <Database size={14} strokeWidth={2} />
             </button>
@@ -1167,13 +1219,21 @@ function CategoryEditor({ cfg, groups, onChange }: { cfg: Record<string, unknown
   return (
     <div className="space-y-2">
       {cats.map((c, i) => (
-        <div key={i} className="space-y-2 rounded border border-border p-2">
-          <input value={c.label} placeholder="Category name" onChange={(e) => setCat(i, { label: e.target.value })} className="w-full rounded-md border border-input px-2 py-1 text-tiny font-medium" />
+        <div key={i} className="space-y-2 rounded-card border border-border p-3">
+          <input value={c.label} placeholder="Category name" onChange={(e) => setCat(i, { label: e.target.value })} className={cn(fieldClasses, "px-2 py-1 text-tiny font-medium")} />
           <ConditionEditor value={asFilterConfig((c.filters as unknown as Record<string, unknown>) ?? {})} groups={groups} onChange={(v) => setCat(i, { filters: { combinator: v.combinator, rules: v.rules } })} />
-          <button onClick={() => onChange({ categories: cats.filter((_, j) => j !== i) })} className="text-tiny text-destructive hover:underline">Remove category</button>
+          <button
+            type="button"
+            onClick={() => onChange({ categories: cats.filter((_, j) => j !== i) })}
+            className="rounded-control text-tiny text-destructive outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+          >
+            Remove category
+          </button>
         </div>
       ))}
-      <button onClick={() => onChange({ categories: [...cats, { label: `Category ${cats.length + 1}`, filters: { combinator: "and", rules: [] } }] })} className="rounded border border-neutral-300 px-3 py-1.5 text-base hover:bg-neutral-50">+ Add category</button>
+      <Button type="button" variant="secondary" size="sm" onClick={() => onChange({ categories: [...cats, { label: `Category ${cats.length + 1}`, filters: { combinator: "and", rules: [] } }] })}>
+        <Plus /> Add category
+      </Button>
       <Field label="Fallback label"><input value={(cfg.fallbackLabel as string) ?? "Other"} onChange={(e) => onChange({ fallbackLabel: e.target.value })} className={INPUT} /></Field>
     </div>
   );
@@ -1361,7 +1421,11 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
     return (
       <p className="flex items-center gap-2 text-tiny text-muted-foreground">
         <span className="min-w-0 truncate">{note}</span>
-        <button type="button" onClick={() => setEditing(true)} className="shrink-0 font-medium text-brand-600 hover:underline">
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="shrink-0 rounded-control font-medium text-primary outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+        >
           Change
         </button>
       </p>
@@ -1422,7 +1486,7 @@ function ImportStatusLine({ connectionId, historyNote }: { connectionId: string;
   // Importing, or an import that ended without finishing. "unknown" with no
   // note is the no-evidence case and stays silent rather than guessing.
   if (!status.note) return null;
-  return <p className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-tiny text-amber-800">{status.note}</p>;
+  return <p className={cn(NOTE_WARN, "mt-1.5")}>{status.note}</p>;
 }
 
 /**
@@ -1593,19 +1657,21 @@ function MomentInput({
         <button
           type="button"
           onClick={toggle}
-          className="relative w-full rounded-control border border-input bg-white py-2 pl-3 pr-9 text-left text-base transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+          className={cn(fieldClasses, "relative py-2 pl-3 pr-9 text-left transition-colors hover:bg-muted")}
         >
           {label ? (
             <span className="block truncate text-foreground">
-              {from ? <span className="text-neutral-400">{from} › </span> : null}
+              {from ? (
+                <span className="text-muted-foreground">
+                  {from} <ChevronRight size={14} strokeWidth={2.25} className="inline -mt-0.5" aria-hidden />{" "}
+                </span>
+              ) : null}
               {label}
             </span>
           ) : (
-            <span className="block truncate text-neutral-400">Choose a time…</span>
+            <span className="block truncate text-muted-foreground">Choose a time…</span>
           )}
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400" aria-hidden>
-            ▾
-          </span>
+          <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden />
         </button>
       )}
     />
@@ -1628,8 +1694,8 @@ function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: 
   const orderName = (d.orderField ?? "occurredAt").replace(/^properties\./, "");
   if (d.matched === 0) {
     return (
-      <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-tiny text-amber-900">
-        Nothing was removed: <span className="font-medium">{name}</span> is empty on all {d.loaded.toLocaleString()} records here, so there was nothing to match on. Pick a
+      <p className={NOTE_WARN}>
+        Nothing was removed: <span className="font-medium">{name}</span> is empty on all {d.loaded.toLocaleString("en-US")} records here, so there was nothing to match on. Pick a
         field these records actually carry.
       </p>
     );
@@ -1640,28 +1706,28 @@ function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: 
   // receipt saying the opposite about the same step.
   if (d.removed > 0 && d.groups != null && d.matched >= 100 && d.groups < d.matched * 0.05) {
     return (
-      <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-tiny text-amber-900">
-        Matching by <span className="font-medium">{name}</span> collapsed {d.removed.toLocaleString()} of {d.matched.toLocaleString()} records into just{" "}
-        {d.groups.toLocaleString()} — it looks like a category, not an identity. If you meant one record per person, pick a field that identifies one (an email or an id).
+      <p className={NOTE_WARN}>
+        Matching by <span className="font-medium">{name}</span> collapsed {d.removed.toLocaleString("en-US")} of {d.matched.toLocaleString("en-US")} records into just{" "}
+        {d.groups.toLocaleString("en-US")} — it looks like a category, not an identity. If you meant one record per person, pick a field that identifies one (an email or an id).
       </p>
     );
   }
-  const partial = d.matched < d.loaded ? ` ${(d.loaded - d.matched).toLocaleString()} records had no ${name} and were all kept.` : "";
+  const partial = d.matched < d.loaded ? ` ${(d.loaded - d.matched).toLocaleString("en-US")} records had no ${name} and were all kept.` : "";
   // Nothing was orderable, so the survivor is whichever loaded first — saying
   // "kept the earliest occurredAt" here would be a plain untruth.
   if (d.removed > 0 && d.ordered === 0) {
     return (
-      <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-tiny text-amber-900">
-        Removed {d.removed.toLocaleString()} record{d.removed === 1 ? "" : "s"}, but <span className="font-medium">{orderName}</span> is empty on all of them — so which one survived was arbitrary. Pick a
+      <p className={NOTE_WARN}>
+        Removed {d.removed.toLocaleString("en-US")} record{d.removed === 1 ? "" : "s"}, but <span className="font-medium">{orderName}</span> is empty on all of them — so which one survived was arbitrary. Pick a
         field that orders these records.
       </p>
     );
   }
   return (
-    <p className="rounded-control border border-border bg-neutral-50 p-2.5 text-tiny text-neutral-600">
+    <p className={NOTE_NEUTRAL}>
       {d.removed === 0
         ? `No duplicates found — every ${name} was different.`
-        : `Removed ${d.removed.toLocaleString()} record${d.removed === 1 ? "" : "s"}, keeping the ${d.keep === "earliest" ? "earliest" : "latest"} ${orderName} of each ${name}.`}
+        : `Removed ${d.removed.toLocaleString("en-US")} record${d.removed === 1 ? "" : "s"}, keeping the ${d.keep === "earliest" ? "earliest" : "latest"} ${orderName} of each ${name}.`}
       {partial}
     </p>
   );
@@ -1679,16 +1745,16 @@ function PairingOutcome({ p }: { p: { keys: number; started: number; matched: nu
   if (p.keys === 0) return null;
   if (p.started === 0) {
     return (
-      <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-tiny text-amber-900">
-        Nothing was paired: none of the {p.keys.toLocaleString()} matched groups had a start time. Check the field picked for “Start the clock on”.
+      <p className={NOTE_WARN}>
+        Nothing was paired: none of the {p.keys.toLocaleString("en-US")} matched groups had a start time. Check the field picked for “Start the clock on”.
       </p>
     );
   }
-  const bits = [`${p.matched.toLocaleString()} of ${p.started.toLocaleString()} matched a stop time`];
-  if (p.noStop > 0) bits.push(`${p.noStop.toLocaleString()} never got one`);
-  if (p.stopBeforeStart > 0) bits.push(`${p.stopBeforeStart.toLocaleString()} only had one before the start`);
+  const bits = [`${p.matched.toLocaleString("en-US")} of ${p.started.toLocaleString("en-US")} matched a stop time`];
+  if (p.noStop > 0) bits.push(`${p.noStop.toLocaleString("en-US")} never got one`);
+  if (p.stopBeforeStart > 0) bits.push(`${p.stopBeforeStart.toLocaleString("en-US")} only had one before the start`);
   return (
-    <p className="rounded-control border border-border bg-neutral-50 p-2.5 text-tiny text-neutral-600">
+    <p className={NOTE_NEUTRAL}>
       {bits.join(", ")}. The rest are not in this number.
     </p>
   );
@@ -1707,20 +1773,20 @@ function CrossRefOutcome({ c }: { c: { mode: string; keyField: string; lookupFie
     // The wrong-field case throws in the engine, so reaching here means the
     // other step genuinely had no records — an empty sheet, not a mistake.
     return (
-      <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-tiny text-amber-900">
+      <p className={NOTE_WARN}>
         The other step had no records, so there was nothing to check <span className="font-medium">{key}</span> against.
       </p>
     );
   }
   const blankNote =
     c.blanks > 0
-      ? ` ${c.blanks.toLocaleString()} had no ${key} and ${c.mode === "appears" ? "were dropped — a blank can't match anything" : "were kept — a blank isn't in the list either"}.`
+      ? ` ${c.blanks.toLocaleString("en-US")} had no ${key} and ${c.mode === "appears" ? "were dropped — a blank can't match anything" : "were kept — a blank isn't in the list either"}.`
       : "";
-  const listNote = c.listBlanks > 0 ? ` (${c.listBlanks.toLocaleString()} of its records had no ${lookup})` : "";
+  const listNote = c.listBlanks > 0 ? ` (${c.listBlanks.toLocaleString("en-US")} of its records had no ${lookup})` : "";
   const outcome =
     c.mode === "appears"
-      ? `${c.kept.toLocaleString()} matched and continue; ${(c.dropped - c.blanks).toLocaleString()} didn't.`
-      : `${(c.kept - c.blanks).toLocaleString()} aren't in the list and continue; ${c.dropped.toLocaleString()} are, and were dropped.`;
+      ? `${c.kept.toLocaleString("en-US")} matched and continue; ${(c.dropped - c.blanks).toLocaleString("en-US")} didn't.`
+      : `${(c.kept - c.blanks).toLocaleString("en-US")} aren't in the list and continue; ${c.dropped.toLocaleString("en-US")} are, and were dropped.`;
   // The digit-matching is invisible in the numbers, so it has to be visible
   // in words — "+1 208-613-0936 matched 2086130936" must never read as a
   // mystery. The sentence states the MECHANISM (last 10 digits) and shows it,
@@ -1730,8 +1796,8 @@ function CrossRefOutcome({ c }: { c: { mode: string; keyField: string; lookupFie
   // than saying nothing.
   const phoneNote = (c.phones ?? 0) > 0 ? " Both fields hold phone numbers, so values were matched by their last 10 digits — “+1 208-613-0936” and “2086130936” count as the same." : "";
   return (
-    <p className="rounded-control border border-border bg-neutral-50 p-2.5 text-tiny text-neutral-600">
-      Checked {c.checked.toLocaleString()} records against {c.listSize.toLocaleString()} values{listNote}. {outcome}
+    <p className={NOTE_NEUTRAL}>
+      Checked {c.checked.toLocaleString("en-US")} records against {c.listSize.toLocaleString("en-US")} values{listNote}. {outcome}
       {blankNote}
       {phoneNote}
     </p>
@@ -1792,7 +1858,7 @@ function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigFi
     return (
       <Field label={field.label}>
         <input value={value} placeholder={field.placeholder} onChange={(e) => set(e.target.value)} className={INPUT} />
-        <p className="mt-1 text-tiny text-amber-700">Couldn’t list options ({state.error}). Paste the {field.label.toLowerCase()} manually.</p>
+        <p className="mt-1 text-tiny text-warn-ink">Couldn’t list options ({state.error}). Paste the {field.label.toLowerCase()} manually.</p>
       </Field>
     );
   }
@@ -1886,10 +1952,14 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
       : fallbackGroups;
 
   return (
-    <div className="space-y-2 rounded-control border border-border p-2.5">
-      <button type="button" onClick={() => onChange({ dedupe: !on })} className="flex items-center gap-2 text-tiny font-medium text-neutral-700">
-        <span className={`flex h-4 w-4 items-center justify-center rounded border ${on ? "border-neutral-800 bg-neutral-800 text-white" : "border-neutral-300"}`}>
-          {on ? "✓" : ""}
+    <div className="space-y-2 rounded-card border border-border p-3">
+      <button
+        type="button"
+        onClick={() => onChange({ dedupe: !on })}
+        className="flex items-center gap-2 rounded-control text-tiny font-medium text-foreground outline-none focus-visible:ring-4 focus-visible:ring-ring/40"
+      >
+        <span className={`flex h-4 w-4 items-center justify-center rounded-control border transition-colors ${on ? "border-primary bg-primary text-primary-foreground" : "border-input"}`}>
+          {on && <Check size={12} strokeWidth={2.25} />}
         </span>
         Remove duplicates
       </button>
@@ -1922,9 +1992,9 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
               </div>
             </div>
           </Field>
-          {state.status === "loading" && <p className="text-tiny text-neutral-400">Loading your fields…</p>}
+          {state.status === "loading" && <p className="text-tiny text-muted-foreground">Loading your fields…</p>}
           {state.status === "ok" && loaded.length === 0 && (
-            <p className="text-tiny text-amber-700">No synced records yet — sync or test this step to see its fields.</p>
+            <p className="text-tiny text-warn-ink">No synced records yet — sync or test this step to see its fields.</p>
           )}
         </>
       )}
@@ -2007,7 +2077,7 @@ function TimePeriodSection({ cfg, groups, onChange }: { cfg: Record<string, unkn
         onChange={pick}
       />
       {enabled && (
-        <div className="space-y-2.5 rounded-control border border-border bg-white p-3">
+        <div className="space-y-2.5 rounded-card border border-border bg-card p-3">
           {mode === "rolling" && (
             <Field label="Number of days">
               <NumberField value={dr.days ?? 30} min={1} onChange={(n) => set({ days: n ?? 1 })} />
@@ -2075,26 +2145,24 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
   const sampleIndex = Number((node.data.config as { sampleIndex?: unknown }).sampleIndex ?? 0);
   return (
     <div className="space-y-3 text-base">
-      <SectionLabel>Result</SectionLabel>
+      <SectionHeading className="mb-0">Result</SectionHeading>
       {/* F.8: when the source couldn't be re-read, the Test says so plainly
           instead of implying these numbers are freshly pulled. */}
-      {t.sourceNote && (
-        <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-tiny text-amber-900">{t.sourceNote}</p>
-      )}
+      {t.sourceNote && <p className={NOTE_WARN}>{t.sourceNote}</p>}
       {t.dedupe && <DedupeOutcome d={t.dedupe} />}
       {t.pairing && <PairingOutcome p={t.pairing} />}
       {t.crossRef && <CrossRefOutcome c={t.crossRef} />}
       {t.truncated && (
-        <p className="rounded-control border border-amber-200 bg-amber-50 p-2.5 text-tiny text-amber-900">
+        <p className={NOTE_WARN}>
           Only the newest 500,000 records were read, so this number is a floor, not a total. Narrow the step with a date range to measure a complete period.
         </p>
       )}
-      <p className="rounded-card border border-border bg-neutral-50 p-3 text-center text-title font-semibold text-foreground">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
+      <p className="tnum rounded-card border border-border bg-muted/50 p-3 text-center text-title font-semibold text-foreground">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
       ) : (
         <details>
-          <summary className="cursor-pointer text-tiny text-muted-foreground">View sample data</summary>
+          <summary className="cursor-pointer rounded-control text-tiny text-muted-foreground outline-none focus-visible:ring-4 focus-visible:ring-ring/40">View sample data</summary>
           <div className="mt-2"><BeforeAfter before={t.inputSample ?? []} after={t.sample} /></div>
         </details>
       )}
@@ -2105,51 +2173,40 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
 function BeforeAfter({ before, after }: { before: unknown[]; after: unknown[] }) {
   const col = (recs: unknown[], label: string, tone: string) => (
     <div>
-      <p className="mb-1 text-tiny font-medium uppercase tracking-wide text-neutral-400">{label} ({recs.length})</p>
+      <p className="mb-1 text-tiny font-medium uppercase tracking-wide text-muted-foreground">{label} ({recs.length})</p>
       <div className="space-y-1">
-        {recs.length === 0 && <p className="text-tiny text-neutral-400">—</p>}
-        {recs.slice(0, 3).map((r, i) => <div key={i} className={`truncate rounded border p-1.5 text-micro ${tone}`}>{sampleLine(r)}</div>)}
+        {recs.length === 0 && <p className="text-tiny text-muted-foreground">—</p>}
+        {recs.slice(0, 3).map((r, i) => <div key={i} className={`truncate rounded-control border p-1.5 text-micro ${tone}`}>{sampleLine(r)}</div>)}
       </div>
     </div>
   );
-  return <div className="grid grid-cols-2 gap-2">{col(before, "Before", "border-neutral-100 bg-neutral-50")}{col(after, "After", "border-green-100 bg-green-50")}</div>;
+  return <div className="grid grid-cols-2 gap-2">{col(before, "Before", "border-border bg-muted/50 text-muted-foreground")}{col(after, "After", "border-success-soft bg-success-soft/50 text-success-ink")}</div>;
 }
 
 function sampleLine(r: unknown): string {
   const rec = r as { source?: string; eventType?: string; subject?: string; value?: unknown; occurredAt?: string };
+  // Both halves of the lead-in are storage keys — the connector key and the
+  // event type — and a sample row reading "gsheets · lead_created" is the
+  // database talking, not the product.
+  const source = rec.source ? catalogEntry(rec.source)?.name ?? rec.source : "";
   const type = rec.eventType ? eventTypeLabel(rec.source ?? null, rec.eventType) : "";
   const when = recordWhen(rec.occurredAt);
-  return `${rec.source ?? ""} · ${type}${rec.subject ? ` · ${rec.subject}` : ""}${rec.value != null ? ` · ${String(rec.value)}` : ""}${when ? ` · ${when}` : ""}`;
-}
-
-/** The label is the QUESTION and the input under it is the ANSWER, so the
-    label may never read lighter than the thing it labels. It matches the
-    Configure tab above exactly — 14px semibold, true black — so the whole
-    panel speaks in one voice. */
-const FIELD_LABEL = "mb-1.5 block text-base font-semibold text-foreground";
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="block">
-      <span className={FIELD_LABEL}>{label}</span>
-      {children}
-    </div>
-  );
+  return `${source} · ${type}${rec.subject ? ` · ${rec.subject}` : ""}${rec.value != null ? ` · ${String(rec.value)}` : ""}${when ? ` · ${when}` : ""}`;
 }
 
 /**
- * The same label as `Field`, for the handful of places that lay their own
- * control out rather than passing it as a child — "Time period", the branch
- * mode, "Only continue if…". All three used `SectionLabel` before, which put
- * an 11px uppercase grey-400 question above a 14px black answer: the exact
- * inversion `Field` exists to prevent. Same string, so the two can never drift.
+ * The label is the QUESTION and the input under it is the ANSWER, so the label
+ * may never read lighter than the thing it labels — which is why this is the
+ * kit's `FieldLabel` and not a local string. The places that lay their own
+ * control out ("Time period", the branch mode, "Only continue if…") reach for
+ * the same component directly, so the two can never drift apart.
  */
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <span className={FIELD_LABEL}>{children}</span>;
-}
-
-/** A small uppercase section heading, matching the step picker's group labels. */
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-micro font-semibold uppercase tracking-wider text-neutral-400">{children}</p>;
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="block">
+      <FieldLabel>{label}</FieldLabel>
+      {children}
+    </div>
+  );
 }
 

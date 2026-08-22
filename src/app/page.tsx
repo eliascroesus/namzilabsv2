@@ -7,10 +7,10 @@ export default async function Home() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
-        <span className="text-lg font-semibold tracking-tight">Namzilabs</span>
+        <span className="text-title font-semibold tracking-tight">Namzilabs</span>
         <nav className="flex items-center gap-4 text-base">
           {user ? (
-            <Link className="rounded-md bg-neutral-900 px-4 py-2 font-medium text-white" href="/dashboard">
+            <Link className="rounded-control bg-neutral-900 px-4 py-2 font-medium text-white" href="/dashboard">
               Dashboard
             </Link>
           ) : (
@@ -18,7 +18,7 @@ export default async function Home() {
               <a className="text-neutral-600 hover:text-foreground" href="/sign-in">
                 Sign in
               </a>
-              <a className="rounded-md bg-neutral-900 px-4 py-2 font-medium text-white" href="/sign-up">
+              <a className="rounded-control bg-neutral-900 px-4 py-2 font-medium text-white" href="/sign-up">
                 Get started
               </a>
             </>
@@ -27,17 +27,17 @@ export default async function Home() {
       </header>
 
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-6 py-24 text-center">
-        <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+        <h1 className="text-hero font-semibold tracking-tight text-foreground">
           All your tools&rsquo; data, in one reliable place.
         </h1>
-        <p className="mt-6 max-w-xl text-lg text-neutral-600">
+        <p className="mt-6 max-w-xl text-title text-neutral-600">
           Namzilabs unifies Calendly, Close, Instantly, Google Sheets and more into one
           live dashboard &mdash; so you can see booked leads, calls, replies and SMS across every
           platform without logging into ten of them.
         </p>
         <div className="mt-10 flex items-center gap-4">
           <a
-            className="rounded-md bg-neutral-900 px-6 py-3 font-medium text-white hover:bg-neutral-800"
+            className="rounded-control bg-neutral-900 px-6 py-3 font-medium text-white hover:bg-neutral-800"
             href={user ? "/dashboard" : "/sign-up"}
           >
             {user ? "Go to dashboard" : "Start free"}

@@ -352,20 +352,21 @@ export function resultLabel(
  * two states worth interrupting for.
  *
  * So: amber outlines a step that BLOCKS publish, red outlines one that broke,
- * blue is the transient outline of the step running right now, and everything
- * else is a plain neutral card with a coloured dot. "Tested" in particular
- * gets no decoration at all — a canvas that celebrates every working step has
- * no way left to point at the one that isn't, and "tested" is the state most
- * cards are in most of the time.
+ * and everything else is a plain neutral card with a coloured dot — including
+ * the step running right now: a test in flight is a transient state, and
+ * nothing transient deserves a colour. "Tested" in particular gets no
+ * decoration at all — a canvas that celebrates every working step has no way
+ * left to point at the one that isn't, and "tested" is the state most cards
+ * are in most of the time.
  */
 export type NodeStatus = "ready" | "setup" | "untested" | "updating" | "error";
 /** Colour on the BORDER means act on me. The dot alone carries all the rest. */
 export const STATUS_META: Record<NodeStatus, { label: string; cls: string; border: string; dot: string; hint: string }> = {
-  ready: { label: "Tested", cls: "bg-success-soft text-success-ink", border: "border-border", dot: "bg-success", hint: "text-neutral-500" },
+  ready: { label: "Tested", cls: "bg-success-soft text-success-ink", border: "border-border", dot: "bg-success", hint: "text-muted-foreground" },
   setup: { label: "Needs setup", cls: "bg-warn-soft text-warn-ink", border: "border-warn/45", dot: "bg-warn", hint: "text-warn-ink" },
-  untested: { label: "Not tested", cls: "bg-muted text-muted-foreground", border: "border-border", dot: "bg-neutral-300", hint: "text-neutral-400" },
-  updating: { label: "Testing…", cls: "bg-blue-100 text-blue-700", border: "border-blue-300", dot: "bg-blue-500", hint: "text-blue-600" },
-  error: { label: "Error", cls: "bg-red-50 text-destructive", border: "border-red-300", dot: "bg-red-500", hint: "text-red-600" },
+  untested: { label: "Not tested", cls: "bg-muted text-muted-foreground", border: "border-border", dot: "bg-neutral-300", hint: "text-muted-foreground" },
+  updating: { label: "Testing…", cls: "bg-muted text-muted-foreground", border: "border-border", dot: "bg-neutral-400", hint: "text-muted-foreground" },
+  error: { label: "Test failed", cls: "bg-danger-soft text-danger-ink", border: "border-danger/45", dot: "bg-danger", hint: "text-danger-ink" },
 };
 
 export function pathHandles(data: NodeData): Array<{ id: string; label: string }> {

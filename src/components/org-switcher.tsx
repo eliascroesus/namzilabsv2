@@ -1,4 +1,6 @@
 import { switchOrgAction } from "@/app/actions";
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/input";
 
 type Org = { id: string; name: string };
 
@@ -22,20 +24,16 @@ export function OrgSwitcher({ orgs, currentId }: { orgs: Org[]; currentId: strin
 
   return (
     <form action={switchOrgAction} className="space-y-1.5">
-      <select
-        name="organizationId"
-        defaultValue={currentId}
-        className="w-full cursor-pointer rounded-control border border-neutral-300 bg-white px-2 py-1.5 text-small font-medium text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
-      >
+      <NativeSelect name="organizationId" defaultValue={currentId}>
         {orgs.map((o) => (
           <option key={o.id} value={o.id}>
             {o.name}
           </option>
         ))}
-      </select>
-      <button type="submit" className="text-micro font-semibold text-brand-600 hover:text-brand-700">
+      </NativeSelect>
+      <Button type="submit" variant="link" size="sm" className="px-0">
         Switch workspace
-      </button>
+      </Button>
     </form>
   );
 }

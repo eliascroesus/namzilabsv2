@@ -1,6 +1,10 @@
 "use client";
 
+import { Star } from "lucide-react";
 import { eventTypeLabel } from "@/connectors/catalog";
+import { cn } from "@/lib/utils";
+import { formatDate } from "@/lib/format";
+import { buttonVariants } from "@/components/ui/button";
 
 type Rec = {
   source?: string;
@@ -47,7 +51,7 @@ export function recordWhen(iso: string | undefined): string {
   if (!iso) return "";
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return "";
-  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return formatDate(new Date(t));
 }
 
 /**
@@ -56,10 +60,10 @@ export function recordWhen(iso: string | undefined): string {
  * values — it does NOT change which records the published flow processes.
  */
 export function RecordSamplePicker({ records, selectedIndex, onSelect }: { records: unknown[]; selectedIndex: number; onSelect: (i: number) => void }) {
-  if (records.length === 0) return <p className="text-tiny text-neutral-400">No records returned.</p>;
+  if (records.length === 0) return <p className="text-tiny text-muted-foreground">No records returned.</p>;
   return (
     <div className="space-y-1.5">
-      <p className="text-micro font-semibold uppercase tracking-wide text-neutral-400">Latest {records.length} records</p>
+      <p className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">Latest {records.length} records</p>
       {records.map((r, i) => {
         const rec = (r ?? {}) as Rec;
         const selected = i === selectedIndex;
@@ -70,39 +74,35 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
         return (
           <details
             key={i}
-            className={`group overflow-hidden rounded-lg border transition-colors ${
-              selected ? "border-brand-200 bg-brand-50/60 ring-1 ring-brand-200" : "border-neutral-100 bg-neutral-50 hover:border-brand-200 hover:bg-brand-50/40"
-            }`}
+            className={cn(
+              "group overflow-hidden rounded-control border transition-colors has-[summary:focus-visible]:ring-4 has-[summary:focus-visible]:ring-ring/40",
+              selected ? "border-brand-300 bg-accent/60" : "border-border bg-muted/40 hover:border-brand-200 hover:bg-muted",
+            )}
           >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-tiny">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-tiny outline-none">
               <span className="flex min-w-0 items-center gap-1.5">
-                {selected && (
-                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-600 text-micro font-bold text-white">★</span>
-                )}
-                <span className={`truncate font-medium ${selected ? "text-brand-900" : "text-neutral-700"}`}>{title || `Record ${i + 1}`}</span>
+                {selected && <Star size={14} fill="currentColor" className="shrink-0 text-primary" aria-hidden />}
+                <span className={cn("truncate font-medium", selected ? "text-accent-foreground" : "text-foreground")}>{title || `Record ${i + 1}`}</span>
               </span>
-              <span className="shrink-0 text-micro text-neutral-400">
+              <span className="shrink-0 text-micro text-muted-foreground">
                 {recordWhen(rec.occurredAt) && <span className="mr-1.5">{recordWhen(rec.occurredAt)}</span>}
                 {fields(rec).length} fields
               </span>
             </summary>
-            <div className="border-t border-neutral-100 bg-white/70 px-2.5 py-2">
+            <div className="border-t border-border bg-card/70 px-2.5 py-2">
               <dl className="space-y-1">
                 {fields(rec).map((f) => (
                   <div key={f.label} className="flex justify-between gap-2 text-micro">
-                    <dt className="shrink-0 text-neutral-400">{f.label}</dt>
-                    <dd className="min-w-0 truncate text-right font-medium text-neutral-700">{f.value}</dd>
+                    <dt className="shrink-0 text-muted-foreground">{f.label}</dt>
+                    <dd className="min-w-0 truncate text-right font-medium text-foreground">{f.value}</dd>
                   </div>
                 ))}
               </dl>
               <button
+                type="button"
                 onClick={() => onSelect(i)}
                 disabled={selected}
-                className={`mt-2.5 w-full rounded-md border px-2 py-1.5 text-tiny font-medium transition-colors ${
-                  selected
-                    ? "cursor-default border-transparent bg-white text-neutral-400"
-                    : "border-brand-200 text-brand-700 hover:border-brand-600 hover:bg-brand-600 hover:text-white"
-                }`}
+                className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "mt-2.5 w-full")}
               >
                 {selected ? "Used as sample" : "Use this record as sample"}
               </button>

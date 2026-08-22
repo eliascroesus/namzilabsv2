@@ -1,6 +1,12 @@
 import { redirect } from "next/navigation";
 import { withAuth, signOut, getWorkOS } from "@workos-inc/authkit-nextjs";
+import { ArrowRight, ChevronRight } from "lucide-react";
 import { createOrganizationAction, switchOrgAction } from "@/app/actions";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -28,26 +34,36 @@ export default async function OnboardingPage() {
       {hasWorkspaces ? (
         <>
           <h1 className="text-display font-semibold tracking-tight text-foreground">Choose a workspace</h1>
-          <p className="mt-2 text-base text-neutral-600">
+          <p className="mt-2 text-base text-muted-foreground">
             You already belong to {orgs.length === 1 ? "a workspace" : `${orgs.length} workspaces`}. Pick one to continue.
           </p>
-          <div className="mt-6 divide-y divide-neutral-100 rounded-md border border-neutral-200">
-            {orgs.map((o) => (
+          <Card variant="surface" padding="none" className="mt-6 divide-y divide-border">
+            {orgs.map((o, i) => (
               <form key={o.id} action={switchOrgAction}>
                 <input type="hidden" name="organizationId" value={o.id} />
-                <button
+                <Button
                   type="submit"
-                  className="flex w-full items-center justify-between px-4 py-3 text-left text-base hover:bg-neutral-50"
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    "h-auto w-full justify-between rounded-none px-4 py-3 text-left text-base font-normal",
+                    i === 0 && "rounded-t-surface",
+                    i === orgs.length - 1 && "rounded-b-surface",
+                  )}
                 >
-                  <span className="font-medium">{o.name}</span>
-                  <span className="text-neutral-400">Enter &rarr;</span>
-                </button>
+                  <span className="font-medium text-foreground">{o.name}</span>
+                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                    Enter
+                    <ArrowRight size={14} strokeWidth={2.25} />
+                  </span>
+                </Button>
               </form>
             ))}
-          </div>
+          </Card>
 
-          <details className="mt-6">
-            <summary className="cursor-pointer text-base text-neutral-500 hover:text-foreground">
+          <details className="group mt-6">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-base text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+              <ChevronRight size={14} strokeWidth={2.25} className="transition-transform group-open:rotate-90" />
               Create another workspace
             </summary>
             <CreateForm className="mt-4" />
@@ -56,7 +72,7 @@ export default async function OnboardingPage() {
       ) : (
         <>
           <h1 className="text-display font-semibold tracking-tight text-foreground">Create your workspace</h1>
-          <p className="mt-2 text-base text-neutral-600">
+          <p className="mt-2 text-base text-muted-foreground">
             A workspace is your organization&rsquo;s private space. All connected integrations and data
             live inside it.
           </p>
@@ -65,9 +81,9 @@ export default async function OnboardingPage() {
       )}
 
       <form action={async () => { "use server"; await signOut(); }} className="mt-6">
-        <button type="submit" className="text-base text-neutral-500 hover:text-foreground">
+        <Button type="submit" variant="ghost" size="sm">
           Sign out
-        </button>
+        </Button>
       </form>
     </main>
   );
@@ -75,25 +91,14 @@ export default async function OnboardingPage() {
 
 function CreateForm({ className }: { className?: string }) {
   return (
-    <form action={createOrganizationAction} className={`space-y-4 ${className ?? ""}`}>
+    <form action={createOrganizationAction} className={cn("space-y-4", className)}>
       <div>
-        <label htmlFor="name" className="block text-base font-semibold text-foreground">
-          Workspace name
-        </label>
-        <input
-          id="name"
-          name="name"
-          required
-          placeholder="Acme Inc"
-          className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-base"
-        />
+        <FieldLabel htmlFor="name">Workspace name</FieldLabel>
+        <Input id="name" name="name" required placeholder="Acme Inc" />
       </div>
-      <button
-        type="submit"
-        className="w-full rounded-md bg-neutral-900 px-4 py-2 font-medium text-white hover:bg-neutral-800"
-      >
+      <Button type="submit" className="w-full">
         Create workspace
-      </button>
+      </Button>
     </form>
   );
 }

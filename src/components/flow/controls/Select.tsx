@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Check, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { fieldClasses } from "@/components/ui/input";
 import { Popover } from "./Popover";
 
 export type Option = { value: string; label: string; hint?: string; group?: string; disabled?: boolean };
 
-const BTN = "flex w-full items-center justify-between gap-2 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-left text-base transition-colors hover:border-neutral-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100";
+const BTN = cn(fieldClasses, "flex items-center justify-between gap-2 px-3 py-2 text-left hover:border-ring/50");
 
 /**
  * A custom (non-native) select. Set `searchable` for combobox behaviour. Full keyboard
@@ -121,10 +124,10 @@ export function Select({
           }}
           aria-haspopup="listbox"
           aria-expanded={open}
-          className={`${BTN} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+          className={BTN}
         >
-          <span className={`min-w-0 truncate ${current ? "text-foreground" : "text-neutral-400"}`}>{current?.label ?? placeholder}</span>
-          <span className="shrink-0 text-neutral-400">▾</span>
+          <span className={`min-w-0 truncate ${current ? "text-foreground" : "text-muted-foreground"}`}>{current?.label ?? placeholder}</span>
+          <ChevronDown size={16} className="shrink-0 text-muted-foreground" aria-hidden />
         </button>
       }
     >
@@ -139,13 +142,13 @@ export function Select({
             }}
             onKeyDown={onKey}
             placeholder="Search…"
-            className="mb-1 w-full rounded-lg border border-neutral-200 px-2.5 py-1.5 text-base text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+            className={cn(fieldClasses, "mb-1 h-8 px-2.5")}
           />
         )}
-        {filtered.length === 0 && <p className="p-2 text-center text-tiny text-neutral-400">No matches</p>}
+        {filtered.length === 0 && <p className="p-2 text-center text-tiny text-muted-foreground">No matches</p>}
         {grouped.map(([g, opts]) => (
           <div key={g || "_"}>
-            {g && <p className="px-2 pb-0.5 pt-1.5 text-micro font-semibold uppercase tracking-wide text-neutral-400">{g}</p>}
+            {g && <p className="px-2 pb-0.5 pt-1.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground">{g}</p>}
             {opts.map((o) => {
               flatIndex += 1;
               const i = flatIndex;
@@ -161,13 +164,13 @@ export function Select({
                     if (!o.disabled) pick(o.value);
                   }}
                   onMouseEnter={() => setActive(i)}
-                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-base ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-brand-50 text-brand-700" : ""}`}
+                  className={`flex w-full items-center justify-between gap-2 rounded-control px-2.5 py-1.5 text-left text-base outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40 ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-accent text-accent-foreground" : ""}`}
                 >
                   <span className="min-w-0">
-                    <span className={`block ${o.disabled ? "" : "truncate"} ${o.value === value ? "font-medium text-foreground" : "text-neutral-700"}`}>{o.label}</span>
-                    {o.hint && <span className={`block text-micro text-neutral-400 ${o.disabled ? "whitespace-normal" : "truncate"}`}>{o.hint}</span>}
+                    <span className={`block ${o.disabled ? "" : "truncate"} ${o.value === value ? "font-medium text-foreground" : "text-foreground"}`}>{o.label}</span>
+                    {o.hint && <span className={`block text-micro text-muted-foreground ${o.disabled ? "whitespace-normal" : "truncate"}`}>{o.hint}</span>}
                   </span>
-                  {o.value === value && <span className="shrink-0 text-neutral-500">✓</span>}
+                  {o.value === value && <Check size={14} className="shrink-0 text-muted-foreground" aria-hidden />}
                 </button>
               );
             })}

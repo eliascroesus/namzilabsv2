@@ -13,13 +13,19 @@ import {
   Wrench,
   type LucideIcon,
 } from "lucide-react";
+import { NODE_ACCENT } from "@/components/flow/node-accent";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/chip";
+import { Input, NativeSelect } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Toast } from "@/components/ui/toast";
 import { PERMISSIONS, type RankRow } from "@/lib/permissions";
 import { assignRankAction, createRankAction, deleteRankAction, updateRankAction } from "./actions";
 
 /**
  * The Ranks editor. Every control here is a switch that saves the moment it
- * flips — optimistic flip, server call, revert plus one red line if the server
+ * flips — optimistic flip, server call, revert plus a toast if the server
  * says no. There is deliberately NO Save button: a toggle that needs a Save
  * button is a checkbox wearing a costume, and the feature is meant to feel
  * like flipping breakers, not filling in a form.
@@ -41,10 +47,10 @@ const toggled = (list: string[], key: string) =>
 
 const count = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-// The rank marks wear the flow step accents (src/components/flow/node-accent.ts:
-// app green, unite blue, Summarize violet, time-between orange), cycled by
-// index, so the list reads like a column of step cards rather than a form.
-const RANK_ACCENTS = ["#0EAB0E", "#009ED3", "#D95FF2", "#F66700"];
+// The rank marks wear the flow step accents (app green, unite blue, Summarize
+// violet, time-between orange), cycled by index, so the list reads like a
+// column of step cards rather than a form.
+const RANK_ACCENTS = [NODE_ACCENT.app, NODE_ACCENT.unite, NODE_ACCENT.formula, NODE_ACCENT.time_between];
 
 // One glyph per permission, so each row reads like a library row (icon +
 // title + blurb) instead of a line of prose.
@@ -172,11 +178,7 @@ export function RanksPanel({
         full access — restrictions begin when you assign one.
       </p>
 
-      {toast && (
-        <p role="status" className="mb-2 text-tiny font-medium text-destructive">
-          {toast}
-        </p>
-      )}
+      {toast && <Toast>{toast}</Toast>}
 
       {/* Each rank is a CARD — the builder's step-card anatomy (coloured mark,
           text-lead title, text-tiny meta), stacked with air between them like
@@ -197,21 +199,21 @@ export function RanksPanel({
             /* overflow-hidden is safe here (nothing inside pops over the edge —
                the delete confirm is inline) and keeps the header's hover tint
                within the 16px corners. */
-            <div key={r.id} className="overflow-hidden rounded-surface border border-border bg-card shadow-card">
+            <Card key={r.id} variant="surface" padding="none" className="overflow-hidden">
               <button
                 type="button"
                 onClick={() => {
                   setExpandedId(open ? null : r.id);
                   setConfirmingDelete(null);
                 }}
-                className="flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-muted"
+                className="flex w-full items-center gap-3 p-3.5 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
               >
                 <span
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control"
                   style={{ backgroundColor: RANK_ACCENTS[i % RANK_ACCENTS.length] }}
                   aria-hidden
                 >
-                  <Shield size={18} strokeWidth={2.25} className="text-white" />
+                  <Shield size={18} strokeWidth={2} className="text-white" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-lead font-semibold text-foreground">{r.name}</span>
@@ -328,73 +330,66 @@ export function RanksPanel({
                   </Group>
                 </div>
               )}
-            </div>
+            </Card>
           );
         })}
 
         {/* The list's foot: the builder's "Add next step" ghost, until it is
             clicked — then the same spot holds the name input and Create. */}
         {adding ? (
-          <form
-            onSubmit={create}
-            className="space-y-3 rounded-surface border border-border bg-card p-3 shadow-card"
-          >
-            <div className="flex items-center gap-2">
-              <input
-                autoFocus
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setAdding(false);
-                }}
-                required
-                placeholder="New rank name"
-                aria-label="New rank name"
-                className="w-full max-w-sm rounded-control border border-input bg-card px-3 py-2 text-base text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
-              />
-              <Button type="submit" disabled={creating || newName.trim() === ""}>
-                Create
-              </Button>
-            </div>
-            {/* Whop's presets, reduced to the one that earns its place: Admin.
-                A preset is a STARTING POINT — it creates an ordinary rank with
-                both masters on, fully editable after — so the chip says what it
-                does rather than hiding it behind a name. */}
-            <div className="flex items-center gap-2">
-              {(
-                [
-                  { value: undefined, label: "Start blank", blurb: "grants nothing until you flip switches" },
-                  { value: "admin" as const, label: "Admin preset", blurb: "all permissions and all metrics, on" },
-                ] as const
-              ).map((o) => (
-                <button
-                  key={o.label}
-                  type="button"
-                  onClick={() => setPreset(o.value)}
-                  aria-pressed={preset === o.value}
-                  className={`rounded-full px-3 py-1.5 text-small font-medium transition-colors ${
-                    preset === o.value
-                      ? "bg-primary text-primary-foreground"
-                      : "border border-border bg-card text-foreground hover:bg-muted"
-                  }`}
-                  title={o.blurb}
-                >
-                  {o.label}
-                </button>
-              ))}
-              <span className="text-tiny text-muted-foreground">
-                {preset === "admin" ? "All permissions and all metrics, on — editable after." : "Grants nothing until you flip switches."}
-              </span>
-            </div>
-          </form>
+          <Card variant="surface" padding="dense">
+            <form onSubmit={create} className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Input
+                  autoFocus
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setAdding(false);
+                  }}
+                  required
+                  placeholder="New rank name"
+                  aria-label="New rank name"
+                  className="max-w-sm"
+                />
+                <Button type="submit" disabled={creating || newName.trim() === ""}>
+                  Create
+                </Button>
+              </div>
+              {/* Whop's presets, reduced to the one that earns its place: Admin.
+                  A preset is a STARTING POINT — it creates an ordinary rank with
+                  both masters on, fully editable after — so the chip says what it
+                  does rather than hiding it behind a name. */}
+              <div className="flex items-center gap-2">
+                {(
+                  [
+                    { value: undefined, label: "Start blank", blurb: "grants nothing until you flip switches" },
+                    { value: "admin" as const, label: "Admin preset", blurb: "all permissions and all metrics, on" },
+                  ] as const
+                ).map((o) => (
+                  <Chip
+                    key={o.label}
+                    active={preset === o.value}
+                    onClick={() => setPreset(o.value)}
+                    title={o.blurb}
+                  >
+                    {o.label}
+                  </Chip>
+                ))}
+                <span className="text-tiny text-muted-foreground">
+                  {preset === "admin" ? "All permissions and all metrics, on — editable after." : "Grants nothing until you flip switches."}
+                </span>
+              </div>
+            </form>
+          </Card>
         ) : (
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="flex w-full items-center gap-2.5 rounded-surface border-2 border-dashed border-border p-3 text-left text-base font-semibold text-muted-foreground transition-all hover:border-primary hover:text-primary"
+            className="flex w-full items-center gap-2.5 rounded-surface border-2 border-dashed border-border p-3 text-left text-base font-semibold text-muted-foreground outline-none transition-all hover:border-primary hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
-              <Plus size={15} strokeWidth={2.5} />
+              <Plus size={14} strokeWidth={2.25} />
             </span>
             New rank
           </button>
@@ -440,26 +435,17 @@ export function MemberRankSelect({
   };
 
   return (
-    <span className="flex items-center gap-2">
-      {error && (
-        <span role="status" className="text-tiny font-medium text-destructive">
-          {error}
-        </span>
-      )}
-      <select
-        value={value}
-        onChange={(e) => change(e.target.value)}
-        aria-label="Rank"
-        className="h-8 rounded-control border border-input bg-card px-2.5 text-small text-foreground focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
-      >
+    <>
+      {error && <Toast>{error}</Toast>}
+      <NativeSelect value={value} onChange={(e) => change(e.target.value)} aria-label="Rank" className="w-auto">
         <option value="">Full access</option>
         {ranks.map((r) => (
           <option key={r.id} value={r.id}>
             {r.name}
           </option>
         ))}
-      </select>
-    </span>
+      </NativeSelect>
+    </>
   );
 }
 
@@ -498,59 +484,24 @@ function ToggleRow({
   onChange: () => void;
 }) {
   return (
-    <div className={`flex items-center gap-3 py-2 ${implied ? "opacity-45" : ""}`}>
+    <div className="flex items-center gap-3 py-2">
       {Icon && (
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-muted text-muted-foreground" aria-hidden>
-          <Icon size={15} strokeWidth={2} />
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-muted text-muted-foreground ${
+            implied ? "opacity-45" : ""
+          }`}
+          aria-hidden
+        >
+          <Icon size={14} strokeWidth={2} />
         </span>
       )}
-      <span className="min-w-0 flex-1">
+      <span className={`min-w-0 flex-1 ${implied ? "opacity-45" : ""}`}>
         <span className={`block truncate text-base ${bold ? "font-semibold" : "font-medium"} text-foreground`}>
           {label}
         </span>
         {blurb && <span className="block text-tiny text-muted-foreground">{blurb}</span>}
       </span>
-      <Switch on={implied || on} disabled={implied} onChange={onChange} label={label} />
+      <Switch checked={implied || on} disabled={implied} onClick={onChange} aria-label={label} />
     </div>
-  );
-}
-
-/**
- * FlowSwitch's geometry (src/components/flow/FlowToolbar.tsx), exactly —
- * settings must feel like the same product as the builder, so the knob rides
- * the same spring in the same track: 20px knob in a 40px track, 18px = 40 −
- * 20 − the 2px inset it rests in when off. No opacity here when disabled —
- * the implied row dims as a whole, and dimming twice reads as broken rather
- * than covered.
- */
-function Switch({
-  on,
-  disabled,
-  onChange,
-  label,
-}: {
-  on: boolean;
-  disabled?: boolean;
-  onChange: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      disabled={disabled}
-      onClick={onChange}
-      aria-label={label}
-      className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${on ? "bg-primary" : "bg-neutral-200"} ${
-        disabled ? "cursor-not-allowed" : "hover:brightness-105"
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm ${on ? "left-[18px]" : "left-0.5"}`}
-        style={{ transition: "left .22s cubic-bezier(.34,1.56,.64,1)" }}
-        aria-hidden
-      />
-    </button>
   );
 }

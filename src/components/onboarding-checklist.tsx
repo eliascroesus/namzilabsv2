@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /**
  * The guided path a brand-new workspace sees instead of a bare "No metrics
@@ -29,51 +31,54 @@ export function OnboardingChecklist({
       title: "Connect an integration",
       detail: "Close, Calendly, Google Sheets, a custom webhook — anywhere your data already lives.",
       href: "/integrations",
-      cta: "Connect →",
+      cta: "Connect",
     },
     {
       done: hasFlow,
       title: "Build your first flow",
       detail: "Pick the data, filter and group it visually, and Test it on real records as you go.",
       href: "/dashboard/flows",
-      cta: "New flow →",
+      cta: "New flow",
     },
     {
       done: hasPublished,
       title: "Publish it",
       detail: "Publishing puts the number on this dashboard and keeps it updating by itself.",
       href: "/dashboard/flows",
-      cta: "Open flows →",
+      cta: "Open flows",
     },
   ];
   const next = steps.findIndex((s) => !s.done);
   return (
-    <div className="mt-8 rounded-lg border border-dashed border-neutral-300 p-8">
-      <h2 className="text-lg font-semibold text-foreground">Get your first metric live</h2>
-      <p className="mt-1 text-base text-neutral-500">Three steps — the first takes about a minute.</p>
+    <div className="mt-8 rounded-card border border-dashed border-border p-8">
+      <h2 className="text-title font-semibold text-foreground">Get your first metric live</h2>
+      <p className="mt-1 text-base text-muted-foreground">Three steps — the first takes about a minute.</p>
       <ol className="mt-5 space-y-4">
         {steps.map((step, i) => (
           <li key={step.title} className="flex items-start gap-3">
             {step.done ? (
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-100 text-base font-semibold text-green-700">
-                ✓
+              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-success-soft text-success-ink">
+                <Check size={14} strokeWidth={2.25} />
               </span>
             ) : (
               <span
-                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base font-semibold ${
-                  i === next ? "bg-neutral-900 text-white" : "border border-neutral-300 text-neutral-400"
-                }`}
+                className={cn(
+                  "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base font-semibold",
+                  i === next ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground",
+                )}
               >
                 {i + 1}
               </span>
             )}
             <div>
-              <p className={`font-medium ${step.done ? "text-neutral-400 line-through" : "text-foreground"}`}>{step.title}</p>
+              <p className={cn("font-medium", step.done ? "text-muted-foreground line-through" : "text-foreground")}>
+                {step.title}
+              </p>
               {!step.done && (
-                <p className="mt-0.5 text-base text-neutral-500">
+                <p className="mt-0.5 text-base text-muted-foreground">
                   {step.detail}{" "}
                   {i === next && (
-                    <Link href={step.href} className="whitespace-nowrap font-medium text-blue-600 hover:underline">
+                    <Link href={step.href} className="whitespace-nowrap font-medium text-primary hover:underline">
                       {step.cta}
                     </Link>
                   )}

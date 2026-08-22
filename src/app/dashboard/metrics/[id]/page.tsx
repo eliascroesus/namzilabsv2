@@ -1,14 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Inbox } from "lucide-react";
 import { requireOrg } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { AppShell } from "@/components/app-shell";
 import { FunnelView } from "@/components/funnel-view";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
+import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { getDb } from "@/db/client";
 import { getMetric } from "@/lib/metrics/store";
 import { parseDefinition } from "@/lib/metrics/types";
 import { computeAggregate, computeFunnel, queryEvents } from "@/lib/metrics/compute";
-import { resolveRange } from "@/lib/metrics/range";
+import { resolveRange, RANGE_OPTIONS } from "@/lib/metrics/range";
+import { catalogEntry, eventTypeLabel } from "@/connectors/catalog";
+import { formatDateTime, formatMetricValue } from "@/lib/format";
 import { deleteMetricAction } from "@/app/dashboard/metrics/actions";
 
 export const dynamic = "force-dynamic";
@@ -35,10 +43,26 @@ export default async function MetricDrillPage({
   const access = await effectiveAccess(getDb(), { orgId, userId, role });
   if (!access.canSeeMetric(`metric:${id}`)) notFound();
 
-  const { range } = resolveRange(one(sp.range) || "30d");
+  const { key: rangeKey, range } = resolveRange(one(sp.range) || "30d");
+  // The lede states the window the numbers actually cover — resolveRange has
+  // its own fallback for unknown keys, so the label follows its answer.
+  const rangeLabel = (RANGE_OPTIONS.find((r) => r.key === rangeKey)?.label ?? "Last 30 days").toLowerCase();
   const def = parseDefinition(metric.definition);
 
-  let headline = "";
+  // Deleting is a two-step ceremony without client JS: the first click only
+  // adds ?confirmDelete=1 and the re-render offers Cancel beside the real
+  // destructive submit.
+  const confirmingDelete = one(sp.confirmDelete) === "1";
+  const selfHref = (confirm: boolean) => {
+    const p = new URLSearchParams();
+    const r = one(sp.range);
+    if (r) p.set("range", r);
+    if (confirm) p.set("confirmDelete", "1");
+    const qs = p.toString();
+    return qs ? `/dashboard/metrics/${id}?${qs}` : `/dashboard/metrics/${id}`;
+  };
+
+  let headline: number | null = null;
   let rows: Awaited<ReturnType<typeof queryEvents>> = [];
   let funnel: Awaited<ReturnType<typeof computeFunnel>> | null = null;
   let error: string | null = null;
@@ -46,7 +70,7 @@ export default async function MetricDrillPage({
   try {
     if (def.kind === "aggregate") {
       const res = await computeAggregate(getDb(), orgId, def, range);
-      headline = String(res.kind === "scalar" ? res.value : res.series.reduce((a, b) => a + b.value, 0));
+      headline = res.kind === "scalar" ? res.value : res.series.reduce((a, b) => a + b.value, 0);
       rows = await queryEvents(getDb(), orgId, {
         source: def.source,
         eventType: def.eventType,
@@ -63,67 +87,87 @@ export default async function MetricDrillPage({
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
-      <main className="mx-auto max-w-4xl px-6 py-10">
-        <Link href="/dashboard" className="text-base text-neutral-500 hover:text-foreground">
-          &larr; Dashboard
-        </Link>
-        <div className="mt-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-display font-semibold tracking-tight text-foreground">{metric.name}</h1>
-            <p className="text-base text-neutral-500">
-              {def.kind === "aggregate" ? "Metric" : "Funnel"} · last 30 days
-            </p>
-          </div>
-          <form action={deleteMetricAction}>
-            <input type="hidden" name="id" value={metric.id} />
-            <button className="rounded-md border border-red-300 px-3 py-1.5 text-base font-medium text-red-700 hover:bg-red-50">
-              Delete
-            </button>
-          </form>
-        </div>
+      <PageContainer width="narrow">
+        <PageHeader
+          back={{ href: "/dashboard", label: "Dashboard" }}
+          title={metric.name}
+          lede={`${def.kind === "aggregate" ? "Metric" : "Funnel"} · ${rangeLabel}`}
+          actions={
+            confirmingDelete ? (
+              <>
+                <Link href={selfHref(false)} className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}>
+                  Cancel
+                </Link>
+                <form action={deleteMetricAction}>
+                  <input type="hidden" name="id" value={metric.id} />
+                  <Button type="submit" variant="destructive" size="sm">
+                    Delete metric
+                  </Button>
+                </form>
+              </>
+            ) : (
+              <Link href={selfHref(true)} className={cn(buttonVariants({ variant: "destructiveOutline", size: "sm" }))}>
+                Delete
+              </Link>
+            )
+          }
+        />
 
         {error && (
-          <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-base text-amber-800">{error}</p>
+          <div className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
+            {error}
+          </div>
         )}
 
         {def.kind === "aggregate" && (
           <>
-            <p className="mt-6 text-5xl font-semibold">
-              {headline}
-              {metric.unit && <span className="ml-2 text-lg font-normal text-neutral-500">{metric.unit}</span>}
+            {/* Same formatter as the dashboard tile — the drill-in must read
+                the exact number the tile promised. A legacy metric stores no
+                precision, so an integer keeps none and a real decimal keeps
+                two rather than being silently rounded away. */}
+            <p className="tnum mt-6 text-stat font-semibold">
+              {formatMetricValue(headline, {
+                format: "number",
+                precision: headline != null && Number.isInteger(headline) ? 0 : 2,
+              })}
+              {metric.unit && <span className="ml-2 text-base font-normal text-muted-foreground">{metric.unit}</span>}
             </p>
-            <h2 className="mt-8 mb-2 text-base font-semibold uppercase tracking-wide text-neutral-500">
-              Underlying events ({rows.length})
-            </h2>
+            <SectionHeading className="mt-8">Underlying events ({rows.length})</SectionHeading>
             {rows.length === 0 ? (
-              <p className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-base text-neutral-500">
-                No matching events in this window.
-              </p>
+              <EmptyState
+                icon={<Inbox />}
+                title="No matching events"
+                description="No events matched this metric in this window."
+              />
             ) : (
-              <div className="overflow-x-auto rounded-md border border-neutral-200">
-                <table className="w-full text-left text-base">
-                  <thead className="bg-neutral-50 text-tiny uppercase tracking-wide text-neutral-500">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">Source</th>
-                      <th className="px-3 py-2 font-medium">Type</th>
-                      <th className="px-3 py-2 font-medium">Subject</th>
-                      <th className="px-3 py-2 font-medium">Value</th>
-                      <th className="px-3 py-2 font-medium">Occurred</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <TableShell>
+                <Table>
+                  <THead>
+                    <TR static>
+                      <TH>Source</TH>
+                      <TH>Type</TH>
+                      <TH>Subject</TH>
+                      <TH>Value</TH>
+                      <TH>Occurred</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {/* Humanised the way the dashboard feed does it — "Close
+                        CRM · Lead created", not "close · lead_created". The
+                        raw type rides along in the title attribute, because
+                        it IS what the metric's filter matches on. */}
                     {rows.map((e) => (
-                      <tr key={e.id} className="border-t border-neutral-100">
-                        <td className="px-3 py-2">{e.source}</td>
-                        <td className="px-3 py-2">{e.eventType}</td>
-                        <td className="px-3 py-2 text-neutral-700">{e.subject ?? "—"}</td>
-                        <td className="px-3 py-2 text-neutral-700">{e.value ?? "—"}</td>
-                        <td className="px-3 py-2 text-neutral-500">{new Date(e.occurredAt).toLocaleString()}</td>
-                      </tr>
+                      <TR key={e.id}>
+                        <TD>{catalogEntry(e.source)?.name ?? e.source}</TD>
+                        <TD title={e.eventType}>{eventTypeLabel(e.source, e.eventType)}</TD>
+                        <TD>{e.subject ?? "—"}</TD>
+                        <TD className="tnum">{e.value ?? "—"}</TD>
+                        <TD className="text-muted-foreground">{formatDateTime(new Date(e.occurredAt))}</TD>
+                      </TR>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </TBody>
+                </Table>
+              </TableShell>
             )}
           </>
         )}
@@ -133,7 +177,7 @@ export default async function MetricDrillPage({
             <FunnelView result={funnel} />
           </div>
         )}
-      </main>
+      </PageContainer>
     </AppShell>
   );
 }

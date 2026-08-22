@@ -3,19 +3,23 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * THE CANVAS COLOURS EXIST TWICE, SO PIN THEM TOGETHER.
+ * THE CANVAS READS THE TOKENS — IT DOES NOT COPY THEM.
  *
- * React Flow's `<Background>` takes `color` and `bgColor` as plain strings and
- * writes them onto an SVG pattern — it cannot take `var(--color-canvas-dot)`.
- * So the dot grid's two colours are the one place in the product where a
- * palette value is written as a literal hex outside globals.css, and the whole
- * point of `--color-canvas-bg` / `--color-canvas-dot` is that the page behind
- * the canvas, the design page's dot preview and the canvas itself can never
- * drift apart.
+ * This file used to pin two literal hexes in flow-canvas.tsx against the two
+ * tokens in globals.css, on the belief that React Flow's `<Background>` takes
+ * `color`/`bgColor` as plain strings an SVG pattern could not resolve a
+ * `var()` through. That is not what v12 does: both props are written as INLINE
+ * CUSTOM PROPERTIES (`--xy-background-pattern-color-props`,
+ * `--xy-background-color-props`) which its own stylesheet then reads, and a
+ * custom property holding `var(--color-canvas-dot)` resolves by ordinary
+ * variable indirection. Verified in a browser: the dot computes to
+ * rgb(217,217,217) through the chain.
  *
- * That is a promise nothing enforced. This enforces it: change the token and
- * this fails until the canvas follows. Sabotage-verified — editing either hex
- * in flow-canvas.tsx fails this test alone.
+ * So the duplication is gone, and with it the drift this file was written to
+ * catch — one definition cannot disagree with itself. What is left worth
+ * pinning is that the canvas keeps REFERENCING the tokens (a future edit
+ * pasting a hex back in is the regression now), and that the two values stay
+ * in the relationship the grid depends on.
  */
 const root = join(__dirname, "..");
 const css = readFileSync(join(root, "src/app/globals.css"), "utf8");
@@ -34,12 +38,26 @@ describe("the canvas Background matches the theme tokens", () => {
     expect(canvas.match(/<Background\b/g)).toHaveLength(1);
   });
 
-  it("its bgColor is --color-canvas-bg", () => {
-    expect(bg?.[0]).toContain(`bgColor="${token("color-canvas-bg")}"`);
+  it("its bgColor references --color-canvas-bg", () => {
+    expect(bg?.[0]).toContain(`bgColor="var(--color-canvas-bg)"`);
   });
 
-  it("its dot color is --color-canvas-dot", () => {
-    expect(bg?.[0]).toContain(`color="${token("color-canvas-dot")}"`);
+  it("its dot color references --color-canvas-dot", () => {
+    expect(bg?.[0]).toContain(`color="var(--color-canvas-dot)"`);
+  });
+
+  it("names no colour of its own", () => {
+    // The point of the rewrite: a hex pasted back onto the Background is a
+    // second definition of a colour that already has one.
+    expect(bg?.[0]).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+  });
+
+  it("both tokens it names exist as hex literals in the theme", () => {
+    // `token()` throws when the variable is missing or stops being a hex, so
+    // deleting or renaming either one fails here rather than at runtime, where
+    // an unresolved var() silently falls back to React Flow's own default.
+    expect(token("color-canvas-bg")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(token("color-canvas-dot")).toMatch(/^#[0-9a-f]{6}$/);
   });
 
   it("the dots stay subtler than the surface they sit on", () => {

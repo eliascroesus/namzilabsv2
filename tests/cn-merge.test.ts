@@ -18,7 +18,7 @@ import { buttonVariants } from "@/components/ui/button";
  * fails the first test alone.
  */
 describe("cn keeps a colour when a custom type token follows it", () => {
-  for (const size of ["micro", "tiny", "small", "lead", "title", "display"]) {
+  for (const size of ["micro", "tiny", "small", "lead", "title", "display", "stat", "hero"]) {
     it(`text-${size} does not eat the preceding text colour`, () => {
       const out = cn("text-primary-foreground", `text-${size}`);
       expect(out).toContain("text-primary-foreground");

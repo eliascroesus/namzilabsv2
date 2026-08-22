@@ -2,11 +2,16 @@
 
 import { Copy, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
+import { Input } from "@/components/ui/input";
+import { StatusPill, type StatusPillProps } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { NodeIcon } from "@/components/flow/icons";
+import { formatDate, formatTime } from "@/lib/format";
 import { deleteFlowAction, duplicateFlowAction, setFlowEnabledAction } from "./actions";
 import type { FlowState } from "@/lib/flow/store";
 
@@ -28,10 +33,10 @@ const FILTERS: Array<{ key: "all" | FlowState; label: string }> = [
   { key: "paused", label: "Paused" },
 ];
 
-const STATE_META: Record<FlowState, { label: string; dot: string; pill: string }> = {
-  active: { label: "Active", dot: "bg-success", pill: "bg-success-soft text-success-ink" },
-  paused: { label: "Paused", dot: "bg-warn", pill: "bg-warn-soft text-warn-ink" },
-  draft: { label: "Draft", dot: "bg-neutral-400", pill: "bg-neutral-100 text-neutral-600" },
+const STATE_META: Record<FlowState, { label: string; tone: StatusPillProps["tone"]; dot?: boolean }> = {
+  active: { label: "Active", tone: "success", dot: true },
+  paused: { label: "Paused", tone: "warn" },
+  draft: { label: "Draft", tone: "pending" },
 };
 
 /**
@@ -65,36 +70,24 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
         {/* Counts live on the tabs, so "how many are actually running" is
             answered without clicking anything. */}
         <div className="flex flex-wrap items-center gap-1">
-          {FILTERS.map((f) => {
-            const active = filter === f.key;
-            return (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-small font-semibold transition-colors ${
-                  active ? "bg-primary text-primary-foreground shadow-sm" : "text-neutral-600 hover:bg-muted"
-                }`}
-              >
-                {f.label}
-                <span className={`rounded-full px-1.5 text-micro font-bold ${active ? "bg-white/25" : "bg-neutral-100 text-neutral-500"}`}>
-                  {counts[f.key]}
-                </span>
-              </button>
-            );
-          })}
+          {FILTERS.map((f) => (
+            <Chip key={f.key} active={filter === f.key} count={counts[f.key]} onClick={() => setFilter(f.key)}>
+              {f.label}
+            </Chip>
+          ))}
         </div>
         {flows.length > 5 && (
-          <input
+          <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search flows…"
-            className="w-56 rounded-control border border-neutral-200 px-3 py-1.5 text-small transition-colors focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+            className="h-8 w-56 text-small"
           />
         )}
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-surface border border-border bg-card shadow-surface">
-        <div className="grid grid-cols-[1fr_150px_180px_120px] items-center gap-4 border-b border-neutral-200 bg-neutral-50/70 px-4 py-2.5 text-micro font-semibold uppercase tracking-wide text-neutral-500">
+      <div className="mt-4 overflow-hidden rounded-surface border border-border bg-card shadow-card">
+        <div className="grid grid-cols-[1fr_150px_180px_120px] items-center gap-4 border-b border-border bg-muted/50 px-4 py-2.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground">
           <span>Flow name</span>
           <span>Status</span>
           <span>Last updated</span>
@@ -102,11 +95,11 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
         </div>
 
         {visible.length === 0 ? (
-          <p className="px-4 py-10 text-center text-small text-neutral-500">
+          <p className="px-4 py-10 text-center text-small text-muted-foreground">
             {query ? `No flows match “${q.trim()}”.` : `No ${filter === "all" ? "" : filter} flows.`}
           </p>
         ) : (
-          <div className="divide-y divide-neutral-100">
+          <div className="divide-y divide-border">
             {visible.map((f) => (
               <Row key={f.id} flow={f} />
             ))}
@@ -114,7 +107,7 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
         )}
       </div>
 
-      <p className="mt-3 text-center text-tiny text-neutral-400">
+      <p className="mt-3 text-center text-tiny text-muted-foreground">
         {visible.length} of {flows.length} flow{flows.length === 1 ? "" : "s"}
       </p>
     </div>
@@ -161,39 +154,38 @@ function Row({ flow }: { flow: FlowListItem }) {
     });
 
   return (
-    <div className="grid grid-cols-[1fr_150px_180px_120px] items-center gap-4 px-4 py-3 transition-colors hover:bg-accent/40">
+    <div className="grid grid-cols-[1fr_150px_180px_120px] items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/40">
       <Link href={`/dashboard/flows/${flow.id}`} className="flex min-w-0 items-center gap-3">
         <NodeIcon type="app" source={flow.source ?? undefined} size={34} />
         <span className="min-w-0">
           <span className="block truncate text-base font-semibold text-foreground">{flow.name}</span>
-          <span className="block truncate text-tiny text-neutral-500">{flow.summary}</span>
+          <span className="block truncate text-tiny text-muted-foreground">{flow.summary}</span>
         </span>
       </Link>
 
       <span className="flex items-center gap-2.5">
         {/* A never-published flow has nothing to switch on, so the control says
             so rather than failing on click. */}
-        <Toggle
-          on={state === "active"}
+        <Switch
+          size="sm"
+          checked={state === "active"}
           disabled={state === "draft" || pending}
-          onChange={toggle}
-          label={state === "draft" ? "Publish this flow before turning it on" : state === "active" ? "Turn off" : "Turn on"}
+          onClick={toggle}
+          aria-label={state === "draft" ? "Publish this flow before turning it on" : state === "active" ? "Turn off" : "Turn on"}
+          title={state === "draft" ? "Publish this flow before turning it on" : state === "active" ? "Turn off" : "Turn on"}
         />
-        <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-micro font-bold ${meta.pill}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} aria-hidden />
+        <StatusPill tone={meta.tone} dot={meta.dot}>
           {meta.label}
-        </span>
+        </StatusPill>
       </span>
 
-      <span className="text-tiny text-neutral-500">
-        {new Date(flow.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-        <span className="block text-neutral-400">
-          {new Date(flow.updatedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
-        </span>
+      <span className="text-tiny text-muted-foreground">
+        {formatDate(new Date(flow.updatedAt))}
+        <span className="block text-muted-foreground/70">{formatTime(new Date(flow.updatedAt))}</span>
       </span>
 
       <span className="flex items-center justify-end gap-1">
-        {error && <span className="mr-1 truncate text-micro text-red-600" title={error}>Failed</span>}
+        {error && <span className="mr-1 truncate text-micro text-danger-ink" title={error}>Failed</span>}
         <Button variant="ghost" size="icon" onClick={duplicate} disabled={pending} title="Duplicate" aria-label="Duplicate">
           <Copy />
         </Button>
@@ -216,26 +208,3 @@ function Row({ flow }: { flow: FlowListItem }) {
   );
 }
 
-/** The on/off switch. Zapier's control, because it is the one everyone reads. */
-function Toggle({ on, disabled, onChange, label }: { on: boolean; disabled?: boolean; onChange: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onChange}
-      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-        on ? "bg-primary" : "bg-neutral-200"
-      } ${disabled ? "cursor-not-allowed opacity-50" : "hover:brightness-105"}`}
-    >
-      <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm ${on ? "left-[18px]" : "left-0.5"}`}
-        style={{ transition: "left .22s cubic-bezier(.34,1.56,.64,1)" }}
-        aria-hidden
-      />
-    </button>
-  );
-}

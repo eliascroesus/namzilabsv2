@@ -167,7 +167,7 @@ export async function runBackfillSlice(db: DB, job: BackfillJob, now = new Date(
       // slice's, so a job cannot exceed it by one slice's worth each time.
       if (imported >= started.rowCeiling) {
         await checkpointJob(db, job.id, { checkpoint: cursor, oldestSeen: oldest, rowsImported: rows }, now);
-        const detail = `Reached this stream's ${started.rowCeiling.toLocaleString()}-row limit before the full window.`;
+        const detail = `Reached this stream's ${started.rowCeiling.toLocaleString("en-US")}-row limit before the full window.`;
         await finishJob(db, job.id, { status: "partial", detail }, now);
         return { kind: "finished", status: "partial", detail };
       }

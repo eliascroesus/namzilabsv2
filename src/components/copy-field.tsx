@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 /**
  * A value the user has to move into ANOTHER application — a webhook URL, a
@@ -44,28 +45,30 @@ export function CopyField({
 
   return (
     <div className="mb-2">
-      <span className="text-tiny text-neutral-500">{label}</span>
-      <div className="mt-0.5 flex items-stretch gap-2">
-        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-tiny leading-5">
+      <span className="text-tiny text-muted-foreground">{label}</span>
+      <div className="mt-0.5 flex items-center gap-2">
+        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-control border border-border bg-muted/50 px-3 py-2 font-mono text-tiny">
           {value}
         </code>
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
           onClick={() => void copy()}
           disabled={!usable}
-          className="shrink-0 rounded border border-neutral-300 px-3 py-2 text-tiny font-medium hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={`Copy ${label}`}
         >
           {copied ? "Copied" : "Copy"}
-        </button>
+        </Button>
       </div>
       {!usable && (
-        <p className="mt-1 text-tiny text-amber-700">
+        <p className="mt-1 text-tiny text-warn-ink">
           This is missing its https://… prefix, so nothing can post to it. Set{" "}
           <code>APP_BASE_URL</code> to the app&rsquo;s public URL and reload.
         </p>
       )}
-      {usable && hint && <p className="mt-1 text-tiny text-neutral-500">{hint}</p>}
+      {usable && hint && <p className="mt-1 text-tiny text-muted-foreground">{hint}</p>}
     </div>
   );
 }

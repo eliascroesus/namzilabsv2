@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { connections, events, flows, flowVersions, sourceStreams } from "@/db/schema";
+import { formatTime } from "@/lib/format";
 import type { DB } from "@/db/types";
 import type { CanonicalEvent } from "@/connectors/types";
 import { getConnector } from "@/connectors/registry";
@@ -1107,7 +1108,7 @@ export async function primeStream(
   // A Test must be HONEST, not broken: compute on stored data and say plainly
   // that the source wasn't re-read, with when it resumes.
   if (isPaused(conn)) {
-    const when = conn.pausedUntil ? ` Retrying around ${conn.pausedUntil.toLocaleTimeString()}.` : "";
+    const when = conn.pausedUntil ? ` Retrying around ${formatTime(conn.pausedUntil)}.` : "";
     return {
       ok: true,
       refreshed: false,
