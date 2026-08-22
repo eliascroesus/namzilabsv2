@@ -4,7 +4,7 @@ import { refreshFlowAction } from "@/app/dashboard/flows/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusPill, type StatusPillProps } from "@/components/ui/badge";
-import { GroupBars, ImportProgress, Sparkbars, TargetBar } from "@/components/charts";
+import { Delta, GroupBars, ImportProgress, Sparkbars, TargetBar } from "@/components/charts";
 import type { ImportCoverage } from "@/connectors/types";
 
 /**
@@ -88,63 +88,60 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
   const t: Tile = windowed && !unavailable ? { ...stored, value: windowed.value, series: windowed.series, groups: windowed.groups } : stored;
   if (unavailable) {
     return (
-      <Card variant="card" className="lift">
-        <div className="flex items-start justify-between">
-          <h3 className="text-base font-semibold text-foreground">{stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
-          <Link href={`/dashboard/flows/${row.flowId}`} className="text-tiny text-primary hover:underline">
-            Open
-          </Link>
+      <Card variant="card" padding="compact" className="lift">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="min-w-0 truncate text-base font-semibold text-foreground">
+            {stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}
+          </h3>
         </div>
         {/* An em-dash, not a 0: "no answer for this period" and "the answer is
             zero" are different facts, and the tile that conflates them is the
             one nobody can trust. Same stat size as a real number, so switching
             ranges never makes the tile jump. */}
-        <p className="tnum mt-2 text-stat font-semibold text-muted-foreground/50">—</p>
-        <p className="mt-2 text-base text-muted-foreground">No data for this period.</p>
-        <p className="mt-1 text-tiny text-muted-foreground" title={unavailable}>
-          {unavailable.length > 120 ? `${unavailable.slice(0, 120)}…` : unavailable}
+        <p className="tnum mt-1.5 text-stat font-semibold leading-none text-muted-foreground/50">—</p>
+        <p className="mt-2.5 text-tiny text-muted-foreground" title={unavailable}>
+          No data for this period.
         </p>
-      </Card>
-    );
-  }
-  return (
-    <Card variant="card" className="lift">
-      <div className="flex items-start justify-between">
-        {/* A row whose tile jsonb is null has never computed successfully, so
-            there is no stored name — the output id is the only honest handle. */}
-        <h3 className="text-base font-semibold text-foreground">{t.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}</h3>
-        <div className="flex items-center gap-2">
-          <Freshness status={row.status} />
-          <form action={refreshFlowAction}>
-            <input type="hidden" name="flowId" value={row.flowId} />
-            {/* The Button's `link` variant, sized down to sit level with the
-                "Open" link beside it — a submit, so it stays a real button. */}
-            <Button
-              type="submit"
-              variant="link"
-              size="sm"
-              className="h-auto p-0 text-tiny"
-              title="Recompute this tile now"
-            >
-              Refresh
-            </Button>
-          </form>
-          <Link href={`/dashboard/flows/${row.flowId}`} className="text-tiny text-primary hover:underline">
+        <div className="mt-3 flex items-center justify-end text-tiny text-muted-foreground">
+          <Link
+            href={`/dashboard/flows/${row.flowId}`}
+            className="rounded-control font-medium outline-none transition-colors hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
+          >
             Open
           </Link>
         </div>
+      </Card>
+    );
+  }
+  const delta = deriveDelta(stored, t, rangeKey);
+
+  return (
+    <Card variant="card" padding="compact" className="lift group/tile">
+      {/* HEAD: the name, and a status marker that is quiet when there is
+          nothing to say. A healthy tile carries a 6px dot; only a tile that
+          needs something wears a full pill. Eight green "Up to date" badges
+          on one board is eight pieces of furniture reporting no news. */}
+      <div className="flex items-start justify-between gap-2">
+        {/* A row whose tile jsonb is null has never computed successfully, so
+            there is no stored name — the output id is the only honest handle. */}
+        <h3 className="min-w-0 truncate text-base font-semibold text-foreground">
+          {t.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}
+        </h3>
+        <Freshness status={row.status} />
+      </div>
+
+      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+        <p className="tnum text-stat font-semibold leading-none">{fmt(t.value, t)}</p>
+        {delta && <Delta current={delta.current} previous={delta.previous} format={t} since={delta.since} />}
       </div>
 
       {t.series && t.series.length > 0 ? (
-        <Sparkbars series={t.series} label={fmt(t.value, t)} format={t} />
+        <Sparkbars series={t.series} format={t} />
       ) : t.groups && t.groups.length > 0 ? (
         <GroupBars groups={t.groups} total={t.value} format={t} />
-      ) : (
-        <>
-          <p className="tnum mt-2 text-stat font-semibold">{fmt(t.value, t)}</p>
-          {t.target != null && <TargetBar value={t.value ?? 0} target={t.target} format={t} />}
-        </>
-      )}
+      ) : t.target != null ? (
+        <TargetBar value={t.value ?? 0} target={t.target} format={t} />
+      ) : null}
 
       {/* The red pill alone says "broken" while withholding WHY. The stored
           message names the failing node's error — truncated here, complete in
@@ -175,27 +172,118 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           misleads. */}
       {row.importing && <ImportProgress importing={row.importing} />}
 
-      {/* The honesty marker (G.3): every materialized number says WHEN it was
-          true. A stale tile's timestamp shows exactly how far behind it is. */}
-      {row.computedAt && (
-        <p className="mt-3 text-tiny text-muted-foreground" title={formatDateTime(new Date(row.computedAt))}>
-          Updated {relativeTime(new Date(row.computedAt))}
-        </p>
-      )}
+      {/* FOOT: provenance on the left, actions on the right, one line.
+          The honesty marker (G.3): every materialized number says WHEN it was
+          true. A stale tile's timestamp shows exactly how far behind it is.
+          The actions sit at rest in muted grey and take the accent on hover —
+          present without competing with the number above them. */}
+      <div className="mt-3 flex items-center justify-between gap-2 text-tiny text-muted-foreground">
+        {row.computedAt ? (
+          <span className="truncate" title={formatDateTime(new Date(row.computedAt))}>
+            {relativeTime(new Date(row.computedAt))}
+          </span>
+        ) : (
+          <span />
+        )}
+        <span className="flex shrink-0 items-center gap-2">
+          <form action={refreshFlowAction}>
+            <input type="hidden" name="flowId" value={row.flowId} />
+            {/* A submit, so it stays a real button; sized to sit level with
+                the "Open" link beside it. */}
+            <Button
+              type="submit"
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-tiny font-medium text-muted-foreground hover:text-primary"
+              title="Recompute this tile now"
+            >
+              Refresh
+            </Button>
+          </form>
+          <Link
+            href={`/dashboard/flows/${row.flowId}`}
+            className="rounded-control font-medium outline-none transition-colors hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
+          >
+            Open
+          </Link>
+        </span>
+      </div>
     </Card>
   );
 }
 
+/**
+ * WHAT THIS NUMBER CAN HONESTLY BE COMPARED TO.
+ *
+ * Only two comparisons exist in the data, and neither is invented:
+ *
+ *  - "Today" has "Yesterday" sitting beside it in `byRange` — both were
+ *    computed from the same run, so it is a real like-for-like period.
+ *  - A bucketed series carries its own history, so the newest COMPLETE bucket
+ *    can be read against the one before it. The final bucket is skipped
+ *    because it is still filling: comparing a partial day to a whole one
+ *    manufactures a decline every morning.
+ *
+ * Every other range (7d, 30d, 90d, all) has no stored predecessor — there is
+ * no "previous 7 days" bucket — so those tiles show no delta rather than a
+ * guess. Returning null is the point: a dashboard that fabricates a
+ * comparison is worse than one that omits it.
+ */
+function deriveDelta(
+  stored: Tile,
+  t: Tile,
+  rangeKey?: string,
+): { current: number; previous: number; since: string } | null {
+  const current = t.value;
+  if (current == null || !Number.isFinite(current)) return null;
+
+  if (rangeKey === "today") {
+    const y = stored.byRange?.yesterday;
+    if (y && !y.unavailable && y.value != null && Number.isFinite(y.value)) {
+      return { current, previous: y.value, since: "vs yesterday" };
+    }
+  }
+
+  const series = t.series;
+  if (series && series.length >= 3) {
+    const last = series[series.length - 2];
+    const prior = series[series.length - 3];
+    if (last?.value != null && prior?.value != null) {
+      return { current: last.value, previous: prior.value, since: "vs prior" };
+    }
+  }
+  return null;
+}
+
+/**
+ * QUIET WHEN FINE, LOUD WHEN NOT.
+ *
+ * A healthy tile says so with a 6px dot; anything else wears the full pill.
+ * Every tile used to carry a green "Up to date" badge, which is a board full
+ * of labels reporting no news — and it made the one tile that DID need
+ * attention just another badge in a row of badges. Plain English throughout:
+ * "stale" reads as broken to a customer when it means a refresh is on its way.
+ */
 function Freshness({ status }: { status: string }) {
-  // Plain English, not internal states — "stale" reads as broken to a
-  // customer when it means "a refresh is on its way". Transient states are
-  // `pending` (neutral), never blue.
+  if (status === "fresh") {
+    return (
+      <span
+        className="mt-1.5 size-1.5 shrink-0 rounded-full bg-success"
+        title="Up to date"
+        role="img"
+        aria-label="Up to date"
+      />
+    );
+  }
   const meta: Record<string, { tone: StatusPillProps["tone"]; label: string }> = {
-    fresh: { tone: "success", label: "Up to date" },
     stale: { tone: "warn", label: "Refreshing soon" },
     computing: { tone: "pending", label: "Computing…" },
     error: { tone: "danger", label: "Error" },
   };
   const m = meta[status] ?? { tone: "pending", label: status };
-  return <StatusPill tone={m.tone}>{m.label}</StatusPill>;
+  return (
+    <StatusPill tone={m.tone} className="shrink-0">
+      {m.label}
+    </StatusPill>
+  );
 }

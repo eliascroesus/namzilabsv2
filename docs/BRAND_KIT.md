@@ -146,7 +146,25 @@ toolbar · **24** rail. `strokeWidth` 2 (2.25 only at ≤14px). Text glyphs
 
 Marks are `brand-600`; target-met `success`; bottleneck `danger`; tracks
 `bg-muted`. Bars never `bg-neutral-800`. Headline numbers per §3. One
-`Sparkbars`/`TargetBar` implementation, shared.
+`Sparkbars`/`TargetBar`/`GroupBars`/`Delta` implementation in
+`src/components/charts.tsx`, shared by every tile.
+
+**A number alone is half a fact.** Where a comparison exists, tiles show a
+`Delta` beside the value — but only a real one: "Today" reads against the
+stored "Yesterday", and a bucketed series reads its newest *complete* bucket
+against the one before. Every other range has no stored predecessor, so it
+shows nothing. A fabricated comparison is worse than no comparison.
+
+**Deltas are never green or red.** Up is good for Booked Leads and bad for
+Speed to Lead, and nothing stored on a tile says which — so a coloured delta
+would confidently report a regression as a win. It states direction and size
+and leaves the judgement to the reader. Percentages move in *points*
+(20% → 22% is "+2 pts", not "+10%").
+
+**Status is quiet when fine.** A healthy tile carries a 6px `success` dot;
+only a tile that needs something wears a full `StatusPill`. A board where every
+card shows a green badge is furniture reporting no news, and it buries the one
+card that matters.
 
 ## 10. Voice & formatting
 

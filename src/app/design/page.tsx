@@ -21,6 +21,8 @@ import { ToolbarPreview } from "@/components/flow/toolbar-preview";
 import { PanelTabsPreview } from "@/components/flow/panel-preview";
 import { PANEL_SHELL } from "@/components/flow/panel-chrome";
 import { FlowList } from "@/app/dashboard/flows/FlowRow";
+import { Delta, GroupBars, Sparkbars, TargetBar } from "@/components/charts";
+import { SourceMark } from "@/components/source-mark";
 
 /**
  * THE BRAND KIT, RENDERED.
@@ -463,6 +465,62 @@ export default function DesignPage() {
           <div className="bg-rail flex h-40 overflow-hidden rounded-card">
             <div className="w-[100px] shrink-0" />
             <div className="flex-1 rounded-l-frame bg-card" />
+          </div>
+        </Section>
+
+        <Section
+          title="Marks"
+          note="What a dashboard tile is made of. Bars are brand-600, a met goal turns success, tracks are bg-muted, and every value a mark prints goes through formatMetricValue — the tooltip and the headline must say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile says which."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-card border border-border bg-card p-4">
+              <p className="text-base font-semibold text-foreground">Total leads</p>
+              <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                <p className="tnum text-stat font-semibold leading-none">44</p>
+                <Delta current={44} previous={32} format={{ format: "number" }} since="vs prior" />
+              </div>
+              <Sparkbars
+                series={[4, 7, 5, 9, 12, 8, 14, 11, 16, 13, 18, 15].map((v, i) => ({ bucket: `d${i}`, value: v }))}
+                format={{ format: "number" }}
+              />
+            </div>
+            <div className="rounded-card border border-border bg-card p-4">
+              <p className="text-base font-semibold text-foreground">Pickup rate</p>
+              <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                <p className="tnum text-stat font-semibold leading-none">57.1%</p>
+                <Delta current={57.1} previous={55.1} format={{ format: "percent", precision: 1 }} since="vs yesterday" />
+              </div>
+              <TargetBar value={57.1} target={50} format={{ format: "percent", precision: 1 }} />
+            </div>
+            <div className="rounded-card border border-border bg-card p-4">
+              <p className="text-base font-semibold text-foreground">Leads by owner</p>
+              <p className="tnum mt-1.5 text-stat font-semibold leading-none">41</p>
+              <GroupBars
+                groups={[
+                  { label: "Afeef", value: 23 },
+                  { label: "Arman", value: 18 },
+                  { label: "Unassigned", value: 6 },
+                  { label: "Tristan", value: 4 },
+                  { label: "Sam", value: 2 },
+                ]}
+                total={41}
+                format={{ format: "number" }}
+              />
+            </div>
+            <div className="rounded-card border border-border bg-card p-4">
+              <p className="text-base font-semibold text-foreground">Source marks</p>
+              <p className="mt-1 text-tiny text-muted-foreground">
+                A connector&rsquo;s brand tile, at list scale — rows are read by shape before they are read by word.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                {["gsheets", "close", "gcal", "whop", "calendly", "instantly", "webhook"].map((s) => (
+                  <span key={s} className="flex items-center gap-1.5">
+                    <SourceMark source={s} />
+                    <code className="font-mono text-micro text-muted-foreground">{s}</code>
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         </Section>
 

@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import Link from "next/link";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
@@ -13,6 +13,7 @@ import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page"
 import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
+import { SourceMark } from "@/components/source-mark";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
@@ -201,14 +202,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     return `/dashboard?${p.toString()}`;
   };
 
-  // One voice for every filter chip on the page — the Chip recipe, worn by
-  // links. These chips navigate (range and source live in the URL), so they
-  // stay anchors and take the Chip component's exact classes instead.
-  const chip = (active: boolean) =>
+  /**
+   * The range control, worn by links — range lives in the URL, so these stay
+   * anchors rather than becoming the Chip button.
+   *
+   * A SEGMENTED TRACK, not six loose pills. Eleven free-floating chips across
+   * two filter dimensions wrapped onto a second line and orphaned the last two
+   * sources, and nothing in the row said which chips answered which question.
+   * Sitting the six ranges in one `bg-muted` track makes them read as one
+   * control with one answer, and leaves the source picker beside it as
+   * visibly separate.
+   */
+  const rangeItem = (active: boolean) =>
     cn(
-      "inline-flex shrink-0 items-center rounded-full px-3 py-1.5 text-small font-medium outline-none transition-colors focus-visible:ring-4 focus-visible:ring-ring/40",
-      active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      "inline-flex shrink-0 items-center rounded-[calc(var(--radius-control)-2px)] px-2.5 py-1 text-small font-medium outline-none transition-colors focus-visible:ring-4 focus-visible:ring-ring/40",
+      active ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground",
     );
+
+  const activeSourceLabel = boardSource ? (catalogEntry(boardSource)?.name ?? boardSource) : "All sources";
+  // Render the Subject column only when some row has one to show.
+  const hasSubjects = recentEvents.some((e) => e.subject);
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
@@ -244,25 +257,56 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           }
         />
 
-        {/* Filters */}
-        <div className="mt-5 flex flex-wrap items-center gap-2">
-          {RANGE_OPTIONS.map((r) => (
-            <Link key={r.key} href={qs({ range: r.key })} className={chip(rangeKey === r.key)}>
-              {r.label}
-            </Link>
-          ))}
-          <span className="mx-1 h-4 w-px bg-border" />
-          <Link href={qs({ source: "" })} className={chip(!boardSource)}>
-            All sources
-          </Link>
-          {/* The connector's own name, not its storage key: this row read
-              "gsheets · close · webhook" while every other screen in the
-              product says "Google Sheets", "Close CRM", "Custom Webhook". */}
-          {sources.map((srcName) => (
-            <Link key={srcName} href={qs({ source: srcName })} className={chip(boardSource === srcName)}>
-              {catalogEntry(srcName)?.name ?? srcName}
-            </Link>
-          ))}
+        {/* Filters: two questions, two controls, one line that never wraps. */}
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className="inline-flex items-center gap-0.5 rounded-control bg-muted p-0.5">
+            {RANGE_OPTIONS.map((r) => (
+              <Link key={r.key} href={qs({ range: r.key })} className={rangeItem(rangeKey === r.key)}>
+                {r.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* A <details> popover rather than a select: the source lives in the
+              URL, so each option has to be a real link, and this page renders
+              on the server with no client JS to submit a form. Collapsing the
+              sources behind their own current value is also what stops the row
+              growing every time a workspace connects another app. */}
+          {sources.length > 0 && (
+            <details className="group/src relative">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-control border border-border bg-card px-3 py-1.5 text-small font-medium text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden">
+                {activeSourceLabel}
+                <ChevronDown size={14} className="text-muted-foreground transition-transform group-open/src:rotate-180" />
+              </summary>
+              <div className="absolute left-0 top-full z-20 mt-1.5 min-w-48 rounded-card border border-border bg-card p-1 shadow-surface">
+                <Link
+                  href={qs({ source: "" })}
+                  className={cn(
+                    "block rounded-control px-2.5 py-1.5 text-small outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40",
+                    !boardSource ? "font-semibold text-primary" : "text-foreground",
+                  )}
+                >
+                  All sources
+                </Link>
+                {/* The connector's own name, not its storage key: this row read
+                    "gsheets · close · webhook" while every other screen in the
+                    product says "Google Sheets", "Close CRM". */}
+                {sources.map((srcName) => (
+                  <Link
+                    key={srcName}
+                    href={qs({ source: srcName })}
+                    className={cn(
+                      "flex items-center gap-2 rounded-control px-2.5 py-1.5 text-small outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40",
+                      boardSource === srcName ? "font-semibold text-primary" : "text-foreground",
+                    )}
+                  >
+                    <SourceMark source={srcName} />
+                    {catalogEntry(srcName)?.name ?? srcName}
+                  </Link>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
 
         {loadError && (
@@ -274,11 +318,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         {/* Metric tiles: materialized flow outputs + legacy metrics. The
             checklist renders only when the empty state is REAL — behind a
             load error the honest message is the banner above, never a
-            "get started" card implying the workspace is empty. */}
+            "get started" card implying the workspace is empty.
+
+            `items-start` on the grid: a tile is as tall as what it has to say.
+            Stretching every row to its tallest member gave a bare scalar tile
+            beside a breakdown a third of a card of white space, which reads as
+            a tile that failed to load rather than one with nothing to add. */}
         {!hasTiles && !loadError ? (
           <OnboardingChecklist hasConnection={connCount > 0} hasFlow={flowCount > 0} hasPublished={flowTiles.length > 0} />
         ) : !hasTiles ? null : (
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          <div className="mt-8 grid items-start gap-4 sm:grid-cols-2">
             {flowTiles.map((row) => (
               <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} rangeKey={rangeKey} />
             ))}
@@ -321,8 +370,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   <tr>
                     <TH>Source</TH>
                     <TH>Type</TH>
-                    <TH>Subject</TH>
-                    <TH>Occurred</TH>
+                    {/* A column of em-dashes is not information. Most sources
+                        carry no subject, and the empty column was taking a
+                        sixth of the table's width to say so on every row. */}
+                    {hasSubjects && <TH>Subject</TH>}
+                    <TH className="text-right">Occurred</TH>
                   </tr>
                 </THead>
                 <TBody>
@@ -332,10 +384,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                       it IS what a Filter step matches on. */}
                   {recentEvents.map((e) => (
                     <TR key={e.id} static>
-                      <TD>{catalogEntry(e.source)?.name ?? e.source}</TD>
-                      <TD title={e.eventType}>{eventTypeLabel(e.source, e.eventType)}</TD>
-                      <TD>{e.subject ?? "—"}</TD>
-                      <TD className="text-muted-foreground">{formatDateTime(new Date(e.occurredAt))}</TD>
+                      <TD>
+                        <span className="flex items-center gap-2">
+                          <SourceMark source={e.source} />
+                          <span className="truncate">{catalogEntry(e.source)?.name ?? e.source}</span>
+                        </span>
+                      </TD>
+                      <TD title={e.eventType} className="text-muted-foreground">
+                        {eventTypeLabel(e.source, e.eventType)}
+                      </TD>
+                      {hasSubjects && <TD className="text-muted-foreground">{e.subject ?? "—"}</TD>}
+                      <TD className="whitespace-nowrap text-right text-muted-foreground">
+                        {formatDateTime(new Date(e.occurredAt))}
+                      </TD>
                     </TR>
                   ))}
                 </TBody>
@@ -348,65 +409,72 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   );
 }
 
+/**
+ * A legacy `metrics` row as a tile. Kept in step with FlowTile's shape on
+ * purpose — the two sit in one grid, and a board where half the cards are
+ * built differently is the drift this pass exists to remove.
+ */
 function MetricTile({ tile }: { tile: Tile }) {
   const { metric } = tile;
+  // A sum over the window for a bucketed metric, so the number above the bars
+  // is the same quantity the bars describe.
+  const total =
+    tile.kind === "aggregate" && tile.result.kind === "series"
+      ? tile.result.series.reduce((a, b) => a + b.value, 0)
+      : tile.kind === "aggregate" && tile.result.kind === "scalar"
+        ? tile.result.value
+        : null;
+  // Through the same formatter the flow tiles use. A legacy metric printed its
+  // raw number, so one board could show "1234.5" beside a flow tile reading
+  // "1,234.5" — the same quantity, two renderings, side by side. It stores no
+  // precision, so an integer keeps none and a real decimal keeps two.
+  const numberFormat = { format: "number" as const, precision: total != null && Number.isInteger(total) ? 0 : 2 };
+
   return (
-    <Card variant="card" className="lift">
-      <div className="flex items-start justify-between">
-        <h3 className="text-base font-semibold text-foreground">{metric.name}</h3>
-        {tile.kind === "aggregate" && (
-          <Link href={`/dashboard/metrics/${metric.id}`} className="text-tiny text-primary hover:underline">
-            Drill in
-          </Link>
-        )}
+    <Card variant="card" padding="compact" className="lift">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="min-w-0 truncate text-base font-semibold text-foreground">{metric.name}</h3>
       </div>
 
-      {tile.kind === "error" && <p className="mt-3 text-base text-warn-ink">{tile.error}</p>}
-
-      {tile.kind === "aggregate" && tile.result.kind === "scalar" && (
-        <>
-          {/* Through the same formatter the flow tiles use. A legacy metric
-              printed its raw number, so one board could show "1234.5" beside
-              a flow tile reading "1,234.5" — the same quantity, two
-              renderings, side by side. A legacy metric stores no precision,
-              so an integer keeps none and a real decimal keeps two rather
-              than losing its fraction on the way to the tile. */}
-          <p className="tnum mt-2 text-stat font-semibold">
-            {formatMetricValue(tile.result.value, { format: "number", precision: Number.isInteger(tile.result.value) ? 0 : 2 })}
-            {metric.unit && <span className="ml-2 text-base font-normal text-muted-foreground">{metric.unit}</span>}
+      {tile.kind === "error" ? (
+        <p className="mt-2 text-tiny text-warn-ink">{tile.error}</p>
+      ) : (
+        total != null && (
+          <p className="tnum mt-1.5 text-stat font-semibold leading-none">
+            {formatMetricValue(total, numberFormat)}
+            {metric.unit && <span className="ml-1.5 text-base font-normal text-muted-foreground">{metric.unit}</span>}
           </p>
-          {metric.target != null && (
-            <TargetBar
-              value={tile.result.value}
-              target={Number(metric.target)}
-              format={{ format: "number", precision: Number.isInteger(Number(metric.target)) ? 0 : 2 }}
-            />
-          )}
-        </>
+        )
       )}
 
-      {tile.kind === "aggregate" && tile.result.kind === "series" && <SeriesTile series={tile.result.series} />}
+      {tile.kind === "aggregate" && tile.result.kind === "series" && (
+        <Sparkbars series={tile.result.series} format={{ format: "number", precision: 2 }} />
+      )}
+
+      {tile.kind === "aggregate" && tile.result.kind === "scalar" && metric.target != null && (
+        <TargetBar
+          value={tile.result.value}
+          target={Number(metric.target)}
+          format={{ format: "number", precision: Number.isInteger(Number(metric.target)) ? 0 : 2 }}
+        />
+      )}
 
       {tile.kind === "funnel" && (
         <div className="mt-3">
           <FunnelView result={tile.result} />
         </div>
       )}
-    </Card>
-  );
-}
 
-function SeriesTile({ series }: { series: Array<{ bucket: string; value: number }> }) {
-  // The headline is a sum over the window, through the same formatter as
-  // everywhere else — it can reach the thousands where a raw print loses its
-  // separators. A legacy metric stores no precision, so tooltips keep up to
-  // two decimals rather than silently rounding a real decimal away.
-  const total = series.reduce((a, b) => a + b.value, 0);
-  return (
-    <Sparkbars
-      series={series}
-      label={formatMetricValue(total, { format: "number", precision: Number.isInteger(total) ? 0 : 2 })}
-      format={{ format: "number", precision: 2 }}
-    />
+      {tile.kind === "aggregate" && (
+        <div className="mt-3 flex items-center justify-end text-tiny text-muted-foreground">
+          <Link
+            href={`/dashboard/metrics/${metric.id}`}
+            className="rounded-control font-medium outline-none transition-colors hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
+          >
+            Drill in
+          </Link>
+        </div>
+      )}
+    </Card>
   );
 }
