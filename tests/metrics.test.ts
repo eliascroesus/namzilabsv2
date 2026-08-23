@@ -183,3 +183,44 @@ describe("resolveRange — Today and Yesterday", () => {
     expect(resolveRange(undefined).key).toBe("7d");
   });
 });
+
+/**
+ * THE FORWARD RANGE. Every other pill ends at now, so a meeting that has not
+ * happened yet was visible in exactly one place — "All time", which is returned
+ * unfiltered and so counted it without saying so.
+ */
+describe("resolveRange — Upcoming", () => {
+  it("starts strictly after now, so a record dated exactly now is not counted twice", () => {
+    const before = Date.now();
+    const { key, range } = resolveRange("upcoming");
+    expect(key).toBe("upcoming");
+    expect(range.from.getTime()).toBeGreaterThan(before);
+  });
+
+  it("ends at a bound that survives being written as a date", () => {
+    const { range } = resolveRange("upcoming");
+    // Sabotage: `new Date(8_640_000_000_000_000)` is also a Date and is also
+    // "far future", but it serialises as "+275760-09-13T00:00:00.000Z" — the
+    // ISO extended-year spelling, which Postgres will not parse. Four plain
+    // digits is the whole requirement, and the SQL test below proves it.
+    expect(range.to.toISOString()).toBe("9999-12-31T23:59:59.999Z");
+  });
+
+  /**
+   * The bound is not decorative: `compute.ts` binds it straight into
+   * `occurred_at <= $n`. This runs it through the real database.
+   */
+  it("selects future-dated events through the SQL path, and only those", async () => {
+    await ev({ eventType: "booked", subject: "next week", daysAgo: -7 });
+    await ev({ eventType: "booked", subject: "in an hour", daysAgo: -1 / 24 });
+    await ev({ eventType: "booked", subject: "yesterday", daysAgo: 1 });
+
+    const res = await computeAggregate(db, ORG, agg({ eventType: "booked" }), resolveRange("upcoming").range);
+    expect(res).toEqual({ kind: "scalar", value: 2 });
+
+    // And the backward pills still exclude them, which is the asymmetry that
+    // made the future invisible in the first place.
+    const week = await computeAggregate(db, ORG, agg({ eventType: "booked" }), resolveRange("7d").range);
+    expect(week).toEqual({ kind: "scalar", value: 1 });
+  });
+});

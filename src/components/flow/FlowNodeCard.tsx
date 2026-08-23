@@ -4,6 +4,7 @@ import { LineChart, MoreVertical, Plus } from "lucide-react";
 
 import { useState, type CSSProperties } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { relativeTime } from "@/lib/format";
 import { type NodeType } from "@/lib/flow/types";
 import { isBinaryCalc } from "@/lib/flow/shapes";
 import type { FNode, NodeData } from "./graph-utils";
@@ -95,16 +96,45 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
   const accent = nodeAccent(t, nodeVariant(t, data.config as Record<string, unknown>));
   const freeHandles = (data.freeHandles as Array<{ id: string; label: string }> | undefined) ?? [];
 
+  /**
+   * A NUMBER WITH NO DATE ON IT IS THE TRAP THIS CARD USED TO SET.
+   *
+   * The count here is CACHED from the last Test — it is not recomputed on
+   * render and nothing on the canvas ever refreshed it. So "6 passed" read the
+   * same on the day it was measured and three days later, while the dashboard
+   * (computed from the published version) said something else, and neither
+   * surface looked wrong. The age is the whole fix: a figure that says when it
+   * was measured cannot be mistaken for a live one.
+   *
+   * Older results carry no `testedAt`, and those render exactly as they always
+   * did — no time rather than an invented one.
+   */
+  const measuredAt = typeof test?.testedAt === "string" ? new Date(test.testedAt) : null;
+  const testedAge = measuredAt && !Number.isNaN(measuredAt.getTime()) ? relativeTime(measuredAt) : null;
+  /** The step (or something above it) changed after this count was measured. */
+  const superseded = (data as { superseded?: boolean }).superseded === true && test?.status === "ok";
+  const count = test?.status === "ok" ? resultLabel(t, test, data.config as Record<string, unknown>) : null;
+
   // The single body line: the plain output when ready, a hint when setup, else nothing.
   // Its colour follows the status dot, so the amber pair reads as one signal.
+  //
+  // A superseded count is struck rather than dropped: the number is still the
+  // last thing this step measured, and showing it crossed out beside the way
+  // to refresh it says more than an empty line does. It stays MUTED — the step
+  // blocks nothing, and colour on this canvas is reserved for what does.
   const bodyLine =
     status === "error" && test?.status === "error"
-      ? { text: test.error, cls: sm.hint }
+      ? { text: test.error, cls: sm.hint, struck: null }
       : status === "setup" && data.issue
-        ? { text: data.issue, cls: sm.hint }
-        : status === "ready" && test?.status === "ok"
-          ? { text: resultLabel(t, test, data.config as Record<string, unknown>), cls: "text-muted-foreground" }
-          : null;
+        ? { text: data.issue, cls: sm.hint, struck: null }
+        : superseded && count != null
+          ? { text: " · re-test to update", cls: "text-muted-foreground", struck: count }
+          : status === "ready" && count != null
+            ? { text: testedAge ? `${count} · tested ${testedAge}` : count, cls: "text-muted-foreground", struck: null }
+            : null;
+  // The tooltip is the unabridged line — the card is 300px and truncates, and
+  // what gets cut first is the age, which is the part worth reading twice.
+  const bodyTitle = bodyLine?.struck ? `${bodyLine.struck}${testedAge ? ` · tested ${testedAge}` : ""}${bodyLine.text}` : (bodyLine?.text ?? "");
 
   // A second line, only when the source itself has something to say — today
   // that is "still importing, covering N of M days". The count above it is a
@@ -187,7 +217,8 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             <span className="min-w-0 truncate text-lead font-semibold text-foreground">{nodeTitle(t, data)}</span>
           </span>
           {bodyLine && (
-            <span className={`mt-1 block truncate text-tiny font-medium ${bodyLine.cls}`} title={bodyLine.text}>
+            <span className={`mt-1 block truncate text-tiny font-medium ${bodyLine.cls}`} title={bodyTitle}>
+              {bodyLine.struck && <span className="line-through">{bodyLine.struck}</span>}
               {bodyLine.text}
             </span>
           )}

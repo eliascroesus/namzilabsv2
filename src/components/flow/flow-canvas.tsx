@@ -22,6 +22,8 @@ import {
   type Edge,
 } from "@xyflow/react";
 import { isDatasetFormulaOp, seedMetricFormat, type NodeType } from "@/lib/flow/types";
+import { graphFingerprint } from "@/lib/flow/changes";
+import { DISPLAY_ONLY_CONFIG_KEYS, testFingerprint } from "@/lib/flow/test-fingerprint";
 import { isBinaryCalc, outputShapeOf, producesDataset, producesNumber, readsRecords, recordsSourceOf } from "@/lib/flow/shapes";
 import { useRouter } from "next/navigation";
 import { saveDraftAction, startNodeTestAction, pollNodeTestAction, publishFlowAction, renameFlowAction, duplicateFlowAction, deleteFlowAction, setFlowEnabledAction, type NodeTestDTO } from "@/app/dashboard/flows/actions";
@@ -166,6 +168,15 @@ export function FlowCanvas(props: {
   name: string;
   status: string;
   publishedVersion: number | null;
+  /**
+   * The published version's graph, reduced to what could move a number (see
+   * lib/flow/changes.ts). The FINGERPRINT and not the graph: this only ever
+   * gets compared, and shipping a second copy of the whole graph to the
+   * browser to answer a yes/no question is not a trade worth making. Null when
+   * the flow has never been published — nothing is live to differ from — and
+   * also when the page could not read one; both warn rather than reassure.
+   */
+  publishedFingerprint: string | null;
   initialGraph: { nodes: FNode[] | { id: string; type: string; position: { x: number; y: number }; data: { config?: unknown; label?: unknown; lastTest?: unknown } }[]; edges: Array<{ id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>; metrics?: MetricSpecT[] };
   connections: ConnMeta[];
 }) {
@@ -176,7 +187,7 @@ export function FlowCanvas(props: {
   );
 }
 
-function CanvasInner({ flowId, name: initialName, status, publishedVersion, initialGraph, connections }: Parameters<typeof FlowCanvas>[0]) {
+function CanvasInner({ flowId, name: initialName, status, publishedVersion, publishedFingerprint, initialGraph, connections }: Parameters<typeof FlowCanvas>[0]) {
   const initialNodes: FNode[] = useMemo(
     () =>
       initialGraph.nodes.map((n) => {
@@ -227,6 +238,13 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const [name, setName] = useState(initialName);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
   const [publishState, setPublishState] = useState<{ status: string; version: number | null }>({ status, version: publishedVersion });
+  /**
+   * What the DASHBOARD is computing from, as a fingerprint. Held in state
+   * because a publish makes the draft on screen the live version without a
+   * reload, and the "Changes not live" pill has to go out at that moment
+   * rather than at the next navigation.
+   */
+  const [publishedFp, setPublishedFp] = useState<string | null>(publishedFingerprint);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishIssues, setPublishIssues] = useState<Array<{ nodeId?: string; message: string }>>([]);
   const [publishWarning, setPublishWarning] = useState<string | null>(null);
@@ -260,6 +278,33 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   }, [snapshot, syncHist]);
 
   const toGraph = useCallback((): Graph => serializeGraph(nodes, edges, metrics), [nodes, edges, metrics]);
+
+  /**
+   * THE ONE FACT THE BUILDER NEVER TOLD ANYONE: the canvas edits and Tests the
+   * DRAFT, and every dashboard tile is computed from the published version. A
+   * customer rewrote two Filters, pressed Test, saw the new number here, and
+   * read the old one off their dashboard for three days — with nothing on
+   * either screen admitting the two were different graphs.
+   *
+   * Content-compared, not timestamped, and recomputed from what is on screen
+   * rather than from what was saved: dragging a card, clicking a step or
+   * running a Test all leave this false (see `graphFingerprint` for exactly
+   * what is ignored), while changing a filter rule flips it before the
+   * autosave has even fired.
+   *
+   * A flow with no published version has nothing live to differ from, so the
+   * question becomes "is there anything here that COULD be published" — an
+   * empty canvas is not owed a warning.
+   *
+   * No fingerprint ALSO means the page could not read one (a version that will
+   * not parse: the editor still opens, see flows/[id]/page.tsx). It lands in
+   * the same branch and warns, because the honest answer to an unverifiable
+   * comparison is the warning, never "your edits are live".
+   */
+  const unpublished = useMemo(
+    () => (publishedFp == null ? nodes.length > 0 : graphFingerprint(toGraph()) !== publishedFp),
+    [publishedFp, nodes.length, toGraph],
+  );
 
   /**
    * WHAT IS ALREADY ON THE SERVER, as its serialised form.
@@ -470,7 +515,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
   const updateConfig = useCallback(
     (id: string, patch: Record<string, unknown>) => {
       // Display-only keys (e.g. which sample record feeds the pills) never invalidate a test.
-      const displayOnly = Object.keys(patch).length > 0 && Object.keys(patch).every((k) => k === "sampleIndex");
+      // The SAME set the test fingerprint ignores, imported rather than retyped: a key
+      // honoured here and hashed there would flip every card to "re-test to update".
+      const displayOnly = Object.keys(patch).length > 0 && Object.keys(patch).every((k) => DISPLAY_ONLY_CONFIG_KEYS.has(k));
       commit();
       const marks = displayOnly ? new Set<string>() : descendants(id);
       setNodes((ns) =>
@@ -837,6 +884,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
       // Cancelled: the step keeps whatever it had, including its dirty mark.
       // Writing the result anyway would resurrect a run the user dismissed.
       if (cancelTestRef.current || result == null) return;
+      // Clearing `dirty` here also clears an edit made WHILE the test ran — the
+      // result is then already the answer to a previous version of the step.
+      // The fingerprint the server stamped on it is what catches that: it was
+      // taken from the graph that was sent, so the step reads superseded until
+      // it is run again.
       setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, lastTest: result, dirty: false } } : n)));
       setTestingId(null);
     },
@@ -884,10 +936,36 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     setPublishError(null);
     setPublishIssues([]);
     setPublishWarning(null);
-    await saveDraftAction(flowId, toGraph());
+    /**
+     * ONE graph for both calls: publish snapshots whatever the save just
+     * stored, so this exact payload is what becomes live — and its fingerprint
+     * is what the toolbar must compare against from here on. Re-serializing
+     * after the round trip would adopt any edit made DURING it and quietly
+     * claim it was published.
+     *
+     * Which is also why the save has to be READ, not merely awaited.
+     * `publishFlow` republishes the draft AS STORED and `saveDraftAction`
+     * reports a failure rather than throwing it, so a save that did not land
+     * followed by a publish that did would ship the PREVIOUS graph while the
+     * success branch below adopted `shipped`'s fingerprint — the warn pill
+     * gone, and the dashboard unable to correct it, because the stored draft
+     * and the published version would agree with each other and only this
+     * canvas would be holding the edits.
+     */
+    const shipped = toGraph();
+    const saved = await saveDraftAction(flowId, shipped);
+    if (!saved.ok) {
+      // The server's own reason, on publish's channel — and the save chip says
+      // "Not saved" with its Retry, because that is now the true state.
+      setPublishError(`Your changes weren't saved, so nothing was published. ${saved.error}`);
+      setSaveState("error");
+      setPublishing(false);
+      return;
+    }
     const r = await publishFlowAction(flowId);
     if (r.ok) {
       setPublishState({ status: "published", version: r.version });
+      setPublishedFp(graphFingerprint(shipped));
       if (r.warning) setPublishWarning(r.warning);
       else setReviewOpen(false);
     } else {
@@ -1046,6 +1124,32 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     return out;
   }, [selected, edges]);
 
+  /**
+   * STEPS WHOSE CACHED RESULT NO LONGER DESCRIBES THEM.
+   *
+   * `dirty` already says this for edits made in THIS session, and it is
+   * deliberately not persisted (serializeGraph) — so a reload wiped it and
+   * restored a green "Tested" card over a number measured before the edit.
+   * The stored fingerprint is what survives that: it is the graph slice the
+   * result was computed from, so a mismatch means the step, an ancestor or the
+   * wiring between them changed after the number was measured.
+   *
+   * A result with no fingerprint (stored before the mark existed, or written
+   * by the client's own error shape) is never called superseded — the honest
+   * reading of "no claim" is silence, not suspicion.
+   *
+   * Declared above the pickers because they quote cached counts back to the
+   * user and may not present one as current.
+   */
+  const supersededById = useMemo(() => {
+    const out = new Set<string>();
+    for (const n of nodes) {
+      const stamped = n.data.lastTest?.configHash;
+      if (stamped && stamped !== testFingerprint(nodes, edges, n.id)) out.add(n.id);
+    }
+    return out;
+  }, [nodes, edges]);
+
   // Number choices for a compare step, in the same data-browser shape as every other
   // input: one group per earlier step, each exposing exactly its number — a scalar
   // step's Result, or a dataset step's Output number (its record count).
@@ -1103,15 +1207,59 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           });
         }
       }
+      /**
+       * THE GATE ABOVE HAS TO SAY ITS NAME. Withholding a step's columns —
+       * the same columns a Summarize step's picker lists on the very same
+       * source — with no word about why was read as a bug and reported as
+       * one. The rule is right; only its silence was wrong. So the group
+       * carries the reason and the browser prints it where those columns
+       * would have been.
+       *
+       * The multi-record sentence is the ENGINE'S sentence, deliberately: the
+       * picker and the error a user would otherwise have hit name the same
+       * cause and the same two ways out, so meeting one after the other reads
+       * as one rule rather than two obstacles.
+       *
+       * Every sentence restates a fact this build already tested — a record
+       * count, or the absence of a successful test — because a picker that
+       * guessed at its own reason would be the same failure one level up. A
+       * one-record step whose schema is genuinely empty is owed no
+       * explanation and gets none: nothing was withheld from it.
+       *
+       * And every sentence stays in the PAST TENSE. The count is the one the
+       * last Test cached; nothing re-measures it to open this flyout, and the
+       * card behind the flyout is at that moment striking the same figure
+       * through. "Holds N" here would be this panel telling the user the
+       * opposite of what the canvas under it says.
+       */
+      let note: string | undefined;
+      if (!scalar && own.length === 0) {
+        // Edited since that test — by this session's `dirty` or by a
+        // fingerprint that no longer matches the graph — means the count
+        // answers for the previous version of the step, and the gate it
+        // explains may not survive a re-test.
+        const stale = n.data.dirty === true || supersededById.has(n.id);
+        const sinceEdit = stale ? " This step has changed since that test, so re-test it to see what it holds now." : "";
+        if (t?.status !== "ok") note = "Test this step to see whether one of its columns can be picked here.";
+        else if (t.recordsOut > 1) {
+          // A test that hit the read ceiling counted a prefix of the step, so
+          // its figure is a floor — the Result panel refuses to call the same
+          // number a total, and neither may this. The gate is unaffected:
+          // more than a ceiling is still more than one.
+          const held = `${t.truncated ? "more than " : ""}${t.recordsOut.toLocaleString("en-US")}`;
+          note = `This step held ${held} records on its last test, so there is no single value to take from a column. Add a Summarize step set to Sum to total one, or narrow this step to a single record.${sinceEdit}`;
+        } else if (t.recordsOut === 0) note = `This step held no records on its last test, so there were no columns to offer.${sinceEdit}`;
+      }
       return {
         stepId: n.id,
         stepNo: stepNoById.get(n.id),
         source: app ? String((app.data.config as { source?: unknown }).source ?? "") : undefined,
         title: nodeTitle(String(n.type) as NodeType, n.data),
         fields: [{ path: scalar ? `__result_${n.id}` : `__count_${n.id}`, label: scalar ? "Result" : "Output number", type: "number", sample }, ...own],
+        note,
       };
     });
-  }, [selected, nodes, edges, stepNoById]);
+  }, [selected, nodes, edges, stepNoById, supersededById]);
 
   /**
    * RE-MEASURE A PATHS HUB WHENEVER ITS LANES CHANGE.
@@ -1214,16 +1362,28 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
 
   // Each endpoint's last tested value — the Review modal's preview. Reads the
   // same fields resultLabel does: a computed value first, then a tile value.
+  // A superseded result is withheld exactly as a dirty one is: this preview is
+  // a promise about the tile publish will create, and a number measured from a
+  // different graph is not that tile.
   const endpointPreviews = useMemo<Record<string, number | null>>(() => {
     const out: Record<string, number | null> = {};
     for (const ep of endpoints) {
       const n = nodes.find((x) => x.id === ep.nodeId);
       const t = n?.data.lastTest;
       const tileVal = (t?.tile as { value?: unknown } | undefined)?.value;
-      out[ep.nodeId] = n?.data.dirty ? null : t?.status === "ok" ? (typeof t.value === "number" ? t.value : typeof tileVal === "number" ? tileVal : null) : null;
+      out[ep.nodeId] =
+        n?.data.dirty || supersededById.has(ep.nodeId)
+          ? null
+          : t?.status === "ok"
+            ? typeof t.value === "number"
+              ? t.value
+              : typeof tileVal === "number"
+                ? tileVal
+                : null
+            : null;
     }
     return out;
-  }, [endpoints, nodes]);
+  }, [endpoints, nodes, supersededById]);
   // The metric's "Time reference" choices (which value says WHEN each record
   // happened). ONLY date fields are offered: the backend canonicalizes every
   // date-looking value at ingest (normalize-dates), so a real timestamp column
@@ -1340,7 +1500,12 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
     () =>
       nodes.map((n) => {
         const inputCount = inDegreeById.get(n.id) ?? 0;
-        const status = computeNodeStatus({ type: String(n.type), cfg: n.data.config, inputCount, inputHandles: inHandlesById.get(n.id) ?? [], branchMode: branchModeById.get(n.id) ?? null, lastTest: n.data.lastTest, dirty: n.data.dirty, updating: testingId === n.id });
+        // One truth, two readings: the step counts as untested (dot, pill,
+        // footer button) AND its cached number is shown struck rather than
+        // hidden — a count that silently vanishes on edit teaches nothing,
+        // and one that stays green is the trap this whole change exists for.
+        const stale = n.data.dirty === true || supersededById.has(n.id);
+        const status = computeNodeStatus({ type: String(n.type), cfg: n.data.config, inputCount, inputHandles: inHandlesById.get(n.id) ?? [], branchMode: branchModeById.get(n.id) ?? null, lastTest: n.data.lastTest, dirty: stale, updating: testingId === n.id });
         const issue = status === "setup" ? setupHint(String(n.type), n.data.config, inputCount) : undefined;
         let freeHandles: Array<{ id: string; label: string }> | undefined;
         if (n.type === "paths") {
@@ -1361,6 +1526,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
             isTerminal: terminals.has(n.id),
             publishes: publishesToDashboard(String(n.type), terminals.has(n.id), metricByNode.get(n.id)),
             refLine: refLineById.get(n.id),
+            superseded: stale && n.data.lastTest?.status === "ok",
             freeHandles,
             onAddFrom: addFromNode,
             onDeleteNode: requestDelete,
@@ -1368,7 +1534,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
           },
         };
       }),
-    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId, metricByNode, refLineById],
+    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId, metricByNode, refLineById, supersededById],
   );
   /**
    * RUN THE WHOLE FLOW, top to bottom.
@@ -1446,6 +1612,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
         showTestAll={!empty}
         publishedVersion={publishState.version}
         isPublished={publishState.status === "published"}
+        unpublished={unpublished}
         publishing={publishing}
         onReview={openReview}
         onUndo={undo}
@@ -1564,6 +1731,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, init
               ? {
                   node: selected,
                   stepNo: stepNoById.get(selected.id),
+                  // The panel holds the same node's number at four times the
+                  // size of the card's, so it is the last place that may show
+                  // it as current after the step has moved on.
+                  superseded: supersededById.has(selected.id),
                   connections,
                   fieldGroups,
                   inputs: selectedInputs,

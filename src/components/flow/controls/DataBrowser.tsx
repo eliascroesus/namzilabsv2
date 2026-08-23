@@ -290,7 +290,15 @@ export function DataBrowser({
               // An active type chip behaves like a search: groups auto-expand
               // to their matches and empty ones step aside.
               const searching = q.trim().length > 0 || typeFilter !== "all";
-              if (searching && fields.length === 0) return null;
+              /**
+               * A GROUP CARRYING A NOTE NEVER STEPS ASIDE. The note says why
+               * the columns a user came for are not in this list, so the one
+               * moment it is most needed is when they type one of those names
+               * — the very filter that empties the group. Dropping it there
+               * restores the silence the note exists to end; the price is a
+               * header with a 0 beside it, which is what actually matched.
+               */
+              if (searching && fields.length === 0 && !g.note) return null;
               const isOpen = searching || soleGroup || expanded.has(g.stepId);
               return (
                 <div key={g.stepId} className="mb-1">
@@ -325,6 +333,14 @@ export function DataBrowser({
                           <FieldRow key={f.path} field={f} onPick={() => pick(g, f)} onDrill={() => setDrill({ groupId: g.stepId, trail: [f] })} />
                         ))}
                         {hidden > 0 && <ShowAllRow k={g.stepId} hidden={hidden} />}
+                        {/* A step that offers less than the user came for says
+                            why, right where the missing fields would be —
+                            same quiet register as the footer note below. The
+                            sentence is the caller's: this browser is handed
+                            groups and renders them, and teaching it which
+                            step types withhold what would put the rule in two
+                            places for the two to drift apart. */}
+                        {g.note && <p className="px-2.5 py-1 text-micro leading-snug text-muted-foreground">{g.note}</p>}
                       </div>
                     );
                   })()}

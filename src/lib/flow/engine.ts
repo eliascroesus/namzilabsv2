@@ -1561,13 +1561,22 @@ export type RangeSlot = NonNullable<TileSpec["byRange"]>[string];
  * "All time" is the run itself, returned untouched. It must not be re-filtered:
  * its upper bound is NOW, and Calendly meetings are dated when they will
  * happen, so filtering would drop every future booking out of the total.
+ *
+ * "Upcoming" is the mirror of that fact, made addressable: strictly after now,
+ * up to a sentinel bound (see range.ts). It is the one range whose end is NOT
+ * the clock, which is why it must announce itself — `future` below.
  */
 export function tileByRange(
   graph: FlowGraph,
   nodes: Map<string, NodeExec>,
   nodeId: string,
   spec: TilePresentation,
-  ranges: Array<{ key: string; start: number; end: number; all?: boolean; rollingMs?: number }>,
+  /**
+   * `all` returns the run untouched; `rollingMs` is a backward window's length;
+   * `future` marks a range whose `end` is a far-future sentinel rather than the
+   * clock, so the crossing arithmetic below can tell the two apart.
+   */
+  ranges: Array<{ key: string; start: number; end: number; all?: boolean; rollingMs?: number; future?: boolean }>,
 ): { byRange: Record<string, RangeSlot>; nextChangeMs: number } {
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
   const incomingBy = new Map<string, FlowGraph["edges"]>();
@@ -1594,14 +1603,28 @@ export function tileByRange(
    * Midnight always participates, so the answer is never later than the next
    * UTC midnight and a completely quiet flow recomputes once a day.
    */
-  const now = ranges.reduce((a, r) => Math.max(a, r.end), 0);
+  /**
+   * NOW IS THE LARGEST END AMONG THE RANGES THAT ACTUALLY END AT NOW.
+   *
+   * "Upcoming" ends at a sentinel eight thousand years out, and letting that
+   * set `now` would put every record that exists in the past: no crossing would
+   * ever be tracked, the midnight cap would land in year 9999, and the tile
+   * would store a `nextChangeAt` it can never reach — a number frozen for good
+   * behind a green dot, which is the precise failure the rest of this block
+   * exists to prevent. The clock is the fallback, so a caller passing only
+   * forward ranges gets today rather than 1970.
+   */
+  const now = ranges.reduce((a, r) => (r.future ? a : Math.max(a, r.end)), 0) || Date.now();
   const nextMidnight = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate() + 1);
   let nextChangeMs = nextMidnight;
   const rollings = ranges.filter((r) => r.rollingMs != null).map((r) => r.rollingMs!);
   const trackCrossing = (t: number) => {
     if (t > now) {
       // A future record enters every now-ended range the moment the clock
-      // reaches it.
+      // reaches it — and LEAVES "Upcoming" at that same instant. One crossing,
+      // both directions: this is why adding a forward range needs no second
+      // kind of bookkeeping, and why `nextChangeAt` can never be later than the
+      // moment a booked meeting starts.
       if (t < nextChangeMs) nextChangeMs = t;
       return;
     }

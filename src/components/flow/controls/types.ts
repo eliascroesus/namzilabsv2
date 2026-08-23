@@ -17,6 +17,13 @@ export type DataGroup = {
   title: string;
   system?: boolean;
   fields: DataField[];
+  /**
+   * Why this step offers fewer fields than the step itself holds — printed
+   * under its fields, in the caller's words. The browser renders whatever
+   * sentence it is handed and knows no step-type rules: only the picker that
+   * built the group knows what it gated on and can say so without guessing.
+   */
+  note?: string;
 };
 
 /**

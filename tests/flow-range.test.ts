@@ -79,12 +79,23 @@ const SPEC = (over: Partial<TilePresentation> = {}): TilePresentation => ({
   ...over,
 });
 
+/** Mirrors the bound in range.ts; pinned there against its ISO spelling. */
+const FAR_FUTURE = Date.parse("9999-12-31T23:59:59.999Z");
+
 /** The pills these tests care about, resolved the way the dashboard does. */
 const RANGES = [
   { key: "today", start: START_OF_TODAY, end: NOW },
   { key: "yesterday", start: START_OF_TODAY - DAY, end: START_OF_TODAY - 1 },
   { key: "7d", start: NOW - 7 * DAY, end: NOW, rollingMs: 7 * DAY },
   { key: "all", start: 0, end: NOW, all: true },
+  /**
+   * The forward pill. Its end is range.ts's sentinel rather than the clock, and
+   * `future` is what tells `tileByRange` so. DROP THAT FLAG AND EVERY
+   * ASSERTION IN THE nextChangeMs BLOCK BELOW GOES TO YEAR 9999's MIDNIGHT —
+   * "now" is taken as the largest range end, so the sentinel would silently
+   * become the present and no crossing could ever be in the future.
+   */
+  { key: "upcoming", start: NOW + 1, end: FAR_FUTURE, future: true },
 ];
 
 async function derive(graph: unknown, nodeId: string, spec: TilePresentation = SPEC()) {
@@ -268,6 +279,98 @@ describe("a range selects records; it does not re-run the flow against a truncat
     const by = await slots(graph, "m");
     expect(by.all.value).toBe(1);
     expect(by.today.value).toBe(0);
+  });
+});
+
+/**
+ * UPCOMING — the range that looks forward.
+ *
+ * Every other pill caps at now, so a meeting that has not happened yet was
+ * visible in exactly one place: "All time", which is returned unfiltered and
+ * therefore counted it silently. One workspace read 29.4% all-time against
+ * 21.4% over the last 7 days with nothing on the board to account for the gap.
+ * These tests pin the gap's contents as a range of its own.
+ */
+describe("Upcoming — the records that have not happened yet", () => {
+  const graph = {
+    nodes: [N("m", "app", { connectionId: CONN, source: "close", eventType: "meeting_booked" })],
+    edges: [],
+  };
+
+  it("holds a future meeting that no backward range can see, and that All time was counting silently", async () => {
+    await ev({ eventType: "meeting_booked", at: NOW + 3 * DAY, key: "L1" });
+
+    const by = await slots(graph, "m");
+    expect(by.upcoming.value).toBe(1);
+    expect(by.today.value).toBe(0);
+    expect(by["7d"].value).toBe(0);
+    expect(by.all.value).toBe(1);
+  });
+
+  it("holds nothing that has already happened", async () => {
+    await ev({ eventType: "meeting_booked", at: NOW - 2 * HOUR, key: "L1" });
+
+    const by = await slots(graph, "m");
+    expect(by.upcoming.value).toBe(0);
+    expect(by.today.value).toBe(1);
+  });
+
+  /**
+   * The customer's chosen time reference decides what "upcoming" means, exactly
+   * as it decides which day a record belongs to. A booking that ARRIVED last
+   * week for a meeting in two days is upcoming; the row's arrival is not.
+   */
+  it("is upcoming by when the meeting happens, not by when the booking arrived", async () => {
+    await ev({
+      eventType: "meeting_booked",
+      at: NOW - 7 * DAY,
+      key: "L1",
+      props: { starts_at: new Date(NOW + 2 * DAY).toISOString() },
+    });
+
+    expect((await slots(graph, "m")).upcoming.value).toBe(0);
+    const booked = await slots(graph, "m", SPEC({ timeField: "properties.starts_at" }));
+    expect(booked.upcoming.value).toBe(1);
+  });
+
+  /**
+   * NOTHING AHEAD IS NOT ZERO PER CENT. A rate whose denominator empties has no
+   * answer, and the range must store that rather than a number — it is what
+   * makes the tile render its em-dash and the stored REASON instead of falling
+   * back to the flow's own all-time figure under a forward pill.
+   */
+  it("says a rate has no answer for an empty upcoming window", async () => {
+    await ev({ eventType: "lead_created", at: NOW - 3 * DAY, key: "L1" });
+    await ev({ eventType: "call_logged", at: NOW - 3 * DAY, key: "L1" });
+
+    const rate = {
+      nodes: [
+        N("leads", "app", { connectionId: CONN, source: "close", eventType: "lead_created" }),
+        N("calls", "app", { connectionId: CONN, source: "close", eventType: "call_logged" }),
+        N("rate", "calculate", { mode: "compare", op: "percentage" }),
+      ],
+      edges: [E("calls", "rate", "a"), E("leads", "rate", "b")],
+    };
+
+    const by = await slots(rate, "rate");
+    expect(by.all.value).toBe(100);
+    expect(by.upcoming.value).toBeUndefined();
+    expect(by.upcoming.unavailable).toMatch(/denominator/i);
+  });
+
+  /**
+   * THE SENTINEL MUST NOT BECOME THE PRESENT. A record leaves Upcoming and
+   * enters every now-ended range at the same instant, so the stored crossing is
+   * the meeting itself — never the range's own far-future end, which would
+   * freeze the tile behind a green dot until the age backstop caught it.
+   */
+  it("books the crossing at the meeting, not at the range's far-future end", async () => {
+    const meeting = NOW + 90 * 60_000;
+    await ev({ eventType: "meeting_booked", at: meeting, key: "L1" });
+
+    const { nextChangeMs } = await derive(graph, "m");
+    expect(nextChangeMs).toBe(Math.min(meeting, START_OF_TODAY + DAY));
+    expect(nextChangeMs).toBeLessThan(FAR_FUTURE);
   });
 });
 

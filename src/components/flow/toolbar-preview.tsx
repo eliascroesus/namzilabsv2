@@ -32,6 +32,10 @@ export function ToolbarPreview() {
       showTestAll
       publishedVersion={3}
       isPublished
+      // The kit page shows the settled state: a published flow whose draft
+      // still matches it. The warn pill and the shipping words are the other
+      // half of this control and belong on a real flow, not on a specimen.
+      unpublished={false}
       publishing={false}
       onReview={noop}
       onUndo={noop}

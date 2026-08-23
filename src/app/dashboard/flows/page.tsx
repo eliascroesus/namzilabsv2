@@ -9,6 +9,7 @@ import { PageContainer, PageHeader } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
 import { getReadDb } from "@/db/client";
 import { flowState, listFlows } from "@/lib/flow/store";
+import { unpublishedFlowIds } from "@/lib/flow/materialize";
 import { parseGraph } from "@/lib/flow/types";
 import { catalogEntry } from "@/connectors/catalog";
 import { createFlowAction } from "./actions";
@@ -41,7 +42,10 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v 
  * choke point every other load path uses, so a legacy graph reads correctly
  * here too.
  */
-function summarize(f: { id: string; name: string; status: string; publishedVersion: number | null; updatedAt: Date; draftGraph: unknown }) {
+function summarize(
+  f: { id: string; name: string; status: string; publishedVersion: number | null; updatedAt: Date; draftGraph: unknown },
+  unpublished: Set<string>,
+) {
   let steps = 0;
   let sources: string[] = [];
   try {
@@ -68,6 +72,10 @@ function summarize(f: { id: string; name: string; status: string; publishedVersi
     updatedAt: new Date(f.updatedAt).toISOString(),
     summary,
     source: sources[0] ?? null,
+    // The third place this has to agree with: the toolbar says it while you
+    // edit, the tile says it on the dashboard, and a list of flows is where
+    // someone goes to ask "which of these is actually live?".
+    unpublished: unpublished.has(f.id),
   };
 }
 
@@ -84,6 +92,9 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
   const canCreate = access.can("create_flows");
   const allFlows = await listFlows(getReadDb(), orgId).catch(() => []);
   const flows = allFlows.filter((f) => access.canSeeMetric(`flow:${f.id}`));
+  // One pass for the whole list — the same answer the dashboard shows and the
+  // same rule the editor's toolbar applies, so no two surfaces can disagree.
+  const unpublished = await unpublishedFlowIds(getReadDb(), orgId).catch(() => new Set<string>());
 
   const createForm = canCreate ? (
     <form action={createFlowAction}>
@@ -146,7 +157,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
             action={createForm}
           />
         ) : (
-          <FlowList flows={flows.map(summarize)} />
+          <FlowList flows={flows.map((f) => summarize(f, unpublished))} />
         )}
       </PageContainer>
     </AppShell>

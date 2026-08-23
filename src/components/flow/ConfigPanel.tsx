@@ -10,6 +10,7 @@ import {
   streamDateColumnAction,
   type AppFieldDTO,
 } from "@/app/dashboard/flows/actions";
+import { relativeTime } from "@/lib/format";
 import type { DateColumnChoice } from "@/lib/sync/date-column";
 import type { ImportStatus } from "@/lib/sync/import-status";
 import type { SourceOption } from "@/connectors/types";
@@ -107,6 +108,7 @@ const title = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUppe
 export function ConfigPanel({
   node,
   stepNo,
+  superseded = false,
   connections,
   fieldGroups,
   inputs,
@@ -131,6 +133,13 @@ export function ConfigPanel({
 }: {
   node: FNode;
   stepNo?: number;
+  /**
+   * The stored result was computed from a graph slice this step no longer
+   * matches (see test-fingerprint.ts). Read here as well as on the card
+   * because `dirty` — the same fact for edits made in this session — is not
+   * persisted, so after a reload this is the only thing that knows.
+   */
+  superseded?: boolean;
   connections: ConnMeta[];
   fieldGroups: FieldGroup[];
   inputs: InputDescriptor[];
@@ -159,7 +168,10 @@ export function ConfigPanel({
 }) {
   const type = String(node.type) as NodeType;
   const cfg = node.data.config;
-  const status = computeNodeStatus({ type, cfg, inputCount, inputHandles: inputs.map((i) => i.targetHandle), branchMode: branch?.mode ?? null, lastTest: node.data.lastTest, dirty: node.data.dirty, updating: testing });
+  // `dirty` and `superseded` are the same claim over two lifetimes — this
+  // session's edits and edits that outlived a reload — so the pill reads them
+  // as one. Anything else lets the header say "Tested" over a stale result.
+  const status = computeNodeStatus({ type, cfg, inputCount, inputHandles: inputs.map((i) => i.targetHandle), branchMode: branch?.mode ?? null, lastTest: node.data.lastTest, dirty: node.data.dirty || superseded, updating: testing });
   const sm = STATUS_META[status];
   const err = node.data.lastTest?.status === "error" ? node.data.lastTest.error : null;
   const tested = status === "ready";
@@ -267,7 +279,7 @@ export function ConfigPanel({
             <div className="space-y-4">
               {err && <div className="rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-base text-danger-ink">{err}</div>}
               {node.data.lastTest?.status === "ok" ? (
-                <TestResults node={node} onChange={onChange} />
+                <TestResults node={node} superseded={node.data.dirty === true || superseded} onChange={onChange} />
               ) : (
                 !err && (
                   <div className="rounded-card border border-dashed border-border bg-muted/50 p-6 text-center">
@@ -2138,14 +2150,24 @@ function describeWindow(mode: string, dr: { preset?: string; days?: number; from
 }
 
 /** Shown only after a successful manual test (never auto-computed). */
-function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record<string, unknown>) => void }) {
+function TestResults({ node, superseded, onChange }: { node: FNode; superseded: boolean; onChange: (patch: Record<string, unknown>) => void }) {
   const t = node.data.lastTest;
   if (!t || t.status !== "ok") return null;
   const type = String(node.type);
   const sampleIndex = Number((node.data.config as { sampleIndex?: unknown }).sampleIndex ?? 0);
+  // This panel is the only place the result is stated at full size, so it is
+  // the last place a figure could pass for freshly computed. Results stored
+  // before `testedAt` existed say nothing about when — never a guessed time.
+  const measuredAt = typeof t.testedAt === "string" ? new Date(t.testedAt) : null;
+  const measured = measuredAt && !Number.isNaN(measuredAt.getTime()) ? measuredAt : null;
   return (
     <div className="space-y-3 text-base">
       <SectionHeading className="mb-0">Result</SectionHeading>
+      {superseded && (
+        <p className={NOTE_WARN}>
+          This step changed after the number below was measured, so it is the answer to the previous version of it. Re-test to update it.
+        </p>
+      )}
       {/* F.8: when the source couldn't be re-read, the Test says so plainly
           instead of implying these numbers are freshly pulled. */}
       {t.sourceNote && <p className={NOTE_WARN}>{t.sourceNote}</p>}
@@ -2157,7 +2179,10 @@ function TestResults({ node, onChange }: { node: FNode; onChange: (patch: Record
           Only the newest 500,000 records were read, so this number is a floor, not a total. Narrow the step with a date range to measure a complete period.
         </p>
       )}
-      <p className="tnum rounded-card border border-border bg-muted/50 p-3 text-center text-title font-semibold text-foreground">{resultLabel(type, t, node.data.config as Record<string, unknown>)}</p>
+      <p className={cn("tnum rounded-card border border-border bg-muted/50 p-3 text-center text-title font-semibold text-foreground", superseded && "text-muted-foreground line-through")}>
+        {resultLabel(type, t, node.data.config as Record<string, unknown>)}
+      </p>
+      {measured && <p className="text-center text-tiny text-muted-foreground">Measured {relativeTime(measured)}.</p>}
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
       ) : (

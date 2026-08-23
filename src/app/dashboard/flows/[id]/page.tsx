@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireOrg } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { getDb } from "@/db/client";
-import { getFlow } from "@/lib/flow/store";
+import { getFlow, publishedGraphFingerprint } from "@/lib/flow/store";
 import { listConnections } from "@/lib/connections";
 import { parseGraph } from "@/lib/flow/types";
 import { FlowCanvas, type ConnMeta } from "@/components/flow/flow-canvas";
@@ -35,6 +35,27 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
   const access = await effectiveAccess(getDb(), { orgId, userId, role });
   if (!access.canSeeMetric(`flow:${id}`)) notFound();
 
+  /**
+   * WHAT THE DASHBOARD IS ACTUALLY COMPUTING FROM, so the toolbar can say
+   * whether the draft still agrees with it.
+   *
+   * Hashed in the query rather than read out of it: the answer has to survive
+   * every edit the user makes without a round trip, so the canvas gets the
+   * published version's FINGERPRINT and re-fingerprints the draft as it
+   * changes — and the projection keeps every step's cached Test payload in the
+   * database (see `graphForFingerprint`). Only for a flow that has something
+   * live to differ from.
+   *
+   * Guarded like its sibling below, and for the stronger reason: this decides
+   * whether a PILL is shown. A version cut before a schema change can fail to
+   * parse, and that must degrade to no fingerprint — whereupon the toolbar
+   * warns rather than claiming the edits are live — never to no editor.
+   */
+  const publishedFp =
+    flow.publishedVersion != null
+      ? await publishedGraphFingerprint(getDb(), orgId, id, flow.publishedVersion).catch(() => null)
+      : null;
+
   const conns = await listConnections(orgId).catch(() => []);
   // Record types are NOT loaded here: the Configure panel fetches them fresh
   // per connection on open (listRecordTypesAction). The page-render snapshot
@@ -62,6 +83,7 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
         name={flow.name}
         status={flow.status}
         publishedVersion={flow.publishedVersion}
+        publishedFingerprint={publishedFp}
         initialGraph={parseGraph(flow.draftGraph)}
         connections={connections}
       />

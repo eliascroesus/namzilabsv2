@@ -1,12 +1,12 @@
-import { and, asc, eq, inArray, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, notInArray, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { backfillJobs, connections, flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import { runFlow, buildTile, tileByRange, type CompileProvenance } from "./engine";
 import { compileEnabled } from "./compile/flags";
-import { getPublishedVersion } from "./store";
+import { getPublishedVersion, graphFingerprint, graphForFingerprint } from "./store";
 import { parseGraph, seedMetricFormat, type TileSpec } from "./types";
-import { resolveRange, rollingMsOf, MATERIALIZED_RANGES } from "@/lib/metrics/range";
+import { resolveRange, rollingMsOf, isForwardRange, MATERIALIZED_RANGES } from "@/lib/metrics/range";
 import { streamRefsOfGraph } from "@/lib/sync/streams";
 
 /**
@@ -37,6 +37,36 @@ function graphHasSlidingWindow(graph: { nodes: Array<{ type: string; data: { con
     }
   }
   return false;
+}
+
+/**
+ * THE STORED CROSSING, BOUNDED AT THE WRITE SITE — because one bad row here
+ * stops the expiry sweep for a whole org, not just for its own tile.
+ *
+ * `expireAgedResults` reads this value in SQL as
+ * `(tile ->> 'nextChangeAt')::timestamptz`, and Postgres THROWS on a timestamp
+ * outside its range: `select '+010000-01-01T00:00:00.000Z'::timestamptz` is
+ * "time zone displacement out of range". The cast runs over every candidate
+ * row, so a single tile carrying an extended-year spelling fails the whole
+ * UPDATE and every result in that org stops expiring — behind green dots.
+ *
+ * A year-10000 value is one deleted line away: `tileByRange` derives "now" from
+ * the range ends, so a forward range that stops declaring itself `future`
+ * hands it the sentinel, and its midnight cap lands past year 9999. The
+ * arithmetic upstream is the first lock; this is the second, at the only place
+ * the value becomes a stored string.
+ *
+ * Both bounds are the ones the arithmetic already promises: never later than
+ * the next UTC midnight after this run, never a non-finite instant (which
+ * `toISOString` throws on — inside materializeFlow's own catch, which would
+ * then mark the flow errored and blame the customer's graph). Clamping to
+ * midnight when a run straddles it costs one extra recompute, not a wrong
+ * number.
+ */
+function nextChangeAtIso(nextChangeMs: number, slidingCapMs: number, asOf: Date): string {
+  const nextMidnight = Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate() + 1);
+  const crossing = Number.isFinite(nextChangeMs) ? nextChangeMs : nextMidnight;
+  return new Date(Math.min(crossing, slidingCapMs, nextMidnight)).toISOString();
 }
 
 /**
@@ -166,7 +196,17 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
      */
     const ranges = MATERIALIZED_RANGES.map((key) => {
       const { range } = resolveRange(key);
-      return { key, start: range.from.getTime(), end: range.to.getTime(), all: key === "all", rollingMs: rollingMsOf(key) ?? undefined };
+      return {
+        key,
+        start: range.from.getTime(),
+        end: range.to.getTime(),
+        all: key === "all",
+        // A forward range ends at a sentinel rather than at the clock, and
+        // `tileByRange` derives "now" from these ends — it has to skip those
+        // or every crossing it computes lands beyond the horizon.
+        future: isForwardRange(key),
+        rollingMs: rollingMsOf(key) ?? undefined,
+      };
     });
     const presentationOf = new Map<string, Parameters<typeof tileByRange>[3]>();
     for (const m of graph.metrics) if (m.enabled) presentationOf.set(m.nodeId, factCorrected(m));
@@ -191,7 +231,7 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
       // expiry can read it in SQL. See its docstring in types.ts.
       const tile =
         derived && Object.keys(derived.byRange).length > 0
-          ? { ...t.tile, byRange: derived.byRange, nextChangeAt: new Date(Math.min(derived.nextChangeMs, slidingCapMs)).toISOString() }
+          ? { ...t.tile, byRange: derived.byRange, nextChangeAt: nextChangeAtIso(derived.nextChangeMs, slidingCapMs, asOf) }
           : t.tile;
       await upsertResult(db, orgId, flowId, version, t.nodeId, tile, "fresh", null, record);
     }
@@ -311,6 +351,118 @@ export async function publishedFlowTiles(db: DB, orgId: string) {
     .from(flowResults)
     .innerJoin(flows, eq(flows.id, flowResults.flowId))
     .where(and(eq(flowResults.orgId, orgId), eq(flows.status, "published")));
+}
+
+/**
+ * THE GRAPH, REDUCED TO WHAT COULD MOVE A NUMBER — in SQL, and only to
+ * NARROW the question.
+ *
+ * The same rule as `graphFingerprint` (lib/flow/changes.ts) written in the
+ * other dialect, which is what makes it cheap: Postgres compares the two jsonb
+ * blobs in place across the whole board and returns a flow id or nothing,
+ * instead of shipping every published flow's draft AND version graph — cached
+ * Test samples and all — out of the database on every dashboard render.
+ *
+ * It is NOT the answer, because the two dialects genuinely differ on real
+ * pre-existing flows: this compares stored bytes, while `graphFingerprint`
+ * parses both sides first and so sees schema defaults added since a version
+ * was cut (`metrics[].durationDisplay` landed after `metrics[]` shipped, and
+ * every save re-parses it into the draft). Bytes differ, flows do not. Which
+ * way that error runs is the whole reason for the split: it can only
+ * OVER-report, so it is a candidate filter and `unpublishedFlowIds` confirms
+ * each candidate in JS before anything is shown to anyone.
+ *
+ * Dropped here for the same reasons stated there: node positions (dragging a
+ * card moves no records), `data.lastTest` (the cached Test result lives in the
+ * draft, so testing after a publish would flag the flow forever), `data.label`
+ * (never reaches the tile), and edge ids (redrawing the same wire mints a new
+ * one). jsonb needs no key sorting — the type stores objects normalized.
+ */
+function comparableGraph(graph: SQLWrapper): SQL {
+  return sql`jsonb_build_object(
+    'nodes', coalesce((
+      select jsonb_agg(jsonb_build_object('i', node ->> 'id', 't', node ->> 'type', 'c', coalesce(node -> 'data' -> 'config', '{}'::jsonb)) order by node ->> 'id')
+      from jsonb_array_elements(coalesce(${graph} -> 'nodes', '[]'::jsonb)) as n(node)
+    ), '[]'::jsonb),
+    'edges', coalesce((
+      select jsonb_agg(
+        jsonb_build_object('s', edge ->> 'source', 'sh', edge ->> 'sourceHandle', 't', edge ->> 'target', 'th', edge ->> 'targetHandle')
+        order by edge ->> 'source', edge ->> 'target', edge ->> 'sourceHandle', edge ->> 'targetHandle'
+      )
+      from jsonb_array_elements(coalesce(${graph} -> 'edges', '[]'::jsonb)) as e(edge)
+    ), '[]'::jsonb),
+    'metrics', coalesce((
+      select jsonb_agg(metric order by metric ->> 'nodeId')
+      from jsonb_array_elements(coalesce(${graph} -> 'metrics', '[]'::jsonb)) as m(metric)
+    ), '[]'::jsonb)
+  )`;
+}
+
+/**
+ * WHICH PUBLISHED FLOWS MIGHT BE SHOWING A NUMBER THAT IS NOT THE CURRENT
+ * FLOW — the candidate pass. Ids only, one query for the whole board, and a
+ * SUPERSET of the truth: see `comparableGraph` for the one way stored bytes
+ * and parsed graphs part company, and `unpublishedFlowIds` for the pass that
+ * settles it.
+ *
+ * The join is what keeps even the candidate list honest: a flow whose version
+ * row is missing (or that has no `published_version`) simply does not come
+ * back, so an unanswerable comparison shows nothing rather than a guess.
+ *
+ * Deliberately NOT `flows.updated_at > flow_versions.published_at`: publishFlow
+ * writes the version row and THEN stamps the flow, so every freshly published
+ * flow would carry the marker for the rest of its life.
+ */
+export async function unpublishedCandidateIds(db: DB, orgId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ flowId: flows.id })
+    .from(flows)
+    .innerJoin(flowVersions, and(eq(flowVersions.flowId, flows.id), eq(flowVersions.version, flows.publishedVersion)))
+    .where(
+      and(
+        eq(flows.orgId, orgId),
+        eq(flows.status, "published"),
+        sql`${comparableGraph(flows.draftGraph)} is distinct from ${comparableGraph(flowVersions.graph)}`,
+      ),
+    );
+  return new Set(rows.map((r) => r.flowId));
+}
+
+/**
+ * WHICH PUBLISHED FLOWS ARE SHOWING A NUMBER THAT IS NOT THE CURRENT FLOW.
+ *
+ * ONE definition of the rule decides what anyone is told, and it is the JS
+ * one (`graphFingerprint`), because that is the definition the builder's own
+ * toolbar answers with as you type. Two dialects both allowed to speak is how
+ * a tile said "Edited since publishing" about a flow whose editor showed no
+ * pill — a false alarm on the one marker whose entire value is being believed.
+ *
+ * So the SQL pass narrows and this pass decides: the candidates come back from
+ * `unpublishedCandidateIds`, and only THEIR graphs are read, projected down to
+ * what a fingerprint reads (`graphForFingerprint` — no cached Test payloads
+ * cross the wire) and compared the way the toolbar compares them. One extra
+ * query, only when something was flagged, and nothing at all on the common
+ * board where every flow is published.
+ *
+ * A candidate that no longer joins — deleted, unpublished, or its version row
+ * gone between the two queries — is dropped rather than assumed: no marker is
+ * the honest answer to a question that can no longer be asked.
+ */
+export async function unpublishedFlowIds(db: DB, orgId: string): Promise<Set<string>> {
+  const candidates = await unpublishedCandidateIds(db, orgId);
+  if (candidates.size === 0) return candidates;
+  const rows = await db
+    .select({
+      flowId: flows.id,
+      draft: graphForFingerprint(flows.draftGraph),
+      published: graphForFingerprint(flowVersions.graph),
+    })
+    .from(flows)
+    .innerJoin(flowVersions, and(eq(flowVersions.flowId, flows.id), eq(flowVersions.version, flows.publishedVersion)))
+    .where(and(eq(flows.orgId, orgId), eq(flows.status, "published"), inArray(flows.id, [...candidates])));
+  const changed = new Set<string>();
+  for (const r of rows) if (graphFingerprint(r.draft) !== graphFingerprint(r.published)) changed.add(r.flowId);
+  return changed;
 }
 
 /**
@@ -435,8 +587,32 @@ export async function expireAgedResults(db: DB, maxAgeMs = RESULT_MAX_AGE_MS, or
   const due = and(
     eq(flowResults.status, "fresh"),
     or(
-      // The tile's own stated next crossing has arrived.
-      sql`(${flowResults.tile} ->> 'nextChangeAt')::timestamptz <= now()`,
+      /**
+       * The tile's own stated next crossing has arrived.
+       *
+       * THE CAST IS GUARDED BECAUSE ONE BAD ROW STOPS EVERY ROW. Postgres
+       * throws on a timestamp outside its range — `select
+       * '+010000-01-01T00:00:00.000Z'::timestamptz` is "time zone displacement
+       * out of range" — and this cast runs over every candidate, so a single
+       * tile carrying an extended-year spelling aborts the whole UPDATE and
+       * NOTHING in the org expires again. Behind green dots, which is the worst
+       * possible way to fail.
+       *
+       * `nextChangeAtIso` bounds what this function writes, but that only
+       * covers rows written after it shipped: a value already stored, or one
+       * written by an older build, is exactly the row this has to survive. So
+       * the shape is checked before the cast rather than trusted — CASE
+       * evaluates only the branch it selects, and a four-digit-year anchor
+       * rejects the extended-year form (it opens with `+`).
+       *
+       * A row that fails the shape test is not lost: it falls through to the
+       * age backstop below, so it still expires, just on the slower clock.
+       */
+      sql`case
+            when (${flowResults.tile} ->> 'nextChangeAt') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
+            then (${flowResults.tile} ->> 'nextChangeAt')::timestamptz <= now()
+            else false
+          end`,
       // Everything else waits for the age backstop alone.
       lt(flowResults.computedAt, cutoff),
     ),

@@ -5,6 +5,7 @@ import { appFieldUnion, headlineValue, runFlow, type NodeExec } from "./engine";
 import type { FieldInfo } from "./schema-infer";
 import { compileEnabled } from "./compile/flags";
 import { parseGraph, type FlowGraph } from "@/lib/flow/types";
+import { testFingerprint } from "./test-fingerprint";
 import { hasStreamConfig } from "@/lib/sync/stream-hash";
 import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { primeStream } from "@/lib/sync/streams";
@@ -81,6 +82,24 @@ export type NodeTestDTO = {
    * DTO always dropped it, so a capped count was reported as a complete total.
    */
   truncated?: boolean;
+  /**
+   * WHEN this was measured (ISO, server clock). The canvas card renders the
+   * cached count from the last Test, and with no date on it a three-day-old
+   * "6 passed" is indistinguishable from a number computed a second ago —
+   * which is how a canvas came to contradict a dashboard for three days with
+   * neither side looking wrong.
+   *
+   * Optional, and stays optional: results stored before this field existed
+   * still render, showing no time rather than a guessed one.
+   */
+  testedAt?: string;
+  /**
+   * The fingerprint of the graph slice this ran on (see test-fingerprint.ts).
+   * A step whose slice no longer hashes to this has been edited since, so its
+   * count is shown as superseded instead of as current. Optional for the same
+   * reason as `testedAt` — an older result simply carries no claim either way.
+   */
+  configHash?: string;
 };
 
 /** Shape one engine result into the compact DTO the editor renders. */
@@ -194,10 +213,30 @@ async function missingSourcePrompt(db: DB, orgId: string, g: FlowGraph, nodeId: 
   return null;
 }
 
-/** Prime (force-fresh) + run the engine up to the node. Never throws. */
+/**
+ * Prime (force-fresh) + run the engine up to the node. Never throws.
+ *
+ * WHEN, and FROM WHAT, are stamped here rather than inside the run, because
+ * this is the one return every settled Test result passes through and a result
+ * that reaches the editor carrying neither cannot be told apart from a live
+ * one. Neither changes what the Test computes — they are what lets the canvas
+ * say how old the number is and whether the step still matches it.
+ */
 export async function executeNodeTest(db: DB, orgId: string, graph: unknown, nodeId: string): Promise<NodeTestDTO> {
+  let g: FlowGraph;
   try {
-    const g = parseGraph(graph);
+    g = parseGraph(graph);
+  } catch (e) {
+    return { status: "error", recordsIn: 0, recordsOut: 0, sample: [], inputSample: [], outputSchema: [], error: e instanceof Error ? e.message : String(e), testedAt: new Date().toISOString() };
+  }
+  const dto = await runNodeTest(db, orgId, g, nodeId);
+  dto.testedAt = new Date().toISOString();
+  dto.configHash = testFingerprint(g.nodes, g.edges, nodeId);
+  return dto;
+}
+
+async function runNodeTest(db: DB, orgId: string, g: FlowGraph, nodeId: string): Promise<NodeTestDTO> {
+  try {
     // Before anything else: if this step has no source to read, say which
     // choice is missing rather than returning a confident zero.
     const missing = await missingSourcePrompt(db, orgId, g, nodeId);

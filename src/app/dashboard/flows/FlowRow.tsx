@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Trash2, X } from "lucide-react";
+import { Copy, PencilLine, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,12 @@ export type FlowListItem = {
   summary: string;
   /** The first Get-data step's source, for the row's icon. */
   source: string | null;
+  /**
+   * Edited since the version the dashboard is computing from. Says the same
+   * thing the tile and the toolbar say, in the place people scan to find out
+   * which flows are live.
+   */
+  unpublished?: boolean;
 };
 
 const FILTERS: Array<{ key: "all" | FlowState; label: string }> = [
@@ -159,7 +165,17 @@ function Row({ flow }: { flow: FlowListItem }) {
         <NodeIcon type="app" source={flow.source ?? undefined} size={34} />
         <span className="min-w-0">
           <span className="block truncate text-base font-semibold text-foreground">{flow.name}</span>
-          <span className="block truncate text-tiny text-muted-foreground">{flow.summary}</span>
+          {/* The edit note REPLACES the step summary rather than sitting under
+              it: "which of these is live" is the more urgent fact, and a third
+              line would push the rows past the grid's height. */}
+          {flow.unpublished ? (
+            <span className="flex items-center gap-1.5 text-tiny text-warn-ink">
+              <PencilLine size={12} className="shrink-0" aria-hidden />
+              <span className="truncate">Edited since publishing</span>
+            </span>
+          ) : (
+            <span className="block truncate text-tiny text-muted-foreground">{flow.summary}</span>
+          )}
         </span>
       </Link>
 

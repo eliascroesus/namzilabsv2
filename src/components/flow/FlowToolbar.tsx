@@ -125,6 +125,7 @@ export function FlowToolbar({
   showTestAll,
   publishedVersion,
   isPublished,
+  unpublished,
   publishing,
   onReview,
   onUndo,
@@ -150,6 +151,13 @@ export function FlowToolbar({
   showTestAll: boolean;
   publishedVersion: number | null;
   isPublished: boolean;
+  /**
+   * The draft on screen would not produce what the dashboard is showing —
+   * content-compared, so a drag or a Test does not claim it. For a flow that
+   * has never been published it is simply true (nothing is live), which is why
+   * the wording below asks `publishedVersion` and not this.
+   */
+  unpublished: boolean;
   publishing: boolean;
   onReview: () => void;
   onUndo: () => void;
@@ -166,6 +174,18 @@ export function FlowToolbar({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  /**
+   * WHAT THIS BUTTON IS FOR, RIGHT NOW.
+   *
+   * It read "Edit output" for any published flow — including one whose steps
+   * had been rewritten since, which is the exact case where the only thing
+   * that matters is shipping them. "Edit output" is a settled word; it told a
+   * customer their work was done while the dashboard served three-day-old
+   * filters. So: anything unshipped puts the rocket and the shipping words
+   * back, and the button stays the one saturated control in the bar.
+   */
+  const shipping = !isPublished || unpublished;
 
   return (
     <>
@@ -199,9 +219,18 @@ export function FlowToolbar({
                 <ChevronLeft size={26} strokeWidth={2} />
               </Link>
 
-              <Button onClick={onReview} disabled={publishing} className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-lead [&_svg]:size-[18px]">
-                {isPublished ? <SlidersHorizontal /> : <Rocket />}
-                {isPublished ? "Edit output" : "Review & publish"}
+              <Button
+                onClick={onReview}
+                disabled={publishing}
+                title={
+                  unpublished && publishedVersion != null
+                    ? "Your edits are not on the dashboard yet — publish to make them live"
+                    : undefined
+                }
+                className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-lead [&_svg]:size-[18px]"
+              >
+                {shipping ? <Rocket /> : <SlidersHorizontal />}
+                {shipping ? "Review & publish" : "Edit output"}
               </Button>
               {showTestAll && (
                 <Button
@@ -272,6 +301,28 @@ export function FlowToolbar({
                 corner. */}
             <span className="flex items-center justify-end gap-2">
               <SaveChip state={saveState} onRetry={onRetrySave} />
+              {/* SAVED IS NOT LIVE, AND THE BAR HAS TO SAY WHICH IT MEANS.
+                  Deliberately AFTER "Saved", because it corrects it: the word
+                  beside it answers a different question — the draft reached the
+                  server — and a customer read it as "the dashboard has this",
+                  edited two filters, pressed Test, and watched the old number
+                  sit on their dashboard for three days. This is the only thing
+                  in the bar that can be wrong about the PRODUCT rather than
+                  about the editing session, so it is the only thing here
+                  wearing a tone. */}
+              {unpublished && (
+                <StatusPill
+                  tone="warn"
+                  className="shrink-0"
+                  title={
+                    publishedVersion == null
+                      ? "Nothing from this flow is on the dashboard yet"
+                      : "The dashboard is still showing the last published version of this flow"
+                  }
+                >
+                  {publishedVersion == null ? "Not published" : "Changes not live"}
+                </StatusPill>
+              )}
               <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
                 <Undo2 />
               </IslandButton>

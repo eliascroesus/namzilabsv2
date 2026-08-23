@@ -18,7 +18,7 @@ import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
-import { publishedFlowTiles } from "@/lib/flow/materialize";
+import { publishedFlowTiles, unpublishedFlowIds } from "@/lib/flow/materialize";
 import { refreshAllFlowsAction } from "@/app/dashboard/flows/actions";
 import { listMetrics, type Metric } from "@/lib/metrics/store";
 import { parseDefinition } from "@/lib/metrics/types";
@@ -82,8 +82,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // the common case costs at most one assignment lookup.
   const access = await effectiveAccess(db, { orgId, userId, role });
 
-  const rangeKey = one(sp.range) || "7d";
-  const { range } = resolveRange(rangeKey);
+  /**
+   * THE NORMALIZED KEY, not the one in the URL. `resolveRange` already falls
+   * back to "7d" for anything it does not recognise, and the raw string used
+   * to be handed to the tiles anyway — so `?range=lastweek` selected the 7-day
+   * WINDOW for every computation on the page while every tile looked its own
+   * stored ranges up under "lastweek", found nothing, and reported "not
+   * computed yet" about data that was computed and sitting right there. A
+   * typo in a shared link became a statement about the customer's numbers.
+   */
+  const { key: rangeKey, range } = resolveRange(one(sp.range) || "7d");
   const boardSource = one(sp.source) || null;
 
   let metrics: Metric[] = [];
@@ -169,6 +177,32 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // number vanished from the dashboard and nothing said why. An import badge is
     // an annotation on a number; it must not be able to take the number with it.
     flowTiles = rows.map((r) => ({ ...r }));
+
+    /**
+     * A NUMBER COMPUTED FROM A DIFFERENT VERSION OF THE FLOW.
+     *
+     * Freshness and this are two different axes, and conflating them is what
+     * cost three days of a customer's trust: a stored result can be perfectly
+     * fresh — recomputed minutes ago, green dot and all — and still be the
+     * answer to the graph as it stood before someone edited the filters. The
+     * dot says when the number was verified; this says which flow it belongs to.
+     *
+     * Same join discipline as the import badge above: board-wide rather than
+     * per tile, decorated onto rows that have already landed, and failing
+     * alone. Postgres narrows it to candidates and `unpublishedFlowIds`
+     * confirms each one against the rule the BUILDER uses, so a tile cannot
+     * accuse a flow whose editor shows no pill.
+     */
+    let unpublished = new Set<string>();
+    try {
+      // Nothing on the board, nothing to annotate — a workspace mid-onboarding
+      // should not pay for a graph comparison to decorate zero tiles.
+      if (rows.length > 0) unpublished = await unpublishedFlowIds(db, orgId);
+      if (unpublished.size > 0) flowTiles = flowTiles.map((r) => (unpublished.has(r.flowId) ? { ...r, unpublished: true } : r));
+    } catch {
+      // No marker rather than no dashboard.
+    }
+
     try {
       const refs = rows.flatMap((r) => streamRefsOfProvenance(r.provenance));
       const progress = await importProgressByStreamRef(db, orgId, refs);
@@ -179,7 +213,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         // A flow reading two streams shows the one with furthest still to go —
         // the number is only as settled as its least-settled input.
         const importing = mine.sort((a, b) => b.targetMs - b.coveredMs - (a.targetMs - a.coveredMs))[0];
-        return { ...r, importing };
+        // Rebuilt from the query rows (they carry `provenance`), so the marker
+        // decorated above has to be re-applied rather than assumed to survive.
+        return { ...r, importing, unpublished: unpublished.has(r.flowId) };
       });
     } catch {
       // No badge rather than no dashboard.
@@ -206,16 +242,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * The range control, worn by links — range lives in the URL, so these stay
    * anchors rather than becoming the Chip button.
    *
-   * A SEGMENTED TRACK, not six loose pills. Eleven free-floating chips across
+   * A SEGMENTED TRACK, not loose pills. Eleven free-floating chips across
    * two filter dimensions wrapped onto a second line and orphaned the last two
    * sources, and nothing in the row said which chips answered which question.
-   * Sitting the six ranges in one `bg-muted` track makes them read as one
+   * Sitting the ranges in one `bg-muted` track makes them read as one
    * control with one answer, and leaves the source picker beside it as
    * visibly separate.
+   *
+   * THE TRACK CANNOT WRAP — it is `flex` at its default `nowrap`, so a seventh
+   * option can only make it wider, never make it fold. "Upcoming" is that
+   * seventh, and 8px of item padding (down from 10, and on the 4px grid the
+   * old value missed) keeps the whole track a shade over half of the 976px
+   * `PageContainer` with the source picker still beside it. An EIGHTH option
+   * needs this measured again rather than assumed.
    */
   const rangeItem = (active: boolean) =>
     cn(
-      "inline-flex shrink-0 items-center rounded-[calc(var(--radius-control)-2px)] px-2.5 py-1 text-small font-medium outline-none transition-colors focus-visible:ring-4 focus-visible:ring-ring/40",
+      "inline-flex shrink-0 items-center rounded-[calc(var(--radius-control)-2px)] px-2 py-1 text-small font-medium outline-none transition-colors focus-visible:ring-4 focus-visible:ring-ring/40",
       active ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground",
     );
 

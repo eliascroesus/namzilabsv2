@@ -270,8 +270,13 @@ describe("a published tile carries one value per dashboard range", () => {
     expect(byRange.today.value).toBe(1);
     expect(byRange.yesterday.value).toBe(2);
     expect(byRange["7d"].value).toBe(3);
+    expect(byRange["30d"].value).toBe(3);
     expect(byRange["90d"].value).toBe(4);
     expect(byRange.all.value).toBe(4);
+    // Nothing is dated ahead, so the forward pill is an answered zero — a
+    // stored entry, not a missing one. The tile's "not computed yet" line
+    // belongs to rows written before this range existed and to nothing else.
+    expect(byRange.upcoming.value).toBe(0);
     // The headline value stays the flow's own definition, so a tile rendered
     // without a range (or written before this shipped) is unchanged.
     expect((row.tile as { value?: number }).value).toBe(4);
@@ -303,6 +308,160 @@ describe("a published tile carries one value per dashboard range", () => {
     // Today holds two events; the flow only ever counts one of them.
     expect(byRange.today.value).toBe(1);
     expect(byRange.all.value).toBe(1);
+  });
+});
+
+/**
+ * THE CROSSING, AS IT IS ACTUALLY WRITTEN AND ACTUALLY READ.
+ *
+ * `nextChangeAt` is computed in `tileByRange`, clamped here, stored as a string
+ * inside the tile jsonb, and read back by `expireAgedResults` through an SQL
+ * cast — four seams, and until now the only tests of any of it built the ranges
+ * array themselves. Delete `future: isForwardRange(key)` from the ranges the
+ * materializer builds and the suite stayed green while the stored value became
+ * `+010000-01-01T00:00:00.000Z`: "now" is taken as the largest range end, so
+ * the forward range's year-9999 sentinel became the present and the midnight
+ * cap landed past year 9999.
+ *
+ * That value is not merely useless. `select '+010000-01-01T00:00:00.000Z'::timestamptz`
+ * THROWS ("time zone displacement out of range"), the sweep's cast runs over
+ * every candidate row at once, and so ONE such tile stops expiry for the whole
+ * org — every result frozen at fresh, behind green dots. Both halves are pinned
+ * below: the value is the record's own crossing, and the sweep survives it.
+ */
+describe("the stored crossing, end to end", () => {
+  const CONN = "33333333-3333-4333-8333-333333333333";
+  const DAY_MS = 86_400_000;
+  const nextMidnightAfter = (ms: number) => {
+    const d = new Date(ms);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
+  };
+
+  async function publishCountFlow(orgId: string) {
+    await db.insert(connections).values({ id: CONN, orgId, source: "webhook", name: "Hook", status: "active", authType: "none" });
+    const graph = {
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN, source: "webhook" } } },
+        { id: "c", type: "formula", data: { config: { op: "count" } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "c" }],
+      metrics: [{ nodeId: "c", enabled: true, name: "Events", viz: "number", format: "number", precision: 0 }],
+    };
+    const [flow] = await db.insert(flows).values({ orgId, name: "counter", draftGraph: graph, status: "published", publishedVersion: 1 }).returning();
+    await db.insert(flowVersions).values({ flowId: flow.id, orgId, version: 1, graph });
+    return flow.id;
+  }
+
+  const event = async (orgId: string, id: string, occurredAt: Date) => {
+    await db.insert(events).values({
+      eventId: id, orgId, connectionId: CONN, source: "webhook", eventType: "thing",
+      subject: id, occurredAt, properties: {},
+    });
+  };
+
+  const storedCrossing = async (flowId: string): Promise<string | undefined> => {
+    const [r] = await db.select().from(flowResults).where(eq(flowResults.flowId, flowId));
+    return (r.tile as { nextChangeAt?: string }).nextChangeAt;
+  };
+
+  it("books the record still to come, not the forward range's far-future end", async () => {
+    const org = "org_crossing";
+    const flowId = await publishCountFlow(org);
+    /**
+     * THE FUTURE RECORD HAS TO OUTLAST THE SUITE, NOT THE STOPWATCH.
+     *
+     * This was `now + 2 minutes`, and it failed once on a loaded full run:
+     * more than two minutes passed between writing the event and materializing,
+     * the record was PAST by the time the crossing was computed, and the tile
+     * correctly booked midnight instead. A race, not a regression — but a test
+     * that fails on a busy machine teaches people to re-run rather than read,
+     * which is the opposite of what this file is for.
+     *
+     * Halfway to the next UTC midnight is always still ahead when materialize
+     * runs and always inside the day cap, so `min(record, midnight)` is the
+     * record. The one window where that distinction cannot be drawn at all is
+     * the last few minutes before midnight, where every candidate crossing IS
+     * midnight; there the strict half of the assertion is skipped rather than
+     * loosened, because a bound that only sometimes means something is worse
+     * than one that says when it does not apply.
+     */
+    const startedAt = Date.now();
+    const midnight = nextMidnightAfter(startedAt);
+    const headroomMs = midnight - startedAt;
+    const soon = startedAt + Math.floor(headroomMs / 2);
+    await event(org, "soon", new Date(soon));
+    await event(org, "past", new Date(startedAt - 3 * DAY_MS));
+
+    await materializeFlow(db, org, flowId);
+    const iso = await storedCrossing(flowId);
+
+    expect(iso).toBeTruthy();
+    // Four plain digits. The extended-year spelling ("+010000-…") is what
+    // Postgres refuses, and it is the exact shape a dropped `future` produces.
+    expect(iso).toMatch(/^\d{4}-/);
+    const at = Date.parse(iso!);
+    expect(Number.isFinite(at)).toBe(true);
+    expect(at).toBeLessThanOrEqual(midnight);
+    expect(at).toBeGreaterThan(startedAt);
+
+    // And it is the RECORD's moment, not the day cap: drop the `future` flag
+    // and every record reads as past against a sentinel "now", so no crossing
+    // is booked at all and this is midnight instead.
+    if (headroomMs > 10 * 60_000) {
+      expect(at).toBeLessThanOrEqual(soon);
+      expect(at).toBeLessThan(midnight);
+    }
+  });
+
+  it("a far-future record cannot poison the org's expiry sweep", async () => {
+    const org = "org_crossing2";
+    const flowId = await publishCountFlow(org);
+    // Beyond every cap, and inside "Upcoming" — the case that produced the
+    // unparseable string.
+    await event(org, "millennium", new Date("3000-01-01T00:00:00Z"));
+    await materializeFlow(db, org, flowId);
+    expect(await storedCrossing(flowId)).toMatch(/^\d{4}-/);
+
+    // An ordinary aged tile in the same org, which the sweep must still reach:
+    // the cast is evaluated for every fresh row, so one unparseable value fails
+    // the whole UPDATE and this row never expires either.
+    const aged = await staleFlow(org, "aged", back(2));
+    await db.update(flowResults).set({ status: "fresh" }).where(eq(flowResults.flowId, aged));
+
+    await expect(expireAgedResults(db, 3_600_000, org)).resolves.toBe(1);
+    expect(await statusOf(aged)).toBe("stale");
+  });
+
+  /**
+   * THE ROW THIS BUILD DID NOT WRITE.
+   *
+   * `nextChangeAtIso` bounds what materialize stores from now on, but the
+   * sweep runs over rows written by every build before it — and its cast
+   * (`(tile ->> 'nextChangeAt')::timestamptz`) is evaluated for every
+   * candidate, so ONE value Postgres refuses aborts the whole UPDATE and the
+   * entire org stops expiring behind green dots. The write-side clamp cannot
+   * reach those rows; only the guard at the read site can.
+   *
+   * Written straight into the column here, deliberately bypassing
+   * materializeFlow, because that is the only way to reproduce a row this
+   * code did not produce.
+   */
+  it("survives a stored crossing Postgres cannot cast", async () => {
+    const org = "org_poison";
+    const poisoned = await staleFlow(org, "poisoned", back(2));
+    await db
+      .update(flowResults)
+      .set({ status: "fresh", tile: { name: "poisoned", nextChangeAt: "+010000-01-01T00:00:00.000Z" } })
+      .where(eq(flowResults.flowId, poisoned));
+
+    const aged = await staleFlow(org, "aged", back(2));
+    await db.update(flowResults).set({ status: "fresh" }).where(eq(flowResults.flowId, aged));
+
+    // The malformed row must not take the sweep down with it, and it must not
+    // be stranded either: the age backstop still reaches it.
+    await expect(expireAgedResults(db, 3_600_000, org)).resolves.toBe(2);
+    expect(await statusOf(aged)).toBe("stale");
+    expect(await statusOf(poisoned)).toBe("stale");
   });
 });
 

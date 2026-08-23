@@ -1,9 +1,20 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { CapError, flowCap } from "@/lib/limits";
 import { parseGraph, type FlowGraph } from "./types";
 import { validateGraph, type ValidationIssue } from "./validate";
+
+import { graphFingerprint } from "./changes";
+
+/**
+ * "Is the draft still the flow the dashboard is showing?" — the content test,
+ * re-exported here so server callers have it where the rest of the draft/
+ * publish vocabulary lives. It is DEFINED in ./changes because the builder
+ * asks the same question in the browser on every edit, and this file imports
+ * the schema and the driver.
+ */
+export { graphFingerprint };
 
 export type Flow = typeof flows.$inferSelect;
 export type FlowVersion = typeof flowVersions.$inferSelect;
@@ -153,6 +164,74 @@ export async function setFlowEnabled(db: DB, orgId: string, id: string, enabled:
   return flowState({ status: next, publishedVersion: flow.publishedVersion });
 }
 
+/**
+ * THE GRAPH REDUCED TO WHAT A FINGERPRINT READS, IN THE SELECT.
+ *
+ * `graphFingerprint` reads node ids, node types, every step's config, the
+ * wiring and `metrics[]` — and nothing else. A stored graph also carries each
+ * step's cached `lastTest`, with its `sample`, `inputSample` and rendered
+ * `tile`: the fattest jsonb the product stores, in the draft and therefore in
+ * every snapshot cut from one. Egress on this account is metered, so the rows
+ * that only answer "are the edits live" never ship those payloads at all.
+ *
+ * Edge ids and node `position` are decided by two different rules: positions
+ * are dropped (the fingerprint ignores them and `parseGraph` defaults them),
+ * edge ids are kept because `parseGraph` REQUIRES them, not because anything
+ * downstream reads them. Order is preserved — `parseGraph`'s legacy migrations
+ * resolve some references first-match.
+ */
+export function graphForFingerprint(graph: SQLWrapper): SQL<unknown> {
+  return sql`jsonb_build_object(
+    'nodes', coalesce((
+      select jsonb_agg(
+        jsonb_build_object(
+          'id', node ->> 'id',
+          'type', node ->> 'type',
+          'data', jsonb_build_object('config', coalesce(node -> 'data' -> 'config', '{}'::jsonb))
+        )
+        order by ord
+      )
+      from jsonb_array_elements(coalesce(${graph} -> 'nodes', '[]'::jsonb)) with ordinality as n(node, ord)
+    ), '[]'::jsonb),
+    'edges', coalesce(${graph} -> 'edges', '[]'::jsonb),
+    'metrics', coalesce(${graph} -> 'metrics', '[]'::jsonb)
+  )`;
+}
+
+/**
+ * The published version's fingerprint, without the version's Test payloads
+ * crossing the wire — the editor asks this on every open purely to decide
+ * whether the toolbar shows a pill.
+ *
+ * Null means "no such version row", never "unchanged": a caller that cannot
+ * get an answer has to show the warning, not swallow it.
+ */
+export async function publishedGraphFingerprint(db: DB, orgId: string, flowId: string, version: number): Promise<string | null> {
+  const [row] = await db
+    .select({ graph: graphForFingerprint(flowVersions.graph) })
+    .from(flowVersions)
+    .where(and(eq(flowVersions.orgId, orgId), eq(flowVersions.flowId, flowId), eq(flowVersions.version, version)))
+    .limit(1);
+  return row ? graphFingerprint(row.graph) : null;
+}
+
+/**
+ * One version's graph, for a caller that already knows which version it wants
+ * (it holds the flow row, or it just published). The `graph` column ONLY: a
+ * version row also carries ids and timestamps, and this jsonb is the largest
+ * thing the product reads per flow. Whole, because the caller RUNS it —
+ * anything that only compares graphs goes through `graphForFingerprint`
+ * instead and leaves the Test payloads in the database.
+ */
+export async function getPublishedGraph(db: DB, orgId: string, flowId: string, version: number): Promise<FlowGraph | null> {
+  const [row] = await db
+    .select({ graph: flowVersions.graph })
+    .from(flowVersions)
+    .where(and(eq(flowVersions.orgId, orgId), eq(flowVersions.flowId, flowId), eq(flowVersions.version, version)))
+    .limit(1);
+  return row ? parseGraph(row.graph) : null;
+}
+
 /** The immutable published graph the dashboard/materializer should use. */
 export async function getPublishedVersion(
   db: DB,
@@ -161,10 +240,6 @@ export async function getPublishedVersion(
 ): Promise<{ version: number; graph: FlowGraph } | null> {
   const flow = await getFlow(db, orgId, flowId);
   if (!flow?.publishedVersion) return null;
-  const [row] = await db
-    .select()
-    .from(flowVersions)
-    .where(and(eq(flowVersions.flowId, flowId), eq(flowVersions.version, flow.publishedVersion)))
-    .limit(1);
-  return row ? { version: row.version, graph: parseGraph(row.graph) } : null;
+  const graph = await getPublishedGraph(db, orgId, flowId, flow.publishedVersion);
+  return graph ? { version: flow.publishedVersion, graph } : null;
 }

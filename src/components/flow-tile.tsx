@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { PencilLine } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
+import { isForwardRange } from "@/lib/metrics/range";
 import { refreshFlowAction } from "@/app/dashboard/flows/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -60,6 +63,16 @@ export type FlowResultRow = {
    * so every flow on one importing stream says the same thing.
    */
   importing?: ImportCoverage;
+  /**
+   * The flow's draft would not produce this number any more — someone edited
+   * the steps and has not published since. A DIFFERENT AXIS FROM `status`: the
+   * row can be "fresh" and carry this at the same time, and that combination is
+   * exactly the one that burned a customer (a number recomputed every hour,
+   * faithfully, from a version of the flow they had replaced three days
+   * earlier). Joined for the whole board at render time — see
+   * `unpublishedFlowIds` — so it can never be a stale copy of itself.
+   */
+  unpublished?: boolean;
 };
 
 function fmt(value: number | undefined, t: Tile): string {
@@ -84,37 +97,42 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
    */
   const windowed = rangeKey ? stored.byRange?.[rangeKey] : undefined;
   const missing = rangeKey != null && stored.byRange != null && windowed == null;
-  const unavailable = windowed?.unavailable ?? (missing ? "This range has not been computed yet." : undefined);
+  /**
+   * WHY there is no number, in the words of whatever decided there wasn't one.
+   *
+   * A range added after a tile was last materialized is absent from every
+   * already-stored row, so `missing` is the ordinary state of every board for
+   * one recompute after a pill ships — and the fixed sentence this used to
+   * render ("No data for this period.") reported that as the customer having
+   * nothing, with the real reason hidden in a `title` nobody hovers. The stored
+   * message is rendered instead, at the one length the tile can hold.
+   */
+  /**
+   * "Refresh to compute it" is advice, and advice is a claim too: on a row
+   * whose last run FAILED, a recompute reproduces the failure, so telling the
+   * customer to press it sends them at a button that cannot help. The error
+   * itself is already rendered below — the missing range is a consequence of
+   * it, not a separate errand.
+   */
+  const unavailable =
+    windowed?.unavailable ??
+    (missing
+      ? row.status === "error"
+        ? "Not computed for this range — the last run of this flow failed."
+        : "Not computed yet for this range — Refresh to compute it."
+      : undefined);
   const t: Tile = windowed && !unavailable ? { ...stored, value: windowed.value, series: windowed.series, groups: windowed.groups } : stored;
-  if (unavailable) {
-    return (
-      <Card variant="card" padding="compact" className="lift">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="min-w-0 truncate text-base font-semibold text-foreground">
-            {stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}
-          </h3>
-        </div>
-        {/* An em-dash, not a 0: "no answer for this period" and "the answer is
-            zero" are different facts, and the tile that conflates them is the
-            one nobody can trust. Same stat size as a real number, so switching
-            ranges never makes the tile jump. */}
-        <p className="tnum mt-1.5 text-stat font-semibold leading-none text-muted-foreground/50">—</p>
-        <p className="mt-2.5 text-tiny text-muted-foreground" title={unavailable}>
-          No data for this period.
-        </p>
-        <div className="mt-3 flex items-center justify-end text-tiny text-muted-foreground">
-          <Link
-            href={`/dashboard/flows/${row.flowId}`}
-            className="rounded-control font-medium outline-none transition-colors hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
-          >
-            Open
-          </Link>
-        </div>
-      </Card>
-    );
-  }
-  const delta = deriveDelta(stored, t, rangeKey);
+  // Nothing to compare a missing number against.
+  const delta = unavailable ? null : deriveDelta(stored, t, rangeKey);
 
+  /**
+   * ONE CARD, AND AN UNANSWERED RANGE REMOVES ONLY THE NUMBER. The unavailable
+   * state used to return a card of its own, ABOVE the error block, the
+   * freshness marker and the footer — so under a range no stored row had an
+   * entry for yet, a flow that had FAILED rendered as a calm em-dash with no
+   * red pill, no reason, no as-of and no Refresh: a broken number wearing an
+   * empty one's face. Everything that qualifies a number qualifies its absence.
+   */
   return (
     <Card variant="card" padding="compact" className="lift group/tile">
       {/* HEAD: the name, and a status marker that is quiet when there is
@@ -127,21 +145,46 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
         <h3 className="min-w-0 truncate text-base font-semibold text-foreground">
           {t.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}
         </h3>
-        <Freshness status={row.status} />
+        {/* "Up to date" is about the ROW, and on a range this row predates it
+            contradicts the body two lines down ("not computed yet"). The row
+            being fresh is true and useless there — what the customer asked
+            about has no answer — so the healthy marker is withheld and only
+            the states that still mean something (refreshing, computing,
+            error) keep their pill. */}
+        {missing && row.status === "fresh" ? null : <Freshness status={row.status} />}
       </div>
 
+      {/* An em-dash, not a 0: "no answer for this period" and "the answer is
+          zero" are different facts, and the tile that conflates them is the one
+          nobody can trust. Same stat size as a real number, so switching ranges
+          never makes the tile jump. */}
       <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <p className="tnum text-stat font-semibold leading-none">{fmt(t.value, t)}</p>
+        <p className={cn("tnum text-stat font-semibold leading-none", unavailable && "text-muted-foreground/50")}>
+          {unavailable ? "—" : fmt(t.value, t)}
+        </p>
         {delta && <Delta current={delta.current} previous={delta.previous} format={t} since={delta.since} />}
       </div>
 
-      {t.series && t.series.length > 0 ? (
+      {/* No number means no chart either: `t` has fallen back to the stored
+          tile, whose series and target are the flow's OWN all-time figures —
+          drawing them under a range that has no answer is the all-time-number-
+          under-the-Today-pill fallback wearing bars. */}
+      {unavailable ? (
+        <p className="mt-2.5 text-tiny text-muted-foreground" title={unavailable}>
+          {unavailable.length > 160 ? `${unavailable.slice(0, 160)}…` : unavailable}
+        </p>
+      ) : t.series && t.series.length > 0 ? (
         <Sparkbars series={t.series} format={t} />
       ) : t.groups && t.groups.length > 0 ? (
         <GroupBars groups={t.groups} total={t.value} format={t} />
       ) : t.target != null ? (
         <TargetBar value={t.value ?? 0} target={t.target} format={t} />
       ) : null}
+
+      {/* Directly under the number, because it is about the number: everything
+          below this point qualifies it too, and this is the qualification that
+          decides whether the figure means anything at all. */}
+      {row.unpublished && <NotLive flowId={row.flowId} />}
 
       {/* The red pill alone says "broken" while withholding WHY. The stored
           message names the failing node's error — truncated here, complete in
@@ -228,6 +271,14 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
  * no "previous 7 days" bucket — so those tiles show no delta rather than a
  * guess. Returning null is the point: a dashboard that fabricates a
  * comparison is worse than one that omits it.
+ *
+ * A FORWARD RANGE HAS NO "PRIOR" AT ALL, and the series rule inverts under it.
+ * The bucket still filling is the FIRST one (the period we are inside), not the
+ * last; the last is the furthest-future, complete one. So the skip-the-final
+ * rule dropped the most informative bucket and compared two arbitrary future
+ * buckets under a headline that is the whole future total. There is no honest
+ * answer to "compared to what" for the future — a booking made for next month
+ * is not a movement against anything — so Upcoming gets no delta.
  */
 function deriveDelta(
   stored: Tile,
@@ -236,6 +287,7 @@ function deriveDelta(
 ): { current: number; previous: number; since: string } | null {
   const current = t.value;
   if (current == null || !Number.isFinite(current)) return null;
+  if (isForwardRange(rangeKey)) return null;
 
   if (rangeKey === "today") {
     const y = stored.byRange?.yesterday;
@@ -256,6 +308,40 @@ function deriveDelta(
 }
 
 /**
+ * THE NUMBER IS FROM A FLOW THAT NO LONGER EXISTS AS DRAWN.
+ *
+ * Warn-toned and worded as the whole sentence, because the failure it reports
+ * is one of BELIEF: the tile looked right, the timestamp was recent, the dot
+ * was green, and the figure was computed from filters the customer had
+ * replaced. Nothing here can fix that except saying it, in the same place the
+ * number is read.
+ *
+ * Not a `StatusPill` in the head: that slot answers "how current is this
+ * number" (fresh / refreshing / error), and a fresh number CAN be a
+ * not-live one. Two claims, two places — see the Freshness note below.
+ *
+ * The link lands on the editor, where the toolbar carries the other half of
+ * this fix and the same words on its primary button.
+ */
+function NotLive({ flowId }: { flowId: string }) {
+  return (
+    <p className="mt-2 flex items-start gap-1.5 text-tiny text-warn-ink">
+      <PencilLine size={14} className="mt-px shrink-0" aria-hidden />
+      <span>
+        Edited since publishing — this is the published version&rsquo;s number.{" "}
+        <Link
+          href={`/dashboard/flows/${flowId}`}
+          className="rounded-control font-medium underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-4 focus-visible:ring-ring/40"
+        >
+          Review &amp; publish
+        </Link>{" "}
+        to make your changes live.
+      </span>
+    </p>
+  );
+}
+
+/**
  * QUIET WHEN FINE, LOUD WHEN NOT.
  *
  * A healthy tile says so with a 6px dot; anything else wears the full pill.
@@ -263,6 +349,12 @@ function deriveDelta(
  * of labels reporting no news — and it made the one tile that DID need
  * attention just another badge in a row of badges. Plain English throughout:
  * "stale" reads as broken to a customer when it means a refresh is on its way.
+ *
+ * THIS VOCABULARY IS ABOUT TIME, NOT ABOUT VERSIONS. "Up to date" means the
+ * stored value was verified against the source recently; it says nothing about
+ * WHICH graph produced it. Unpublished draft changes are the other axis and
+ * get their own line (`NotLive`) — folding them in here would make a fresh
+ * number computed from an old flow indistinguishable from an honest one.
  */
 function Freshness({ status }: { status: string }) {
   if (status === "fresh") {
