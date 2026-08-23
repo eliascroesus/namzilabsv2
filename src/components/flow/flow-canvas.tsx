@@ -168,12 +168,15 @@ function setupHint(type: string, cfg: Record<string, unknown>, inputCount: numbe
 const nodeTypes = Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])) as Record<string, typeof FlowNodeCard>;
 const edgeTypes = { insert: InsertEdge };
 
+/** A step card's height, and the space the layout leaves under one. */
+const CARD_H = 86;
+const CARD_GAP = 84;
 /**
- * How far below a card its "drop here" slot sits — one card height plus the
- * gap the layout leaves between steps, so the slot is where the next step
- * would actually appear rather than on top of the card above it.
+ * How far to the side of a first step its "own lane" slot sits — one card
+ * width plus a clear margin, so the slot reads as beside the flow rather than
+ * as part of it.
  */
-const CARD_DROP_GAP = 170;
+const LANE_OFFSET = 360;
 /**
  * How near a slot a released card has to be to join it. Wider than the gap
  * between slots so there is no dead zone between two steps, and narrow enough
@@ -1585,11 +1588,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    * the target card wears a ring so the answer is visible before committing.
    */
   const [dragging, setDragging] = useState<string | null>(null);
-  const [dropSlot, setDropSlot] = useState<{ after?: string; handle?: string; root?: boolean } | null>(null);
+  const [dropSlot, setDropSlot] = useState<{ x: number; y: number; after?: string; handle?: string; root?: boolean } | null>(null);
   /** Where the held card is drawn, in SCREEN space — the cursor, not the graph. */
   const [ghostAt, setGhostAt] = useState<{ x: number; y: number } | null>(null);
-  /** The point the drop is measured from, in GRAPH space. */
-  const [dropAt, setDropAt] = useState<{ x: number; y: number } | null>(null);
 
   /**
    * Every place a step can be dropped, as a point on the canvas.
@@ -1600,7 +1601,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    * genuinely ambiguous otherwise.
    */
   const dropSlots = useMemo(() => {
-    const out: Array<{ x: number; y: number; after: string; handle?: string }> = [];
+    const out: Array<{ x: number; y: number; after?: string; handle?: string; root?: boolean }> = [];
+    /** The gap between a card and the one under it — where its `+` sits. */
+    const gapY = (top: number, childTop: number | null) =>
+      childTop == null ? top + CARD_H + CARD_GAP / 2 : (top + CARD_H + childTop) / 2;
+
     for (const n of nodes) {
       const p = layout.get(n.id);
       if (!p) continue;
@@ -1608,14 +1613,26 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
         for (const e of edges) {
           if (e.source !== n.id || !e.sourceHandle) continue;
           const tp = layout.get(e.target);
-          if (tp) out.push({ x: tp.x, y: tp.y, after: n.id, handle: e.sourceHandle });
+          if (tp) out.push({ x: tp.x, y: gapY(p.y, tp.y), after: n.id, handle: e.sourceHandle });
         }
       } else {
-        out.push({ x: p.x, y: p.y + CARD_DROP_GAP, after: n.id });
+        const kid = edges.find((e) => e.source === n.id && !e.sourceHandle && e.targetHandle == null)?.target;
+        const kp = kid ? layout.get(kid) : null;
+        out.push({ x: p.x, y: gapY(p.y, kp?.y ?? null), after: n.id });
       }
+      /**
+       * A LANE OF ITS OWN IS A PLACE, NOT AN ABSENCE.
+       *
+       * It used to be whatever was left when a card was dropped beyond reach
+       * of everything, so the only feedback was the gap chasing the cursor
+       * into empty space — and dragging a little too far sideways silently
+       * meant "detach this". Every root gets a slot beside it instead: a
+       * target you can see, aim at, and miss.
+       */
+      if ((inDegreeById.get(n.id) ?? 0) === 0) out.push({ x: p.x + LANE_OFFSET, y: p.y + CARD_H / 2, root: true });
     }
     return out;
-  }, [nodes, edges, layout]);
+  }, [nodes, edges, layout, inDegreeById]);
 
   /**
    * The slot a loose card would join. Beyond `DROP_REACH` of every slot it is
@@ -1624,17 +1641,19 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    */
   const slotFor = useCallback(
     (id: string, at: { x: number; y: number }) => {
-      let best: { after: string; handle?: string } | null = null;
+      let best: (typeof dropSlots)[number] | null = null;
       let bestD = Infinity;
       for (const s of dropSlots) {
         if (s.after === id) continue;
         const d = Math.hypot(s.x - at.x, s.y - at.y);
         if (d < bestD) {
           bestD = d;
-          best = { after: s.after, handle: s.handle };
+          best = s;
         }
       }
-      return best && bestD < DROP_REACH ? best : { root: true };
+      // Out of reach of every slot is NOT a drop. Cancelling has to be
+      // possible, and "somewhere over there" is the shape of a mistake.
+      return best && bestD < DROP_REACH ? best : null;
     },
     [dropSlots],
   );
@@ -1658,7 +1677,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       setGhostAt(pointerOf(e));
       // React Flow hands us where the card WOULD be; the card itself never
       // moves, so this is only ever used to pick a slot.
-      setDropAt(node.position);
       setDropSlot(slotFor(node.id, node.position));
     },
     [slotFor],
@@ -1671,7 +1689,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       setDragging(null);
       setDropSlot(null);
       setGhostAt(null);
-      setDropAt(null);
       /**
        * React Flow moved the node in state even though the card never moved on
        * screen (the layout owns what is rendered). Put the stored position
@@ -1679,7 +1696,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
        * in the autosaved draft.
        */
       if (home) setNodes((ns) => ns.map((n) => (n.id === node.id ? { ...n, position: home } : n)));
-      const wiring = moveWiring(node.id, target, edges);
+      if (!target) return;
+      const wiring = moveWiring(node.id, { after: target.after, handle: target.handle, root: target.root }, edges);
       if (!wiring) return;
       commit();
       setEdges((es) => {
@@ -1696,14 +1714,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    * every line gets one under the cursor instead, because "its own lane" has
    * no existing position to point at.
    */
-  const slotAt = useMemo(() => {
-    if (!dragging || !dropSlot) return null;
-    // A slot inside the flow has a point of its own; "its own lane" has none,
-    // so it opens under the cursor instead.
-    return dropSlot.root
-      ? dropAt
-      : (dropSlots.find((s) => s.after === dropSlot.after && s.handle === dropSlot.handle) ?? null);
-  }, [dragging, dropSlot, dropSlots, dropAt]);
+  // Every slot has a point on the canvas, including "its own lane", so the gap
+  // is always drawn where the step would actually land — never at the cursor.
+  const slotAt = dragging && dropSlot ? { x: dropSlot.x, y: dropSlot.y } : null;
 
   const displayNodes = useMemo(
     () =>
@@ -1802,10 +1815,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       const key = `${e.source}::${e.sourceHandle ?? ""}->${e.target}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge } });
+      out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge, carrying: dragging != null } });
     }
     return out;
-  }, [nodes, edges, insertOnEdge, selectedId]);
+  }, [nodes, edges, insertOnEdge, selectedId, dragging]);
 
   const empty = nodes.length === 0;
 
@@ -1940,7 +1953,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
                 mid-drag over. */}
             {slotAt && (
               <ViewportPortal>
-                <div style={{ position: "absolute", transform: `translate(${slotAt.x}px, ${slotAt.y}px)` }}>
+                {/* The slot's point is the CENTRE of the gap — where the `+`
+                    it replaces sits — so the placeholder is pulled up by half
+                    its own height rather than hanging off the point. */}
+                <div style={{ position: "absolute", transform: `translate(${slotAt.x}px, ${slotAt.y}px) translateY(-50%)` }}>
                   <DropSlotNode />
                 </div>
               </ViewportPortal>

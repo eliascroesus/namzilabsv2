@@ -19,12 +19,19 @@ export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosit
   // hard right angle.
   const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 22 });
   const onInsert = (data as { onInsert?: (edgeId: string, anchor?: { x: number; y: number; leftX?: number }) => void } | undefined)?.onInsert;
+  /**
+   * While a step is being carried, every `+` steps aside. The drop placeholder
+   * IS the insert affordance for the length of the drag, and two of them in
+   * the same gap — one round, one dashed — reads as two different things you
+   * could do rather than one thing about to happen.
+   */
+  const carrying = (data as { carrying?: boolean } | undefined)?.carrying === true;
   return (
     <>
       {/* Colour, width and the dashed pattern come from `.react-flow__edge-path`
           in globals.css, so hover/selected states brighten the whole edge. */}
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} />
-      {onInsert && (
+      {onInsert && !carrying && (
         <EdgeLabelRenderer>
           <div
             style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: "all" }}
