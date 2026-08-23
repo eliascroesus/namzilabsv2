@@ -58,17 +58,28 @@ export const googleCalendarConnector: Connector = {
     const calendarId = str(args.config?.["calendarId"]) ?? "primary";
 
     const params = new URLSearchParams({ maxResults: "250", singleEvents: "true" });
+    /**
+     * THE SPAN THIS READ ENUMERATES — null when the read is incremental.
+     *
+     * Held because it is the difference between "here is what changed" and
+     * "here is everything there is", and only the second licenses retiring a
+     * stored row. See the mirrorScope handed back below.
+     */
+    let window: { from: Date; to: Date } | null = null;
     if (args.cursor) {
       params.set("syncToken", args.cursor);
     } else {
-      params.set("orderBy", "startTime");
-      params.set("timeMin", new Date(Date.now() - 30 * 864e5).toISOString());
+      const from = new Date(Date.now() - 30 * 864e5);
       // Bound the FORWARD horizon too. A calendar with a long-running recurring
       // event expands to an unbounded number of instances, so a first sync with
       // only a lower bound can grind indefinitely on connect. A year ahead
       // covers every realistic dashboard question; the sync token takes over
       // afterwards and picks up anything created beyond it.
-      params.set("timeMax", new Date(Date.now() + 365 * 864e5).toISOString());
+      const to = new Date(Date.now() + 365 * 864e5);
+      window = { from, to };
+      params.set("orderBy", "startTime");
+      params.set("timeMin", from.toISOString());
+      params.set("timeMax", to.toISOString());
     }
 
     const streamTag = args.streamHash ? `${args.streamHash}:` : "";
@@ -113,6 +124,14 @@ export const googleCalendarConnector: Connector = {
       }
 
       for (const ev of data.items ?? []) {
+        /**
+         * A DELETED MEETING IS NOT A MEETING. An incremental sync reports a
+         * removed event as a tombstone — the same id, `status: "cancelled"`,
+         * and no attendees — and storing that as a record would leave a
+         * meeting nobody is having inside every count that reads this stream.
+         * Absent from `records` is also what licenses the retire below.
+         */
+        if (str(ev["status"]) === "cancelled") continue;
         records.push({
           eventId: `gcal:${args.connectionId}:${streamTag}${str(ev["id"])}`,
           eventType: "calendar_event",
@@ -159,7 +178,31 @@ export const googleCalendarConnector: Connector = {
         // returns null — START OVER — so the next sweep re-lists the window and
         // the connection never becomes incremental.
         probe(args.cursor ? "listing-ended-incremental" : "listing-ended-NO-TOKEN");
-        return { records, nextCursor: args.cursor, providerCalls };
+        /**
+         * THE WINDOW WAS ENUMERATED END TO END, SO WHAT IS MISSING IS GONE.
+         *
+         * The measurement above has its answer: Google withholds
+         * `nextSyncToken` from a request carrying `orderBy`/`timeMin`/
+         * `timeMax`, so `cursor` stays null for ever and this connector
+         * re-lists its whole window on every sweep. That was filed as costing
+         * only quota, and it cost accuracy too: `events.list` omits deleted
+         * events, nothing else retires a calendar row, and so a meeting that
+         * was cancelled STAYED in the store permanently. It kept counting as
+         * booked — a customer's acceptance rate read 2 of 7 where the calendar
+         * showed 5 meetings, and no amount of correct arithmetic downstream
+         * could recover from a denominator holding meetings that no longer
+         * existed.
+         *
+         * Declaring the span makes the re-list do the work its cost already
+         * paid for: `retireAbsent` tombstones stored rows INSIDE it that this
+         * read did not return. Scoped, so history older than `timeMin` is
+         * never touched.
+         *
+         * Only on this exit. The page-budget exit below walked a prefix of the
+         * window, and treating a prefix as the whole would tombstone every
+         * live meeting past the last page it reached.
+         */
+        return { records, nextCursor: args.cursor, providerCalls, ...(window ? { mirrorScope: window } : {}) };
       }
       pageToken = data.nextPageToken;
     }

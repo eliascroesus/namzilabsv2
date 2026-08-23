@@ -115,3 +115,70 @@ describe("Google Calendar pagination (sync token only on the last page)", () => 
     expect(res.nextCursor).toBe("SYNC-1"); // unchanged → next sweep retries; dedup absorbs re-reads
   });
 });
+
+/**
+ * A CANCELLED MEETING HAS TO STOP COUNTING.
+ *
+ * Google withholds `nextSyncToken` from a request carrying
+ * orderBy/timeMin/timeMax, so this connector re-lists its whole window on
+ * every sweep and the cursor stays null for ever. `events.list` omits deleted
+ * events and nothing else retires a calendar row, so a cancelled meeting
+ * stayed stored permanently and kept counting as booked: one workspace's
+ * acceptance rate read 2 of 7 while the calendar showed five meetings.
+ *
+ * The window read now declares itself a mirror, which is what lets the sweep
+ * tombstone what it did not return.
+ */
+describe("deleted meetings stop counting", () => {
+  it("declares the listed window a mirror when the listing completes", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ items: [item("a1")] })));
+    const res = await googleCalendarConnector.poll!(pollArgs(null));
+
+    expect(res.mirrorScope).toBeDefined();
+    // The span actually asked for: 30 days back, a year ahead.
+    const days = (res.mirrorScope!.to.getTime() - res.mirrorScope!.from.getTime()) / 864e5;
+    expect(Math.round(days)).toBe(395);
+    expect(res.mirrorScope!.from.getTime()).toBeLessThan(Date.now());
+    expect(res.mirrorScope!.to.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("claims no mirror on an incremental read", async () => {
+    // A sync token reports CHANGES, not the whole calendar — retiring on that
+    // basis would tombstone every meeting it simply had no news about.
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ items: [item("a1")], nextSyncToken: "S2" })));
+    const res = await googleCalendarConnector.poll!(pollArgs("SYNC-1"));
+    expect(res.mirrorScope).toBeUndefined();
+  });
+
+  it("claims no mirror when the page budget cut the listing short", async () => {
+    // A prefix of the window is not the window: treating it as one would
+    // retire every live meeting past the last page reached.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const n = Number(new URL(String(input)).searchParams.get("pageToken") ?? "0");
+        return jsonResponse({ items: [item(`c${n}`)], nextPageToken: String(n + 1) });
+      }),
+    );
+    const res = await googleCalendarConnector.poll!(pollArgs(null));
+    expect(res.mirrorScope).toBeUndefined();
+  });
+
+  it("never stores a cancelled event as a live meeting", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({
+          items: [
+            item("live"),
+            // The tombstone shape an incremental sync sends for a deletion.
+            { id: "gone", status: "cancelled" },
+          ],
+        }),
+      ),
+    );
+    const res = await googleCalendarConnector.poll!(pollArgs(null));
+    expect(res.records).toHaveLength(1);
+    expect(res.records[0].eventId).toContain("live");
+  });
+});
