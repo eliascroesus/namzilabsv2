@@ -69,7 +69,22 @@ export const googleCalendarConnector: Connector = {
     if (args.cursor) {
       params.set("syncToken", args.cursor);
     } else {
-      const from = new Date(Date.now() - 30 * 864e5);
+      /**
+       * THE STREAM'S OWN REACH, when a backfill has asked for one.
+       *
+       * 30 days is the default span, not a ceiling. `ensureStreamsForGraph`
+       * queues a 90-day history import for every new calendar stream, and this
+       * connector was ignoring `windowFloor` entirely — so the job asked for
+       * ninety days, got thirty, and reported success. Every calendar metric
+       * over a range longer than a month was quietly answering from a third of
+       * the history it claimed.
+       *
+       * Only ever DEEPENS: a floor shallower than the default would narrow the
+       * window and hand the retire below a span it had no business tombstoning
+       * inside.
+       */
+      const floor = args.windowFloor ?? null;
+      const from = floor && floor.getTime() < Date.now() - 30 * 864e5 ? floor : new Date(Date.now() - 30 * 864e5);
       // Bound the FORWARD horizon too. A calendar with a long-running recurring
       // event expands to an unbounded number of instances, so a first sync with
       // only a lower bound can grind indefinitely on connect. A year ahead
@@ -213,7 +228,33 @@ export const googleCalendarConnector: Connector = {
       `[gcal-probe] exit=page-budget first_sync=${!args.cursor} pages=${MAX_PAGES} records=${records.length} ` +
         `nextSyncToken=never-seen — on a first sync this returns null (START OVER), so the window is re-listed next sweep`,
     );
-    return { records, nextCursor: args.cursor, providerCalls };
+    /**
+     * A PREFIX IS NOT THE WINDOW — BUT IT IS EXACTLY A SHORTER WINDOW.
+     *
+     * The cursor never becomes non-null here, so a calendar holding more than
+     * MAX_PAGES × 250 events in its span reaches THIS exit on every single
+     * sweep and never the one above. Declaring nothing was the safe choice and
+     * it left the cancelled-meeting bug completely unfixed for precisely the
+     * busiest calendars — recurring series expand under `singleEvents`, so a
+     * handful of daily meetings clears 2,000 across 395 days.
+     *
+     * `orderBy=startTime` is ascending and is sent on exactly this branch, so
+     * the pages that DID come back enumerate `[timeMin, last start seen]`
+     * completely. That sub-span is a mirror by the same argument the full
+     * window is; beyond it we know nothing and claim nothing, which is what
+     * keeps a live meeting past the cut-off from being tombstoned.
+     *
+     * `incomplete` so the sweep does not read a permanently-truncated calendar
+     * as a quiet one and tier its cadence down.
+     */
+    const edge = records.reduce((max, r) => Math.max(max, r.occurredAt.getTime()), 0);
+    return {
+      records,
+      nextCursor: args.cursor,
+      providerCalls,
+      incomplete: true,
+      ...(window && edge > 0 ? { mirrorScope: { from: window.from, to: new Date(edge) } } : {}),
+    };
   },
 
   async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {

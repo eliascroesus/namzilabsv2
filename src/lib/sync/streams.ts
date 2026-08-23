@@ -843,10 +843,27 @@ export async function syncStream(
         const swap = await withStreamWriteLock(db, `stream:${stream.id}`, async (tx) => {
           const res = await upsertEvents(
             tx,
-            // A window-scoped mirror restates rows in place, so its stored
-            // occurred_at must stay the day it describes, not drift to
-            // first-seen — same reason whole-resource mirrors preserve it.
-            { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation, preserveOccurredAt: mirrorScope != null || preserveOccurredAt === true },
+            /**
+             * PINNING occurred_at IS THE CONNECTOR'S CALL, NOT AN INFERENCE
+             * FROM `mirrorScope`.
+             *
+             * This used to read `mirrorScope != null || preserveOccurredAt`,
+             * on the reasoning that a window-scoped mirror restates rows in
+             * place so its date describes a day rather than a first sighting.
+             * That is true of Instantly's daily analytics — which says so
+             * itself, `preserveOccurredAt: true` at instantly.ts:390 — and it
+             * is exactly wrong for a calendar, where `occurred_at` IS the
+             * meeting's start time. The moment Google Calendar started
+             * declaring a mirror to get cancelled meetings retired, it also
+             * silently inherited this pin, and a RESCHEDULED meeting would
+             * have kept its original slot for ever: the payload updating
+             * underneath a date that never moved, landing the metric in the
+             * wrong day and never correcting.
+             *
+             * Two unrelated properties rode on one flag. The connector that
+             * wants the pin asks for it.
+             */
+            { orgId: conn.orgId, connectionId: conn.id, source: conn.source, streamHash: stream.configHash, generation, preserveOccurredAt: preserveOccurredAt === true },
             records,
           );
           // Per-stream mirror-ness: a source that is incremental overall can

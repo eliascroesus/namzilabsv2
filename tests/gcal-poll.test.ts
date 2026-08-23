@@ -150,18 +150,63 @@ describe("deleted meetings stop counting", () => {
     expect(res.mirrorScope).toBeUndefined();
   });
 
-  it("claims no mirror when the page budget cut the listing short", async () => {
-    // A prefix of the window is not the window: treating it as one would
-    // retire every live meeting past the last page reached.
+  it("mirrors only the prefix it enumerated when the page budget cut the listing short", async () => {
+    /**
+     * The cursor never becomes non-null, so a calendar with more than
+     * MAX_PAGES × 250 events in its span hits THIS exit every sweep and never
+     * the one above. Declaring nothing here left the cancelled-meeting bug
+     * unfixed for exactly the busiest calendars; declaring the WHOLE window
+     * would tombstone every live meeting past the last page reached.
+     * `orderBy=startTime` is ascending, so the prefix is a mirror of itself.
+     */
+    let n = 0;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        const n = Number(new URL(String(input)).searchParams.get("pageToken") ?? "0");
-        return jsonResponse({ items: [item(`c${n}`)], nextPageToken: String(n + 1) });
+      vi.fn(async () => {
+        const day = String(10 + n).padStart(2, "0");
+        n += 1;
+        return jsonResponse({
+          items: [{ id: `c${n}`, summary: "E", start: { dateTime: `2026-07-${day}T10:00:00Z` } }],
+          nextPageToken: String(n),
+        });
       }),
     );
     const res = await googleCalendarConnector.poll!(pollArgs(null));
-    expect(res.mirrorScope).toBeUndefined();
+
+    expect(res.incomplete).toBe(true);
+    expect(res.mirrorScope).toBeDefined();
+    // Ends at the newest start actually seen, never at the window's far edge.
+    expect(res.mirrorScope!.to.toISOString()).toBe(
+      res.records.reduce((m, r) => (r.occurredAt > m ? r.occurredAt : m), new Date(0)).toISOString(),
+    );
+    expect(res.mirrorScope!.to.getTime()).toBeLessThan(Date.now() + 365 * 864e5);
+  });
+
+  it("deepens the window to a backfill's floor instead of silently keeping 30 days", async () => {
+    // A 90-day history import asked for ninety days and used to get thirty,
+    // then report success.
+    const floor = new Date(Date.now() - 90 * 864e5);
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        urls.push(String(input));
+        return jsonResponse({ items: [item("a1")] });
+      }),
+    );
+    const res = await googleCalendarConnector.poll!({ ...pollArgs(null), windowFloor: floor });
+    expect(new URL(urls[0]).searchParams.get("timeMin")).toBe(floor.toISOString());
+    expect(res.mirrorScope!.from.toISOString()).toBe(floor.toISOString());
+  });
+
+  it("ignores a floor shallower than the default rather than narrowing the window", async () => {
+    // Narrowing would hand the retire a span it has no business tombstoning in.
+    const shallow = new Date(Date.now() - 2 * 864e5);
+    const res = await (async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ items: [item("a1")] })));
+      return googleCalendarConnector.poll!({ ...pollArgs(null), windowFloor: shallow });
+    })();
+    expect(res.mirrorScope!.from.getTime()).toBeLessThan(shallow.getTime());
   });
 
   it("never stores a cancelled event as a live meeting", async () => {
