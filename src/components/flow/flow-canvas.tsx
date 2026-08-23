@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ReactFlow,
+  ViewportPortal,
   ReactFlowProvider,
   Background,
   BackgroundVariant,
@@ -164,7 +165,7 @@ function setupHint(type: string, cfg: Record<string, unknown>, inputCount: numbe
   return "Needs a step above";
 }
 
-const nodeTypes = { ...Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])), dropslot: DropSlotNode } as Record<string, typeof FlowNodeCard>;
+const nodeTypes = Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])) as Record<string, typeof FlowNodeCard>;
 const edgeTypes = { insert: InsertEdge };
 
 /**
@@ -1695,13 +1696,13 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    * every line gets one under the cursor instead, because "its own lane" has
    * no existing position to point at.
    */
-  const slotNode = useMemo(() => {
+  const slotAt = useMemo(() => {
     if (!dragging || !dropSlot) return null;
-    const at = dropSlot.root
+    // A slot inside the flow has a point of its own; "its own lane" has none,
+    // so it opens under the cursor instead.
+    return dropSlot.root
       ? dropAt
       : (dropSlots.find((s) => s.after === dropSlot.after && s.handle === dropSlot.handle) ?? null);
-    if (!at) return null;
-    return { id: "__drop_slot__", type: "dropslot", position: { x: at.x, y: at.y }, data: {}, draggable: false, selectable: false } as unknown as FNode;
   }, [dragging, dropSlot, dropSlots, dropAt]);
 
   const displayNodes = useMemo(
@@ -1884,7 +1885,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
         {/* Canvas — full width; the config panel floats OVER it as an overlay. */}
         <div className="relative min-w-0 flex-1">
           <ReactFlow
-            nodes={slotNode ? [...displayNodes, slotNode] : displayNodes}
+            nodes={displayNodes}
             edges={displayEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
@@ -1931,6 +1932,19 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
                 smooth while panning, not a busy pattern. */}
             {/* size is a DIAMETER and it scales with zoom — see --color-canvas-dot. */}
             <Background variant={BackgroundVariant.Dots} gap={26} size={1.6} color="var(--color-canvas-dot)" bgColor="var(--color-canvas-bg)" />
+
+            {/* THE GAP, DRAWN IN GRAPH SPACE. `ViewportPortal` renders into the
+                canvas's own transformed layer, so the placeholder pans and
+                zooms with the cards it sits between — and, unlike a synthetic
+                node, it never enters the controlled `nodes` array React Flow is
+                mid-drag over. */}
+            {slotAt && (
+              <ViewportPortal>
+                <div style={{ position: "absolute", transform: `translate(${slotAt.x}px, ${slotAt.y}px)` }}>
+                  <DropSlotNode />
+                </div>
+              </ViewportPortal>
+            )}
           </ReactFlow>
 
           {/* The held card, under the cursor. A sibling of <ReactFlow> for the
