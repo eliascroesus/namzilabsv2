@@ -92,17 +92,15 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
    * at one corner. So the border NEVER changes: the halo sits outside it, and
    * the card keeps exactly one edge in every state.
    */
+  const border = selected ? "border-border ring-[3px] ring-primary/40" : "border-border";
   /**
-   * A card being dragged has to say where it would land BEFORE it is dropped,
-   * or the drop is a guess. The target wears the same halo selection uses, at
-   * full strength — it is answering a question the user is asking right now,
-   * where selection is only recording one they answered earlier.
+   * The card stays exactly where it is while it is being carried — a ghost
+   * follows the cursor and a dashed gap opens at the destination, so nothing
+   * on the canvas moves until a drop is committed. Fading it is what says
+   * "this one is in your hand": without it the ghost reads as a second step
+   * that has appeared from nowhere.
    */
-  const border = data.dropTarget
-    ? "border-border ring-[3px] ring-primary"
-    : selected
-      ? "border-border ring-[3px] ring-primary/40"
-      : "border-border";
+  const carried = data.beingDragged === true;
   const accent = nodeAccent(t, nodeVariant(t, data.config as Record<string, unknown>));
   const freeHandles = (data.freeHandles as Array<{ id: string; label: string }> | undefined) ?? [];
 
@@ -198,7 +196,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
          inner strip: the radius clips it for free and nothing inside the card
          can knock it out of alignment. */
       style={{ borderLeftWidth: 4, borderLeftColor: accent }}
-      className={`group/card w-[300px] rounded-surface border bg-card shadow-surface transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-surface ${border}`}
+      className={`group/card w-[300px] rounded-surface border bg-card shadow-surface transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-surface ${border} ${carried ? "opacity-40" : ""}`}
     >
       {isCompare ? (
         <>

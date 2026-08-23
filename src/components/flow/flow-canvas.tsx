@@ -116,6 +116,8 @@ import { ALL_TYPES, defaultConfig, formulaExpression, nodeTitle, pathHandles } f
 import { serializeGraph } from "./graph-serialize";
 import { FlowNodeCard } from "./FlowNodeCard";
 import { InsertEdge } from "./InsertEdge";
+import { DragGhost, DropSlotNode } from "./drop-slot";
+import { NodeIcon } from "./icons";
 import { FlowToolbar } from "./FlowToolbar";
 import { ConfigPanel, type StepRef } from "./ConfigPanel";
 import { NodeLibraryModal, anchorFromRect, type PickerAnchor } from "./NodeLibraryModal";
@@ -162,7 +164,7 @@ function setupHint(type: string, cfg: Record<string, unknown>, inputCount: numbe
   return "Needs a step above";
 }
 
-const nodeTypes = Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])) as Record<string, typeof FlowNodeCard>;
+const nodeTypes = { ...Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])), dropslot: DropSlotNode } as Record<string, typeof FlowNodeCard>;
 const edgeTypes = { insert: InsertEdge };
 
 /**
@@ -1583,6 +1585,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    */
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropSlot, setDropSlot] = useState<{ after?: string; handle?: string; root?: boolean } | null>(null);
+  /** Where the held card is drawn, in SCREEN space — the cursor, not the graph. */
+  const [ghostAt, setGhostAt] = useState<{ x: number; y: number } | null>(null);
+  /** The point the drop is measured from, in GRAPH space. */
+  const [dropAt, setDropAt] = useState<{ x: number; y: number } | null>(null);
 
   /**
    * Every place a step can be dropped, as a point on the canvas.
@@ -1632,22 +1638,47 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
     [dropSlots],
   );
 
+  /**
+   * Where the pointer is, from either kind of drag event React Flow forwards.
+   * A touch drag reports its position on `touches`, and reading only
+   * `clientX` would pin the ghost to the top-left corner on a tablet.
+   */
+  const pointerOf = (e: MouseEvent | TouchEvent) =>
+    "touches" in e ? { x: e.touches[0]?.clientX ?? 0, y: e.touches[0]?.clientY ?? 0 } : { x: e.clientX, y: e.clientY };
+
+  const onNodeDragStart = useCallback((e: MouseEvent | TouchEvent, node: { id: string }) => {
+    setDragging(node.id);
+    setGhostAt(pointerOf(e));
+  }, []);
+
   const onNodeDrag = useCallback(
-    (_: unknown, node: FNode) => {
+    (e: MouseEvent | TouchEvent, node: { id: string; position: { x: number; y: number } }) => {
       setDragging(node.id);
+      setGhostAt(pointerOf(e));
+      // React Flow hands us where the card WOULD be; the card itself never
+      // moves, so this is only ever used to pick a slot.
+      setDropAt(node.position);
       setDropSlot(slotFor(node.id, node.position));
     },
     [slotFor],
   );
 
   const onNodeDragStop = useCallback(
-    (_: unknown, node: FNode) => {
+    (_: MouseEvent | TouchEvent, node: { id: string; position: { x: number; y: number } }) => {
       const target = slotFor(node.id, node.position);
+      const home = layout.get(node.id);
       setDragging(null);
       setDropSlot(null);
+      setGhostAt(null);
+      setDropAt(null);
+      /**
+       * React Flow moved the node in state even though the card never moved on
+       * screen (the layout owns what is rendered). Put the stored position
+       * back, so a drag that changes nothing leaves nothing behind — including
+       * in the autosaved draft.
+       */
+      if (home) setNodes((ns) => ns.map((n) => (n.id === node.id ? { ...n, position: home } : n)));
       const wiring = moveWiring(node.id, target, edges);
-      // Nothing to do (dropped on itself): the layout puts the card back on
-      // the next render, so simply not writing anything IS the snap-back.
       if (!wiring) return;
       commit();
       setEdges((es) => {
@@ -1655,8 +1686,23 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
         return [...es.filter((e) => !dropped.has(e.id)), ...wiring.add];
       });
     },
-    [slotFor, edges, commit, setEdges],
+    [slotFor, edges, commit, setEdges, setNodes, layout],
   );
+
+  /**
+   * The gap the flow opens while a card is held. A slot inside the line gets a
+   * card-sized placeholder at that slot's own point; a card dragged clear of
+   * every line gets one under the cursor instead, because "its own lane" has
+   * no existing position to point at.
+   */
+  const slotNode = useMemo(() => {
+    if (!dragging || !dropSlot) return null;
+    const at = dropSlot.root
+      ? dropAt
+      : (dropSlots.find((s) => s.after === dropSlot.after && s.handle === dropSlot.handle) ?? null);
+    if (!at) return null;
+    return { id: "__drop_slot__", type: "dropslot", position: { x: at.x, y: at.y }, data: {}, draggable: false, selectable: false } as unknown as FNode;
+  }, [dragging, dropSlot, dropSlots, dropAt]);
 
   const displayNodes = useMemo(
     () =>
@@ -1676,9 +1722,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
         }
         return {
           ...n,
-          // A loose card keeps the position the pointer gave it; every other
-          // card is placed by the layout.
-          position: dragging === n.id ? n.position : (layout.get(n.id) ?? n.position),
+          // ALWAYS the layout's position, including while this card is being
+          // dragged: the card stays where it is and a ghost follows the
+          // cursor, so nothing on the canvas jumps until a drop is committed.
+          position: layout.get(n.id) ?? n.position,
           // Drive the selection ring from OUR selection (the open config step), so
           // programmatic selection (adding/continuing to a step) highlights the right card.
           selected: n.id === selectedId,
@@ -1695,7 +1742,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
             onAddFrom: addFromNode,
             onDeleteNode: requestDelete,
             onDuplicateNode: duplicateNode,
-            dropTarget: dropSlot?.after === n.id && dragging !== n.id,
+            beingDragged: dragging === n.id,
           },
         };
       }),
@@ -1837,7 +1884,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
         {/* Canvas — full width; the config panel floats OVER it as an overlay. */}
         <div className="relative min-w-0 flex-1">
           <ReactFlow
-            nodes={displayNodes}
+            nodes={slotNode ? [...displayNodes, slotNode] : displayNodes}
             edges={displayEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
@@ -1855,6 +1902,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
              */
             nodesDraggable
             nodeDragThreshold={6}
+            onNodeDragStart={onNodeDragStart}
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
             nodesConnectable={false}
@@ -1884,6 +1932,22 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
             {/* size is a DIAMETER and it scales with zoom — see --color-canvas-dot. */}
             <Background variant={BackgroundVariant.Dots} gap={26} size={1.6} color="var(--color-canvas-dot)" bgColor="var(--color-canvas-bg)" />
           </ReactFlow>
+
+          {/* The held card, under the cursor. A sibling of <ReactFlow> for the
+              same reason the empty state is: a child would be drawn into the
+              transformed viewport and pan away from the pointer. */}
+          {dragging && ghostAt && (() => {
+            const held = nodes.find((n) => n.id === dragging);
+            if (!held) return null;
+            return (
+              <DragGhost
+                x={ghostAt.x}
+                y={ghostAt.y}
+                title={nodeTitle(held.type as never, held.data as never)}
+                mark={<NodeIcon type={String(held.type)} source={(held.data.config as { source?: string } | undefined)?.source} size={28} />}
+              />
+            );
+          })()}
 
           {/* THE EMPTY STATE. It sits here, a sibling of <ReactFlow> inside the
               canvas box, rather than as a child — React Flow renders children
