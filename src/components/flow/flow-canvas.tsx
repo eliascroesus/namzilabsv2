@@ -92,6 +92,7 @@ import {
   laneAncestorIds,
   matchKeepOf,
   nearestAppAncestor,
+  duplicateWiring,
   publishesToDashboard,
   resolveSampleField,
   structuralEdges,
@@ -830,16 +831,73 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
     return () => document.removeEventListener("keydown", onKey);
   }, [selectedId, requestDelete]);
 
+  /**
+   * A COPY OF A STEP BELONGS WHERE THE STEP IS.
+   *
+   * This used to clone the node and wire NOTHING, leaving the copy with no
+   * incoming edge — which the layout reads as a second root and draws as its
+   * own lane beside the flow. Duplicating the third Filter of a chain put an
+   * orphan next to the source, and the only way to get it back in line was to
+   * delete it and add the step by hand.
+   *
+   * Three cases, and the shape of the step decides which:
+   *
+   *  - A GET DATA step really is a new lane. It has no input to inherit, and a
+   *    second source beside the first is exactly what someone duplicating one
+   *    is asking for. Wired to nothing, deliberately.
+   *  - A SPLIT hub takes its copy into its own FIRST branch. A Split's meaning
+   *    is the branching, so a sibling Split beside it is nothing; nested one
+   *    branch deeper it is a second question asked of the records that got
+   *    through the first. The clone's branch ids are re-minted — the labels are
+   *    the same words, but two hubs sharing a path id would have their branch
+   *    edges answer to each other's handles.
+   *  - EVERYTHING ELSE is inserted immediately after the original, inheriting
+   *    its place in the chain: original → copy → whatever followed. That holds
+   *    inside a Split branch too, because a branch is an ordinary chain hanging
+   *    off a handle.
+   *
+   * The copy never inherits `lastTest`: it has not run, and showing the
+   * original's numbers under it would be the cached-count lie in a new place.
+   */
   const duplicateNode = useCallback(
     (id: string) => {
       const src = nodes.find((n) => n.id === id);
       if (!src) return;
       commit();
       const newId = `${src.type}_${Math.random().toString(36).slice(2, 8)}`;
-      setNodes((ns) => [...ns, { ...src, id: newId, position: { x: src.position.x + 40, y: src.position.y + 40 }, data: { ...src.data, lastTest: null, dirty: true }, selected: false }]);
+
+      const cfg = (src.data.config ?? {}) as { paths?: Array<{ id: string; label: string }>; fallbackId?: string };
+      const isSplit = src.type === "paths";
+      const clonedConfig = isSplit
+        ? {
+            ...cfg,
+            paths: (cfg.paths ?? []).map((p) => ({ ...p, id: `p${Math.random().toString(36).slice(2, 7)}` })),
+            ...(cfg.fallbackId ? { fallbackId: `p${Math.random().toString(36).slice(2, 7)}` } : {}),
+          }
+        : src.data.config;
+
+      setNodes((ns) => [
+        ...ns,
+        {
+          ...src,
+          id: newId,
+          // A placeholder only: `layout` recomputes every position from the
+          // wiring below on the next render.
+          position: { x: src.position.x, y: src.position.y + 170 },
+          data: { ...src.data, config: clonedConfig, lastTest: null, dirty: true },
+          selected: false,
+        } as FNode,
+      ]);
+
+      setEdges((es) => {
+        const { remove, add } = duplicateWiring({ id, type: src.type, config: cfg }, newId, es);
+        if (add.length === 0) return es;
+        const dropped = new Set(remove.map((e) => e.id));
+        return [...es.filter((e) => !dropped.has(e.id)), ...add];
+      });
       setSelectedId(newId);
     },
-    [commit, nodes, setNodes],
+    [commit, nodes, setNodes, setEdges],
   );
 
   /**

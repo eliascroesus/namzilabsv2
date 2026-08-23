@@ -402,6 +402,61 @@ export function descendantsOf(start: string, edges: Edge[]): Set<string> {
   return out;
 }
 
+// ---------- Duplicate & place ----------
+
+/**
+ * WHERE A COPY OF A STEP GOES.
+ *
+ * Duplicating used to wire nothing, so the copy had no incoming edge and the
+ * layout — which reads a node with no parent as a root — drew it in its own
+ * lane beside the flow. Duplicating the third Filter of a chain produced an
+ * orphan next to the source.
+ *
+ * The step's shape decides the answer:
+ *  - `app` (Get data) genuinely IS a new lane: it has no input to inherit, and
+ *    a second source beside the first is what duplicating one asks for. The
+ *    caller adds no edges at all, so this returns nothing to do.
+ *  - `paths` takes its copy into its own FIRST branch. A Split's whole meaning
+ *    is the branching, so a sibling Split beside it says nothing; one branch
+ *    deeper it is a second question asked of the records that got through.
+ *  - everything else lands immediately after the original, inheriting its
+ *    place: original → copy → whatever the original fed. That holds inside a
+ *    branch too, since a branch is an ordinary chain hanging off a handle.
+ *
+ * Returns the edge to RETIRE (the original's outgoing link, now re-homed under
+ * the copy) and the edges to add. `targetHandle` rides through for the same
+ * reason it does in `bridgeEdgesFor`: a link into a Calculate's B input has to
+ * come back into B, not silently become the chain input.
+ */
+export function duplicateWiring(
+  // `type` is optional on React Flow's node, so it arrives widened. A node
+  // without one is neither a source nor a Split and takes the chain rule.
+  original: { id: string; type?: string; config?: { paths?: Array<{ id: string }> } | null },
+  newId: string,
+  edges: Edge[],
+): { remove: Edge[]; add: Edge[] } {
+  if (original.type === "app") return { remove: [], add: [] };
+  const handle = original.type === "paths" ? (original.config?.paths ?? [])[0]?.id : undefined;
+  const outgoing =
+    original.type === "paths"
+      ? // Only when the hub actually has a branch to hand the copy to.
+        (handle ? edges.find((e) => e.source === original.id && e.sourceHandle === handle) : undefined)
+      : edges.find((e) => e.source === original.id && !e.sourceHandle && e.targetHandle == null);
+  // A Split with no branches yet has no lane to nest into; hanging the copy off
+  // a handle nothing else uses would strand it exactly as before.
+  if (original.type === "paths" && !handle) return { remove: [], add: [] };
+  const eid = () => `e_${Math.random().toString(36).slice(2, 9)}`;
+  return {
+    remove: outgoing ? [outgoing] : [],
+    add: [
+      { id: eid(), type: "insert", source: original.id, sourceHandle: handle, target: newId },
+      ...(outgoing
+        ? [{ id: eid(), type: "insert", source: newId, target: outgoing.target, targetHandle: outgoing.targetHandle ?? undefined }]
+        : []),
+    ],
+  };
+}
+
 // ---------- Delete & reconnect ----------
 
 /**

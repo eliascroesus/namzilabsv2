@@ -5,6 +5,7 @@ import {
   bridgeEdgesFor,
   buildFieldGroups,
   computeVerticalLayout,
+  duplicateWiring,
   computeStepNumbers,
   laneAncestorIds,
   nodeNeedsSetup,
@@ -678,5 +679,88 @@ describe("lane spread and row packing cannot disagree", () => {
     // no longer sits under the hub — it gets pushed right along with the rest.
     expect(xb).toBe(hubX);
     expect(hubX - xa).toBe(xc - hubX);
+  });
+});
+
+/**
+ * A COPY OF A STEP BELONGS WHERE THE STEP IS.
+ *
+ * Duplicating wired nothing, so the copy had no parent and the layout — which
+ * reads a parentless node as a root — drew it in its own lane beside the flow.
+ * Duplicating the third Filter of a chain produced an orphan next to the
+ * source, and the only way back into line was to delete it and re-add the step.
+ */
+describe("duplicateWiring (where a copy of a step goes)", () => {
+  it("inserts the copy immediately after the original, keeping one line", () => {
+    const edges = [E("a", "b"), E("b", "c")];
+    const { remove, add } = duplicateWiring({ id: "b", type: "filter" }, "b2", edges);
+
+    // b -> c is re-homed under the copy rather than left forking off b.
+    expect(remove.map((e) => e.id)).toEqual(["b->c"]);
+    expect(add).toHaveLength(2);
+    expect(add[0]).toMatchObject({ source: "b", target: "b2" });
+    expect(add[1]).toMatchObject({ source: "b2", target: "c" });
+  });
+
+  it("appends the copy at the end when the original feeds nothing", () => {
+    const { remove, add } = duplicateWiring({ id: "c", type: "filter" }, "c2", [E("b", "c")]);
+    expect(remove).toHaveLength(0);
+    expect(add).toEqual([expect.objectContaining({ source: "c", target: "c2" })]);
+  });
+
+  it("gives a Get data step its own lane, wired to nothing", () => {
+    // It has no input to inherit, and a second source beside the first is
+    // exactly what duplicating one asks for.
+    expect(duplicateWiring({ id: "src", type: "app" }, "src2", [E("src", "b")])).toEqual({ remove: [], add: [] });
+  });
+
+  it("nests a Split's copy into its own first branch", () => {
+    const edges = [E("hub", "b1", { sourceHandle: "p1" }), E("hub", "b2", { sourceHandle: "p2" })];
+    const { remove, add } = duplicateWiring({ id: "hub", type: "paths", config: { paths: [{ id: "p1" }, { id: "p2" }] } }, "hub2", edges);
+
+    // Branch one's existing head moves under the copy; branch two is untouched.
+    expect(remove.map((e) => e.id)).toEqual(["hub->b1"]);
+    expect(add[0]).toMatchObject({ source: "hub", sourceHandle: "p1", target: "hub2" });
+    expect(add[1]).toMatchObject({ source: "hub2", target: "b1" });
+    expect(add.some((e) => e.sourceHandle === "p2")).toBe(false);
+  });
+
+  it("leaves a branchless Split alone rather than stranding the copy on a dead handle", () => {
+    expect(duplicateWiring({ id: "hub", type: "paths", config: { paths: [] } }, "hub2", [])).toEqual({ remove: [], add: [] });
+  });
+
+  it("never steals a number reference from the original", () => {
+    /**
+     * An edge carrying a `targetHandle` is a step's number wired into another
+     * step's input, not a link in the chain. Re-homing one under the copy
+     * would silently repoint a live Calculate at a step that has never run —
+     * changing a published number with no edit the user made to it.
+     */
+    const edges = [E("count", "calc", { targetHandle: "b" })];
+    const { remove, add } = duplicateWiring({ id: "count", type: "filter" }, "count2", edges);
+
+    expect(remove).toHaveLength(0);
+    expect(add).toEqual([expect.objectContaining({ source: "count", target: "count2" })]);
+    // The original keeps feeding the Calculate's B input.
+    expect(add.some((e) => e.target === "calc")).toBe(false);
+  });
+
+  it("carries a chained targetHandle through when it IS the link being moved", () => {
+    // A Unite's second lane is a chain link that happens to name its input.
+    const edges = [E("a", "b"), E("b", "unite", { targetHandle: "in2" })];
+    const { add } = duplicateWiring({ id: "b", type: "filter" }, "b2", edges);
+    // b -> unite is a reference-shaped link, so it stays with b.
+    expect(add).toHaveLength(1);
+    expect(add[0]).toMatchObject({ source: "b", target: "b2" });
+  });
+
+  it("duplicates a step inside a branch into that branch, not out of it", () => {
+    // A branch is an ordinary chain hanging off a handle, so the chain rule
+    // already covers it — pinned because it is the case most likely to regress.
+    const edges = [E("hub", "f1", { sourceHandle: "p1" }), E("f1", "f2")];
+    const { remove, add } = duplicateWiring({ id: "f1", type: "filter" }, "f1b", edges);
+    expect(remove.map((e) => e.id)).toEqual(["f1->f2"]);
+    expect(add[0]).toMatchObject({ source: "f1", target: "f1b" });
+    expect(add[1]).toMatchObject({ source: "f1b", target: "f2" });
   });
 });
