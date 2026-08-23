@@ -92,7 +92,17 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
    * at one corner. So the border NEVER changes: the halo sits outside it, and
    * the card keeps exactly one edge in every state.
    */
-  const border = selected ? "border-border ring-[3px] ring-primary/40" : "border-border";
+  /**
+   * A card being dragged has to say where it would land BEFORE it is dropped,
+   * or the drop is a guess. The target wears the same halo selection uses, at
+   * full strength — it is answering a question the user is asking right now,
+   * where selection is only recording one they answered earlier.
+   */
+  const border = data.dropTarget
+    ? "border-border ring-[3px] ring-primary"
+    : selected
+      ? "border-border ring-[3px] ring-primary/40"
+      : "border-border";
   const accent = nodeAccent(t, nodeVariant(t, data.config as Record<string, unknown>));
   const freeHandles = (data.freeHandles as Array<{ id: string; label: string }> | undefined) ?? [];
 

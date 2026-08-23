@@ -93,6 +93,7 @@ import {
   matchKeepOf,
   nearestAppAncestor,
   duplicateWiring,
+  moveWiring,
   publishesToDashboard,
   resolveSampleField,
   structuralEdges,
@@ -163,6 +164,20 @@ function setupHint(type: string, cfg: Record<string, unknown>, inputCount: numbe
 
 const nodeTypes = Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])) as Record<string, typeof FlowNodeCard>;
 const edgeTypes = { insert: InsertEdge };
+
+/**
+ * How far below a card its "drop here" slot sits — one card height plus the
+ * gap the layout leaves between steps, so the slot is where the next step
+ * would actually appear rather than on top of the card above it.
+ */
+const CARD_DROP_GAP = 170;
+/**
+ * How near a slot a released card has to be to join it. Wider than the gap
+ * between slots so there is no dead zone between two steps, and narrow enough
+ * that a card dragged clear of the flow reads as "give this its own lane"
+ * rather than snapping back to the nearest line.
+ */
+const DROP_REACH = 260;
 
 export function FlowCanvas(props: {
   flowId: string;
@@ -1554,6 +1569,95 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
     return out;
   }, [nodes, edges, stepNoById]);
 
+  /**
+   * DRAG TO REORDER, ON A CANVAS THAT OWNS ITS OWN POSITIONS.
+   *
+   * Every card's x/y is computed from the wiring, so dropping one at a
+   * coordinate cannot mean anything — the next render would put it back. What
+   * a drag chooses here is a PLACE IN THE ORDER, and the drop lands on the
+   * nearest slot rather than wherever the pointer stopped.
+   *
+   * `dragging` holds the card that is currently loose so the layout lets go of
+   * it for the duration; `dropSlot` is what it would join if released now, and
+   * the target card wears a ring so the answer is visible before committing.
+   */
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropSlot, setDropSlot] = useState<{ after?: string; handle?: string; root?: boolean } | null>(null);
+
+  /**
+   * Every place a step can be dropped, as a point on the canvas.
+   *
+   * A chain slot sits under its step. A Split's branches are keyed by the
+   * position of each branch's current head, so dropping there means "become
+   * this branch's first step" — the one thing a hub with several lanes leaves
+   * genuinely ambiguous otherwise.
+   */
+  const dropSlots = useMemo(() => {
+    const out: Array<{ x: number; y: number; after: string; handle?: string }> = [];
+    for (const n of nodes) {
+      const p = layout.get(n.id);
+      if (!p) continue;
+      if (n.type === "paths") {
+        for (const e of edges) {
+          if (e.source !== n.id || !e.sourceHandle) continue;
+          const tp = layout.get(e.target);
+          if (tp) out.push({ x: tp.x, y: tp.y, after: n.id, handle: e.sourceHandle });
+        }
+      } else {
+        out.push({ x: p.x, y: p.y + CARD_DROP_GAP, after: n.id });
+      }
+    }
+    return out;
+  }, [nodes, edges, layout]);
+
+  /**
+   * The slot a loose card would join. Beyond `DROP_REACH` of every slot it is
+   * a lane of its own — which is how a second source, or a chain someone wants
+   * to start over, gets made: drag it out to the side and let go.
+   */
+  const slotFor = useCallback(
+    (id: string, at: { x: number; y: number }) => {
+      let best: { after: string; handle?: string } | null = null;
+      let bestD = Infinity;
+      for (const s of dropSlots) {
+        if (s.after === id) continue;
+        const d = Math.hypot(s.x - at.x, s.y - at.y);
+        if (d < bestD) {
+          bestD = d;
+          best = { after: s.after, handle: s.handle };
+        }
+      }
+      return best && bestD < DROP_REACH ? best : { root: true };
+    },
+    [dropSlots],
+  );
+
+  const onNodeDrag = useCallback(
+    (_: unknown, node: FNode) => {
+      setDragging(node.id);
+      setDropSlot(slotFor(node.id, node.position));
+    },
+    [slotFor],
+  );
+
+  const onNodeDragStop = useCallback(
+    (_: unknown, node: FNode) => {
+      const target = slotFor(node.id, node.position);
+      setDragging(null);
+      setDropSlot(null);
+      const wiring = moveWiring(node.id, target, edges);
+      // Nothing to do (dropped on itself): the layout puts the card back on
+      // the next render, so simply not writing anything IS the snap-back.
+      if (!wiring) return;
+      commit();
+      setEdges((es) => {
+        const dropped = new Set(wiring.remove.map((e) => e.id));
+        return [...es.filter((e) => !dropped.has(e.id)), ...wiring.add];
+      });
+    },
+    [slotFor, edges, commit, setEdges],
+  );
+
   const displayNodes = useMemo(
     () =>
       nodes.map((n) => {
@@ -1572,7 +1676,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
         }
         return {
           ...n,
-          position: layout.get(n.id) ?? n.position,
+          // A loose card keeps the position the pointer gave it; every other
+          // card is placed by the layout.
+          position: dragging === n.id ? n.position : (layout.get(n.id) ?? n.position),
           // Drive the selection ring from OUR selection (the open config step), so
           // programmatic selection (adding/continuing to a step) highlights the right card.
           selected: n.id === selectedId,
@@ -1589,10 +1695,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
             onAddFrom: addFromNode,
             onDeleteNode: requestDelete,
             onDuplicateNode: duplicateNode,
+            dropTarget: dropSlot?.after === n.id && dragging !== n.id,
           },
         };
       }),
-    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId, metricByNode, refLineById, supersededById],
+    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId, metricByNode, refLineById, supersededById, dragging, dropSlot],
   );
   /**
    * RUN THE WHOLE FLOW, top to bottom.
@@ -1739,7 +1846,17 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             defaultEdgeOptions={{ type: "insert" }}
-            nodesDraggable={false}
+            /**
+             * Cards are draggable so the order can be rearranged; the wiring,
+             * not the coordinate, is what a drop changes. A small threshold
+             * keeps a click on a card from registering as a one-pixel drag,
+             * and the kebab and its menu carry `nodrag` so pressing them never
+             * picks the card up.
+             */
+            nodesDraggable
+            nodeDragThreshold={6}
+            onNodeDrag={onNodeDrag}
+            onNodeDragStop={onNodeDragStop}
             nodesConnectable={false}
             fitView
             // 1.3 is the resting size of this canvas, not 1. A step card is 300px

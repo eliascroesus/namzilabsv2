@@ -457,6 +457,75 @@ export function duplicateWiring(
   };
 }
 
+/**
+ * WHERE A STEP GOES WHEN IT IS DRAGGED SOMEWHERE ELSE.
+ *
+ * Moving is detaching plus inserting, and both halves already exist: the step
+ * leaves the way a deleted one does — its parent bridged to its children, so
+ * the line it was in closes up — and it arrives the way a duplicate does,
+ * between the drop target and whatever that target fed.
+ *
+ * `target` is a slot, never a coordinate. Positions on this canvas are
+ * computed from the wiring, so a dropped step has no meaningful x/y of its
+ * own; what a drag actually chooses is a PLACE IN THE ORDER.
+ *  - `{ after: id }` puts it directly below that step, in that step's lane.
+ *  - `{ after: id, handle }` puts it at the head of one of a Split's branches.
+ *  - `{ root: true }` detaches it into a lane of its own — the "drop it beside
+ *    the first step" case, which is how a second source, or a chain someone
+ *    wants to rebuild from scratch, gets started.
+ *
+ * Returns null when there is no move to make — dropped on itself, or with no
+ * slot named.
+ *
+ * NO CYCLE IS REACHABLE, and the reason is worth stating because the obvious
+ * guard is wrong. Refusing a target inside the step's own subtree looks
+ * prudent and forbids the commonest reorder there is: dragging a step to the
+ * BOTTOM of the line it already sits in. The step is detached before it is
+ * re-inserted — its children are bridged to its parent, so by the time the
+ * slot is read it has no descendants at all, and inserting a parentless node
+ * into a DAG cannot close a loop.
+ */
+export function moveWiring(
+  nodeId: string,
+  target: { after?: string; handle?: string; root?: boolean },
+  edges: Edge[],
+): { remove: Edge[]; add: Edge[] } | null {
+  if (target.after === nodeId) return null;
+
+  // Detach: everything touching the step, plus the bridge that closes the gap.
+  const incident = edges.filter((e) => e.source === nodeId || e.target === nodeId);
+  const bridges = bridgeEdgesFor(nodeId, edges);
+  if (target.root) return { remove: incident, add: bridges };
+  if (!target.after) return null;
+
+  /**
+   * INSERT INTO THE GRAPH AS IT WILL BE, NOT AS IT WAS.
+   *
+   * The slot has to be found AFTER the step has left, because the link it is
+   * about to occupy may be the bridge its own departure created. Dragging a
+   * step to sit directly under its own parent is the plain case: `a -> b -> c`
+   * detaches to `a -> c`, and reading the original edges instead would find
+   * nothing leaving `a`, drop the step on the end, and lose `c`.
+   */
+  const detached = [...edges.filter((e) => !incident.includes(e)), ...bridges];
+  const outgoing = target.handle
+    ? detached.find((e) => e.source === target.after && e.sourceHandle === target.handle)
+    : detached.find((e) => e.source === target.after && !e.sourceHandle && e.targetHandle == null);
+  const eid = () => `e_${Math.random().toString(36).slice(2, 9)}`;
+  return {
+    // A bridge is a new edge, so "not adding it" is how it is taken back out;
+    // only an ORIGINAL edge can be removed.
+    remove: [...incident, ...(outgoing && !bridges.includes(outgoing) ? [outgoing] : [])],
+    add: [
+      ...bridges.filter((b) => b !== outgoing),
+      { id: eid(), type: "insert", source: target.after, sourceHandle: target.handle, target: nodeId },
+      ...(outgoing
+        ? [{ id: eid(), type: "insert", source: nodeId, target: outgoing.target, targetHandle: outgoing.targetHandle ?? undefined }]
+        : []),
+    ],
+  };
+}
+
 // ---------- Delete & reconnect ----------
 
 /**

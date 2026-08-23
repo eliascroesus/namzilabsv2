@@ -6,6 +6,7 @@ import {
   buildFieldGroups,
   computeVerticalLayout,
   duplicateWiring,
+  moveWiring,
   computeStepNumbers,
   laneAncestorIds,
   nodeNeedsSetup,
@@ -762,5 +763,75 @@ describe("duplicateWiring (where a copy of a step goes)", () => {
     expect(remove.map((e) => e.id)).toEqual(["f1->f2"]);
     expect(add[0]).toMatchObject({ source: "f1", target: "f1b" });
     expect(add[1]).toMatchObject({ source: "f1b", target: "f2" });
+  });
+});
+
+/**
+ * MOVING IS DETACHING PLUS INSERTING, and a drop chooses a PLACE IN THE ORDER
+ * rather than a coordinate — positions on this canvas are computed from the
+ * wiring, so a dragged step has no meaningful x/y of its own.
+ */
+describe("moveWiring (drag a step to a new place in the order)", () => {
+  it("closes the gap it left and opens the one it lands in", () => {
+    // a -> b -> c -> d, drag b under c.
+    const edges = [E("a", "b"), E("b", "c"), E("c", "d")];
+    const out = moveWiring("b", { after: "c" }, edges)!;
+
+    // b's old links go, and a is bridged straight to c.
+    expect(out.remove.map((e) => e.id).sort()).toEqual(["a->b", "b->c", "c->d"]);
+    const add = out.add.map((e) => `${e.source}->${e.target}`);
+    expect(add).toContain("a->c");
+    expect(add).toContain("c->b");
+    expect(add).toContain("b->d");
+  });
+
+  it("appends to the end when the target feeds nothing", () => {
+    const out = moveWiring("b", { after: "c" }, [E("a", "b"), E("b", "c")])!;
+    const add = out.add.map((e) => `${e.source}->${e.target}`);
+    expect(add).toContain("a->c");
+    expect(add).toContain("c->b");
+  });
+
+  it("drops a step into a Split branch by its handle", () => {
+    const edges = [E("a", "b"), E("hub", "x", { sourceHandle: "p1" })];
+    const out = moveWiring("b", { after: "hub", handle: "p1" }, edges)!;
+    const wired = out.add.find((e) => e.target === "b")!;
+    expect(wired).toMatchObject({ source: "hub", sourceHandle: "p1" });
+    // Branch one's old head now hangs off the moved step.
+    expect(out.add.some((e) => e.source === "b" && e.target === "x")).toBe(true);
+  });
+
+  it("detaches into a lane of its own when dropped beside the first step", () => {
+    const out = moveWiring("b", { root: true }, [E("a", "b"), E("b", "c")])!;
+    expect(out.remove.map((e) => e.id).sort()).toEqual(["a->b", "b->c"]);
+    // The line b was in closes up; b itself is wired to nothing.
+    expect(out.add.map((e) => `${e.source}->${e.target}`)).toEqual(["a->c"]);
+  });
+
+  it("refuses to drop a step onto itself", () => {
+    expect(moveWiring("b", { after: "b" }, [E("a", "b")])).toBeNull();
+  });
+
+  it("allows dragging a step to the bottom of the line it is already in", () => {
+    /**
+     * The obvious guard — refuse a target inside the step's own subtree —
+     * forbids the commonest reorder there is. The step is detached before it
+     * is re-inserted, so by the time the slot is read it has no descendants
+     * and no loop is reachable.
+     */
+    const out = moveWiring("b", { after: "d" }, [E("a", "b"), E("b", "c"), E("c", "d")])!;
+    expect(out).not.toBeNull();
+    const add = out.add.map((e) => `${e.source}->${e.target}`);
+    expect(add).toContain("a->c"); // the gap b left closes up
+    expect(add).toContain("d->b"); // and b lands on the end
+  });
+
+  it("does not re-home the link it is about to occupy", () => {
+    // Dragging b to sit directly under its own parent is a no-op in order,
+    // and must not leave a->b removed with nothing put back.
+    const out = moveWiring("b", { after: "a" }, [E("a", "b"), E("b", "c")])!;
+    const add = out.add.map((e) => `${e.source}->${e.target}`);
+    expect(add).toContain("a->b");
+    expect(add).toContain("b->c");
   });
 });
