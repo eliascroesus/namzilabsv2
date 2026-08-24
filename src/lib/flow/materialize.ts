@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, lt, notInArray, or, sql, type SQL, type SQLWrapp
 import { backfillJobs, connections, flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
-import { runFlow, buildTile, tileByRange, type CompileProvenance } from "./engine";
+import { runFlow, buildTile, tileByRange, type CompileProvenance, type RangeSlot } from "./engine";
 import { compileEnabled } from "./compile/flags";
 import { getPublishedVersion, graphFingerprint, graphForFingerprint } from "./store";
 import { parseGraph, seedMetricFormat, type TileSpec } from "./types";
@@ -68,6 +68,34 @@ function nextChangeAtIso(nextChangeMs: number, slidingCapMs: number, asOf: Date)
   const nextMidnight = Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate() + 1);
   const crossing = Number.isFinite(nextChangeMs) ? nextChangeMs : nextMidnight;
   return new Date(Math.min(crossing, slidingCapMs, nextMidnight)).toISOString();
+}
+
+/**
+ * THE DASHBOARD'S OWN SLOTS — the day keys dropped, and `records` with them.
+ *
+ * `tileByRange` answers every window it is handed in one shape, so the seven
+ * pills came back carrying a `records` count that only the CALENDAR asks for:
+ * seven numbers per tile that nothing on the board reads (`flow-tile.tsx`
+ * doesn't even declare the field), riding in the one column the dashboard
+ * fetches on every render and every freshness poll. About a hundred bytes a
+ * tile — small, and it is exactly the kind of small that accumulates unnoticed
+ * in a column billed by the byte, because nothing renders differently when it
+ * is there.
+ *
+ * Dropped HERE rather than in `tileByRange`, which has no business knowing
+ * which of its callers wants which field.
+ */
+function dashboardRanges(
+  byRange: Record<string, RangeSlot>,
+  dayKeys: Set<string>,
+): Record<string, RangeSlot> {
+  const out: Record<string, RangeSlot> = {};
+  for (const [key, slot] of Object.entries(byRange)) {
+    if (dayKeys.has(key)) continue;
+    const { records: _records, ...rest } = slot;
+    out[key] = rest;
+  }
+  return out;
 }
 
 /**
@@ -277,7 +305,7 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
         derived && Object.keys(derived.byRange).length > 0
           ? {
               ...t.tile,
-              byRange: Object.fromEntries(Object.entries(derived.byRange).filter(([k]) => !dayKeys.has(k))),
+              byRange: dashboardRanges(derived.byRange, dayKeys),
               byDay: dayValues(derived.byRange, dayKeys),
               nextChangeAt: nextChangeAtIso(derived.nextChangeMs, slidingCapMs, asOf),
             }

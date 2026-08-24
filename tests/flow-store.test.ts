@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createTestDb } from "./helpers/testdb";
 import { events, flowResults } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { createFlow, saveDraft, publishFlow, getPublishedVersion } from "@/lib/flow/store";
+import { createFlow, saveDraft, publishFlow, getPublishedVersion, listFlowNames } from "@/lib/flow/store";
 import { materializeFlow } from "@/lib/flow/materialize";
 import { validateGraph } from "@/lib/flow/validate";
 import { parseGraph } from "@/lib/flow/types";
@@ -253,5 +253,35 @@ describe("graph validation", () => {
       metrics: [{ nodeId: "c", enabled: true, name: "Total" }],
     });
     expect(validateGraph(g).some((i) => /metric to publish/.test(i.message))).toBe(false);
+  });
+});
+
+/**
+ * THE NARROW READ, PINNED — because the wide one is the easy mistake.
+ *
+ * `listFlows` is `select()`, and `flows.draft_graph` carries every node's
+ * config AND its cached Test payload with sample records: tens of kilobytes
+ * per flow. The calendar's metric picker only needs a NAME to say which flow a
+ * metric came from, and it reached for `listFlows` to get one — every graph in
+ * the workspace, on every page view, out of a database that bills by the byte.
+ *
+ * A column added to this select is invisible: the page looks identical and the
+ * bill moves. So the shape is a test.
+ */
+describe("listFlowNames", () => {
+  it("returns the id and the name, and nothing else", async () => {
+    const flow = await createFlow(db, ORG, "Speed to lead");
+    await saveDraft(db, ORG, flow.id, {
+      nodes: [{ id: "a", type: "app", data: { config: { connectionId: CONN }, lastTest: { status: "ok", sample: [{ big: "x".repeat(5000) }] } } }],
+      edges: [],
+    });
+
+    const rows = await listFlowNames(db, ORG);
+
+    expect(rows).toHaveLength(1);
+    expect(Object.keys(rows[0]).sort()).toEqual(["id", "name"]);
+    expect(rows[0].name).toBe("Speed to lead");
+    // The draft graph — the whole reason this function exists — stayed home.
+    expect(JSON.stringify(rows[0])).not.toContain("xxxx");
   });
 });

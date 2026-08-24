@@ -304,7 +304,7 @@ describe("materializeFlow stores the days on the tile", () => {
     await materializeFlow(db, ORG, flow.id);
     const [row] = await db.select().from(flowResults).where(eq(flowResults.flowId, flow.id));
     const tile = row.tile as {
-      byRange?: Record<string, unknown>;
+      byRange?: Record<string, Record<string, unknown>>;
       byDay?: Record<string, { value: number; records?: number }>;
     };
 
@@ -316,6 +316,19 @@ describe("materializeFlow stores the days on the tile", () => {
     // The pills are untouched — the dashboard reads these and knows nothing
     // about days.
     expect(Object.keys(tile.byRange ?? {}).sort()).toEqual([...MATERIALIZED_RANGES].sort());
+    /**
+     * AND THEY CARRY NOTHING THE BOARD DOES NOT RENDER.
+     *
+     * `tileByRange` answers every window in one shape, so the pills came back
+     * with the calendar's `records` count on them — seven numbers per tile that
+     * `flow-tile.tsx` does not read or even declare, in the one column the
+     * dashboard fetches on every render and every freshness poll. Roughly a
+     * hundred bytes a tile: too small to notice and exactly the kind of small
+     * that accumulates in a column billed by the byte.
+     */
+    for (const slot of Object.values(tile.byRange ?? {})) expect(slot).not.toHaveProperty("records");
+    // The calendar's own days keep it — that is where the count is rendered.
+    expect(tile.byDay?.[yesterday]?.records).toBe(2);
     // …and every calendar day is present, so a square can tell "zero happened"
     // from "this metric cannot answer for that day".
     expect(Object.keys(tile.byDay ?? {})).toHaveLength(calendarDayRanges(now).length);

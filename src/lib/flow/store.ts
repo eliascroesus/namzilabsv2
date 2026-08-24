@@ -40,8 +40,33 @@ export async function createFlow(db: DB, orgId: string, name = "Untitled flow"):
   return row;
 }
 
+/**
+ * Every column, including `draft_graph` — WHICH IS THE WHOLE POINT AND ALSO THE
+ * WHOLE COST. The flows list needs the graph (it counts steps and names sources
+ * off it), and nothing else does.
+ *
+ * A draft graph is not a small value: it carries every node's config AND its
+ * cached `lastTest` payload, sample records included. Reaching for this to get
+ * a flow's NAME reads all of that out of a database that bills by the byte —
+ * see `listFlowNames` below, which exists because the calendar page did exactly
+ * that to label a dropdown.
+ */
 export async function listFlows(db: DB, orgId: string): Promise<Flow[]> {
   return db.select().from(flows).where(eq(flows.orgId, orgId)).orderBy(desc(flows.updatedAt));
+}
+
+/**
+ * Id and name, for anything that only has to LABEL a flow.
+ *
+ * Two columns instead of nine, and the two that matter are small: the ones left
+ * behind include `draft_graph`, whose cached Test samples can run to tens of
+ * kilobytes per flow. The calendar's metric picker shows which flow a metric
+ * came from ("Booked" from Speed to lead, "Booked" from Pickup rate), and it
+ * was calling `listFlows` for that — every graph in the workspace, on every
+ * page view, to print a hint.
+ */
+export async function listFlowNames(db: DB, orgId: string): Promise<Array<{ id: string; name: string }>> {
+  return db.select({ id: flows.id, name: flows.name }).from(flows).where(eq(flows.orgId, orgId));
 }
 
 export async function getFlow(db: DB, orgId: string, id: string): Promise<Flow | null> {

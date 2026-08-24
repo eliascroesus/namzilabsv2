@@ -3,7 +3,7 @@ import { requireOrg } from "@/lib/auth";
 import { getReadDb } from "@/db/client";
 import { effectiveAccess } from "@/lib/permissions";
 import { calendarFlowTiles } from "@/lib/flow/materialize";
-import { listFlows } from "@/lib/flow/store";
+import { listFlowNames } from "@/lib/flow/store";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer, PageHeader } from "@/components/ui/page";
@@ -28,8 +28,10 @@ export const maxDuration = 60;
  * answers "which days made it". They read the SAME stored rows: the
  * materializer computes every day of the two months this view can show at the
  * same time it computes the range pills (see `byDay` in flow/types.ts), so this
- * page is one query and no flow run — the reason changing metric or month here
- * costs nothing at all.
+ * page runs NO FLOW — it is three narrow reads (the rank gate, the tiles, the
+ * flow names) and nothing else. That is also why changing metric or month
+ * costs nothing at all: both months arrive with the first render, and the
+ * board switches between them without going back to the server.
  *
  * RANK-GATED LIKE THE BOARD IT MIRRORS. A metric hidden from a member on the
  * dashboard must be hidden from every other way of looking at the same number,
@@ -54,11 +56,16 @@ export default async function CalendarPage() {
 
   // Flow names, for the picker's hint: two flows may each publish a metric
   // called "Booked", and a dropdown with two identical rows is a coin toss.
+  //
+  // TWO COLUMNS, NOT NINE. This asked `listFlows` first, which is `select()` —
+  // so labelling a dropdown read every draft graph in the workspace, cached
+  // Test samples and all, on every page view. Neon bills what it returns.
+  //
   // Best-effort — a missing name costs a hint, never the page.
   const flowNames = new Map<string, string>();
   if (rows) {
     try {
-      for (const f of await listFlows(db, orgId)) flowNames.set(f.id, f.name);
+      for (const f of await listFlowNames(db, orgId)) flowNames.set(f.id, f.name);
     } catch {
       // No hints rather than no calendar.
     }
