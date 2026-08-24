@@ -229,6 +229,47 @@ describe("a day square carries that day's own number", () => {
   });
 
   /**
+   * THE CALENDAR GETS NO VOTE ON THE DASHBOARD'S REFRESH CADENCE.
+   *
+   * `nextChangeMs` decides when the expiry sweep recomputes this flow, and a
+   * recompute re-reads the flow's whole history — the single largest egress
+   * line in the product. So the day windows are handed in with
+   * `tracksCrossings: false`, and this is the assertion that says it worked:
+   * the answer with 60 extra windows must be IDENTICAL to the answer without
+   * them.
+   *
+   * It is not a theoretical guard. Which nodes a window traverses is
+   * range-dependent — `windowed` throws when a step cannot be recomputed and
+   * abandons the rest of that input loop, and whether a step throws is not
+   * monotone in window width (`assertFieldHasValues` passes an EMPTY window and
+   * rejects a populated one whose column holds no numbers). A quiet day can
+   * therefore complete a traversal every pill abandons, reach a branch none of
+   * them reach, and book a crossing off a record none of them saw. Delete the
+   * flag and a flow like that starts recomputing hours early, for good.
+   */
+  it("cannot move the next-change moment, however many days are asked for", async () => {
+    await ev(at("2026-08-17T09:00:00Z"), "A");
+    // A record in the future: this is what a crossing is made of, so if the day
+    // windows could book one, this is the fixture that would show it.
+    await ev(at("2026-08-18T16:00:00Z"), "future");
+
+    const g = parseGraph(GRAPH);
+    const run = await runFlow({ db, orgId: ORG }, g);
+    const pills = [
+      { key: "today", start: at("2026-08-18T00:00:00Z"), end: NOW.getTime() },
+      { key: "7d", start: NOW.getTime() - 7 * DAY, end: NOW.getTime(), rollingMs: 7 * DAY },
+    ];
+
+    const withoutDays = tileByRange(g, run.nodes, "count", SPEC, pills);
+    const withDays = tileByRange(g, run.nodes, "count", SPEC, [...pills, ...calendarDayRanges(NOW)]);
+
+    expect(withDays.nextChangeMs).toBe(withoutDays.nextChangeMs);
+    // And the days still got their answers — the flag silences the crossing
+    // arithmetic, not the windowing.
+    expect(withDays.byRange["2026-08-17"].value).toBe(1);
+  });
+
+  /**
    * THE REASON THE FUTURE FLAG EXISTS, proven rather than asserted about.
    *
    * With the month's remaining days handed in unflagged, `now` becomes the end

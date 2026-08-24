@@ -355,24 +355,53 @@ export async function markStaleForSource(
   connectionId?: string | null,
   streamHashes?: string[] | null,
 ): Promise<string[]> {
-  const published = await db.select().from(flows).where(and(eq(flows.orgId, orgId), eq(flows.status, "published")));
+  /**
+   * ONE QUERY, AND NOT ONE CACHED TEST PAYLOAD IN IT.
+   *
+   * THIS IS THE HOTTEST DATABASE PATH IN THE PRODUCT — it runs on every
+   * ingested webhook event and on every sweep tick that found a change — and
+   * it used to be the most wasteful. It read `select()` on `flows` (nine
+   * columns, `draft_graph` among them) to use exactly two scalars, and then
+   * issued ONE MORE unprojected query per published flow to read three keys off
+   * each app node. For a ten-flow org that is eleven round trips carrying a few
+   * hundred kilobytes, per event, to answer a question about node configs.
+   *
+   * Both halves are fixed here without changing what the loop decides:
+   *
+   *  - the join replaces the per-flow query, and `publishedVersion` is the join
+   *    key, so a flow with no published version simply does not come back (the
+   *    old `if (!f.publishedVersion) continue` and `if (!ver) continue` are now
+   *    the join's own semantics);
+   *  - `graphForFingerprint` projects the stored graph down to node id/type/
+   *    config plus edges and metrics IN POSTGRES, so every step's cached
+   *    `lastTest` — its `sample`, `inputSample` and rendered tile, the fattest
+   *    jsonb the product stores — stays in the database.
+   *
+   * The projection is deliberately the one the fingerprint already uses rather
+   * than a tighter bespoke one: its output still parses through `parseGraph`,
+   * so the legacy migrations that run inside it see exactly what they saw
+   * before, and the `uses` test below is answered by the same JS on the same
+   * shape. A tighter SQL projection would have meant reading raw stored bytes
+   * instead of migrated ones — see `comparableGraph`, which is allowed to
+   * disagree with the parsed graph precisely because it only ever NARROWS a
+   * question that JS then settles. Staleness has no second pass to settle it:
+   * a false negative here is a customer's number silently frozen.
+   */
+  const published = await db
+    .select({ flowId: flows.id, graph: graphForFingerprint(flowVersions.graph) })
+    .from(flows)
+    .innerJoin(flowVersions, and(eq(flowVersions.flowId, flows.id), eq(flowVersions.version, flows.publishedVersion)))
+    .where(and(eq(flows.orgId, orgId), eq(flows.status, "published")));
   const changedHashes = streamHashes?.length ? new Set(streamHashes) : null;
   const affected: string[] = [];
   for (const f of published) {
-    if (!f.publishedVersion) continue;
-    const [ver] = await db
-      .select()
-      .from(flowVersions)
-      .where(and(eq(flowVersions.flowId, f.id), eq(flowVersions.version, f.publishedVersion)))
-      .limit(1);
-    if (!ver) continue;
     // One unparseable stored graph must not kill staleness for every OTHER
     // flow in the org — parseGraph is designed never to throw (migrations run
     // inside it), but this loop is the org-wide freshness artery and a single
     // corrupt row taking it down would freeze every tile at once.
     let graph: ReturnType<typeof parseGraph>;
     try {
-      graph = parseGraph(ver.graph);
+      graph = parseGraph(f.graph);
     } catch {
       continue;
     }
@@ -391,8 +420,8 @@ export async function markStaleForSource(
       return true; // whole-connection read, or caller without stream knowledge
     });
     if (uses) {
-      await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.flowId, f.id));
-      affected.push(f.id);
+      await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.flowId, f.flowId));
+      affected.push(f.flowId);
     }
   }
   return affected;
@@ -434,9 +463,21 @@ export async function publishedFlowTiles(db: DB, orgId: string) {
       status: flowResults.status,
       error: flowResults.error,
       computedAt: flowResults.computedAt,
-      // Which streams this number was computed from, recorded at materialize
-      // time. Needed to answer "is any of it still importing".
-      provenance: flowResults.provenance,
+      /**
+       * Which streams this number was computed from, recorded at materialize
+       * time. Needed to answer "is any of it still importing" — and that ONE
+       * key is all the board reads (`streamRefsOfProvenance`).
+       *
+       * The rest of `provenance` is the audit trail: `reads`, holding the
+       * compiled SQL text and the bound parameters for every Get-data node in
+       * the flow, several hundred bytes each. Shipping it here meant the
+       * dashboard downloaded a copy of its own query plans on every render and
+       * every freshness poll, to look at none of them. Same projection trick as
+       * `calendarFlowTiles` below, and null-safe for the same reason.
+       */
+      provenance: sql<{ streams?: unknown } | null>`jsonb_build_object('streams', ${flowResults.provenance} -> 'streams')`.as(
+        "provenance",
+      ),
     })
     .from(flowResults)
     .innerJoin(flows, eq(flows.id, flowResults.flowId))

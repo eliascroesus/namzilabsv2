@@ -263,7 +263,21 @@ export async function getPublishedVersion(
   orgId: string,
   flowId: string,
 ): Promise<{ version: number; graph: FlowGraph } | null> {
-  const flow = await getFlow(db, orgId, flowId);
+  /**
+   * ONE INTEGER, READ AS ONE INTEGER.
+   *
+   * This asked `getFlow`, which is `select()` — so every materialize decoded
+   * the flow's whole `draft_graph` (tens of kilobytes of cached Test payloads)
+   * and threw all of it away to learn a version number. Worse than merely
+   * wasteful: the very next line fetches the VERSION graph, which is a snapshot
+   * of that same draft, so the fat was being paid for twice on the product's
+   * most frequent write path.
+   */
+  const [flow] = await db
+    .select({ publishedVersion: flows.publishedVersion })
+    .from(flows)
+    .where(and(eq(flows.id, flowId), eq(flows.orgId, orgId)))
+    .limit(1);
   if (!flow?.publishedVersion) return null;
   const graph = await getPublishedGraph(db, orgId, flowId, flow.publishedVersion);
   return graph ? { version: flow.publishedVersion, graph } : null;

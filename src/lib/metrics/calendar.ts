@@ -111,9 +111,9 @@ export function monthLabel(key: MonthKey): string {
  */
 export function calendarDayRanges(
   now: Date = new Date(),
-): Array<{ key: string; start: number; end: number; future?: boolean }> {
+): Array<{ key: string; start: number; end: number; future?: boolean; tracksCrossings: false }> {
   const nowMs = now.getTime();
-  const out: Array<{ key: string; start: number; end: number; future?: boolean }> = [];
+  const out: Array<{ key: string; start: number; end: number; future?: boolean; tracksCrossings: false }> = [];
   for (const month of calendarMonths(now)) {
     const first = monthStart(month);
     for (let i = 0; i < daysInMonth(month); i++) {
@@ -121,7 +121,11 @@ export function calendarDayRanges(
       // Ends one millisecond before the next day begins — the same hygiene
       // "Yesterday" uses against "Today", so no record is counted in two squares.
       const end = start + DAY_MS - 1;
-      out.push({ key: dayKey(start), start, end, ...(end > nowMs ? { future: true } : {}) });
+      // `tracksCrossings: false` — a calendar window is READ from the run, it
+      // does not get a vote on when the tile next changes. See the flag's note
+      // on `tileByRange`: without it a quiet day can reach a branch the
+      // dashboard's own windows abandon and pull the next recompute earlier.
+      out.push({ key: dayKey(start), start, end, tracksCrossings: false, ...(end > nowMs ? { future: true } : {}) });
     }
   }
   return out;

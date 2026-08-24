@@ -1575,8 +1575,32 @@ export function tileByRange(
    * `all` returns the run untouched; `rollingMs` is a backward window's length;
    * `future` marks a range whose `end` is a far-future sentinel rather than the
    * clock, so the crossing arithmetic below can tell the two apart.
+   *
+   * `tracksCrossings: false` says this window is here to be READ and must not
+   * influence `nextChangeMs` — the calendar's day windows set it, the seven
+   * dashboard pills do not (the default is on, so no existing caller changes).
+   *
+   * WHY IT IS NEEDED, since "the same records produce the same crossings" is
+   * almost true: which NODES a window traverses is range-dependent. `windowed`
+   * throws when a step cannot be recomputed, aborting the input loop, and
+   * whether a step throws is not monotone in window width — `assertFieldHasValues`
+   * lets an EMPTY window pass and rejects a populated one whose column holds no
+   * numbers. So a quiet calendar day can complete a traversal that every
+   * dashboard pill abandons, reach a branch they never reach, and book a
+   * crossing off a record none of them saw. `nextChangeMs` is a min, so the
+   * tile then expires early and the flow re-reads its whole history hours
+   * before it had to. Bounded and rare — and the fix is one boolean, because
+   * the calendar has no business voting on the dashboard's refresh cadence.
    */
-  ranges: Array<{ key: string; start: number; end: number; all?: boolean; rollingMs?: number; future?: boolean }>,
+  ranges: Array<{
+    key: string;
+    start: number;
+    end: number;
+    all?: boolean;
+    rollingMs?: number;
+    future?: boolean;
+    tracksCrossings?: boolean;
+  }>,
 ): { byRange: Record<string, RangeSlot>; nextChangeMs: number } {
   const nodeById = new Map(graph.nodes.map((n) => [n.id, n]));
   const incomingBy = new Map<string, FlowGraph["edges"]>();
@@ -1634,9 +1658,66 @@ export function tileByRange(
     }
   };
 
+  /**
+   * EVERY RECORD'S DATE, READ ONCE INSTEAD OF ONCE PER WINDOW.
+   *
+   * `keep()` below runs per node PER RANGE over the same record objects — the
+   * run's own arrays, handed back unchanged by `nodes.get(id)` every time — so
+   * with the calendar's day windows in play the seven dashboard ranges became
+   * sixty-nine, and a 20,000-record flow parsed 1.4 MILLION dates to answer
+   * questions about 20,000. Measured before this cache: 20.5ms for the pills
+   * alone, 194ms with the days.
+   *
+   * A `WeakMap` per FIELD, because which field dates a record is decided per
+   * dataset (`spec.timeField` or the `occurredAt` fallback) and the same record
+   * can legitimately be dated both ways in one call. Weak so a big run's
+   * records are still collectable the moment the range loop lets go of them.
+   *
+   * `getField` + `dateMs` are pure over a record that nothing here mutates, so
+   * the cached answer is the answer — this changes speed and nothing else.
+   */
+  const dateCache = new Map<string, WeakMap<FlowRecord, number | null>>();
+  const dateOf = (r: FlowRecord, field: string): number | null => {
+    let byRecord = dateCache.get(field);
+    if (!byRecord) {
+      byRecord = new WeakMap();
+      dateCache.set(field, byRecord);
+    }
+    const hit = byRecord.get(r);
+    if (hit !== undefined) return hit;
+    const t = dateMs(getField(r, field));
+    byRecord.set(r, t);
+    return t;
+  };
+  /**
+   * Which field dates a given ARRAY of records — the `records.some(...)` probe
+   * was itself a full pass per node per range, and the answer cannot change
+   * between ranges for the same array.
+   */
+  const fieldCache = new WeakMap<FlowRecord[], string>();
+  const fieldFor = (records: FlowRecord[]): string => {
+    const hit = fieldCache.get(records);
+    if (hit !== undefined) return hit;
+    const field =
+      spec.timeField && records.some((r) => dateOf(r, spec.timeField!) != null) ? spec.timeField : "occurredAt";
+    fieldCache.set(records, field);
+    return field;
+  };
+
   const out: Record<string, RangeSlot> = {};
   for (const range of ranges) {
     let undated = 0;
+    /**
+     * WHETHER THIS WINDOW GETS A VOTE ON WHEN THE TILE NEXT CHANGES.
+     *
+     * Crossings are the DASHBOARD's arithmetic: they answer "when can the
+     * stored pills move without new data", and the expiry sweep recomputes the
+     * flow at that moment. The calendar's day windows are read-only observers
+     * of the same run and must not touch it — see `tracksCrossings` on the
+     * range type for the failure this prevents, which is a flow recomputing
+     * hours early because a day window reached a branch the pills never did.
+     */
+    const tracks = range.tracksCrossings !== false;
     /**
      * The fallback is decided PER DATASET, not per record, and the difference
      * matters both ways.
@@ -1653,15 +1734,14 @@ export function tileByRange(
      */
     const keep = (records: FlowRecord[]): FlowRecord[] => {
       if (range.all) return records;
-      const field =
-        spec.timeField && records.some((r) => dateMs(getField(r, spec.timeField!)) != null) ? spec.timeField : "occurredAt";
+      const field = fieldFor(records);
       return records.filter((r) => {
-        const t = dateMs(getField(r, field));
+        const t = dateOf(r, field);
         if (t == null) {
           undated++;
           return false;
         }
-        trackCrossing(t);
+        if (tracks) trackCrossing(t);
         return t >= range.start && t <= range.end;
       });
     };

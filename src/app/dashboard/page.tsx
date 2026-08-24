@@ -27,7 +27,7 @@ import { parseDefinition } from "@/lib/metrics/types";
 import {
   computeAggregate,
   computeFunnel,
-  distinctSources,
+  connectedSources,
   type AggregateResult,
   type FunnelResult,
 } from "@/lib/metrics/compute";
@@ -98,7 +98,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   let metrics: Metric[] = [];
   let sources: string[] = [];
-  let recentEvents: (typeof events.$inferSelect)[] = [];
+  // The five columns the feed renders, not the whole row — see the select below.
+  let recentEvents: Array<{ id: string; source: string; eventType: string; subject: string | null; occurredAt: Date }> = [];
   let dlqByConnection: Array<{ connectionId: string; name: string; count: number }> = [];
   let connCount = 0;
   let flowCount = 0;
@@ -107,11 +108,49 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   try {
     [metrics, sources, recentEvents, dlqByConnection, connCount, flowCount] = await Promise.all([
       listMetrics(orgId),
-      distinctSources(db, orgId),
+      /**
+       * THE SOURCES A WORKSPACE IS CONNECTED TO, not the ones its history
+       * mentions.
+       *
+       * This asked `distinctSources`, which is `select distinct source from
+       * events` — a scan of the org's ENTIRE live event table, on every render
+       * of the most-rendered page in the product, to fill a dropdown that never
+       * holds more than about six items. There is no index carrying `source`,
+       * so it is a heap pass: measured at ~55ms per render at 100k live rows
+       * and half a second to a second at a million, growing with history
+       * forever while the answer stays the same six words.
+       *
+       * `connections` is a tens-of-rows table and answers the same question
+       * better: this picker exists to filter the board by APP, and the apps are
+       * the ones you have connected. The one behaviour it changes is at the
+       * edges — a source whose connection was deleted stops being offered
+       * (its events are gone with it), and a freshly connected app is offered
+       * before its first event lands, which is the honest state of things.
+       * The legacy metric builders keep the event-derived list: they filter
+       * events directly, and they are cold pages where the scan costs nothing.
+       */
+      connectedSources(db, orgId),
       // Live rows only (query convention: every events read filters deleted_at,
       // src/db/schema.ts). receivedAt ordering is intentional for an activity
       // feed; the top-6 sort over one org's live rows is bounded and cheap.
-      db.select().from(events).where(and(eq(events.orgId, orgId), isNull(events.deletedAt))).orderBy(desc(events.receivedAt)).limit(6),
+      //
+      // FIVE COLUMNS, NOT SEVENTEEN. The feed renders source, type, subject and
+      // a timestamp; a bare `select()` also carried `properties` — the whole
+      // provider record, which is 5–30KB per row for a Close event log entry
+      // and up to 50KB for an Instantly email — six times over, on every render
+      // and every freshness poll, to display none of it.
+      db
+        .select({
+          id: events.id,
+          source: events.source,
+          eventType: events.eventType,
+          subject: events.subject,
+          occurredAt: events.occurredAt,
+        })
+        .from(events)
+        .where(and(eq(events.orgId, orgId), isNull(events.deletedAt)))
+        .orderBy(desc(events.receivedAt))
+        .limit(6),
       // Per-connection, not a scalar: the red number links to the page with
       // the Replay button instead of being a dead end.
       unresolvedDeadLetterCountsByConnection(db, orgId),

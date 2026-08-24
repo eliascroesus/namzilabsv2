@@ -16,8 +16,8 @@
  * golden suite AND (b) no metric definitions remain that only this path can
  * evaluate. Until both hold, it stays.
  */
-import { and, or, desc, sql, type SQL } from "drizzle-orm";
-import { events } from "@/db/schema";
+import { and, eq, ne, or, desc, sql, type SQL } from "drizzle-orm";
+import { connections, events } from "@/db/schema";
 import type { DB } from "@/db/types";
 import type { AggregateDefinition, FunnelDefinition, Filters, Filter } from "./types";
 
@@ -220,6 +220,38 @@ export async function distinctSources(db: DB, orgId: string): Promise<string[]> 
     .selectDistinct({ source: events.source })
     .from(events)
     .where(sql`${events.orgId} = ${orgId} and ${events.deletedAt} is null`);
+  return rows.map((r) => r.source).sort();
+}
+
+/**
+ * THE SAME LIST, ASKED OF A TENS-OF-ROWS TABLE INSTEAD OF AN UNBOUNDED ONE.
+ *
+ * `distinctSources` above answers "which sources appear in this org's history"
+ * by scanning every live event. No index carries `source`, so it is a heap pass
+ * that grows with history forever — ~55ms at 100k live rows, half a second to a
+ * second at a million — and it was being run on every render of the dashboard
+ * to fill a dropdown holding at most a handful of items.
+ *
+ * The dashboard's picker is really asking "which apps is this workspace
+ * connected to", and `connections` answers that directly and cheaply. The two
+ * lists differ only at the edges: a source whose connection was deleted drops
+ * out (so does its data), and a newly connected app appears before its first
+ * event arrives — which is the truth about the workspace, and arguably the
+ * better answer for a filter.
+ *
+ * Disabled connections are excluded for the same reason the integrations page
+ * excludes them from its counts: a paused source is not syncing, and offering
+ * it as a live filter says otherwise.
+ *
+ * `distinctSources` stays for the legacy metric builders, which filter EVENTS
+ * and so want the event-derived truth — and which are cold pages where the
+ * scan costs nothing.
+ */
+export async function connectedSources(db: DB, orgId: string): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ source: connections.source })
+    .from(connections)
+    .where(and(eq(connections.orgId, orgId), ne(connections.status, "disabled")));
   return rows.map((r) => r.source).sort();
 }
 
