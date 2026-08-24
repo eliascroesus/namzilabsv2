@@ -42,28 +42,43 @@ import { SourceMark } from "@/components/source-mark";
  */
 export const metadata = { title: "Namzilabs — UI kit" };
 
+/**
+ * THE SWATCH LABELS ARE THE ONE PLACE A HEX IS ALLOWED TO BE COPIED — and the
+ * copy is checked.
+ *
+ * The tile itself renders from the TOKEN (`bg-brand-600`); only the caption
+ * beside it is a literal, because a documentation page that cannot print the
+ * value it is documenting is not documenting anything. That makes this the
+ * exact drift the kit forbids everywhere else, so it is pinned instead:
+ * tests/design-swatches.test.ts reads globals.css and fails if any caption
+ * here disagrees with the token it sits under.
+ *
+ * That test is not hypothetical. The warm re-theme moved every value below,
+ * and for one render the page showed ultramarine tiles captioned with the old
+ * indigo hexes — a kit page confidently lying about the kit.
+ */
 const BRAND: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "50", cls: "bg-brand-50", hex: "#eef2ff" },
-  { step: "100", cls: "bg-brand-100", hex: "#e0e7ff" },
-  { step: "200", cls: "bg-brand-200", hex: "#c7d2fe" },
-  { step: "300", cls: "bg-brand-300", hex: "#a5b4fc" },
-  { step: "400", cls: "bg-brand-400", hex: "#818cf8" },
-  { step: "500", cls: "bg-brand-500", hex: "#6366f1" },
-  { step: "600", cls: "bg-brand-600", hex: "#4f46e5" },
-  { step: "700", cls: "bg-brand-700", hex: "#4338ca" },
+  { step: "50", cls: "bg-brand-50", hex: "#eef1fe" },
+  { step: "100", cls: "bg-brand-100", hex: "#e0e5fd" },
+  { step: "200", cls: "bg-brand-200", hex: "#c5cdfb" },
+  { step: "300", cls: "bg-brand-300", hex: "#9eaaf7" },
+  { step: "400", cls: "bg-brand-400", hex: "#7183f1" },
+  { step: "500", cls: "bg-brand-500", hex: "#4a5ee8" },
+  { step: "600", cls: "bg-brand-600", hex: "#2b44d8" },
+  { step: "700", cls: "bg-brand-700", hex: "#2135b3" },
 ];
 const INK: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "950", cls: "bg-ink-950", hex: "#23262d" },
-  { step: "900", cls: "bg-ink-900", hex: "#31353e" },
-  { step: "800", cls: "bg-ink-800", hex: "#3b404a" },
-  { step: "700", cls: "bg-ink-700", hex: "#4a5059" },
-  { step: "400", cls: "bg-ink-400", hex: "#9aa1ae" },
-  { step: "100", cls: "bg-ink-100", hex: "#e7e9ee" },
-  { step: "50", cls: "bg-ink-50", hex: "#f7f8fa" },
+  { step: "950", cls: "bg-ink-950", hex: "#1b1a18" },
+  { step: "900", cls: "bg-ink-900", hex: "#262421" },
+  { step: "800", cls: "bg-ink-800", hex: "#322f2b" },
+  { step: "700", cls: "bg-ink-700", hex: "#423e39" },
+  { step: "400", cls: "bg-ink-400", hex: "#9c958b" },
+  { step: "100", cls: "bg-ink-100", hex: "#e9e5df" },
+  { step: "50", cls: "bg-ink-50", hex: "#f8f6f3" },
 ];
 const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample: string }> = [
-  { token: "text-stat", cls: "tnum text-stat font-semibold", px: "36px", use: "Headline numbers, via formatMetricValue — nothing else", sample: "1,204" },
-  { token: "text-display", cls: "text-display font-semibold tracking-tight", px: "24px", use: "Page titles (PageHeader)", sample: "Speed to lead" },
+  { token: "text-stat", cls: "stat-numeral text-stat", px: "36px", use: "Headline numbers, via formatMetricValue — set in the display face", sample: "1,204" },
+  { token: "text-display", cls: "font-display text-display font-semibold", px: "24px", use: "Page titles (PageHeader) — display face", sample: "Speed to lead" },
   { token: "text-title", cls: "text-title font-semibold tracking-tight", px: "17px", use: "Card and modal titles", sample: "Speed to lead" },
   { token: "text-lead", cls: "text-lead font-semibold", px: "15px", use: "Panel titles, hero list rows", sample: "Speed to lead" },
   { token: "text-base", cls: "text-base", px: "14px", use: "Body, field labels — the default", sample: "Speed to lead" },
@@ -130,9 +145,9 @@ export default function DesignPage() {
 
         <Section
           title="Colour"
-          note="One accent: deep indigo. brand-600 is every primary action and link, brand-400 the focus ring, 50/100 the selection washes. Ink is the dark end of the neutral scale — the rail sits on ink-950, the toast on ink-900. Everything else is a role (bg-card, border-border, text-muted-foreground) or a state trio."
+          note="One accent: ultramarine. brand-600 is every primary action and link (7.19:1 on white), brand-400 the focus ring, 50/100 the selection washes. Ink is the warm dark end of the neutral scale — the rail sits on ink-950, the toast on ink-900. Everything else is a role (bg-card, border-border, text-muted-foreground) or a state trio."
         >
-          <p className="mb-2 text-tiny font-medium text-muted-foreground">Accent — indigo, brand-*</p>
+          <p className="mb-2 text-tiny font-medium text-muted-foreground">Accent — ultramarine, brand-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
             {BRAND.map((s) => (
               <div key={s.step} className="min-w-0 flex-1">
@@ -144,7 +159,7 @@ export default function DesignPage() {
               </div>
             ))}
           </div>
-          <p className="mb-2 mt-5 text-tiny font-medium text-muted-foreground">Ink — dark surfaces, ink-*</p>
+          <p className="mb-2 mt-5 text-tiny font-medium text-muted-foreground">Ink — warm dark surfaces, ink-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
             {INK.map((s) => (
               <div key={s.step} className="min-w-0 flex-1">
@@ -405,8 +420,9 @@ export default function DesignPage() {
                 </div>
               </Card>
               <p className="mt-2 text-tiny text-muted-foreground">
-                The modal, shown flat. The real one floats on the one scrim — neutral-950/30 with backdrop blur — and
-                closes on Escape or an outside press.
+                The modal, shown flat. The real one floats on the one scrim — neutral-950/40 with backdrop blur — traps
+                focus while it is open, locks the page behind it, and returns focus to whatever opened it. Escape or an
+                outside press closes it.
               </p>
             </div>
             <div>
@@ -423,7 +439,7 @@ export default function DesignPage() {
 
         <Section
           title="Rail"
-          note="The 30 of the 60/30/10 split: ink-950 graphite carrying a 100px icon column, so primary indigo has something to pop against. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else."
+          note="The 30 of the 60/30/10 split: ink-950 warm near-black carrying a 100px icon column, so primary ultramarine has something to pop against. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else."
         >
           <div className="flex items-stretch gap-4">
             <div className="bg-rail inline-flex items-start gap-3 rounded-card px-5 py-4">
@@ -476,7 +492,7 @@ export default function DesignPage() {
             <div className="rounded-card border border-border bg-card p-4">
               <p className="text-base font-semibold text-foreground">Total leads</p>
               <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                <p className="tnum text-stat font-semibold leading-none">44</p>
+                <p className="stat-numeral text-stat leading-none">44</p>
                 <Delta current={44} previous={32} format={{ format: "number" }} since="vs prior" />
               </div>
               <Sparkbars
@@ -487,14 +503,14 @@ export default function DesignPage() {
             <div className="rounded-card border border-border bg-card p-4">
               <p className="text-base font-semibold text-foreground">Pickup rate</p>
               <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                <p className="tnum text-stat font-semibold leading-none">57.1%</p>
+                <p className="stat-numeral text-stat leading-none">57.1%</p>
                 <Delta current={57.1} previous={55.1} format={{ format: "percent", precision: 1 }} since="vs yesterday" />
               </div>
               <TargetBar value={57.1} target={50} format={{ format: "percent", precision: 1 }} />
             </div>
             <div className="rounded-card border border-border bg-card p-4">
               <p className="text-base font-semibold text-foreground">Leads by owner</p>
-              <p className="tnum mt-1.5 text-stat font-semibold leading-none">41</p>
+              <p className="stat-numeral mt-1.5 text-stat leading-none">41</p>
               <GroupBars
                 groups={[
                   { label: "Afeef", value: 23 },

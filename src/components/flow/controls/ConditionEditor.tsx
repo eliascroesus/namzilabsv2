@@ -146,7 +146,7 @@ export function ConditionEditor({
                 <button
                   type="button"
                   onClick={() => removeRule(i)}
-                  className="rounded-control text-tiny text-muted-foreground outline-none transition-colors hover:text-danger-ink focus-visible:ring-4 focus-visible:ring-ring/40"
+                  className="rounded-control text-tiny text-muted-foreground transition-colors hover:text-danger-ink"
                 >
                   Remove
                 </button>
@@ -159,7 +159,7 @@ export function ConditionEditor({
       <button
         type="button"
         onClick={addRule}
-        className="inline-flex items-center gap-1 rounded-control border border-dashed border-border px-2.5 py-1.5 text-tiny text-muted-foreground outline-none transition-colors hover:border-ring/50 hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
+        className="inline-flex items-center gap-1 rounded-control border border-dashed border-border px-2.5 py-1.5 text-tiny text-muted-foreground transition-colors hover:border-ring/50 hover:text-foreground"
       >
         <Plus size={14} strokeWidth={2.25} aria-hidden /> Add condition
       </button>

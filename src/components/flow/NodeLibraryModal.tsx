@@ -168,7 +168,7 @@ export function NodeLibraryModal({
                     <button
                       key={e.key}
                       onClick={() => onPick(e)}
-                      className="group flex w-full items-center gap-3.5 rounded-card px-2.5 py-2.5 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-4 focus-visible:ring-ring/40"
+                      className="group flex w-full items-center gap-3.5 rounded-card px-2.5 py-2.5 text-left transition-colors hover:bg-accent/60"
                     >
                       <NodeIcon type={e.type} variant={e.key === "unite_match" ? "unite_match" : e.key === "formula_compare" ? "formula_compare" : undefined} size={40} />
                       <span className="min-w-0">

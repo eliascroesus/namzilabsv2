@@ -159,7 +159,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           nobody can trust. Same stat size as a real number, so switching ranges
           never makes the tile jump. */}
       <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <p className={cn("tnum text-stat font-semibold leading-none", unavailable && "text-muted-foreground/50")}>
+        <p className={cn("stat-numeral text-stat leading-none", unavailable && "text-muted-foreground")}>
           {unavailable ? "—" : fmt(t.value, t)}
         </p>
         {delta && <Delta current={delta.current} previous={delta.previous} format={t} since={delta.since} />}
@@ -245,7 +245,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           </form>
           <Link
             href={`/dashboard/flows/${row.flowId}`}
-            className="rounded-control font-medium outline-none transition-colors hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
+            className="rounded-control font-medium transition-colors hover:text-primary"
           >
             Open
           </Link>
@@ -331,7 +331,7 @@ function NotLive({ flowId }: { flowId: string }) {
         Edited since publishing — this is the published version&rsquo;s number.{" "}
         <Link
           href={`/dashboard/flows/${flowId}`}
-          className="rounded-control font-medium underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-4 focus-visible:ring-ring/40"
+          className="rounded-control font-medium underline underline-offset-2 hover:no-underline"
         >
           Review &amp; publish
         </Link>{" "}

@@ -32,7 +32,10 @@ export function Toast({ children, action, className }: ToastProps) {
           <button
             type="button"
             onClick={action.onClick}
-            className="rounded-control px-2.5 py-1 text-base font-semibold text-white/90 outline-none transition-colors hover:bg-white/15 focus-visible:ring-4 focus-visible:ring-white/25"
+            // `focus-ring-light`: the shared focus outline is ultramarine, which
+            // is invisible on a near-black toast. The class swaps it for white
+            // without re-spelling the rest of the rule.
+            className="focus-ring-light rounded-control px-2.5 py-1 text-base font-semibold text-white/90 transition-colors hover:bg-white/15"
           >
             {action.label}
           </button>

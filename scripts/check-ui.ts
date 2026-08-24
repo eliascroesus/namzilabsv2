@@ -112,18 +112,23 @@ const RULES: Rule[] = [
       line.match(
         /\b(?:bg|text|border|divide|ring|outline|fill|stroke|from|via|to)-(?:slate|gray|zinc|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d+(?:\/\d+)?\b/,
       )?.[0] ?? null,
+    // The privacy/terms exemptions are GONE, and deliberately so: those two
+    // pages were the last raw-palette holdouts ("out of scope this pass"), and
+    // they now render through src/components/ui/legal.tsx like everything else.
+    // An allowlist entry that no longer suppresses anything is an invitation to
+    // put something back under it.
     allow: {
       "src/components/ui": "primitives are the sanctioned home of the few raw tints the trios can't express",
-      "src/app/privacy/page.tsx": "out of scope this pass — restyled with the landing rebuild",
-      "src/app/terms/page.tsx": "out of scope this pass — restyled with the landing rebuild",
     },
   },
   {
     name: "black-as-primary",
-    why: "the product has ONE primary and it is indigo; bg-neutral-900 buttons are the old split brand",
+    why: "the product has ONE primary and it is ultramarine; bg-neutral-900 buttons are the old split brand",
     find: (line) => (line.includes("bg-neutral-900") ? "bg-neutral-900" : null),
+    // The landing's exemption is gone too — its buttons were the last
+    // black-as-primary in the product and are now `buttonVariants()` like
+    // every other button.
     allow: {
-      "src/app/page.tsx": "landing keeps its current look until the marketing rebuild",
       "src/components/charts.tsx": "if bars ever need a neutral series tone, it is decided there once",
     },
   },
@@ -135,6 +140,12 @@ const RULES: Rule[] = [
       "src/components/flow/node-accent.ts": "the step-identity palette — the one sanctioned hex map",
       "src/components/flow/controls/source-style.ts": "connector brand colours are the vendors', not ours",
       "src/app/design/page.tsx": "the kit page prints hex VALUES as documentation labels",
+      // Next emits <meta name="theme-color"> from a build-time literal, so it
+      // cannot read a CSS custom property — the browser chrome's colour has to
+      // be written out. Pinned to --background by tests/design-swatches.test.ts
+      // rather than trusted, because a theme change that misses it leaves a
+      // grey band above the app on mobile and nothing fails.
+      "src/app/layout.tsx": "themeColor must be a literal for the meta tag; pinned to --background by test",
     },
   },
   {

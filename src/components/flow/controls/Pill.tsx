@@ -48,14 +48,19 @@ export function DataPill({
 }) {
   const s = fmtSample(sample);
   const tone = stale ? "border-warn-soft bg-warn-soft/50 text-warn-ink" : "border-border bg-muted/50 text-foreground";
+  // The step number is quieter than the field name beside it — but through the
+  // RAMP, not `opacity-60`, which composited the stale pill's warn ink down to
+  // 2.61:1. A stale pill exists to be noticed. Stale keeps full warn ink
+  // (5.55:1); the ordinary pill steps to muted-foreground (5.40:1).
+  const dim = stale ? "" : "text-muted-foreground";
   return (
     <span className={`inline-flex max-w-full items-center gap-1 rounded-control border px-1.5 py-1 text-tiny ${tone}`} title={stale ? "This field's source is missing — pick it again" : label}>
       {stale ? <AlertTriangle size={12} strokeWidth={2.25} className="shrink-0" aria-hidden /> : <SourceBadge source={source} size={14} />}
-      {stepNo != null && <span className="shrink-0 opacity-60">{stepNo}.</span>}
+      {stepNo != null && <span className={`shrink-0 ${dim}`}>{stepNo}.</span>}
       <button
         type="button"
         onClick={onClick}
-        className="min-w-0 truncate rounded-control font-medium outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+        className="min-w-0 truncate rounded-control font-medium hover:underline"
       >
         {label}
       </button>
@@ -64,7 +69,7 @@ export function DataPill({
         <button
           type="button"
           onClick={onClear}
-          className="ml-0.5 flex shrink-0 items-center justify-center rounded-full p-0.5 opacity-60 outline-none transition-opacity hover:opacity-100 focus-visible:ring-4 focus-visible:ring-ring/40"
+          className="ml-0.5 flex shrink-0 items-center justify-center rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100"
           title="Clear"
           aria-label="Clear"
         >

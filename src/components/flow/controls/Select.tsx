@@ -164,7 +164,7 @@ export function Select({
                     if (!o.disabled) pick(o.value);
                   }}
                   onMouseEnter={() => setActive(i)}
-                  className={`flex w-full items-center justify-between gap-2 rounded-control px-2.5 py-1.5 text-left text-base outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40 ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-accent text-accent-foreground" : ""}`}
+                  className={`flex w-full items-center justify-between gap-2 rounded-control px-2.5 py-1.5 text-left text-base transition-colors hover:bg-muted ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-accent text-accent-foreground" : ""}`}
                 >
                   <span className="min-w-0">
                     <span className={`block ${o.disabled ? "" : "truncate"} ${o.value === value ? "font-medium text-foreground" : "text-foreground"}`}>{o.label}</span>

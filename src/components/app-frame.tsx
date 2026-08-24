@@ -40,6 +40,7 @@ export function AppFrame({
   surface,
   framed = false,
   hide,
+  ownsMain = false,
   children,
 }: {
   account?: { initials: string; panel: ReactNode };
@@ -48,16 +49,57 @@ export function AppFrame({
   framed?: boolean;
   /** Rail items (by label) this viewer shouldn't see; AppShell decides. */
   hide?: string[];
+  /**
+   * Render the scroll region AS the page's `<main>` landmark.
+   *
+   * THIS FRAME USED TO BE A `<main>` UNCONDITIONALLY, and every page inside it
+   * renders `PageContainer`, which is also a `<main>` — so all eight list
+   * screens shipped with a `<main>` nested inside a `<main>`. That is invalid
+   * HTML, and it costs a real user something: with two main landmarks, "jump
+   * to main content" stops being an unambiguous move, and the skip link at the
+   * top of the document has no single place to point.
+   *
+   * So the region is an ordinary `<div>` by default and the PAGE brings the
+   * landmark. The builder is the one screen with no `PageContainer` — the
+   * canvas fills the frame — so it opts in here instead, and every route ends
+   * up with exactly one `<main id="main">`.
+   */
+  ownsMain?: boolean;
   children: ReactNode;
 }) {
+  // `relative` so anything a page floats over the canvas is measured against
+  // the canvas, not the viewport. It belongs here rather than in a wrapper each
+  // page remembers to add — the builder had exactly such a wrapper, and it was
+  // one nesting level doing nothing else.
+  const className = `relative min-w-0 flex-1 ${framed ? "rounded-l-frame" : ""} ${surface}`;
+
   return (
-    <div className="bg-rail flex h-screen">
+    // `h-dvh`, not `h-screen`: on mobile Safari `100vh` is the height the
+    // viewport has with the browser chrome RETRACTED, so a full-height frame
+    // is permanently taller than the window and the rail's account control
+    // sits below the fold with nothing to scroll it into view.
+    //
+    // The safe-area padding is the other half of `viewportFit: "cover"` in
+    // layout.tsx. Cover lets the wash run edge to edge — which is what you want
+    // for a full-bleed dark rail — but without these insets the rail's mark
+    // sits under the camera cutout in landscape, and its account avatar under
+    // the home indicator. Padding the FRAME rather than the rail keeps the
+    // colour full-bleed and moves only the content.
+    <div
+      className="bg-rail flex h-dvh"
+      style={{
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+      }}
+    >
       <Sidebar account={account} hide={hide} />
-      {/* `relative` so anything a page floats over the canvas is measured
-          against the canvas, not the viewport. It belongs here rather than in
-          a wrapper each page remembers to add — the builder had exactly such a
-          wrapper, and it was one nesting level doing nothing else. */}
-      <main className={`relative min-w-0 flex-1 ${framed ? "rounded-l-frame" : ""} ${surface}`}>{children}</main>
+      {ownsMain ? (
+        <main id="main" className={className}>
+          {children}
+        </main>
+      ) : (
+        <div className={className}>{children}</div>
+      )}
     </div>
   );
 }

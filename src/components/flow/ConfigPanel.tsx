@@ -234,7 +234,7 @@ export function ConfigPanel({
             value={node.data.label ?? ""}
             onChange={(e) => onRename(e.target.value)}
             placeholder={`${stepNo != null ? `${stepNo}. ` : ""}${defaultTitle(type, node.data)}`}
-            className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground outline-none transition-colors hover:border-border hover:bg-card focus-visible:border-ring focus-visible:bg-card focus-visible:ring-4 focus-visible:ring-ring/25"
+            className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground transition-colors hover:border-border hover:bg-card focus-visible:border-ring focus-visible:bg-card"
           />
         </div>
         <StatusPill tone={STATUS_TONE[status]} className="shrink-0">{sm.label}</StatusPill>
@@ -857,7 +857,7 @@ function NodeConfig({
                   const avail = datasetCandidates.find((c) => !laneIds.includes(c.id));
                   if (avail) setLanes([...laneIds, avail.id]);
                 }}
-                className="inline-flex items-center gap-1 rounded-control border border-dashed border-border px-2.5 py-1.5 text-tiny text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
+                className="inline-flex items-center gap-1 rounded-control border border-dashed border-border px-2.5 py-1.5 text-tiny text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <Plus size={14} strokeWidth={2.25} /> Add another step
               </button>
@@ -912,7 +912,7 @@ function NodeConfig({
               <button
                 type="button"
                 onClick={() => onRemoveBranch(p.id)}
-                className="shrink-0 rounded-control text-micro text-destructive outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+                className="shrink-0 rounded-control text-micro text-destructive hover:underline"
                 title="Remove this branch and its steps"
               >
                 Remove
@@ -923,7 +923,7 @@ function NodeConfig({
         <button
           type="button"
           onClick={onAddBranch}
-          className="inline-flex w-full items-center justify-center gap-1 rounded-control border border-dashed border-border px-3 py-1.5 text-base text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
+          className="inline-flex w-full items-center justify-center gap-1 rounded-control border border-dashed border-border px-3 py-1.5 text-base text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <Plus size={16} /> Add branch
         </button>
@@ -1040,7 +1040,7 @@ function NumberFieldList({
             <button
               type="button"
               onClick={() => setExtra(extra.filter((_, j) => j !== i))}
-              className="rounded-control p-1 text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
+              className="rounded-control p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               title="Remove this field"
               aria-label="Remove this field"
             >
@@ -1051,7 +1051,7 @@ function NumberFieldList({
         <button
           type="button"
           onClick={() => setExtra([...extra, ""])}
-          className="inline-flex items-center gap-1 rounded-control text-tiny font-medium text-primary outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+          className="inline-flex items-center gap-1 rounded-control text-tiny font-medium text-primary hover:underline"
         >
           <Plus size={14} strokeWidth={2.25} /> Add another field
         </button>
@@ -1197,7 +1197,7 @@ function NumberPicker({
                     // different step must not inherit a column it never had.
                     onSetField(null);
                   }}
-                  className="absolute right-8 top-1/2 -translate-y-1/2 rounded-control p-1 text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
+                  className="absolute right-8 top-1/2 -translate-y-1/2 rounded-control p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   title="Clear — type a number instead"
                   aria-label="Clear the picked step"
                 >
@@ -1212,7 +1212,7 @@ function NumberPicker({
               onClick={toggle}
               title="Use a number from an earlier step"
               aria-label="Pick a number from an earlier step"
-              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-100 bg-accent p-1 text-primary outline-none transition-colors hover:bg-brand-100 focus-visible:ring-4 focus-visible:ring-ring/40"
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-100 bg-accent p-1 text-primary transition-colors hover:bg-brand-100"
             >
               <Database size={14} strokeWidth={2} />
             </button>
@@ -1237,7 +1237,7 @@ function CategoryEditor({ cfg, groups, onChange }: { cfg: Record<string, unknown
           <button
             type="button"
             onClick={() => onChange({ categories: cats.filter((_, j) => j !== i) })}
-            className="rounded-control text-tiny text-destructive outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+            className="rounded-control text-tiny text-destructive hover:underline"
           >
             Remove category
           </button>
@@ -1436,7 +1436,7 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="shrink-0 rounded-control font-medium text-primary outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+          className="shrink-0 rounded-control font-medium text-primary hover:underline"
         >
           Change
         </button>
@@ -1968,7 +1968,7 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
       <button
         type="button"
         onClick={() => onChange({ dedupe: !on })}
-        className="flex items-center gap-2 rounded-control text-tiny font-medium text-foreground outline-none focus-visible:ring-4 focus-visible:ring-ring/40"
+        className="flex items-center gap-2 rounded-control text-tiny font-medium text-foreground"
       >
         <span className={`flex h-4 w-4 items-center justify-center rounded-control border transition-colors ${on ? "border-primary bg-primary text-primary-foreground" : "border-input"}`}>
           {on && <Check size={12} strokeWidth={2.25} />}
@@ -2187,7 +2187,7 @@ function TestResults({ node, superseded, onChange }: { node: FNode; superseded: 
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
       ) : (
         <details>
-          <summary className="cursor-pointer rounded-control text-tiny text-muted-foreground outline-none focus-visible:ring-4 focus-visible:ring-ring/40">View sample data</summary>
+          <summary className="cursor-pointer rounded-control text-tiny text-muted-foreground">View sample data</summary>
           <div className="mt-2"><BeforeAfter before={t.inputSample ?? []} after={t.sample} /></div>
         </details>
       )}

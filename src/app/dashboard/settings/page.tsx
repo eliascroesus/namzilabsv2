@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/format";
 import { AppShell } from "@/components/app-shell";
 import { Badge, StatusPill } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
@@ -156,7 +157,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Link
               href="/dashboard/settings"
               aria-label="Dismiss"
-              className="shrink-0 rounded-control opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:ring-4 focus-visible:ring-ring/40"
+              className="shrink-0 rounded-control opacity-70 transition-opacity hover:opacity-100"
             >
               <X size={16} strokeWidth={2} />
             </Link>
@@ -168,7 +169,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Link
               href="/dashboard/settings"
               aria-label="Dismiss"
-              className="shrink-0 rounded-control opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:ring-4 focus-visible:ring-ring/40"
+              className="shrink-0 rounded-control opacity-70 transition-opacity hover:opacity-100"
             >
               <X size={16} strokeWidth={2} />
             </Link>
@@ -238,8 +239,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <SectionHeading>Invite a teammate</SectionHeading>
             <Card variant="surface" padding="compact">
               <form action={inviteMemberAction} className="flex gap-2">
-                <Input type="email" name="email" required placeholder="teammate@company.com" className="max-w-sm" />
-                <Button type="submit">Send invite</Button>
+                <Input
+                  type="email"
+                  name="email"
+                  required
+                  // The ONE field in the app that wants the browser's help: it is
+                  // a real email address, and the person sending an invite has
+                  // almost certainly typed their colleague's before.
+                  autoComplete="email"
+                  placeholder="teammate@company.com"
+                  className="max-w-sm"
+                />
+                <SubmitButton pendingLabel="Sending…">Send invite</SubmitButton>
               </form>
               <p className="mt-2.5 text-tiny text-muted-foreground">
                 An email with a join link goes out automatically — the same link appears under{" "}

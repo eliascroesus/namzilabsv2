@@ -58,7 +58,7 @@ function Disclosure({ summary, children }: { summary: string; children: ReactNod
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex items-center gap-1.5 rounded-control py-1 text-tiny font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
+        className="flex items-center gap-1.5 rounded-control py-1 text-tiny font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronRight size={14} strokeWidth={2.25} className={`transition-transform ${open ? "rotate-90" : ""}`} aria-hidden />
         {summary}
@@ -260,7 +260,7 @@ export function ReviewPublishModal({
                         <button
                           type="button"
                           onClick={() => onSelectNode(iss.nodeId!)}
-                          className="rounded-control text-left underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-4 focus-visible:ring-ring/40"
+                          className="rounded-control text-left underline underline-offset-2 hover:no-underline"
                         >
                           {iss.message}
                         </button>

@@ -79,7 +79,7 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
               selected ? "border-brand-300 bg-accent/60" : "border-border bg-muted/40 hover:border-brand-200 hover:bg-muted",
             )}
           >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-tiny outline-none">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-tiny">
               <span className="flex min-w-0 items-center gap-1.5">
                 {selected && <Star size={14} fill="currentColor" className="shrink-0 text-primary" aria-hidden />}
                 <span className={cn("truncate font-medium", selected ? "text-accent-foreground" : "text-foreground")}>{title || `Record ${i + 1}`}</span>

@@ -111,7 +111,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
             <Row htmlFor="name" label="Name">
               <Input id="name" name="name" defaultValue={one(sp.name)} placeholder="Booked leads this week" />
             </Row>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Row htmlFor="source" label="Source">
                 {/* Storage keys stay the VALUES (the definition matches on
                     them); only the reading is humanized, exactly as the
@@ -143,7 +143,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
                 })()}
               </Row>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Row htmlFor="aggregation" label="Aggregation">
                 <Select name="aggregation" value={one(sp.aggregation) || "count"}
                   options={["count", "sum", "count_distinct"]}
@@ -154,7 +154,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
                   labels={{ "": "No trend (single number)", day: "Day", week: "Week", month: "Month" }} />
               </Row>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Row htmlFor="valueField" label="Sum field (for Sum)">
                 <Input id="valueField" name="valueField" defaultValue={one(sp.valueField) || "value"} />
               </Row>
@@ -170,7 +170,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
                   labels={{ and: "AND", or: "OR" }} />
               </Row>
               {[0, 1].map((i) => (
-                <div key={i} className="mt-2 grid grid-cols-3 gap-2">
+                <div key={i} className="mt-2 grid gap-2 sm:grid-cols-3">
                   <Input name={`filter${i}_field`} defaultValue={one(sp[`filter${i}_field`])}
                     placeholder="field (e.g. subject or properties.plan)" className="h-8 px-2 text-small" />
                   <Select name={`filter${i}_op`} value={one(sp[`filter${i}_op`])} options={["", ...FILTER_OPS]} labels={{ "": "op" }} />
@@ -180,7 +180,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
               ))}
             </fieldset>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Row htmlFor="unit" label="Unit (optional)">
                 <Input id="unit" name="unit" defaultValue={one(sp.unit)} placeholder="leads" />
               </Row>
@@ -208,7 +208,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
                 {/* Same formatter and recipe as the dashboard tile this metric
                     will become — the preview must not print "1234.5" for a
                     number the board will render as "1,234.5". */}
-                <p className="tnum text-stat font-semibold">
+                <p className="stat-numeral text-stat">
                   {formatMetricValue(previewValue, { format: "number", precision: Number.isInteger(previewValue) ? 0 : 2 })}
                   {one(sp.unit) && <span className="ml-2 text-base font-normal text-muted-foreground">{one(sp.unit)}</span>}
                 </p>

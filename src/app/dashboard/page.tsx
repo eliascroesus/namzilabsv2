@@ -7,7 +7,8 @@ import { unresolvedDeadLetterCountsByConnection } from "@/lib/dead-letter";
 import { requireOrg } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { AppShell } from "@/components/app-shell";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
 import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -126,7 +127,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         .then((r) => Number(r[0]?.c ?? 0)),
     ]);
   } catch (err) {
-    loadError = err instanceof Error ? err.message : String(err);
+    // THE EXCEPTION GOES TO THE LOG, NOT TO THE PAGE. This used to set
+    // `err.message` and render it verbatim, so a customer's dashboard could
+    // announce `relation "flow_results" does not exist` — schema internals, and
+    // occasionally a connection string. `loadError` is now a FLAG; the operator
+    // keeps the detail.
+    console.error("[dashboard] core read failed", err);
+    loadError = "unavailable";
   }
 
   // Filter the SOURCE list, not the rendering: every classic-metric surface on
@@ -258,7 +265,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
   const rangeItem = (active: boolean) =>
     cn(
-      "inline-flex shrink-0 items-center rounded-[calc(var(--radius-control)-2px)] px-2 py-1 text-small font-medium outline-none transition-colors focus-visible:ring-4 focus-visible:ring-ring/40",
+      "inline-flex shrink-0 items-center rounded-[calc(var(--radius-control)-2px)] px-2 py-1 text-small font-medium transition-colors",
       active ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground",
     );
 
@@ -279,9 +286,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   which is the wrong unit when you have just changed something
                   upstream and want the whole board to agree with reality. */}
               <form action={refreshAllFlowsAction}>
-                <Button type="submit" variant="secondary" title="Recompute every published metric now">
-                  Refresh
-                </Button>
+                <SubmitButton variant="secondary" pendingLabel="Refreshing…" title="Recompute every published metric now">
+                  Refresh all
+                </SubmitButton>
               </form>
               {/* ONE way to build a metric. The retired form builder was still
                   advertised here as "Classic metric", and "classic" reads as
@@ -302,12 +309,33 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
         {/* Filters: two questions, two controls, one line that never wraps. */}
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <div className="inline-flex items-center gap-0.5 rounded-control bg-muted p-0.5">
-            {RANGE_OPTIONS.map((r) => (
-              <Link key={r.key} href={qs({ range: r.key })} className={rangeItem(rangeKey === r.key)}>
-                {r.label}
-              </Link>
-            ))}
+          {/* THE RANGE TRACK SCROLLS RATHER THAN BREAKING THE PAGE.
+              Seven pills at ~70px each is a ~500px track that cannot wrap
+              (the pills are `shrink-0`, correctly — without it "Last 30 days"
+              wraps to two lines inside its own pill and the track grows a
+              second ragged row). At 390px that pushed the WHOLE page into
+              horizontal scroll. A local scroller contains it.
+
+              The `-mx-*`/`px-*` pair is deliberate: a bare `overflow-x-auto`
+              clips its children's focus ring at both ends, so the first and
+              last pill lose their outline exactly when a keyboard user reaches
+              them. The negative margin lets the ring breathe inside the
+              scrollport without indenting the track. */}
+          <div className="-mx-1 max-w-full overflow-x-auto px-1 lg:mx-0 lg:overflow-visible lg:px-0">
+            <div className="inline-flex items-center gap-0.5 rounded-control bg-muted p-0.5">
+              {RANGE_OPTIONS.map((r) => (
+                <Link
+                  key={r.key}
+                  href={qs({ range: r.key })}
+                  // The selected range was styling only — a screen reader heard
+                  // seven identical links and no indication of which is on.
+                  aria-current={rangeKey === r.key ? "true" : undefined}
+                  className={rangeItem(rangeKey === r.key)}
+                >
+                  {r.label}
+                </Link>
+              ))}
+            </div>
           </div>
 
           {/* A <details> popover rather than a select: the source lives in the
@@ -317,7 +345,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               growing every time a workspace connects another app. */}
           {sources.length > 0 && (
             <details className="group/src relative">
-              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-control border border-border bg-card px-3 py-1.5 text-small font-medium text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-control border border-border bg-card px-3 py-1.5 text-small font-medium text-foreground transition-colors hover:bg-muted [&::-webkit-details-marker]:hidden">
                 {activeSourceLabel}
                 <ChevronDown size={14} className="text-muted-foreground transition-transform group-open/src:rotate-180" />
               </summary>
@@ -325,7 +353,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <Link
                   href={qs({ source: "" })}
                   className={cn(
-                    "block rounded-control px-2.5 py-1.5 text-small outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40",
+                    "block rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-muted",
                     !boardSource ? "font-semibold text-primary" : "text-foreground",
                   )}
                 >
@@ -339,7 +367,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     key={srcName}
                     href={qs({ source: srcName })}
                     className={cn(
-                      "flex items-center gap-2 rounded-control px-2.5 py-1.5 text-small outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40",
+                      "flex items-center gap-2 rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-muted",
                       boardSource === srcName ? "font-semibold text-primary" : "text-foreground",
                     )}
                   >
@@ -354,7 +382,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
         {loadError && (
           <div className="mt-6 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
-            Some dashboard data could not be loaded ({loadError}). Refresh to retry — your data is intact.
+            Some dashboard data couldn&rsquo;t be loaded just now. Refresh to try again — nothing has been lost, and
+            your numbers are still stored.
           </div>
         )}
 
@@ -483,7 +512,7 @@ function MetricTile({ tile }: { tile: Tile }) {
         <p className="mt-2 text-tiny text-warn-ink">{tile.error}</p>
       ) : (
         total != null && (
-          <p className="tnum mt-1.5 text-stat font-semibold leading-none">
+          <p className="stat-numeral mt-1.5 text-stat leading-none">
             {formatMetricValue(total, numberFormat)}
             {metric.unit && <span className="ml-1.5 text-base font-normal text-muted-foreground">{metric.unit}</span>}
           </p>
@@ -512,7 +541,7 @@ function MetricTile({ tile }: { tile: Tile }) {
         <div className="mt-3 flex items-center justify-end text-tiny text-muted-foreground">
           <Link
             href={`/dashboard/metrics/${metric.id}`}
-            className="rounded-control font-medium outline-none transition-colors hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
+            className="rounded-control font-medium transition-colors hover:text-primary"
           >
             Drill in
           </Link>

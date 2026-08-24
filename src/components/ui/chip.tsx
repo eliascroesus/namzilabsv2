@@ -22,17 +22,31 @@ export function Chip({ className, active, count, children, ...props }: ChipProps
       type="button"
       aria-pressed={active}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-small font-medium outline-none transition-colors focus-visible:ring-4 focus-visible:ring-ring/40",
+        // Focus comes from the shared rule in globals.css — see button.tsx.
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-small font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)",
         active
-          ? "bg-primary text-primary-foreground"
+          ? "bg-primary text-primary-foreground hover:bg-brand-700"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
         className,
       )}
       {...props}
     >
       {children}
+      {/* THE ACTIVE COUNT IS AN INVERTED PILL, not a translucent wash.
+          `bg-white/25` over brand-600 composites to #6073e2, and white on that
+          is 4.16:1 — under AA for 11px semibold, on the flows filter row where
+          the counts ARE the information. A solid white pill with brand-600 text
+          is 7.19:1, keeps both states shaped like the same component, and
+          introduces no colour that is not already in the ramp. (`bg-black/20`
+          measures better still and was rejected: it puts pure black into a kit
+          that refuses it by name.) */}
       {count != null && (
-        <span className={cn("tnum rounded-full px-1.5 text-micro font-semibold", active ? "bg-white/25" : "bg-muted")}>
+        <span
+          className={cn(
+            "tnum rounded-full px-1.5 text-micro font-semibold",
+            active ? "bg-primary-foreground text-primary" : "bg-muted",
+          )}
+        >
           {count}
         </span>
       )}

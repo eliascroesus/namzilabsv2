@@ -8,20 +8,35 @@
  * `border-ink-700`. Nothing here is decoration for its own sake; each scale
  * exists because the product was picking values ad hoc and drifting.
  *
- * WHAT THIS IS MODELLED ON. A light working surface (Zapier's clarity) with a
- * dark, near-black navigation rail and one chromatic accent (Linear's calm).
- * The rail was a saturated indigo→violet gradient, which is the single most
- * common "we chose a colour" tell in early SaaS — it competes with content,
- * it dates fast, and every step icon on the canvas has to shout over it. A
- * near-black rail with a blue cast recedes, makes the accent mean something,
- * and is what the tools people keep open all day (Linear, Vercel, Supabase)
- * converged on.
+ * THE THESIS: QUIET CHROME, LOUD NUMBERS.
  *
- * THE RULE FOR COLOUR: the RAIL carries the product's mood, and everything
- * to the right of it stays neutral except for (a) identity — which kind of
- * step this is — and (b) state — what needs the user. That division is what
- * lets the rail be loud without the app becoming noisy; a canvas where
- * everything is coloured can point at nothing.
+ * This is a reconciliation product. Six tools disagree about how many calls
+ * were booked; the app's whole job is to answer that in one number you can
+ * defend. So the two things a user actually came for — THE NUMBER and THE
+ * CANVAS — are the only things allowed presence. Everything around them is
+ * furniture, and furniture that shouts is the reason most operational tools
+ * feel exhausting by 4pm.
+ *
+ * WHAT CHANGED, AND WHY (the warm pass).
+ * The kit was built on a cool neutral ramp with pure #000 text — technically
+ * correct, and the single most common palette in software. Two problems. Pure
+ * black on white is a 21:1 glare that no printed page has ever asked anyone to
+ * read, and a COOL grey app makes every warm thing in it (a customer's logo, a
+ * photo, an amber warning) look like a foreign object. The whole neutral ramp
+ * is now warm — a low-saturation ~40° hue, the colour of paper rather than of
+ * screens — and the foreground is a warm near-black at 16.4:1, which is still
+ * far past AAA and stops fighting the reader.
+ *
+ * Warm neutrals also fix the rail. It was cool graphite beside a cool white
+ * app, which is two greys that never quite agree; it is now a warm near-black
+ * cut from the same ramp as the paper, so the dark column and the light page
+ * read as one material seen at two exposures.
+ *
+ * THE RULE FOR COLOUR: the RAIL carries the product's mood, and everything to
+ * the right of it stays neutral except for (a) identity — which kind of step
+ * this is — and (b) state — what needs the user. That division is what lets
+ * the rail be dark without the app becoming noisy; a canvas where everything
+ * is coloured can point at nothing.
  * ========================================================================== */
 @theme {
   /* --- The stock scales, cleared ------------------------------------------
@@ -36,60 +51,120 @@
    * and starts being a missing style you can see — which is the only kind of
    * rule that survives contact with a deadline.
    *
-   * NOT cleared: `--color-*`, because the neutral ramp, `white`, `black` and
-   * `transparent` all live there and the kit's roles are built ON them. Colour
-   * discipline is enforced by scripts/check-ui.ts instead.
+   * NOT cleared: `--color-*`, because `white`, `black` and `transparent` live
+   * there and the kit's roles are built ON them. The neutral and red ramps are
+   * REDEFINED below rather than cleared, so the handful of sanctioned raw
+   * `neutral-*` / `red-*` classes inside `src/components/ui` warm up with the
+   * rest of the app instead of staying cool against it. Colour discipline is
+   * enforced by scripts/check-ui.ts.
    */
   --text-*: initial;
   --radius-*: initial;
   --shadow-*: initial;
 
-  /* The app's typeface, wired through Tailwind so `font-sans` means Inter. */
+  /* --- Typefaces ----------------------------------------------------------
+   * TWO FACES, WITH DIFFERENT JOBS.
+   *
+   * Inter runs the interface, because at 13–15px in dense tables and config
+   * panels its job is to disappear, and nothing disappears better. But a page
+   * set ENTIRELY in Inter is the house style of every dashboard built since
+   * 2019 — it is the typographic equivalent of not choosing.
+   *
+   * So the display face is Instrument Sans: slightly narrower, with more
+   * tension in the letterforms and a lower, more editorial x-height that gives
+   * headings and the metric numeral some spine. It appears in exactly three
+   * places — page titles, the landing hero, and the tile's headline number —
+   * and it is never used below 17px, where its character would cost legibility
+   * and buy nothing.
+   */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: var(--font-instrument), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   /* IDs, API keys, webhook URLs, code. System mono — nothing to load, and
      technical strings stop wearing the browser's fallback serif-mono mix. */
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
   /* --- Brand / accent -----------------------------------------------------
-   * One accent, used for every primary action, every selection, every focus
+   * ONE accent, used for every primary action, every selection, every focus
    * ring. `brand-600` is the button; 500 is hover-on-dark; 50/100 are tints.
    *
-   * Deep indigo — Stripe/Linear territory, the settled hue of tools people
-   * trust with their data. `brand-600` under white text is ~6.3:1 — past AA
-   * even for normal-weight body text, not just the semibold buttons use.
+   * ULTRAMARINE, NOT INDIGO. The accent has to live in the blue-violet band —
+   * green, amber and red are spoken for by the state trios, and an accent that
+   * collides with "this failed" is an accent that cannot mean "press this".
+   * Within that band the default is Tailwind's indigo-500/600, which is the
+   * most-used accent in software right now and reads as a stock choice.
+   *
+   * Ultramarine is deeper and far more saturated — a pigment colour rather
+   * than a UI colour, which is the right note for a product whose whole claim
+   * is that its numbers are the defensible ones. It also measures better: 7.19:1
+   * on white against indigo-600's 6.29:1, so the same button clears AAA where
+   * it used to merely clear AA, and links can sit at body weight without
+   * apology.
    */
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-300: #a5b4fc;
-  --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
+  --color-brand-50: #eef1fe;
+  --color-brand-100: #e0e5fd;
+  --color-brand-200: #c5cdfb;
+  --color-brand-300: #9eaaf7;
+  --color-brand-400: #7183f1; /* focus ring */
+  --color-brand-500: #4a5ee8; /* hover-on-dark */
+  --color-brand-600: #2b44d8; /* primary — 7.19:1 on white */
+  --color-brand-700: #2135b3; /* pressed, accent-foreground */
+  --color-brand-800: #1d2d8f;
+
+  /* --- The warm neutral ramp ----------------------------------------------
+   * TAILWIND'S `neutral-*`, REDEFINED IN PLACE.
+   *
+   * Overriding the stock ramp rather than adding a parallel one is deliberate:
+   * the roles below are built on it, the `ui/` primitives are allowed to reach
+   * for it directly, and a second ramp beside the first is precisely the drift
+   * this file exists to prevent. Change it here and the switch's track, the
+   * ghost button's rest state and every `--muted` surface move together.
+   *
+   * Hue sits near 40° at very low saturation. Enough warmth that white paper
+   * beside it reads as paper; not so much that it reads as beige, which is a
+   * different (and much more decorated) idea than this product wants.
+   */
+  --color-neutral-50: #faf9f7;
+  --color-neutral-100: #f4f2ef; /* --muted: recessed surfaces, table headers */
+  --color-neutral-200: #e9e6e1; /* the heavier hairline: switch track, dividers */
+  --color-neutral-300: #dad6cf;
+  --color-neutral-400: #a8a29a; /* decorative / disabled only — 2.5:1, never text */
+  --color-neutral-500: #6b6660; /* --muted-foreground — 5.68:1, up from 4.74:1 */
+  --color-neutral-600: #55514b;
+  --color-neutral-700: #403d38;
+  --color-neutral-800: #2c2a26;
+  --color-neutral-900: #211f1d; /* --foreground — 16.43:1 */
+  --color-neutral-950: #1b1a18;
+
+  /* The red ramp, warmed to match. Only `ui/button.tsx` reaches for these
+     directly (the destructive ghost's hover wash and the outline's border);
+     left cool they were the one cold thing on a warm surface. */
+  --color-red-50: #fdf0ee;
+  --color-red-100: #fbe6e3;
+  --color-red-200: #f6cdc8;
+  --color-red-600: #dc2626;
 
   /* --- Ink: the navigation rail and any dark surface ----------------------
-   * A four-step ladder, which is the minimum a dark surface needs to express
-   * elevation at all: base, raised, hover, hairline.
+   * A ladder, which is the minimum a dark surface needs to express elevation
+   * at all: base, raised, hover, hairline, then three steps of text.
    *
-   * GRAPHITE, NOT NEAR-BLACK. #0b0c0f made the rail a void beside a white
-   * working surface — technically calm, actually bleak, and the whole left
-   * edge of the app read as a bar of absence. Lifting the base three steps to
-   * a cool graphite keeps the contrast the icons need while letting the rail
-   * read as a surface rather than a hole.
+   * WARM NEAR-BLACK. This was cool graphite (#23262d) — correct contrast, and
+   * a different material from the app it borders. Cut from the same warm ramp
+   * as the paper, the rail stops reading as a separate component bolted to the
+   * left edge and starts reading as the same surface in shadow.
    */
-  --color-ink-950: #23262d; /* rail base — graphite, not black */
-  --color-ink-900: #31353e; /* rail raised (active item) */
-  --color-ink-800: #3b404a; /* rail hover */
-  --color-ink-700: #4a5059; /* hairline on dark */
-  --color-ink-400: #9aa1ae; /* muted text on dark */
-  --color-ink-100: #e7e9ee; /* body text on dark */
-  --color-ink-50: #f7f8fa; /* headings on dark */
+  --color-ink-950: #1b1a18; /* rail base */
+  --color-ink-900: #262421; /* rail raised (active item), the toast */
+  --color-ink-800: #322f2b; /* rail hover */
+  --color-ink-700: #423e39; /* hairline on dark */
+  --color-ink-400: #9c958b; /* muted text on dark — 5.87:1 on the rail */
+  --color-ink-100: #e9e5df; /* body text on dark */
+  --color-ink-50: #f8f6f3; /* headings on dark */
 
   /* --- Canvas -------------------------------------------------------------
    * The flow builder's working surface. Kept as tokens so the dot grid, the
    * page behind it and the edge colour can never drift apart again.
    */
-  --color-canvas-bg: #f0f0f0;
+  --color-canvas-bg: #f1efec;
   /* CHOSEN AT 83% ZOOM, NOT AT 100%.
      React Flow scales the dot pattern with the viewport, so a 1px dot is
      already sub-pixel by the time you have zoomed out enough to see a whole
@@ -98,9 +173,11 @@
      at 83%: a flat lavender field, no texture at all. This value was picked by
      rendering React Flow's own pattern maths at both zooms and looking.
      It is still a depth cue, not content — it should read as texture at a
-     glance and vanish the moment you look at a card. */
-  --color-canvas-dot: #d9d9d9;
-  --color-canvas-edge: #aab4cb;
+     glance and vanish the moment you look at a card.
+     tests/canvas-tokens.test.ts pins the gap to the 20–45 band that keeps it
+     both visible when zoomed out and lighter than any card's border. */
+  --color-canvas-dot: #d8d4ce;
+  --color-canvas-edge: #b4ada3;
 
   /* --- Type scale ---------------------------------------------------------
    * EIGHT SIZES, AND NOTHING BETWEEN THEM. The app had accumulated 9px, 10px,
@@ -126,12 +203,18 @@
   /* The metric numeral — the dashboard's one size above display, because a
      tile's number is the product's payoff and 24px reads as a label. It exists
      as a token so the number can never drift per-tile again, and it is always
-     set with .tnum. */
+     set with .stat-numeral (display face + tabular figures). */
   --text-stat: 2.25rem; /* 36px — the tile's headline number, nothing else */
   --text-stat--line-height: 2.5rem;
   /* Marketing only — the landing hero. In-app nothing goes past `stat`. */
   --text-hero: 2.5rem; /* 40px */
   --text-hero--line-height: 2.75rem;
+  /* The landing's one oversized moment, and the only size in the kit that
+     exists purely to be impressive. Fluid, because a fixed 64px headline is a
+     four-line wall on a phone: it resolves to `hero` on a narrow screen and
+     grows to 64px once there is room, with no breakpoint to forget. */
+  --text-banner: clamp(2.5rem, 1.4rem + 4.6vw, 4rem);
+  --text-banner--line-height: 1.04;
 
   /* --- Radius -------------------------------------------------------------
    * Three steps. Controls, cards, floating surfaces. Everything else was a
@@ -163,15 +246,41 @@
    */
   --spacing-chrome-band: 106px;
 
+  /* --- Motion -------------------------------------------------------------
+   * THE TIMINGS WERE ALL ONE-OFFS. 0.12s, 0.16s, 0.19s, 200ms and four
+   * different cubic-beziers were spread across six files, which is why some
+   * things in the app felt crisp and others felt slightly wrong without
+   * anyone being able to say which.
+   *
+   * Three durations and three curves. `standard` is the everyday
+   * colour/opacity change; `spring` is the one with overshoot, reserved for
+   * things that appear or that a user just did (a switch knob, a popping
+   * surface); `exit` is asymmetric on purpose — things should leave faster
+   * than they arrive, because a slow dismissal reads as lag while a slow
+   * entrance reads as grace.
+   */
+  --ease-standard: cubic-bezier(0.2, 0, 0.13, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 280ms;
+
   /* --- Elevation ----------------------------------------------------------
    * One ladder in two finishes. A surface that is merely on the page uses the
    * `raised` rung, one being dragged or hovered the `lifted` rung, one over
    * the canvas `float`, and a modal `pop`.
+   *
+   * Cast in WARM ink (41 37 33) rather than cool slate. A shadow is the
+   * surface's own colour with the light taken out of it, so a blue-grey shadow
+   * under a warm-white card is light arriving from a different room — small,
+   * and one of the things that separates a palette that was assembled from one
+   * that was chosen.
    */
-  --shadow-raised: 0 0 0 1px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.05), 0 2px 4px -2px rgb(15 23 42 / 0.06);
-  --shadow-lifted: 0 0 0 1px rgb(15 23 42 / 0.05), 0 2px 4px rgb(15 23 42 / 0.05), 0 10px 20px -6px rgb(15 23 42 / 0.12);
-  --shadow-float: 0 0 0 1px rgb(15 23 42 / 0.06), 0 4px 8px -2px rgb(15 23 42 / 0.06), 0 16px 28px -8px rgb(15 23 42 / 0.14);
-  --shadow-pop: 0 0 0 1px rgb(15 23 42 / 0.06), 0 8px 16px -4px rgb(15 23 42 / 0.08), 0 28px 56px -12px rgb(15 23 42 / 0.2);
+  --shadow-raised: 0 0 0 1px rgb(41 37 33 / 0.05), 0 1px 2px rgb(41 37 33 / 0.05), 0 2px 4px -2px rgb(41 37 33 / 0.06);
+  --shadow-lifted: 0 0 0 1px rgb(41 37 33 / 0.06), 0 2px 4px rgb(41 37 33 / 0.05), 0 10px 20px -6px rgb(41 37 33 / 0.12);
+  --shadow-float: 0 0 0 1px rgb(41 37 33 / 0.07), 0 4px 8px -2px rgb(41 37 33 / 0.06), 0 16px 28px -8px rgb(41 37 33 / 0.14);
+  --shadow-pop: 0 0 0 1px rgb(41 37 33 / 0.07), 0 8px 16px -4px rgb(41 37 33 / 0.08), 0 28px 56px -12px rgb(41 37 33 / 0.2);
 
   /* THE SAME LADDER, MINUS THE RING — and the rule that keeps being
      rediscovered one component at a time.
@@ -186,31 +295,31 @@
      card replaces raised, card-hover replaces lifted, island replaces float,
      panel replaces pop. shadcn's surfaces are border + soft shadow, which is
      exactly this half of the ladder. */
-  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.05), 0 2px 4px -2px rgb(15 23 42 / 0.06);
-  --shadow-card-hover: 0 2px 4px rgb(15 23 42 / 0.05), 0 10px 20px -6px rgb(15 23 42 / 0.12);
-  --shadow-island: 0 4px 8px -2px rgb(15 23 42 / 0.06), 0 16px 28px -8px rgb(15 23 42 / 0.14);
+  --shadow-card: 0 1px 2px rgb(41 37 33 / 0.05), 0 2px 4px -2px rgb(41 37 33 / 0.06);
+  --shadow-card-hover: 0 2px 4px rgb(41 37 33 / 0.05), 0 10px 20px -6px rgb(41 37 33 / 0.12);
+  --shadow-island: 0 4px 8px -2px rgb(41 37 33 / 0.06), 0 16px 28px -8px rgb(41 37 33 / 0.14);
   /* MODALS ONLY — pop minus its ring. Its 56px 0.2 halo is sized for a
      centred dialog over a dimmed backdrop. Docked to the canvas it spread
      DARKER than the 1px border it surrounded, so the ramp reversed at the
      edge and the hairline read as a light stripe inside a bruise instead of
      as an edge. The config panel takes `shadow-island`: it is another
      surface floating on the canvas, exactly like the toolbar islands. */
-  --shadow-panel: 0 8px 16px -4px rgb(15 23 42 / 0.08), 0 28px 56px -12px rgb(15 23 42 / 0.2);
+  --shadow-panel: 0 8px 16px -4px rgb(41 37 33 / 0.08), 0 28px 56px -12px rgb(41 37 33 / 0.2);
   /* THE ONE SHADOW EVERY FLOATING SURFACE USES — the step picker's own
      elevation, minus its 1px ring because all of them draw a real border.
      The top bar, the step cards, the config panel and the picker were on
      four different rungs; a canvas where every floating thing sits at the
      same height is the point, and one token is how it stays that way. */
-  --shadow-surface: 0 6px 12px -3px rgb(15 23 42 / 0.07), 0 20px 40px -10px rgb(15 23 42 / 0.16);
+  --shadow-surface: 0 6px 12px -3px rgb(41 37 33 / 0.07), 0 20px 40px -10px rgb(41 37 33 / 0.16);
 
   /* --- The rail ------------------------------------------------------------
    * THE 30 IN A 60/30/10 SPLIT. White canvas is the 60, this rail is the 30,
-   * and the indigo accent is the 10 — which only works if the rail is NOT the
-   * accent. It has been Make's violet→fuchsia (theirs, not ours), the accent
-   * itself (so primary buttons had nothing to pop against), and a warm brown
-   * that matched nothing else in the palette.
+   * and the ultramarine accent is the 10 — which only works if the rail is NOT
+   * the accent. It has been Make's violet→fuchsia (theirs, not ours), the
+   * accent itself (so primary buttons had nothing to pop against), and a warm
+   * brown that matched nothing else in the palette.
    *
-   * Now it IS the ink ladder's base: the cool graphite the ladder was built
+   * Now it IS the ink ladder's base: the warm near-black the ladder was built
    * around, so the rail and every dark surface (the canvas toast) are the same
    * material by construction rather than by coincidence.
    */
@@ -225,17 +334,24 @@
    * the colour itself (dots, strokes), a soft wash (badge/banner fill), and
    * an ink (text ON the wash). Pending/transient state takes `muted` +
    * `muted-foreground` — deliberately NOT blue, so nothing competes with the
-   * indigo accent.
+   * ultramarine accent.
+   *
+   * THE INKS ARE SOLVED, NOT PICKED. Each one is the darkest step that still
+   * looks like its hue, chosen so that ink-on-its-own-soft lands in a 5.2–5.5:1
+   * band. That tight band is the point: a badge row where green measures 4.4
+   * and red measures 6.1 reads as inconsistent weight even when nobody can say
+   * why. The previous greens and ambers sat at 4.38 and 4.41 — under AA for
+   * the 11px semibold these are actually set in.
    */
   --color-success: #16a34a;
-  --color-success-soft: #dcfce7;
-  --color-success-ink: #15803d;
-  --color-warn: #f97316;
-  --color-warn-soft: #fff1e7;
-  --color-warn-ink: #c2410c;
+  --color-success-soft: #e8f6e9;
+  --color-success-ink: #14713a; /* 5.44:1 on its soft */
+  --color-warn: #e8720c;
+  --color-warn-soft: #fceedf;
+  --color-warn-ink: #a44a07; /* 5.18:1 on its soft */
   --color-danger: #dc2626;
-  --color-danger-soft: #fee2e2;
-  --color-danger-ink: #b91c1c;
+  --color-danger-soft: #fbe6e3;
+  --color-danger-ink: #b42318; /* 5.49:1 on its soft */
 }
 
 :root {
@@ -249,16 +365,17 @@
    * one place each colour is decided.
    */
   --background: #ffffff;
-  /* BLACK, not 96% black. Primary text, headings, button labels and icons are
-     #000; anything meant to recede uses `muted-foreground`. Splitting the
-     difference at #0a0a0a made everything read one step greyer than intended
-     and left no room at the top of the scale. */
-  --foreground: #000000;
+  /* WARM NEAR-BLACK, not pure black. #000 on #fff is 21:1 — a contrast no
+     printed page has ever asked a reader to sustain, and the reason long
+     sessions in this kind of tool feel like glare. The warm 900 measures
+     16.43:1, which is still comfortably past AAA, and leaves the top of the
+     scale free so that something genuinely emphatic still has somewhere to go. */
+  --foreground: var(--color-neutral-900);
 
   --card: #ffffff;
-  --card-foreground: #000000;
+  --card-foreground: var(--color-neutral-900);
   --popover: #ffffff;
-  --popover-foreground: #000000;
+  --popover-foreground: var(--color-neutral-900);
 
   --primary: var(--color-brand-600);
   --primary-foreground: #ffffff;
@@ -275,12 +392,10 @@
   --destructive: var(--color-red-600);
   --destructive-foreground: #ffffff;
 
-  /* A hair of lavender in it, because everything it draws on has one. At
-     neutral-200 (#e5e5e5, dead grey) the hairline was the only desaturated
-     thing in a #f6f6fb field: shadow falloff around a card ran blue-tinted
-     and then the border stepped back to neutral, which reads as dry rather
-     than as part of the family. Same luminance, borrowed hue. */
-  --border: #e5e4ed;
+  /* The hairline, cut from the warm ramp so it belongs to the same family as
+     the shadow falling around it. It was #e5e4ed — a faintly lavender grey
+     chosen to match a cool palette that no longer exists. */
+  --border: var(--color-neutral-200);
   /* The SAME hairline as --border, not a step darker. They were #d4d4d4 and
      #e5e5e5, seventeen levels apart in one hue, so a select inside the config
      panel was drawn harder than the panel containing it — almost-but-not-
@@ -315,6 +430,49 @@
   --color-ring: var(--ring);
 }
 
+/**
+ * WHAT THE BROWSER ITSELF NEEDS TO BE TOLD.
+ *
+ * None of this is visible in a component's class list, which is exactly why
+ * none of it was here: these are the platform behaviours a design system has
+ * to declare once or get wrong everywhere.
+ */
+html {
+  /* The product is light-only for now, and SAYING so is not a no-op: without
+     it, a visitor whose OS is in dark mode gets dark-rendered scrollbars,
+     spinners, and native <select> popups against our white surfaces. Declaring
+     it also stops the form controls from being repainted at hydration. */
+  color-scheme: light;
+  /* Anchored headings otherwise land flush against the top of the viewport
+     with their first line under the edge. */
+  scroll-padding-top: 5rem;
+}
+
+/**
+ * THE 300ms TAP DELAY, REMOVED. Mobile Safari waits a third of a second after
+ * every tap to see whether a second one is coming (double-tap to zoom). On
+ * controls, that delay is indistinguishable from the app being slow, and it is
+ * one line to opt out of. Zoom itself is untouched — pinch still works, which
+ * is why this is not `user-scalable=no`.
+ */
+button,
+a,
+summary,
+label,
+[role="button"],
+[role="switch"],
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+/* Chosen rather than inherited: the default is a translucent grey block that
+   ignores our radii, so a tapped pill flashes as a rectangle. */
+html {
+  -webkit-tap-highlight-color: rgb(43 68 216 / 0.12);
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -334,12 +492,64 @@ body {
   font-feature-settings: "cv01", "ss03";
 }
 
+/**
+ * NO WIDOWS, ANYWHERE.
+ *
+ * `balance` distributes a heading across its lines so the last one is never a
+ * single orphaned word — the landing hero and half the empty-state titles in
+ * this app were wrapping to a two-word second line. `pretty` does the cheaper
+ * version for body text (last line only), which is what it is for: `balance`
+ * is capped at a few lines by the spec and is the wrong tool for a paragraph.
+ *
+ * Applied by ELEMENT rather than by class so no heading can be added later
+ * without it. `:where()` keeps specificity at zero, so any component that
+ * genuinely needs a different wrap still wins without `!important`.
+ */
+:where(h1, h2, h3, h4, legend) {
+  text-wrap: balance;
+}
+:where(p, li, dd, figcaption) {
+  text-wrap: pretty;
+}
+
 /* Tabular numerals, opt-in per element — never global, per every reference
    product (Stripe: "tnum" on metric spans only). For numbers that update in
    place: a metric that reflows as it ticks reads as jitter, not change. */
 .tnum {
   font-feature-settings: "cv01", "ss03", "tnum";
   font-variant-numeric: tabular-nums;
+}
+
+/**
+ * THE LEDGER NUMERAL — the product's one signature, and the only place the
+ * display face and tabular figures are used together.
+ *
+ * A tile's number is the entire payoff of the product: six tools disagreed,
+ * and this is the answer. Set in Inter at UI tracking it read as a slightly
+ * large label. In the display face at -0.03em it reads as a figure on a
+ * statement — which is what it is, and what the user is going to quote to
+ * somebody else.
+ *
+ * `tabular-nums` is not decoration here either: these numbers refresh in
+ * place, and proportional figures make a tile twitch every time a 1 becomes
+ * a 4.
+ */
+.stat-numeral {
+  font-family: var(--font-display);
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+/**
+ * The display face, for headings that are not the metric. Kept as a utility
+ * rather than bound to `h1` so that the ONE h1 recipe in ui/page.tsx stays the
+ * single place a page title is decided.
+ */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.022em;
 }
 
 /**
@@ -354,6 +564,40 @@ body {
   [role="switch"]:not(:disabled):active {
     transform: translateY(0.5px);
   }
+}
+
+/**
+ * THE FOCUS RING, IN ONE PLACE.
+ *
+ * Every component was spelling its own `focus-visible:ring-4 ring-ring/40`,
+ * which is four tokens to get wrong and which several controls simply omitted.
+ * A keyboard user should never have to wonder where they are — and on a dark
+ * surface the same ring is invisible, so the rail and the toast opt into the
+ * white twin instead.
+ */
+:where(a, button, summary, [role="button"], [role="switch"], [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.focus-ring-light:focus-visible {
+  outline-color: rgb(255 255 255 / 0.9);
+}
+
+/**
+ * SKIP TO CONTENT. Off-screen until focused, then the first thing a keyboard
+ * or screen-reader user meets — without it, reaching the page means tabbing
+ * through the whole rail on every navigation.
+ */
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  transform: translateY(-200%);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.skip-link:focus-visible {
+  transform: translateY(0);
 }
 
 /*
@@ -394,9 +638,9 @@ body {
   pointer-events: none;
 }
 /*
- * Connection lines. A soft, cool-grey DASHED stroke with rounded caps and
+ * Connection lines. A soft, warm-grey DASHED stroke with rounded caps and
  * rounded corners (from the edge geometry) — calm and intentional, like
- * Make.com. Brightens to indigo when the edge is hovered or selected.
+ * Make.com.
  */
 .react-flow__edge-path {
   stroke: var(--color-canvas-edge);
@@ -450,7 +694,9 @@ summary {
  */
 @media (prefers-reduced-motion: no-preference) {
   .lift {
-    transition: transform 0.16s cubic-bezier(0.34, 1.3, 0.64, 1), box-shadow 0.16s ease;
+    transition:
+      transform var(--duration-base) var(--ease-spring),
+      box-shadow var(--duration-base) var(--ease-standard);
   }
   .lift:hover {
     transform: translateY(-1px);
@@ -473,7 +719,7 @@ summary {
   /* `backwards` (not `both`) so NO transform lingers after the animation — a
      lingering transform would make `position: fixed` children (the data browser)
      anchor to the panel instead of the viewport and render off-screen. */
-  animation: flowPopIn 0.19s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  animation: flowPopIn var(--duration-base) var(--ease-spring) backwards;
 }
 
 @keyframes flowPopOut {
@@ -487,5 +733,53 @@ summary {
   }
 }
 .flow-pop-out {
-  animation: flowPopOut 0.12s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: flowPopOut var(--duration-fast) var(--ease-exit) both;
+}
+
+/**
+ * THE PAGE'S OWN ENTRANCE, so navigation reads as arrival rather than as
+ * replacement.
+ *
+ * A FADE, NOT A RISE — and the missing 10px of travel is a deliberate
+ * subtraction, not an oversight. This class sits on `PageContainer`, which is
+ * the ancestor of everything on a route, and ANY transform on an element makes
+ * it the containing block for `position: fixed` descendants. The settings page
+ * renders a Modal inside its container; the builder's data browser has already
+ * been bitten by exactly this once (see `.flow-pop-in`, which uses `backwards`
+ * rather than `both` for the same reason).
+ *
+ * With no delay the hazard window is only the 280ms of the animation itself,
+ * and no human opens a dialog that fast — but "safe because nobody can click
+ * quickly enough" is how a latent bug waits for the first feature that opens a
+ * modal on mount from a query param. Opacity creates no containing block, so
+ * there is nothing to reason about.
+ */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .rise-in {
+    animation: fadeIn var(--duration-slow) var(--ease-standard) backwards;
+  }
+}
+
+/**
+ * EVERY ANIMATION, OFF. The rules above are individually guarded, but third-
+ * party CSS (React Flow's own transitions) is not — and a user who has asked
+ * the OS for less motion has asked the whole page, not our half of it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

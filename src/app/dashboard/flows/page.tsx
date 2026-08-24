@@ -90,8 +90,16 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
   // action itself is gated server-side, the button is the courtesy.
   const access = await effectiveAccess(getReadDb(), { orgId, userId, role });
   const canCreate = access.can("create_flows");
-  const allFlows = await listFlows(getReadDb(), orgId).catch(() => []);
-  const flows = allFlows.filter((f) => access.canSeeMetric(`flow:${f.id}`));
+  // `null` means the read FAILED; `[]` means the workspace is genuinely empty.
+  // Collapsing both to `[]` is what made a database outage render as "No flows
+  // yet — press Create flow", i.e. the product telling a customer their work is
+  // gone. The exception goes to the log, never to the page.
+  const allFlows = await listFlows(getReadDb(), orgId).catch((err) => {
+    console.error("[flows] list read failed", err);
+    return null;
+  });
+  const flowsUnavailable = allFlows === null;
+  const flows = (allFlows ?? []).filter((f) => access.canSeeMetric(`flow:${f.id}`));
   // One pass for the whole list — the same answer the dashboard shows and the
   // same rule the editor's toolbar applies, so no two surfaces can disagree.
   const unpublished = await unpublishedFlowIds(getReadDb(), orgId).catch(() => new Set<string>());
@@ -144,7 +152,14 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
           actions={createForm}
         />
 
-        {flows.length === 0 ? (
+        {flowsUnavailable ? (
+          <EmptyState
+            className="mt-8"
+            icon={<Workflow />}
+            title="Your flows couldn’t be loaded"
+            description="This is a problem on our side, not a change to your workspace — nothing has been deleted. Refresh to try again."
+          />
+        ) : flows.length === 0 ? (
           <EmptyState
             className="mt-8"
             icon={<Workflow />}

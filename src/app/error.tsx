@@ -18,8 +18,8 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
   }, [error]);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-16">
-      <h1 className="text-display font-semibold tracking-tight text-foreground">Something went wrong</h1>
+    <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-16">
+      <h1 className="font-display text-display font-semibold text-foreground">Something went wrong</h1>
       <p className="mt-3 text-base text-muted-foreground">
         An unexpected error interrupted this page. Trying again usually clears it — your data is intact.
       </p>

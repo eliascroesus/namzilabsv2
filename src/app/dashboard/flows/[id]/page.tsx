@@ -77,7 +77,9 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
     // clips rather than scrolls, and sits on the canvas grey rather than white.
     // No account panel: it would cost a WorkOS membership fetch per editor
     // load for a control the dashboard is one click away from.
-    <AppFrame framed surface="overflow-hidden bg-canvas-bg">
+    // `ownsMain`: the builder is the one screen with no PageContainer, so the
+    // frame carries the page's single <main> landmark here.
+    <AppFrame framed ownsMain surface="overflow-hidden bg-canvas-bg">
       <FlowCanvas
         flowId={flow.id}
         name={flow.name}

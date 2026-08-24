@@ -15,13 +15,41 @@ import { Skeleton } from "@/components/ui/skeleton";
  * skeleton of itself: the real rail is about to occupy it, and shimmering
  * placeholders under icons that never move is noise.
  */
-export function ShellSkeleton({ children }: { children: React.ReactNode }) {
+export function ShellSkeleton({
+  width = "default",
+  children,
+}: {
+  /** Mirrors PageContainer's own prop — connections/[id] is a narrow page. */
+  width?: "default" | "narrow";
+  children: React.ReactNode;
+}) {
   return (
-    <div className="bg-rail flex h-screen">
-      <div className="w-[100px] shrink-0" />
-      <div className="flex-1 overflow-hidden bg-white">
+    // EVERY NUMBER BELOW IS A MIRROR, AND MIRRORS GO STALE.
+    //
+    // These are copies of the real chrome's measurements, and they drifted the
+    // moment the responsive pass moved the originals: the rail became
+    // 76/100px, the gutter became px-4 py-8 / sm:px-6 sm:py-10 / lg:px-8, and
+    // the frame became h-dvh. A skeleton whose geometry disagrees with the page
+    // it precedes does the one thing a skeleton exists to prevent — at ≥1024px
+    // the content jumped 8px sideways when the real page landed, and below
+    // 640px it jumped 32px sideways and 8px down.
+    //
+    // Kept as literals rather than routed through AppFrame/PageContainer on
+    // purpose: PageContainer is `<main id="main">` and carries `rise-in`, and a
+    // fallback must not render a second main landmark (nor animate in, only to
+    // animate in again when the real page arrives).
+    <div className="bg-rail flex h-dvh">
+      <div className="w-[76px] shrink-0 sm:w-[100px]" />
+      {/* `overflow-y-auto`, matching AppShell's own surface — with
+          `overflow-hidden` a classic scrollbar appeared only after the swap and
+          stole width from the canvas column at the same moment. */}
+      <div className="flex-1 overflow-y-auto bg-white">
         {/* Not <main>: PageContainer renders the page's one main landmark. */}
-        <div className="mx-auto w-full max-w-5xl px-6 py-10">
+        <div
+          className={`mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8 ${
+            width === "narrow" ? "max-w-3xl" : "max-w-5xl"
+          }`}
+        >
           <Skeleton className="h-8 w-48" />
           {children}
         </div>

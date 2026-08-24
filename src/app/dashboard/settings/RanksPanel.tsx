@@ -206,7 +206,7 @@ export function RanksPanel({
                   setExpandedId(open ? null : r.id);
                   setConfirmingDelete(null);
                 }}
-                className="flex w-full items-center gap-3 p-3.5 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
+                className="flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-muted"
               >
                 <span
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control"
@@ -386,7 +386,7 @@ export function RanksPanel({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="flex w-full items-center gap-2.5 rounded-surface border-2 border-dashed border-border p-3 text-left text-base font-semibold text-muted-foreground outline-none transition-all hover:border-primary hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
+            className="flex w-full items-center gap-2.5 rounded-surface border-2 border-dashed border-border p-3 text-left text-base font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-primary hover:text-primary"
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
               <Plus size={14} strokeWidth={2.25} />

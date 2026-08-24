@@ -205,7 +205,7 @@ export default async function ConnectionPage({
               <SectionHeading className="mb-0">Latest records</SectionHeading>
               <Link
                 href={`/connections/${conn.id}?preview=1`}
-                className="rounded-control text-base font-medium text-primary outline-none transition-colors hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+                className="rounded-control text-base font-medium text-primary transition-colors hover:underline"
               >
                 Preview latest
               </Link>

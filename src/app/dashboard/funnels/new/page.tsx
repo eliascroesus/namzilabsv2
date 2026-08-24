@@ -80,7 +80,7 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
               />
             </div>
             <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid gap-2 sm:grid-cols-3">
                 {STAGE_COLUMNS.map((col) => (
                   <span key={col} className="text-tiny font-medium text-muted-foreground">
                     {col}
@@ -88,7 +88,7 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
                 ))}
               </div>
               {STAGES.map((i) => (
-                <div key={i} className="grid grid-cols-3 gap-2">
+                <div key={i} className="grid gap-2 sm:grid-cols-3">
                   <Input
                     name={`stage${i}_label`}
                     defaultValue={one(sp[`stage${i}_label`])}

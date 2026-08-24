@@ -20,7 +20,7 @@ function FieldRow({ field, onDrill, onPick }: { field: DataField; onDrill: () =>
     <button
       type="button"
       onClick={field.container ? onDrill : onPick}
-      className="flex w-full items-center gap-3 rounded-control border border-border bg-muted/40 px-2.5 py-2 text-left outline-none transition-colors hover:border-brand-200 hover:bg-accent/60 focus-visible:ring-4 focus-visible:ring-ring/40"
+      className="flex w-full items-center gap-3 rounded-control border border-border bg-muted/40 px-2.5 py-2 text-left transition-colors hover:border-brand-200 hover:bg-accent/60"
     >
       <span className="flex min-w-0 max-w-[55%] shrink-0 items-center gap-1.5">
         <span className="truncate text-base text-foreground">{field.label}</span>
@@ -141,7 +141,7 @@ export function DataBrowser({
     <button
       type="button"
       onClick={() => setShowAll((prev) => new Set(prev).add(k))}
-      className="mt-1 w-full rounded-control px-2.5 py-1.5 text-left text-micro font-medium text-primary outline-none transition-colors hover:bg-accent focus-visible:ring-4 focus-visible:ring-ring/40"
+      className="mt-1 w-full rounded-control px-2.5 py-1.5 text-left text-micro font-medium text-primary transition-colors hover:bg-accent"
     >
       Show all {hidden + VISIBLE} fields
     </button>
@@ -193,7 +193,7 @@ export function DataBrowser({
               onClick={() => setOpen(false)}
               title="Close"
               aria-label="Close the field browser"
-              className="shrink-0 rounded-control p-1.5 text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
+              className="shrink-0 rounded-control p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <X size={16} />
             </button>
@@ -206,7 +206,7 @@ export function DataBrowser({
                 key={t.key}
                 type="button"
                 onClick={() => setTypeFilter(t.key)}
-                className={`rounded-full px-2.5 py-1 text-micro font-medium outline-none transition-colors focus-visible:ring-4 focus-visible:ring-ring/40 ${
+                className={`rounded-full px-2.5 py-1 text-micro font-medium transition-colors ${
                   typeFilter === t.key ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -222,7 +222,7 @@ export function DataBrowser({
             <button
               type="button"
               onClick={() => setDrill(drill.trail.length > 1 ? { groupId: drill.groupId, trail: drill.trail.slice(0, -1) } : null)}
-              className="flex shrink-0 items-center gap-0.5 rounded-control px-1 outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
+              className="flex shrink-0 items-center gap-0.5 rounded-control px-1 transition-colors hover:bg-muted"
             >
               <ChevronLeft size={12} strokeWidth={2.25} aria-hidden /> Back
             </button>
@@ -305,7 +305,7 @@ export function DataBrowser({
                   <button
                     type="button"
                     onClick={() => toggleGroup(g.stepId)}
-                    className="flex w-full items-center gap-1.5 rounded-control px-2 py-1.5 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
+                    className="flex w-full items-center gap-1.5 rounded-control px-2 py-1.5 text-left transition-colors hover:bg-muted"
                   >
                     <ChevronRight
                       size={14}
@@ -378,7 +378,7 @@ export function DataBrowser({
               onCustom(q.trim());
               setOpen(false);
             }}
-            className="border-t border-border px-3 py-2 text-left text-tiny text-muted-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
+            className="border-t border-border px-3 py-2 text-left text-tiny text-muted-foreground transition-colors hover:bg-muted"
           >
             {/* Says what it DOES — now that search also matches values, this
                 hatch must not read as "pick the record with this email". */}

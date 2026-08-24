@@ -125,7 +125,7 @@ export default async function MetricDrillPage({
                 the exact number the tile promised. A legacy metric stores no
                 precision, so an integer keeps none and a real decimal keeps
                 two rather than being silently rounded away. */}
-            <p className="tnum mt-6 text-stat font-semibold">
+            <p className="stat-numeral mt-6 text-stat">
               {formatMetricValue(headline, {
                 format: "number",
                 precision: headline != null && Number.isInteger(headline) ? 0 : 2,

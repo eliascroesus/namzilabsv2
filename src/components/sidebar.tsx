@@ -6,23 +6,24 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LayoutDashboard, Plug, Settings, Workflow } from "lucide-react";
 
 /**
- * THE RAIL: a 100px icon column carrying the product's colour.
+ * THE RAIL: an icon column carrying the product's one dark surface.
  *
- * It has been three things now — a saturated gradient, then near-black, then
- * graphite — and the graphite was right about contrast and wrong about
- * feeling: a grey bar down the side of a grey app is correct and joyless. The
- * wash is back, but built rather than picked: anchored on our own brand at
- * the top, warming through violet to fuchsia, on a rail whose icons and
- * labels were designed for it (they were not, the first time).
+ * IT HAS BEEN FOUR THINGS. A saturated indigo→violet gradient (Make's, not
+ * ours), then near-black, then cool graphite, and now the warm near-black it
+ * should have been from the start. The graphite was right about contrast and
+ * wrong about material: a COOL grey bar down the side of a warm app is two
+ * different greys that never quite agree, and the eye reads that as a
+ * component bolted on rather than as part of the same object.
  *
- * This is the one place in the product allowed to be loud. Everything to the
- * right of it stays neutral, which is exactly what lets the rail carry colour
- * without the app becoming noisy.
+ * `ink-950` is cut from the same warm ramp as the paper to its right, so the
+ * rail and the page are one material at two exposures. It is deliberately NOT
+ * the accent: this is the 30 in a 60/30/10, and primary ultramarine needs
+ * something to pop against.
  *
- * The rail no longer PAINTS that wash — it sits on it, transparent, and
- * AppFrame paints it for both the rail and the notches at the canvas's left
- * corners. One gradient rather than two identical declarations, so the two
- * cannot drift apart at the seam.
+ * The rail does not PAINT its own background — it sits transparent on the one
+ * AppFrame paints, which also fills the notches at the canvas's left corners.
+ * One declaration rather than two, so the rail and the notch cannot drift
+ * apart at the seam.
  *
  * The active item is derived from the path; no page passes it in.
  */
@@ -53,7 +54,11 @@ export function Sidebar({
 }) {
   const pathname = usePathname() ?? "";
   return (
-    <aside className="flex h-full w-[100px] shrink-0 flex-col items-center px-2.5">
+    // NARROWER BELOW `sm`. At a flat 100px the rail took a quarter of a 390px
+    // phone for four icons, and every table to its right paid for it. 76px
+    // still holds the 40px tile and its label; the tile itself never shrinks,
+    // because it is the touch target.
+    <aside className="flex h-full w-[76px] shrink-0 flex-col items-center px-2 sm:w-[100px] sm:px-2.5">
       {/* THE WORDMARK IS THE TOP BAR'S HEIGHT.
           The rail's mark and the canvas's top island sit at the same y, so when
           they were different heights the two read as misaligned furniture. It
@@ -64,11 +69,16 @@ export function Sidebar({
           not their edges.
 
           The 11px beneath is Make's: its logo centre sits at y=35 and its first
-          icon centre at y=101 under a 70px band, leaving 101 - 20 - 70 = 11. */}
+          icon centre at y=101 under a 70px band, leaving 101 - 20 - 70 = 11.
+
+          That 106px is a DESKTOP measurement — it exists to line the mark up
+          with the builder's top island, and the builder is not a phone screen.
+          Below `sm` it collapses to 72px, which buys back a whole nav item's
+          worth of vertical space on a short viewport. */}
       <Link
         href="/dashboard"
         title="Namzilabs — dashboard"
-        className="mb-[11px] flex h-[106px] w-full items-center justify-center rounded-card text-title font-semibold text-white outline-none transition-opacity hover:opacity-85 focus-visible:ring-4 focus-visible:ring-white/25"
+        className="mb-[11px] flex h-[72px] w-full items-center justify-center rounded-card text-title font-semibold text-white transition-opacity hover:opacity-85 focus-ring-light sm:h-[106px]"
       >
         {/* THE MARK IS NOT A NAV TILE. It used to be a white wash like the
             active item's, and once resting glyphs stopped dimming it became the
@@ -95,8 +105,12 @@ export function Sidebar({
 
           The ACTIVE state highlights the tile only — not the label. Ours
           highlighted the whole item as one white pill, which is a different
-          (and heavier) thing entirely. */}
-      <nav className="flex w-full flex-col items-center gap-[30px]">
+          (and heavier) thing entirely.
+
+          The 30px gap tightens to 22px below `sm`, where vertical room is the
+          scarce thing rather than horizontal — four items at the desktop pitch
+          pushed the account avatar off a short phone viewport. */}
+      <nav className="flex w-full flex-col items-center gap-[22px] sm:gap-[30px]">
         {NAV.filter((item) => !hide?.includes(item.label)).map((item) => {
           const active = item.match(pathname);
           return (
@@ -104,7 +118,7 @@ export function Sidebar({
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className="group flex w-full flex-col items-center rounded-control outline-none focus-visible:ring-4 focus-visible:ring-white/25"
+              className="group flex w-full flex-col items-center rounded-control focus-ring-light"
             >
               {/* The GLYPH is full white at every state — it is the item's
                   identifier, and an identifier you have to squint at is a poor
@@ -169,7 +183,7 @@ function RailAccount({ initials, children }: { initials: string; children: React
         title="Account"
         aria-label="Account"
         aria-expanded={open}
-        className={`flex h-9 w-9 items-center justify-center rounded-full text-micro font-semibold text-white outline-none ring-1 ring-white/25 transition-all focus-visible:ring-4 focus-visible:ring-white/25 ${
+        className={`flex h-9 w-9 items-center justify-center rounded-full text-micro font-semibold text-white ring-1 ring-white/25 transition-colors duration-(--duration-fast) focus-ring-light ${
           open ? "bg-white/25" : "bg-white/15 hover:bg-white/25"
         }`}
       >

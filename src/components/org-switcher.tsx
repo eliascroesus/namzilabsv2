@@ -24,7 +24,10 @@ export function OrgSwitcher({ orgs, currentId }: { orgs: Org[]; currentId: strin
 
   return (
     <form action={switchOrgAction} className="space-y-1.5">
-      <NativeSelect name="organizationId" defaultValue={currentId}>
+      {/* The visible "Workspace" caption lives in app-shell.tsx as a plain
+          <p>, so it names nothing. A screen reader announced this as an
+          unlabelled combo box listing company names. */}
+      <NativeSelect name="organizationId" defaultValue={currentId} aria-label="Workspace">
         {orgs.map((o) => (
           <option key={o.id} value={o.id}>
             {o.name}

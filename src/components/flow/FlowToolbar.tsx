@@ -105,7 +105,7 @@ function IslandButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent [&_svg]:size-[26px] [&_svg]:stroke-[2]"
+      className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent [&_svg]:size-[26px] [&_svg]:stroke-[2]"
     >
       {children}
     </button>
@@ -214,7 +214,7 @@ export function FlowToolbar({
               <Link
                 href="/dashboard/flows"
                 title="All flows"
-                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
+                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
               >
                 <ChevronLeft size={26} strokeWidth={2} />
               </Link>
@@ -290,7 +290,7 @@ export function FlowToolbar({
                   placeholder="Untitled flow"
                   title={name}
                   style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
-                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground outline-none transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/25"
+                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
                 />
               </span>
             </span>
@@ -346,7 +346,7 @@ export function FlowToolbar({
                       setMenuOpen(false);
                       onDuplicate();
                     }}
-                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
+                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-foreground transition-colors hover:bg-muted"
                   >
                     <Copy size={16} />
                     Duplicate flow
@@ -356,7 +356,7 @@ export function FlowToolbar({
                       setMenuOpen(false);
                       setConfirmingDelete(true);
                     }}
-                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-destructive outline-none transition-colors hover:bg-danger-soft/60 focus-visible:ring-4 focus-visible:ring-ring/40"
+                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-destructive transition-colors hover:bg-danger-soft/60"
                   >
                     <Trash2 size={16} />
                     Delete flow
@@ -397,7 +397,7 @@ export function FlowToolbar({
           <button
             onClick={onFitView}
             title="Fit the whole flow on screen"
-            className="tnum h-[42px] w-[42px] rounded-control text-base font-semibold text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
+            className="tnum h-[42px] w-[42px] rounded-control text-base font-semibold text-foreground transition-colors hover:bg-muted"
           >
             {zoomPct}%
           </button>
@@ -455,7 +455,7 @@ function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void })
         <button
           type="button"
           onClick={onRetry}
-          className="rounded-control underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-4 focus-visible:ring-ring/40"
+          className="rounded-control underline underline-offset-2 hover:no-underline"
         >
           Retry
         </button>

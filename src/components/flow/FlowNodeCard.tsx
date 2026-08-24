@@ -34,7 +34,7 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
             e.stopPropagation();
             setOpen(!open);
           }}
-          className="nodrag flex h-7 w-7 items-center justify-center rounded-control text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
+          className="nodrag flex h-7 w-7 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           title="Step actions"
           aria-label="Step actions"
         >
@@ -50,7 +50,7 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
             setOpen(false);
             data.onDuplicateNode?.(id);
           }}
-          className="block w-full rounded-control px-2 py-1.5 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-4 focus-visible:ring-ring/40"
+          className="block w-full rounded-control px-2 py-1.5 text-left transition-colors hover:bg-muted"
         >
           Duplicate
         </button>
@@ -61,7 +61,7 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
             setOpen(false);
             data.onDeleteNode?.(id);
           }}
-          className="block w-full rounded-control px-2 py-1.5 text-left text-destructive outline-none transition-colors hover:bg-danger-soft/60 focus-visible:ring-4 focus-visible:ring-ring/40"
+          className="block w-full rounded-control px-2 py-1.5 text-left text-destructive transition-colors hover:bg-danger-soft/60"
         >
           Delete
         </button>
@@ -196,7 +196,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
          inner strip: the radius clips it for free and nothing inside the card
          can knock it out of alignment. */
       style={{ borderLeftWidth: 4, borderLeftColor: accent }}
-      className={`group/card w-[300px] rounded-surface border bg-card shadow-surface transition-all duration-150 hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-surface ${border} ${carried ? "opacity-40" : ""}`}
+      className={`group/card w-[300px] rounded-surface border bg-card shadow-surface transition-shadow duration-(--duration-fast) hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-surface ${border} ${carried ? "opacity-40" : ""}`}
     >
       {isCompare ? (
         <>
@@ -290,7 +290,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             (data as NodeData).onAddFrom?.(id, null, anchorFromRect(e.currentTarget.getBoundingClientRect()));
           }}
           title="Add the next step"
-          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-left text-base font-semibold text-muted-foreground shadow-surface outline-none transition-all hover:border-primary hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
+          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-left text-base font-semibold text-muted-foreground shadow-surface transition-colors duration-(--duration-fast) hover:border-primary hover:text-primary"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
             <Plus size={16} strokeWidth={2} />
@@ -311,7 +311,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
                 (data as NodeData).onAddFrom?.(id, h.id, anchorFromRect(e.currentTarget.getBoundingClientRect()));
               }}
               title={`Add a step to “${h.label}”`}
-              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-border bg-card px-3 py-1.5 text-tiny font-semibold text-muted-foreground outline-none transition-all hover:border-primary hover:text-primary focus-visible:ring-4 focus-visible:ring-ring/40"
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-border bg-card px-3 py-1.5 text-tiny font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-primary hover:text-primary"
             >
               <Plus size={14} strokeWidth={2.25} />
               {h.label}

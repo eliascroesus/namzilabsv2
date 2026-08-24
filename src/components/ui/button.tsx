@@ -19,22 +19,42 @@ import { cn } from "@/lib/utils";
  * to server actions).
  */
 const buttonVariants = cva(
-  // Shared: the focus ring is on `focus-visible` only, so keyboard users get
-  // it and mouse users never see a ring they did not ask for.
-  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-control font-semibold transition-all outline-none focus-visible:ring-4 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  // Shared. NOTE what this no longer carries: an outline reset and a
+  // focus-ring spelling of its own.
+  //
+  // Focus is decided ONCE, in globals.css, by a zero-specificity
+  // `:where(a, button, summary, …):focus-visible` outline, so every control in
+  // the product shows the SAME ring. That was the actual problem: buttons rang
+  // at /40, fields at /25, the rail in white, and four controls had no focus
+  // state at all — 122 hand-written copies of one idea. A component that
+  // re-spells the ring can drift from it, and an outline reset here would
+  // switch the shared rule off for the most-focused element in the app.
+  //
+  // `transition-colors`, not `transition-all`: `all` animates the outline too,
+  // so the focus ring grew into place a beat after the key was pressed.
+  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-control font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:brightness-110 active:brightness-95",
-        secondary: "border border-border bg-card text-foreground hover:bg-muted",
-        ghost: "text-muted-foreground hover:bg-muted hover:text-foreground",
-        destructive: "bg-destructive text-destructive-foreground hover:brightness-110",
+        // Hover walks DOWN the ramp, it does not brighten. `brightness-110` on
+        // a 7.19:1 ultramarine lightens it toward the white behind it, so the
+        // label's contrast FELL at the one moment the button is under a
+        // pointer. Down the ramp is also the direction a real button moves.
+        default: "bg-primary text-primary-foreground hover:bg-brand-700 active:bg-brand-800",
+        secondary: "border border-border bg-card text-foreground hover:bg-muted active:bg-neutral-200",
+        ghost: "text-muted-foreground hover:bg-muted hover:text-foreground active:bg-neutral-200",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-danger-ink active:brightness-95",
         // Running something is a different KIND of act from publishing it, and
         // Make/Zapier both give it its own colour rather than a second grey.
         success: "bg-success-soft text-success-ink hover:brightness-[0.97]",
         // A destructive action that is not the point of the screen: quiet
         // until hovered, then unmistakable.
-        destructiveGhost: "text-neutral-400 hover:bg-red-50 hover:text-destructive",
+        // Rest was `text-neutral-400` — 2.53:1, and globals.css marks that token
+        // "decorative / disabled only — never text". It was carrying real labels
+        // ("Revoke", "Delete rank", "Remove") at 13px semibold. Hover was no
+        // better: destructive-on-red-50 measures 4.34:1. Both states now come
+        // from the danger trio — 5.68:1 at rest, 5.49:1 on hover.
+        destructiveGhost: "text-muted-foreground hover:bg-danger-soft hover:text-danger-ink",
         // The bordered delete: present enough to find, calm enough to sit
         // beside content. Confirm steps and inline "Disconnect"s live here.
         destructiveOutline: "border border-red-200 bg-card text-danger-ink hover:bg-danger-soft/60",

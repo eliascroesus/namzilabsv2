@@ -284,7 +284,7 @@ export function ConnectionRow({
           <span className="flex min-w-0 items-center gap-2">
             <Link
               href={`/connections/${id}`}
-              className="truncate rounded-control text-base font-semibold text-foreground outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+              className="truncate rounded-control text-base font-semibold text-foreground hover:underline"
             >
               {saving ? draft : name}
             </Link>
@@ -361,7 +361,7 @@ export function ConnectionRow({
           />
           <Link
             href={`/connections/${id}`}
-            className="rounded-control text-tiny text-primary outline-none hover:underline focus-visible:ring-4 focus-visible:ring-ring/40"
+            className="rounded-control text-tiny text-primary hover:underline"
           >
             Signing secret and delivery status
           </Link>

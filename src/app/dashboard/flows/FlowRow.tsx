@@ -84,6 +84,11 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
         </div>
         {flows.length > 5 && (
           <Input
+            type="search"
+            // `type="search"` and not `text`: it gives the field Escape-to-clear
+            // and the native clear affordance for free, and mobile keyboards
+            // label their return key "Search" instead of "Go".
+            aria-label="Search flows"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search flows…"
@@ -197,7 +202,7 @@ function Row({ flow }: { flow: FlowListItem }) {
 
       <span className="text-tiny text-muted-foreground">
         {formatDate(new Date(flow.updatedAt))}
-        <span className="block text-muted-foreground/70">{formatTime(new Date(flow.updatedAt))}</span>
+        <span className="block text-muted-foreground">{formatTime(new Date(flow.updatedAt))}</span>
       </span>
 
       <span className="flex items-center justify-end gap-1">

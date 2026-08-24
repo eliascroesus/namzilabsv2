@@ -15,7 +15,19 @@ export function PageContainer({
 }: React.ComponentProps<"main"> & { width?: "default" | "narrow" }) {
   return (
     <main
-      className={cn("mx-auto w-full px-6 py-10", width === "narrow" ? "max-w-3xl" : "max-w-5xl", className)}
+      // `id="main"` is the skip link's target, and it lives HERE rather than on
+      // each page so that no route can forget it. It is also why this element
+      // is the page's one landmark — see AppFrame's `ownsMain`.
+      id="main"
+      className={cn(
+        // The gutter steps with the viewport. At a flat px-6 the content of a
+        // page sat 24px off a phone's edge, which is fine, and 24px off a 27"
+        // display's rail, which is not — a 1440px window and a 390px one were
+        // asking for the same margin.
+        "rise-in mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+        width === "narrow" ? "max-w-3xl" : "max-w-5xl",
+        className,
+      )}
       {...props}
     />
   );
@@ -39,18 +51,27 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
       {back && (
         <Link
           href={back.href}
-          className="inline-flex items-center gap-1 rounded-control text-base text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-4 focus-visible:ring-ring/40"
+          className="inline-flex items-center gap-1 rounded-control text-base text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft size={14} />
           {back.label}
         </Link>
       )}
-      <div className={cn("flex flex-wrap items-center justify-between gap-3", back && "mt-3")}>
+      <div className={cn("flex flex-wrap items-start justify-between gap-x-4 gap-y-3", back && "mt-3")}>
         <div className="min-w-0">
-          <h1 className="text-display font-semibold tracking-tight text-foreground">{title}</h1>
-          {lede && <p className="mt-1 text-base text-muted-foreground">{lede}</p>}
+          {/* The display face's one in-app appearance besides the metric
+              numeral. `.font-display` carries its own tracking, so no
+              `tracking-tight` here — the two would compound. */}
+          <h1 className="font-display text-display font-semibold text-foreground">{title}</h1>
+          {/* `max-w-2xl`: a lede is a sentence, and a sentence that runs the
+              full 1024px of the container is 140 characters a line — roughly
+              twice the measure anything is comfortably read at. */}
+          {lede && <p className="mt-1.5 max-w-2xl text-base text-muted-foreground">{lede}</p>}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {/* `items-center` on a wrapping row put the buttons half a line below
+            the title whenever the lede pushed the left column taller. They
+            align to the TOP of the header and hold the title's own line. */}
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
     </header>
   );

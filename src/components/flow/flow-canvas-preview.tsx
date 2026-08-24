@@ -42,7 +42,7 @@ export function FlowNodeCard({
   return (
     <div
       style={{ borderLeftWidth: 4, borderLeftColor: accent }}
-      className="w-[300px] rounded-surface border border-border bg-card shadow-surface transition-all duration-150 hover:shadow-card-hover"
+      className="w-[300px] rounded-surface border border-border bg-card shadow-surface transition-shadow duration-(--duration-fast) hover:shadow-card-hover"
     >
       <div className="flex items-start gap-3 p-3.5">
         <NodeIcon type={type} source={source} variant={variant.includes("_") ? variant : undefined} size={44} />

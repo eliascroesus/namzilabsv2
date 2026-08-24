@@ -19,10 +19,10 @@
  * this string into a client reference, and /design is a server component that
  * needs to read it as a string.
  */
-export const PANEL_SHELL = "flex flex-col overflow-hidden rounded-surface border border-border bg-card shadow-surface";
+export const PANEL_SHELL ="flex flex-col overflow-hidden rounded-surface border border-border bg-card shadow-surface";
 
 /** Set the step up, then run it. A step that cannot be run offers only the first. */
-export type PanelTab = "configure" | "test";
+export type PanelTab ="configure" |"test";
 
 /**
  * The tab row. `data-config-tabs` is load-bearing — the field browser measures
@@ -33,27 +33,27 @@ export type PanelTab = "configure" | "test";
  * which is the one place two almost-identical blues cannot be afforded.
  */
 export function PanelTabs({
-  tabs,
-  active,
-  onSelect,
+ tabs,
+ active,
+ onSelect,
 }: {
-  tabs: readonly PanelTab[];
-  active: PanelTab;
-  onSelect: (tab: PanelTab) => void;
+ tabs: readonly PanelTab[];
+ active: PanelTab;
+ onSelect: (tab: PanelTab) => void;
 }) {
-  return (
-    <div data-config-tabs className="flex gap-5 border-b border-border bg-card px-5">
-      {tabs.map((t) => (
-        <button
-          key={t}
-          onClick={() => onSelect(t)}
-          className={`-mb-px border-b-2 py-3 text-base capitalize outline-none transition-colors focus-visible:ring-4 focus-visible:ring-ring/40 ${
-            active === t ? "border-primary font-semibold text-foreground" : "border-transparent font-medium text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {t}
-        </button>
-      ))}
-    </div>
-  );
+ return (
+ <div data-config-tabs className="flex gap-5 border-b border-border bg-card px-5">
+ {tabs.map((t) => (
+ <button
+ key={t}
+ onClick={() => onSelect(t)}
+ className={`-mb-px border-b-2 py-3 text-base capitalize transition-colors ${
+ active === t ?"border-primary font-semibold text-foreground" :"border-transparent font-medium text-muted-foreground hover:text-foreground"
+ }`}
+ >
+ {t}
+ </button>
+ ))}
+ </div>
+ );
 }

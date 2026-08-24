@@ -12,7 +12,8 @@ import { ConnectionRow } from "./ConnectionRow";
 import { connectApiKeyAction } from "./actions";
 import { eventTimeNote, readEventTime } from "@/lib/webhooks/event-time";
 import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -62,7 +63,15 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
   const sp = await searchParams;
   const errorCode = one(sp.error);
-  const connected = await listConnections(orgId).catch(() => []);
+  // `null` means the read FAILED; `[]` means there genuinely are none. Merging
+  // the two rendered a database outage as "No connections yet", which reads as
+  // "your integrations are gone" to the person whose integrations they are.
+  const connectedOrNull = await listConnections(orgId).catch((err) => {
+    console.error("[integrations] connection list read failed", err);
+    return null;
+  });
+  const connectionsUnavailable = connectedOrNull === null;
+  const connected = connectedOrNull ?? [];
   // Best-effort: a failed count must not take down the page, and the delete
   // warning falls back to naming no number rather than naming a wrong one.
   const records = await connectionRecordCounts(orgId).catch(() => ({}) as Record<string, number>);
@@ -95,7 +104,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           <div className="mt-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-base text-danger-ink">
             <p>
               {integrationsErrorMessage(errorCode)}{" "}
-              <span className="text-tiny text-danger-ink/70">({errorCode})</span>
+              <span className="text-tiny text-danger-ink">({errorCode})</span>
             </p>
             {/* Dismissal without client JS: dropping the query param re-renders
                 the page clean (this segment is force-dynamic). */}
@@ -114,7 +123,13 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
         <section className="mt-8">
           <SectionHeading className="mb-2">Your connections</SectionHeading>
-          {connected.length === 0 ? (
+          {connectionsUnavailable ? (
+            <EmptyState
+              icon={<Plug />}
+              title="Your connections couldn’t be loaded"
+              description="This is a problem on our side — nothing has been disconnected and no data has been lost. Refresh to try again."
+            />
+          ) : connected.length === 0 ? (
             <EmptyState
               icon={<Plug />}
               title="No connections yet"
@@ -226,9 +241,9 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
                   />
                 </div>
               ))}
-              <Button type="submit" variant="secondary" className="w-full">
+              <SubmitButton variant="secondary" pendingLabel="Saving…" className="w-full">
                 Save connection
-              </Button>
+              </SubmitButton>
               {/* A source with no credentials to enter (Custom Webhook) gives no
                   clue that saving is only step one — the URL it mints is the
                   whole product, and it appears above once the row exists. */}

@@ -98,8 +98,12 @@ export function Delta({
       title={`${formatMetricValue(previous, format)} ${since}`}
     >
       <Icon size={12} aria-hidden />
-      <span className="tnum">{magnitude}</span>
-      <span className="text-muted-foreground/70">{since}</span>
+      {/* The two-tone is built by raising the NUMBER, not by sinking the
+          label. `since` carries "vs yesterday" — the half that says what the
+          comparison is against — and at /70 it measured 2.84:1, so the pill
+          read as a naked "+12%" with an unreadable qualifier. */}
+      <span className="tnum font-semibold text-foreground">{magnitude}</span>
+      <span>{since}</span>
     </span>
   );
 }

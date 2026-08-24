@@ -71,7 +71,7 @@ async function pollTestResult(runId: string, cancelled: () => boolean): Promise<
   // Never started: the row is still queued, so nothing ever claimed it.
   if (last?.status === "queued") {
     return fail(
-      "This test was queued but never picked up — the background worker isn't running. Check the Inngest connection, then try again.",
+      "This test was queued but never started. That is on our side, not yours — nothing about the step is wrong. Try again in a moment, and if it keeps happening, contact support.",
     );
   }
   // Started and went quiet: the run began and stopped reporting, which is what a
@@ -1866,7 +1866,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
                   <button
                     type="button"
                     onClick={() => { setSelectedId(iss.nodeId!); setPublishError(null); }}
-                    className="rounded-control text-left underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-4 focus-visible:ring-ring/40"
+                    className="rounded-control text-left underline underline-offset-2 hover:no-underline"
                   >
                     {iss.message}
                   </button>
