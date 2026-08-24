@@ -86,6 +86,8 @@ export async function setFlowEnabledAction(
     // The dashboard's tiles come and go with this, so it has to re-render too.
     revalidatePath("/dashboard/flows");
     revalidatePath("/dashboard");
+    // The calendar reads the same stored tiles, so it goes stale with them.
+    revalidatePath("/dashboard/calendar");
     return { ok: true, state };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -371,11 +373,15 @@ export async function refreshFlowAction(formData: FormData): Promise<void> {
     const access = await effectiveAccess(getDb(), ctx);
     if (!access.canSeeMetric(`flow:${id}`)) {
       revalidatePath("/dashboard");
+      // The calendar reads the same stored tiles, so it goes stale with them.
+      revalidatePath("/dashboard/calendar");
       return;
     }
     await materializeFlow(getDb(), orgId, id);
   }
   revalidatePath("/dashboard");
+  // The calendar reads the same stored tiles, so it goes stale with them.
+  revalidatePath("/dashboard/calendar");
 }
 
 /**
@@ -395,6 +401,8 @@ export async function refreshAllFlowsAction(): Promise<void> {
   await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.orgId, orgId));
   await materializeStaleAll(db, { orgId });
   revalidatePath("/dashboard");
+  // The calendar reads the same stored tiles, so it goes stale with them.
+  revalidatePath("/dashboard/calendar");
 }
 
 export async function publishFlowAction(

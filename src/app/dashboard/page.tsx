@@ -18,6 +18,7 @@ import { SourceMark } from "@/components/source-mark";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
+import { BoardControls, MetaLine, RangeLink, SourceLink, TileArea } from "./board-controls";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
 import { publishedFlowTiles, unpublishedFlowIds } from "@/lib/flow/materialize";
 import { refreshAllFlowsAction } from "@/app/dashboard/flows/actions";
@@ -269,12 +270,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * became a floating white smear. The track is a white island (the same
    * border-and-shadow every floating thing in the builder wears) and selection
    * is `bg-accent` + `text-accent-foreground`, which needs no depth to be read.
+   *
+   * The classes themselves now live on the `RangeLink` call below, because the
+   * ACTIVE one is decided per press rather than per render — see
+   * board-controls.tsx.
    */
-  const rangeItem = (active: boolean) =>
-    cn(
-      "inline-flex shrink-0 items-center rounded-control px-2.5 py-1.5 text-small font-medium transition-colors duration-(--duration-fast)",
-      active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-    );
 
   const activeSourceLabel = boardSource ? (catalogEntry(boardSource)?.name ?? boardSource) : "All sources";
   // Render the Subject column only when some row has one to show.
@@ -326,6 +326,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           }
         />
 
+        {/* The filters and the tiles are ONE control: pressing a pill has to
+            change both, and the second one has to say it is thinking. They
+            share a client boundary so the press can land before the server
+            answers — see board-controls.tsx. */}
+        <BoardControls>
         {/* ── THE FILTER BAR, AS AN ISLAND ──────────────────────────────
             Two questions, two controls, one surface. They used to sit loose on
             the page: on white that was merely plain, and on the warm canvas it
@@ -355,16 +360,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 `bg-muted` track inside a white bar is a box drawn inside a box. */}
             <div className="inline-flex items-center gap-0.5">
               {RANGE_OPTIONS.map((r) => (
-                <Link
+                // Still an anchor with a real href — see RangeLink. What it
+                // adds is that the press lands NOW: the pill lights and the
+                // tiles become skeletons while this page re-renders, instead of
+                // a second of nothing over numbers that answer the old range.
+                <RangeLink
                   key={r.key}
                   href={qs({ range: r.key })}
-                  // The selected range was styling only — a screen reader heard
-                  // seven identical links and no indication of which is on.
-                  aria-current={rangeKey === r.key ? "true" : undefined}
-                  className={rangeItem(rangeKey === r.key)}
+                  rangeKey={r.key}
+                  activeRange={rangeKey}
+                  className="inline-flex shrink-0 items-center rounded-control px-2.5 py-1.5 text-small font-medium transition-colors duration-(--duration-fast)"
+                  activeClassName="bg-accent text-accent-foreground"
+                  idleClassName="text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   {r.label}
-                </Link>
+                </RangeLink>
               ))}
             </div>
           </div>
@@ -384,7 +394,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               {/* Right-aligned: the control sits at the island's right edge, so
                   a left-anchored menu opened off the end of the bar. */}
               <div className="absolute right-0 top-full z-20 mt-1.5 min-w-52 rounded-surface border border-border bg-card p-1 shadow-surface">
-                <Link
+                <SourceLink
                   href={qs({ source: "" })}
                   className={cn(
                     "block rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-muted",
@@ -392,12 +402,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   )}
                 >
                   All sources
-                </Link>
+                </SourceLink>
                 {/* The connector's own name, not its storage key: this row read
                     "gsheets · close · webhook" while every other screen in the
                     product says "Google Sheets", "Close CRM". */}
                 {sources.map((srcName) => (
-                  <Link
+                  <SourceLink
                     key={srcName}
                     href={qs({ source: srcName })}
                     className={cn(
@@ -407,7 +417,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   >
                     <SourceMark source={srcName} />
                     {catalogEntry(srcName)?.name ?? srcName}
-                  </Link>
+                  </SourceLink>
                 ))}
               </div>
             </details>
@@ -426,7 +436,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             question you ask on arrival. Deliberately unboxed and quiet — it is
             a caption for the grid below, not another card competing with it. */}
         {hasTiles && (
-          <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-tiny text-muted-foreground">
+          <MetaLine className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-tiny text-muted-foreground">
             <span className="tnum">
               {tiles.length + flowTiles.length} metric{tiles.length + flowTiles.length === 1 ? "" : "s"}
             </span>
@@ -441,7 +451,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 with the Replay button on it. The same red number twice on one
                 screen, once without a door, is how a dashboard teaches people
                 to stop reading it. */}
-          </p>
+          </MetaLine>
         )}
 
         {/* Metric tiles: materialized flow outputs + legacy metrics. The
@@ -461,15 +471,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         {!hasTiles && !loadError ? (
           <OnboardingChecklist hasConnection={connCount > 0} hasFlow={flowCount > 0} hasPublished={flowTiles.length > 0} />
         ) : !hasTiles ? null : (
-          <div className="mt-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {flowTiles.map((row) => (
-              <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} rangeKey={rangeKey} />
-            ))}
-            {tiles.map((tile) => (
-              <MetricTile key={tile.metric.id} tile={tile} />
-            ))}
-          </div>
+          // Swapped for same-sized skeletons the instant a filter is pressed:
+          // the alternative is leaving last range's numbers on screen under a
+          // pill that now says something else.
+          <TileArea count={flowTiles.length + tiles.length}>
+            <div className="mt-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {flowTiles.map((row) => (
+                <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} rangeKey={rangeKey} />
+              ))}
+              {tiles.map((tile) => (
+                <MetricTile key={tile.metric.id} tile={tile} />
+              ))}
+            </div>
+          </TileArea>
         )}
+        </BoardControls>
 
         {/* ── WORKSPACE ACTIVITY ────────────────────────────────────────
             ONE SURFACE, HEADER AND ALL. The eyebrow and the connection summary

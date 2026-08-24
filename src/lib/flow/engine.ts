@@ -1748,10 +1748,43 @@ export function tileByRange(
       return result;
     };
 
+    /**
+     * HOW MANY RECORDS THIS RANGE'S NUMBER WAS MEASURED OVER.
+     *
+     * The calendar prints it under each day, because "12" backed by one record
+     * and "12" backed by four hundred are different claims and the square has
+     * room to say which.
+     *
+     * NOT `ex.recordsIn`, which is the honest count for an aggregation and a
+     * meaningless one everywhere else — a two-number compare reports
+     * `recordsIn: 2` (its two operands), and "2 records" under a percentage is
+     * a lie with a number in it. So: a dataset endpoint counts its own records,
+     * an aggregation counts the windowed dataset it consumed, and anything that
+     * cannot answer honestly answers 0, which the caller renders as silence.
+     * Under-reporting is the failure mode by design; over-reporting is not.
+     */
+    const recordsBehind = (ex: NodeExecOk, memo: Map<string, NodeExecOk>): number => {
+      if (ex.shape.kind === "dataset") return ex.shape.records.length;
+      let n = 0;
+      for (const e of incomingBy.get(nodeId) ?? []) {
+        const src = memo.get(e.source);
+        const shape = src && e.sourceHandle && src.outputs?.[e.sourceHandle] ? src.outputs[e.sourceHandle] : src?.shape;
+        if (shape?.kind === "dataset") n += shape.records.length;
+      }
+      return n;
+    };
+
     try {
       const ex = windowed(nodeId);
       const tile = ex.tile ?? buildTile(spec, ex.shape, ex.sample);
-      out[range.key] = { value: tile.value, series: tile.series, groups: tile.groups, ...(undated > 0 ? { undated } : {}) };
+      const records = recordsBehind(ex, memo);
+      out[range.key] = {
+        value: tile.value,
+        series: tile.series,
+        groups: tile.groups,
+        ...(records > 0 ? { records } : {}),
+        ...(undated > 0 ? { undated } : {}),
+      };
     } catch (e) {
       /**
        * EVERY RANGE GETS AN ENTRY, including the ones that cannot be answered.

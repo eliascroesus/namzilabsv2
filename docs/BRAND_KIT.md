@@ -194,6 +194,19 @@ Hand-rolling any of these is a defect. Links dressed as buttons use
   carrying no focus state at all. Dark surfaces add `.focus-ring-light`.
   Text fields are the one exception, and keep border-plus-halo (`ui/input.tsx`):
   a field is a place you are *in*, not a thing you pressed.
+- **A filter answers on the press, not on the response.** Anything that
+  re-renders the page from the URL (the dashboard's range and source) goes
+  through `board-controls.tsx`: the pressed control goes active immediately,
+  the content it governs swaps to **content-shaped skeletons**, and the URL
+  still updates inside a `useTransition` so back and shared links keep working.
+  Controls stay real `<a href>`s — middle-click and the pre-hydration paint
+  depend on it. Never dim the old numbers instead: a legible figure under a
+  pill that now says something else is a wrong answer shown confidently.
+- **Skeletons hold the real shape.** `Skeleton` is `neutral-200` (it has to
+  read on the warm canvas *and* on a white card) and is sized at the call site
+  to the thing it stands in for — a route's `loading.tsx` should be its page's
+  own layout in grey, not three bars. A skeleton that doesn't match its content
+  moves the jank later instead of removing it.
 - **Hover:** neutral hovers are `hover:bg-muted` (rows `hover:bg-muted/40`);
   primary walks **down** the ramp — `hover:bg-brand-700`, `active:bg-brand-800`.
   Never `hover:brightness-110` on the accent: it lightens toward the background,
@@ -243,6 +256,16 @@ and leaves the judgement to the reader. Percentages move in *points*
 only a tile that needs something wears a full `StatusPill`. A board where every
 card shows a green badge is furniture reporting no news, and it buries the one
 card that matters.
+
+**Heat is magnitude, never judgement.** The calendar tints each day by its
+share of the month's largest day, in the one accent — `color-mix(in srgb,
+var(--color-brand-600) 8–38%, white)`, which keeps the numeral past 9:1 at
+every step of the ramp. Green-good/red-bad is the same mistake a coloured
+delta would be. A **negative** value is the single exception and takes the
+danger tint: below zero is a fact about the number, not an opinion about it.
+Days with nothing are recessed (`bg-muted/50`), not white — inside a white card
+an empty white square is the same material as the sheet, so the days that have
+something must be the figure and the rest the ground.
 
 ## 10. Voice & formatting
 

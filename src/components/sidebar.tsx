@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { LayoutDashboard, Plug, Settings, Workflow } from "lucide-react";
+import { CalendarDays, LayoutDashboard, Plug, Settings, Workflow } from "lucide-react";
 
 /**
  * THE RAIL: an icon column carrying the product's one dark surface.
@@ -33,6 +33,15 @@ const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: stri
     label: "Dashboard",
     icon: <LayoutDashboard size={24} strokeWidth={2} />,
     match: (p) => p === "/dashboard" || p.startsWith("/dashboard/metrics") || p.startsWith("/dashboard/funnels"),
+  },
+  // Directly under Dashboard, because it is the same numbers seen a different
+  // way — the board answers "what is this metric right now", the calendar
+  // answers "which days made it". Nav order is a claim about relatedness.
+  {
+    href: "/dashboard/calendar",
+    label: "Calendar",
+    icon: <CalendarDays size={24} strokeWidth={2} />,
+    match: (p) => p.startsWith("/dashboard/calendar"),
   },
   { href: "/dashboard/flows", label: "Flows", icon: <Workflow size={24} strokeWidth={2} />, match: (p) => p.startsWith("/dashboard/flows") },
   {

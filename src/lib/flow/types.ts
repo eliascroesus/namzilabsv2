@@ -879,8 +879,42 @@ export type TileSpec = {
       unavailable?: string;
       /** Records carrying no date in the metric's time reference, so counted in no period. */
       undated?: number;
+      /**
+       * How many records the number was measured over, when that can be said
+       * honestly (see `recordsBehind` in engine.ts — a two-number compare
+       * cannot, and answers nothing rather than "2"). The calendar prints it
+       * under each day; a range with no answer simply omits the line.
+       */
+      records?: number;
     }
   >;
+
+  /**
+   * THE METRIC, DAY BY DAY — what the calendar view reads.
+   *
+   * Keyed `YYYY-MM-DD` in UTC, covering every day of the months
+   * `calendarMonths()` allows (this month and the one before it). It rides in
+   * the tile beside `byRange` for the same three reasons that one does: no
+   * migration, a tile written before the feature simply has none, and the
+   * dashboard's existing read already carries it to the client.
+   *
+   * WHY IT IS STORED RATHER THAN COMPUTED ON DEMAND. A day value is not a
+   * slice of the month's total — a rate, an average or a de-duplicated count
+   * has to be recomputed over that day's records — so a calendar built at read
+   * time would re-run the flow on every page view, against a database that
+   * bills every byte it returns. `tileByRange` already answers "this metric,
+   * through an arbitrary window" from records the materializer is holding
+   * anyway, so sixty-odd more windows cost arithmetic and no query at all. The
+   * calendar page then reads exactly what the dashboard reads.
+   *
+   * ONLY DAYS WITH AN ANSWER APPEAR. A day whose metric could not be computed
+   * (a percentage with nothing in its denominator) is absent rather than
+   * carrying a reason: sixty stored sentences to render sixty blank squares is
+   * a lot of bytes for a fact the empty square already tells. A genuine zero is
+   * present and is a different thing entirely — that distinction is the whole
+   * reason this is not a sparse "only non-zero days" map.
+   */
+  byDay?: Record<string, { value: number; records?: number }>;
   /**
    * The earliest moment these numbers can change WITHOUT new data arriving —
    * a record falling out of a rolling window, a future-dated one reaching

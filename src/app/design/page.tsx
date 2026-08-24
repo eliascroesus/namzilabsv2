@@ -21,6 +21,8 @@ import { ToolbarPreview } from "@/components/flow/toolbar-preview";
 import { PanelTabsPreview } from "@/components/flow/panel-preview";
 import { PANEL_SHELL } from "@/components/flow/panel-chrome";
 import { FlowList } from "@/app/dashboard/flows/FlowRow";
+import { CalendarBoard, type CalendarMetric } from "@/app/dashboard/calendar/CalendarBoard";
+import { calendarMonths, dayKey, daysInMonth } from "@/lib/metrics/calendar";
 import { Delta, GroupBars, Sparkbars, TargetBar } from "@/components/charts";
 import { SourceMark } from "@/components/source-mark";
 
@@ -92,6 +94,56 @@ const RADII: Array<{ cls: string; label: string; body: string }> = [
   { cls: "rounded-surface", label: "surface · 16px", body: "Panels, modals, tables, step cards" },
   { cls: "rounded-frame", label: "frame · 32px", body: "The app's own left edge" },
 ];
+/**
+ * SAMPLE DAYS FOR THE CALENDAR SECTION.
+ *
+ * Generated rather than typed out, because the kit renders the CURRENT month
+ * and a hand-written May would be an empty grid by June. Deterministic on
+ * purpose — no `Math.random`, so two renders of this page are the same page,
+ * and the heat ramp can be judged against a stable spread. Two metrics, so the
+ * picker has something to pick and the two formats (a count and a rate) both
+ * get seen.
+ */
+function kitCalendarDays(seed: number, scale: number, gaps: number[]): Record<string, { value: number; records?: number }> {
+  const out: Record<string, { value: number; records?: number }> = {};
+  for (const month of calendarMonths()) {
+    for (let d = 1; d <= daysInMonth(month); d++) {
+      // Weekends off and a few blank weekdays — a real month is not solid.
+      const ms = Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, d);
+      const dow = new Date(ms).getUTCDay();
+      if (dow === 0 || dow === 6 || gaps.includes(d)) continue;
+      const wave = Math.abs(Math.sin((d + seed) * 1.7));
+      out[dayKey(ms)] = { value: Math.round(wave * scale * 10) / 10, records: 1 + Math.round(wave * 26) };
+    }
+  }
+  return out;
+}
+
+const KIT_CALENDAR_METRICS: CalendarMetric[] = [
+  {
+    id: "kit-1",
+    flowId: "kit-flow-1",
+    flowName: "Speed to lead",
+    name: "Leads booked",
+    format: { format: "number", precision: 0 },
+    days: kitCalendarDays(2, 24, [7, 8, 19]),
+    status: "fresh",
+    error: null,
+    computedAt: null,
+  },
+  {
+    id: "kit-2",
+    flowId: "kit-flow-2",
+    flowName: "Pickup rate",
+    name: "Pickup rate",
+    format: { format: "percent", precision: 1 },
+    days: kitCalendarDays(5, 100, [3, 14]),
+    status: "fresh",
+    error: null,
+    computedAt: null,
+  },
+];
+
 const SHADOWS: Array<{ cls: string; body: string }> = [
   { cls: "shadow-card", body: "Rest" },
   { cls: "shadow-card-hover", body: "Hover, drag" },
@@ -591,6 +643,17 @@ export default function DesignPage() {
                 { id: "4", name: "Meetings booked", state: "draft", updatedAt: "2026-08-14T16:05:00Z", summary: "2 steps · Calendly", source: "calendly" },
               ]}
             />
+          </div>
+        </Section>
+
+        <Section
+          title="Calendar"
+          note="One published metric, day by day, over the two months the materializer stores values for. The fill is a heat ramp keyed to the month's largest day — never green-good/red-bad, because up is good for Booked Leads and bad for Speed to Lead and nothing on a tile says which. A negative day is the one exception and takes the danger tint: below zero is a fact, not an opinion. Every square's number goes through formatMetricValue, so a day reads exactly like the tile it came from."
+        >
+          {/* The real component with sample days — the same board the product
+              ships, so a change to a square lands here or nowhere. */}
+          <div className="rounded-card bg-canvas-bg p-4">
+            <CalendarBoard metrics={KIT_CALENDAR_METRICS} months={calendarMonths()} todayKey={dayKey(new Date())} />
           </div>
         </Section>
 

@@ -7,6 +7,7 @@ import { compileEnabled } from "./compile/flags";
 import { getPublishedVersion, graphFingerprint, graphForFingerprint } from "./store";
 import { parseGraph, seedMetricFormat, type TileSpec } from "./types";
 import { resolveRange, rollingMsOf, isForwardRange, MATERIALIZED_RANGES } from "@/lib/metrics/range";
+import { calendarDayRanges } from "@/lib/metrics/calendar";
 import { streamRefsOfGraph } from "@/lib/sync/streams";
 
 /**
@@ -67,6 +68,33 @@ function nextChangeAtIso(nextChangeMs: number, slidingCapMs: number, asOf: Date)
   const nextMidnight = Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate() + 1);
   const crossing = Number.isFinite(nextChangeMs) ? nextChangeMs : nextMidnight;
   return new Date(Math.min(crossing, slidingCapMs, nextMidnight)).toISOString();
+}
+
+/**
+ * The day slots, reduced to what a calendar square can show.
+ *
+ * `tileByRange` answers every window in the same rich shape — value, series,
+ * groups, the reason it could not be answered — and a square has room for a
+ * number and a record count. Storing the rest would put sixty copies of a
+ * metric's series into every tile's jsonb to render sixty numbers.
+ *
+ * A day with no answer is DROPPED rather than stored with its reason (see
+ * `byDay` in types.ts): the empty square already says it, and sixty stored
+ * sentences per tile is real weight in a column the dashboard reads on every
+ * page load. A day whose value is genuinely 0 is kept — "none happened" and
+ * "we cannot say" are different facts and the calendar draws them differently.
+ */
+function dayValues(
+  byRange: Record<string, { value?: number; records?: number }>,
+  dayKeys: Set<string>,
+): Record<string, { value: number; records?: number }> {
+  const out: Record<string, { value: number; records?: number }> = {};
+  for (const key of dayKeys) {
+    const slot = byRange[key];
+    if (!slot || slot.value == null || !Number.isFinite(slot.value)) continue;
+    out[key] = slot.records != null && slot.records > 0 ? { value: slot.value, records: slot.records } : { value: slot.value };
+  }
+  return out;
 }
 
 /**
@@ -208,6 +236,21 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
         rollingMs: rollingMsOf(key) ?? undefined,
       };
     });
+    /**
+     * THE CALENDAR'S DAYS, ON THE SAME RUN.
+     *
+     * One graph run already answers seven dashboard ranges; these are sixty-odd
+     * more windows over the very same records, and they are the reason the
+     * calendar view can be a plain read of `flow_results` instead of a flow run
+     * per page view. `tileByRange` re-does only the final arithmetic per window
+     * (`reexecPure` touches no database), so the cost here is CPU over records
+     * already in memory — never another query, never another byte of egress.
+     *
+     * The keys cannot collide with the range keys above: a day is "2026-05-04"
+     * and a range is "today". The split below relies on that, and
+     * tests/calendar-window.test.ts pins it.
+     */
+    const dayRanges = calendarDayRanges(asOf);
     const presentationOf = new Map<string, Parameters<typeof tileByRange>[3]>();
     for (const m of graph.metrics) if (m.enabled) presentationOf.set(m.nodeId, factCorrected(m));
     // An Output node carries its own presentation in its config; the tile it
@@ -224,14 +267,20 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
      * clock. Fixed between-dates windows never move and take no cap.
      */
     const slidingCapMs = graphHasSlidingWindow(graph) ? asOf.getTime() + 60 * 60 * 1000 : Infinity;
+    const dayKeys = new Set(dayRanges.map((d) => d.key));
     for (const t of tiles) {
       const spec = presentationOf.get(t.nodeId);
-      const derived = spec ? tileByRange(graph, nodes, t.nodeId, spec, ranges) : undefined;
+      const derived = spec ? tileByRange(graph, nodes, t.nodeId, spec, [...ranges, ...dayRanges]) : undefined;
       // `nextChangeAt` rides in the tile jsonb, so no migration — and the
       // expiry can read it in SQL. See its docstring in types.ts.
       const tile =
         derived && Object.keys(derived.byRange).length > 0
-          ? { ...t.tile, byRange: derived.byRange, nextChangeAt: nextChangeAtIso(derived.nextChangeMs, slidingCapMs, asOf) }
+          ? {
+              ...t.tile,
+              byRange: Object.fromEntries(Object.entries(derived.byRange).filter(([k]) => !dayKeys.has(k))),
+              byDay: dayValues(derived.byRange, dayKeys),
+              nextChangeAt: nextChangeAtIso(derived.nextChangeMs, slidingCapMs, asOf),
+            }
           : t.tile;
       await upsertResult(db, orgId, flowId, version, t.nodeId, tile, "fresh", null, record);
     }
@@ -340,13 +389,64 @@ export async function publishedFlowTiles(db: DB, orgId: string) {
     .select({
       flowId: flowResults.flowId,
       outputNodeId: flowResults.outputNodeId,
-      tile: flowResults.tile,
+      /**
+       * THE TILE, MINUS THE DAY MAP IT DOES NOT USE.
+       *
+       * `byDay` is sixty-odd entries the CALENDAR reads and the dashboard never
+       * looks at — a couple of kilobytes per tile, on the one query that runs
+       * on every dashboard render, against a database that bills every byte it
+       * returns. `- 'byDay'` drops the key in Postgres, so the bytes are never
+       * put on the wire rather than being fetched and ignored.
+       *
+       * The jsonb minus-text operator is null-safe here: a row whose tile has
+       * never computed is NULL, `NULL - 'byDay'` is NULL, and every caller
+       * already treats that as "no stored tile".
+       */
+      tile: sql<Record<string, unknown> | null>`${flowResults.tile} - 'byDay'`.as("tile"),
       status: flowResults.status,
       error: flowResults.error,
       computedAt: flowResults.computedAt,
       // Which streams this number was computed from, recorded at materialize
       // time. Needed to answer "is any of it still importing".
       provenance: flowResults.provenance,
+    })
+    .from(flowResults)
+    .innerJoin(flows, eq(flows.id, flowResults.flowId))
+    .where(and(eq(flowResults.orgId, orgId), eq(flows.status, "published")));
+}
+
+/**
+ * THE CALENDAR'S READ — the mirror of the one above, and the reason both are
+ * narrow.
+ *
+ * The calendar needs a metric's name, the six keys that decide how a number is
+ * SPELLED, and its day map. It does not need `sample` (up to five whole
+ * records), `series`, `groups` or `byRange` — which together are most of a
+ * tile's bytes. Selecting the whole jsonb and picking fields in JS costs the
+ * egress anyway; this builds the small object in Postgres, so a workspace with
+ * twenty metrics ships kilobytes rather than hundreds of them.
+ *
+ * A row with no stored tile yields an object of nulls rather than NULL, which
+ * every reader here already handles: the name falls back to the output id and
+ * the day map to `{}`.
+ */
+export async function calendarFlowTiles(db: DB, orgId: string) {
+  return db
+    .select({
+      flowId: flowResults.flowId,
+      outputNodeId: flowResults.outputNodeId,
+      tile: sql<Record<string, unknown> | null>`jsonb_build_object(
+        'name', ${flowResults.tile} -> 'name',
+        'format', ${flowResults.tile} -> 'format',
+        'precision', ${flowResults.tile} -> 'precision',
+        'unit', ${flowResults.tile} -> 'unit',
+        'currency', ${flowResults.tile} -> 'currency',
+        'durationDisplay', ${flowResults.tile} -> 'durationDisplay',
+        'byDay', ${flowResults.tile} -> 'byDay'
+      )`.as("tile"),
+      status: flowResults.status,
+      error: flowResults.error,
+      computedAt: flowResults.computedAt,
     })
     .from(flowResults)
     .innerJoin(flows, eq(flows.id, flowResults.flowId))
