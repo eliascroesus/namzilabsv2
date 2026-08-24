@@ -124,8 +124,13 @@ export function Sidebar({
                   identifier, and an identifier you have to squint at is a poor
                   one. Selection is carried by the two things around it: the
                   tile's wash and the label's step up from 75% to full. */}
+              {/* `rounded-card`, matching the mark above it. At the control
+                  radius the four tiles were 8px in a column headed by a 12px
+                  mark, beside a page whose own corner is cut at 32 — three
+                  roundnesses down one 100px strip. One step rounder is all it
+                  takes for the rail to read as one family. */}
               <span
-                className={`flex h-10 w-10 items-center justify-center rounded-control text-white transition-colors ${
+                className={`flex h-10 w-10 items-center justify-center rounded-card text-white transition-colors duration-(--duration-fast) ${
                   active ? "bg-white/15" : "group-hover:bg-white/10"
                 }`}
               >

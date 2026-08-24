@@ -42,12 +42,14 @@ export function ShellSkeleton({
       <div className="w-[76px] shrink-0 sm:w-[100px]" />
       {/* `overflow-y-auto`, matching AppShell's own surface — with
           `overflow-hidden` a classic scrollbar appeared only after the swap and
-          stole width from the canvas column at the same moment. */}
-      <div className="flex-1 overflow-y-auto bg-white">
+          stole width from the canvas column at the same moment. The wash and
+          the 32px notch are mirrors too: without them the skeleton is a square
+          white sheet that squares off the app's own corner for a frame. */}
+      <div className="flex-1 overflow-y-auto rounded-l-frame bg-canvas-bg">
         {/* Not <main>: PageContainer renders the page's one main landmark. */}
         <div
           className={`mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8 ${
-            width === "narrow" ? "max-w-3xl" : "max-w-5xl"
+            width === "narrow" ? "max-w-3xl" : "max-w-6xl"
           }`}
         >
           <Skeleton className="h-8 w-48" />

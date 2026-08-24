@@ -12,13 +12,22 @@ import { sourceStyle } from "@/components/flow/controls/source-style";
  * server-rendered dashboard without pulling the builder's client-side
  * `NodeIcon` (and its whole icon set) into the page's bundle.
  */
-export function SourceMark({ source, size = 20 }: { source?: string | null; size?: number }) {
+export function SourceMark({
+  source,
+  size = 20,
+  className,
+}: {
+  source?: string | null;
+  size?: number;
+  /** Layout only — the mark's own colour, radius and type are not the caller's. */
+  className?: string;
+}) {
   const s = sourceStyle(source);
   return (
     <span
       aria-hidden
       title={s.label}
-      className="inline-flex shrink-0 items-center justify-center font-semibold text-white"
+      className={`inline-flex shrink-0 items-center justify-center font-semibold text-white${className ? ` ${className}` : ""}`}
       style={{
         width: size,
         height: size,

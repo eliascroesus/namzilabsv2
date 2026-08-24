@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Inbox, LayoutDashboard, Plug, Plus, Settings, Workflow } from "lucide-react";
+import { Inbox, LayoutDashboard, Plug, Plus, Settings, Workflow, X } from "lucide-react";
 import { AppFrame } from "@/components/app-frame";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -87,10 +87,10 @@ const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample:
   { token: "text-micro", cls: "text-micro font-semibold uppercase tracking-wide", px: "11px", use: "Badges, chips, section eyebrows", sample: "Speed to lead" },
 ];
 const RADII: Array<{ cls: string; label: string; body: string }> = [
-  { cls: "rounded-control", label: "control · 8px", body: "Buttons, inputs, nav tiles" },
-  { cls: "rounded-card", label: "card · 12px", body: "Tiles, sections, list rows" },
+  { cls: "rounded-control", label: "control · 8px", body: "Buttons, inputs, menu rows" },
+  { cls: "rounded-card", label: "card · 12px", body: "Tiles, list rows, rail tiles" },
   { cls: "rounded-surface", label: "surface · 16px", body: "Panels, modals, tables, step cards" },
-  { cls: "rounded-frame", label: "frame · 32px", body: "The app-shell notch only" },
+  { cls: "rounded-frame", label: "frame · 32px", body: "The app's own left edge" },
 ];
 const SHADOWS: Array<{ cls: string; body: string }> = [
   { cls: "shadow-card", body: "Rest" },
@@ -103,11 +103,13 @@ export default function DesignPage() {
   return (
     // The kit is rendered in the REAL frame, notches and all — a page that
     // showed the rail without the wash behind the canvas would be exactly the
-    // drift it exists to catch. It takes `framed` although it is not the
-    // builder: the cut is the thing that needs looking at, and the Frame
-    // section below says plainly that only the builder gets it.
+    // drift it exists to catch.
+    //
+    // It scrolls on `bg-card` rather than the app's warm canvas: this page is
+    // a sheet of documentation with swatches printed on it, and half of those
+    // swatches ARE surfaces. Rendering white cards on the warm page they are
+    // meant to float over would make the samples argue with the sample board.
     <AppFrame
-      framed
       surface="overflow-y-auto bg-card"
       account={{
         initials: "EC",
@@ -444,19 +446,19 @@ export default function DesignPage() {
           <div className="flex items-stretch gap-4">
             <div className="bg-rail inline-flex items-start gap-3 rounded-card px-5 py-4">
               <span className="flex w-14 flex-col items-center">
-                <span className="flex size-10 items-center justify-center rounded-control bg-white/15 text-white">
+                <span className="flex size-10 items-center justify-center rounded-card bg-white/15 text-white">
                   <LayoutDashboard size={24} strokeWidth={2} />
                 </span>
                 <span className="px-1 text-center text-tiny font-medium leading-4 text-white">Active</span>
               </span>
               <span className="flex w-14 flex-col items-center">
-                <span className="flex size-10 items-center justify-center rounded-control bg-white/10 text-white">
+                <span className="flex size-10 items-center justify-center rounded-card bg-white/10 text-white">
                   <Workflow size={24} strokeWidth={2} />
                 </span>
                 <span className="px-1 text-center text-tiny font-medium leading-4 text-white">Hover</span>
               </span>
               <span className="flex w-14 flex-col items-center">
-                <span className="flex size-10 items-center justify-center rounded-control text-white">
+                <span className="flex size-10 items-center justify-center rounded-card text-white">
                   <Plug size={24} strokeWidth={2} />
                 </span>
                 <span className="px-1 text-center text-tiny font-medium leading-4 text-white/75">Rest</span>
@@ -476,20 +478,24 @@ export default function DesignPage() {
 
         <Section
           title="Frame"
-          note="The builder only. A canvas is a workspace you look into, so the app cuts the 32px frame radius out of its left corners and lets the rail's wash show through; list pages run flush off the rail, square. AppFrame paints the wash once — the rail is transparent on top of it — so the two colours cannot drift."
+          note="Every authenticated page, not just the builder: the app cuts the 32px frame radius out of the page's left corners and lets the rail's wash show through, so the shape of the application never changes as you move around it. Right, top and bottom stay flush to the viewport — a card inset on all four sides is a smaller-feeling app. AppFrame paints the wash once and the rail sits transparent on top of it, so the two colours cannot drift."
         >
           <div className="bg-rail flex h-40 overflow-hidden rounded-card">
             <div className="w-[100px] shrink-0" />
-            <div className="flex-1 rounded-l-frame bg-card" />
+            <div className="flex-1 rounded-l-frame bg-canvas-bg" />
           </div>
+          <p className="mt-2 text-tiny text-muted-foreground">
+            The page inside the notch is <code className="font-mono text-foreground">--color-canvas-bg</code> — the same
+            warm surface the builder's canvas uses. Content sits on it in white islands, never flat on the page.
+          </p>
         </Section>
 
         <Section
           title="Marks"
           note="What a dashboard tile is made of. Bars are brand-600, a met goal turns success, tracks are bg-muted, and every value a mark prints goes through formatMetricValue — the tooltip and the headline must say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile says which."
         >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-card border border-border bg-card p-4">
+          <div className="grid gap-4 rounded-card bg-canvas-bg p-4 sm:grid-cols-2">
+            <div className="rounded-surface border border-border bg-card p-5 shadow-card">
               <p className="text-base font-semibold text-foreground">Total leads</p>
               <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
                 <p className="stat-numeral text-stat leading-none">44</p>
@@ -500,7 +506,7 @@ export default function DesignPage() {
                 format={{ format: "number" }}
               />
             </div>
-            <div className="rounded-card border border-border bg-card p-4">
+            <div className="rounded-surface border border-border bg-card p-5 shadow-card">
               <p className="text-base font-semibold text-foreground">Pickup rate</p>
               <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
                 <p className="stat-numeral text-stat leading-none">57.1%</p>
@@ -508,7 +514,7 @@ export default function DesignPage() {
               </div>
               <TargetBar value={57.1} target={50} format={{ format: "percent", precision: 1 }} />
             </div>
-            <div className="rounded-card border border-border bg-card p-4">
+            <div className="rounded-surface border border-border bg-card p-5 shadow-card">
               <p className="text-base font-semibold text-foreground">Leads by owner</p>
               <p className="stat-numeral mt-1.5 text-stat leading-none">41</p>
               <GroupBars
@@ -523,7 +529,7 @@ export default function DesignPage() {
                 format={{ format: "number" }}
               />
             </div>
-            <div className="rounded-card border border-border bg-card p-4">
+            <div className="rounded-surface border border-border bg-card p-5 shadow-card">
               <p className="text-base font-semibold text-foreground">Source marks</p>
               <p className="mt-1 text-tiny text-muted-foreground">
                 A connector&rsquo;s brand tile, at list scale — rows are read by shape before they are read by word.
@@ -572,15 +578,20 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Flow list" note="Zapier's per-row switch, the inspo's table. Off is paused, not deleted — the tiles come back with it.">
-          <FlowList
-            flows={[
-              { id: "1", name: "Speed to lead", state: "active", updatedAt: "2026-08-19T14:45:00Z", summary: "6 steps · Close CRM", source: "close" },
-              { id: "2", name: "Pickup rate", state: "active", updatedAt: "2026-08-18T11:20:00Z", summary: "4 steps · Close CRM", source: "close" },
-              { id: "3", name: "Claimed leads", state: "paused", updatedAt: "2026-08-17T09:10:00Z", summary: "3 steps · Google Sheets", source: "gsheets" },
-              { id: "4", name: "Meetings booked", state: "draft", updatedAt: "2026-08-14T16:05:00Z", summary: "2 steps · Calendly", source: "calendly" },
-            ]}
-          />
+        <Section title="Flow list" note="A board of cards, not a spreadsheet of rows — the same grid, radius and elevation the dashboard's tiles use, because the two screens people move between most should be built out of the same object. Zapier's per-row switch is kept: off is paused, not deleted, and the tiles come back with it. The whole card is the link (a stretched overlay), with the switch and the two actions floating above it.">
+          {/* Rendered on the warm canvas, which is where it actually lives.
+              On this page's white sheet a white card on white is the one thing
+              the kit could show that the product never looks like. */}
+          <div className="rounded-card bg-canvas-bg p-4">
+            <FlowList
+              flows={[
+                { id: "1", name: "Speed to lead", state: "active", updatedAt: "2026-08-19T14:45:00Z", summary: "6 steps · Close CRM", source: "close" },
+                { id: "2", name: "Pickup rate", state: "active", updatedAt: "2026-08-18T11:20:00Z", summary: "4 steps · Close CRM", source: "close", unpublished: true },
+                { id: "3", name: "Claimed leads", state: "paused", updatedAt: "2026-08-17T09:10:00Z", summary: "3 steps · Google Sheets", source: "gsheets" },
+                { id: "4", name: "Meetings booked", state: "draft", updatedAt: "2026-08-14T16:05:00Z", summary: "2 steps · Calendly", source: "calendly" },
+              ]}
+            />
+          </div>
         </Section>
 
         {/* THE FIRST THING ANYONE EVER SEES, and until now the one surface the
@@ -645,12 +656,22 @@ export default function DesignPage() {
             />
             <div className="relative flex justify-end">
               <aside className={`h-[440px] w-[452px] max-w-full ${PANEL_SHELL}`}>
-                <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-5 py-4">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <NodeIcon type="formula" size={38} />
-                    <p className="truncate text-title font-semibold tracking-tight text-foreground">Summarize</p>
+                {/* The header's SHAPE, mirroring ConfigPanel: which step and
+                    what state on the eyebrow, the editable name at full width
+                    beneath it, and a close control — the panel used to be
+                    dismissable only by finding empty canvas to click. */}
+                <div className="flex items-center gap-3 border-b border-border bg-card px-5 py-4">
+                  <NodeIcon type="formula" size={38} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="shrink-0 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Step 3</span>
+                      <StatusPill tone="success">Tested</StatusPill>
+                    </div>
+                    <p className="-ml-1.5 mt-0.5 truncate px-1.5 py-1 text-title font-semibold tracking-tight text-foreground">Summarize</p>
                   </div>
-                  <StatusPill tone="success">Tested</StatusPill>
+                  <span className="-mr-1.5 shrink-0 self-start rounded-control p-1.5 text-muted-foreground">
+                    <X size={18} strokeWidth={2} />
+                  </span>
                 </div>
 
                 <PanelTabsPreview />

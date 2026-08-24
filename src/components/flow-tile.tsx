@@ -134,7 +134,12 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
    * empty one's face. Everything that qualifies a number qualifies its absence.
    */
   return (
-    <Card variant="card" padding="compact" className="lift group/tile">
+    // `surface` (16px) and the full 20px padding: the tile is the product's
+    // payoff and it sits on the warm canvas like every other floating thing in
+    // the app, so it wears the same radius as the builder's step cards and the
+    // config panel. `shadow-card-hover` is the ladder's hover rung — the `lift`
+    // translate alone moved the card without changing the light on it.
+    <Card variant="surface" className="lift group/tile hover:shadow-card-hover">
       {/* HEAD: the name, and a status marker that is quiet when there is
           nothing to say. A healthy tile carries a 6px dot; only a tile that
           needs something wears a full pill. Eight green "Up to date" badges

@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { NodeIcon } from "@/components/flow/icons";
+import { SourceMark } from "@/components/source-mark";
 import { formatDate, formatTime } from "@/lib/format";
 import { deleteFlowAction, duplicateFlowAction, setFlowEnabledAction } from "./actions";
 import type { FlowState } from "@/lib/flow/store";
@@ -46,14 +46,24 @@ const STATE_META: Record<FlowState, { label: string; tone: StatusPillProps["tone
 };
 
 /**
- * The flows list: a table, with the flow's own on/off switch in it.
+ * THE FLOWS LIST — a board of cards, not a spreadsheet of rows.
  *
- * It was a bare row of name + status word + date. Two things were missing that
- * every comparable list has — a way to tell at a glance WHICH flows are
- * running (Zapier's per-row toggle) and a way to narrow to them (the filter
- * tabs, with live counts). Both matter more here than in an automation tool,
- * because a paused flow silently removes tiles from the dashboard, and the
- * only place that fact can live is this list.
+ * It has been two things before this. A bare line of name + status word + date,
+ * and then a four-column grid table with the toggle wedged into a 150px column.
+ * Both were LISTS OF RECORDS, and a flow is not a record: it is a small program
+ * with a shape, a source, a state and an on/off switch, and the thing a person
+ * comes here to do is recognise one and open it.
+ *
+ * So each flow is a card the size of a dashboard tile, in the same grid, on the
+ * same warm canvas, wearing the same 16px radius and the same elevation — the
+ * two screens you move between most are now built out of the same object. The
+ * card is clickable as a whole (the title's `after:` overlay stretches over it)
+ * with the controls floated above that overlay, which is what lets a big soft
+ * target and small precise ones live on one surface.
+ *
+ * What was already right and is kept: the per-row switch (a paused flow
+ * silently removes tiles from the dashboard, and this list is the only place
+ * that fact can live) and the filter chips with live counts.
  */
 export function FlowList({ flows }: { flows: FlowListItem[] }) {
   const [q, setQ] = useState("");
@@ -72,7 +82,10 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
 
   return (
     <div className="mt-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* The same island the dashboard's range bar sits in — one control bar
+          recipe for the whole app, so moving between the two screens does not
+          change what a filter row looks like. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-surface border border-border bg-card p-2 shadow-card">
         {/* Counts live on the tabs, so "how many are actually running" is
             answered without clicking anything. */}
         <div className="flex flex-wrap items-center gap-1">
@@ -97,28 +110,24 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
         )}
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-surface border border-border bg-card shadow-card">
-        <div className="grid grid-cols-[1fr_150px_180px_120px] items-center gap-4 border-b border-border bg-muted/50 px-4 py-2.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground">
-          <span>Flow name</span>
-          <span>Status</span>
-          <span>Last updated</span>
-          <span className="text-right">Actions</span>
+      {visible.length === 0 ? (
+        <p className="mt-4 rounded-surface border border-dashed border-border bg-card px-4 py-12 text-center text-small text-muted-foreground">
+          {query ? `No flows match “${q.trim()}”.` : `No ${filter === "all" ? "" : filter} flows.`}
+        </p>
+      ) : (
+        // NOT `items-start`: the cards stretch to the tallest in their row and
+        // each one's footer is pushed down by a `flex-1` body, so the switches
+        // and dates line up across the row even when one flow carries an extra
+        // line. A ragged row of footers is the difference between a board and a
+        // pile.
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {visible.map((f) => (
+            <Row key={f.id} flow={f} />
+          ))}
         </div>
+      )}
 
-        {visible.length === 0 ? (
-          <p className="px-4 py-10 text-center text-small text-muted-foreground">
-            {query ? `No flows match “${q.trim()}”.` : `No ${filter === "all" ? "" : filter} flows.`}
-          </p>
-        ) : (
-          <div className="divide-y divide-border">
-            {visible.map((f) => (
-              <Row key={f.id} flow={f} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <p className="mt-3 text-center text-tiny text-muted-foreground">
+      <p className="mt-4 text-center text-tiny text-muted-foreground">
         {visible.length} of {flows.length} flow{flows.length === 1 ? "" : "s"}
       </p>
     </div>
@@ -164,27 +173,50 @@ function Row({ flow }: { flow: FlowListItem }) {
       else setError(r.error);
     });
 
-  return (
-    <div className="grid grid-cols-[1fr_150px_180px_120px] items-center gap-4 px-4 py-3 transition-colors hover:bg-muted/40">
-      <Link href={`/dashboard/flows/${flow.id}`} className="flex min-w-0 items-center gap-3">
-        <NodeIcon type="app" source={flow.source ?? undefined} size={34} />
-        <span className="min-w-0">
-          <span className="block truncate text-base font-semibold text-foreground">{flow.name}</span>
-          {/* The edit note REPLACES the step summary rather than sitting under
-              it: "which of these is live" is the more urgent fact, and a third
-              line would push the rows past the grid's height. */}
-          {flow.unpublished ? (
-            <span className="flex items-center gap-1.5 text-tiny text-warn-ink">
-              <PencilLine size={12} className="shrink-0" aria-hidden />
-              <span className="truncate">Edited since publishing</span>
-            </span>
-          ) : (
-            <span className="block truncate text-tiny text-muted-foreground">{flow.summary}</span>
-          )}
-        </span>
-      </Link>
+  const toggleLabel =
+    state === "draft" ? "Publish this flow before turning it on" : state === "active" ? "Turn off" : "Turn on";
 
-      <span className="flex items-center gap-2.5">
+  return (
+    // `lift` is the app's shared hover, and `relative` is what lets the title's
+    // overlay claim the whole card without swallowing the controls below it.
+    <div className="lift relative flex flex-col rounded-surface border border-border bg-card shadow-card transition-shadow hover:shadow-card-hover">
+      <div className="flex flex-1 flex-col p-4">
+        <div className="flex items-center gap-3">
+          {/* THE APP'S OWN MARK, not the step's.
+              This was `NodeIcon type="app"`, which paints every Get-data step
+              in the step type's green ON PURPOSE — on a canvas the question is
+              "what kind of step is this", and a row of differently-coloured
+              Get-data tiles would answer a question nobody asked. A list of
+              FLOWS is the opposite case: the only thing the mark can usefully
+              say is which app the flow reads, and it was saying it in green
+              while the dashboard's activity feed said it in Close's blue two
+              clicks away. Same component as that feed now. */}
+          <SourceMark source={flow.source} size={38} />
+          {/* THE WHOLE CARD IS THE LINK. `after:inset-0` stretches this anchor
+              over the card, so the soft target is the whole tile while the
+              focus ring stays on the words — which is the only part a keyboard
+              user can see. Everything that must stay separately clickable sits
+              in the footer with `relative z-10`, above the overlay. */}
+          <Link
+            href={`/dashboard/flows/${flow.id}`}
+            className="min-w-0 flex-1 truncate rounded-control text-base font-semibold text-foreground after:absolute after:inset-0 after:content-['']"
+          >
+            {flow.name}
+          </Link>
+          <StatusPill tone={meta.tone} dot={meta.dot} className="shrink-0">
+            {meta.label}
+          </StatusPill>
+        </div>
+
+        {/* THE SUMMARY GETS ITS OWN LINE, at the card's full width. Tucked
+            under the name it shared a column with the status pill, so
+            "6 steps · Close CRM" truncated to "6 steps · Close …" with 90px of
+            empty card beside it — the one line that says what the flow IS,
+            cut short to make room for a word that was already legible. */}
+        <p className="mt-2 truncate text-tiny text-muted-foreground">{flow.summary}</p>
+      </div>
+
+      <div className="relative z-10 flex items-center gap-2 border-t border-border px-3 py-2">
         {/* A never-published flow has nothing to switch on, so the control says
             so rather than failing on click. */}
         <Switch
@@ -192,26 +224,39 @@ function Row({ flow }: { flow: FlowListItem }) {
           checked={state === "active"}
           disabled={state === "draft" || pending}
           onClick={toggle}
-          aria-label={state === "draft" ? "Publish this flow before turning it on" : state === "active" ? "Turn off" : "Turn on"}
-          title={state === "draft" ? "Publish this flow before turning it on" : state === "active" ? "Turn off" : "Turn on"}
+          aria-label={toggleLabel}
+          title={toggleLabel}
         />
-        <StatusPill tone={meta.tone} dot={meta.dot}>
-          {meta.label}
-        </StatusPill>
-      </span>
+        {/* ONE LINE, THREE THINGS IT CAN SAY, in order of what needs the user.
+            A failed action first; then the fact that the dashboard is serving
+            a different version of this flow (which is about the PRODUCT, not
+            about the editing session, and is the only one wearing a tone);
+            then, when neither applies, when it was last touched.
 
-      <span className="text-tiny text-muted-foreground">
-        {formatDate(new Date(flow.updatedAt))}
-        <span className="block text-muted-foreground">{formatTime(new Date(flow.updatedAt))}</span>
-      </span>
-
-      <span className="flex items-center justify-end gap-1">
-        {error && <span className="mr-1 truncate text-micro text-danger-ink" title={error}>Failed</span>}
-        <Button variant="ghost" size="icon" onClick={duplicate} disabled={pending} title="Duplicate" aria-label="Duplicate">
-          <Copy />
-        </Button>
+            Stacking them instead would make one card in a row taller than the
+            rest, and a grid of cards whose footers do not line up reads as a
+            pile. The full timestamp stays in the title either way. */}
+        <span
+          className="min-w-0 flex-1 truncate text-tiny text-muted-foreground"
+          title={`Edited ${formatDate(new Date(flow.updatedAt))} ${formatTime(new Date(flow.updatedAt))}`}
+        >
+          {error ? (
+            <span className="text-danger-ink">{error}</span>
+          ) : flow.unpublished ? (
+            // "Changes not live" and not "Edited since publishing": the same
+            // words the builder's toolbar pill uses for the same fact, and
+            // short enough to survive a 370px card without an ellipsis eating
+            // the half that carries the meaning.
+            <span className="inline-flex items-center gap-1.5 text-warn-ink" title="The dashboard is still showing the last published version of this flow">
+              <PencilLine size={12} className="shrink-0" aria-hidden />
+              Changes not live
+            </span>
+          ) : (
+            `Edited ${formatDate(new Date(flow.updatedAt))}`
+          )}
+        </span>
         {confirming ? (
-          <span className="flex items-center gap-1">
+          <span className="flex shrink-0 items-center gap-1">
             <Button variant="destructive" size="sm" onClick={del} disabled={pending}>
               {pending ? "…" : "Delete"}
             </Button>
@@ -220,11 +265,16 @@ function Row({ flow }: { flow: FlowListItem }) {
             </Button>
           </span>
         ) : (
-          <Button variant="destructiveGhost" size="icon" onClick={() => setConfirming(true)} disabled={pending} title="Delete" aria-label="Delete">
-            <Trash2 />
-          </Button>
+          <span className="flex shrink-0 items-center gap-0.5">
+            <Button variant="ghost" size="icon" onClick={duplicate} disabled={pending} title="Duplicate" aria-label="Duplicate">
+              <Copy />
+            </Button>
+            <Button variant="destructiveGhost" size="icon" onClick={() => setConfirming(true)} disabled={pending} title="Delete" aria-label="Delete">
+              <Trash2 />
+            </Button>
+          </span>
         )}
-      </span>
+      </div>
     </div>
   );
 }

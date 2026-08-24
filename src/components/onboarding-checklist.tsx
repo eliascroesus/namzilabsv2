@@ -50,8 +50,11 @@ export function OnboardingChecklist({
   ];
   const next = steps.findIndex((s) => !s.done);
   return (
-    <div className="mt-8 rounded-card border border-dashed border-border p-8">
-      <h2 className="text-title font-semibold text-foreground">Get your first metric live</h2>
+    // A REAL SURFACE now, not a dashed outline on the page: this is the first
+    // thing a new workspace sees, and on the warm canvas an unfilled box reads
+    // as a placeholder that failed to load rather than as an invitation.
+    <div className="mt-6 rounded-surface border border-border bg-card p-8 shadow-card">
+      <h2 className="font-display text-title font-semibold text-foreground">Get your first metric live</h2>
       <p className="mt-1 text-base text-muted-foreground">Three steps — the first takes about a minute.</p>
       <ol className="mt-5 space-y-4">
         {steps.map((step, i) => (

@@ -6,6 +6,7 @@ import { effectiveAccess } from "@/lib/permissions";
 import { AppShell } from "@/components/app-shell";
 import { FunnelView } from "@/components/funnel-view";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
 import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -125,13 +126,21 @@ export default async function MetricDrillPage({
                 the exact number the tile promised. A legacy metric stores no
                 precision, so an integer keeps none and a real decimal keeps
                 two rather than being silently rounded away. */}
-            <p className="stat-numeral mt-6 text-stat">
-              {formatMetricValue(headline, {
-                format: "number",
-                precision: headline != null && Number.isInteger(headline) ? 0 : 2,
-              })}
-              {metric.unit && <span className="ml-2 text-base font-normal text-muted-foreground">{metric.unit}</span>}
-            </p>
+            {/* IN A TILE, like the one that was clicked to get here. The
+                number used to sit flat on the page — which read as a heading
+                on white and reads as an unhoused number on the canvas. Same
+                surface, same numeral, so the drill-in visibly continues the
+                tile rather than restating it. */}
+            <Card variant="surface" className="mt-6">
+              <p className="stat-numeral text-stat leading-none">
+                {formatMetricValue(headline, {
+                  format: "number",
+                  precision: headline != null && Number.isInteger(headline) ? 0 : 2,
+                })}
+                {metric.unit && <span className="ml-2 text-base font-normal text-muted-foreground">{metric.unit}</span>}
+              </p>
+              <p className="mt-2 text-tiny text-muted-foreground">{rangeLabel}</p>
+            </Card>
             <SectionHeading className="mt-8">Underlying events ({rows.length})</SectionHeading>
             {rows.length === 0 ? (
               <EmptyState
@@ -173,9 +182,12 @@ export default async function MetricDrillPage({
         )}
 
         {def.kind === "funnel" && funnel && (
-          <div className="mt-6">
+          // Same housing as the aggregate's number above: a funnel is the other
+          // half of "what this metric says", and it was the one reading in the
+          // product still drawn straight onto the page.
+          <Card variant="surface" className="mt-6">
             <FunnelView result={funnel} />
-          </div>
+          </Card>
         )}
       </PageContainer>
     </AppShell>

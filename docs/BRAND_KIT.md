@@ -65,6 +65,16 @@ neutral-900 `#211f1d`, `--muted` neutral-100, `--muted-foreground`
 neutral-500 `#6b6660`, `--border`/`--input` neutral-200 `#e9e6e1`. Dark
 surfaces use the `ink-*` ladder (rail = `ink-950` `#1b1a18`; toast = `ink-900`).
 
+### The page is a canvas, and content floats on it
+Every authenticated page scrolls on `--color-canvas-bg` `#f1efec` — the same
+warm surface the builder's canvas uses — and **everything with content in it is
+a white island**: a `Card`, a `TableShell`, or a bar wearing
+`rounded-surface border border-border bg-card shadow-card`. Pages used to be
+pure white with white cards on them, so a card was announced only by a
+hairline; the builder next door read as objects floating over a surface, and
+the same product was made of two materials. Nothing sits flat on the page
+except a heading, a caption, or a filter's own label.
+
 **Pure black is banned as a foreground.** `#000` on `#fff` is 21:1 — a
 contrast no printed page has ever asked a reader to sustain. The warm 900 is
 16.4:1, still past AAA, and leaves headroom at the top of the scale.
@@ -125,11 +135,19 @@ from the theme.
 
 ## 4. Shape & elevation
 
-**Radii — four tokens + full:** `rounded-control` 8px (buttons, inputs, nav
-tiles) · `rounded-card` 12px (tiles, sections) · `rounded-surface` 16px
-(panels, modals, tables, step cards) · `rounded-frame` 32px (the app shell
-notch only) · `rounded-full` (pills, avatars, switches). Stock
-`rounded`/`-md`/`-lg`/`-xl` and arbitrary radii are banned.
+**Radii — four tokens + full:** `rounded-control` 8px (buttons, inputs, menu
+rows) · `rounded-card` 12px (sections, list rows, the rail's 40px tiles) ·
+`rounded-surface` 16px (panels, modals, tables, step cards, dashboard tiles,
+flow cards) · `rounded-frame` 32px (the app's own left edge — see below) ·
+`rounded-full` (pills, avatars, switches). Stock `rounded`/`-md`/`-lg`/`-xl`
+and arbitrary radii are banned.
+
+**The frame is every page's, not the builder's.** `AppFrame` cuts
+`rounded-l-frame` out of the scroll region's left corners on every
+authenticated route and lets the rail's wash show through the notch; right, top
+and bottom stay flush to the viewport. It was the builder's alone once, which
+meant the shape of the application changed as you navigated — the kind of
+inconsistency nobody reports and everybody feels.
 
 **Shadows:** surfaces with a border use the ring-free ladder —
 `shadow-card` (rest) · `shadow-card-hover` (hover/drag) · `shadow-surface`
@@ -139,13 +157,17 @@ for borderless surfaces. `shadow-sm` and friends are banned.
 ## 5. Layout & spacing
 
 4px grid. Page shape comes from primitives, not hand-set containers:
-- `PageContainer` — `max-w-5xl`, gutter steps `px-4 → sm:px-6 → lg:px-8`;
+- `PageContainer` — `max-w-6xl`, gutter steps `px-4 → sm:px-6 → lg:px-8`;
   `width="narrow"` → `max-w-3xl` (forms, detail pages). Centered flows (auth,
   onboarding) use `max-w-md`. It renders the page's one `<main id="main">` —
   the skip link's target — so `AppFrame` renders a plain `<div>` unless a page
   brings no container (the builder, via `ownsMain`).
 - Card padding: `p-5` default, `p-4` compact, `p-3` dense rows. Nothing else.
 - Section rhythm: `mt-8` between page sections.
+- Card grids: `gap-4 sm:grid-cols-2 xl:grid-cols-3` — one rhythm for the
+  dashboard's tiles, the flows board and the connector catalogue. Let the cards
+  stretch (no `items-start`) wherever they carry a footer, so the row's footers
+  line up; a ragged row of footers is the difference between a board and a pile.
 
 ## 6. Components (`src/components/ui/`)
 

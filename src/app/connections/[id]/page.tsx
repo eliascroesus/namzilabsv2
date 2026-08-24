@@ -118,7 +118,7 @@ export default async function ConnectionPage({
           )
         )}
 
-        <Card variant="card" padding="compact" className="mt-6">
+        <Card variant="surface" className="mt-6">
           <dl className="grid gap-4 text-base sm:grid-cols-2">
             <div>
               <dt className="text-muted-foreground">Data status</dt>
@@ -164,7 +164,7 @@ export default async function ConnectionPage({
         {entry?.flowFields && entry.flowFields.length > 0 && (
           <section className="mt-8">
             <SectionHeading>Configuration</SectionHeading>
-            <p className="rounded-card border border-border bg-muted/50 p-4 text-base text-muted-foreground">
+            <p className="rounded-card border border-border bg-card p-4 text-base text-muted-foreground">
               This account is connected. Choose {entry.flowFields.map((f) => f.label.toLowerCase()).join(" and ")} inside each
               flow&rsquo;s <b>Get data</b> step — every flow can pull from a different one.
             </p>
@@ -211,7 +211,7 @@ export default async function ConnectionPage({
               </Link>
             </div>
             {preview !== "1" && (
-              <p className="rounded-card border border-border bg-muted/50 p-4 text-base text-muted-foreground">
+              <p className="rounded-card border border-border bg-card p-4 text-base text-muted-foreground">
                 Click &ldquo;Preview latest&rdquo; to pull the most recent records from this source.
               </p>
             )}

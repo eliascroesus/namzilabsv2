@@ -79,7 +79,7 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
     // load for a control the dashboard is one click away from.
     // `ownsMain`: the builder is the one screen with no PageContainer, so the
     // frame carries the page's single <main> landmark here.
-    <AppFrame framed ownsMain surface="overflow-hidden bg-canvas-bg">
+    <AppFrame ownsMain surface="overflow-hidden bg-canvas-bg">
       <FlowCanvas
         flowId={flow.id}
         name={flow.name}

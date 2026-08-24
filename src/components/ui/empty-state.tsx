@@ -18,7 +18,12 @@ export function EmptyState({ icon, title, description, action, className }: Empt
   return (
     <div
       className={cn(
-        "flex flex-col items-center rounded-card border border-dashed border-border p-8 text-center",
+        // A REAL SURFACE, dashed. It used to be a transparent dashed box, which
+        // works on a white page and reads as an unpainted hole on the warm one
+        // — the app's pages are a canvas now and everything with content in it
+        // is an island. The border stays dashed: that is what says "this is
+        // where something will BE", rather than "this is a thing".
+        "flex flex-col items-center rounded-surface border border-dashed border-border bg-card p-8 text-center",
         className,
       )}
     >

@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SourceMark } from "@/components/source-mark";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -187,7 +188,9 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
         <section className="mt-8">
           <SectionHeading>Add a connection</SectionHeading>
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* Three-up above `xl`, matching the dashboard's tiles and the flows
+              board: one grid rhythm for the whole product. */}
+          <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {CONNECTOR_CATALOG.map((entry) => (
               <ConnectorCard key={entry.source} entry={entry} connectedCount={countBySource[entry.source] ?? 0} />
             ))}
@@ -200,13 +203,20 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
 function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry; connectedCount: number }) {
   return (
-    <Card variant="card" padding="compact">
+    // `surface`, like every other island in the app now — and the connector's
+    // own mark in front of its name, because this grid is the one place in the
+    // product where you are picking a TOOL rather than reading about one, and a
+    // logo is recognised a great deal faster than a word.
+    <Card variant="surface" className="flex flex-col">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold text-foreground">{entry.name}</h3>
-          <p className="mt-1 text-base text-muted-foreground">{entry.description}</p>
+        <div className="flex min-w-0 items-start gap-3">
+          <SourceMark source={entry.source} size={26} className="mt-0.5" />
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-foreground">{entry.name}</h3>
+            <p className="mt-1 text-base text-muted-foreground">{entry.description}</p>
+          </div>
         </div>
-        {connectedCount > 0 && <Badge className="tnum">{connectedCount} connected</Badge>}
+        {connectedCount > 0 && <Badge className="tnum shrink-0">{connectedCount} connected</Badge>}
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {entry.instant && <Badge>Instant webhook</Badge>}

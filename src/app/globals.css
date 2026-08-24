@@ -161,8 +161,21 @@
   --color-ink-50: #f8f6f3; /* headings on dark */
 
   /* --- Canvas -------------------------------------------------------------
-   * The flow builder's working surface. Kept as tokens so the dot grid, the
-   * page behind it and the edge colour can never drift apart again.
+   * THE WHOLE APP'S WORKING SURFACE — not the builder's alone any more.
+   *
+   * Every authenticated page used to be pure white with white cards on it, so
+   * a card was announced only by a hairline: the dashboard read as one flat
+   * sheet with faint boxes drawn on it, while the builder next door read as
+   * objects floating over a surface. Same product, two materials.
+   *
+   * The pages now sit on THIS colour and everything with content in it is a
+   * white island with a border and a shadow — which is exactly the builder's
+   * grammar, applied to the rest of the app. Cards stop needing to shout to be
+   * seen (their own edge does the work), and the tile's number is the loudest
+   * thing on the page again.
+   *
+   * Kept as tokens so the dot grid, the page behind it and the edge colour can
+   * never drift apart again.
    */
   --color-canvas-bg: #f1efec;
   /* CHOSEN AT 83% ZOOM, NOT AT 100%.

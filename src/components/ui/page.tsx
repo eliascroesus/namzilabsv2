@@ -25,7 +25,11 @@ export function PageContainer({
         // display's rail, which is not — a 1440px window and a 390px one were
         // asking for the same margin.
         "rise-in mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
-        width === "narrow" ? "max-w-3xl" : "max-w-5xl",
+        // 1152px, up from 1024. The board is the reason: two columns of tiles
+        // on a 15" laptop left a third of the canvas empty, and a third column
+        // does not fit until the container has the width for it. Narrow pages
+        // (forms, settings) are unchanged — a form does not get better wider.
+        width === "narrow" ? "max-w-3xl" : "max-w-6xl",
         className,
       )}
       {...props}

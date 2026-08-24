@@ -11,7 +11,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
-import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { SourceMark } from "@/components/source-mark";
@@ -32,7 +32,7 @@ import {
 } from "@/lib/metrics/compute";
 import { resolveRange, RANGE_OPTIONS } from "@/lib/metrics/range";
 import { catalogEntry, eventTypeLabel } from "@/connectors/catalog";
-import { formatDateTime, formatMetricValue } from "@/lib/format";
+import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ImportCoverage } from "@/connectors/types";
 
@@ -252,26 +252,44 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * A SEGMENTED TRACK, not loose pills. Eleven free-floating chips across
    * two filter dimensions wrapped onto a second line and orphaned the last two
    * sources, and nothing in the row said which chips answered which question.
-   * Sitting the ranges in one `bg-muted` track makes them read as one
-   * control with one answer, and leaves the source picker beside it as
-   * visibly separate.
+   * Sitting the ranges in one track makes them read as one control with one
+   * answer, and leaves the source picker beside it as visibly separate.
    *
    * THE TRACK CANNOT WRAP — it is `flex` at its default `nowrap`, so a seventh
    * option can only make it wider, never make it fold. "Upcoming" is that
    * seventh, and 8px of item padding (down from 10, and on the 4px grid the
-   * old value missed) keeps the whole track a shade over half of the 976px
+   * old value missed) keeps the whole track a shade over half of the
    * `PageContainer` with the source picker still beside it. An EIGHTH option
    * needs this measured again rather than assumed.
+   *
+   * THE SELECTED ITEM IS THE ACCENT WASH NOW, not a white knob. The track used
+   * to be a `bg-muted` groove with a white pill riding in it — a shape that
+   * only reads on a white page. On the warm canvas the groove and the page are
+   * within four levels of each other, so the control dissolved and the "knob"
+   * became a floating white smear. The track is a white island (the same
+   * border-and-shadow every floating thing in the builder wears) and selection
+   * is `bg-accent` + `text-accent-foreground`, which needs no depth to be read.
    */
   const rangeItem = (active: boolean) =>
     cn(
-      "inline-flex shrink-0 items-center rounded-[calc(var(--radius-control)-2px)] px-2 py-1 text-small font-medium transition-colors",
-      active ? "bg-card text-foreground shadow-card" : "text-muted-foreground hover:text-foreground",
+      "inline-flex shrink-0 items-center rounded-control px-2.5 py-1.5 text-small font-medium transition-colors duration-(--duration-fast)",
+      active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
     );
 
   const activeSourceLabel = boardSource ? (catalogEntry(boardSource)?.name ?? boardSource) : "All sources";
   // Render the Subject column only when some row has one to show.
   const hasSubjects = recentEvents.some((e) => e.subject);
+  /**
+   * WHEN THE BOARD ITSELF WAS LAST TRUE — the newest `computedAt` across every
+   * tile on it. Each tile already carries its own as-of line; what none of them
+   * could answer is the question a person actually asks on arrival ("is any of
+   * this from today?"), which is a fact about the BOARD and therefore has to be
+   * derived once, here, from the rows that are already in hand.
+   */
+  const boardComputedAt = flowTiles.reduce<Date | null>(
+    (newest, r) => (r.computedAt && (!newest || r.computedAt > newest) ? r.computedAt : newest),
+    null,
+  );
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
@@ -280,6 +298,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <PageContainer>
         <PageHeader
           title="Dashboard"
+          lede="Every published flow's number in one place — recomputed on a schedule, and stamped with when it was last true."
           actions={
             <>
               {/* Every tile at once. The per-tile Refresh recomputes one flow,
@@ -307,8 +326,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           }
         />
 
-        {/* Filters: two questions, two controls, one line that never wraps. */}
-        <div className="mt-5 flex flex-wrap items-center gap-3">
+        {/* ── THE FILTER BAR, AS AN ISLAND ──────────────────────────────
+            Two questions, two controls, one surface. They used to sit loose on
+            the page: on white that was merely plain, and on the warm canvas it
+            would be two orphaned controls with nothing holding them. A white
+            bar with a hairline and the card shadow is the same object the
+            builder floats its toolbar in — which is the point, since this bar
+            does the same job at the top of this screen.
+
+            `justify-between` so the range (what period) reads from the left
+            edge and the source (whose data) sits at the right, with the gap
+            between them saying they are two separate answers. */}
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-2 rounded-surface border border-border bg-card p-2 shadow-card">
           {/* THE RANGE TRACK SCROLLS RATHER THAN BREAKING THE PAGE.
               Seven pills at ~70px each is a ~500px track that cannot wrap
               (the pills are `shrink-0`, correctly — without it "Last 30 days"
@@ -322,7 +351,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               them. The negative margin lets the ring breathe inside the
               scrollport without indenting the track. */}
           <div className="-mx-1 max-w-full overflow-x-auto px-1 lg:mx-0 lg:overflow-visible lg:px-0">
-            <div className="inline-flex items-center gap-0.5 rounded-control bg-muted p-0.5">
+            {/* No groove of its own — the island IS the container now, and a
+                `bg-muted` track inside a white bar is a box drawn inside a box. */}
+            <div className="inline-flex items-center gap-0.5">
               {RANGE_OPTIONS.map((r) => (
                 <Link
                   key={r.key}
@@ -345,11 +376,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               growing every time a workspace connects another app. */}
           {sources.length > 0 && (
             <details className="group/src relative">
-              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-control border border-border bg-card px-3 py-1.5 text-small font-medium text-foreground transition-colors hover:bg-muted [&::-webkit-details-marker]:hidden">
+              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-control border border-border bg-card px-3 py-1.5 text-small font-medium text-foreground transition-colors duration-(--duration-fast) hover:bg-muted [&::-webkit-details-marker]:hidden">
+                {boardSource && <SourceMark source={boardSource} />}
                 {activeSourceLabel}
                 <ChevronDown size={14} className="text-muted-foreground transition-transform group-open/src:rotate-180" />
               </summary>
-              <div className="absolute left-0 top-full z-20 mt-1.5 min-w-48 rounded-card border border-border bg-card p-1 shadow-surface">
+              {/* Right-aligned: the control sits at the island's right edge, so
+                  a left-anchored menu opened off the end of the bar. */}
+              <div className="absolute right-0 top-full z-20 mt-1.5 min-w-52 rounded-surface border border-border bg-card p-1 shadow-surface">
                 <Link
                   href={qs({ source: "" })}
                   className={cn(
@@ -387,6 +421,29 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </div>
         )}
 
+        {/* WHAT THE BOARD IS, IN ONE LINE. Every tile says when IT was last
+            computed; none of them could say when the board was, which is the
+            question you ask on arrival. Deliberately unboxed and quiet — it is
+            a caption for the grid below, not another card competing with it. */}
+        {hasTiles && (
+          <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-tiny text-muted-foreground">
+            <span className="tnum">
+              {tiles.length + flowTiles.length} metric{tiles.length + flowTiles.length === 1 ? "" : "s"}
+            </span>
+            {boardComputedAt && (
+              <>
+                <span aria-hidden>·</span>
+                <span title={formatDateTime(boardComputedAt)}>newest number {relativeTime(boardComputedAt)}</span>
+              </>
+            )}
+            {/* No dead-letter count here on purpose: the activity card below
+                already carries it, per connection and as a LINK to the page
+                with the Replay button on it. The same red number twice on one
+                screen, once without a door, is how a dashboard teaches people
+                to stop reading it. */}
+          </p>
+        )}
+
         {/* Metric tiles: materialized flow outputs + legacy metrics. The
             checklist renders only when the empty state is REAL — behind a
             load error the honest message is the banner above, never a
@@ -395,11 +452,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             `items-start` on the grid: a tile is as tall as what it has to say.
             Stretching every row to its tallest member gave a bare scalar tile
             beside a breakdown a third of a card of white space, which reads as
-            a tile that failed to load rather than one with nothing to add. */}
+            a tile that failed to load rather than one with nothing to add.
+
+            THREE COLUMNS ABOVE `xl`, two below. A dashboard tile is a headline
+            number and at most four bars — at two-up on a 1152px container each
+            one was 560px wide holding a 36px numeral, which reads as a mostly
+            empty card rather than a confident one. */}
         {!hasTiles && !loadError ? (
           <OnboardingChecklist hasConnection={connCount > 0} hasFlow={flowCount > 0} hasPublished={flowTiles.length > 0} />
         ) : !hasTiles ? null : (
-          <div className="mt-8 grid items-start gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {flowTiles.map((row) => (
               <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} rangeKey={rangeKey} />
             ))}
@@ -409,72 +471,86 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </div>
         )}
 
-        {/* Condensed workspace activity */}
+        {/* ── WORKSPACE ACTIVITY ────────────────────────────────────────
+            ONE SURFACE, HEADER AND ALL. The eyebrow and the connection summary
+            used to float above a separate table shell, so the section read as
+            two unrelated things stacked — and on the warm canvas a heading
+            sitting on the page beside a white table looks like a caption that
+            lost its card. The strip is now the table's own head. */}
         <section className="mt-12">
-          <div className="mb-3 flex items-center justify-between">
-            <SectionHeading className="mb-0">Recent activity</SectionHeading>
-            <span className="text-tiny text-muted-foreground">
-              {connCount} connection{connCount === 1 ? "" : "s"} ·{" "}
-              {dlqByConnection.length > 0 ? (
-                // Each count links to the connection page that hosts the
-                // Replay button — a red number with no door was the old shape.
-                dlqByConnection.map((d, i) => (
-                  <span key={d.connectionId}>
-                    {i > 0 && ", "}
-                    <Link href={`/connections/${d.connectionId}`} className="text-danger-ink hover:underline">
-                      {d.count} in dead-letter on {d.name}
-                    </Link>
-                  </span>
-                ))
-              ) : (
-                "no failures"
-              )}
-            </span>
-          </div>
-          {recentEvents.length === 0 ? (
-            <Card variant="card" padding="compact" className="text-base text-muted-foreground">
-              No events ingested yet. <Link href="/integrations" className="text-primary hover:underline">Connect a source</Link>.
-            </Card>
-          ) : (
-            <TableShell>
-              <Table>
-                <THead>
-                  <tr>
-                    <TH>Source</TH>
-                    <TH>Type</TH>
-                    {/* A column of em-dashes is not information. Most sources
-                        carry no subject, and the empty column was taking a
-                        sixth of the table's width to say so on every row. */}
-                    {hasSubjects && <TH>Subject</TH>}
-                    <TH className="text-right">Occurred</TH>
-                  </tr>
-                </THead>
-                <TBody>
-                  {/* Humanised the way the builder's own pickers do it —
-                      "Close CRM · Lead created", not "close · lead_created".
-                      The raw type rides along in the title attribute, because
-                      it IS what a Filter step matches on. */}
-                  {recentEvents.map((e) => (
-                    <TR key={e.id} static>
-                      <TD>
-                        <span className="flex items-center gap-2">
-                          <SourceMark source={e.source} />
-                          <span className="truncate">{catalogEntry(e.source)?.name ?? e.source}</span>
-                        </span>
-                      </TD>
-                      <TD title={e.eventType} className="text-muted-foreground">
-                        {eventTypeLabel(e.source, e.eventType)}
-                      </TD>
-                      {hasSubjects && <TD className="text-muted-foreground">{e.subject ?? "—"}</TD>}
-                      <TD className="whitespace-nowrap text-right text-muted-foreground">
-                        {formatDateTime(new Date(e.occurredAt))}
-                      </TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
-            </TableShell>
-          )}
+          <Card variant="surface" padding="none" className="overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-4 py-3">
+              <SectionHeading className="mb-0">Recent activity</SectionHeading>
+              <span className="text-tiny text-muted-foreground">
+                {connCount} connection{connCount === 1 ? "" : "s"} ·{" "}
+                {dlqByConnection.length > 0 ? (
+                  // Each count links to the connection page that hosts the
+                  // Replay button — a red number with no door was the old shape.
+                  dlqByConnection.map((d, i) => (
+                    <span key={d.connectionId}>
+                      {i > 0 && ", "}
+                      <Link href={`/connections/${d.connectionId}`} className="text-danger-ink hover:underline">
+                        {d.count} in dead-letter on {d.name}
+                      </Link>
+                    </span>
+                  ))
+                ) : (
+                  "no failures"
+                )}
+              </span>
+            </div>
+            {recentEvents.length === 0 ? (
+              <p className="px-4 py-8 text-center text-base text-muted-foreground">
+                No events ingested yet.{" "}
+                <Link href="/integrations" className="font-medium text-primary hover:underline">
+                  Connect a source
+                </Link>
+                .
+              </p>
+            ) : (
+              // The Card is the shell, so the table needs only its own
+              // horizontal scroller — a TableShell here would draw a second
+              // border and a second radius inside the first.
+              <div className="overflow-x-auto">
+                <Table>
+                  <THead>
+                    <tr>
+                      <TH>Source</TH>
+                      <TH>Type</TH>
+                      {/* A column of em-dashes is not information. Most sources
+                          carry no subject, and the empty column was taking a
+                          sixth of the table's width to say so on every row. */}
+                      {hasSubjects && <TH>Subject</TH>}
+                      <TH className="text-right">Occurred</TH>
+                    </tr>
+                  </THead>
+                  <TBody>
+                    {/* Humanised the way the builder's own pickers do it —
+                        "Close CRM · Lead created", not "close · lead_created".
+                        The raw type rides along in the title attribute, because
+                        it IS what a Filter step matches on. */}
+                    {recentEvents.map((e) => (
+                      <TR key={e.id} static>
+                        <TD>
+                          <span className="flex items-center gap-2">
+                            <SourceMark source={e.source} />
+                            <span className="truncate">{catalogEntry(e.source)?.name ?? e.source}</span>
+                          </span>
+                        </TD>
+                        <TD title={e.eventType} className="text-muted-foreground">
+                          {eventTypeLabel(e.source, e.eventType)}
+                        </TD>
+                        {hasSubjects && <TD className="text-muted-foreground">{e.subject ?? "—"}</TD>}
+                        <TD className="whitespace-nowrap text-right text-muted-foreground">
+                          {formatDateTime(new Date(e.occurredAt))}
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              </div>
+            )}
+          </Card>
         </section>
       </PageContainer>
     </AppShell>
@@ -503,7 +579,10 @@ function MetricTile({ tile }: { tile: Tile }) {
   const numberFormat = { format: "number" as const, precision: total != null && Number.isInteger(total) ? 0 : 2 };
 
   return (
-    <Card variant="card" padding="compact" className="lift">
+    // `surface`, matching FlowTile beside it: a tile is a thing floating on the
+    // canvas now, so it takes the 16px radius every other floating surface in
+    // the product wears, and answers the pointer with the ladder's hover rung.
+    <Card variant="surface" className="lift hover:shadow-card-hover">
       <div className="flex items-start justify-between gap-2">
         <h3 className="min-w-0 truncate text-base font-semibold text-foreground">{metric.name}</h3>
       </div>

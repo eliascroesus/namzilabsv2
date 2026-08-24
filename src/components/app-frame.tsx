@@ -18,35 +18,33 @@ import { Sidebar } from "./sidebar";
  * and the colour of the rail are therefore not two values in sync — they are
  * one gradient, and cannot drift.
  *
- * Only the left corners are cut, and only when `framed` is set. The cut belongs
- * to the BUILDER: a canvas is a workspace you look into, and the 32px notch is
- * what says the app is holding it. A list of flows is not a workspace — it is a
- * document — and it reads better running flush off the rail, square, with no
- * gutter of wash between the navigation and the thing you came to read. The
- * right, top and bottom edges stay flush to the viewport either way, because a
- * card inset on all four sides is a different (and smaller-feeling) app.
+ * THE CUT IS THE APP'S EDGE, SO EVERY PAGE GETS IT.
  *
- * The wash is painted unconditionally regardless: an unframed page covers it
- * completely, so there is nothing to switch off, and one code path means the
- * framed and unframed pages can never disagree about the colour.
+ * It used to be the builder's alone, on the theory that a canvas is a workspace
+ * you look into while a list is a document that reads better running flush off
+ * the rail. That theory cost more than it bought: moving between the builder
+ * and any other page changed the SHAPE of the application — the left edge grew
+ * a 32px radius on one route and lost it on the next — which is the kind of
+ * inconsistency nobody reports and everybody feels.
  *
- * `surface` is the caller's, because the pages genuinely disagree: list pages
- * scroll on white, the builder does not scroll and sits on the canvas grey. It
- * must carry an overflow value — rounded corners only cut the content if the
- * box clips.
+ * So the notch is unconditional now. The right, top and bottom edges stay flush
+ * to the viewport, because a card inset on all four sides is a different (and
+ * much smaller-feeling) app; only the seam between the navigation and the page
+ * is rounded, and it is rounded everywhere.
+ *
+ * `surface` is still the caller's, because the pages genuinely disagree about
+ * SCROLLING: list pages scroll, the builder does not. It must carry an overflow
+ * value — rounded corners only cut the content if the box clips.
  */
 export function AppFrame({
   account,
   surface,
-  framed = false,
   hide,
   ownsMain = false,
   children,
 }: {
   account?: { initials: string; panel: ReactNode };
   surface: string;
-  /** Cut the canvas into the rail's wash. The flow builder, and nothing else. */
-  framed?: boolean;
   /** Rail items (by label) this viewer shouldn't see; AppShell decides. */
   hide?: string[];
   /**
@@ -71,7 +69,7 @@ export function AppFrame({
   // the canvas, not the viewport. It belongs here rather than in a wrapper each
   // page remembers to add — the builder had exactly such a wrapper, and it was
   // one nesting level doing nothing else.
-  const className = `relative min-w-0 flex-1 ${framed ? "rounded-l-frame" : ""} ${surface}`;
+  const className = `relative min-w-0 flex-1 rounded-l-frame ${surface}`;
 
   return (
     // `h-dvh`, not `h-screen`: on mobile Safari `100vh` is the height the

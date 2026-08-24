@@ -2023,6 +2023,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
                     return up ? () => testNode(up) : undefined;
                   })(),
                   onAddNext: () => continueFromNode(selected.id),
+                  // The panel's own way out. Clicking empty canvas still works
+                  // and is what most people use; this is for the canvas that
+                  // has no empty pixel left to click.
+                  onClose: () => setSelectedId(null),
                   onSetInput: (handle, sourceId) => setFormulaInput(selected.id, handle, sourceId),
                   onSetSources: (ids) => setUniteSources(selected.id, ids),
                   onAddBranch: () => addBranch(selected.id),

@@ -124,6 +124,7 @@ export function ConfigPanel({
   onCancelTest,
   onTestUpstream,
   onAddNext,
+  onClose,
   animClass = "flow-pop-in",
   branch,
   onSetInput,
@@ -160,6 +161,8 @@ export function ConfigPanel({
   /** Runs the previous step's test — the cure for an empty field picker. */
   onTestUpstream?: () => void;
   onAddNext: (anchor?: { x: number; y: number; leftX?: number }) => void;
+  /** Dismiss the panel — deselects the step. Optional so /design can render the shell. */
+  onClose?: () => void;
   animClass?: string;
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
@@ -226,18 +229,46 @@ export function ConfigPanel({
           hairlines, the way every other island in the builder is; three stacked
           greys was the last place still separating regions by tint. What marks
           this strip as "what am I editing" is the step's own colourful icon and
-          the rule under it, neither of which needed a second grey to work. */}
-      <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-5 py-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} variant={nodeVariant(type, cfg)} size={38} />
+          the rule under it, neither of which needed a second grey to work.
+
+          TWO LINES, NOT ONE. The name and the status pill used to share a row
+          with the icon, so a long step name was squeezed between a 38px mark
+          and a pill that could say "Needs setup" — the one editable thing in
+          the header had the least room in it. The eyebrow above now carries
+          WHICH step this is and WHAT state it is in (both read-only facts), and
+          the name gets the full width beneath them.
+
+          The close button is the other half: the panel could only be dismissed
+          by clicking empty canvas, which is a gesture you have to already know
+          — and on a full canvas there may be no empty pixel to click. */}
+      <div className="flex items-center gap-3 border-b border-border bg-card px-5 py-4">
+        <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} variant={nodeVariant(type, cfg)} size={38} />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            {stepNo != null && (
+              <span className="shrink-0 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Step {stepNo}</span>
+            )}
+            <StatusPill tone={STATUS_TONE[status]} className="shrink-0">{sm.label}</StatusPill>
+          </div>
           <input
             value={node.data.label ?? ""}
             onChange={(e) => onRename(e.target.value)}
-            placeholder={`${stepNo != null ? `${stepNo}. ` : ""}${defaultTitle(type, node.data)}`}
-            className="min-w-0 flex-1 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground transition-colors hover:border-border hover:bg-card focus-visible:border-ring focus-visible:bg-card"
+            placeholder={defaultTitle(type, node.data)}
+            aria-label="Step name"
+            className="-ml-1.5 mt-0.5 w-[calc(100%+0.375rem)] min-w-0 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground transition-colors hover:border-border hover:bg-card focus-visible:border-ring focus-visible:bg-card"
           />
         </div>
-        <StatusPill tone={STATUS_TONE[status]} className="shrink-0">{sm.label}</StatusPill>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            title="Close"
+            aria-label="Close step settings"
+            className="-mr-1.5 shrink-0 self-start rounded-control p-1.5 text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-muted hover:text-foreground"
+          >
+            <X size={18} strokeWidth={2} />
+          </button>
+        )}
       </div>
 
       <PanelTabs tabs={supportsTest ? ["configure", "test"] : ["configure"]} active={activeTab} onSelect={setTab} />

@@ -85,8 +85,12 @@ export async function AppShell({
   return (
     // The rail is fixed; only the canvas column scrolls, and it clips so its
     // rounded left corners cut the content rather than let it run past them.
+    //
+    // `bg-canvas-bg`, not white: the app's pages are the same warm surface the
+    // builder's canvas is, and every block of content on them is a white island
+    // floating over it. See the token's own note in globals.css.
     <AppFrame
-      surface="overflow-y-auto bg-white"
+      surface="overflow-y-auto bg-canvas-bg"
       hide={hide}
       account={{
         initials,
