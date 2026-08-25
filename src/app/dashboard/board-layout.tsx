@@ -245,7 +245,12 @@ export function BoardLayout({
   const gapAt = (laneId: string | null) => (drag?.target && drag.target.laneId === laneId ? drag.target.index : null);
 
   return (
-    <div ref={rootRef}>
+    // `select-none` ONLY while something is in the air. A press moves a few
+    // pixels before it counts as a drag, which is enough for the browser to
+    // start selecting text — so a frozen drag came with a blue smear across the
+    // card's own name. Permanent `select-none` would be the lazy fix and would
+    // cost the ability to copy a number off the board.
+    <div ref={rootRef} className={drag ? "select-none" : undefined}>
       {/* THE ONE DOOR to a new column. On the caption line rather than in the
           page header, because that line is already about the board as a whole —
           which is exactly what a group is — and because the header's two

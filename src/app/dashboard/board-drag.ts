@@ -110,16 +110,30 @@ type Lane = {
  * makes the cache survive auto-scroll instead of silently going stale and
  * dropping the tile in the wrong column.
  */
-function measure(root: HTMLElement, held: string, kind: DragKind): { lanes: Lane[]; scrollY0: number; heldH: number } {
+function measure(
+  root: HTMLElement,
+  held: string,
+  kind: DragKind,
+): { lanes: Lane[]; scrollY0: number; heldH: number; home: DragTarget | null } {
   const lanes: Lane[] = [];
   const heldEl = root.querySelector<HTMLElement>(`[${TILE_ATTR}="${held}"]`);
   const heldH = heldEl ? heldEl.getBoundingClientRect().height : 0;
+  /**
+   * WHERE THE HELD ITEM ALREADY IS, in the same coordinates a target is
+   * reported in: its lane, and its index among the OTHER items of that lane.
+   *
+   * This is what lets a drop onto its own position be recognised as the no-op
+   * it is — see `resolve`.
+   */
+  let home: DragTarget | null = null;
+
   for (const el of root.querySelectorAll<HTMLElement>(`[${LANE_ATTR}]`)) {
     // A lane that does not take what is in the hand is not a candidate. See
     // ACCEPTS_ATTR — this one line is the whole fix for "I can't move the
     // metrics inside the groups".
     if (el.getAttribute(ACCEPTS_ATTR) !== kind) continue;
     const raw = el.getAttribute(LANE_ATTR)!;
+    const id = raw === UNGROUPED ? null : raw;
     const axis = el.getAttribute(AXIS_ATTR) === "x" ? "x" : "y";
     const r = el.getBoundingClientRect();
     const scroller = el.closest<HTMLElement>(`[${SCROLLER_ATTR}]`);
@@ -134,13 +148,17 @@ function measure(root: HTMLElement, held: string, kind: DragKind): { lanes: Lane
        */
       if (t.closest(`[${LANE_ATTR}]`) !== el) continue;
       // The held item is excluded, so an index counts among the OTHERS — which
-      // is exactly what the placement maths expects to be handed.
-      if (t.getAttribute(TILE_ATTR) === held) continue;
+      // is exactly what the placement maths expects to be handed. Its position
+      // in that count IS its home.
+      if (t.getAttribute(TILE_ATTR) === held) {
+        home = { laneId: id, index: bounds.length };
+        continue;
+      }
       const tr = t.getBoundingClientRect();
       bounds.push(axis === "x" ? tr.left + tr.width / 2 : tr.top + tr.height / 2);
     }
     lanes.push({
-      id: raw === UNGROUPED ? null : raw,
+      id,
       axis,
       left: r.left,
       right: r.right,
@@ -151,7 +169,7 @@ function measure(root: HTMLElement, held: string, kind: DragKind): { lanes: Lane
       scrollLeft0: scroller?.scrollLeft ?? 0,
     });
   }
-  return { lanes, scrollY0: window.scrollY, heldH };
+  return { lanes, scrollY0: window.scrollY, heldH, home };
 }
 
 /** How far outside a band a value sits — zero when it is inside. */
@@ -171,7 +189,10 @@ export function useBoardDrag(
     moved: boolean;
     tileKey: string;
     target: DragTarget | null;
+    home: DragTarget | null;
     pointer: { x: number; y: number };
+    /** Everything this drag subscribed to, so one call can undo all of it. */
+    release: () => void;
   } | null>(null);
   /** Set when a press became a drag, so the click that follows is swallowed. */
   const dragged = useRef(false);
@@ -233,6 +254,22 @@ export function useBoardDrag(
     const along = lane.axis === "x" ? x : y;
     let index = 0;
     for (const b of lane.bounds) if (along > b - shift) index++;
+
+    /**
+     * A DROP ONTO ITS OWN POSITION IS NOT A DROP.
+     *
+     * Hovering the hole a card came out of, or either side of it that resolves
+     * to the same place, would otherwise open a placeholder saying "it goes
+     * HERE" about the spot it is already in — and releasing would write a row
+     * and re-render the board to produce the arrangement that was already on
+     * screen. Reported as the placeholder showing "right next to where it used
+     * to be because it doesn't really change position", which is exactly right.
+     *
+     * Returning null here means no placeholder AND no write: the same answer as
+     * dragging out of reach, because they are the same answer — nothing to do.
+     */
+    if (s.home && s.home.laneId === lane.id && s.home.index === index) return null;
+
     return { laneId: lane.id, index };
   }, []);
 
@@ -295,7 +332,9 @@ export function useBoardDrag(
         moved: false,
         tileKey: tile.key,
         target: null,
+        home: null,
         pointer: { x: e.clientX, y: e.clientY },
+        release: () => {},
       };
       // Capture NOW, before the threshold: without it a fast flick loses its
       // own pointermove events to whatever is under the cursor.
@@ -314,6 +353,16 @@ export function useBoardDrag(
           const m = measure(root, tile.key, tile.kind);
           s.lanes = m.lanes;
           s.scrollY0 = m.scrollY0;
+          s.home = m.home;
+          /**
+           * THE SELECTION THE PRESS ALREADY STARTED, CLEARED.
+           *
+           * Four pixels with the button down is enough for the browser to begin
+           * selecting text, so by the time this is a drag there is often a blue
+           * smear across the card's own name. The root also takes `select-none`
+           * for the duration — see BoardLayout — so no more can accumulate.
+           */
+          window.getSelection?.()?.removeAllRanges();
           setDrag({
             tileKey: tile.key,
             title: tile.title,
@@ -326,22 +375,63 @@ export function useBoardDrag(
           raf.current = requestAnimationFrame(tick);
         }
       };
-      const onUp = () => {
-        el.removeEventListener("pointermove", onMove);
-        el.removeEventListener("pointerup", onUp);
-        el.removeEventListener("pointercancel", onUp);
-        stopScrolling();
+      /**
+       * ONE TEARDOWN, REACHED BY EVERY WAY A DRAG CAN END — and the reason this
+       * is a `release` closure rather than four copies of the same three lines.
+       *
+       * THE FREEZE THIS FIXES: a drag ends when the pointer comes up, and
+       * `pointerup` is not the only way the pointer can go away. Alt-tab to
+       * another app, click into the browser's own chrome, let the OS take the
+       * gesture — and `pointerup` never arrives on this element. The old code
+       * had nothing else to hear, so `live.current` stayed set, the
+       * requestAnimationFrame loop kept running, and the ghost sat frozen over
+       * the board with a placeholder stuck beside it. Nothing could clear it but
+       * a reload.
+       *
+       * So: `lostpointercapture` (the browser handing capture back for ANY
+       * reason), window `blur` (focus left the page entirely), and Escape (the
+       * key a person actually presses when something is stuck). All three
+       * CANCEL rather than commit — a drag whose end nobody witnessed is not an
+       * instruction, and dropping a metric somewhere because a Slack
+       * notification stole focus is worse than dropping it nowhere.
+       *
+       * `lostpointercapture` also fires in the ordinary case, immediately after
+       * `pointerup`. By then `finish` has already run and nulled `live.current`,
+       * so the cancel path finds nothing to do — which is why the ordering
+       * matters and why `release` is idempotent.
+       */
+      const finish = (commit: boolean) => {
         const s = live.current;
+        if (!s) return;
+        s.release();
         live.current = null;
+        stopScrolling();
         setDrag(null);
         // No target is a CANCELLED drag, not a drop at the nearest thing.
         // Cancelling has to be possible, and "somewhere over there" is the
         // shape of a mistake rather than an instruction.
-        if (s?.moved && s.target) onDrop(s.tileKey, s.target.laneId, s.target.index);
+        if (commit && s.moved && s.target) onDrop(s.tileKey, s.target.laneId, s.target.index);
       };
+      const onUp = () => finish(true);
+      const onAbort = () => finish(false);
+      const onKey = (ev: KeyboardEvent) => {
+        if (ev.key === "Escape") finish(false);
+      };
+
       el.addEventListener("pointermove", onMove);
       el.addEventListener("pointerup", onUp);
-      el.addEventListener("pointercancel", onUp);
+      el.addEventListener("pointercancel", onAbort);
+      el.addEventListener("lostpointercapture", onAbort);
+      window.addEventListener("blur", onAbort);
+      window.addEventListener("keydown", onKey);
+      live.current.release = () => {
+        el.removeEventListener("pointermove", onMove);
+        el.removeEventListener("pointerup", onUp);
+        el.removeEventListener("pointercancel", onAbort);
+        el.removeEventListener("lostpointercapture", onAbort);
+        window.removeEventListener("blur", onAbort);
+        window.removeEventListener("keydown", onKey);
+      };
     },
     [rootRef, onDrop, stopScrolling, tick],
   );

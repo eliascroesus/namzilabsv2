@@ -88,11 +88,25 @@ describe("pointer capture, not document listeners", () => {
     expect(code(drag)).toMatch(/setPointerCapture\(/);
   });
 
-  it("never listens on the document", () => {
-    // The regression this replaces: a document listener that outlives its drag
-    // leaves the board dragging a tile nobody is holding.
-    expect(code(drag)).not.toMatch(/document\.addEventListener/);
-    expect(code(drag)).not.toMatch(/window\.addEventListener/);
+  it("routes no POINTER event through the document or the window", () => {
+    /**
+     * The rule is about the pointer specifically, and it is narrower than it
+     * first looks. A document-level `pointermove` is the regression: it
+     * outlives its drag and leaves the board following a tile nobody is
+     * holding. Capture is what makes it unnecessary.
+     *
+     * The window listeners that DO exist — `blur` and `keydown` — are the
+     * opposite thing. They are how a drag ENDS when the pointer never comes
+     * back, and forbidding them outright is what produced the frozen ghost.
+     */
+    for (const evt of ["pointermove", "pointerup", "pointerdown", "pointercancel"]) {
+      expect(code(drag), `${evt} is listened for on the document`).not.toMatch(
+        new RegExp(`document\\.addEventListener\\("${evt}`),
+      );
+      expect(code(drag), `${evt} is listened for on the window`).not.toMatch(
+        new RegExp(`window\\.addEventListener\\("${evt}`),
+      );
+    }
   });
 
   it("swallows the click that ends a drop", () => {
@@ -153,7 +167,7 @@ describe("out of reach is not a drop", () => {
     // Cancelling has to be possible. The canvas's own rule, applied to a board:
     // "a target you can see, aim at, and miss".
     expect(code(drag)).toMatch(/if \(!best \|\| best\.d > LANE_REACH\) return null;/);
-    expect(code(drag)).toMatch(/if \(s\?\.moved && s\.target\) onDrop\(/);
+    expect(code(drag)).toMatch(/if \(commit && s\.moved && s\.target\) onDrop\(/);
   });
 });
 
@@ -269,5 +283,59 @@ describe("the gap is the size of the hole it fills", () => {
     // reads as a disabled region rather than as the place a card is going.
     expect(code(menu)).toMatch(/const brand = accent == null;/);
     expect(code(layout)).toMatch(/<DropGap height=\{drag\?\.height\} \/>/);
+  });
+});
+
+describe("a drag always ends, however it ends", () => {
+  it("hears every way the pointer can go away, not just pointerup", () => {
+    /**
+     * THE FREEZE. A drag ends when the pointer comes up, and `pointerup` is not
+     * the only way the pointer can leave: alt-tab, a click into the browser's
+     * own chrome, the OS taking the gesture. With nothing else listening,
+     * `live.current` stayed set, the rAF loop kept running, and the ghost sat
+     * frozen over the board until a reload.
+     */
+    expect(code(drag)).toMatch(/addEventListener\("lostpointercapture"/);
+    expect(code(drag)).toMatch(/window\.addEventListener\("blur"/);
+    expect(code(drag)).toMatch(/ev\.key === "Escape"/);
+  });
+
+  it("CANCELS on those, rather than committing a move nobody finished", () => {
+    // Dropping a metric into a group because a notification stole focus is
+    // worse than dropping it nowhere.
+    expect(code(drag)).toMatch(/const onAbort = \(\) => finish\(false\);/);
+    expect(code(drag)).toMatch(/const onUp = \(\) => finish\(true\);/);
+  });
+
+  it("tears down through one idempotent release, so a double end is harmless", () => {
+    // `lostpointercapture` fires in the ordinary case too, right after
+    // `pointerup` — by which point `finish` has nulled the state and there is
+    // nothing left to do. That ordering is the whole reason this is safe.
+    expect(code(drag)).toMatch(/const s = live\.current;\s*\n\s*if \(!s\) return;\s*\n\s*s\.release\(\);/);
+  });
+
+  it("clears the selection the press started, and stops more accruing", () => {
+    // Four pixels with the button down is enough to begin selecting text, so a
+    // stuck drag came with a blue smear across the card's own name.
+    expect(code(drag)).toMatch(/removeAllRanges\(\)/);
+    expect(code(layout)).toMatch(/drag \? "select-none" : undefined/);
+  });
+});
+
+describe("dropping a card where it already is", () => {
+  it("is not a drop, so no placeholder opens and nothing is written", () => {
+    /**
+     * Hovering the hole a card came out of would otherwise open a placeholder
+     * saying "it goes HERE" about the spot it is already in, and releasing
+     * would write a row to produce the arrangement already on screen.
+     *
+     * `home` is recorded in the SAME coordinates a target is reported in — its
+     * lane, and its index among the OTHER items — so the comparison is a
+     * comparison rather than a reconstruction.
+     */
+    expect(code(drag)).toMatch(/home = \{ laneId: id, index: bounds\.length \};/);
+    expect(code(drag)).toMatch(
+      /if \(s\.home && s\.home\.laneId === lane\.id && s\.home\.index === index\) return null;/,
+    );
   });
 });
