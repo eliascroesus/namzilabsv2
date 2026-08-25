@@ -202,6 +202,16 @@ Hand-rolling any of these is a defect. Links dressed as buttons use
   Controls stay real `<a href>`s — middle-click and the pre-hydration paint
   depend on it. Never dim the old numbers instead: a legible figure under a
   pill that now says something else is a wrong answer shown confidently.
+- **Nothing here is a login, and the browser must be told four times.** Fields
+  default to `autocomplete="off"` and `spellcheck="false"` (`ui/input.tsx`) —
+  almost every field in this app asks for something no browser has stored. A
+  **masked** field goes further, automatically: `autocomplete="new-password"`
+  plus `NO_AUTOFILL`, one opt-out attribute per manager (LastPass, 1Password,
+  Bitwarden, Dashlane). `autocomplete="off"` is the one value browsers
+  deliberately ignore on a `type="password"` field, so passing it there is a
+  no-op that *looks* like a fix — never re-pass it at a call site. Any text
+  field sitting directly above a masked one spreads `NO_AUTOFILL` too: that
+  shape reads as "username, password" and gets filled with someone's email.
 - **Skeletons hold the real shape.** `Skeleton` is `neutral-200` (it has to
   read on the warm canvas *and* on a white card) and is sized at the call site
   to the thing it stands in for — a route's `loading.tsx` should be its page's

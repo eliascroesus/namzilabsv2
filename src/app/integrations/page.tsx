@@ -16,7 +16,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Input, NO_AUTOFILL } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SourceMark } from "@/components/source-mark";
@@ -233,20 +233,29 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
             <summary className={cn(buttonVariants(), "cursor-pointer list-none [&::-webkit-details-marker]:hidden")}>
               Connect
             </summary>
-            <form action={connectApiKeyAction} className="mt-3 space-y-3">
+            {/* NOTHING ON THIS FORM IS A LOGIN, and a password manager has to
+                be told so in four dialects — see `NO_AUTOFILL` in ui/input.tsx.
+                The masked fields get it automatically from `Input`; the name
+                field asks for it here, because a text box sitting directly
+                above a masked one is precisely the shape a manager reads as
+                "username, password" and fills with somebody's email. */}
+            <form action={connectApiKeyAction} autoComplete="off" className="mt-3 space-y-3">
               <input type="hidden" name="source" value={entry.source} />
               <div>
                 <FieldLabel htmlFor={`name-${entry.source}`}>Connection name</FieldLabel>
-                <Input id={`name-${entry.source}`} name="name" placeholder={entry.name} />
+                <Input id={`name-${entry.source}`} name="name" placeholder={entry.name} {...NO_AUTOFILL} />
               </div>
               {entry.credentialFields.map((f) => (
                 <div key={f.key}>
                   <FieldLabel htmlFor={`cred-${entry.source}-${f.key}`}>{f.label}</FieldLabel>
+                  {/* No `autoComplete` override here on purpose: `Input` sets
+                      `new-password` for a masked field, and "off" — which this
+                      call site used to pass — is the one value browsers ignore
+                      on one. Passing it back re-opens the bug. */}
                   <Input
                     id={`cred-${entry.source}-${f.key}`}
                     name={`cred_${f.key}`}
                     type="password"
-                    autoComplete="off"
                     placeholder={f.placeholder ?? ""}
                   />
                 </div>

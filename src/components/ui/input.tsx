@@ -43,13 +43,56 @@ const FIELD =
  * Textarea deliberately does NOT inherit the spellcheck default: the only
  * multi-line fields in the app take prose, where squiggles are a feature.
  */
-export function Input({ className, autoComplete, spellCheck, ...props }: React.ComponentProps<"input">) {
+
+/**
+ * THE OPT-OUT EVERY PASSWORD MANAGER ACTUALLY READS.
+ *
+ * `autocomplete="off"` does not work on a password field and has not for years:
+ * Chrome, Safari and Firefox all ignore it there on purpose, because sites
+ * abused it to break legitimate password managers. So a field that says "off"
+ * and means it has to say so in each vendor's own dialect. These four are the
+ * documented attributes, one per manager, and they are cheap: an attribute a
+ * manager does not know is an attribute it skips.
+ *
+ * The `<meta>`-style presence attribute for 1Password is empty-valued by its
+ * own spec — React renders `data-1p-ignore=""`, which is what it looks for.
+ */
+export const NO_AUTOFILL = {
+  "data-lpignore": "true", // LastPass
+  "data-1p-ignore": "", // 1Password
+  "data-bwignore": "true", // Bitwarden
+  "data-form-type": "other", // Dashlane
+} as const;
+
+export function Input({ className, autoComplete, spellCheck, type, ...props }: React.ComponentProps<"input">) {
+  /**
+   * A SECRET FIELD IS NOT A PASSWORD FIELD, AND THE BROWSER CANNOT TELL.
+   *
+   * Every masked field in this product holds an API key or a personal access
+   * token — a value the user pastes once from another tab and never types
+   * again. No password manager has it saved, so anything it fills in here is
+   * wrong by construction: the credentials for some unrelated site, dropped
+   * into a box that will be encrypted and sent to Close or Calendly.
+   *
+   * That is what was happening. The field carried `autoComplete="off"`, which
+   * a password field is the one place browsers deliberately IGNORE, so simply
+   * opening the Apps tab was enough for a manager to fill seven collapsed
+   * connect forms at once — every connector's form is in the DOM whether its
+   * `<details>` is open or not.
+   *
+   * `new-password` is the documented way to say "this is not the saved one",
+   * and it is the only value Chrome honours on a masked field. The vendor
+   * attributes above cover the extensions, which honour nothing else.
+   */
+  const secret = type === "password";
   // h-9, same as the default Button — a field and its submit sit level.
   return (
     <input
+      type={type}
       className={cn(FIELD, "h-9 px-3", className)}
-      autoComplete={autoComplete ?? "off"}
+      autoComplete={autoComplete ?? (secret ? "new-password" : "off")}
       spellCheck={spellCheck ?? false}
+      {...(secret ? NO_AUTOFILL : {})}
       {...props}
     />
   );

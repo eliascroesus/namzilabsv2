@@ -327,12 +327,21 @@ export default function DesignPage() {
 
         <Section
           title="Controls"
-          note="One field recipe: 36px tall, hairline border, and the same 4px ring on focus — fields show it whenever they hold focus, buttons only for keyboard users. The label is the question and never reads lighter than its answer."
+          note="One field recipe: 36px tall, hairline border, and the same 4px ring on focus — fields show it whenever they hold focus, buttons only for keyboard users. The label is the question and never reads lighter than its answer. Autofill and spellcheck are OFF by default, because twenty-two of the app's twenty-three fields ask for something no browser has ever stored; a masked field goes further and opts out in four password managers' own dialects (NO_AUTOFILL), since `autocomplete=off` is the one value browsers ignore on one."
         >
           <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
             <div>
               <FieldLabel htmlFor="kit-input">Flow name</FieldLabel>
               <Input id="kit-input" defaultValue="Speed to lead" />
+            </div>
+            <div>
+              <FieldLabel htmlFor="kit-secret">Personal access token</FieldLabel>
+              {/* THE REAL COMPONENT, so the attributes below are the ones the
+                  connect form ships. A masked field here is not a password —
+                  it is an API key pasted once from another tab, which no
+                  manager has saved and every manager used to try to fill. */}
+              <Input id="kit-secret" type="password" placeholder="cal_live_…" />
+              <FieldHint>Never autofilled: `new-password` plus one opt-out per manager.</FieldHint>
             </div>
             <div>
               <FieldLabel htmlFor="kit-input-disabled">Disabled</FieldLabel>

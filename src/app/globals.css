@@ -506,6 +506,38 @@ body {
 }
 
 /**
+ * AN AUTOFILLED FIELD IS STILL ONE OF OUR FIELDS.
+ *
+ * When a browser fills an input it paints its own background — a pale blue or
+ * yellow wash straight from the UA stylesheet — and it wins over `bg-card`
+ * because it is applied to a pseudo-class no author rule outranks. On a warm
+ * white form that lands as one cold blue box among five, which is exactly what
+ * a screenshot of the connect form showed.
+ *
+ * The inset shadow is the documented way to defeat it: the fill is painted
+ * behind the shadow, so a 1000px inset spread in our own surface colour covers
+ * it. Ugly, and the only thing that works — `background-color` is ignored here.
+ *
+ * `-webkit-text-fill-color` for the same reason: the UA overrides `color` on a
+ * filled field, and without this a filled value reads in the browser's near-
+ * black rather than the kit's warm one.
+ *
+ * NOT a licence to autofill: `ui/input.tsx` turns it off wherever it would be
+ * wrong (see `NO_AUTOFILL`). This is what the two fields that legitimately fill
+ * — the invite email — should look like when they do.
+ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--foreground);
+  -webkit-box-shadow: 0 0 0 1000px var(--card) inset;
+  box-shadow: 0 0 0 1000px var(--card) inset;
+  caret-color: var(--foreground);
+}
+
+/**
  * NO WIDOWS, ANYWHERE.
  *
  * `balance` distributes a heading across its lines so the last one is never a
