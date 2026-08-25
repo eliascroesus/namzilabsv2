@@ -20,11 +20,8 @@ export default function DashboardLoading() {
           sentence that never arrives is a 16px jump on every first load. */}
       <Skeleton className="mt-6 h-14 rounded-surface" />
       <Skeleton className="mt-3 h-3 w-64" />
-      {/* Ten, not six: at `3xl` the real board lays five to a row, and a
-          six-tile shimmer leaves the second row visibly short of the page it
-          is standing in for. */}
       <div className={`mt-4 ${BOARD_GRID}`}>
-        {Array.from({ length: 10 }, (_, i) => (
+        {Array.from({ length: 6 }, (_, i) => (
           <Skeleton key={i} className="h-44 rounded-surface" />
         ))}
       </div>

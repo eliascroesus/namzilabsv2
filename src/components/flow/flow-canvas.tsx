@@ -1665,14 +1665,26 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    * is what stops one lighting up under the cursor first, which would read as
    * a drop the editor then silently declined.
    *
-   * `descendantsOf` runs per pointer move rather than being memoized, and that
-   * is deliberate: it is a DFS over a graph the flow limit keeps to a few dozen
-   * edges, and the alternative is caching a value keyed on a drag that is
-   * already in flight.
+   * The subtree is computed ONCE PER DRAG, not per pointer move. It was the
+   * latter, on the reasoning that a DFS over a few dozen edges is cheap — which
+   * is true of one call and false of the sixty a second a drag actually makes,
+   * each one also doing a linear `nodes.find` and allocating a Set. A drag is
+   * the one interaction in this product that must not stutter, and the graph it
+   * walks cannot change while a card is in the air.
+   *
+   * Falling back to `null` when the id is not the held card is SAFE rather than
+   * merely convenient: this filter is a courtesy that stops an impossible slot
+   * lighting up, and `moveWiring` refuses the same move outright. The wall is
+   * there; this is the handrail.
    */
+  const draggingSubtree = useMemo(
+    () => (dragging && nodes.find((n) => n.id === dragging)?.type === "paths" ? descendantsOf(dragging, edges) : null),
+    [dragging, nodes, edges],
+  );
+
   const slotFor = useCallback(
     (id: string, at: { x: number; y: number }) => {
-      const inside = nodes.find((n) => n.id === id)?.type === "paths" ? descendantsOf(id, edges) : null;
+      const inside = id === dragging ? draggingSubtree : null;
       let best: (typeof dropSlots)[number] | null = null;
       let bestD = Infinity;
       for (const s of dropSlots) {
@@ -1688,7 +1700,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       // possible, and "somewhere over there" is the shape of a mistake.
       return best && bestD < DROP_REACH ? best : null;
     },
-    [dropSlots, nodes, edges],
+    [dropSlots, dragging, draggingSubtree],
   );
 
   /**

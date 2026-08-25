@@ -44,7 +44,46 @@ warm-canvas material system.
 
 ---
 
-## 2. Width — boards fill, forms stay narrow
+## 2. Width — REVERTED, see §2a
+
+> **§2 as written below shipped and was reverted within the hour, on sight.**
+> Read §2a first; what follows is kept because it records why the fill looked
+> right on paper and what the skeleton/grid work it dragged in was actually
+> worth.
+
+## 2a. What the width is now, and why the fill was wrong
+
+`PageContainer` keeps its cap: `max-w-6xl` (1152px) for boards, `max-w-3xl`
+(768px) for forms, gutter `px-4 → sm:px-6 → lg:px-8`. **Nothing about a page's
+geometry changes when you resize the window.**
+
+The fill in §2 was reasoned about as a layout problem — a board's unit repeats,
+so width buys another column — and that reasoning ignored what a dashboard is
+FOR. Three things went wrong in practice:
+
+- **No stable picture.** A dashboard is something you learn the shape of. If the
+  tiles reflow every time the window changes, there is no shape to learn, and
+  the same board is a different object on a laptop and a monitor.
+- **It felt bad.** Reflowing a grid across 2560px is real work on every frame,
+  and it lands on top of whatever else is animating.
+- **The calendar was worst.** Seven columns across an uncapped page turn day
+  squares into letterbox strips. §2 tried to answer that by growing the cell
+  height at two breakpoints — a patch on a problem the cap does not have.
+
+Notion is the reference the user named and it is the right one: a fixed content
+measure with real margin either side, where a bigger screen changes how much you
+see and never how big anything is.
+
+**What survived the revert, because it was never about the fill:** `BOARD_GRID`
+as a single spelling (five literals for one decision), `day-cell.ts` as a
+directive-free module (§2's client-boundary bug is real either way), and
+`tests/page-width.test.ts` pinning the page/skeleton pair — which has now drifted
+twice and been caught once.
+
+**What went with it:** the `2xl`/`3xl` grid rungs, `--breakpoint-3xl`, the
+`2xl:px-12` gutter rung, and the calendar's stepped cell height.
+
+## 2. Width — boards fill, forms stay narrow *(superseded — see §2a)*
 
 `PageContainer` has two modes, and **every route already picks the right one**:
 boards and lists take `default`, forms take `narrow`. So the change is to the

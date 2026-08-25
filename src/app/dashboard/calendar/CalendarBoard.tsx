@@ -244,8 +244,9 @@ export function CalendarBoard({
 
       {/* THE GRID SCROLLS RATHER THAN CRUSHING ITS SQUARES. Seven columns of a
           readable width need ~640px; below that the sheet scrolls sideways
-          inside its own card instead of squeezing a number into 40px.
-          At the other end it GROWS — see DAY_CELL_H. */}
+          inside its own card instead of squeezing a number into 40px. Above it
+          the sheet simply stops growing with the page's own cap, so a month
+          looks the same on every screen. */}
       <Card variant="surface" padding="none" className="mt-4 overflow-hidden">
         <div className="overflow-x-auto p-3 sm:p-4">
           <div className="min-w-[640px]">

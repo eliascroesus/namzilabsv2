@@ -34,14 +34,10 @@ export function ShellSkeleton({
     // the content jumped 8px sideways when the real page landed, and below
     // 640px it jumped 32px sideways and 8px down.
     //
-    // Drifted a SECOND time when the boards began filling the viewport: this
-    // still capped its default at 1152px, so on anything wider the shimmer sat
-    // centred in a column the real page no longer used, and the content jumped
-    // outward on arrival by half the leftover width. Default now carries no cap
-    // and gains the 2xl gutter, exactly as PageContainer does.
-    //
     // tests/page-width.test.ts pins this pair, class for class. It is the only
-    // thing that does.
+    // thing that does — which is how a brief experiment with an uncapped
+    // container got its skeleton updated in the same breath, and how this one
+    // got put back with it.
     //
     // Kept as literals rather than routed through AppFrame/PageContainer on
     // purpose: PageContainer is `<main id="main">` and carries `rise-in`, and a
@@ -57,8 +53,8 @@ export function ShellSkeleton({
       <div className="flex-1 overflow-y-auto rounded-l-frame bg-canvas-bg">
         {/* Not <main>: PageContainer renders the page's one main landmark. */}
         <div
-          className={`mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8 2xl:px-12 ${
-            width === "narrow" ? "max-w-3xl" : ""
+          className={`mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8 ${
+            width === "narrow" ? "max-w-3xl" : "max-w-6xl"
           }`}
         >
           <Skeleton className="h-8 w-48" />

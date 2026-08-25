@@ -58,25 +58,33 @@ function sourceFiles(dir = join(root, "src"), out: string[] = []): string[] {
 
 describe("the page container and the skeleton that stands in for it", () => {
   it("share one gutter, rung for rung", () => {
-    // The gutter steps with the viewport: 16px on a phone, 24, 32, then 48 once
-    // the content stops being centred in empty canvas and the gutter is the
-    // only thing holding it off the frame.
-    const gutter = "px-4 py-8 sm:px-6 sm:py-10 lg:px-8 2xl:px-12";
+    // 16px on a phone, 24 from `sm`, 32 from `lg`. A flat value asked a 390px
+    // window and a 27" display for the same margin.
+    const gutter = "px-4 py-8 sm:px-6 sm:py-10 lg:px-8";
     expect(page).toContain(gutter);
     expect(skeleton).toContain(gutter);
   });
 
-  it("agree that narrow is capped and default is not", () => {
-    // A form does not get better wider — `narrow` holds 768px at every
-    // viewport. A board does, so `default` carries no max-width at all and the
-    // COLUMN COUNT is what steps instead.
-    expect(page).toContain('width === "narrow" && "max-w-3xl"');
-    expect(skeleton).toContain('width === "narrow" ? "max-w-3xl" : ""');
+  it("agree on both caps, so the shimmer stands where the page will", () => {
+    /**
+     * BOTH widths are capped, and the page does not chase the window. This
+     * briefly ran uncapped on `default` — the boards filled the viewport and
+     * gained columns — and it was reverted: a layout that reflows on every
+     * resize gives no stable picture of a dashboard, and the tiles changed size
+     * depending on which monitor you opened it on. Notion is the reference; the
+     * content column is a fixed measure with real margin either side.
+     *
+     * The pair is asserted TOGETHER because the skeleton is a hand-copy of the
+     * page's classes (it cannot render PageContainer — that is `<main
+     * id="main">` and carries `rise-in`), and it has drifted from it twice.
+     */
+    expect(page).toContain('width === "narrow" ? "max-w-3xl" : "max-w-6xl"');
+    expect(skeleton).toContain('width === "narrow" ? "max-w-3xl" : "max-w-6xl"');
 
-    // The cap `default` used to carry. If this string comes back to either
-    // file, the fill is over and the skeleton/page pair is drifting again.
-    expect(page).not.toContain("max-w-6xl");
-    expect(skeleton).not.toContain("max-w-6xl");
+    // The uncapped spelling. Its return means the fill is back and the pair is
+    // out of step with the kit again.
+    expect(page).not.toMatch(/width === "narrow" && "max-w-3xl"/);
+    expect(skeleton).not.toContain('"max-w-3xl" : ""');
   });
 });
 
@@ -99,12 +107,22 @@ describe("the board grid", () => {
     expect(offenders.map((f) => f.slice(root.length + 1))).toEqual([]);
   });
 
-  it("names a breakpoint the stylesheet actually defines", () => {
-    // Tailwind v4 emits a variant only for a breakpoint declared in `@theme`.
-    // `3xl:` compiles to nothing at all if the token is missing — a silent
-    // failure that looks exactly like a grid that simply never gains a column.
-    expect(page).toMatch(/BOARD_GRID = "[^"]*3xl:grid-cols-5"/);
-    expect(css).toMatch(/--breakpoint-3xl:\s*120rem;/);
+  it("stops at three columns, and names no breakpoint the stylesheet lacks", () => {
+    /**
+     * Three is what 1152px is for: four tiles inside it are 270px each, which
+     * is narrower than the numeral they exist to carry.
+     *
+     * The `2xl`/`3xl` rungs this briefly had are gone with the uncapped
+     * container that justified them — and so is `--breakpoint-3xl`. Tailwind v4
+     * emits a variant only for a breakpoint declared in `@theme`, so a `3xl:`
+     * class left behind after the token went would compile to nothing at all:
+     * a silent failure that looks exactly like a grid that never gains a
+     * column. Asserting both directions keeps the class and the token from
+     * outliving each other in either order.
+     */
+    expect(page).toMatch(/BOARD_GRID = "grid gap-4 sm:grid-cols-2 xl:grid-cols-3";/);
+    expect(page).not.toMatch(/BOARD_GRID = "[^"]*3xl:/);
+    expect(css).not.toMatch(/--breakpoint-3xl:/);
   });
 });
 
@@ -115,7 +133,7 @@ describe("the calendar's day square", () => {
   it("is one measurement, read by both the sheet and its skeleton", () => {
     // Same mirror problem, smaller: `loading.tsx` draws the same square, and a
     // literal there would go stale the moment the cell grows a rung.
-    expect(cell).toMatch(/export const DAY_CELL_H = "min-h-\[92px\] 2xl:min-h-\[116px\] 3xl:min-h-\[140px\]";/);
+    expect(cell).toMatch(/export const DAY_CELL_H = "min-h-\[92px\]";/);
     expect(read("src/app/dashboard/calendar/CalendarBoard.tsx")).toContain('from "./day-cell"');
     expect(loading).toContain('from "./day-cell"');
     // The literal it replaced. Its return means the two have parted again.

@@ -1,12 +1,11 @@
 /**
- * A DAY SQUARE'S HEIGHT, WHICH IS NOT ONE NUMBER ANY MORE.
+ * A DAY SQUARE'S HEIGHT — ONE NUMBER, AT EVERY VIEWPORT.
  *
- * The sheet fills the page now, and seven columns across an ultrawide put a
- * 92px-tall cell at better than three to one — a letterbox slot, not a day.
- * The width is not the thing to cap: a month grid IS the page it is on, and
- * capping it would leave a sheet marooned in canvas on the one screen with
- * room to read it comfortably. So the cell gets taller as it gets wider, on
- * the same two rungs the boards gain columns at.
+ * It briefly grew at two breakpoints, to stop a month grid stretched across an
+ * uncapped page turning its cells into letterbox slots. The page has a cap
+ * again, so the sheet is a sheet at every size: seven columns inside 1152px is
+ * a ~150px square, and 92px of height against it reads as a day rather than a
+ * strip. Nothing about the calendar should change when you resize the window.
  *
  * ── WHY THIS IS ITS OWN FILE, WITH NO `"use client"` ───────────────────────
  *
@@ -30,4 +29,4 @@
  * module with no directive. Adding `"use client"` here re-breaks the skeleton
  * silently; tests/page-width.test.ts pins that it stays absent.
  */
-export const DAY_CELL_H = "min-h-[92px] 2xl:min-h-[116px] 3xl:min-h-[140px]";
+export const DAY_CELL_H = "min-h-[92px]";
