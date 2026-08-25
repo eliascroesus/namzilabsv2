@@ -8,7 +8,9 @@ import { GROUP_ACCENT, groupAccent } from "@/components/flow/node-accent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover } from "@/components/flow/controls/Popover";
-import { TileSlot } from "./board-tile-menu";
+import { DropGap, TileSlot } from "./board-tile-menu";
+import { AXIS_ATTR, LANE_ATTR } from "./board-drag";
+import { withGap } from "./board-layout";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
 
 /**
@@ -33,6 +35,10 @@ export function BoardColumn({
   onRecolour,
   onDelete,
   onPlace,
+  gapIndex,
+  heldKey,
+  onGrab,
+  swallowClick,
 }: {
   lane: BoardLane & { group: BoardGroup };
   canEdit: boolean;
@@ -42,6 +48,11 @@ export function BoardColumn({
   onRecolour: (id: string, color: string) => void;
   onDelete: (id: string) => void;
   onPlace: (tileKey: string, groupId: string | null, index: number) => void;
+  /** Where the held tile would land in THIS column, or null if not here. */
+  gapIndex: number | null;
+  heldKey: string | null;
+  onGrab: (e: React.PointerEvent<HTMLElement>, tile: { key: string; title: string; accent: string }) => void;
+  swallowClick: () => boolean;
 }) {
   const g = lane.group;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -193,28 +204,40 @@ export function BoardColumn({
         )}
       </div>
 
-      {lane.tiles.length === 0 ? (
-        /* An empty column is a header over nothing, which reads as a tile that
-           failed to load. Saying what the space is for turns it into a target. */
-        <div className="flex min-h-[120px] items-center justify-center rounded-surface border-2 border-dashed border-border px-4 text-center text-tiny text-muted-foreground">
-          Nothing in this group yet
-        </div>
-      ) : (
-        <div className={`flex flex-col ${LANE_GAP}`}>
-          {lane.tiles.map((t, i) => (
-            <TileSlot
-              key={t.key}
-              tile={t}
-              canEdit={canEdit}
-              laneId={g.id}
-              index={i}
-              count={lane.tiles.length}
-              lanes={lanes}
-              onPlace={onPlace}
-            />
-          ))}
-        </div>
-      )}
+      {/* THE LANE ITSELF — the box the drag hit-tests against. It stays in the
+          tree even when the column is empty, so an empty group is still
+          somewhere a tile can be dropped. */}
+      <div {...{ [LANE_ATTR]: g.id, [AXIS_ATTR]: "y" }} className={`flex flex-col ${LANE_GAP}`}>
+        {lane.tiles.length === 0 && gapIndex == null ? (
+          /* An empty column is a header over nothing, which reads as a tile
+             that failed to load. Saying what the space is for turns it into a
+             target rather than a rendering fault. */
+          <div className="flex min-h-[120px] items-center justify-center rounded-surface border-2 border-dashed border-border px-4 text-center text-tiny text-muted-foreground">
+            Nothing in this group yet
+          </div>
+        ) : (
+          withGap(lane.tiles, gapIndex, heldKey).map((slot) =>
+            slot === null ? (
+              <DropGap key="gap" />
+            ) : (
+              <TileSlot
+                key={slot.key}
+                tile={slot}
+                canEdit={canEdit}
+                laneId={g.id}
+                index={lane.tiles.indexOf(slot)}
+                count={lane.tiles.length}
+                lanes={lanes}
+                onPlace={onPlace}
+                accent={groupAccent(g.color)}
+                held={heldKey === slot.key}
+                onGrab={onGrab}
+                swallowClick={swallowClick}
+              />
+            ),
+          )
+        )}
+      </div>
     </section>
   );
 }

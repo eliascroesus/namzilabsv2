@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { arrangeBoard, type BoardLane } from "@/lib/board/arrange";
 import { keyBetween, keysBetween } from "@/lib/board/order";
@@ -8,9 +8,12 @@ import type { BoardGroup, BoardTile, TilePlacement } from "@/lib/board/types";
 import { Button } from "@/components/ui/button";
 import { Toast } from "@/components/ui/toast";
 import { BOARD_GRID } from "@/components/ui/page";
+import { DragGhost } from "@/components/flow/drop-slot";
+import { groupAccent } from "@/components/flow/node-accent";
 import { createGroupAction, deleteGroupAction, renameGroupAction, setGroupColorAction, setTilePlacementsAction } from "./board-actions";
 import { BoardColumn } from "./board-column";
-import { TileSlot } from "./board-tile-menu";
+import { DropGap, TileSlot } from "./board-tile-menu";
+import { AXIS_ATTR, LANE_ATTR, SCROLLER_ATTR, UNGROUPED, useBoardDrag } from "./board-drag";
 import { COLUMN_W, LANE_GAP, SCROLLER_BLEED } from "./board-shape";
 
 /**
@@ -174,8 +177,13 @@ export function BoardLayout({
 
   const laneNames = groups.map((g) => ({ id: g.id, name: g.name }));
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  const { drag, onPointerDown, swallowClick } = useBoardDrag(rootRef, placeTile);
+  /** The gap belongs to exactly one lane at a time, at one index. */
+  const gapAt = (laneId: string | null) => (drag?.target && drag.target.laneId === laneId ? drag.target.index : null);
+
   return (
-    <>
+    <div ref={rootRef}>
       {/* THE ONE DOOR to a new column. On the caption line rather than in the
           page header, because that line is already about the board as a whole —
           which is exactly what a group is — and because the header's two
@@ -200,30 +208,40 @@ export function BoardLayout({
               Rendered only when it holds something: an empty scroller is a rule
               that does nothing, and "everything is filed" is worth seeing as an
               absence rather than as an empty box. */}
-          {board.ungrouped.tiles.length > 0 && (
-            <div className={`${SCROLLER_BLEED} overflow-x-auto pb-2`}>
-              <div className={`flex items-start ${LANE_GAP}`}>
-                {board.ungrouped.tiles.map((t, i) => (
-                  // `shrink-0` or the row compresses its tiles to fit instead of
-                  // scrolling, which is what makes a scroller look like a
-                  // broken grid.
-                  <div key={t.key} className={`${COLUMN_W} shrink-0`}>
-                    <TileSlot
-                      tile={t}
-                      canEdit={canEdit}
-                      laneId={null}
-                      index={i}
-                      count={board.ungrouped.tiles.length}
-                      lanes={laneNames}
-                      onPlace={placeTile}
-                    />
-                  </div>
-                ))}
+          {(board.ungrouped.tiles.length > 0 || gapAt(null) != null) && (
+            <div {...{ [SCROLLER_ATTR]: "row" }} className={`${SCROLLER_BLEED} overflow-x-auto pb-2`}>
+              <div {...{ [LANE_ATTR]: UNGROUPED, [AXIS_ATTR]: "x" }} className={`flex items-start ${LANE_GAP}`}>
+                {withGap(board.ungrouped.tiles, gapAt(null), drag?.tileKey ?? null).map((slot) =>
+                  slot === null ? (
+                    <div key="gap" className={`${COLUMN_W} shrink-0`}>
+                      <DropGap />
+                    </div>
+                  ) : (
+                    // `shrink-0` or the row compresses its tiles to fit instead
+                    // of scrolling, which is what makes a scroller look like a
+                    // broken grid.
+                    <div key={slot.key} className={`${COLUMN_W} shrink-0`}>
+                      <TileSlot
+                        tile={slot}
+                        canEdit={canEdit}
+                        laneId={null}
+                        index={board.ungrouped.tiles.indexOf(slot)}
+                        count={board.ungrouped.tiles.length}
+                        lanes={laneNames}
+                        onPlace={placeTile}
+                        accent={groupAccent("grey")}
+                        held={drag?.tileKey === slot.key}
+                        onGrab={onPointerDown}
+                        swallowClick={swallowClick}
+                      />
+                    </div>
+                  ),
+                )}
               </div>
             </div>
           )}
 
-          <div className={`${SCROLLER_BLEED} mt-4 overflow-x-auto pb-2`}>
+          <div {...{ [SCROLLER_ATTR]: "columns" }} className={`${SCROLLER_BLEED} mt-4 overflow-x-auto pb-2`}>
             <div className={`flex items-start ${LANE_GAP}`}>
               {board.columns.map((lane) => (
                 <BoardColumn
@@ -236,6 +254,10 @@ export function BoardLayout({
                   onRecolour={recolourGroup}
                   onDelete={removeGroup}
                   onPlace={placeTile}
+                  gapIndex={gapAt(lane.id)}
+                  heldKey={drag?.tileKey ?? null}
+                  onGrab={onPointerDown}
+                  swallowClick={swallowClick}
                 />
               ))}
             </div>
@@ -243,7 +265,49 @@ export function BoardLayout({
         </div>
       )}
 
+      {/* THE HELD CARD, UNDER THE CURSOR. A sibling of the board rather than a
+          child of a scroller, so it stays with the pointer in screen space
+          instead of panning away inside an overflow container. The same reduced
+          ghost the flow builder uses, imported unchanged. */}
+      {drag && (
+        <DragGhost
+          x={drag.x}
+          y={drag.y}
+          title={drag.title}
+          mark={<span className="size-5 shrink-0 rounded-control" style={{ background: drag.accent }} />}
+        />
+      )}
+
       {toast && <Toast action={{ label: "Dismiss", onClick: () => setToast(null) }}>{toast}</Toast>}
-    </>
+    </div>
   );
+}
+
+/**
+ * The lane's tiles with the gap spliced in — as `null` — where the held tile
+ * would land.
+ *
+ * THE INDEX COUNTS AMONG THE OTHER TILES, not among all of them, because that
+ * is what the drag measured and what the placement maths will be handed: the
+ * held card is still on screen (faded, where it was), so counting it would put
+ * the gap one place out for every drop below its own position.
+ *
+ * One helper for both orientations, so a column and the row above it cannot
+ * come to disagree about what "index 3" means.
+ */
+export function withGap(tiles: BoardTile[], gap: number | null, heldKey: string | null): Array<BoardTile | null> {
+  if (gap == null) return tiles;
+  const out: Array<BoardTile | null> = [];
+  let seen = 0;
+  let placed = false;
+  for (const t of tiles) {
+    if (!placed && seen === gap) {
+      out.push(null);
+      placed = true;
+    }
+    out.push(t);
+    if (t.key !== heldKey) seen++;
+  }
+  if (!placed) out.push(null);
+  return out;
 }

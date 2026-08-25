@@ -1,10 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Check, GripVertical } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, GripVertical, Plus } from "lucide-react";
 import type { BoardTile } from "@/lib/board/types";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/flow/controls/Popover";
+import { TILE_ATTR } from "./board-drag";
+
+/**
+ * THE GAP THAT OPENS WHERE A HELD TILE WOULD LAND.
+ *
+ * Written HERE rather than beside `DropSlotNode` in `flow/drop-slot.tsx`, and
+ * that is not a stylistic choice: `tests/drag-rules.test.ts` reads the FIRST
+ * `h-[Npx]` in that file to prove the canvas's `SLOT_H` still matches its
+ * placeholder. A second component with its own pixel height in there fails an
+ * unrelated test with a message about the flow builder.
+ *
+ * It borrows the LOOK — dashed, brand-tinted, a filled `+` in the middle —
+ * because that is what a drop target means everywhere else in this product.
+ */
+export function DropGap() {
+  return (
+    <div className="pointer-events-none flex h-[112px] w-full items-center justify-center rounded-surface border-2 border-dashed border-primary bg-accent/40">
+      <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+        <Plus size={16} strokeWidth={2.5} />
+      </span>
+    </div>
+  );
+}
 
 /**
  * ONE TILE, WITH A HANDLE ON IT.
@@ -33,6 +56,10 @@ export function TileSlot({
   count,
   lanes,
   onPlace,
+  held,
+  onGrab,
+  swallowClick,
+  accent,
 }: {
   tile: BoardTile;
   canEdit: boolean;
@@ -42,9 +69,18 @@ export function TileSlot({
   count: number;
   lanes: Array<{ id: string; name: string }>;
   onPlace: (tileKey: string, groupId: string | null, index: number) => void;
+  /** True while this is the tile in the customer's hand. */
+  held?: boolean;
+  onGrab?: (e: React.PointerEvent<HTMLElement>, tile: { key: string; title: string; accent: string }) => void;
+  swallowClick?: () => boolean;
+  /** The colour of the lane it came from — the mark the ghost carries. */
+  accent?: string;
 }) {
   const [open, setOpen] = useState(false);
 
+  // A member who may not rearrange gets the card and nothing else — not a
+  // disabled handle, which is a control advertising a thing it will refuse.
+  // The identifying attribute goes too: nothing here can be a drop target.
   if (!canEdit) return <>{tile.node}</>;
 
   const move = (groupId: string | null, at: number) => {
@@ -53,7 +89,10 @@ export function TileSlot({
   };
 
   return (
-    <div className="group/slot relative">
+    <div
+      {...{ [TILE_ATTR]: tile.key }}
+      className={`group/slot relative transition-opacity duration-(--duration-fast) ${held ? "opacity-40" : ""}`}
+    >
       <div className="absolute left-2 top-2 z-10 opacity-0 transition-opacity duration-(--duration-fast) focus-within:opacity-100 group-hover/slot:opacity-100 pointer-coarse:opacity-100">
         <Popover
           open={open}
@@ -63,12 +102,21 @@ export function TileSlot({
             <Button
               variant="ghost"
               size="iconSm"
-              onClick={() => setOpen((o) => !o)}
+              // A PRESS-AND-MOVE IS A DRAG; A PRESS ALONE IS THE MENU. Four
+              // pixels is what separates them, and `swallowClick` is what stops
+              // the pointerup that ends a drop from also opening the menu.
+              onPointerDown={(e) => onGrab?.(e, { key: tile.key, title: tile.title, accent: accent ?? "" })}
+              onClick={() => {
+                if (swallowClick?.()) return;
+                setOpen((o) => !o);
+              }}
               aria-label={`Move ${tile.title}`}
               aria-haspopup="menu"
               aria-expanded={open}
-              title="Move this metric"
-              className="bg-card/90 backdrop-blur-sm"
+              title="Drag to move, or press for the menu"
+              // `touch-action: none` or the browser claims the gesture for
+              // scrolling and the drag never starts on a phone.
+              className="bg-card/90 backdrop-blur-sm [touch-action:none]"
             >
               <GripVertical />
             </Button>
