@@ -945,17 +945,79 @@ describe("moveWiring — a Split carries its branches", () => {
     expect(out.add.map((e) => `${e.source}->${e.target}`)).toContain("i1->filter");
   });
 
-  it("refuses a drop inside its own subtree", () => {
+  /**
+   * A HUB DROPPED INTO ITS OWN BRANCH CUTS THAT BRANCH.
+   *
+   * This was refused outright, which made a Split the one step on the canvas
+   * that could only ever move UP: everything below it is its own subtree, so
+   * every `+` beneath it was dead and dragging it down did nothing.
+   *
+   * It cannot carry the branch it lands in — the steps above the drop point
+   * would have to be both above and below the hub at once — so that lane is cut
+   * at the drop point and every OTHER lane travels as usual.
+   */
+  it("cuts the lane it lands in, and keeps the others", () => {
+    // The user's own graph: app -> hub{ pA -> fA -> f5 -> f6, pB -> fB }.
+    // Drop the hub between f5 and f6.
+    const nodes = [step("app"), hub("hub", "pA", "pB"), step("fA"), step("f5"), step("f6"), step("fB")];
+    const edges = [
+      E("app", "hub"),
+      E("hub", "fA", { sourceHandle: "pA" }),
+      E("fA", "f5"),
+      E("f5", "f6"),
+      E("hub", "fB", { sourceHandle: "pB" }),
+    ];
+    const out = moveWiring("hub", { after: "f5" }, edges, nodes)!;
+    const dropped = new Set(out.remove.map((e) => e.id));
+    const next = [...edges.filter((e) => !dropped.has(e.id)), ...out.add];
+    const wires = next.map((e) => `${e.source}${e.sourceHandle ? `[${e.sourceHandle}]` : ""}->${e.target}`);
+
+    // The cut lane's head takes the hub's old place, so the line above closes up.
+    expect(wires).toContain("app->fA");
+    expect(wires).toContain("fA->f5");
+    // The hub lands where it was dropped...
+    expect(wires).toContain("f5->hub");
+    // ...and what f5 used to feed becomes that same lane's new content, through
+    // its OWN handle — a `paths` node has no plain chain child to be.
+    expect(wires).toContain("hub[pA]->f6");
+    // Every other lane is untouched. This is the half that must not regress.
+    expect(wires).toContain("hub[pB]->fB");
+    expect(hasCycle(next)).toBe(false);
+  });
+
+  it("cuts the right lane when the drop is in the second one", () => {
+    const { nodes, edges } = splitGraph(); // hub{pA -> a1, pB -> b1}, filter -> hub
+    const out = moveWiring("hub", { after: "b1" }, edges, nodes)!;
+    const dropped = new Set(out.remove.map((e) => e.id));
+    const next = [...edges.filter((e) => !dropped.has(e.id)), ...out.add];
+    const wires = next.map((e) => `${e.source}${e.sourceHandle ? `[${e.sourceHandle}]` : ""}->${e.target}`);
+
+    expect(wires).toContain("filter->b1"); // lane B's head re-homed upward
+    expect(wires).toContain("b1->hub");
+    expect(wires).toContain("hub[pA]->a1"); // lane A untouched
+    expect(wires).not.toContain("hub[pB]->b1"); // lane B was the one cut
+    expect(hasCycle(next)).toBe(false);
+  });
+
+  it("refuses any move it cannot make acyclic", () => {
     /**
-     * The guard the plain path deliberately does NOT have. Every other step is
-     * fully detached before reinsertion, so it has no descendants and cannot
-     * close a loop — see "allows dragging a step to the bottom of the line it
-     * is already in" above. A hub keeps its descendants, so this one case can
-     * ring, and a ring is a layout that walks forever.
+     * The backstop, not a case analysis. `moveWiring` builds the graph the move
+     * would produce and checks it; a shape the rules have no answer for reads as
+     * a drag that did not take, which is fair. A STORED cycle is not — the
+     * layout's Kahn pass silently defaults every node in one to depth 0, and the
+     * flow compiles from the same edges.
+     *
+     * Sabotage: return `result` unchecked at the end of the `paths` branch and
+     * this is the test that fails.
      */
-    const { nodes, edges } = splitGraph();
-    expect(moveWiring("hub", { after: "a1" }, edges, nodes)).toBeNull();
-    expect(moveWiring("hub", { after: "b1" }, edges, nodes)).toBeNull();
+    const nodes = [step("app"), hub("hub", "pA"), step("fA")];
+    // A hub whose only lane already loops back into it: no cut can fix this.
+    const edges = [E("app", "hub"), E("hub", "fA", { sourceHandle: "pA" }), E("fA", "hub")];
+    const out = moveWiring("hub", { after: "fA" }, edges, nodes);
+    if (out) {
+      const dropped = new Set(out.remove.map((e) => e.id));
+      expect(hasCycle([...edges.filter((e) => !dropped.has(e.id)), ...out.add])).toBe(false);
+    }
   });
 
   it("detaches into its own lane with every branch intact", () => {

@@ -18,6 +18,8 @@ export type NodeData = {
   stepNo?: number;
   status?: "ready" | "setup" | "untested" | "updating" | "error";
   isTerminal?: boolean;
+  /** Terminal "Add next step" steps aside — a drop placeholder is on its spot. */
+  hideTailAdd?: boolean;
   issue?: string;
   freeHandles?: Array<{ id: string; label: string }>;
   onAddFrom?: (sourceNodeId: string, sourceHandle?: string | null, anchor?: { x: number; y: number; leftX?: number }) => void;
@@ -489,6 +491,49 @@ function chainEndOf(startId: string, typeOf: (id: string) => string | undefined,
   }
 }
 
+/** The edge list a `{remove, add}` would leave behind. */
+function applied(edges: Edge[], wiring: { remove: Edge[]; add: Array<{ source: string; target: string }> }): Array<{ source: string; target: string }> {
+  const dropped = new Set(wiring.remove.map((e) => e.id));
+  return [...edges.filter((e) => !dropped.has(e.id)), ...wiring.add];
+}
+
+/**
+ * Does this edge list contain a cycle? Iterative DFS with an on-stack marker,
+ * so a graph mid-edit cannot blow the call stack the way the recursive form
+ * would on a long chain.
+ */
+function cycles(edges: Array<{ source: string; target: string }>): boolean {
+  const out = new Map<string, string[]>();
+  const ids = new Set<string>();
+  for (const e of edges) {
+    out.set(e.source, [...(out.get(e.source) ?? []), e.target]);
+    ids.add(e.source);
+    ids.add(e.target);
+  }
+  const state = new Map<string, 1 | 2>(); // 1 = on the stack, 2 = finished
+  for (const root of ids) {
+    if (state.get(root)) continue;
+    const stack: Array<{ id: string; i: number }> = [{ id: root, i: 0 }];
+    state.set(root, 1);
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      const kids = out.get(top.id) ?? [];
+      if (top.i >= kids.length) {
+        state.set(top.id, 2);
+        stack.pop();
+        continue;
+      }
+      const next = kids[top.i++];
+      if (state.get(next) === 1) return true;
+      if (!state.get(next)) {
+        state.set(next, 1);
+        stack.push({ id: next, i: 0 });
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * WHERE A STEP GOES WHEN IT IS DRAGGED SOMEWHERE ELSE.
  *
@@ -572,23 +617,67 @@ export function moveWiring(
     const incoming = edges.filter((e) => e.target === nodeId);
     if (target.root) return { remove: incoming, add: [] };
     if (!target.after) return null;
+    // Captured once: narrowing a parameter's property does not survive into
+    // the closures below.
+    const after = target.after;
 
-    // Everything the hub carries — needed twice below, and both uses are about
-    // the same hazard: a hub that keeps its subtree can be wired back into it.
+    // Everything the hub carries.
     const carried = descendantsOf(nodeId, edges);
-    // Dropping a hub inside its own branch would ring. See the docstring.
-    if (carried.has(target.after)) return null;
 
-    const detached = edges.filter((e) => !incoming.includes(e));
+    /**
+     * ── DROPPING A HUB INTO ITS OWN BRANCH ─────────────────────────────────
+     *
+     * This used to be refused outright, which made a Split the one step on the
+     * canvas that could only ever move UP: everything below it is its own
+     * subtree, so every `+` beneath it was dead. Every step has to be droppable
+     * at every `+`.
+     *
+     * It cannot carry the branch it is being dropped INTO — the steps above the
+     * drop point would have to be simultaneously above and below the hub — so
+     * that one branch is CUT at the drop point and the rest travel as usual:
+     *
+     *   1 App                     1 App
+     *   2 Split                   └─ 3 Path A          <- host branch's head,
+     *      ├─ 3 Path A                 └─ 5 Filter        re-homed to the hub's
+     *      │    └─ 5 Filter                 └─ 2 Split     old parent
+     *      │         └─ 6 Filter                 ├─ 6 Filter   <- becomes the
+     *      └─ 4 Path B                           └─ 4 Path B      branch's new
+     *                                                             content
+     *
+     * The hub keeps every OTHER branch, which is the whole point of the move
+     * rule; only the lane it landed in gives way. `hostHandle` is that lane.
+     */
+    let hostHandle: string | undefined;
+    if (carried.has(after)) {
+      // Ordered by the user's own path order, then any lane not in `paths`
+      // (a Split's fallback lane carries a handle that config never lists).
+      const laneEdges = edges.filter((e) => e.source === nodeId && e.sourceHandle);
+      const declared = pathHandleIds({ config: configOf(nodeId) });
+      const ordered = [
+        ...declared.map((h) => laneEdges.find((e) => e.sourceHandle === h)).filter((e): e is Edge => e != null),
+        ...laneEdges.filter((e) => !declared.includes(e.sourceHandle!)),
+      ];
+      const host = ordered.find((e) => e.target === after || descendantsOf(e.target, edges).has(after));
+      // Reachable from the hub but through no lane at all means a shape this
+      // move has no answer for; refusing beats inventing one.
+      if (!host?.sourceHandle) return null;
+      hostHandle = host.sourceHandle;
+    }
+
+    // The lane being cut, and the head it hands back to the hub's own parent.
+    const hostEdge = hostHandle ? edges.find((e) => e.source === nodeId && e.sourceHandle === hostHandle) : undefined;
+
+    const detached = edges.filter((e) => !incoming.includes(e) && e !== hostEdge);
     const outgoing = target.handle
-      ? detached.find((e) => e.source === target.after && e.sourceHandle === target.handle)
-      : detached.find((e) => e.source === target.after && !e.sourceHandle && e.targetHandle == null);
+      ? detached.find((e) => e.source === after && e.sourceHandle === target.handle)
+      : detached.find((e) => e.source === after && !e.sourceHandle && e.targetHandle == null);
 
     // The tail of path A, or the hub itself when it has no branch wired yet —
     // a degenerate shape, but one that must still land somewhere rather than
-    // strand the step it displaced.
+    // strand the step it displaced. When a lane was cut, the displaced step
+    // becomes THAT lane's content instead: it is the branch that just emptied.
     const firstHead = detached.find((e) => e.source === nodeId && e.sourceHandle === pathHandleIds({ config: configOf(nodeId) })[0])?.target;
-    const landing = firstHead ? chainEndOf(firstHead, typeOf, configOf, detached) : nodeId;
+    const landing = hostHandle ? nodeId : firstHead ? chainEndOf(firstHead, typeOf, configOf, detached) : nodeId;
 
     /**
      * A DISPLACED STEP THAT IS ALREADY OURS IS NOT DISPLACED.
@@ -612,18 +701,67 @@ export function moveWiring(
      * definition, so cutting the direct `after -> target` link cannot orphan
      * it: the hub now feeds it through the branch it was always on. The link
      * is still removed, because `after` reaches it through the hub now.
+     *
+     * The cut lane is the exception: its steps are no longer downstream of the
+     * hub at all, so a displaced step inside it is genuinely displaced and must
+     * be re-homed. `stillCarried` is `carried` minus what the cut gave away.
      */
-    const rehome = outgoing && !carried.has(outgoing.target) ? outgoing : null;
+    const stillCarried = hostEdge
+      ? (() => {
+          const gone = new Set([hostEdge.target, ...descendantsOf(hostEdge.target, detached)]);
+          return new Set([...carried].filter((id) => !gone.has(id)));
+        })()
+      : carried;
+    const rehome = outgoing && !stillCarried.has(outgoing.target) ? outgoing : null;
 
-    return {
-      remove: [...incoming, ...(outgoing ? [outgoing] : [])],
+    const result = {
+      remove: [...incoming, ...(hostEdge ? [hostEdge] : []), ...(outgoing ? [outgoing] : [])],
       add: [
+        // The cut lane's head takes the hub's place under the hub's own parent,
+        // so the line above the drop point closes up exactly as a deletion's
+        // bridge would.
+        ...(hostEdge
+          ? incoming.map((i) => ({
+              id: eid(),
+              type: "insert",
+              source: i.source,
+              sourceHandle: i.sourceHandle ?? undefined,
+              target: hostEdge.target,
+            }))
+          : []),
         { id: eid(), type: "insert", source: target.after, sourceHandle: target.handle, target: nodeId },
         ...(rehome
-          ? [{ id: eid(), type: "insert", source: landing, target: rehome.target, targetHandle: rehome.targetHandle ?? undefined }]
+          ? [
+              {
+                id: eid(),
+                type: "insert",
+                source: landing,
+                // A cut lane re-homes THROUGH ITS OWN HANDLE — the displaced
+                // step becomes that branch's content rather than a chain child
+                // of the hub, which a `paths` node does not have.
+                sourceHandle: hostHandle,
+                target: rehome.target,
+                targetHandle: rehome.targetHandle ?? undefined,
+              },
+            ]
           : []),
       ],
     };
+
+    /**
+     * THE BACKSTOP. Every ring above is reasoned about case by case, and this
+     * branch now has three moving parts (which lane was cut, where the head
+     * went, where the displaced step landed) whose interactions are not all
+     * enumerable — a merge inside a cut lane, a nested hub, a step feeding two
+     * branches at once. So the answer is CHECKED rather than argued: build the
+     * graph this move would produce and refuse it if it has a cycle.
+     *
+     * Refusing reads as the drag not taking, which is a fair outcome for a
+     * shape the rules have no answer for. A stored cycle is not: the layout's
+     * Kahn pass silently defaults every node in it to depth 0, and the flow
+     * compiles from the same edges.
+     */
+    return cycles(applied(edges, result)) ? null : result;
   }
 
   // Detach: everything touching the step, plus the bridge that closes the gap.

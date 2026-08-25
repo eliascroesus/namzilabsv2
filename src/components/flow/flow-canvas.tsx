@@ -168,9 +168,30 @@ function setupHint(type: string, cfg: Record<string, unknown>, inputCount: numbe
 const nodeTypes = Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])) as Record<string, typeof FlowNodeCard>;
 const edgeTypes = { insert: InsertEdge };
 
-/** A step card's height, and the space the layout leaves under one. */
+/** A step card's height. */
 const CARD_H = 86;
-const CARD_GAP = 84;
+/**
+ * WHERE A LINE'S LAST SLOT SITS, measured from the top of the last card.
+ *
+ * This replaces a `CARD_GAP / 2` that was the canvas's last use of that
+ * constant — half the layout's inter-card gap, which put the slot 18px above
+ * where the eye expects it.
+ *
+ * The end of a chain already has a card in it — the terminal "Add next step"
+ * button — so the drop placeholder must land ON it rather than in the gap
+ * above. Anything else draws two dashed cards a few pixels apart, fighting for
+ * one position.
+ *
+ * THIS IS A MEASUREMENT OF ANOTHER FILE, and the only thing keeping the two
+ * agreeing is tests/tail-slot.test.ts. FlowNodeCard renders that button
+ * `absolute top-full mt-8` — 32px below the card — at 56px tall (`p-3` above
+ * and below a 32px `h-8` glyph). Its centre is therefore
+ *
+ *     CARD_H (86) + mt-8 (32) + half of 56 (28) = 146
+ *
+ * Change the button's margin, padding or glyph size and this number follows.
+ */
+const TAIL_SLOT_Y = CARD_H + 32 + 28;
 /**
  * How far to the side of a first step its "own lane" slot sits — one card
  * width plus a clear margin, so the slot reads as beside the flow rather than
@@ -1602,9 +1623,23 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    */
   const dropSlots = useMemo(() => {
     const out: Array<{ x: number; y: number; after?: string; handle?: string; root?: boolean }> = [];
-    /** The gap between a card and the one under it — where its `+` sits. */
+    /**
+     * The gap between a card and the one under it — where its `+` sits.
+     *
+     * A LINE'S END IS NOT A GAP, IT IS THE "Add next step" CARD, and the slot
+     * has to land ON that card rather than in the space above it. At
+     * `CARD_GAP / 2` it sat 18px high, so the placeholder overlapped the button
+     * instead of replacing it — two dashed cards fighting for one position,
+     * which is what it looked like.
+     *
+     * `TAIL_SLOT_Y` is that button's own centre, measured from the card's top:
+     * see FlowNodeCard's terminal button, which is `top-full mt-8` (32px below
+     * the card) and 56px tall (`p-3` twice around a 32px glyph). 86 + 32 + 28.
+     * The button hides while the slot is on it — see `hideTailAdd` in
+     * displayNodes — so exactly one dashed card is ever in that spot.
+     */
     const gapY = (top: number, childTop: number | null) =>
-      childTop == null ? top + CARD_H + CARD_GAP / 2 : (top + CARD_H + childTop) / 2;
+      childTop == null ? top + TAIL_SLOT_Y : (top + CARD_H + childTop) / 2;
 
     for (const n of nodes) {
       const p = layout.get(n.id);
@@ -1659,37 +1694,22 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    * a lane of its own — which is how a second source, or a chain someone wants
    * to start over, gets made: drag it out to the side and let go.
    *
-   * A SPLIT CANNOT BE DROPPED INSIDE ITSELF. It travels with its branches now,
-   * so a slot within its own subtree would close a ring that the layout walks
-   * forever. `moveWiring` refuses that move outright; skipping the slots here
-   * is what stops one lighting up under the cursor first, which would read as
-   * a drop the editor then silently declined.
+   * EVERY SLOT IS A TARGET FOR EVERY STEP, including a Split's own subtree.
    *
-   * The subtree is computed ONCE PER DRAG, not per pointer move. It was the
-   * latter, on the reasoning that a DFS over a few dozen edges is cheap — which
-   * is true of one call and false of the sixty a second a drag actually makes,
-   * each one also doing a linear `nodes.find` and allocating a Set. A drag is
-   * the one interaction in this product that must not stutter, and the graph it
-   * walks cannot change while a card is in the air.
-   *
-   * Falling back to `null` when the id is not the held card is SAFE rather than
-   * merely convenient: this filter is a courtesy that stops an impossible slot
-   * lighting up, and `moveWiring` refuses the same move outright. The wall is
-   * there; this is the handrail.
+   * This used to skip slots inside the held hub's descendants, because a hub
+   * travels with its branches and a drop in its own lane would ring. The cost
+   * of that shortcut was that a Split could only ever move UP — everything
+   * below it IS its subtree, so every `+` beneath it was dead and dragging it
+   * down did nothing at all. `moveWiring` handles the case properly now: the
+   * lane it lands in is cut and the others travel, with a cycle check as the
+   * backstop. So there is nothing left for this to filter.
    */
-  const draggingSubtree = useMemo(
-    () => (dragging && nodes.find((n) => n.id === dragging)?.type === "paths" ? descendantsOf(dragging, edges) : null),
-    [dragging, nodes, edges],
-  );
-
   const slotFor = useCallback(
     (id: string, at: { x: number; y: number }) => {
-      const inside = id === dragging ? draggingSubtree : null;
       let best: (typeof dropSlots)[number] | null = null;
       let bestD = Infinity;
       for (const s of dropSlots) {
         if (s.after === id) continue;
-        if (inside && s.after && inside.has(s.after)) continue;
         const d = Math.hypot(s.x - at.x, s.y - at.y);
         if (d < bestD) {
           bestD = d;
@@ -1700,7 +1720,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       // possible, and "somewhere over there" is the shape of a mistake.
       return best && bestD < DROP_REACH ? best : null;
     },
-    [dropSlots, dragging, draggingSubtree],
+    [dropSlots],
   );
 
   /**
@@ -1808,6 +1828,17 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
             onDeleteNode: requestDelete,
             onDuplicateNode: duplicateNode,
             beingDragged: dragging === n.id,
+            /**
+             * The terminal "Add next step" steps aside while a card is being
+             * dropped onto its spot — the placeholder takes that exact position
+             * (see TAIL_SLOT_Y), and two dashed cards in one place reads as a
+             * rendering fault rather than as a target.
+             *
+             * A tail slot is the only one that can name a TERMINAL node: a
+             * mid-chain slot exists because the step has a child, and a step
+             * with a child is not terminal.
+             */
+            hideTailAdd: dropSlot?.after === n.id && !dropSlot.handle,
           },
         };
       }),

@@ -281,8 +281,11 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         <Handle type="source" position={Position.Bottom} style={HIDDEN_HANDLE} />
       ) : null}
 
-      {/* One "Add next step" at the end of a plain branch. */}
-      {data.isTerminal && t !== "output" && !isPaths && (
+      {/* One "Add next step" at the end of a plain branch — hidden while a
+          dragged card is being dropped onto exactly this spot, because the drop
+          placeholder occupies it (flow-canvas: TAIL_SLOT_Y / hideTailAdd) and
+          two dashed cards in one position read as a rendering fault. */}
+      {data.isTerminal && t !== "output" && !isPaths && !data.hideTailAdd && (
         <button
           data-add-btn={id}
           onClick={(e) => {
