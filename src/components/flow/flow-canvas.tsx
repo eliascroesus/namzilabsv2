@@ -169,31 +169,37 @@ function setupHint(type: string, cfg: Record<string, unknown>, inputCount: numbe
 const nodeTypes = Object.fromEntries(ALL_TYPES.map((t) => [t, FlowNodeCard])) as Record<string, typeof FlowNodeCard>;
 const edgeTypes = { insert: InsertEdge };
 
-/** A step card's height. */
-const CARD_H = 86;
 /**
- * WHERE A LINE'S LAST SLOT SITS, measured from the top of the last card.
- *
- * IT IS EXACTLY WHERE A MID-LINE SLOT SITS, and that is the whole requirement.
- * A slot between two cards lands at the midpoint of the gap between them —
- * `(cardTop + CARD_H + childTop) / 2`, and `childTop - cardTop` is `ROW_PITCH`,
- * so the offset is `(CARD_H + ROW_PITCH) / 2`. A line's end has no child to
- * measure against, so it borrows the same arithmetic rather than inventing a
- * number, and the placeholder sits at one distance from its card everywhere on
- * the canvas.
- *
- * Half a card gap below the card (128) was the version that got reported. It
- * put the placeholder's top edge 1px ABOVE the last card's bottom, so the gap
- * opened INSIDE the card it was meant to open under, while the terminal "Add
- * next step" button stayed lit across the same 56px — two dashed cards in one
- * column, neither of them where a step would actually land. At `TAIL_SLOT_Y`
- * the placeholder clears the card by 30px, which is exactly what it clears the
- * card above it by in the middle of a line.
- *
- * The button that occupies this spot steps aside rather than being dodged: see
- * `hideTailAdd`. Exactly one dashed card is ever in this position.
+ * A step card's height — the PLAIN one, and only a fallback for the frame
+ * before React Flow has measured the real card. Cards are not one size: the
+ * publish footer and a result line each add to it. Anything that has to clear a
+ * specific card asks that card (`n.measured?.height`).
  */
-const TAIL_SLOT_Y = (CARD_H + ROW_PITCH) / 2;
+const CARD_H = 86;
+/** The drop placeholder's own height — DropSlotNode's `h-[86px]`. */
+const SLOT_H = 86;
+/**
+ * THE CLEAR SPACE BETWEEN A CARD AND THE PLACEHOLDER UNDER IT, everywhere on
+ * the canvas. One number, so the gap under the last card in a line is the gap
+ * between any two cards, which is the whole of what was asked for.
+ *
+ * It is not a taste value, it is what a mid-line gap already has room for: two
+ * cards sit `ROW_PITCH` apart, a plain card is `CARD_H` tall, and the
+ * placeholder is `SLOT_H` — so the space left over, split above and below,
+ * is this. Centring a placeholder between two plain cards produces exactly this
+ * clearance, and the end of a line now copies it rather than deriving a
+ * position of its own.
+ *
+ * The end of a line has been wrong twice, both times because it was measured
+ * off something other than the card's own bottom edge: half a card gap (128)
+ * put the placeholder's top 1px INSIDE the card, and `(CARD_H + ROW_PITCH) / 2`
+ * fixed that for a plain card while leaving a footered one — the taller card,
+ * and the one in the screenshot — with about 9px of air instead of 30.
+ *
+ * The terminal "Add next step" that occupies this spot steps aside rather than
+ * being dodged: see `hideTailAdd`. Exactly one dashed card is ever there.
+ */
+const SLOT_CLEARANCE = (ROW_PITCH - CARD_H - SLOT_H) / 2;
 /**
  * How far to the side of a first step its "own lane" slot sits — one card
  * width plus a clear margin, so the slot reads as beside the flow rather than
@@ -1618,36 +1624,59 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
   /**
    * Every place a step can be dropped, as a point on the canvas.
    *
-   * A chain slot sits under its step. A Split's branches are keyed by the
-   * position of each branch's current head, so dropping there means "become
-   * this branch's first step" — the one thing a hub with several lanes leaves
-   * genuinely ambiguous otherwise.
+   * A chain slot sits under its step. A hub contributes NONE — see below.
    */
   const dropSlots = useMemo(() => {
     const out: Array<{ x: number; y: number; after?: string; handle?: string; root?: boolean }> = [];
     /**
-     * The gap between a card and the one under it — where its `+` sits.
+     * WHERE THE GAP UNDER A CARD OPENS, measured from that card's REAL bottom.
      *
-     * A LINE'S END HAS NO CHILD to measure a midpoint against, so it borrows
-     * the mid-line arithmetic instead: see `TAIL_SLOT_Y`. Both branches of this
-     * expression put the slot the same distance below the card it follows.
+     * `height` is the rendered height, not `CARD_H`. A card is not one size:
+     * the publish footer ("On your dashboard") adds a whole strip, and a step
+     * with a result line is taller than one without. Measuring from a constant
+     * 86 put the placeholder a few pixels under a plain card and hard up
+     * against a footered one — the same drop, two different spacings, which is
+     * exactly how it was reported.
+     *
+     * A LINE'S END has no child to find a midpoint against, so it takes the
+     * clearance directly: `SLOT_CLEARANCE` below the card's bottom edge. That
+     * is the same clear space a mid-line placeholder leaves, so the gap under
+     * the last card looks like the gap between any two.
      */
-    const gapY = (top: number, childTop: number | null) =>
-      childTop == null ? top + TAIL_SLOT_Y : (top + CARD_H + childTop) / 2;
+    const gapY = (top: number, height: number, childTop: number | null) =>
+      childTop == null ? top + height + SLOT_CLEARANCE + SLOT_H / 2 : (top + height + childTop) / 2;
 
     for (const n of nodes) {
       const p = layout.get(n.id);
       if (!p) continue;
+      /**
+       * THIS card's height, not a card's height. React Flow measures every node
+       * it renders and writes the result back through `onNodesChange`, so this
+       * is the real box on screen — footer, result line and all. `CARD_H` is
+       * only the answer for the one frame before that measurement lands.
+       */
+      const h = n.measured?.height ?? CARD_H;
       if (n.type === "paths") {
-        for (const e of edges) {
-          if (e.source !== n.id || !e.sourceHandle) continue;
-          const tp = layout.get(e.target);
-          if (tp) out.push({ x: tp.x, y: gapY(p.y, tp.y), after: n.id, handle: e.sourceHandle });
-        }
+        /**
+         * A HUB OFFERS NO SLOT OF ITS OWN, and that is the fix for "nodes are
+         * able to be placed in between the Split and Path nodes".
+         *
+         * There used to be one per branch, sitting in the gap above each Path
+         * card, and dropping there meant "become this branch's first step" —
+         * which pushed the auto-created "Path A" card into second place and
+         * broke the one thing those cards promise by being named that. There is
+         * no `+` in that gap either (branch edges get no insert affordance), so
+         * the drop was offering a position the canvas never advertised.
+         *
+         * A branch's head is its Path card, permanently. Steps join a branch by
+         * landing UNDER that card, which is an ordinary chain slot the Path card
+         * already contributes on the pass below. Nothing is lost; one wrong
+         * target is.
+         */
       } else {
         const kid = edges.find((e) => e.source === n.id && !e.sourceHandle && e.targetHandle == null)?.target;
         const kp = kid ? layout.get(kid) : null;
-        out.push({ x: p.x, y: gapY(p.y, kp?.y ?? null), after: n.id });
+        out.push({ x: p.x, y: gapY(p.y, h, kp?.y ?? null), after: n.id });
       }
       /**
        * A LANE OF ITS OWN IS A PLACE, NOT AN ABSENCE.
@@ -1657,8 +1686,12 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
        * into empty space — and dragging a little too far sideways silently
        * meant "detach this". Every root gets a slot beside it instead: a
        * target you can see, aim at, and miss.
+       *
+       * Level with the middle of the card it sits beside, so it reads as that
+       * card's alternative — which needs the card's own height for the same
+       * reason the gap below it does.
        */
-      if ((inDegreeById.get(n.id) ?? 0) === 0) out.push({ x: p.x + LANE_OFFSET, y: p.y + CARD_H / 2, root: true });
+      if ((inDegreeById.get(n.id) ?? 0) === 0) out.push({ x: p.x + LANE_OFFSET, y: p.y + h / 2, root: true });
     }
     return out;
   }, [nodes, edges, layout, inDegreeById]);
@@ -1684,13 +1717,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    * as every other card does, including into and out of the branch. What is
    * locked is picking these two kinds of card UP.
    *
-   * MEMBERSHIP IS A FACT ABOUT WIRING, NOT ABOUT A NODE. "Is a branch head" is
-   * read from the hub's handles every render, so it follows the graph: drop a
-   * step into the slot above a Path card and that step becomes the head, takes
-   * the lock, and the Path card it displaced becomes an ordinary step inside
-   * the branch that can be dragged like any other. That is a consequence of the
-   * hub still offering a slot per branch (see `dropSlots`); remove those slots
-   * and the group is fixed for the life of the Split.
+   * MEMBERSHIP IS A FACT ABOUT WIRING, read from the hub's handles every
+   * render — and nothing a user can do re-points those handles, because the hub
+   * offers no drop slot of its own (see `dropSlots`). A step cannot be inserted
+   * between a Split and a Path card, so the group a Split is born with is the
+   * group it keeps.
    */
   const splitGroupIds = useMemo(() => {
     // Read from `hubs`, written to `locked`: a branch head that is ITSELF a hub

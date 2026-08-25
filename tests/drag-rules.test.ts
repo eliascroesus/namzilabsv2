@@ -62,6 +62,26 @@ describe("what a user may pick up", () => {
     expect(all[0]).toMatch(/draggable: !splitGroupIds\.has\(n\.id\),/);
   });
 
+  it("offers no slot between a Split and a Path card", () => {
+    /**
+     * "Nodes are able to be placed in between the split and path nodes, which
+     * should absolutely not be possible — there is no + there."
+     *
+     * That is the whole argument. A branch edge gets no insert affordance, so a
+     * hub advertising a drop target in that gap was offering a position nothing
+     * on the canvas said existed — and taking it pushed the auto-created "Path
+     * A" card into second place, which is the one thing a card named Path A
+     * promises not to be. Steps join a branch by landing UNDER its Path card.
+     *
+     * The hub branch of the loop must therefore push nothing at all.
+     */
+    const hubBranch = canvas.match(/if \(n\.type === "paths"\) \{([\s\S]*?)\n {6}\} else \{/);
+    expect(hubBranch, "the hub's arm of the dropSlots loop has moved").not.toBeNull();
+    expect(hubBranch![1], "a hub is contributing a drop slot again").not.toMatch(/out\.push/);
+    // And the affordance it would have shadowed is still withheld.
+    expect(canvas).toMatch(/onInsert: e\.sourceHandle \? undefined : insertOnEdge/);
+  });
+
   it("keeps the wall behind the lock rather than only the lock", () => {
     // A hub cannot be picked up, so `moveWiring` can no longer be handed one by
     // a drag — but it is still given `nodes`, which is what makes it refuse.
@@ -70,36 +90,49 @@ describe("what a user may pick up", () => {
 });
 
 describe("the end-of-line drop slot", () => {
-  it("borrows the mid-line gap's arithmetic instead of inventing a number", () => {
+  it("is measured off THIS card's bottom, not off a constant card height", () => {
     /**
-     * A slot between two cards lands at the midpoint of the gap between them —
-     * `(cardTop + CARD_H + childTop) / 2`, where `childTop - cardTop` is
-     * ROW_PITCH. A line's end has no child to measure against, so it reuses the
-     * same expression.
+     * The bug behind "the spacing on placeholder end node should be bigger".
+     * Cards are not one size — the publish footer ("On your dashboard") adds a
+     * whole strip — so a slot placed at a fixed offset from the card's TOP
+     * leaves a plain card 30px of air and a footered one about 9px. Same drop,
+     * two spacings.
      *
-     * Spelled as the sum, not as the answer: `= 159` would be a magic number
-     * that survives every future change to the pitch it is derived from.
+     * React Flow measures what it renders, so the card can simply be asked.
      */
-    expect(canvas).toMatch(/const TAIL_SLOT_Y = \(CARD_H \+ ROW_PITCH\) \/ 2;/);
-    expect(canvas).toMatch(/childTop == null \? top \+ TAIL_SLOT_Y : \(top \+ CARD_H \+ childTop\) \/ 2/);
+    expect(canvas).toMatch(/const h = n\.measured\?\.height \?\? CARD_H;/);
+    expect(canvas).toMatch(/childTop == null \? top \+ height \+ SLOT_CLEARANCE \+ SLOT_H \/ 2 : \(top \+ height \+ childTop\) \/ 2/);
+    // `CARD_H` may no longer stand in for a real card anywhere a gap is placed.
+    expect(canvas).not.toMatch(/gapY\(p\.y, CARD_H/);
+    expect(canvas).not.toMatch(/\(top \+ CARD_H \+ childTop\) \/ 2/);
   });
 
-  it("clears the last card by the same margin a mid-line slot clears its own", () => {
+  it("leaves the same clear space a mid-line slot leaves, by construction", () => {
+    /**
+     * Spelled as the leftover room in a row rather than as `30`: two cards sit
+     * ROW_PITCH apart, the card takes CARD_H of that and the placeholder
+     * SLOT_H, and what is left splits above and below. A magic 30 would survive
+     * every future change to the pitch it is derived from.
+     */
+    expect(canvas).toMatch(/const SLOT_CLEARANCE = \(ROW_PITCH - CARD_H - SLOT_H\) \/ 2;/);
+
     const CARD_H = constant("CARD_H");
-    const SLOT_H = slotHeight();
-    // The placeholder is centred on the slot's point (`translateY(-50%)`), so
-    // its top edge is half its height above it.
-    const clearance = (CARD_H + ROW_PITCH) / 2 - SLOT_H / 2 - CARD_H;
+    const SLOT_H = constant("SLOT_H");
+    expect(SLOT_H, "SLOT_H no longer matches DropSlotNode's own height").toBe(slotHeight());
+
+    // The property the eye actually checks: a placeholder centred between two
+    // plain cards clears each of them by exactly SLOT_CLEARANCE.
+    const clearance = (ROW_PITCH - CARD_H - SLOT_H) / 2;
+    const midCentre = (CARD_H + ROW_PITCH) / 2;
+    expect(midCentre - SLOT_H / 2 - CARD_H).toBe(clearance);
     expect(clearance, "the placeholder opens INSIDE the card it follows").toBeGreaterThan(0);
 
-    // Half a card gap below the card is what was reported: at 128 the
-    // placeholder's top edge sat 1px above the card's bottom, so the gap opened
-    // inside the card and the terminal button stayed lit across the same band.
-    expect(86 + 84 / 2 - SLOT_H / 2 - CARD_H).toBeLessThan(0);
-
-    // Nor is it the terminal button's own centre — 13px short of a real gap,
-    // which is close enough to read as a mistake rather than a decision.
-    expect((CARD_H + ROW_PITCH) / 2).not.toBe(CARD_H + 32 + 28);
+    // Both earlier end-of-line values, kept as the things this must not become.
+    // Half a card gap (128) opened the gap 1px inside the card; the mid-line
+    // centre (159) was right for a plain card and ~9px for a footered one.
+    const FOOTERED = 119;
+    expect(CARD_H + 84 / 2 - SLOT_H / 2 - CARD_H).toBeLessThan(0);
+    expect(midCentre - SLOT_H / 2 - FOOTERED).toBeLessThan(clearance);
   });
 
   it("takes the terminal button's place rather than sitting beside it", () => {
