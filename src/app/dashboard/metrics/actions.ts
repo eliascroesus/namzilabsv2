@@ -5,6 +5,7 @@ import { requireOrg } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { getDb } from "@/db/client";
 import { createMetric, deleteMetric } from "@/lib/metrics/store";
+import { forgetTilePlacements } from "@/lib/board/store";
 import { MetricDefinitionSchema } from "@/lib/metrics/types";
 
 function s(fd: FormData, key: string): string {
@@ -18,7 +19,7 @@ function numOrNull(v: string): number | null {
 export async function createAggregateMetricAction(fd: FormData): Promise<void> {
   const ctx = await requireOrg();
   const { orgId } = ctx;
-  // "Create & edit flows" covers metrics — they were one clause in the ask
+  // "Create & edit flows" covers metrics â they were one clause in the ask
   // ("create new flows/metrics") and they are one bundle of build power here.
   {
     const access = await effectiveAccess(getDb(), ctx);
@@ -58,7 +59,7 @@ export async function createAggregateMetricAction(fd: FormData): Promise<void> {
 export async function createFunnelMetricAction(fd: FormData): Promise<void> {
   const ctx = await requireOrg();
   const { orgId } = ctx;
-  // "Create & edit flows" covers metrics — they were one clause in the ask
+  // "Create & edit flows" covers metrics â they were one clause in the ask
   // ("create new flows/metrics") and they are one bundle of build power here.
   {
     const access = await effectiveAccess(getDb(), ctx);
@@ -84,19 +85,22 @@ export async function createFunnelMetricAction(fd: FormData): Promise<void> {
 export async function deleteMetricAction(fd: FormData): Promise<void> {
   const ctx = await requireOrg();
   const { orgId } = ctx;
-  // "Create & edit flows" covers metrics — they were one clause in the ask
+  // "Create & edit flows" covers metrics â they were one clause in the ask
   // ("create new flows/metrics") and they are one bundle of build power here.
   {
     const access = await effectiveAccess(getDb(), ctx);
     if (!access.can("create_flows")) redirect("/dashboard?error=rank");
   }
   const id = s(fd, "id");
-  // You cannot delete what your rank cannot see — a hidden metric must not be
+  // You cannot delete what your rank cannot see â a hidden metric must not be
   // enumerable or destructible by POSTing ids.
   if (id) {
     const access = await effectiveAccess(getDb(), ctx);
     if (!access.canSeeMetric(`metric:${id}`)) redirect("/dashboard");
     await deleteMetric(orgId, id);
+    // And where it sat on the board. The only cleanup path there is — see
+    // forgetTilePlacements.
+    await forgetTilePlacements(getDb(), orgId, `metric:${id}`);
   }
   redirect("/dashboard");
 }

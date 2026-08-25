@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createTestDb } from "./helpers/testdb";
 import { dashboardGroups, dashboardTilePlacements } from "@/db/schema";
-import { listBoardGroups, listTilePlacements } from "@/lib/board/store";
+import { forgetTilePlacements, listBoardGroups, listTilePlacements } from "@/lib/board/store";
 import type { DB } from "@/db/types";
 
 /**
@@ -165,5 +165,47 @@ describe("a failed read is a load error, never an empty board", () => {
     // that their layout.
     await db.execute(sql`DROP TABLE ${dashboardGroups} CASCADE`);
     await expect(listBoardGroups(db, A)).rejects.toThrow();
+  });
+});
+
+describe("forgetting a deleted metric's place", () => {
+  it("clears one flow's tiles and leaves another flow's alone", async () => {
+    /**
+     * THE ONLY CLEANUP PATH. One flow can publish several tiles, so the prefix
+     * has to sweep them all — and the trailing colon is what stops deleting
+     * flow "ab" from also forgetting flow "abc", which is the kind of bug that
+     * only shows up once a workspace has enough flows for the ids to collide.
+     */
+    await db.insert(dashboardTilePlacements).values([
+      { orgId: A, tileKey: "flow:ab:n1", groupId: null, pos: "i" },
+      { orgId: A, tileKey: "flow:ab:n2", groupId: null, pos: "j" },
+      { orgId: A, tileKey: "flow:abc:n1", groupId: null, pos: "k" },
+      { orgId: A, tileKey: "metric:m1", groupId: null, pos: "m" },
+      { orgId: B, tileKey: "flow:ab:n1", groupId: null, pos: "i" },
+    ]);
+
+    await forgetTilePlacements(db, A, "flow:ab:");
+    expect((await listTilePlacements(db, A)).map((p) => p.tileKey).sort()).toEqual(["flow:abc:n1", "metric:m1"]);
+    // And never another workspace's, even for the identical key.
+    expect(await listTilePlacements(db, B)).toHaveLength(1);
+  });
+
+  it("clears a classic metric by its own key", async () => {
+    await db.insert(dashboardTilePlacements).values([
+      { orgId: A, tileKey: "metric:m1", groupId: null, pos: "i" },
+      { orgId: A, tileKey: "metric:m2", groupId: null, pos: "j" },
+    ]);
+    await forgetTilePlacements(db, A, "metric:m1");
+    expect((await listTilePlacements(db, A)).map((p) => p.tileKey)).toEqual(["metric:m2"]);
+  });
+
+  it("does not treat a wildcard in the key as a wildcard", async () => {
+    // The pattern is BOUND as a parameter, so a flow id carrying a % cannot
+    // widen the match into everything the workspace has.
+    await db.insert(dashboardTilePlacements).values([
+      { orgId: A, tileKey: "metric:keepme", groupId: null, pos: "i" },
+    ]);
+    await forgetTilePlacements(db, A, "metric:%");
+    expect(await listTilePlacements(db, A)).toHaveLength(1);
   });
 });

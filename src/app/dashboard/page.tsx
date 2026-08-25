@@ -575,7 +575,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             {/* The ARRANGEMENT is the client's; the CARDS are still rendered
                 here, on the server, and passed through as `node`. With no
                 groups this emits the same BOARD_GRID markup it always did. */}
-            <BoardLayout tiles={boardTiles} groups={groups} placements={placements} />
+            <BoardLayout tiles={boardTiles} groups={groups} placements={placements} canEdit={access.can("create_flows")} />
           </TileArea>
         )}
         </BoardControls>

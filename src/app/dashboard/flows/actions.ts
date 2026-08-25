@@ -12,6 +12,7 @@ import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { dateColumnChoice, dateColumnNote, dateColumnSettings, setDateColumn, type DateColumnChoice } from "@/lib/sync/date-column";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow, getFlow, setFlowEnabled, type FlowState } from "@/lib/flow/store";
 import { CapError } from "@/lib/limits";
+import { forgetTilePlacements } from "@/lib/board/store";
 import { sampleAppFields } from "@/lib/flow/engine";
 import { materializeFlow, materializeStaleAll } from "@/lib/flow/materialize";
 import { parseGraph } from "@/lib/flow/types";
@@ -153,6 +154,11 @@ export async function deleteFlowAction(id: string): Promise<{ ok: true } | { ok:
   if (await blockedFromEditingFlows(ctx, id)) return { ok: false, error: RANK_BLOCKS_FLOWS };
   try {
     await deleteFlow(getDb(), orgId, id);
+    // Where its tiles sat on the board goes with it. This is the ONLY place a
+    // placement is cleaned up: republishing a flow deliberately keeps them, so
+    // that re-adding an Output returns its metric to the column it was in.
+    // One flow can publish several tiles, hence the prefix.
+    await forgetTilePlacements(getDb(), orgId, `flow:${id}:`);
     revalidatePath("/dashboard/flows");
     return { ok: true };
   } catch (e) {

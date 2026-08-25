@@ -40,3 +40,30 @@ export function connectionCap(): number {
 export function flowCap(): number {
   return intEnv("MAX_FLOWS_PER_ORG", 25);
 }
+
+/**
+ * How many columns one workspace may put on its dashboard.
+ *
+ * A blast-radius bound like the two above rather than a product decision:
+ * twelve columns is already more than fits on any screen, and the number exists
+ * so a runaway client cannot mint ten thousand rows, not to tell anyone how to
+ * organise their metrics.
+ */
+export function boardGroupCap(): number {
+  return intEnv("MAX_BOARD_GROUPS_PER_ORG", 24);
+}
+
+/**
+ * How many saved tile positions one workspace may hold.
+ *
+ * Bounded in practice by the number of metrics, and unbounded in principle:
+ * placements outlive their tiles ON PURPOSE, so the ceiling is every tile the
+ * workspace has ever published. Deleting the flow or metric clears them; this
+ * is what catches the case where nobody does.
+ *
+ * It doubles as the batch limit on the placement write, so a single request
+ * cannot ask for more rows than the workspace is allowed to have.
+ */
+export function boardPlacementCap(): number {
+  return intEnv("MAX_BOARD_PLACEMENTS_PER_ORG", 500);
+}
