@@ -36,6 +36,66 @@ export const NODE_ACCENT: Record<string, string> = {
   output: "#F76262",
 };
 
+/**
+ * THE BOARD-GROUP PALETTE — a second vocabulary, in the same file on purpose.
+ *
+ * A step's colour is IDENTITY: a Filter is always indigo, and the map above is
+ * a lookup, not a choice. A group's colour is a LABEL the customer picked for a
+ * column they named. Two different jobs, so two different maps — kept in one
+ * home because a hex with two homes is exactly the drift this file's check-ui
+ * allowlist entry exists to prevent, and because `luminance` is right here.
+ *
+ * They are a separate const rather than extra keys in NODE_ACCENT because
+ * `nodeAccent()` falls through that map by type name: a group hue that happened
+ * to answer a node-type lookup is a coincidence waiting to be a bug.
+ *
+ * TEN HUES, SPACED BY WHAT THE EYE CAN SEPARATE AT DOT SIZE — which is a much
+ * stricter test than a swatch. Two hues 15° apart are obviously different at
+ * 40px and identical at the 8px dot a column header wears, which is why real
+ * yellow (40°) is absent: beside orange (25°) it read as one colour twice.
+ *
+ * Eight are the step palette's own values, restated rather than re-picked —
+ * one green in this product, not two. Only `grey` and `teal` are new, and both
+ * are solved the same way everything above is: saturation near the top of the
+ * gamut, then lightness down to the highest value still clearing 3.05:1 against
+ * white. Teal sits at 168° rather than the 172° that first suggested itself,
+ * because 27° of separation from blue survives at dot size and 21° does not.
+ *
+ * `grey` is the exception to the solve, and deliberately: it is the "no colour"
+ * default, so it comes from the kit's own warm neutral ramp
+ * (`--color-neutral-500`, the same value `--muted-foreground` uses) rather than
+ * being pushed to the contrast edge. A neutral has no vividness to preserve,
+ * and the edge-solved version was a washed-out beige that read as a rendering
+ * fault next to nine confident hues.
+ */
+export const GROUP_ACCENT: Record<string, string> = {
+  grey: "#6b6660", //  --color-neutral-500, the kit's own warm grey
+  red: "#F76262", //   0°
+  orange: "#F66700", //  25°
+  olive: "#71A20D", //  75°
+  green: "#0EAB0E", // 120°
+  teal: "#00A786", // 168° — the one real gap in the wheel
+  blue: "#009ED3", // 195°
+  indigo: "#8176F9", // 245°
+  violet: "#D95FF2", // 290°
+  pink: "#F856A7", // 330°
+};
+
+/** The order the picker offers them in — round the wheel, grey first. */
+export const GROUP_COLOR_KEYS = Object.keys(GROUP_ACCENT);
+
+/**
+ * The colour a group wears.
+ *
+ * An unknown key reads as grey and never throws, which is what lets the column
+ * store a KEY instead of a hex: re-solving a hue changes every board at once
+ * with no backfill, and a key this map has since dropped degrades to the
+ * default rather than rendering `undefined` into a style attribute.
+ */
+export function groupAccent(key: string): string {
+  return GROUP_ACCENT[key] ?? GROUP_ACCENT.grey;
+}
+
 /** Relative luminance, sRGB. */
 function luminance(hex: string): number {
   const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);

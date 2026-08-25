@@ -27,7 +27,7 @@ vi.mock("next/link", () => ({
 // under test is what the tile SAYS.
 vi.mock("@/app/dashboard/flows/actions", () => ({ refreshFlowAction: async () => {} }));
 
-import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
+import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 
 const COMPUTED_AT = new Date(Date.now() - 2 * 3_600_000);
 
@@ -204,5 +204,49 @@ describe("the delta beside the headline", () => {
 
   it("still reads Today against Yesterday", () => {
     expect(render(row(), "today")).toContain("vs yesterday");
+  });
+});
+
+/**
+ * THE SORT AND THE CARD MUST AGREE ABOUT WHETHER THERE IS A NUMBER.
+ *
+ * `tileValueForRange` exists so the dashboard's "Value high→low" group sort
+ * ranks tiles by the figure a customer can SEE. That makes it a second reader
+ * of the three-state range logic above — the state that once put an all-time
+ * figure under the "Today" pill behind a green badge — so these pin the two
+ * together rather than trusting them to stay in step.
+ *
+ * The property, stated once: the helper returns null in exactly the cases the
+ * card renders an em-dash.
+ */
+describe("the value the board sorts on", () => {
+  const cases: Array<[string, FlowResultRow, string | undefined]> = [
+    ["a range with an entry", row(), "today"],
+    ["a range with no entry", row(), "upcoming"],
+    ["a range the tile marked unavailable", row({ tile: { ...(row().tile as object), byRange: { today: { unavailable: "No denominator" } } } }), "today"],
+    ["no range at all", row(), undefined],
+    ["a tile that has never computed", row({ tile: null, status: "error", error: "boom" }), "today"],
+  ];
+
+  for (const [name, r, rangeKey] of cases) {
+    it(`agrees with the card for ${name}`, () => {
+      const html = render(r, rangeKey);
+      // The card's em-dash lives in the stat numeral; a real number never does.
+      const showsDash = html.includes(">—</p>");
+      expect(tileValueForRange(r.tile, rangeKey) == null).toBe(showsDash);
+    });
+  }
+
+  it("never reports zero for an absent number", () => {
+    // An em-dash is not a small number. A sort that treated it as zero would
+    // file a broken metric in the middle of a healthy column.
+    expect(tileValueForRange(row().tile, "upcoming")).toBeNull();
+    expect(tileValueForRange(null, "today")).toBeNull();
+  });
+
+  it("prefers the windowed figure over the tile's all-time one", () => {
+    // The bug this whole file exists for, asked of the sort instead of the card.
+    expect(tileValueForRange(row().tile, "today")).toBe(3);
+    expect(tileValueForRange(row().tile, undefined)).toBe(12);
   });
 });

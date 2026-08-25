@@ -79,6 +79,31 @@ function fmt(value: number | undefined, t: Tile): string {
   return formatMetricValue(value, t);
 }
 
+/**
+ * THE NUMBER THIS TILE IS SHOWING, OR NULL WHERE IT SHOWS AN EM-DASH.
+ *
+ * Exported because the dashboard's "Value high→low" group sort has to rank
+ * tiles by the figure the customer can SEE, and every other way of getting it
+ * would be a second opinion about the three-state range logic twenty lines
+ * below — the state that already cost a customer three days when the all-time
+ * figure appeared under the "Today" pill.
+ *
+ * It mirrors that block exactly and must keep mirroring it: an unanswered range
+ * and a range with no entry are both "no number", never zero, because a sort
+ * that treats an absent figure as small puts a broken metric in the middle of a
+ * healthy list. `tests/flow-tile-range.test.ts` pins the agreement.
+ */
+export function tileValueForRange(tile: unknown, rangeKey?: string): number | null {
+  const stored = (tile ?? {}) as Tile;
+  const windowed = rangeKey ? stored.byRange?.[rangeKey] : undefined;
+  // A range added after this row was last materialized is absent from it — the
+  // ordinary state of every board for one recompute after a pill ships.
+  if (rangeKey != null && stored.byRange != null && windowed == null) return null;
+  if (windowed?.unavailable) return null;
+  const v = windowed ? windowed.value : stored.value;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
 /** Renders one materialized flow Output as a dashboard tile. */
 export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: string }) {
   const stored = (row.tile ?? {}) as Tile;

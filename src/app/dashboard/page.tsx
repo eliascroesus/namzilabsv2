@@ -9,14 +9,17 @@ import { AppShell } from "@/components/app-shell";
 import { buttonVariants } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
-import { BOARD_GRID, PageContainer, PageHeader } from "@/components/ui/page";
+import { PageContainer, PageHeader } from "@/components/ui/page";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { SourceMark } from "@/components/source-mark";
 import { FunnelView } from "@/components/funnel-view";
-import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
+import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { BoardControls, MetaLine, RangeLink, SourceLink, TileArea } from "./board-controls";
+import { BoardLayout } from "./board-layout";
+import { listBoardGroups, listTilePlacements } from "@/lib/board/store";
+import { tileKeyOfFlow, tileKeyOfMetric, type BoardGroup, type BoardTile, type TilePlacement } from "@/lib/board/types";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
 import { publishedFlowTiles, unpublishedFlowIds } from "@/lib/flow/materialize";
 import { refreshAllFlowsAction } from "@/app/dashboard/flows/actions";
@@ -98,10 +101,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   let sources: string[] = [];
   let connCount = 0;
   let flowCount = 0;
+  let groups: BoardGroup[] = [];
+  let placements: TilePlacement[] = [];
   let loadError: string | null = null;
 
   /**
-   * FOUR READS, DOWN FROM SIX. The event feed and the dead-letter roll-up used
+   * FIVE READS, DOWN FROM SIX. The event feed and the dead-letter roll-up used
    * to run HERE, on the most-rendered page in the product — and not merely on
    * navigation: `FreshnessPoller` calls `router.refresh()` on every results
    * version change, which re-runs this whole component. Two queries per render
@@ -109,9 +114,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    *
    * Both moved to /dashboard/activity, which has room to show fifty rows and
    * runs them only when somebody opens it. See that page's own note.
+   *
+   * The fifth is the board's groups, added when the dashboard learned to hold
+   * columns. It is CONCURRENT with the other four, so it costs no wall clock,
+   * and it is one narrow read of a table that holds a handful of rows per
+   * workspace. Its partner — the placements — is CONDITIONAL and sits below the
+   * try, because a workspace with no groups cannot have any, and at launch
+   * every workspace is that workspace. Same budget as everything else on this
+   * page: whatever runs here runs every twelve seconds in every open tab.
    */
   try {
-    [metrics, sources, connCount, flowCount] = await Promise.all([
+    [metrics, sources, connCount, flowCount, groups] = await Promise.all([
       listMetrics(orgId),
       /**
        * THE SOURCES A WORKSPACE IS CONNECTED TO, not the ones its history
@@ -146,7 +159,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         .from(flows)
         .where(eq(flows.orgId, orgId))
         .then((r) => Number(r[0]?.c ?? 0)),
+      listBoardGroups(db, orgId),
     ]);
+    // THE SECOND BOARD READ, AND THE WHOLE COST ARGUMENT FOR IT. A workspace
+    // with no groups renders the plain grid, so its placements are not merely
+    // unused — they cannot exist. Sequential rather than in the Promise.all
+    // above because it has to know the answer to the first one.
+    if (groups.length > 0) placements = await listTilePlacements(db, orgId);
   } catch (err) {
     // THE EXCEPTION GOES TO THE LOG, NOT TO THE PAGE. This used to set
     // `err.message` and render it verbatim, so a customer's dashboard could
@@ -308,6 +327,61 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     (newest, r) => (r.computedAt && (!newest || r.computedAt > newest) ? r.computedAt : newest),
     null,
   );
+
+  /**
+   * EVERY TILE, PLUS THE FOUR FACTS AN ARRANGEMENT IS COMPUTED FROM.
+   *
+   * The cards are rendered HERE — server components, exactly as before — and
+   * ride through as `node`. `BoardLayout` places them without ever looking
+   * inside one, which is what lets the arrangement be client state while the
+   * expensive half stays on the server.
+   *
+   * THIS ARRAY'S ORDER IS THE DEFAULT ORDER, and it is deliberately the order
+   * the board already had: published flow tiles, then legacy metrics. Anything
+   * a customer has not filed into a column keeps that ranking, so a workspace
+   * that never makes a group sees exactly what it saw yesterday, and a newly
+   * published metric appears at the END of the ungrouped row rather than in the
+   * middle of an arrangement somebody built.
+   */
+  const boardTiles: BoardTile[] = [
+    ...flowTiles.map((row): BoardTile => {
+      const stored = (row.tile ?? {}) as { name?: string; format?: string; currency?: string; unit?: string };
+      const value = tileValueForRange(row.tile, rangeKey);
+      return {
+        key: tileKeyOfFlow(row.flowId, row.outputNodeId),
+        // The same fallback the card itself shows: a row whose tile jsonb is
+        // null has never computed, so the output id is the only honest handle.
+        title: stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`,
+        unitKey: `${stored.format ?? "number"}:${stored.currency ?? ""}:${stored.unit ?? ""}`,
+        value,
+        attention: attentionOf(row, value),
+        node: <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} rangeKey={rangeKey} />,
+      };
+    }),
+    ...tiles.map((tile): BoardTile => {
+      // A legacy metric is computed live and stores no format, so its number is
+      // whatever `MetricTile` puts above the bars — a windowed sum for a series,
+      // the scalar otherwise. Anything else has no headline figure at all.
+      const total =
+        tile.kind === "aggregate" && tile.result.kind === "series"
+          ? tile.result.series.reduce((a, b) => a + b.value, 0)
+          : tile.kind === "aggregate" && tile.result.kind === "scalar"
+            ? tile.result.value
+            : null;
+      return {
+        key: tileKeyOfMetric(tile.metric.id),
+        title: tile.metric.name,
+        unitKey: `number::${tile.metric.unit ?? ""}`,
+        value: total,
+        // A classic metric has no freshness axis — it is recomputed on every
+        // render — so the only thing that can need attention is a failed
+        // compute. Inventing a staleness it cannot have would rank it against
+        // flow tiles on a fact that is not true of it.
+        attention: tile.kind === "error" ? 3 : 0,
+        node: <MetricTile key={tile.metric.id} tile={tile} />,
+      };
+    }),
+  ];
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
@@ -498,14 +572,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           // the alternative is leaving last range's numbers on screen under a
           // pill that now says something else.
           <TileArea count={flowTiles.length + tiles.length}>
-            <div className={`mt-4 items-start ${BOARD_GRID}`}>
-              {flowTiles.map((row) => (
-                <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} rangeKey={rangeKey} />
-              ))}
-              {tiles.map((tile) => (
-                <MetricTile key={tile.metric.id} tile={tile} />
-              ))}
-            </div>
+            {/* The ARRANGEMENT is the client's; the CARDS are still rendered
+                here, on the server, and passed through as `node`. With no
+                groups this emits the same BOARD_GRID markup it always did. */}
+            <BoardLayout tiles={boardTiles} groups={groups} placements={placements} />
           </TileArea>
         )}
         </BoardControls>
@@ -519,6 +589,33 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
  * purpose — the two sit in one grid, and a board where half the cards are
  * built differently is the drift this pass exists to remove.
  */
+/**
+ * HOW LOUDLY A TILE IS ASKING FOR SOMETHING — the rank behind a group's
+ * "Needs attention first" sort.
+ *
+ * Three states that already exist on the row, ordered by how much they cost the
+ * person reading the number: a broken tile is showing nothing, an unpublished
+ * one is showing a number computed from a version of the flow that no longer
+ * exists as drawn, and a stale one is merely behind.
+ *
+ * `importing` is DELIBERATELY not attention. An import reaching backwards
+ * through history is expected work rather than a problem — the card already
+ * treats it as an annotation — and floating every backfilling metric to the top
+ * of its column on the day a workspace connects an app would make the sort
+ * useless exactly when it is most looked at. `computing` is transient for the
+ * same reason.
+ */
+function attentionOf(row: FlowResultRow, value: number | null): 0 | 1 | 2 | 3 {
+  if (row.status === "error") return 3;
+  if (row.unpublished) return 2;
+  // An em-dash under the selected range is a metric that cannot answer the
+  // question being asked of it, which belongs beside "behind" rather than
+  // beside "fine" — the two are the same size of problem from where the
+  // customer is sitting.
+  if (row.status === "stale" || value == null) return 1;
+  return 0;
+}
+
 function MetricTile({ tile }: { tile: Tile }) {
   const { metric } = tile;
   // A sum over the window for a bucketed metric, so the number above the bars
