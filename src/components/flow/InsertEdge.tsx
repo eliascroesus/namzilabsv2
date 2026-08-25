@@ -20,12 +20,16 @@ export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosit
   const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 22 });
   const onInsert = (data as { onInsert?: (edgeId: string, anchor?: { x: number; y: number; leftX?: number }) => void } | undefined)?.onInsert;
   /**
-   * While a step is being carried, every `+` steps aside. The drop placeholder
-   * IS the insert affordance for the length of the drag, and two of them in
-   * the same gap — one round, one dashed — reads as two different things you
-   * could do rather than one thing about to happen.
+   * THIS gap is the one a held card is about to land in, so its `+` steps
+   * aside — two affordances in one spot, one round and one dashed, read as two
+   * different things you could do rather than one thing about to happen.
+   *
+   * Only this one. Every OTHER `+` stays up for the length of the drag, and
+   * that is the point: they are the map of where a step may go, and hiding
+   * them all (which is what this used to do) took the map away at exactly the
+   * moment it was being read.
    */
-  const carrying = (data as { carrying?: boolean } | undefined)?.carrying === true;
+  const carrying = (data as { covered?: boolean } | undefined)?.covered === true;
   return (
     <>
       {/* Colour, width and the dashed pattern come from `.react-flow__edge-path`

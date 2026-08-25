@@ -968,15 +968,74 @@ describe("moveWiring — a Split carries its branches", () => {
    * would have to be both above and below the hub at once — so that lane is cut
    * at the drop point and every OTHER lane travels as usual.
    */
-  it("refuses a drop inside its own group rather than coming apart", () => {
+  it("moves DOWN its own line, with the Path cards travelling along", () => {
     /**
-     * The user's own graph: app -> hub{ pA -> fA -> f5 -> f6, pB -> fB }.
+     * The reported bug, three times over: "I can't move the node further down
+     * the flow than where it is."
      *
-     * An attempt to allow this — "cut the lane you land in" — shipped and was
-     * reverted the same day: it left the Path A card stranded ABOVE the Split
-     * as a plain filter, which is worse than refusing because it looks
-     * deliberate. There is no position under a hub that is not already part of
-     * the hub, so there is nothing to move it to.
+     * The group is the hub and its Path CARDS — not the whole subtree. The
+     * branch's ordinary content is just steps, and steps can flow above a hub
+     * perfectly well. So the run above the drop point rises into the space the
+     * hub left, and everything else stays exactly where it was.
+     */
+    const nodes = [step("Whop"), hub("Split", "pA", "pB"), step("PathA"), step("F5"), step("F6"), step("PathB")];
+    const edges = [
+      E("Whop", "Split"),
+      E("Split", "PathA", { sourceHandle: "pA" }),
+      E("PathA", "F5"),
+      E("F5", "F6"),
+      E("Split", "PathB", { sourceHandle: "pB" }),
+    ];
+    const out = moveWiring("Split", { after: "F5" }, edges, nodes)!;
+    expect(out, "the hub must be movable down its own line").not.toBeNull();
+    const dropped = new Set(out.remove.map((e) => e.id));
+    const next = [...edges.filter((e) => !dropped.has(e.id)), ...out.add];
+    const wires = next.map((e) => `${e.source}${e.sourceHandle ? `[${e.sourceHandle}]` : ""}->${e.target}`).sort();
+
+    expect(wires).toEqual(
+      [
+        "Whop->F5", // content above the drop point rose into the hub's old place
+        "F5->Split", // the hub landed where it was dropped
+        "Split[pA]->PathA", // both Path cards travelled with it, on their own handles
+        "Split[pB]->PathB",
+        "PathA->F6", // content below the drop point stayed in its own lane
+      ].sort(),
+    );
+    expect(hasCycle(next)).toBe(false);
+  });
+
+  it("keeps a displaced step in ITS OWN lane, not always path A", () => {
+    // Drop into path B's content: what B fed must come back under Path B.
+    const nodes = [step("Whop"), hub("Split", "pA", "pB"), step("PathA"), step("PathB"), step("B1"), step("B2")];
+    const edges = [
+      E("Whop", "Split"),
+      E("Split", "PathA", { sourceHandle: "pA" }),
+      E("Split", "PathB", { sourceHandle: "pB" }),
+      E("PathB", "B1"),
+      E("B1", "B2"),
+    ];
+    const out = moveWiring("Split", { after: "B1" }, edges, nodes)!;
+    const dropped = new Set(out.remove.map((e) => e.id));
+    const next = [...edges.filter((e) => !dropped.has(e.id)), ...out.add];
+    const wires = next.map((e) => `${e.source}${e.sourceHandle ? `[${e.sourceHandle}]` : ""}->${e.target}`);
+
+    expect(wires).toContain("Whop->B1");
+    expect(wires).toContain("B1->Split");
+    expect(wires).toContain("PathB->B2"); // B's content, back under B — not A
+    expect(wires).toContain("Split[pA]->PathA");
+    expect(wires).toContain("Split[pB]->PathB");
+    expect(hasCycle(next)).toBe(false);
+  });
+
+  it("refuses only the drop that has no meaning: under its own Path card", () => {
+    /**
+     * A hub CAN move down its own line now — the two tests above — so what is
+     * left refused is the one position with no coherent answer: directly under
+     * one of its own Path cards. The card is part of the group, so there is no
+     * run of content between them to rise, and the hub would end up below a
+     * card that hangs off it.
+     *
+     * Everything else in its own subtree is ordinary content and is allowed.
      */
     const nodes = [step("app"), hub("hub", "pA", "pB"), step("fA"), step("f5"), step("f6"), step("fB")];
     const edges = [
@@ -986,9 +1045,12 @@ describe("moveWiring — a Split carries its branches", () => {
       E("f5", "f6"),
       E("hub", "fB", { sourceHandle: "pB" }),
     ];
-    for (const inside of ["fA", "f5", "f6", "fB"]) {
-      expect(moveWiring("hub", { after: inside }, edges, nodes), `drop after ${inside}`).toBeNull();
-    }
+    // Its own Path cards: no meaning, refused.
+    expect(moveWiring("hub", { after: "fA" }, edges, nodes), "under its own Path A card").toBeNull();
+    expect(moveWiring("hub", { after: "fB" }, edges, nodes), "under its own Path B card").toBeNull();
+    // Ordinary content in its own branch: allowed, which is the whole fix.
+    expect(moveWiring("hub", { after: "f5" }, edges, nodes), "down its own line").not.toBeNull();
+    expect(moveWiring("hub", { after: "f6" }, edges, nodes), "to the end of its own line").not.toBeNull();
   });
 
   /**

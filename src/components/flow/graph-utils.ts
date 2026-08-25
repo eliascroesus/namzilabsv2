@@ -108,6 +108,19 @@ export function structuralEdges(nodes: FNode[], edges: Edge[]): Edge[] {
   return [...byPair.values()];
 }
 
+/**
+ * The vertical distance between one row of cards and the next.
+ *
+ * Row pitch follows the card's HEIGHT the way COL follows its width: the card
+ * grew from ~40px to ~76px (taller again with a publish footer), and the ghost
+ * "Add next step" beneath a terminal needs its own room.
+ *
+ * EXPORTED because the canvas has to place the end-of-line drop slot at the
+ * same distance a mid-line one sits at, and "the same" has to be arithmetic
+ * rather than a number typed twice. See TAIL_SLOT_Y in flow-canvas.
+ */
+export const ROW_PITCH = 232;
+
 /** Assign 1-based step numbers in topological (top-to-bottom, left-to-right) order. */
 export function computeStepNumbers(nodes: FNode[], allEdges: Edge[]): Map<string, number> {
   const edges = structuralEdges(nodes, allEdges);
@@ -236,10 +249,7 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
     }
     return px;
   };
-  // Row pitch follows the card's HEIGHT the way COL follows its width: the
-  // card grew from ~40px to ~76px (taller again with a publish footer), and
-  // the ghost "Add next step" beneath a terminal needs its own room.
-  const ROW = 232;
+  const ROW = ROW_PITCH;
   const MIN_GAP = COL;
   const byDepth = new Map<number, string[]>();
   for (const n of nodes) {
@@ -663,33 +673,80 @@ export function moveWiring(
     if (!target.after) return null;
 
     const carried = descendantsOf(nodeId, edges);
-    /**
-     * Into itself. See above.
-     *
-     * REDUNDANT WITH THE CYCLE BACKSTOP AT THE FOOT OF THIS BRANCH, and
-     * deliberately kept anyway — verified by sabotage, removing either one
-     * alone changes no behaviour. It cannot not be redundant: `after` being
-     * inside `carried` means the hub already reaches it, and no branch edge is
-     * ever removed, so adding `after -> hub` closes a ring every time.
-     *
-     * It stays because it says WHY in one line at the place the question is
-     * asked, and because the backstop is a net rather than a rule. Do not
-     * delete the backstop on the strength of this line, or vice versa: this one
-     * covers the case that is understood, that one covers the cases that are
-     * not.
-     */
-    if (carried.has(target.after)) return null;
 
-    const detached = edges.filter((e) => !incoming.includes(e));
+    /**
+     * ── MOVING A HUB DOWN ITS OWN LINE ─────────────────────────────────────
+     *
+     * THE GROUP IS THE HUB AND ITS PATH CARDS. It is not the whole subtree, and
+     * getting that wrong by one level is what every previous attempt did:
+     *
+     *   - Refusing every in-subtree drop meant a Split could only ever move UP,
+     *     because everything below it is its subtree.
+     *   - "Cut the lane" sent the PATH CARD up to the hub's old parent, which
+     *     stranded Path A above the Split as a plain filter.
+     *
+     * The Path card belongs to the hub and never leaves it. What actually moves
+     * out of the way is the branch's CONTENT — the ordinary steps below the
+     * Path card, which are just steps and can go above the hub perfectly well:
+     *
+     *   1 Whop                    1 Whop
+     *   2 Split                   └─ 5 Filter        <- content above the drop
+     *      ├─ 3 Path A                 └─ 2 Split       point rises into the
+     *      │    └─ 5 Filter                 ├─ 3 Path A  space the hub left
+     *      │         └─ 6 Filter            │    └─ 6 Filter   <- content below
+     *      └─ 4 Path B                      └─ 4 Path B           it stays put
+     *
+     * Every Path card is still on its own handle. Nothing about the group came
+     * apart; the steps flowed around it, which is what dragging a step past
+     * other steps means everywhere else on this canvas.
+     *
+     * `host` is the branch the drop landed in, `seam` its Path card, and
+     * `rising` that card's current child — the top of the run that goes above.
+     */
+    let host: Edge | undefined;
+    let rising: Edge | undefined;
+    if (carried.has(target.after)) {
+      // Captured: narrowing a parameter's property does not survive into a
+      // closure.
+      const after = target.after;
+      host = edges
+        .filter((e) => e.source === nodeId && e.sourceHandle)
+        .find((e) => e.target === after || descendantsOf(e.target, edges).has(after));
+      // Inside the group but down no lane at all is a shape with no answer.
+      if (!host) return null;
+      /**
+       * Dropping the hub directly under its OWN Path card has no meaning: the
+       * card is part of the group, so there is no run of content between them
+       * to rise, and the hub would have to sit below a card that hangs off it.
+       */
+      if (host.target === target.after) return null;
+      rising = edges.find((e) => e.source === host!.target && !e.sourceHandle && e.targetHandle == null);
+      if (!rising) return null;
+    }
+
+    const detached = edges.filter((e) => !incoming.includes(e) && e !== rising);
     const outgoing = target.handle
       ? detached.find((e) => e.source === target.after && e.sourceHandle === target.handle)
       : detached.find((e) => e.source === target.after && !e.sourceHandle && e.targetHandle == null);
 
-    // The tail of path A, or the hub itself when it has no branch wired yet —
-    // a degenerate shape, but one that must still land somewhere rather than
-    // strand the step it displaced.
+    /**
+     * Where a displaced step lands.
+     *
+     * Moving down its own line: under the HOST branch's Path card — that lane
+     * just emptied above the drop point, and the step was already in it, so it
+     * stays in the lane it was always in. Not path A, which may be a different
+     * lane entirely.
+     *
+     * Any other move: the tail of path A, or the hub itself when it has no
+     * branch wired yet — a degenerate shape, but one that must still land
+     * somewhere rather than strand the step it displaced.
+     */
     const firstHead = detached.find((e) => e.source === nodeId && e.sourceHandle === pathHandleIds({ config: configOf(nodeId) })[0])?.target;
-    const landing = firstHead ? chainEndOf(firstHead, typeOf, configOf, detached) : nodeId;
+    const landing = host
+      ? chainEndOf(host.target, typeOf, configOf, detached)
+      : firstHead
+        ? chainEndOf(firstHead, typeOf, configOf, detached)
+        : nodeId;
 
     /**
      * A DISPLACED STEP THAT IS ALREADY OURS IS NOT DISPLACED.
@@ -711,12 +768,27 @@ export function moveWiring(
      * SKIPPED. A target inside `carried` is reachable from the hub by
      * definition, so cutting the direct `after -> target` link cannot orphan
      * it: the hub feeds it through the branch it was always on.
+     *
+     * A move DOWN ITS OWN LINE is the exception: the run that rose above the
+     * hub is no longer downstream of it, so what the drop point used to feed is
+     * genuinely displaced and lands back under that branch's Path card.
      */
-    const rehome = outgoing && !carried.has(outgoing.target) ? outgoing : null;
+    const rehome = outgoing && (rising != null || !carried.has(outgoing.target)) ? outgoing : null;
 
     const result = {
-      remove: [...incoming, ...(outgoing ? [outgoing] : [])],
+      remove: [...incoming, ...(rising ? [rising] : []), ...(outgoing ? [outgoing] : [])],
       add: [
+        // The branch content above the drop point rises into the space the hub
+        // left, under whatever the hub itself hung from.
+        ...(rising
+          ? incoming.map((i) => ({
+              id: eid(),
+              type: "insert",
+              source: i.source,
+              sourceHandle: i.sourceHandle ?? undefined,
+              target: rising!.target,
+            }))
+          : []),
         { id: eid(), type: "insert", source: target.after, sourceHandle: target.handle, target: nodeId },
         ...(rehome
           ? [{ id: eid(), type: "insert", source: landing, target: rehome.target, targetHandle: rehome.targetHandle ?? undefined }]

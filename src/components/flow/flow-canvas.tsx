@@ -89,6 +89,7 @@ import {
   computeVerticalLayout,
   describeInputs,
   descendantsOf,
+  ROW_PITCH,
   isCompareNode,
   laneAncestorIds,
   matchKeepOf,
@@ -173,25 +174,24 @@ const CARD_H = 86;
 /**
  * WHERE A LINE'S LAST SLOT SITS, measured from the top of the last card.
  *
- * This replaces a `CARD_GAP / 2` that was the canvas's last use of that
- * constant — half the layout's inter-card gap, which put the slot 18px above
- * where the eye expects it.
+ * IT IS EXACTLY WHERE A MID-LINE SLOT SITS, and that is the whole requirement.
+ * A slot between two cards lands at the midpoint of the gap between them —
+ * `(cardTop + CARD_H + childTop) / 2`, and `childTop - cardTop` is `ROW_PITCH`,
+ * so the offset is `(CARD_H + ROW_PITCH) / 2`. A line's end has no child to
+ * measure against, so it borrows the same arithmetic rather than inventing a
+ * number, and the placeholder sits at one distance from its card everywhere on
+ * the canvas.
  *
- * The end of a chain already has a card in it — the terminal "Add next step"
- * button — so the drop placeholder must land ON it rather than in the gap
- * above. Anything else draws two dashed cards a few pixels apart, fighting for
- * one position.
+ * It has been wrong in both directions. `CARD_GAP / 2` (128) was too high, and
+ * then aligning it with the terminal "Add next step" button's own centre (146)
+ * was still 13px short of a mid-line gap — close enough to look like a mistake
+ * rather than a decision, which is exactly how it was reported.
  *
- * THIS IS A MEASUREMENT OF ANOTHER FILE, and the only thing keeping the two
- * agreeing is tests/tail-slot.test.ts. FlowNodeCard renders that button
- * `absolute top-full mt-8` — 32px below the card — at 56px tall (`p-3` above
- * and below a 32px `h-8` glyph). Its centre is therefore
- *
- *     CARD_H (86) + mt-8 (32) + half of 56 (28) = 146
- *
- * Change the button's margin, padding or glyph size and this number follows.
+ * The button that already occupies this spot steps aside instead of being
+ * dodged: see `hideTailAdd`. Two dashed cards in one place is a worse problem
+ * than either position.
  */
-const TAIL_SLOT_Y = CARD_H + 32 + 28;
+const TAIL_SLOT_Y = (CARD_H + ROW_PITCH) / 2;
 /**
  * How far to the side of a first step its "own lane" slot sits — one card
  * width plus a clear margin, so the slot reads as beside the flow rather than
@@ -199,12 +199,21 @@ const TAIL_SLOT_Y = CARD_H + 32 + 28;
  */
 const LANE_OFFSET = 360;
 /**
- * How near a slot a released card has to be to join it. Wider than the gap
- * between slots so there is no dead zone between two steps, and narrow enough
- * that a card dragged clear of the flow reads as "give this its own lane"
- * rather than snapping back to the nearest line.
+ * How near a slot a held card has to be for that slot to light up.
+ *
+ * IT WAS 260, WHICH IS WIDER THAN THE GAP BETWEEN SLOTS. Rows are `ROW_PITCH`
+ * (232) apart, so a reach of 260 meant every point on the canvas was inside
+ * some slot's radius — usually two or three at once — and the placeholder
+ * followed the cursor around whether or not it was anywhere near a real
+ * position. Reported as "the hitboxes are too big": the feedback stopped
+ * meaning anything because it was never absent.
+ *
+ * At 110 the radii of two vertically adjacent slots do not meet, so there is a
+ * real band between them where NOTHING lights up, and lanes (a full column
+ * apart) cannot claim a cursor sitting over their neighbour. Landing a card
+ * still only asks for the nearer half of a gap.
  */
-const DROP_REACH = 260;
+const DROP_REACH = 110;
 
 export function FlowCanvas(props: {
   flowId: string;
@@ -1923,10 +1932,27 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       const key = `${e.source}::${e.sourceHandle ?? ""}->${e.target}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge, carrying: dragging != null } });
+      /**
+       * THE `+`s STAY UP WHILE A CARD IS CARRIED, and only the one being
+       * landed on stands down.
+       *
+       * Every `+` used to vanish for the length of a drag. That removed the
+       * only map of where a step is allowed to go at precisely the moment
+       * somebody needs it — you were left dragging over blank canvas hoping a
+       * placeholder would appear. Now they stay, and the drop placeholder
+       * REPLACES the single `+` whose gap it lands in, so the two are never in
+       * one spot and the rest keep saying "here too".
+       *
+       * An insert edge is the gap between its source and its child, so a slot
+       * named `{after, handle}` covers exactly the edge leaving that source on
+       * that handle.
+       */
+      const covered =
+        dropSlot != null && dropSlot.after === e.source && (dropSlot.handle ?? null) === (e.sourceHandle ?? null);
+      out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge, covered } });
     }
     return out;
-  }, [nodes, edges, insertOnEdge, selectedId, dragging]);
+  }, [nodes, edges, insertOnEdge, selectedId, dropSlot]);
 
   const empty = nodes.length === 0;
 
