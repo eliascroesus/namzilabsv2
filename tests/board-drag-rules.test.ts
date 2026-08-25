@@ -88,25 +88,48 @@ describe("pointer capture, not document listeners", () => {
     expect(code(drag)).toMatch(/setPointerCapture\(/);
   });
 
-  it("routes no POINTER event through the document or the window", () => {
+  it("removes every listener it installs, and removes them in one place", () => {
     /**
-     * The rule is about the pointer specifically, and it is narrower than it
-     * first looks. A document-level `pointermove` is the regression: it
-     * outlives its drag and leaves the board following a tile nobody is
-     * holding. Capture is what makes it unnecessary.
+     * THE INVARIANT THAT REPLACED "never listen on the window".
      *
-     * The window listeners that DO exist — `blur` and `keydown` — are the
-     * opposite thing. They are how a drag ENDS when the pointer never comes
-     * back, and forbidding them outright is what produced the frozen ghost.
+     * That rule was written against a real hazard — a document-level listener
+     * that OUTLIVES its drag leaves the board following a tile nobody is
+     * holding — but as a rule it was wrong twice. It forbade the terminators
+     * that end a drag when the pointer never comes back (the frozen ghost), and
+     * it forced `pointermove` onto the element, where it stops tracking the
+     * moment capture fails and the cursor leaves the card.
+     *
+     * What actually prevents the hazard is that the two lists match and one
+     * function owns both. Counted rather than eyeballed.
      */
-    for (const evt of ["pointermove", "pointerup", "pointerdown", "pointercancel"]) {
-      expect(code(drag), `${evt} is listened for on the document`).not.toMatch(
-        new RegExp(`document\\.addEventListener\\("${evt}`),
-      );
-      expect(code(drag), `${evt} is listened for on the window`).not.toMatch(
-        new RegExp(`window\\.addEventListener\\("${evt}`),
-      );
-    }
+    const added = [...code(drag).matchAll(/addEventListener\("(\w+)"/g)].map((m) => m[1]).sort();
+    const removed = [...code(drag).matchAll(/removeEventListener\("(\w+)"/g)].map((m) => m[1]).sort();
+    expect(added.length, "no listeners at all — this test has lost its subject").toBeGreaterThan(3);
+    expect(removed, "a listener is installed that nothing removes").toEqual(added);
+  });
+
+  it("never reaches for the document", () => {
+    // `window` is where a drag's terminators belong; `document` is a third
+    // place to look for the same thing, and two are already enough.
+    expect(code(drag)).not.toMatch(/document\.addEventListener/);
+  });
+
+  it("installs its listeners BEFORE capture, and survives capture throwing", () => {
+    /**
+     * THE BUG BEHIND "I can't drag the metrics inside a group".
+     *
+     * `setPointerCapture` throws — NotFoundError for a pointer the browser no
+     * longer considers active, InvalidStateError for an element it does not
+     * consider connected. It used to run FIRST, so a throw escaped the whole
+     * handler and `addEventListener` never ran: no pointermove, no drag, ever.
+     * The press just selected the card's text instead.
+     *
+     * Capture is an optimisation. An optimisation must not be able to take the
+     * feature down with it.
+     */
+    const body = code(drag);
+    expect(body.indexOf('window.addEventListener("pointermove"')).toBeLessThan(body.indexOf("setPointerCapture"));
+    expect(body).toMatch(/try \{\s*\n\s*el\.setPointerCapture\(e\.pointerId\);\s*\n\s*\} catch/);
   });
 
   it("swallows the click that ends a drop", () => {
@@ -295,7 +318,8 @@ describe("a drag always ends, however it ends", () => {
      * `live.current` stayed set, the rAF loop kept running, and the ghost sat
      * frozen over the board until a reload.
      */
-    expect(code(drag)).toMatch(/addEventListener\("lostpointercapture"/);
+    expect(code(drag)).toMatch(/window\.addEventListener\("pointerup"/);
+    expect(code(drag)).toMatch(/window\.addEventListener\("pointercancel"/);
     expect(code(drag)).toMatch(/window\.addEventListener\("blur"/);
     expect(code(drag)).toMatch(/ev\.key === "Escape"/);
   });
@@ -308,9 +332,9 @@ describe("a drag always ends, however it ends", () => {
   });
 
   it("tears down through one idempotent release, so a double end is harmless", () => {
-    // `lostpointercapture` fires in the ordinary case too, right after
-    // `pointerup` — by which point `finish` has nulled the state and there is
-    // nothing left to do. That ordering is the whole reason this is safe.
+    // More than one terminator can fire for a single ending — a pointercancel
+    // chasing a pointerup, a blur behind both. The first nulls the state and
+    // every one after it finds nothing to do.
     expect(code(drag)).toMatch(/const s = live\.current;\s*\n\s*if \(!s\) return;\s*\n\s*s\.release\(\);/);
   });
 

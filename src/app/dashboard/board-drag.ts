@@ -336,10 +336,6 @@ export function useBoardDrag(
         pointer: { x: e.clientX, y: e.clientY },
         release: () => {},
       };
-      // Capture NOW, before the threshold: without it a fast flick loses its
-      // own pointermove events to whatever is under the cursor.
-      e.currentTarget.setPointerCapture(e.pointerId);
-
       const el = e.currentTarget;
       const onMove = (ev: PointerEvent) => {
         const s = live.current;
@@ -418,20 +414,61 @@ export function useBoardDrag(
         if (ev.key === "Escape") finish(false);
       };
 
-      el.addEventListener("pointermove", onMove);
-      el.addEventListener("pointerup", onUp);
-      el.addEventListener("pointercancel", onAbort);
-      el.addEventListener("lostpointercapture", onAbort);
+      /**
+       * LISTENERS FIRST, CAPTURE SECOND, AND THE CAPTURE IN A TRY.
+       *
+       * The order is the fix for "I can't drag the metrics inside a group".
+       * `setPointerCapture` used to run BEFORE these lines, and it throws —
+       * `NotFoundError` for a pointer the browser no longer considers active,
+       * `InvalidStateError` for an element it does not consider connected. A
+       * throw there escaped the whole handler, so `addEventListener` never ran:
+       * no `pointermove`, no drag, ever, and a `live.current` left set behind
+       * it. The press just selected the card's text instead, which is precisely
+       * what the screenshot shows.
+       *
+       * Capture is an OPTIMISATION — it keeps a fast flick from losing its
+       * moves to whatever is under the cursor — and an optimisation must not be
+       * able to take the feature down with it. Without it the element still
+       * hears moves while the pointer is over it, and the window-level
+       * terminators below still end the drag.
+       *
+       * EVERYTHING IS ON THE WINDOW, and the safety that used to come from
+       * "listen on the element only" now comes from `release`.
+       *
+       * The pointer can leave this element and never return — alt-tab, a click
+       * into the browser's chrome, the OS taking the gesture — so `pointerup`
+       * on the element cannot hear the end of every drag. That was the frozen
+       * ghost. And with capture no longer guaranteed (it is in a `try`), a
+       * `pointermove` on the element would stop tracking the moment the cursor
+       * left the card. Capture RETARGETS a move to the capture element but the
+       * event still propagates, so one window listener sees every move whether
+       * capture took or not.
+       *
+       * The hazard this trades against is real and is handled: a stray
+       * document-level listener that OUTLIVES its drag leaves the board
+       * following a tile nobody is holding. Every listener installed here is
+       * removed by `release`, and `release` is called by `finish`, and `finish`
+       * is what every one of these handlers does. `tests/board-drag-rules`
+       * checks the two lists against each other rather than trusting the eye.
+       */
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onAbort);
       window.addEventListener("blur", onAbort);
       window.addEventListener("keydown", onKey);
       live.current.release = () => {
-        el.removeEventListener("pointermove", onMove);
-        el.removeEventListener("pointerup", onUp);
-        el.removeEventListener("pointercancel", onAbort);
-        el.removeEventListener("lostpointercapture", onAbort);
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onAbort);
         window.removeEventListener("blur", onAbort);
         window.removeEventListener("keydown", onKey);
       };
+
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        // See above: the drag works without it, just less well on a fast flick.
+      }
     },
     [rootRef, onDrop, stopScrolling, tick],
   );
