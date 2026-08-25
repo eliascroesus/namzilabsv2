@@ -879,3 +879,103 @@ export const workspaceOwners = pgTable("workspace_owners", {
   claimedAt: timestamp("claimed_at", { withTimezone: true }).defaultNow().notNull(),
   source: text("source", { enum: ["created", "backfill_earliest"] }).notNull(),
 });
+
+/**
+ * A COLUMN ON THE DASHBOARD — a named, coloured group the customer created to
+ * put their metrics in.
+ *
+ * ORG-SCOPED AND SHARED, with no `user_id`. This is workspace furniture rather
+ * than a per-viewer preference: two people looking at the same dashboard see
+ * the same arrangement, the way a Notion database's groups belong to the
+ * database and not to whoever opened it. Editing is gated on `create_flows` in
+ * the actions; READING is not, so a rank-restricted member sees the shape of
+ * the board without being able to rearrange it.
+ *
+ * `id` is text and app-minted (crypto.randomUUID), for the same reason
+ * `workspace_ranks` is: another table holds it as a plain string, and the
+ * PGlite tests can write one with no uuid extension loaded.
+ *
+ * `color` stores a PALETTE KEY ("blue"), never a hex. Re-solving a hue for
+ * contrast then changes every board at once with no backfill, and an unknown
+ * key degrades to grey instead of rendering `undefined` into a style attribute.
+ * The keys are `GROUP_ACCENT` in src/components/flow/node-accent.ts, which is
+ * the one file check-ui sanctions to hold hexes.
+ *
+ * `pos` is a FRACTIONAL ORDER KEY, not an integer — see src/lib/board/order.ts
+ * for the algebra and the reason. The migration declares it `COLLATE "C"` and
+ * this declaration cannot say so (drizzle-orm 0.45 exposes no collation on a
+ * column), exactly the way `stream_fields_key_uq` under-describes its NULLS NOT
+ * DISTINCT above. The migration file is the truth; the schema audit compares
+ * names and types, so nothing downstream is fooled.
+ */
+export const dashboardGroups = pgTable(
+  "dashboard_groups",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    name: text("name").notNull(),
+    /** A GROUP_ACCENT key. Unknown values read as grey rather than throwing. */
+    color: text("color").notNull().default("grey"),
+    pos: text("pos").notNull(),
+    /** manual | name_asc | name_desc | value_desc | attention */
+    sortKey: text("sort_key").notNull().default("manual"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("dashboard_groups_org_idx").on(t.orgId)],
+);
+
+/**
+ * WHERE ONE TILE SITS ON THE BOARD.
+ *
+ * `group_id` NULL is the ungrouped row above the columns. It is not a special
+ * case — it is the lane whose group is null — so the ordering code has exactly
+ * one shape instead of one shape and an exception.
+ *
+ * THERE IS NO FOREIGN KEY ON `tile_key`, AND THERE CANNOT BE ONE. A flow tile's
+ * identity is (flowId, outputNodeId) in `flow_results`, and `materializeFlow`
+ * DELETES the rows whose outputNodeId left the published set every time a flow
+ * is republished (see the notInArray sweep in src/lib/flow/materialize.ts),
+ * while `flow_results.flow_id` cascades from `flows`. A reference either way
+ * would make republishing a flow silently destroy the customer's layout, or
+ * make the layout block a delete. So placements are allowed to DANGLE and the
+ * read filters them (src/lib/board/arrange.ts).
+ *
+ * That dangling is a feature and not debt: re-add the Output, republish, and
+ * the tile comes back to the column it was in. The only cleanup path is a
+ * deliberate delete of the flow or metric itself.
+ *
+ * `group_id` DOES get one, because this table is ours and nothing deletes from
+ * it behind our back. ON DELETE SET NULL makes "deleting a group returns its
+ * metrics to Ungrouped" a database guarantee rather than an action's good
+ * intentions.
+ *
+ * The primary key is (org_id, tile_key): one placement per tile per workspace.
+ * That is what makes a drag ONE upsert with no read-modify-write, and what
+ * makes two people dragging two different tiles unable to conflict at all.
+ *
+ * THERE IS DELIBERATELY NO UNIQUE CONSTRAINT ON `pos`. Two people dropping two
+ * tiles into the same gap compute the same key; the alternative to allowing it
+ * is one of them getting an error they cannot act on. Ties break deterministically
+ * on `tile_key` in the comparator, so both see the same order, and the next drag
+ * of either tile resolves it.
+ */
+export const dashboardTilePlacements = pgTable(
+  "dashboard_tile_placements",
+  {
+    orgId: text("org_id").notNull(),
+    /** "flow:<flowId>:<outputNodeId>" | "metric:<metricId>" — see src/lib/board/types.ts. */
+    tileKey: text("tile_key").notNull(),
+    groupId: text("group_id").references(() => dashboardGroups.id, { onDelete: "set null" }),
+    pos: text("pos").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "dashboard_tile_placements_pk", columns: [t.orgId, t.tileKey] }),
+    // The FK's ON DELETE SET NULL scans this table for every group deletion,
+    // across every org. That is the reader this index exists for — the
+    // dashboard's own read rides the primary key's org_id prefix and needs
+    // nothing here.
+    index("dashboard_placements_group_idx").on(t.groupId),
+  ],
+);

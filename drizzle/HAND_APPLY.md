@@ -761,3 +761,99 @@ SELECT
   (SELECT count(*) FROM information_schema.columns
     WHERE table_schema='public' AND table_name='workspace_owners')  AS columns_should_be_4;
 ```
+
+## 0026 — `dashboard_groups` + `dashboard_tile_placements` (the board)
+
+Two new tables, nothing altered. They hold the customer's arrangement of the
+dashboard: named, coloured groups rendered as columns, and one row per tile
+saying which column it sits in and where.
+
+`group_id IS NULL` on a placement is the ungrouped row above the columns — the
+lane whose group is null, not a special case.
+
+Two things in this SQL are load-bearing and easy to lose in a re-paste:
+
+- **`pos` is `COLLATE "C"`.** The order keys are fractional lexicographic
+  strings compared in JS as bytes. Under `en_US.UTF-8` Postgres would disagree
+  with JS about `'a'` vs `'B'`, and a board whose order differs between two code
+  paths — intermittently, only for some names — is about the worst failure this
+  feature could ship. The app never sorts these in SQL either; three layers,
+  because one is not enough for a bug this quiet.
+- **The FK is `ON DELETE SET NULL`, and it is only on `group_id`.** That is what
+  makes "deleting a group returns its metrics to Ungrouped" a database
+  guarantee. There is deliberately NO foreign key on `tile_key`: a flow tile is
+  a `flow_results` row that `materializeFlow` deletes and recreates on every
+  republish, so a reference would make republishing a flow silently destroy the
+  layout. Placements dangle on purpose and the read filters them.
+
+```sql
+CREATE TABLE IF NOT EXISTS "dashboard_groups" (
+  "id"         text PRIMARY KEY NOT NULL,
+  "org_id"     text NOT NULL,
+  "name"       text NOT NULL,
+  "color"      text DEFAULT 'grey' NOT NULL,
+  "pos"        text COLLATE "C" NOT NULL,
+  "sort_key"   text DEFAULT 'manual' NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "dashboard_tile_placements" (
+  "org_id"     text NOT NULL,
+  "tile_key"   text NOT NULL,
+  "group_id"   text,
+  "pos"        text COLLATE "C" NOT NULL,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT "dashboard_tile_placements_pk" PRIMARY KEY ("org_id","tile_key")
+);
+
+DO $$ BEGIN
+ ALTER TABLE "dashboard_tile_placements"
+   ADD CONSTRAINT "dashboard_tile_placements_group_id_dashboard_groups_id_fk"
+   FOREIGN KEY ("group_id") REFERENCES "public"."dashboard_groups"("id")
+   ON DELETE set null ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+
+CREATE INDEX IF NOT EXISTS "dashboard_groups_org_idx"
+  ON "dashboard_groups" USING btree ("org_id");
+
+CREATE INDEX IF NOT EXISTS "dashboard_placements_group_idx"
+  ON "dashboard_tile_placements" USING btree ("group_id");
+```
+
+Verify (expect 2, 8, 5, 4 — both primary keys count as indexes):
+
+```sql
+SELECT
+  (SELECT count(*) FROM information_schema.tables
+    WHERE table_schema='public'
+      AND table_name IN ('dashboard_groups','dashboard_tile_placements'))  AS tables_should_be_2,
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='dashboard_groups')         AS group_cols_should_be_8,
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='dashboard_tile_placements') AS placement_cols_should_be_5,
+  (SELECT count(*) FROM pg_indexes
+    WHERE schemaname='public'
+      AND tablename IN ('dashboard_groups','dashboard_tile_placements'))   AS indexes_should_be_4;
+```
+
+Confirm the collation survived the paste (expect two rows, both `C`):
+
+```sql
+SELECT table_name, column_name, collation_name
+FROM information_schema.columns
+WHERE table_schema='public'
+  AND table_name IN ('dashboard_groups','dashboard_tile_placements')
+  AND column_name='pos';
+```
+
+`scripts/schema-audit.sql` was regenerated alongside this: 20 tables, 202
+columns.
+
+> **Numbering note.** 0016 is still reserved by the unmerged
+> `batch5/retention-purge` branch, and the snapshot-chain warning under 0018
+> applies here too at merge time. Like 0024 and 0025, this migration carries no
+> `drizzle/meta/0026_snapshot.json` — it was hand-written, and the journal entry
+> uses a synthetic `when` stamp continuing that pair's sequence.

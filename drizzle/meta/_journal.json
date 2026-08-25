@@ -176,6 +176,13 @@
       "when": 1787184000001,
       "tag": "0025_workspace_owners",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787184000002,
+      "tag": "0026_dashboard_groups",
+      "breakpoints": true
     }
   ]
 }

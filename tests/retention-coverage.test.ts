@@ -82,6 +82,11 @@ const TABLES: Record<string, Classification> = {
     by: "at most one row per (org, member) — the composite PK enforces it; assignment is an upsert, never an append",
   },
   workspace_owners: { kind: "bounded", by: "exactly one row per org — the org id IS the primary key" },
+  dashboard_groups: { kind: "bounded", by: "one row per column a human created on their dashboard" },
+  dashboard_tile_placements: {
+    kind: "bounded",
+    by: "at most one row per (org, tile) — the composite PK enforces it, and a drag is an upsert rather than an append. Placements outlive their tile ON PURPOSE (a republished flow gets its column back), so the ceiling is every tile the workspace has ever published rather than the tiles it has now; deleting the flow or metric clears them, and the write action caps the set",
+  },
 
   // ── Known gaps ────────────────────────────────────────────────────────────
   raw_events: {

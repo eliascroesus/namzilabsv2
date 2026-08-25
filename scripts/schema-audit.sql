@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (18 tables, 189 columns).
+-- QUERY 1 — tables and columns (20 tables, 202 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -67,6 +67,19 @@ WITH expected (tbl, col) AS (
     ('connections', 'disabled_at'),
     ('connections', 'created_at'),
     ('connections', 'updated_at'),
+    ('dashboard_groups', 'id'),
+    ('dashboard_groups', 'org_id'),
+    ('dashboard_groups', 'name'),
+    ('dashboard_groups', 'color'),
+    ('dashboard_groups', 'pos'),
+    ('dashboard_groups', 'sort_key'),
+    ('dashboard_groups', 'created_at'),
+    ('dashboard_groups', 'updated_at'),
+    ('dashboard_tile_placements', 'org_id'),
+    ('dashboard_tile_placements', 'tile_key'),
+    ('dashboard_tile_placements', 'group_id'),
+    ('dashboard_tile_placements', 'pos'),
+    ('dashboard_tile_placements', 'updated_at'),
     ('dead_letter', 'id'),
     ('dead_letter', 'org_id'),
     ('dead_letter', 'connection_id'),
@@ -239,7 +252,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (37 expected).
+-- QUERY 2 (optional) — indexes (39 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -251,6 +264,8 @@ WITH expected (tbl, idx) AS (
     ('connections', 'connections_org_idx'),
     ('connections', 'connections_status_idx'),
     ('connections', 'connections_due_sweep_idx'),
+    ('dashboard_groups', 'dashboard_groups_org_idx'),
+    ('dashboard_tile_placements', 'dashboard_placements_group_idx'),
     ('dead_letter', 'dead_letter_conn_idx'),
     ('dead_letter', 'dead_letter_raw_event_idx'),
     ('delivery_log', 'delivery_log_conn_idx'),
