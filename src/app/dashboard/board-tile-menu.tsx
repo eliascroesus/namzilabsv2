@@ -107,11 +107,15 @@ export function TileSlot({
   /**
    * The name of the sort this lane is under, when it is under one.
    *
-   * A SORTED LANE CANNOT BE REORDERED BY HAND. Dropping a tile at an index the
-   * sort would override on the very next render is a lie the interface tells
-   * once and is never trusted about again — so the drag is withheld and the
-   * card says why. Moving the tile OUT is untouched, and the menu keeps every
-   * one of its lane options; only "up" and "down" within this lane go.
+   * A SORTED LANE CANNOT BE REORDERED BY HAND — but it can be dragged out of,
+   * and into. Dropping a tile at an index the sort would override on the very
+   * next render is a lie the interface tells once and is never trusted about
+   * again; refusing to let the card be PICKED UP is a different and much worse
+   * thing, and is what this prop used to do.
+   *
+   * All that is left here is what the tile says about itself, and the two
+   * nudges that would reorder this lane. The refusal itself lives in the drag,
+   * which is the only place that knows which lane a drop is aimed at.
    */
   sortedBy?: string | null;
 }) {
@@ -148,7 +152,11 @@ export function TileSlot({
        * freshness dot.
        */
       onPointerDown={(e) => {
-        if (sortedBy) return;
+        // NO `sortedBy` GUARD HERE, deliberately — it used to sit on this line
+        // and stopped a tile in a sorted group being picked up at all. The rule
+        // is about which POSITION may be chosen, not about whether the card can
+        // be carried, so it lives in the drag's `resolve` where it can tell the
+        // difference. See SORTED_ATTR.
         if ((e.target as HTMLElement).closest("button, a, input")) return;
         onGrab?.(e, { key: tile.key, title: tile.title, accent: accent ?? "", kind: "tile" });
       }}
@@ -156,9 +164,9 @@ export function TileSlot({
       // tries to drag, so the card is where "this column is sorted, so
       // hand-ordering is off" belongs — a silently immovable tile reads as a
       // broken drag rather than as a rule.
-      title={sortedBy ? `Sorted by ${sortedBy} — switch to Manual to reorder` : undefined}
-      className={`group/slot relative transition-opacity duration-(--duration-fast) ${held ? "opacity-40" : ""} ${
-        sortedBy ? "" : "cursor-grab [touch-action:none]"
+      title={sortedBy ? `Sorted by ${sortedBy} — drag it to another group, or switch to Manual to reorder here` : undefined}
+      className={`group/slot relative cursor-grab transition-opacity duration-(--duration-fast) [touch-action:none] ${
+        held ? "opacity-40" : ""
       }`}
     >
       <div className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-(--duration-fast) focus-within:opacity-100 group-hover/slot:opacity-100 pointer-coarse:opacity-100">

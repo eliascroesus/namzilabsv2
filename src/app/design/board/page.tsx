@@ -50,7 +50,9 @@ const TILES: BoardTile[] = ROWS.map((r) => ({
 
 const GROUPS: BoardGroup[] = [
   { id: "g1", name: "Total", color: "green", pos: "i", sortKey: "manual" },
-  { id: "g2", name: "Confirmation", color: "pink", pos: "r", sortKey: "manual" },
+  // Deliberately SORTED: a tile in here must still be draggable OUT.
+  { id: "g2", name: "Confirmation", color: "pink", pos: "r", sortKey: "name_asc" },
+  { id: "g3", name: "User", color: "blue", pos: "v", sortKey: "manual" },
 ];
 
 const PLACEMENTS: TilePlacement[] = [

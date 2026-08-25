@@ -25,6 +25,16 @@ const LANE_REACH = 120;
 const AUTOSCROLL_EDGE = 64;
 /** Pixels per frame at the very edge, ramping from zero across the band. */
 const AUTOSCROLL_MAX = 18;
+/**
+ * How far past a slot boundary the pointer must travel before the gap moves,
+ * as a share of the item's own size.
+ *
+ * At 0 this is the plain midpoint rule, which for a 310px column means the drop
+ * changes hands when the cursor is 155px into its neighbour — long before it
+ * looks like it belongs there. A quarter of an item is the distance that reads
+ * as "past it" rather than "beside it".
+ */
+const SWITCH_DEADBAND = 0.26;
 
 /** Where a held tile would land: a lane, and a position among its other tiles. */
 export type DragTarget = { laneId: string | null; index: number };
@@ -69,6 +79,14 @@ export const SCROLLER_ATTR = "data-board-scroller";
  * candidates at all.
  */
 export const ACCEPTS_ATTR = "data-board-accepts";
+/**
+ * Marks a lane whose order is decided by a SORT rather than by hand.
+ *
+ * A tile in one can still be picked up and carried out — see `resolve`. What it
+ * cannot do is choose a position INSIDE it, because the sort would override
+ * that on the very next render.
+ */
+export const SORTED_ATTR = "data-board-sorted";
 export type DragKind = "tile" | "column";
 /** `data-board-lane` cannot be empty, so the ungrouped row needs a spelling. */
 export const UNGROUPED = "__ungrouped__";
@@ -92,6 +110,10 @@ type Lane = {
   bottom: number;
   /** Midpoints between consecutive tiles, along the lane's own axis. */
   bounds: number[];
+  /** The typical size of an item along that axis — the deadband is a share of it. */
+  extent: number;
+  /** True when a sort owns this lane's order, so no index inside it is a choice. */
+  sorted: boolean;
   scroller: HTMLElement | null;
   scrollLeft0: number;
 };
@@ -139,6 +161,7 @@ function measure(
     const r = el.getBoundingClientRect();
     const scroller = el.closest<HTMLElement>(`[${SCROLLER_ATTR}]`);
     const bounds: number[] = [];
+    let extentTotal = 0;
     for (const t of el.querySelectorAll<HTMLElement>(`[${TILE_ATTR}]`)) {
       /**
        * LANES NEST — the row of columns is a lane whose items are the columns,
@@ -156,7 +179,9 @@ function measure(
         continue;
       }
       const tr = t.getBoundingClientRect();
-      bounds.push(axis === "x" ? tr.left + tr.width / 2 : tr.top + tr.height / 2);
+      const size = axis === "x" ? tr.width : tr.height;
+      extentTotal += size;
+      bounds.push(axis === "x" ? tr.left + size / 2 : tr.top + size / 2);
     }
     lanes.push({
       id,
@@ -166,6 +191,8 @@ function measure(
       top: r.top,
       bottom: r.bottom,
       bounds,
+      extent: bounds.length > 0 ? extentTotal / bounds.length : 0,
+      sorted: el.getAttribute(SORTED_ATTR) === "1",
       scroller,
       scrollLeft0: scroller?.scrollLeft ?? 0,
     });
@@ -279,6 +306,44 @@ export function useBoardDrag(
     const along = lane.axis === "x" ? x : y;
     let index = 0;
     for (const b of lane.bounds) if (along > b - shift) index++;
+
+    /**
+     * A SORTED LANE TAKES TILES BUT NOT POSITIONS.
+     *
+     * The rule was enforced in the wrong place and did far more than it says:
+     * the tile's own `pointerdown` bailed out, so a tile in a sorted group
+     * could not be picked up AT ALL — not reordered, not moved to another
+     * group, not moved out. Every other tile on the board dragged fine, which
+     * is exactly the shape of the complaint: "I can drag them when they are
+     * ungrouped, just not when they are in groups."
+     *
+     * It belongs here. Carrying a tile INTO a sorted lane appends it and lets
+     * the sort place it; carrying one OUT is untouched; only choosing a
+     * position within the lane it already lives in is refused, because that is
+     * the only one the sort would immediately overrule.
+     */
+    if (lane.sorted) {
+      if (s.home && s.home.laneId === lane.id) return null;
+      index = lane.bounds.length;
+    }
+
+    /**
+     * A DEADBAND ON EVERY BOUNDARY, so the gap does not jump the moment a
+     * neighbour's midpoint is grazed.
+     *
+     * Reported as "it shows halfway through the group next to it — the drop box
+     * is too big". Midpoints are the standard rule and they are too eager for
+     * items this large: a 310px column starts claiming the drop when the cursor
+     * is 155px into it, which is nowhere near where the card would actually
+     * land. The index only changes once the pointer is a real distance past the
+     * line, measured as a share of the item's own size so a tall tile and a
+     * wide column both feel the same.
+     */
+    const held = s.target && s.target.laneId === lane.id ? s.target.index : s.home?.laneId === lane.id ? s.home.index : null;
+    if (held != null && index !== held && lane.extent > 0) {
+      const crossed = lane.bounds[index > held ? index - 1 : index];
+      if (crossed != null && Math.abs(along - (crossed - shift)) < lane.extent * SWITCH_DEADBAND) index = held;
+    }
 
     /**
      * A DROP ONTO ITS OWN POSITION IS NOT A DROP.

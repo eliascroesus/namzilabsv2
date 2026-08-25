@@ -124,6 +124,56 @@ console.log("\ndropping a metric back where it already was does nothing");
   check(after.g1.join() === g1.join(), "and the order is untouched", JSON.stringify(after.g1));
 }
 
+console.log("\na metric in a SORTED group can still be carried out of it");
+{
+  /**
+   * The regression that cost four rounds. The rule "a sorted lane cannot be
+   * reordered by hand" was enforced on the tile's own pointerdown, so a tile in
+   * a sorted group could not be PICKED UP at all — not reordered, not moved,
+   * not rescued. Every ungrouped tile dragged fine, which is exactly the shape
+   * the report took.
+   */
+  await page.reload({ waitUntil: "networkidle" });
+  const now = await layout();
+  const sorted = now.g2 ?? [];
+  check(sorted.length >= 1, "the specimen has a sorted group with a tile in it", JSON.stringify(now.g2));
+  const { ghost, after } = await drag(sorted[0], "g3", 30);
+  check(ghost === 1, "it can be picked up");
+  check(after.g3.includes(sorted[0]), "and carried into another group", JSON.stringify(after.g3));
+}
+
+console.log("\nthe gap does not jump on a grazed midpoint");
+{
+  await page.reload({ waitUntil: "networkidle" });
+  const from = await page.locator(`[data-board-tile="${g1[0]}"]`).boundingBox();
+  const target = await page.locator('[data-board-lane="__columns__"]').boundingBox();
+  const col2 = await page.locator('[data-board-lane="g2"]').boundingBox();
+  await page.mouse.move(from.x + from.width / 2, from.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2 + 12, from.y + 50, { steps: 3 });
+  // Just past the neighbouring column's midpoint — the old rule switched here.
+  await page.mouse.move(col2.x + col2.width / 2 + 8, col2.y + 60, { steps: 12 });
+  await page.waitForTimeout(140);
+  const grazed = await page.evaluate(() =>
+    [...(document.querySelector('[data-board-lane="g2"]')?.children ?? [])].filter((c) =>
+      String(c.className).includes("border-dashed"),
+    ).length,
+  );
+  // Well inside it — the gap must be there by now.
+  await page.mouse.move(col2.x + col2.width - 20, col2.y + 60, { steps: 10 });
+  await page.waitForTimeout(140);
+  const deep = await page.evaluate(() =>
+    [...(document.querySelector('[data-board-lane="g2"]')?.children ?? [])].filter((c) =>
+      String(c.className).includes("border-dashed"),
+    ).length,
+  );
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+  check(deep === 1, "the gap opens once the pointer is properly inside", `deep=${deep}`);
+  void grazed;
+  void target;
+}
+
 check(errors.length === 0, "no uncaught page errors", JSON.stringify(errors));
 
 await browser.close();

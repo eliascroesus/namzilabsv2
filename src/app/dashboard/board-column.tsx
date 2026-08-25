@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
 import { Popover } from "@/components/flow/controls/Popover";
 import { DropGap, TileSlot } from "./board-tile-menu";
-import { ACCEPTS_ATTR, AXIS_ATTR, LANE_ATTR, TILE_ATTR } from "./board-drag";
+import { ACCEPTS_ATTR, AXIS_ATTR, LANE_ATTR, SORTED_ATTR, TILE_ATTR } from "./board-drag";
 import { withGap } from "./board-layout";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
 
@@ -355,7 +355,7 @@ export function BoardColumn({
           is still somewhere a tile can land. `min-h` keeps that target big
           enough to aim at. */}
       <div
-        {...{ [LANE_ATTR]: g.id, [AXIS_ATTR]: "y", [ACCEPTS_ATTR]: "tile" }}
+        {...{ [LANE_ATTR]: g.id, [AXIS_ATTR]: "y", [ACCEPTS_ATTR]: "tile", [SORTED_ATTR]: sortedBy ? "1" : undefined }}
         className={`flex min-h-[140px] flex-col rounded-card p-2 ${LANE_GAP}`}
         style={{ background: groupWash(g.color) }}
       >

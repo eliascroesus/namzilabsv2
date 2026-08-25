@@ -208,18 +208,40 @@ describe("a sorted column cannot be reordered by hand", () => {
     expect(column).toMatch(/const sortedBy = g\.sortKey === "manual" \? null :/);
   });
 
-  it("withholds the drag and both nudges, but never the way out", () => {
-    // Moving a tile OUT of a sorted column is always allowed, and every lane
-    // option stays — only "up" and "down" WITHIN this lane go.
-    expect(code(menu)).toMatch(/if \(sortedBy\) return;/);
+  it("withholds the POSITION, never the pickup", () => {
+    /**
+     * THE REGRESSION THAT COST FOUR ROUNDS, and this test asserted it.
+     *
+     * The rule was enforced on the tile's own `pointerdown` — `if (sortedBy)
+     * return;` — so a tile in a sorted group could not be PICKED UP at all:
+     * not reordered, not moved to another group, not rescued. Every ungrouped
+     * tile dragged fine, which is exactly the shape the report took ("I can
+     * drag them when they are ungrouped, just not when they are in groups").
+     * The comment three lines above it claimed "moving the tile OUT is
+     * untouched" the entire time.
+     *
+     * It belongs in the drag, which is the only place that knows which lane a
+     * drop is AIMED at. Here, all that is left is the two nudges that would
+     * reorder this lane, and what the card says about itself.
+     */
+    expect(code(menu), "the pickup guard is back on pointerdown").not.toMatch(/if \(sortedBy\) return;/);
+    expect(code(drag)).toMatch(/if \(lane\.sorted\) \{/);
+    expect(code(drag)).toMatch(/if \(s\.home && s\.home\.laneId === lane\.id\) return null;/);
+    // The nudges within the lane still go, and the lane list still does not.
     expect(code(menu)).toMatch(/disabled=\{index === 0 \|\| sortedBy != null\}/);
     expect(code(menu)).toMatch(/disabled=\{index >= count - 1 \|\| sortedBy != null\}/);
-    // The lane list is not gated on it.
     expect(code(menu)).toMatch(/<LaneOption label="Ungrouped"/);
   });
 
+  it("does not stop being draggable-looking just because a sort is on", () => {
+    // A card that silently refuses the pointer is a broken drag. It keeps the
+    // grab cursor and says, in its own tooltip, what it will and will not do.
+    expect(code(menu)).toMatch(/relative cursor-grab/);
+    expect(menu).toMatch(/drag it to another group, or switch to Manual to reorder here/);
+  });
+
   it("says why, rather than presenting a control that silently does nothing", () => {
-    expect(menu).toMatch(/Sorted by \$\{sortedBy\} — switch to Manual to reorder/);
+    expect(menu).toMatch(/Sorted by \$\{sortedBy\}/);
   });
 });
 
@@ -403,5 +425,25 @@ describe("dropping a card where it already is", () => {
     expect(code(drag)).toMatch(
       /if \(s\.home && s\.home\.laneId === lane\.id && s\.home\.index === index\) return null;/,
     );
+  });
+});
+
+describe("the gap does not change hands on a grazed midpoint", () => {
+  it("keeps a deadband around every boundary, sized to the item", () => {
+    /**
+     * Reported as "it shows halfway through the group next to it — the drop box
+     * is too big". Midpoints are the standard rule and they are far too eager
+     * for items this size: a 310px column starts claiming the drop when the
+     * cursor is 155px into it, nowhere near where the card would land.
+     *
+     * A share of the item's own size rather than a pixel count, so a tall tile
+     * and a wide column feel the same.
+     */
+    const m = drag.match(/const SWITCH_DEADBAND = ([0-9.]+);/);
+    expect(m, "SWITCH_DEADBAND is not a plain numeric constant").not.toBeNull();
+    const band = Number(m![1]);
+    expect(band, "no deadband at all — this is the plain midpoint rule").toBeGreaterThan(0.1);
+    expect(band, "more than half an item means a boundary can never be crossed").toBeLessThan(0.5);
+    expect(code(drag)).toMatch(/lane\.extent \* SWITCH_DEADBAND/);
   });
 });
