@@ -114,8 +114,9 @@ function measure(
   root: HTMLElement,
   held: string,
   kind: DragKind,
-): { lanes: Lane[]; scrollY0: number; heldH: number; home: DragTarget | null } {
+): { lanes: Lane[]; scrollY0: number; heldH: number; home: DragTarget | null; pageScroller: HTMLElement | null } {
   const lanes: Lane[] = [];
+  const pageScroller = pageScrollerOf(root);
   const heldEl = root.querySelector<HTMLElement>(`[${TILE_ATTR}="${held}"]`);
   const heldH = heldEl ? heldEl.getBoundingClientRect().height : 0;
   /**
@@ -169,8 +170,31 @@ function measure(
       scrollLeft0: scroller?.scrollLeft ?? 0,
     });
   }
-  return { lanes, scrollY0: window.scrollY, heldH, home };
+  return { lanes, scrollY0: scrollTopOf(pageScroller), heldH, home, pageScroller };
 }
+
+/**
+ * THE THING THAT ACTUALLY SCROLLS VERTICALLY — which is NOT the window.
+ *
+ * The app frame puts its pages in a `div` with `overflow-y-auto` (see
+ * AppShell's `surface`), so `window.scrollY` is permanently 0 and
+ * `window.scrollBy` is a no-op on every page in this product. The drag was
+ * written against the window and therefore did neither of the two things it
+ * believed it was doing: it never corrected its cached lane geometry for a page
+ * that scrolled mid-drag, and dragging toward the bottom of the screen never
+ * pulled the board up.
+ *
+ * Found by driving the real frame in a browser rather than by reading it, which
+ * is the only way this class of bug ever surfaces.
+ */
+function pageScrollerOf(el: HTMLElement | null): HTMLElement | null {
+  for (let n = el; n; n = n.parentElement) {
+    const oy = getComputedStyle(n).overflowY;
+    if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight) return n;
+  }
+  return null;
+}
+const scrollTopOf = (s: HTMLElement | null) => (s ? s.scrollTop : window.scrollY);
 
 /** How far outside a band a value sits — zero when it is inside. */
 const outside = (v: number, lo: number, hi: number) => (v < lo ? lo - v : v > hi ? v - hi : 0);
@@ -184,6 +208,7 @@ export function useBoardDrag(
   const live = useRef<{
     lanes: Lane[];
     scrollY0: number;
+    pageScroller: HTMLElement | null;
     startX: number;
     startY: number;
     moved: boolean;
@@ -217,7 +242,7 @@ export function useBoardDrag(
   const resolve = useCallback((x: number, y: number): DragTarget | null => {
     const s = live.current;
     if (!s) return null;
-    const dy = window.scrollY - s.scrollY0;
+    const dy = scrollTopOf(s.pageScroller) - s.scrollY0;
 
     let best: { lane: Lane; d: number } | null = null;
     for (const lane of s.lanes) {
@@ -289,7 +314,7 @@ export function useBoardDrag(
      * there IS no target, and that is exactly when someone is dragging toward a
      * column off the right-hand edge and needs the board to come to them.
      */
-    const dy = window.scrollY - s.scrollY0;
+    const dy = scrollTopOf(s.pageScroller) - s.scrollY0;
     let near: Lane | null = null;
     let nearD = Infinity;
     for (const l of s.lanes) {
@@ -307,9 +332,17 @@ export function useBoardDrag(
       if (nearLeft < AUTOSCROLL_EDGE) scroller.scrollLeft -= AUTOSCROLL_MAX * (1 - nearLeft / AUTOSCROLL_EDGE);
       else if (nearRight < AUTOSCROLL_EDGE) scroller.scrollLeft += AUTOSCROLL_MAX * (1 - nearRight / AUTOSCROLL_EDGE);
     }
-    if (y < AUTOSCROLL_EDGE) window.scrollBy(0, -AUTOSCROLL_MAX * (1 - y / AUTOSCROLL_EDGE));
-    else if (window.innerHeight - y < AUTOSCROLL_EDGE)
-      window.scrollBy(0, AUTOSCROLL_MAX * (1 - (window.innerHeight - y) / AUTOSCROLL_EDGE));
+    // The page's own scroller, not the window — see `pageScrollerOf`.
+    const up = y < AUTOSCROLL_EDGE ? -AUTOSCROLL_MAX * (1 - y / AUTOSCROLL_EDGE) : 0;
+    const down =
+      window.innerHeight - y < AUTOSCROLL_EDGE
+        ? AUTOSCROLL_MAX * (1 - (window.innerHeight - y) / AUTOSCROLL_EDGE)
+        : 0;
+    const dv = up || down;
+    if (dv) {
+      if (s.pageScroller) s.pageScroller.scrollTop += dv;
+      else window.scrollBy(0, dv);
+    }
 
     const target = resolve(x, y);
     s.target = target;
@@ -333,6 +366,7 @@ export function useBoardDrag(
         tileKey: tile.key,
         target: null,
         home: null,
+        pageScroller: null,
         pointer: { x: e.clientX, y: e.clientY },
         release: () => {},
       };
@@ -350,6 +384,7 @@ export function useBoardDrag(
           s.lanes = m.lanes;
           s.scrollY0 = m.scrollY0;
           s.home = m.home;
+          s.pageScroller = m.pageScroller;
           /**
            * THE SELECTION THE PRESS ALREADY STARTED, CLEARED.
            *

@@ -70,6 +70,37 @@ export function BoardLayout({
   const [groups, setGroups] = useState(seedGroups);
   const [placements, setPlacements] = useState(seedPlacements);
   const [toast, setToast] = useState<string | null>(null);
+
+  /**
+   * A WRITE THAT NEVER ANSWERED IS A WRITE THAT FAILED.
+   *
+   * Every action here was `.then(revert-if-not-ok)` with no `.catch()`, and a
+   * server action does not only RESOLVE to `{ok:false}` — it REJECTS. A session
+   * that expired, a network blip, and above all a deployment: Next mints a new
+   * id for every server action it builds, so a tab that was open across a
+   * deploy calls an id the server no longer knows and the fetch simply fails.
+   *
+   * With no catch, that rejection was silent AND invisible: the optimistic move
+   * stayed on screen, nothing was written, and the arrangement was back where
+   * it started on the next load. Which is indistinguishable, from the outside,
+   * from "the drag doesn't work".
+   *
+   * So every write goes through here. A rejection is treated exactly like
+   * `{ok:false}` — put it back, and SAY so.
+   */
+  const settle = useCallback(
+    (p: Promise<{ ok: true } | { ok: false; error: string }>, revert: () => void) => {
+      p.then((r) => {
+        if (r.ok) return;
+        revert();
+        setToast(r.error);
+      }).catch(() => {
+        revert();
+        setToast("Couldn't save that — the page may be out of date. Reload and try again.");
+      });
+    },
+    [],
+  );
   const [busy, setBusy] = useState(false);
 
   const board = arrangeBoard(tiles, groups, placements);
@@ -116,22 +147,21 @@ export function BoardLayout({
       const undo = placements.filter((p) => next.some((n) => n.tileKey === p.tileKey));
       const undoKeys = new Set(next.map((n) => n.tileKey));
       applyPlacements(next);
-      setTilePlacementsAction(next).then((r) => {
-        if (r.ok) return;
-        // Key-scoped revert: put back only what this patch touched.
-        setPlacements((prev) => [...prev.filter((p) => !undoKeys.has(p.tileKey)), ...undo]);
-        setToast(r.error);
-      });
+      // Key-scoped revert: put back only what this patch touched.
+      settle(setTilePlacementsAction(next), () =>
+        setPlacements((prev) => [...prev.filter((p) => !undoKeys.has(p.tileKey)), ...undo]),
+      );
     },
-    [board, placements, applyPlacements],
+    [board, placements, applyPlacements, settle],
   );
 
   const addGroup = useCallback(async () => {
     setBusy(true);
     // NOT optimistic: the id is the server's to mint, and a column that appears
     // with a placeholder id cannot be dropped into until it is replaced.
-    const r = await createGroupAction("New group");
+    const r = await createGroupAction("New group").catch(() => null);
     setBusy(false);
+    if (!r) return setToast("Couldn't add a group — the page may be out of date. Reload and try again.");
     if (!r.ok) return setToast(r.error);
     setGroups((prev) => [...prev, r.group]);
   }, []);
@@ -142,12 +172,10 @@ export function BoardLayout({
       undo = prev.find((g) => g.id === id)?.name;
       return prev.map((g) => (g.id === id ? { ...g, name } : g));
     });
-    renameGroupAction(id, name).then((r) => {
-      if (r.ok) return;
-      setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, name: undo } : g)));
-      setToast(r.error);
-    });
-  }, []);
+    settle(renameGroupAction(id, name), () =>
+      setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, name: undo } : g))),
+    );
+  }, [settle]);
 
   const recolourGroup = useCallback((id: string, color: string) => {
     let undo: string | undefined;
@@ -155,12 +183,10 @@ export function BoardLayout({
       undo = prev.find((g) => g.id === id)?.color;
       return prev.map((g) => (g.id === id ? { ...g, color } : g));
     });
-    setGroupColorAction(id, color).then((r) => {
-      if (r.ok) return;
-      setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, color: undo } : g)));
-      setToast(r.error);
-    });
-  }, []);
+    settle(setGroupColorAction(id, color), () =>
+      setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, color: undo } : g))),
+    );
+  }, [settle]);
 
   /**
    * DELETING IS NOT OPTIMISTIC, and that is the RanksPanel rule applied to the
@@ -174,8 +200,9 @@ export function BoardLayout({
   const removeGroup = useCallback(
     async (id: string) => {
       setBusy(true);
-      const r = await deleteGroupAction(id);
+      const r = await deleteGroupAction(id).catch(() => null);
       setBusy(false);
+      if (!r) return setToast("Couldn't delete that group — the page may be out of date. Reload and try again.");
       if (!r.ok) return setToast(r.error);
       applyPlacements(r.moved.map((m) => ({ tileKey: m.tileKey, groupId: null, pos: m.pos })));
       setGroups((prev) => prev.filter((g) => g.id !== id));
@@ -189,12 +216,10 @@ export function BoardLayout({
       undo = prev.find((g) => g.id === id)?.sortKey;
       return prev.map((g) => (g.id === id ? { ...g, sortKey } : g));
     });
-    setGroupSortAction(id, sortKey).then((r) => {
-      if (r.ok) return;
-      setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, sortKey: undo } : g)));
-      setToast(r.error);
-    });
-  }, []);
+    settle(setGroupSortAction(id, sortKey), () =>
+      setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, sortKey: undo } : g))),
+    );
+  }, [settle]);
 
   /**
    * MOVE A COLUMN TO A POSITION IN THE ROW.
@@ -219,13 +244,11 @@ export function BoardLayout({
         undo = prev.find((g) => g.id === id)?.pos;
         return prev.map((g) => (g.id === id ? { ...g, pos } : g));
       });
-      setGroupPositionsAction([{ id, pos }]).then((r) => {
-        if (r.ok) return;
-        setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, pos: undo } : g)));
-        setToast(r.error);
-      });
+      settle(setGroupPositionsAction([{ id, pos }]), () =>
+        setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, pos: undo } : g))),
+      );
     },
-    [groups],
+    [groups, settle],
   );
 
   const laneNames = groups.map((g) => ({ id: g.id, name: g.name }));

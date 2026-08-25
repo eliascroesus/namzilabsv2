@@ -14,7 +14,8 @@
     "check:ui": "tsx scripts/check-ui.ts",
     "db:generate": "drizzle-kit generate",
     "inngest:dev": "npx inngest-cli@latest dev",
-    "shot": "node scripts/screenshot.mjs"
+    "shot": "node scripts/screenshot.mjs",
+    "board:drag": "node scripts/board-drag-check.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

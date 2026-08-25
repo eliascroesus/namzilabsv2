@@ -76,7 +76,7 @@ describe("the drag's measurements", () => {
     // with the scroll offsets of the moment is what lets auto-scroll run
     // without silently invalidating the hit-test.
     expect(code(drag)).toMatch(/scrollLeft0/);
-    expect(code(drag)).toMatch(/window\.scrollY - s\.scrollY0/);
+    expect(code(drag)).toMatch(/scrollTopOf\(s\.pageScroller\) - s\.scrollY0/);
   });
 });
 
@@ -343,6 +343,48 @@ describe("a drag always ends, however it ends", () => {
     // stuck drag came with a blue smear across the card's own name.
     expect(code(drag)).toMatch(/removeAllRanges\(\)/);
     expect(code(layout)).toMatch(/drag \? "select-none" : undefined/);
+  });
+});
+
+describe("the page scrolls in a div, not the window", () => {
+  it("finds the real scroll container instead of assuming the window", () => {
+    /**
+     * The app frame puts every page in a `div` with `overflow-y-auto` (see
+     * AppShell's `surface`), so `window.scrollY` is permanently 0 here and
+     * `window.scrollBy` is a no-op. The drag was written against the window and
+     * therefore did neither of the two things it believed it was doing: it
+     * never corrected its cached lane geometry for a page that scrolled
+     * mid-drag, and dragging toward the bottom of the screen never pulled the
+     * board up.
+     *
+     * Found by pointing a browser at it — see scripts/board-drag-check.mjs —
+     * which is the only way this class of bug ever surfaces.
+     */
+    expect(code(drag)).toMatch(/function pageScrollerOf\(/);
+    expect(code(drag)).toMatch(/overflowY/);
+    // And the auto-scroll uses it rather than the window.
+    expect(code(drag)).toMatch(/s\.pageScroller\.scrollTop \+= dv;/);
+  });
+});
+
+describe("a write that never answered is a write that failed", () => {
+  it("catches a REJECTED action, not only an {ok:false} one", () => {
+    /**
+     * A server action rejects as well as resolving: an expired session, a
+     * network blip, and above all a DEPLOYMENT — Next mints a new id for every
+     * action it builds, so a tab open across a deploy calls one the server has
+     * forgotten and the fetch simply fails.
+     *
+     * With no catch that was silent AND invisible: the optimistic move stayed
+     * on screen, nothing was written, and the arrangement was back on the next
+     * load. Indistinguishable, from the outside, from "the drag doesn't work".
+     */
+    expect(code(layout)).toMatch(/\.catch\(/);
+    const settled = (code(layout).match(/settle\(/g) ?? []).length;
+    expect(settled, "an optimistic write bypasses the one place that handles failure").toBeGreaterThanOrEqual(5);
+    // The two awaited writes carry their own catch rather than going through it.
+    expect(code(layout)).toMatch(/createGroupAction\("New group"\)\.catch/);
+    expect(code(layout)).toMatch(/deleteGroupAction\(id\)\.catch/);
   });
 });
 
