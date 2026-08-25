@@ -26,8 +26,15 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ getDb: () => db, getReadDb: () => db }));
 vi.mock("@/lib/auth", () => ({ requireOrg: async () => ctx }));
 
-const { createGroupAction, renameGroupAction, setGroupColorAction, deleteGroupAction, setTilePlacementsAction } =
-  await import("@/app/dashboard/board-actions");
+const {
+  createGroupAction,
+  renameGroupAction,
+  setGroupColorAction,
+  deleteGroupAction,
+  setTilePlacementsAction,
+  setGroupPositionsAction,
+  setGroupSortAction,
+} = await import("@/app/dashboard/board-actions");
 
 const A = "org_a";
 const B = "org_b";
@@ -215,5 +222,67 @@ describe("deleting a group", () => {
     await deleteGroupAction(g.group.id);
     // A layout act never destroys a metric, and never forgets one either.
     expect(await placementsOf(A)).toHaveLength(1);
+  });
+});
+
+describe("ordering the columns", () => {
+  it("moves one column without renumbering the others", async () => {
+    const a = await createGroupAction("A");
+    const b = await createGroupAction("B");
+    const c = await createGroupAction("C");
+    if (!a.ok || !b.ok || !c.ok) throw new Error("setup");
+
+    // The whole reason for fractional keys: putting A last is ONE row, and B
+    // and C keep the keys they already had.
+    const after = await setGroupPositionsAction([{ id: a.group.id, pos: "zz" }]);
+    expect(after.ok).toBe(true);
+    const rows = await groupsOf(A);
+    expect(rows.find((r) => r.id === b.group.id)!.pos).toBe(b.group.pos);
+    expect(rows.find((r) => r.id === c.group.id)!.pos).toBe(c.group.pos);
+    expect(rows.slice().sort((x, y) => compareKeys(x.pos, y.pos)).map((r) => r.name)).toEqual(["B", "C", "A"]);
+  });
+
+  it("will not CREATE a column for an id this workspace does not own", async () => {
+    /**
+     * The reason this is an UPDATE per row rather than an upsert: an upsert
+     * keyed on `id` would happily insert a group for an id posted from a
+     * browser, and the org filter on each update is what makes that impossible
+     * rather than merely unlikely.
+     */
+    const r = await setGroupPositionsAction([{ id: "not-ours", pos: "i" }]);
+    expect(r.ok).toBe(true);
+    expect(await groupsOf(A)).toHaveLength(0);
+    expect(await groupsOf(B)).toHaveLength(0);
+  });
+});
+
+describe("how a column sorts itself", () => {
+  it("stores the sort and never touches the tiles' own keys", async () => {
+    /**
+     * The proof that an auto-sort is a VIEW. If it were applied by re-keying,
+     * switching back to Manual would leave whatever the sort last decided and
+     * there would be no way back to the hand-made arrangement.
+     */
+    const g = await createGroupAction("G");
+    if (!g.ok) throw new Error("setup");
+    await setTilePlacementsAction([
+      { tileKey: "metric:c", groupId: g.group.id, pos: "a" },
+      { tileKey: "metric:a", groupId: g.group.id, pos: "m" },
+    ]);
+    const before = await placementsOf(A);
+
+    expect((await setGroupSortAction(g.group.id, "name_asc")).ok).toBe(true);
+    expect((await groupsOf(A))[0].sortKey).toBe("name_asc");
+    expect(await placementsOf(A)).toEqual(before);
+
+    expect((await setGroupSortAction(g.group.id, "manual")).ok).toBe(true);
+    expect(await placementsOf(A)).toEqual(before);
+  });
+
+  it("refuses a sort that is not one of ours", async () => {
+    const g = await createGroupAction("G");
+    if (!g.ok) throw new Error("setup");
+    expect(await setGroupSortAction(g.group.id, "by_vibes")).toEqual({ ok: false, error: "That sort isn't one of ours." });
+    expect((await groupsOf(A))[0].sortKey).toBe("manual");
   });
 });

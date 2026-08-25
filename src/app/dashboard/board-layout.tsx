@@ -3,17 +3,25 @@
 import { useCallback, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { arrangeBoard, type BoardLane } from "@/lib/board/arrange";
-import { keyBetween, keysBetween } from "@/lib/board/order";
-import type { BoardGroup, BoardTile, TilePlacement } from "@/lib/board/types";
+import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
+import type { BoardGroup, BoardTile, GroupSortKey, TilePlacement } from "@/lib/board/types";
 import { Button } from "@/components/ui/button";
 import { Toast } from "@/components/ui/toast";
 import { BOARD_GRID } from "@/components/ui/page";
 import { DragGhost } from "@/components/flow/drop-slot";
 import { groupAccent } from "@/components/flow/node-accent";
-import { createGroupAction, deleteGroupAction, renameGroupAction, setGroupColorAction, setTilePlacementsAction } from "./board-actions";
+import {
+  createGroupAction,
+  deleteGroupAction,
+  renameGroupAction,
+  setGroupColorAction,
+  setGroupPositionsAction,
+  setGroupSortAction,
+  setTilePlacementsAction,
+} from "./board-actions";
 import { BoardColumn } from "./board-column";
 import { DropGap, TileSlot } from "./board-tile-menu";
-import { AXIS_ATTR, LANE_ATTR, SCROLLER_ATTR, UNGROUPED, useBoardDrag } from "./board-drag";
+import { AXIS_ATTR, COLUMNS_LANE, LANE_ATTR, SCROLLER_ATTR, UNGROUPED, useBoardDrag } from "./board-drag";
 import { COLUMN_W, LANE_GAP, SCROLLER_BLEED } from "./board-shape";
 
 /**
@@ -175,10 +183,64 @@ export function BoardLayout({
     [applyPlacements],
   );
 
+  const setSort = useCallback((id: string, sortKey: GroupSortKey) => {
+    let undo: GroupSortKey | undefined;
+    setGroups((prev) => {
+      undo = prev.find((g) => g.id === id)?.sortKey;
+      return prev.map((g) => (g.id === id ? { ...g, sortKey } : g));
+    });
+    setGroupSortAction(id, sortKey).then((r) => {
+      if (r.ok) return;
+      setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, sortKey: undo } : g)));
+      setToast(r.error);
+    });
+  }, []);
+
+  /**
+   * MOVE A COLUMN TO A POSITION IN THE ROW.
+   *
+   * The same shape as `placeTile` one level up: neighbours from the current
+   * order, one key between them, one row written. A column order that has never
+   * been touched always has keys — `createGroupAction` mints one per group — so
+   * unlike a lane of tiles there is no seeding branch.
+   */
+  const moveGroup = useCallback(
+    (id: string, index: number) => {
+      const ordered = groups.slice().sort((a, b) => compareKeys(a.pos, b.pos) || compareKeys(a.id, b.id));
+      const rest = ordered.filter((g) => g.id !== id);
+      const at = Math.max(0, Math.min(index, rest.length));
+      const before = at > 0 ? rest[at - 1].pos : null;
+      const after = at < rest.length ? rest[at].pos : null;
+      if (before === (ordered.find((g) => g.id === id)?.pos ?? null)) return;
+      const pos = keyBetween(before, after);
+
+      let undo: string | undefined;
+      setGroups((prev) => {
+        undo = prev.find((g) => g.id === id)?.pos;
+        return prev.map((g) => (g.id === id ? { ...g, pos } : g));
+      });
+      setGroupPositionsAction([{ id, pos }]).then((r) => {
+        if (r.ok) return;
+        setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, pos: undo } : g)));
+        setToast(r.error);
+      });
+    },
+    [groups],
+  );
+
   const laneNames = groups.map((g) => ({ id: g.id, name: g.name }));
 
   const rootRef = useRef<HTMLDivElement>(null);
-  const { drag, onPointerDown, swallowClick } = useBoardDrag(rootRef, placeTile);
+  /**
+   * ONE ENGINE, TWO KINDS OF ITEM. A drop into the columns lane is a column
+   * being reordered; anything else is a metric being filed. The engine does not
+   * know the difference and does not need to — it answers "which lane, which
+   * index", and this decides what that means.
+   */
+  const { drag, onPointerDown, swallowClick } = useBoardDrag(rootRef, (key, laneId, index) => {
+    if (laneId === COLUMNS_LANE) moveGroup(key, index);
+    else placeTile(key, laneId, index);
+  });
   /** The gap belongs to exactly one lane at a time, at one index. */
   const gapAt = (laneId: string | null) => (drag?.target && drag.target.laneId === laneId ? drag.target.index : null);
 
@@ -242,24 +304,44 @@ export function BoardLayout({
           )}
 
           <div {...{ [SCROLLER_ATTR]: "columns" }} className={`${SCROLLER_BLEED} mt-4 overflow-x-auto pb-2`}>
-            <div className={`flex items-start ${LANE_GAP}`}>
-              {board.columns.map((lane) => (
-                <BoardColumn
-                  key={lane.id}
-                  lane={lane as BoardLane & { group: BoardGroup }}
-                  canEdit={canEdit}
-                  busy={busy}
-                  lanes={laneNames}
-                  onRename={renameGroup}
-                  onRecolour={recolourGroup}
-                  onDelete={removeGroup}
-                  onPlace={placeTile}
-                  gapIndex={gapAt(lane.id)}
-                  heldKey={drag?.tileKey ?? null}
-                  onGrab={onPointerDown}
-                  swallowClick={swallowClick}
-                />
-              ))}
+            {/* The row of columns is a lane too, whose items are the columns —
+                see COLUMNS_LANE. `items-stretch` so a column being dragged past
+                a short one still hit-tests against a full-height band. */}
+            <div
+              {...{ [LANE_ATTR]: COLUMNS_LANE, [AXIS_ATTR]: "x" }}
+              className={`flex items-start ${LANE_GAP}`}
+            >
+              {withGap(
+                board.columns.map((l) => ({ key: l.id! }) as BoardTile),
+                gapAt(COLUMNS_LANE),
+                drag?.tileKey ?? null,
+              ).map((slot) =>
+                slot === null ? (
+                  <div key="colgap" className={`${COLUMN_W} shrink-0 pt-11`}>
+                    <DropGap />
+                  </div>
+                ) : (
+                  <BoardColumn
+                    key={slot.key}
+                    lane={board.columns.find((c) => c.id === slot.key) as BoardLane & { group: BoardGroup }}
+                    canEdit={canEdit}
+                    busy={busy}
+                    lanes={laneNames}
+                    onRename={renameGroup}
+                    onRecolour={recolourGroup}
+                    onDelete={removeGroup}
+                    onPlace={placeTile}
+                    onSort={setSort}
+                    onMoveColumn={moveGroup}
+                    columnIndex={board.columns.findIndex((c) => c.id === slot.key)}
+                    columnCount={board.columns.length}
+                    gapIndex={gapAt(slot.key)}
+                    heldKey={drag?.tileKey ?? null}
+                    onGrab={onPointerDown}
+                    swallowClick={swallowClick}
+                  />
+                ),
+              )}
             </div>
           </div>
         </div>

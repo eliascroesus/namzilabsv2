@@ -571,7 +571,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           // Swapped for same-sized skeletons the instant a filter is pressed:
           // the alternative is leaving last range's numbers on screen under a
           // pill that now says something else.
-          <TileArea count={flowTiles.length + tiles.length}>
+          <TileArea count={flowTiles.length + tiles.length} columns={groups.length}>
             {/* The ARRANGEMENT is the client's; the CARDS are still rendered
                 here, on the server, and passed through as `node`. With no
                 groups this emits the same BOARD_GRID markup it always did. */}

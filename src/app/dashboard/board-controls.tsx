@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BOARD_GRID } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
+import { COLUMN_W, LANE_GAP } from "./board-shape";
 
 /**
  * THE BOARD'S FILTERS, ANSWERING IMMEDIATELY.
@@ -142,10 +143,37 @@ export function SourceLink({ href, className, children }: { href: string; classN
  *
  * `count` is how many tiles the board is currently showing, so the page does
  * not change height while it waits and the scroll position stays put.
+ *
+ * `columns` is how many the board is ARRANGED into. A dashboard with groups is
+ * a set of columns, not a three-up grid, so a grid of skeletons over it would
+ * reshape the page for half a second and reshape it back — which is the jump
+ * the count is there to prevent, arriving by the other door. Absent (or zero)
+ * means no groups, and the grid is right.
  */
-export function TileArea({ count, children }: { count: number; children: ReactNode }) {
+export function TileArea({ count, columns, children }: { count: number; columns?: number; children: ReactNode }) {
   const { pending } = useBoard();
   if (!pending) return <>{children}</>;
+  if (columns && columns > 0) {
+    return (
+      <div className={`mt-4 flex items-start ${LANE_GAP} overflow-hidden`} aria-busy="true" aria-live="polite">
+        <span className="sr-only">Loading metrics…</span>
+        {Array.from({ length: columns }, (_, c) => (
+          <div key={c} className={`${COLUMN_W} shrink-0`}>
+            {/* The header the real column wears: a dot, a name, a count. */}
+            <div className="mb-3 flex h-8 items-center gap-2 px-0.5">
+              <Skeleton className="size-2 rounded-full" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+            <div className={`flex flex-col ${LANE_GAP}`}>
+              {Array.from({ length: Math.max(1, Math.round(count / columns)) }, (_, i) => (
+                <TileSkeleton key={i} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className={`mt-4 items-start ${BOARD_GRID}`} aria-busy="true" aria-live="polite">
       <span className="sr-only">Loading metrics…</span>
@@ -153,13 +181,27 @@ export function TileArea({ count, children }: { count: number; children: ReactNo
         // The tile's own anatomy: a title line, the numeral, a mark, a footer.
         // A plain grey block is a placeholder for "something"; this is a
         // placeholder for a tile, so nothing moves when the real one lands.
-        <div key={i} className="rounded-surface border border-border bg-card p-5 shadow-card">
-          <Skeleton className="h-4 w-2/5" />
-          <Skeleton className="mt-3 h-9 w-1/2" />
-          <Skeleton className="mt-3 h-10 w-full" />
-          <Skeleton className="mt-3 h-3 w-1/3" />
-        </div>
+        <TileSkeleton key={i} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * The tile's own anatomy: a title line, the numeral, a mark, a footer.
+ *
+ * A plain grey block is a placeholder for "something"; this is a placeholder
+ * for a TILE, so nothing moves when the real one lands. One spelling, used by
+ * both shapes above, or the grid and the board would drift apart in the one
+ * state nobody looks at twice.
+ */
+function TileSkeleton() {
+  return (
+    <div className="rounded-surface border border-border bg-card p-5 shadow-card">
+      <Skeleton className="h-4 w-2/5" />
+      <Skeleton className="mt-3 h-9 w-1/2" />
+      <Skeleton className="mt-3 h-10 w-full" />
+      <Skeleton className="mt-3 h-3 w-1/3" />
     </div>
   );
 }

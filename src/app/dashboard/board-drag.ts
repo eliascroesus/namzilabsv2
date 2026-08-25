@@ -46,6 +46,14 @@ export const TILE_ATTR = "data-board-tile";
 export const SCROLLER_ATTR = "data-board-scroller";
 /** `data-board-lane` cannot be empty, so the ungrouped row needs a spelling. */
 export const UNGROUPED = "__ungrouped__";
+/**
+ * The row of columns is itself a lane, whose items are the columns. One engine
+ * answers both questions — "which column does this metric belong in" and "where
+ * does this column go" — because they are the same question about different
+ * nesting levels, and two engines would drift in their feel long before they
+ * drifted in their arithmetic.
+ */
+export const COLUMNS_LANE = "__columns__";
 
 type Lane = {
   id: string | null;
@@ -85,7 +93,15 @@ function measure(root: HTMLElement, held: string): { lanes: Lane[]; scrollY0: nu
     const scroller = el.closest<HTMLElement>(`[${SCROLLER_ATTR}]`);
     const bounds: number[] = [];
     for (const t of el.querySelectorAll<HTMLElement>(`[${TILE_ATTR}]`)) {
-      // The held tile is excluded, so an index counts among the OTHERS — which
+      /**
+       * LANES NEST — the row of columns is a lane whose items are the columns,
+       * and each column contains a lane whose items are its tiles. A plain
+       * descendant query would therefore count every tile on the board as an
+       * item of the columns row, and dropping a column would land it between
+       * two metrics. An item belongs to its NEAREST lane and no other.
+       */
+      if (t.closest(`[${LANE_ATTR}]`) !== el) continue;
+      // The held item is excluded, so an index counts among the OTHERS — which
       // is exactly what the placement maths expects to be handed.
       if (t.getAttribute(TILE_ATTR) === held) continue;
       const tr = t.getBoundingClientRect();

@@ -302,3 +302,65 @@ export async function setTilePlacementsAction(
     return oops(e);
   }
 }
+
+/**
+ * WHERE THE COLUMNS SIT, left to right.
+ *
+ * The same shape as the tile write and for the same reasons: one statement, the
+ * client computes the keys from the two neighbours it is already holding, and
+ * moving a column is one row rather than a renumber of the row of them.
+ */
+export async function setGroupPositionsAction(items: Array<{ id: string; pos: string }>): Promise<Result> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  const parsed = z
+    .array(z.object({ id: idSchema, pos: posSchema }))
+    .min(1)
+    .max(boardGroupCap())
+    .safeParse(items);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "That move won't save.");
+
+  const db = getDb();
+  try {
+    // An UPDATE per row rather than an upsert, deliberately: an upsert keyed on
+    // `id` would CREATE a group for an id this workspace does not own, and the
+    // org filter on each update is what makes that impossible instead of merely
+    // unlikely. A handful of columns is a handful of statements.
+    await Promise.all(
+      parsed.data.map((i) =>
+        db
+          .update(dashboardGroups)
+          .set({ pos: i.pos, updatedAt: new Date() })
+          .where(and(eq(dashboardGroups.id, i.id), eq(dashboardGroups.orgId, ctx.orgId))),
+      ),
+    );
+    return { ok: true };
+  } catch (e) {
+    return oops(e);
+  }
+}
+
+/**
+ * HOW A COLUMN ORDERS THE METRICS INSIDE IT.
+ *
+ * A view over the manual order, never a rewrite of it: `pos` is untouched here,
+ * so switching back to Manual restores by hand exactly what was there before.
+ * That is the whole reason this is a column on the group rather than a
+ * re-keying of its tiles.
+ */
+export async function setGroupSortAction(id: string, sortKey: string): Promise<Result> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  if (!idSchema.safeParse(id).success) return fail("Unknown group.");
+  const parsed = z.enum(["manual", "name_asc", "name_desc", "value_desc", "attention"]).safeParse(sortKey);
+  if (!parsed.success) return fail("That sort isn't one of ours.");
+  try {
+    await getDb()
+      .update(dashboardGroups)
+      .set({ sortKey: parsed.data, updatedAt: new Date() })
+      .where(and(eq(dashboardGroups.id, id), eq(dashboardGroups.orgId, ctx.orgId)));
+    return { ok: true };
+  } catch (e) {
+    return oops(e);
+  }
+}

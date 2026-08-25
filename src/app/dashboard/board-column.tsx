@@ -1,17 +1,38 @@
 "use client";
 
 import { useState } from "react";
-import { Check, MoreHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, MoreHorizontal, Trash2 } from "lucide-react";
 import type { BoardLane } from "@/lib/board/arrange";
-import type { BoardGroup } from "@/lib/board/types";
+import type { BoardGroup, GroupSortKey } from "@/lib/board/types";
 import { GROUP_ACCENT, groupAccent } from "@/components/flow/node-accent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SectionHeading } from "@/components/ui/page";
 import { Popover } from "@/components/flow/controls/Popover";
 import { DropGap, TileSlot } from "./board-tile-menu";
-import { AXIS_ATTR, LANE_ATTR } from "./board-drag";
+import { AXIS_ATTR, LANE_ATTR, TILE_ATTR } from "./board-drag";
 import { withGap } from "./board-layout";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
+
+/**
+ * THE WAYS A COLUMN CAN ORDER ITSELF.
+ *
+ * `manual` is first and is the default, because it is the only one that
+ * preserves what somebody arranged by hand — every other entry is a VIEW over
+ * that order, applied at render and never written back, so turning one off
+ * restores the arrangement exactly.
+ *
+ * The blurbs are not decoration. "Value high→low" across a column holding a
+ * duration, a percentage and a count cannot mean one ranking, so the menu says
+ * what it actually does rather than letting the name imply something untrue.
+ */
+const SORTS: Array<{ key: GroupSortKey; label: string; blurb: string }> = [
+  { key: "manual", label: "Manual", blurb: "The order you arranged by hand" },
+  { key: "name_asc", label: "Name A\u2013Z", blurb: "Alphabetical, with numbers read as numbers" },
+  { key: "name_desc", label: "Name Z\u2013A", blurb: "Reverse alphabetical" },
+  { key: "value_desc", label: "Value high\u2192low", blurb: "Biggest first, currencies together, then counts, then rates" },
+  { key: "attention", label: "Needs attention first", blurb: "Broken, then out of date, then the rest" },
+];
 
 /**
  * ONE GROUP, AS A COLUMN.
@@ -35,6 +56,10 @@ export function BoardColumn({
   onRecolour,
   onDelete,
   onPlace,
+  onSort,
+  onMoveColumn,
+  columnIndex,
+  columnCount,
   gapIndex,
   heldKey,
   onGrab,
@@ -48,6 +73,10 @@ export function BoardColumn({
   onRecolour: (id: string, color: string) => void;
   onDelete: (id: string) => void;
   onPlace: (tileKey: string, groupId: string | null, index: number) => void;
+  onSort: (id: string, sortKey: GroupSortKey) => void;
+  onMoveColumn: (id: string, index: number) => void;
+  columnIndex: number;
+  columnCount: number;
   /** Where the held tile would land in THIS column, or null if not here. */
   gapIndex: number | null;
   heldKey: string | null;
@@ -70,11 +99,38 @@ export function BoardColumn({
     else setDraft(g.name);
   };
 
+  /**
+   * A SORTED COLUMN CANNOT BE REORDERED BY HAND, and saying so is the point.
+   *
+   * Dropping a tile at an index the sort would override on the next render is a
+   * lie the interface tells once and is never trusted about again — so the
+   * handle explains itself instead. Dragging a tile INTO a sorted column is
+   * still fine (it appends to the hidden manual order and the sort places it),
+   * and dragging one OUT always is. This is the one expression that decides it.
+   */
+  const sortedBy = g.sortKey === "manual" ? null : SORTS.find((s) => s.key === g.sortKey)?.label;
+
   return (
-    <section className={`${COLUMN_W} shrink-0`} aria-label={g.name}>
+    <section
+      {...{ [TILE_ATTR]: g.id }}
+      className={`${COLUMN_W} shrink-0 transition-opacity duration-(--duration-fast) ${heldKey === g.id ? "opacity-40" : ""}`}
+      aria-label={g.name}
+    >
       {/* A ROW, NOT A CARD. A header inside a card inside a column is three
-          boxes drawn for one label, and the column's tiles are already cards. */}
-      <div className="mb-3 flex h-8 items-center gap-2 px-0.5">
+          boxes drawn for one label, and the column's tiles are already cards.
+          It is also the column's own drag handle — the whole header, because a
+          separate grip beside a name that is already a button would be three
+          controls in a row for two jobs. */}
+      <div
+        className={`mb-3 flex h-8 items-center gap-2 px-0.5 ${canEdit && !editing ? "cursor-grab [touch-action:none]" : ""}`}
+        onPointerDown={(e) => {
+          // Only the bare header starts a drag. A press that lands on the name,
+          // the kebab or the rename field belongs to that control.
+          if (!canEdit || editing) return;
+          if ((e.target as HTMLElement).closest("button, input")) return;
+          onGrab(e, { key: g.id, title: g.name, accent: groupAccent(g.color) });
+        }}
+      >
         <span className="size-2 shrink-0 rounded-full" style={{ background: groupAccent(g.color) }} aria-hidden />
 
         {editing ? (
@@ -169,6 +225,57 @@ export function BoardColumn({
 
               <div className="my-1.5 h-px bg-border" />
 
+              {/* SectionHeading is the app's one eyebrow recipe — the same
+                  small-caps label Settings uses above a group of controls. */}
+              <SectionHeading className="mb-0.5 px-2 pt-1">Sort</SectionHeading>
+              {SORTS.map((s) => (
+                <Button
+                  key={s.key}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onSort(g.id, s.key)}
+                  aria-current={g.sortKey === s.key ? "true" : undefined}
+                  title={s.blurb}
+                  className="w-full justify-start"
+                >
+                  <span className="flex size-3.5 shrink-0 items-center justify-center">
+                    {g.sortKey === s.key && <Check size={13} strokeWidth={3} />}
+                  </span>
+                  <span className="min-w-0 truncate">{s.label}</span>
+                </Button>
+              ))}
+
+              <div className="my-1.5 h-px bg-border" />
+
+              {/* The keyboard's way to reorder a column, and the mouse's way for
+                  anyone who would rather not drag one. Between them they reach
+                  every order a drag can. */}
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={columnIndex === 0}
+                onClick={() => onMoveColumn(g.id, columnIndex - 1)}
+                className="w-full justify-start"
+              >
+                <ArrowLeft />
+                Move left
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={columnIndex >= columnCount - 1}
+                // +2 rather than +1: the column is taken out of the row before
+                // the index is applied, so passing its right-hand neighbour
+                // means landing one place beyond where it is now.
+                onClick={() => onMoveColumn(g.id, columnIndex + 2)}
+                className="w-full justify-start"
+              >
+                <ArrowRight />
+                Move right
+              </Button>
+
+              <div className="my-1.5 h-px bg-border" />
+
               {confirming ? (
                 /* INLINE, not a modal — the RanksPanel precedent. The sentence
                    says what happens to the metrics, because "delete group" one
@@ -233,6 +340,7 @@ export function BoardColumn({
                 held={heldKey === slot.key}
                 onGrab={onGrab}
                 swallowClick={swallowClick}
+                sortedBy={sortedBy}
               />
             ),
           )

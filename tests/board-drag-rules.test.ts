@@ -29,6 +29,7 @@ const drag = read("src/app/dashboard/board-drag.ts");
 const layout = read("src/app/dashboard/board-layout.tsx");
 const menu = read("src/app/dashboard/board-tile-menu.tsx");
 const slot = read("src/components/flow/drop-slot.tsx");
+const column = read("src/app/dashboard/board-column.tsx");
 
 /** Prose about a hazard is not the hazard. `check-ui.ts` strips for the same reason. */
 const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -141,5 +142,46 @@ describe("out of reach is not a drop", () => {
     // "a target you can see, aim at, and miss".
     expect(code(drag)).toMatch(/if \(!best \|\| best\.d > LANE_REACH\) return null;/);
     expect(code(drag)).toMatch(/if \(s\?\.moved && s\.target\) onDrop\(/);
+  });
+});
+
+describe("a sorted column cannot be reordered by hand", () => {
+  it("decides it in ONE expression, and the expression names the sort", () => {
+    /**
+     * Dropping a tile at an index the sort would override on the very next
+     * render is a lie the interface tells once and is never trusted about
+     * again. A SECOND expression deciding the same thing is how the drag and
+     * the menu come to disagree — the same rule `drag-rules.test.ts` enforces
+     * on the canvas about what may be dragged there.
+     */
+    const decisions = (code(column).match(/g\.sortKey === "manual"/g) ?? []).length;
+    expect(decisions, "more than one thing decides whether a column is sorted").toBe(1);
+    expect(column).toMatch(/const sortedBy = g\.sortKey === "manual" \? null :/);
+  });
+
+  it("withholds the drag and both nudges, but never the way out", () => {
+    // Moving a tile OUT of a sorted column is always allowed, and every lane
+    // option stays — only "up" and "down" WITHIN this lane go.
+    expect(code(menu)).toMatch(/if \(sortedBy\) return;/);
+    expect(code(menu)).toMatch(/disabled=\{index === 0 \|\| sortedBy != null\}/);
+    expect(code(menu)).toMatch(/disabled=\{index >= count - 1 \|\| sortedBy != null\}/);
+    // The lane list is not gated on it.
+    expect(code(menu)).toMatch(/<LaneOption label="Ungrouped"/);
+  });
+
+  it("says why, rather than presenting a control that silently does nothing", () => {
+    expect(menu).toMatch(/Sorted by \$\{sortedBy\} — switch to Manual to reorder/);
+  });
+});
+
+describe("lanes nest, and an item belongs to exactly one", () => {
+  it("skips items that belong to a lane inside this one", () => {
+    /**
+     * The row of columns is a lane whose items are the columns; each column
+     * holds a lane whose items are tiles. A plain descendant query would count
+     * every tile on the board as an item of the columns row, and dropping a
+     * column would land it between two metrics.
+     */
+    expect(code(drag)).toMatch(/if \(t\.closest\(`\[\$\{LANE_ATTR\}\]`\) !== el\) continue;/);
   });
 });

@@ -60,6 +60,7 @@ export function TileSlot({
   onGrab,
   swallowClick,
   accent,
+  sortedBy,
 }: {
   tile: BoardTile;
   canEdit: boolean;
@@ -75,6 +76,16 @@ export function TileSlot({
   swallowClick?: () => boolean;
   /** The colour of the lane it came from — the mark the ghost carries. */
   accent?: string;
+  /**
+   * The name of the sort this lane is under, when it is under one.
+   *
+   * A SORTED LANE CANNOT BE REORDERED BY HAND. Dropping a tile at an index the
+   * sort would override on the very next render is a lie the interface tells
+   * once and is never trusted about again — so the drag is withheld here and
+   * the handle says why. Moving the tile OUT is untouched, and the menu keeps
+   * every one of its lane options; only "up" and "down" within this lane go.
+   */
+  sortedBy?: string | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -105,7 +116,10 @@ export function TileSlot({
               // A PRESS-AND-MOVE IS A DRAG; A PRESS ALONE IS THE MENU. Four
               // pixels is what separates them, and `swallowClick` is what stops
               // the pointerup that ends a drop from also opening the menu.
-              onPointerDown={(e) => onGrab?.(e, { key: tile.key, title: tile.title, accent: accent ?? "" })}
+              onPointerDown={(e) => {
+                if (sortedBy) return;
+                onGrab?.(e, { key: tile.key, title: tile.title, accent: accent ?? "" });
+              }}
               onClick={() => {
                 if (swallowClick?.()) return;
                 setOpen((o) => !o);
@@ -113,10 +127,10 @@ export function TileSlot({
               aria-label={`Move ${tile.title}`}
               aria-haspopup="menu"
               aria-expanded={open}
-              title="Drag to move, or press for the menu"
+              title={sortedBy ? `Sorted by ${sortedBy} — switch to Manual to reorder` : "Drag to move, or press for the menu"}
               // `touch-action: none` or the browser claims the gesture for
               // scrolling and the drag never starts on a phone.
-              className="bg-card/90 backdrop-blur-sm [touch-action:none]"
+              className={`bg-card/90 backdrop-blur-sm ${sortedBy ? "" : "cursor-grab [touch-action:none]"}`}
             >
               <GripVertical />
             </Button>
@@ -145,7 +159,8 @@ export function TileSlot({
             <Button
               variant="ghost"
               size="sm"
-              disabled={index === 0}
+              disabled={index === 0 || sortedBy != null}
+              title={sortedBy ? `Sorted by ${sortedBy}` : undefined}
               onClick={() => move(laneId, index - 1)}
               className="w-full justify-start"
             >
@@ -155,7 +170,8 @@ export function TileSlot({
             <Button
               variant="ghost"
               size="sm"
-              disabled={index >= count - 1}
+              disabled={index >= count - 1 || sortedBy != null}
+              title={sortedBy ? `Sorted by ${sortedBy}` : undefined}
               // +2 rather than +1: the tile is removed from the lane before the
               // index is applied, so passing the neighbour below means landing
               // one place beyond where it currently is.

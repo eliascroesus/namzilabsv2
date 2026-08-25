@@ -55,8 +55,16 @@ describe("constants that cross the server/client boundary", () => {
     // leaving 126px of a fourth column visible. That peek IS the affordance
     // that says the board scrolls; a width that fits exactly looks like an end.
     expect(shape).toMatch(/export const COLUMN_W = "w-\[310px\]";/);
-    const uses = (layout.match(/w-\[\d+px\]/g) ?? []).length;
-    expect(uses, "the column width is spelled in the layout instead of imported").toBe(0);
+    // Nowhere on the board may re-spell it — including the pending skeleton,
+    // which has to be the same width as the thing it stands in for or the page
+    // jumps by the difference twice per filter press.
+    for (const [name, src] of [
+      ["board-layout.tsx", layout],
+      ["board-column.tsx", read("src/app/dashboard/board-column.tsx")],
+      ["board-controls.tsx", read("src/app/dashboard/board-controls.tsx")],
+    ] as const) {
+      expect((src.match(/w-\[\d+px\]/g) ?? []).length, `${name} spells the column width instead of importing it`).toBe(0);
+    }
   });
 });
 
