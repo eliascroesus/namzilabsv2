@@ -792,13 +792,25 @@ describe("moveWiring (drag a step to a new place in the order)", () => {
     expect(add).toContain("c->b");
   });
 
-  it("drops a step into a Split branch by its handle", () => {
-    const edges = [E("a", "b"), E("hub", "x", { sourceHandle: "p1" })];
+  it("fills an EMPTY Split branch when dropped on its handle", () => {
+    // No head on `p1` yet, so this is an append, not an insert above anything.
+    const edges = [E("a", "b"), E("hub", "x", { sourceHandle: "p2" })];
     const out = moveWiring("b", { after: "hub", handle: "p1" }, edges)!;
-    const wired = out.add.find((e) => e.target === "b")!;
-    expect(wired).toMatchObject({ source: "hub", sourceHandle: "p1" });
-    // Branch one's old head now hangs off the moved step.
-    expect(out.add.some((e) => e.source === "b" && e.target === "x")).toBe(true);
+    expect(out.add.find((e) => e.target === "b")).toMatchObject({ source: "hub", sourceHandle: "p1" });
+  });
+
+  it("refuses to insert above a branch head that already exists", () => {
+    /**
+     * THE "filter gets in between split and path a" BUG, at its source.
+     *
+     * It arrived through this ordinary path — the step being dragged was a
+     * Filter, so none of the hub-specific rules ever saw it — and it pushed the
+     * auto-created "Path A" card into second place, breaking the one thing that
+     * card's name promises. A branch's head is its Path card, permanently.
+     * Steps join a branch by landing UNDER it.
+     */
+    const edges = [E("a", "b"), E("hub", "x", { sourceHandle: "p1" })];
+    expect(moveWiring("b", { after: "hub", handle: "p1" }, edges)).toBeNull();
   });
 
   it("detaches into a lane of its own when dropped beside the first step", () => {
@@ -956,9 +968,16 @@ describe("moveWiring — a Split carries its branches", () => {
    * would have to be both above and below the hub at once — so that lane is cut
    * at the drop point and every OTHER lane travels as usual.
    */
-  it("cuts the lane it lands in, and keeps the others", () => {
-    // The user's own graph: app -> hub{ pA -> fA -> f5 -> f6, pB -> fB }.
-    // Drop the hub between f5 and f6.
+  it("refuses a drop inside its own group rather than coming apart", () => {
+    /**
+     * The user's own graph: app -> hub{ pA -> fA -> f5 -> f6, pB -> fB }.
+     *
+     * An attempt to allow this — "cut the lane you land in" — shipped and was
+     * reverted the same day: it left the Path A card stranded ABOVE the Split
+     * as a plain filter, which is worse than refusing because it looks
+     * deliberate. There is no position under a hub that is not already part of
+     * the hub, so there is nothing to move it to.
+     */
     const nodes = [step("app"), hub("hub", "pA", "pB"), step("fA"), step("f5"), step("f6"), step("fB")];
     const edges = [
       E("app", "hub"),
@@ -967,56 +986,84 @@ describe("moveWiring — a Split carries its branches", () => {
       E("f5", "f6"),
       E("hub", "fB", { sourceHandle: "pB" }),
     ];
-    const out = moveWiring("hub", { after: "f5" }, edges, nodes)!;
-    const dropped = new Set(out.remove.map((e) => e.id));
-    const next = [...edges.filter((e) => !dropped.has(e.id)), ...out.add];
-    const wires = next.map((e) => `${e.source}${e.sourceHandle ? `[${e.sourceHandle}]` : ""}->${e.target}`);
-
-    // The cut lane's head takes the hub's old place, so the line above closes up.
-    expect(wires).toContain("app->fA");
-    expect(wires).toContain("fA->f5");
-    // The hub lands where it was dropped...
-    expect(wires).toContain("f5->hub");
-    // ...and what f5 used to feed becomes that same lane's new content, through
-    // its OWN handle — a `paths` node has no plain chain child to be.
-    expect(wires).toContain("hub[pA]->f6");
-    // Every other lane is untouched. This is the half that must not regress.
-    expect(wires).toContain("hub[pB]->fB");
-    expect(hasCycle(next)).toBe(false);
+    for (const inside of ["fA", "f5", "f6", "fB"]) {
+      expect(moveWiring("hub", { after: inside }, edges, nodes), `drop after ${inside}`).toBeNull();
+    }
   });
 
-  it("cuts the right lane when the drop is in the second one", () => {
-    const { nodes, edges } = splitGraph(); // hub{pA -> a1, pB -> b1}, filter -> hub
-    const out = moveWiring("hub", { after: "b1" }, edges, nodes)!;
-    const dropped = new Set(out.remove.map((e) => e.id));
-    const next = [...edges.filter((e) => !dropped.has(e.id)), ...out.add];
-    const wires = next.map((e) => `${e.source}${e.sourceHandle ? `[${e.sourceHandle}]` : ""}->${e.target}`);
+  /**
+   * THE INVARIANT, CHECKED EVERYWHERE RATHER THAN ARGUED ANYWHERE.
+   *
+   * Every bug this branch has ever had was the group coming apart in some new
+   * way — bridged out on detach, or a lane cut and its head stranded. Naming
+   * each shape in its own test only ever caught the shape I thought of.
+   *
+   * So this enumerates EVERY drop target the canvas can produce, over a graph
+   * carrying the awkward cases at once (a nested hub, a branch that rejoins a
+   * Combine, a second source), and asserts one property of each result: the
+   * group is whole, or the move did not happen. There is no third outcome.
+   *
+   * WHAT IT TAKES TO FAIL THIS, measured rather than assumed: `moveWiring` has
+   * two independent refusals for an in-group drop — the explicit
+   * `carried.has(target.after)` line and the cycle backstop — and removing
+   * EITHER one alone leaves every test here green, because each fully covers
+   * the other's cases. Both had to go before this test failed (with
+   * `hub -> {"after":"fA"}: cycle`). That is defence in depth working as
+   * intended, and it is written down so nobody reads one of them as dead code.
+   */
+  it("keeps every Path card attached, for every drop target there is", () => {
+    const nodes = [
+      step("app"), step("src2"),
+      hub("hub", "pA", "pB"),
+      step("fA"), step("a1"),
+      step("fB"),
+      hub("inner", "iA"), step("i1"),
+      step("U"), step("m"),
+    ];
+    const edges = [
+      E("app", "hub"),
+      E("hub", "fA", { sourceHandle: "pA" }),
+      E("fA", "a1"),
+      E("a1", "U"),
+      E("hub", "fB", { sourceHandle: "pB" }),
+      E("fB", "inner"),
+      E("inner", "i1", { sourceHandle: "iA" }),
+      E("src2", "U"),
+      E("U", "m"),
+    ];
 
-    expect(wires).toContain("filter->b1"); // lane B's head re-homed upward
-    expect(wires).toContain("b1->hub");
-    expect(wires).toContain("hub[pA]->a1"); // lane A untouched
-    expect(wires).not.toContain("hub[pB]->b1"); // lane B was the one cut
-    expect(hasCycle(next)).toBe(false);
-  });
+    /** Every `{after, handle}` the canvas could name, plus the lane drop. */
+    const targets: Array<{ after?: string; handle?: string; root?: boolean }> = [
+      ...nodes.map((n) => ({ after: n.id })),
+      ...edges.filter((e) => e.sourceHandle).map((e) => ({ after: e.source, handle: e.sourceHandle! })),
+      { root: true },
+    ];
 
-  it("refuses any move it cannot make acyclic", () => {
-    /**
-     * The backstop, not a case analysis. `moveWiring` builds the graph the move
-     * would produce and checks it; a shape the rules have no answer for reads as
-     * a drag that did not take, which is fair. A STORED cycle is not — the
-     * layout's Kahn pass silently defaults every node in one to depth 0, and the
-     * flow compiles from the same edges.
-     *
-     * Sabotage: return `result` unchecked at the end of the `paths` branch and
-     * this is the test that fails.
-     */
-    const nodes = [step("app"), hub("hub", "pA"), step("fA")];
-    // A hub whose only lane already loops back into it: no cut can fix this.
-    const edges = [E("app", "hub"), E("hub", "fA", { sourceHandle: "pA" }), E("fA", "hub")];
-    const out = moveWiring("hub", { after: "fA" }, edges, nodes);
-    if (out) {
-      const dropped = new Set(out.remove.map((e) => e.id));
-      expect(hasCycle([...edges.filter((e) => !dropped.has(e.id)), ...out.add])).toBe(false);
+    for (const hubId of ["hub", "inner"]) {
+      const lanes = edges.filter((e) => e.source === hubId && e.sourceHandle);
+      for (const t of targets) {
+        const out = moveWiring(hubId, t, edges, nodes);
+        if (!out) continue; // refusing is always a valid answer
+        const dropped = new Set(out.remove.map((e) => e.id));
+        const next = [...edges.filter((e) => !dropped.has(e.id)), ...out.add];
+        const where = `${hubId} -> ${JSON.stringify(t)}`;
+
+        // 1. Every lane still leaves the hub, on the same handle, to the same
+        //    card. This is the whole promise: the group cannot come apart.
+        for (const lane of lanes) {
+          expect(
+            next.some((e) => e.source === hubId && e.sourceHandle === lane.sourceHandle && e.target === lane.target),
+            `${where}: lane ${lane.sourceHandle} -> ${lane.target} was broken`,
+          ).toBe(true);
+        }
+        // 2. No Path card picked up a second parent on the way — that is how one
+        //    ends up rendered above the Split it belongs to.
+        for (const lane of lanes) {
+          expect(next.filter((e) => e.target === lane.target).length, `${where}: ${lane.target} has two parents`).toBe(1);
+        }
+        // 3. And the result is still a DAG.
+        expect(hasCycle(next), `${where}: cycle`).toBe(false);
+      }
     }
   });
 

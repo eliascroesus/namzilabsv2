@@ -1645,11 +1645,20 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       const p = layout.get(n.id);
       if (!p) continue;
       if (n.type === "paths") {
-        for (const e of edges) {
-          if (e.source !== n.id || !e.sourceHandle) continue;
-          const tp = layout.get(e.target);
-          if (tp) out.push({ x: tp.x, y: gapY(p.y, tp.y), after: n.id, handle: e.sourceHandle });
-        }
+        /**
+         * A HUB OFFERS NO SLOT OF ITS OWN, and that is the fix for "the filter
+         * gets in between split and path a".
+         *
+         * There used to be one per branch, sitting in the gap above each Path
+         * card, and dropping there meant "become this branch's first step" —
+         * which pushed the auto-created "Path A" card into second place and
+         * broke the one thing those cards promise by being named that.
+         *
+         * A branch's head is its Path card, permanently. Steps join a branch by
+         * landing UNDER that card, which is an ordinary chain slot the Path
+         * card already contributes on the pass below. Nothing is lost; one
+         * wrong target is.
+         */
       } else {
         const kid = edges.find((e) => e.source === n.id && !e.sourceHandle && e.targetHandle == null)?.target;
         const kp = kid ? layout.get(kid) : null;
@@ -1694,22 +1703,39 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    * a lane of its own — which is how a second source, or a chain someone wants
    * to start over, gets made: drag it out to the side and let go.
    *
-   * EVERY SLOT IS A TARGET FOR EVERY STEP, including a Split's own subtree.
+   * A GROUP IS NOT OFFERED A PLACE INSIDE ITSELF.
    *
-   * This used to skip slots inside the held hub's descendants, because a hub
-   * travels with its branches and a drop in its own lane would ring. The cost
-   * of that shortcut was that a Split could only ever move UP — everything
-   * below it IS its subtree, so every `+` beneath it was dead and dragging it
-   * down did nothing at all. `moveWiring` handles the case properly now: the
-   * lane it lands in is cut and the others travel, with a cycle check as the
-   * backstop. So there is nothing left for this to filter.
+   * A Split moves as one object — hub, Path cards, everything under them — so
+   * a slot within its own subtree names a position that is part of the thing
+   * being moved. `moveWiring` refuses those outright; skipping them here is
+   * what stops one lighting up under the cursor first, which would read as a
+   * drop the editor then silently declined.
+   *
+   * This is why a Split near the end of a flow appears to have nowhere to go
+   * downward: it genuinely has nowhere, because everything down there is it.
+   *
+   * Computed ONCE PER DRAG, not per pointer move. It was the latter, on the
+   * reasoning that a DFS over a few dozen edges is cheap — true of one call and
+   * false of the sixty a second a drag makes, each also doing a linear
+   * `nodes.find` and allocating a Set. A drag is the one interaction here that
+   * must not stutter, and the graph cannot change while a card is in the air.
    */
+  const draggingSubtree = useMemo(
+    () => (dragging && nodes.find((n) => n.id === dragging)?.type === "paths" ? descendantsOf(dragging, edges) : null),
+    [dragging, nodes, edges],
+  );
+
   const slotFor = useCallback(
     (id: string, at: { x: number; y: number }) => {
+      // Falling back to null for anything but the held card is safe: this is a
+      // handrail that stops an impossible slot lighting up, and `moveWiring` is
+      // the wall behind it.
+      const inside = id === dragging ? draggingSubtree : null;
       let best: (typeof dropSlots)[number] | null = null;
       let bestD = Infinity;
       for (const s of dropSlots) {
         if (s.after === id) continue;
+        if (inside && s.after && inside.has(s.after)) continue;
         const d = Math.hypot(s.x - at.x, s.y - at.y);
         if (d < bestD) {
           bestD = d;
@@ -1720,7 +1746,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       // possible, and "somewhere over there" is the shape of a mistake.
       return best && bestD < DROP_REACH ? best : null;
     },
-    [dropSlots],
+    [dropSlots, dragging, draggingSubtree],
   );
 
   /**
