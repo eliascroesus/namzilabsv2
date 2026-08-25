@@ -199,21 +199,26 @@ const TAIL_SLOT_Y = (CARD_H + ROW_PITCH) / 2;
  */
 const LANE_OFFSET = 360;
 /**
- * How near a slot a held card has to be for that slot to light up.
+ * HOW NEAR A SLOT A HELD CARD HAS TO BE, ON EACH AXIS SEPARATELY.
  *
- * IT WAS 260, WHICH IS WIDER THAN THE GAP BETWEEN SLOTS. Rows are `ROW_PITCH`
- * (232) apart, so a reach of 260 meant every point on the canvas was inside
- * some slot's radius — usually two or three at once — and the placeholder
- * followed the cursor around whether or not it was anywhere near a real
- * position. Reported as "the hitboxes are too big": the feedback stopped
- * meaning anything because it was never absent.
+ * It was one radius, and both values it has been given were wrong for opposite
+ * reasons. 260 is wider than the `ROW_PITCH` (232) between gaps, so every point
+ * on the canvas sat inside some slot and the placeholder never went away —
+ * "the hitboxes are too big". 110 fixed that and broke something worse: a hub
+ * sits CENTRED over its branches, so dropping one into a lane is a diagonal of
+ * half a column (172px) plus whatever the grab offset is, which no 110px circle
+ * can contain. The move became impossible to make on purpose.
  *
- * At 110 the radii of two vertically adjacent slots do not meet, so there is a
- * real band between them where NOTHING lights up, and lanes (a full column
- * apart) cannot claim a cursor sitting over their neighbour. Landing a card
- * still only asks for the nearer half of a gap.
+ * The axes are not the same question. Vertical distance decides WHICH GAP, and
+ * gaps are 232 apart, so 100 leaves a real dead band between neighbours — the
+ * placeholder genuinely goes away when you are between two positions.
+ * Horizontal distance decides WHICH LANE, and lanes are `LANE_COL` (344) apart,
+ * so 220 comfortably covers the diagonal into a branch while still being under
+ * the 344 that would let one lane claim a cursor sitting over another. Nearest
+ * wins between two candidates either way.
  */
-const DROP_REACH = 110;
+const DROP_REACH_Y = 100;
+const DROP_REACH_X = 220;
 
 export function FlowCanvas(props: {
   flowId: string;
@@ -1708,54 +1713,71 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
   }, [nodes, edges]);
 
   /**
-   * The slot a loose card would join. Beyond `DROP_REACH` of every slot it is
-   * a lane of its own — which is how a second source, or a chain someone wants
-   * to start over, gets made: drag it out to the side and let go.
+   * THE ONLY SLOTS A HELD HUB IS NOT OFFERED: its own Path cards.
    *
-   * A GROUP IS NOT OFFERED A PLACE INSIDE ITSELF.
+   * This used to skip the hub's ENTIRE subtree, and that was the bug behind
+   * three rounds of "I can't move the Split deeper into the flow". `moveWiring`
+   * had already been taught to make the move — the branch's content rises past
+   * the hub and the Path cards travel with it — but this filter still deleted
+   * every one of those slots before a placeholder could be drawn, so nothing
+   * ever lit up and the drag had nowhere to land. The fix was in one file and
+   * the block was in the other.
    *
-   * A Split moves as one object — hub, Path cards, everything under them — so
-   * a slot within its own subtree names a position that is part of the thing
-   * being moved. `moveWiring` refuses those outright; skipping them here is
-   * what stops one lighting up under the cursor first, which would read as a
-   * drop the editor then silently declined.
+   * What genuinely has no answer is dropping the hub directly under one of its
+   * own Path cards: the card is part of the group, so there is no run of
+   * content between them to rise. `moveWiring` refuses exactly those, and these
+   * are exactly those — the two lists cannot drift, because both are "the
+   * targets of this hub's handles".
    *
-   * This is why a Split near the end of a flow appears to have nowhere to go
-   * downward: it genuinely has nowhere, because everything down there is it.
-   *
-   * Computed ONCE PER DRAG, not per pointer move. It was the latter, on the
-   * reasoning that a DFS over a few dozen edges is cheap — true of one call and
-   * false of the sixty a second a drag makes, each also doing a linear
-   * `nodes.find` and allocating a Set. A drag is the one interaction here that
-   * must not stutter, and the graph cannot change while a card is in the air.
+   * Computed ONCE PER DRAG, not per pointer move: a drag makes about sixty
+   * calls a second and the graph cannot change while a card is in the air.
    */
-  const draggingSubtree = useMemo(
-    () => (dragging && nodes.find((n) => n.id === dragging)?.type === "paths" ? descendantsOf(dragging, edges) : null),
-    [dragging, nodes, edges],
-  );
+  const heldHubPathCards = useMemo(() => {
+    if (!dragging || nodes.find((n) => n.id === dragging)?.type !== "paths") return null;
+    return new Set(edges.filter((e) => e.source === dragging && e.sourceHandle).map((e) => e.target));
+  }, [dragging, nodes, edges]);
 
+  /**
+   * The slot a loose card would join, or null when the card is not near one.
+   *
+   * THE TWO AXES DO NOT MEAN THE SAME THING, so they do not get the same
+   * tolerance. Vertical distance answers "which gap in the line", and gaps are
+   * `ROW_PITCH` apart, so it has to be tight or every point on the canvas
+   * belongs to some slot and the placeholder never goes away. Horizontal
+   * distance answers "which lane", and lanes are `LANE_COL` apart — but a hub
+   * sits CENTRED over its branches, so dropping one into a lane is always a
+   * diagonal drag of half a column or more. Judge that by the same tight radius
+   * and the move is impossible to make on purpose, which is precisely how a
+   * 110px circle behaved.
+   *
+   * So the reach is an ellipse: `DROP_REACH_Y` tall, `DROP_REACH_X` wide.
+   * Nearest still wins between two candidates, measured in the same normalised
+   * space so neither axis can dominate by unit.
+   */
   const slotFor = useCallback(
     (id: string, at: { x: number; y: number }) => {
       // Falling back to null for anything but the held card is safe: this is a
       // handrail that stops an impossible slot lighting up, and `moveWiring` is
       // the wall behind it.
-      const inside = id === dragging ? draggingSubtree : null;
+      const blocked = id === dragging ? heldHubPathCards : null;
       let best: (typeof dropSlots)[number] | null = null;
       let bestD = Infinity;
       for (const s of dropSlots) {
         if (s.after === id) continue;
-        if (inside && s.after && inside.has(s.after)) continue;
-        const d = Math.hypot(s.x - at.x, s.y - at.y);
+        if (blocked && s.after && blocked.has(s.after)) continue;
+        const dx = (s.x - at.x) / DROP_REACH_X;
+        const dy = (s.y - at.y) / DROP_REACH_Y;
+        const d = dx * dx + dy * dy;
         if (d < bestD) {
           bestD = d;
           best = s;
         }
       }
-      // Out of reach of every slot is NOT a drop. Cancelling has to be
+      // Outside the ellipse of every slot is NOT a drop. Cancelling has to be
       // possible, and "somewhere over there" is the shape of a mistake.
-      return best && bestD < DROP_REACH ? best : null;
+      return best && bestD < 1 ? best : null;
     },
-    [dropSlots, dragging, draggingSubtree],
+    [dropSlots, dragging, heldHubPathCards],
   );
 
   /**

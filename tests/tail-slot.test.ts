@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ROW_PITCH } from "@/components/flow/graph-utils";
+import { LANE_COL, ROW_PITCH } from "@/components/flow/graph-utils";
 
 /**
  * THE DRAG'S FEEDBACK RULES, PINNED WHERE THEY ARE ARITHMETIC.
@@ -74,19 +74,57 @@ describe("the end-of-line drop slot", () => {
 describe("the drop hitbox", () => {
   it("leaves a real dead band between vertically adjacent slots", () => {
     /**
-     * The complaint was that the placeholder showed when the cursor was
-     * nowhere near a position. With rows ROW_PITCH apart, two adjacent slots'
-     * radii must not meet — otherwise every point on the canvas belongs to
-     * some slot and the feedback stops carrying information.
+     * "The hitboxes are too big": at 260 against a 232px pitch, every point on
+     * the canvas belonged to some slot and the placeholder never went away.
+     * Two adjacent slots' reaches must not meet.
      */
-    const reach = constant("DROP_REACH");
-    expect(reach * 2, `DROP_REACH ${reach} still spans the ${ROW_PITCH}px row pitch`).toBeLessThan(ROW_PITCH);
+    const y = constant("DROP_REACH_Y");
+    expect(y * 2, `DROP_REACH_Y ${y} still spans the ${ROW_PITCH}px row pitch`).toBeLessThan(ROW_PITCH);
   });
 
-  it("still reaches far enough to land a card without precision", () => {
-    // The other half: too small and the drag becomes a game. Comfortably more
-    // than a third of the gap.
-    expect(constant("DROP_REACH")).toBeGreaterThan(ROW_PITCH / 3);
+  it("reaches far enough sideways to drop a hub into a lane", () => {
+    /**
+     * THE OTHER HALF, AND THE ONE THAT COST THREE ROUNDS. A hub sits CENTRED
+     * over its branches, so dropping it into one is a diagonal of half a lane
+     * (`LANE_COL / 2`) before the grab offset is counted. Judge that with the
+     * vertical radius — as a single 110px circle did — and the move cannot be
+     * made on purpose.
+     */
+    expect(constant("DROP_REACH_X")).toBeGreaterThan(LANE_COL / 2);
+  });
+
+  it("does not let one lane claim a cursor sitting over another", () => {
+    // The ceiling on the same number: wider than a full lane and the nearest
+    // slot could be one the user is not pointing at.
+    expect(constant("DROP_REACH_X")).toBeLessThan(LANE_COL);
+  });
+
+  it("judges the two axes separately, in normalised space", () => {
+    // A single radius cannot serve both questions. The ellipse test is what
+    // makes "tight vertically, generous horizontally" expressible at all.
+    expect(canvas).toMatch(/const dx = \(s\.x - at\.x\) \/ DROP_REACH_X;/);
+    expect(canvas).toMatch(/const dy = \(s\.y - at\.y\) \/ DROP_REACH_Y;/);
+    expect(canvas).toMatch(/return best && bestD < 1 \? best : null;/);
+  });
+});
+
+describe("which slots a held Split is offered", () => {
+  it("blocks ONLY its own Path cards, never its whole subtree", () => {
+    /**
+     * THE BUG BEHIND "I can't move the Split deeper into the flow", three
+     * rounds running, and it is worth stating exactly because the shape of it
+     * is so easy to recreate: `moveWiring` had already been taught to make the
+     * move, and this filter in the OTHER file still deleted every one of those
+     * slots before a placeholder could be drawn. The fix and the block lived in
+     * different files, so each looked correct on its own.
+     *
+     * The set is built from the hub's handle targets — the same definition
+     * `moveWiring` refuses on — so the two cannot drift apart.
+     */
+    expect(canvas).toMatch(/const heldHubPathCards = useMemo\(/);
+    expect(canvas).toMatch(/edges\.filter\(\(e\) => e\.source === dragging && e\.sourceHandle\)\.map\(\(e\) => e\.target\)/);
+    // The subtree-wide version. Its return means the move is blocked again.
+    expect(canvas).not.toMatch(/descendantsOf\(dragging, edges\)/);
   });
 });
 

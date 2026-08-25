@@ -121,6 +121,17 @@ export function structuralEdges(nodes: FNode[], edges: Edge[]): Edge[] {
  */
 export const ROW_PITCH = 232;
 
+/**
+ * The horizontal distance between one lane of the flow and the next — the
+ * width a branch occupies.
+ *
+ * EXPORTED for the same reason ROW_PITCH is: the canvas's drop-target reach is
+ * derived from these two, because the two axes answer different questions
+ * ("which gap" and "which lane") and a single radius cannot serve both. See
+ * DROP_REACH_X / DROP_REACH_Y in flow-canvas.
+ */
+export const LANE_COL = 344;
+
 /** Assign 1-based step numbers in topological (top-to-bottom, left-to-right) order. */
 export function computeStepNumbers(nodes: FNode[], allEdges: Edge[]): Map<string, number> {
   const edges = structuralEdges(nodes, allEdges);
@@ -230,7 +241,7 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
    *
    * The value follows the card: 300px wide plus a 44px gutter.
    */
-  const COL = 344;
+  const COL = LANE_COL;
   const xById = new Map<string, number>();
   /** X under one incoming edge: the parent's lane, offset if it's a Paths branch. */
   const laneX = (edge: { source: string; handle: string | null }): number => {
