@@ -21,7 +21,7 @@ import {
 } from "./board-actions";
 import { BoardColumn } from "./board-column";
 import { DropGap, TileSlot } from "./board-tile-menu";
-import { AXIS_ATTR, COLUMNS_LANE, LANE_ATTR, SCROLLER_ATTR, UNGROUPED, useBoardDrag } from "./board-drag";
+import { ACCEPTS_ATTR, AXIS_ATTR, COLUMNS_LANE, LANE_ATTR, SCROLLER_ATTR, UNGROUPED, useBoardDrag } from "./board-drag";
 import { COLUMN_W, LANE_GAP, SCROLLER_BLEED } from "./board-shape";
 
 /**
@@ -272,11 +272,11 @@ export function BoardLayout({
               absence rather than as an empty box. */}
           {(board.ungrouped.tiles.length > 0 || gapAt(null) != null) && (
             <div {...{ [SCROLLER_ATTR]: "row" }} className={`${SCROLLER_BLEED} overflow-x-auto pb-2`}>
-              <div {...{ [LANE_ATTR]: UNGROUPED, [AXIS_ATTR]: "x" }} className={`flex items-start ${LANE_GAP}`}>
+              <div {...{ [LANE_ATTR]: UNGROUPED, [AXIS_ATTR]: "x", [ACCEPTS_ATTR]: "tile" }} className={`flex items-start ${LANE_GAP}`}>
                 {withGap(board.ungrouped.tiles, gapAt(null), drag?.tileKey ?? null).map((slot) =>
                   slot === null ? (
                     <div key="gap" className={`${COLUMN_W} shrink-0`}>
-                      <DropGap />
+                      <DropGap accent={groupAccent("grey")} />
                     </div>
                   ) : (
                     // `shrink-0` or the row compresses its tiles to fit instead
@@ -308,7 +308,7 @@ export function BoardLayout({
                 see COLUMNS_LANE. `items-stretch` so a column being dragged past
                 a short one still hit-tests against a full-height band. */}
             <div
-              {...{ [LANE_ATTR]: COLUMNS_LANE, [AXIS_ATTR]: "x" }}
+              {...{ [LANE_ATTR]: COLUMNS_LANE, [AXIS_ATTR]: "x", [ACCEPTS_ATTR]: "column" }}
               className={`flex items-start ${LANE_GAP}`}
             >
               {withGap(
@@ -318,7 +318,7 @@ export function BoardLayout({
               ).map((slot) =>
                 slot === null ? (
                   <div key="colgap" className={`${COLUMN_W} shrink-0 pt-11`}>
-                    <DropGap />
+                    <DropGap accent={groupAccent("grey")} />
                   </div>
                 ) : (
                   <BoardColumn

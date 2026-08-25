@@ -44,13 +44,14 @@ export function flowCap(): number {
 /**
  * How many columns one workspace may put on its dashboard.
  *
- * A blast-radius bound like the two above rather than a product decision:
- * twelve columns is already more than fits on any screen, and the number exists
- * so a runaway client cannot mint ten thousand rows, not to tell anyone how to
- * organise their metrics.
+ * A BLAST-RADIUS BOUND, not a product opinion — the number exists so a runaway
+ * client cannot mint ten thousand rows, and it should never be the thing a real
+ * workspace runs into. The board scrolls sideways without limit, so "more
+ * columns than fit on screen" is a normal state here rather than a broken one,
+ * and there is no reason for this to be tight.
  */
 export function boardGroupCap(): number {
-  return intEnv("MAX_BOARD_GROUPS_PER_ORG", 24);
+  return intEnv("MAX_BOARD_GROUPS_PER_ORG", 100);
 }
 
 /**
@@ -65,5 +66,5 @@ export function boardGroupCap(): number {
  * cannot ask for more rows than the workspace is allowed to have.
  */
 export function boardPlacementCap(): number {
-  return intEnv("MAX_BOARD_PLACEMENTS_PER_ORG", 500);
+  return intEnv("MAX_BOARD_PLACEMENTS_PER_ORG", 2000);
 }

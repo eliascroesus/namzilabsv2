@@ -96,6 +96,49 @@ export function groupAccent(key: string): string {
   return GROUP_ACCENT[key] ?? GROUP_ACCENT.grey;
 }
 
+/** Mix two hexes, `p` of the first. Both must be `#rrggbb`. */
+function blend(a: string, b: string, p: number): string {
+  const ch = (i: number) => Math.round(parseInt(a.slice(i, i + 2), 16) * p + parseInt(b.slice(i, i + 2), 16) * (1 - p));
+  return `#${[1, 3, 5].map((i) => ch(i).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * A GROUP'S THREE SURFACES, SOLVED RATHER THAN EYEBALLED.
+ *
+ * A column wears its colour the way Notion's do — a tinted badge around the
+ * name and a wash behind the cards — and the moment a colour becomes a
+ * BACKGROUND, the thing on top of it has to be legible on all ten hues, not on
+ * the two somebody happened to check.
+ *
+ * The numbers are measured (see the ratios below), not chosen:
+ *
+ *   · `groupWash` — 6% over the canvas. Enough to tell two columns apart down
+ *     the page, far too little to compete with a white tile sitting on it. The
+ *     tiles are the loud thing on this screen; the column is furniture.
+ *   · `groupBadge` — 16% over white, the pill behind the name.
+ *   · `groupInk`  — 60% accent into near-black. On its own badge that measures
+ *     5.28:1 at the worst hue (orange) and better on the other nine, so the
+ *     name clears AA at the small size it is set in. The accent ITSELF would
+ *     not: these hues are solved to 3.05:1 on white, which is a rule for a
+ *     4px mark and nowhere near enough for 13px text.
+ */
+const CANVAS = "#f1efec";
+const WHITE = "#ffffff";
+/** The dark end every group ink is mixed toward — warm, so it sits on canvas. */
+const INK = "#1a1400";
+
+export function groupWash(key: string): string {
+  return blend(groupAccent(key), CANVAS, 0.06);
+}
+
+export function groupBadge(key: string): string {
+  return blend(groupAccent(key), WHITE, 0.16);
+}
+
+export function groupInk(key: string): string {
+  return blend(groupAccent(key), INK, 0.6);
+}
+
 /** Relative luminance, sRGB. */
 function luminance(hex: string): number {
   const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);

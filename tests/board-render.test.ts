@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BOARD_GRID } from "@/components/ui/page";
 import type { BoardGroup, BoardTile, TilePlacement } from "@/lib/board/types";
+import { groupAccent, groupBadge, groupInk, groupWash } from "@/components/flow/node-accent";
 
 /**
  * WHAT THE BOARD ACTUALLY EMITS.
@@ -79,6 +80,27 @@ describe("with no groups", () => {
 });
 
 describe("with a group", () => {
+  it("wears its colour as a badge and a wash, not as bare text", () => {
+    /**
+     * The Notion move, and the reason it is worth the two helpers: a board says
+     * "these belong together" with colour before anybody reads a word. The ink
+     * is NOT the accent — these hues are solved to 3.05:1 on white, which is the
+     * rule for a 4px mark and nowhere near enough for 13px text on a tint of
+     * itself. See groupInk.
+     */
+    const html = render({
+      tiles: TILES,
+      groups: [group("g1", "Revenue metrics", "i")],
+      placements: [],
+      canEdit: true,
+    });
+    expect(html).toContain(`background:${groupBadge("blue")}`);
+    expect(html).toContain(`background:${groupWash("blue")}`);
+    expect(html).toContain(`color:${groupInk("blue")}`);
+    // The dot keeps the accent itself — a mark, not text.
+    expect(html).toContain(`background:${groupAccent("blue")}`);
+  });
+
   it("draws a column with its name and count, and the leftovers above it", () => {
     const html = render({
       tiles: TILES,
@@ -95,7 +117,7 @@ describe("with a group", () => {
 
   it("says what an empty column is for, rather than drawing a header over nothing", () => {
     const html = render({ tiles: TILES, groups: [group("g1", "Empty", "i")], placements: [], canEdit: true });
-    expect(html).toContain("Nothing in this group yet");
+    expect(html).toContain("Drop a metric here");
   });
 });
 

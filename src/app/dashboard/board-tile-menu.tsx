@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Check, GripVertical, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, MoreHorizontal, Plus } from "lucide-react";
 import type { BoardTile } from "@/lib/board/types";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/flow/controls/Popover";
@@ -16,13 +16,21 @@ import { TILE_ATTR } from "./board-drag";
  * placeholder. A second component with its own pixel height in there fails an
  * unrelated test with a message about the flow builder.
  *
- * It borrows the LOOK — dashed, brand-tinted, a filled `+` in the middle —
- * because that is what a drop target means everywhere else in this product.
+ * It borrows the SHAPE from the builder's — dashed, a filled `+` in the middle
+ * — because that is what a drop target means everywhere else in this product.
+ * The COLOUR is the column's own: the builder's gap says "a step may go here",
+ * while a board's has to say "this metric is joining THIS group", which is the
+ * only question anyone is asking while something is in the air.
  */
-export function DropGap() {
+export function DropGap({ accent }: { accent?: string }) {
   return (
-    <div className="pointer-events-none flex h-[112px] w-full items-center justify-center rounded-surface border-2 border-dashed border-primary bg-accent/40">
-      <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+    <div
+      className="pointer-events-none flex h-[112px] w-full items-center justify-center rounded-surface border-2 border-dashed"
+      // `1f` is 12% alpha — enough to read as a lit target on the column's own
+      // wash, far too little to compete with the real tiles either side of it.
+      style={accent ? { borderColor: accent, background: `${accent}1f` } : undefined}
+    >
+      <span className="flex size-7 items-center justify-center rounded-full text-white" style={{ background: accent }}>
         <Plus size={16} strokeWidth={2.5} />
       </span>
     </div>
@@ -30,23 +38,20 @@ export function DropGap() {
 }
 
 /**
- * ONE TILE, WITH A HANDLE ON IT.
+ * ONE TILE, GRABBABLE ANYWHERE, WITH A MENU IN ITS CORNER.
  *
- * The handle is a control of its own rather than the card being draggable,
- * because a tile already contains a Refresh submit and two links: making the
- * whole card a drag source would swallow all three. It sits over the card's
- * top-left corner, absolutely positioned by this wrapper — so `flow-tile.tsx`
- * and the page's `MetricTile` need no changes at all to take part.
+ * This wrapper is what lets a SERVER-RENDERED card take part in the board:
+ * `flow-tile.tsx` and the page's `MetricTile` need no changes at all.
  *
- * PRESSING IT OPENS A MENU, and once dragging exists a press-and-move will
- * start a drag instead. That ordering is deliberate: the menu is the complete
- * path, not the consolation prize. Choosing a lane and then moving up or down
- * reaches every arrangement a drag can reach, it is the only path a keyboard
- * has, and it is the better path for anyone who dislikes dragging — which is
- * why it is being built first and the pointer engine second.
+ * TWO PATHS TO THE SAME PLACE, and neither is the consolation prize. The drag
+ * is the obvious one. The menu — choose a lane, then nudge up or down — reaches
+ * every arrangement the drag can, is the only path a keyboard has, and is the
+ * better one for anyone who would rather not drag a card across a scrolling
+ * board. It was also built FIRST, deliberately, so the hardest part of this
+ * feature stayed optional rather than load-bearing.
  *
- * Visible on hover and focus, and always on a coarse pointer, where hover never
- * fires and an invisible affordance is no affordance.
+ * The menu's trigger shows on hover and focus, and always on a coarse pointer,
+ * where hover never fires and an invisible affordance is no affordance at all.
  */
 export function TileSlot({
   tile,
@@ -72,26 +77,29 @@ export function TileSlot({
   onPlace: (tileKey: string, groupId: string | null, index: number) => void;
   /** True while this is the tile in the customer's hand. */
   held?: boolean;
-  onGrab?: (e: React.PointerEvent<HTMLElement>, tile: { key: string; title: string; accent: string }) => void;
+  onGrab?: (
+    e: React.PointerEvent<HTMLElement>,
+    item: { key: string; title: string; accent: string; kind: "tile" | "column" },
+  ) => void;
   swallowClick?: () => boolean;
-  /** The colour of the lane it came from — the mark the ghost carries. */
+  /** The colour of the lane it sits in — the mark the ghost carries. */
   accent?: string;
   /**
    * The name of the sort this lane is under, when it is under one.
    *
    * A SORTED LANE CANNOT BE REORDERED BY HAND. Dropping a tile at an index the
    * sort would override on the very next render is a lie the interface tells
-   * once and is never trusted about again — so the drag is withheld here and
-   * the handle says why. Moving the tile OUT is untouched, and the menu keeps
-   * every one of its lane options; only "up" and "down" within this lane go.
+   * once and is never trusted about again — so the drag is withheld and the
+   * card says why. Moving the tile OUT is untouched, and the menu keeps every
+   * one of its lane options; only "up" and "down" within this lane go.
    */
   sortedBy?: string | null;
 }) {
   const [open, setOpen] = useState(false);
 
   // A member who may not rearrange gets the card and nothing else — not a
-  // disabled handle, which is a control advertising a thing it will refuse.
-  // The identifying attribute goes too: nothing here can be a drop target.
+  // disabled control advertising something it will refuse. The identifying
+  // attribute goes too: nothing here can be a drop target for anyone.
   if (!canEdit) return <>{tile.node}</>;
 
   const move = (groupId: string | null, at: number) => {
@@ -102,24 +110,51 @@ export function TileSlot({
   return (
     <div
       {...{ [TILE_ATTR]: tile.key }}
-      className={`group/slot relative transition-opacity duration-(--duration-fast) ${held ? "opacity-40" : ""}`}
+      /**
+       * THE CARD IS THE DRAG SOURCE — grab it anywhere, the way a Notion card
+       * works.
+       *
+       * It started as a grip in the corner, on the reasoning that a tile
+       * contains a Refresh submit and two links and making the whole thing
+       * draggable would swallow them. Both halves of that were wrong. The
+       * controls are protected by four words — `closest("button, a, input")`,
+       * exactly what the column header already does — and the grip cost far
+       * more than it saved: it had to be hunted for on hover, and it sat on top
+       * of the metric's own NAME, so hovering the card you meant to move hid
+       * which card it was.
+       *
+       * What remains in the corner is the MENU's trigger, not the drag's, and
+       * it has moved to the far side where the only thing beneath it is a 6px
+       * freshness dot.
+       */
+      onPointerDown={(e) => {
+        if (sortedBy) return;
+        if ((e.target as HTMLElement).closest("button, a, input")) return;
+        onGrab?.(e, { key: tile.key, title: tile.title, accent: accent ?? "", kind: "tile" });
+      }}
+      // A CONTROL THAT DOES NOTHING MUST SAY WHY. The card is what someone
+      // tries to drag, so the card is where "this column is sorted, so
+      // hand-ordering is off" belongs — a silently immovable tile reads as a
+      // broken drag rather than as a rule.
+      title={sortedBy ? `Sorted by ${sortedBy} — switch to Manual to reorder` : undefined}
+      className={`group/slot relative transition-opacity duration-(--duration-fast) ${held ? "opacity-40" : ""} ${
+        sortedBy ? "" : "cursor-grab [touch-action:none]"
+      }`}
     >
-      <div className="absolute left-2 top-2 z-10 opacity-0 transition-opacity duration-(--duration-fast) focus-within:opacity-100 group-hover/slot:opacity-100 pointer-coarse:opacity-100">
+      <div className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-(--duration-fast) focus-within:opacity-100 group-hover/slot:opacity-100 pointer-coarse:opacity-100">
         <Popover
           open={open}
           setOpen={setOpen}
+          align="right"
           width={220}
           anchor={
             <Button
               variant="ghost"
               size="iconSm"
-              // A PRESS-AND-MOVE IS A DRAG; A PRESS ALONE IS THE MENU. Four
-              // pixels is what separates them, and `swallowClick` is what stops
-              // the pointerup that ends a drop from also opening the menu.
-              onPointerDown={(e) => {
-                if (sortedBy) return;
-                onGrab?.(e, { key: tile.key, title: tile.title, accent: accent ?? "" });
-              }}
+              // The MENU's trigger, and only that — the card starts the drag
+              // now. It still asks `swallowClick`, because a drag that began on
+              // the card and happened to end over this corner is reported here
+              // as a click, and every drop would otherwise open the menu.
               onClick={() => {
                 if (swallowClick?.()) return;
                 setOpen((o) => !o);
@@ -127,12 +162,10 @@ export function TileSlot({
               aria-label={`Move ${tile.title}`}
               aria-haspopup="menu"
               aria-expanded={open}
-              title={sortedBy ? `Sorted by ${sortedBy} — switch to Manual to reorder` : "Drag to move, or press for the menu"}
-              // `touch-action: none` or the browser claims the gesture for
-              // scrolling and the drag never starts on a phone.
-              className={`bg-card/90 backdrop-blur-sm ${sortedBy ? "" : "cursor-grab [touch-action:none]"}`}
+              title="Move this metric"
+              className="bg-card/90 shadow-card backdrop-blur-sm"
             >
-              <GripVertical />
+              <MoreHorizontal />
             </Button>
           }
         >

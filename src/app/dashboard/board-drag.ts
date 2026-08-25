@@ -44,6 +44,23 @@ export const LANE_ATTR = "data-board-lane";
 export const AXIS_ATTR = "data-board-axis";
 export const TILE_ATTR = "data-board-tile";
 export const SCROLLER_ATTR = "data-board-scroller";
+/**
+ * WHAT A LANE WILL TAKE — "tile" or "column".
+ *
+ * THE BUG THIS EXISTS FOR: lanes nest, so when the pointer is over a group's
+ * column it is inside BOTH the row of columns and that group's own tile lane.
+ * Both scored a perfect hit, the tie was broken by document order, and the row
+ * of columns is always found first — so dragging a metric onto a group opened a
+ * COLUMN-sized gap beside it and the metric could never get in. Reported as "I
+ * can't move the metrics inside the groups", and it was every group, always.
+ *
+ * Resolving the tie by depth would work and would be the wrong rule: a column
+ * has no business being dropped into a lane of metrics either. What decides is
+ * WHAT IS IN THE HAND, so a lane simply says what it takes and the rest are not
+ * candidates at all.
+ */
+export const ACCEPTS_ATTR = "data-board-accepts";
+export type DragKind = "tile" | "column";
 /** `data-board-lane` cannot be empty, so the ungrouped row needs a spelling. */
 export const UNGROUPED = "__ungrouped__";
 /**
@@ -84,9 +101,13 @@ type Lane = {
  * makes the cache survive auto-scroll instead of silently going stale and
  * dropping the tile in the wrong column.
  */
-function measure(root: HTMLElement, held: string): { lanes: Lane[]; scrollY0: number } {
+function measure(root: HTMLElement, held: string, kind: DragKind): { lanes: Lane[]; scrollY0: number } {
   const lanes: Lane[] = [];
   for (const el of root.querySelectorAll<HTMLElement>(`[${LANE_ATTR}]`)) {
+    // A lane that does not take what is in the hand is not a candidate. See
+    // ACCEPTS_ATTR — this one line is the whole fix for "I can't move the
+    // metrics inside the groups".
+    if (el.getAttribute(ACCEPTS_ATTR) !== kind) continue;
     const raw = el.getAttribute(LANE_ATTR)!;
     const axis = el.getAttribute(AXIS_ATTR) === "x" ? "x" : "y";
     const r = el.getBoundingClientRect();
@@ -249,7 +270,7 @@ export function useBoardDrag(
   }, [resolve]);
 
   const onPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLElement>, tile: { key: string; title: string; accent: string }) => {
+    (e: React.PointerEvent<HTMLElement>, tile: { key: string; title: string; accent: string; kind: DragKind }) => {
       // Secondary buttons and modifier-clicks belong to the browser.
       if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
       const root = rootRef.current;
@@ -279,7 +300,7 @@ export function useBoardDrag(
           // The press has become a drag. Measure once, here.
           s.moved = true;
           dragged.current = true;
-          const m = measure(root, tile.key);
+          const m = measure(root, tile.key, tile.kind);
           s.lanes = m.lanes;
           s.scrollY0 = m.scrollY0;
           setDrag({ tileKey: tile.key, title: tile.title, accent: tile.accent, x: ev.clientX, y: ev.clientY, target: null });

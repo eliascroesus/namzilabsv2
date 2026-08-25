@@ -96,16 +96,28 @@ describe("pointer capture, not document listeners", () => {
   });
 
   it("swallows the click that ends a drop", () => {
-    // A drag ends with a pointerup over the handle, which the browser then
-    // reports as a click. Without this, every drop also opens the menu.
+    // A drag that began on the card and ended over the menu's corner is
+    // reported as a click there. Without this, every such drop opens the menu.
     expect(code(drag)).toMatch(/swallowClick/);
     expect(code(menu)).toMatch(/if \(swallowClick\?\.\(\)\) return;/);
   });
 
   it("claims the gesture on touch, where the browser would take it for scrolling", () => {
     expect(menu).toMatch(/\[touch-action:none\]/);
-    // And the handle is reachable at all on a device that never hovers.
+    // And the menu is reachable at all on a device that never hovers.
     expect(menu).toMatch(/pointer-coarse:opacity-100/);
+  });
+
+  it("makes the CARD the drag source, and protects the controls on it", () => {
+    /**
+     * It began as a grip in the corner, which had to be hunted for on hover and
+     * sat on top of the metric's own NAME — so hovering the card you meant to
+     * move hid which card it was. A tile carries a Refresh submit and two links,
+     * and those are protected by four words rather than by a separate handle.
+     */
+    expect(code(menu)).toMatch(/closest\("button, a, input"\)/);
+    // And the same protection on the column header, which is also its handle.
+    expect(code(column)).toMatch(/closest\("button, input"\)/);
   });
 });
 
@@ -183,5 +195,37 @@ describe("lanes nest, and an item belongs to exactly one", () => {
      * column would land it between two metrics.
      */
     expect(code(drag)).toMatch(/if \(t\.closest\(`\[\$\{LANE_ATTR\}\]`\) !== el\) continue;/);
+  });
+});
+
+describe("a lane only takes what it is for", () => {
+  it("filters candidate lanes by what is in the hand", () => {
+    /**
+     * THE BUG: hovering a group puts the pointer inside BOTH that group's tile
+     * lane and the row of columns. Both scored a perfect hit, the tie fell to
+     * document order, and the row of columns is always found first — so
+     * dragging a metric onto a group opened a COLUMN-sized gap beside it and
+     * the metric could never get in. Every group, every time.
+     *
+     * Resolving by depth would also work and would be the wrong rule: a column
+     * has no business landing in a lane of metrics either.
+     */
+    expect(code(drag)).toMatch(/if \(el\.getAttribute\(ACCEPTS_ATTR\) !== kind\) continue;/);
+  });
+
+  it("labels every lane, and labels them correctly", () => {
+    // A lane with no label accepts nothing and silently stops being a target.
+    expect(code(layout)).toMatch(/\[ACCEPTS_ATTR\]: "tile"/);
+    expect(code(layout)).toMatch(/\[ACCEPTS_ATTR\]: "column"/);
+    expect(code(column)).toMatch(/\[ACCEPTS_ATTR\]: "tile"/);
+    // Three lanes are declared across the two files; all three are labelled.
+    const lanes = (code(layout) + code(column)).match(/\[LANE_ATTR\]:/g) ?? [];
+    const labels = (code(layout) + code(column)).match(/\[ACCEPTS_ATTR\]:/g) ?? [];
+    expect(labels.length, "a lane is declared without saying what it accepts").toBe(lanes.length);
+  });
+
+  it("says which kind is being carried at each grab site", () => {
+    expect(code(menu)).toMatch(/kind: "tile"/);
+    expect(code(column)).toMatch(/kind: "column"/);
   });
 });

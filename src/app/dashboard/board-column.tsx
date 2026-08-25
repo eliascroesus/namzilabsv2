@@ -4,13 +4,13 @@ import { useState } from "react";
 import { ArrowLeft, ArrowRight, Check, MoreHorizontal, Trash2 } from "lucide-react";
 import type { BoardLane } from "@/lib/board/arrange";
 import type { BoardGroup, GroupSortKey } from "@/lib/board/types";
-import { GROUP_ACCENT, groupAccent } from "@/components/flow/node-accent";
+import { GROUP_ACCENT, groupAccent, groupBadge, groupInk, groupWash } from "@/components/flow/node-accent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
 import { Popover } from "@/components/flow/controls/Popover";
 import { DropGap, TileSlot } from "./board-tile-menu";
-import { AXIS_ATTR, LANE_ATTR, TILE_ATTR } from "./board-drag";
+import { ACCEPTS_ATTR, AXIS_ATTR, LANE_ATTR, TILE_ATTR } from "./board-drag";
 import { withGap } from "./board-layout";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
 
@@ -80,7 +80,7 @@ export function BoardColumn({
   /** Where the held tile would land in THIS column, or null if not here. */
   gapIndex: number | null;
   heldKey: string | null;
-  onGrab: (e: React.PointerEvent<HTMLElement>, tile: { key: string; title: string; accent: string }) => void;
+  onGrab: (e: React.PointerEvent<HTMLElement>, item: { key: string; title: string; accent: string; kind: "tile" | "column" }) => void;
   swallowClick: () => boolean;
 }) {
   const g = lane.group;
@@ -128,11 +128,9 @@ export function BoardColumn({
           // the kebab or the rename field belongs to that control.
           if (!canEdit || editing) return;
           if ((e.target as HTMLElement).closest("button, input")) return;
-          onGrab(e, { key: g.id, title: g.name, accent: groupAccent(g.color) });
+          onGrab(e, { key: g.id, title: g.name, accent: groupAccent(g.color), kind: "column" });
         }}
       >
-        <span className="size-2 shrink-0 rounded-full" style={{ background: groupAccent(g.color) }} aria-hidden />
-
         {editing ? (
           <Input
             autoFocus
@@ -149,29 +147,46 @@ export function BoardColumn({
               }
             }}
             aria-label={`Rename ${g.name}`}
-            className="h-8 min-w-0 flex-1 px-2 py-1 text-base font-semibold"
+            className="h-7 min-w-0 flex-1 px-2 py-0.5 text-small font-semibold"
           />
-        ) : canEdit ? (
-          // It IS a button: pressing it opens the editor. Styled to read as the
-          // heading it also is, which is not a disguise — the whole affordance
-          // is that the name is the thing you press to change the name.
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setEditing(true)}
-            title="Rename this group"
-            className="h-auto min-w-0 flex-1 justify-start truncate px-1 py-0.5 text-base font-semibold text-foreground"
-          >
-            <span className="truncate">{g.name}</span>
-          </Button>
         ) : (
-          <h3 className="min-w-0 flex-1 truncate px-1 text-base font-semibold text-foreground">{g.name}</h3>
+          /* THE NAME AS A COLOURED BADGE — a dot and a label on a wash of the
+             group's own hue, which is how a board says "these belong together"
+             before anybody reads a word of it. The ink is solved against that
+             wash rather than being the accent itself: these hues clear 3.05:1
+             on white, which is the rule for a 4px mark and nowhere near enough
+             for 13px text. See groupInk. */
+          <span
+            className="flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-2 pr-2.5"
+            style={{ background: groupBadge(g.color) }}
+          >
+            <span className="size-2 shrink-0 rounded-full" style={{ background: groupAccent(g.color) }} aria-hidden />
+            {canEdit ? (
+              // It IS a button: pressing it opens the editor. The whole
+              // affordance is that the name is the thing you press to change.
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditing(true)}
+                title="Rename this group"
+                className="h-auto min-w-0 justify-start truncate p-0 text-small font-semibold hover:bg-transparent"
+                style={{ color: groupInk(g.color) }}
+              >
+                <span className="truncate">{g.name}</span>
+              </Button>
+            ) : (
+              <h3 className="min-w-0 truncate text-small font-semibold" style={{ color: groupInk(g.color) }}>
+                {g.name}
+              </h3>
+            )}
+          </span>
         )}
 
         {/* Computed in JS from rows already in hand — never a count(*) per
             group, which would multiply the board's cost by its column count on
             every twelve-second poll. */}
         <span className="tnum shrink-0 text-tiny text-muted-foreground">{lane.tiles.length}</span>
+        <span className="flex-1" />
 
         {canEdit && (
           <Popover
@@ -311,21 +326,33 @@ export function BoardColumn({
         )}
       </div>
 
-      {/* THE LANE ITSELF — the box the drag hit-tests against. It stays in the
-          tree even when the column is empty, so an empty group is still
-          somewhere a tile can be dropped. */}
-      <div {...{ [LANE_ATTR]: g.id, [AXIS_ATTR]: "y" }} className={`flex flex-col ${LANE_GAP}`}>
+      {/* THE LANE ITSELF — the box the drag hit-tests against, and the wash
+          that says which column you are looking down.
+
+          `ACCEPTS_ATTR` is load-bearing rather than decorative: a group's lane
+          and the row of columns both contain the pointer when you hover a
+          column, and without this the row won a document-order tie every single
+          time — which is precisely why metrics could not be dropped into groups.
+
+          It stays in the tree even when the column is empty, so an empty group
+          is still somewhere a tile can land. `min-h` keeps that target big
+          enough to aim at. */}
+      <div
+        {...{ [LANE_ATTR]: g.id, [AXIS_ATTR]: "y", [ACCEPTS_ATTR]: "tile" }}
+        className={`flex min-h-[140px] flex-col rounded-card p-2 ${LANE_GAP}`}
+        style={{ background: groupWash(g.color) }}
+      >
         {lane.tiles.length === 0 && gapIndex == null ? (
           /* An empty column is a header over nothing, which reads as a tile
              that failed to load. Saying what the space is for turns it into a
              target rather than a rendering fault. */
-          <div className="flex min-h-[120px] items-center justify-center rounded-surface border-2 border-dashed border-border px-4 text-center text-tiny text-muted-foreground">
-            Nothing in this group yet
+          <div className="flex flex-1 items-center justify-center rounded-surface border border-dashed border-border/80 px-4 text-center text-tiny text-muted-foreground">
+            Drop a metric here
           </div>
         ) : (
           withGap(lane.tiles, gapIndex, heldKey).map((slot) =>
             slot === null ? (
-              <DropGap key="gap" />
+              <DropGap key="gap" accent={groupAccent(g.color)} />
             ) : (
               <TileSlot
                 key={slot.key}
