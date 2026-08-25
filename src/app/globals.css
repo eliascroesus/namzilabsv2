@@ -557,6 +557,42 @@ select:-webkit-autofill {
   text-wrap: pretty;
 }
 
+/* A SCROLLER THAT DOES NOT SHOUT.
+
+   Opt-in, for the horizontal scrollers the dashboard board is built from. The
+   platform bar is a heavy, near-black slab on macOS whenever a mouse is
+   attached, and two of them stacked across a page of quiet cards read as the
+   loudest thing on the screen — furniture outranking the numbers, which is the
+   one thing "quiet chrome, loud numbers" forbids.
+
+   Both spellings on purpose: `scrollbar-width` / `scrollbar-color` are the
+   standard and cover Firefox and current Chrome, and the `::-webkit-` rules
+   cover Safari, which still implements neither. A browser that honours only one
+   gets the same result rather than half of it.
+
+   NOT GLOBAL. A page's own scrollbar is a navigation aid and stays the size the
+   platform made it; this is for bars that sit inside the content. */
+.quiet-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-neutral-300) transparent;
+}
+.quiet-scroll::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.quiet-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.quiet-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  background-clip: content-box;
+  background-color: var(--color-neutral-300);
+  border-radius: 999px;
+}
+.quiet-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: var(--color-neutral-400);
+}
+
 /* Tabular numerals, opt-in per element — never global, per every reference
    product (Stripe: "tnum" on metric spans only). For numbers that update in
    place: a metric that reflows as it ticks reads as jitter, not change. */

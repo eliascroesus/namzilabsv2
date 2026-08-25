@@ -229,3 +229,45 @@ describe("a lane only takes what it is for", () => {
     expect(code(column)).toMatch(/kind: "column"/);
   });
 });
+
+describe("the menus escape the scroller they live in", () => {
+  it("uses the Popover's fixed mode in both places", () => {
+    /**
+     * THE BUG IN THE SCREENSHOT: a container that scrolls on ONE axis clips on
+     * BOTH, so an absolutely-positioned menu inside a column was cut off at the
+     * scroller's bottom edge. On an empty column — barely taller than its own
+     * header — that lost everything below the first sort: no Move left, no Move
+     * right, no Delete.
+     *
+     * `fixed` measures the trigger and positions in the viewport, re-measuring
+     * on scroll in the capture phase so it stays glued to a column being
+     * scrolled sideways. Both menus live inside a scroller; both need it.
+     */
+    expect(code(column)).toMatch(/^\s*fixed$/m);
+    expect(code(menu)).toMatch(/^\s*fixed$/m);
+  });
+
+  it("lets a menu taller than the viewport scroll rather than clip", () => {
+    // Fixed mode caps the panel's height and hides its overflow, so the content
+    // has to be the thing that scrolls or the same fold reappears one layer in.
+    expect(code(column)).toMatch(/overflow-y-auto/);
+    expect(code(menu)).toMatch(/overflow-y-auto/);
+  });
+});
+
+describe("the gap is the size of the hole it fills", () => {
+  it("measures the held card rather than assuming a height", () => {
+    // A fixed height was close for a bare number and wrong for a tile carrying
+    // a goal bar, and a gap that is not the size of the card going into it
+    // makes everything below it jump on the drop.
+    expect(code(drag)).toMatch(/heldH/);
+    expect(code(menu)).toMatch(/height: height && height > 0 \? height : 112/);
+  });
+
+  it("keeps the ungrouped row on the brand, not on the grey group default", () => {
+    // Passing grey looked broken: a dashed grey box with a grey disc in it
+    // reads as a disabled region rather than as the place a card is going.
+    expect(code(menu)).toMatch(/const brand = accent == null;/);
+    expect(code(layout)).toMatch(/<DropGap height=\{drag\?\.height\} \/>/);
+  });
+});

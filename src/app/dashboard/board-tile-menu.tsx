@@ -22,15 +22,35 @@ import { TILE_ATTR } from "./board-drag";
  * while a board's has to say "this metric is joining THIS group", which is the
  * only question anyone is asking while something is in the air.
  */
-export function DropGap({ accent }: { accent?: string }) {
+export function DropGap({ accent, height }: { accent?: string; height?: number }) {
+  /**
+   * NO ACCENT MEANS THE UNGROUPED ROW, and it wears the brand rather than a
+   * colour of its own. Passing it grey — the "no colour" group default — was
+   * the obvious thing and looked broken: a dashed grey box with a grey disc in
+   * it reads as a disabled region, not as the one place a card is about to go.
+   * Ungrouped is not a group, so it borrows the affordance every other target
+   * in this product uses.
+   */
+  const brand = accent == null;
   return (
     <div
-      className="pointer-events-none flex h-[112px] w-full items-center justify-center rounded-surface border-2 border-dashed"
-      // `1f` is 12% alpha — enough to read as a lit target on the column's own
-      // wash, far too little to compete with the real tiles either side of it.
-      style={accent ? { borderColor: accent, background: `${accent}1f` } : undefined}
+      className={`pointer-events-none flex w-full items-center justify-center rounded-surface border-2 border-dashed ${
+        brand ? "border-primary bg-accent/40" : ""
+      }`}
+      style={{
+        // The hole is exactly the size of the card going into it, so nothing
+        // below it jumps on the drop. 112 is only the fallback for the frame
+        // before the measurement lands.
+        height: height && height > 0 ? height : 112,
+        // `1f` is 12% alpha — enough to read as a lit target on the column's
+        // own wash, too little to compete with the real tiles either side.
+        ...(brand ? {} : { borderColor: accent, background: `${accent}1f` }),
+      }}
     >
-      <span className="flex size-7 items-center justify-center rounded-full text-white" style={{ background: accent }}>
+      <span
+        className={`flex size-7 items-center justify-center rounded-full ${brand ? "bg-primary text-primary-foreground" : "text-white"}`}
+        style={brand ? undefined : { background: accent }}
+      >
         <Plus size={16} strokeWidth={2.5} />
       </span>
     </div>
@@ -145,8 +165,15 @@ export function TileSlot({
         <Popover
           open={open}
           setOpen={setOpen}
+          /**
+           * FIXED, for the reason the column's own menu is: the lane this tile
+           * sits in is inside an `overflow-x-auto` scroller, and a container
+           * that scrolls on one axis clips on both. An absolute menu on the
+           * last tile in a column was cut off at the fold.
+           */
+          fixed
           align="right"
-          width={220}
+          width={232}
           anchor={
             <Button
               variant="ghost"
@@ -169,7 +196,7 @@ export function TileSlot({
             </Button>
           }
         >
-          <div className="p-1.5">
+          <div className="overflow-y-auto p-1.5">
             <p className="px-2 py-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Move to</p>
 
             {/* A tile lands at the END of the lane it is sent to. That is the

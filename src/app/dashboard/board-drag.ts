@@ -33,6 +33,15 @@ export type DragState = {
   tileKey: string;
   title: string;
   accent: string;
+  /**
+   * The held card's own height, measured at drag start.
+   *
+   * The gap that opens for it is exactly the hole it will fill. A fixed height
+   * was close for a bare number and wrong for a tile carrying a goal bar or a
+   * breakdown, and a gap that is not the size of the thing going into it makes
+   * every card below it jump on the drop.
+   */
+  height: number;
   /** The pointer, in viewport coordinates — where the ghost is drawn. */
   x: number;
   y: number;
@@ -101,8 +110,10 @@ type Lane = {
  * makes the cache survive auto-scroll instead of silently going stale and
  * dropping the tile in the wrong column.
  */
-function measure(root: HTMLElement, held: string, kind: DragKind): { lanes: Lane[]; scrollY0: number } {
+function measure(root: HTMLElement, held: string, kind: DragKind): { lanes: Lane[]; scrollY0: number; heldH: number } {
   const lanes: Lane[] = [];
+  const heldEl = root.querySelector<HTMLElement>(`[${TILE_ATTR}="${held}"]`);
+  const heldH = heldEl ? heldEl.getBoundingClientRect().height : 0;
   for (const el of root.querySelectorAll<HTMLElement>(`[${LANE_ATTR}]`)) {
     // A lane that does not take what is in the hand is not a candidate. See
     // ACCEPTS_ATTR — this one line is the whole fix for "I can't move the
@@ -140,7 +151,7 @@ function measure(root: HTMLElement, held: string, kind: DragKind): { lanes: Lane
       scrollLeft0: scroller?.scrollLeft ?? 0,
     });
   }
-  return { lanes, scrollY0: window.scrollY };
+  return { lanes, scrollY0: window.scrollY, heldH };
 }
 
 /** How far outside a band a value sits — zero when it is inside. */
@@ -303,7 +314,15 @@ export function useBoardDrag(
           const m = measure(root, tile.key, tile.kind);
           s.lanes = m.lanes;
           s.scrollY0 = m.scrollY0;
-          setDrag({ tileKey: tile.key, title: tile.title, accent: tile.accent, x: ev.clientX, y: ev.clientY, target: null });
+          setDrag({
+            tileKey: tile.key,
+            title: tile.title,
+            accent: tile.accent,
+            height: m.heldH,
+            x: ev.clientX,
+            y: ev.clientY,
+            target: null,
+          });
           raf.current = requestAnimationFrame(tick);
         }
       };

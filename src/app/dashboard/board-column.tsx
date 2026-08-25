@@ -61,6 +61,7 @@ export function BoardColumn({
   columnIndex,
   columnCount,
   gapIndex,
+  gapHeight,
   heldKey,
   onGrab,
   swallowClick,
@@ -79,6 +80,8 @@ export function BoardColumn({
   columnCount: number;
   /** Where the held tile would land in THIS column, or null if not here. */
   gapIndex: number | null;
+  /** The held card's own height, so the gap is the size of the hole it fills. */
+  gapHeight?: number;
   heldKey: string | null;
   onGrab: (e: React.PointerEvent<HTMLElement>, item: { key: string; title: string; accent: string; kind: "tile" | "column" }) => void;
   swallowClick: () => boolean;
@@ -195,8 +198,22 @@ export function BoardColumn({
               setMenuOpen(o);
               if (!o) setConfirming(false);
             }}
+            /**
+             * FIXED, SO IT ESCAPES THE SCROLLER IT LIVES IN.
+             *
+             * The board's columns sit in an `overflow-x-auto` container, and a
+             * container that scrolls on one axis clips on BOTH — so an
+             * absolutely-positioned menu inside a column was cut off at the
+             * scroller's bottom edge. On an EMPTY column, whose height is barely
+             * more than its header, that meant the menu lost everything below
+             * the first sort: no Move left, no Move right, no Delete. This mode
+             * measures the trigger and positions in the viewport, re-measuring
+             * on scroll in the capture phase so it stays glued to a column that
+             * is being scrolled sideways.
+             */
+            fixed
             align="right"
-            width={224}
+            width={232}
             anchor={
               <Button
                 variant="ghost"
@@ -210,7 +227,7 @@ export function BoardColumn({
               </Button>
             }
           >
-            <div className="p-1.5">
+            <div className="overflow-y-auto p-1.5">
               {/* THE COLOURS, as a grid of the thing being chosen. A list of
                   names would be ten rows to say what ten dots say at a glance. */}
               <div className="grid grid-cols-5 gap-1 p-1">
@@ -346,13 +363,20 @@ export function BoardColumn({
           /* An empty column is a header over nothing, which reads as a tile
              that failed to load. Saying what the space is for turns it into a
              target rather than a rendering fault. */
-          <div className="flex flex-1 items-center justify-center rounded-surface border border-dashed border-border/80 px-4 text-center text-tiny text-muted-foreground">
+          /* The empty column's own outline is the GROUP's colour at low
+             alpha, not the neutral border. On a wash of that same hue a grey
+             dashed box reads as a thing that failed rather than a place to put
+             something. */
+          <div
+            className="flex flex-1 items-center justify-center rounded-surface border border-dashed px-4 text-center text-tiny"
+            style={{ borderColor: `${groupAccent(g.color)}59`, color: groupInk(g.color) }}
+          >
             Drop a metric here
           </div>
         ) : (
           withGap(lane.tiles, gapIndex, heldKey).map((slot) =>
             slot === null ? (
-              <DropGap key="gap" accent={groupAccent(g.color)} />
+              <DropGap key="gap" accent={groupAccent(g.color)} height={gapHeight} />
             ) : (
               <TileSlot
                 key={slot.key}

@@ -271,39 +271,53 @@ export function BoardLayout({
               that does nothing, and "everything is filed" is worth seeing as an
               absence rather than as an empty box. */}
           {(board.ungrouped.tiles.length > 0 || gapAt(null) != null) && (
-            <div {...{ [SCROLLER_ATTR]: "row" }} className={`${SCROLLER_BLEED} overflow-x-auto pb-2`}>
-              <div {...{ [LANE_ATTR]: UNGROUPED, [AXIS_ATTR]: "x", [ACCEPTS_ATTR]: "tile" }} className={`flex items-start ${LANE_GAP}`}>
-                {withGap(board.ungrouped.tiles, gapAt(null), drag?.tileKey ?? null).map((slot) =>
-                  slot === null ? (
-                    <div key="gap" className={`${COLUMN_W} shrink-0`}>
-                      <DropGap accent={groupAccent("grey")} />
-                    </div>
-                  ) : (
-                    // `shrink-0` or the row compresses its tiles to fit instead
-                    // of scrolling, which is what makes a scroller look like a
-                    // broken grid.
-                    <div key={slot.key} className={`${COLUMN_W} shrink-0`}>
-                      <TileSlot
-                        tile={slot}
-                        canEdit={canEdit}
-                        laneId={null}
-                        index={board.ungrouped.tiles.indexOf(slot)}
-                        count={board.ungrouped.tiles.length}
-                        lanes={laneNames}
-                        onPlace={placeTile}
-                        accent={groupAccent("grey")}
-                        held={drag?.tileKey === slot.key}
-                        onGrab={onPointerDown}
-                        swallowClick={swallowClick}
-                      />
-                    </div>
-                  ),
-                )}
+            <>
+              {/* A HEADING, ON THE SAME LINE THE COLUMNS WEAR THEIRS.
+                  Without it this row is just "the dashboard" with a set of
+                  columns under it, and nothing on screen says the two are the
+                  same pile of metrics in two states. The badge is deliberately
+                  the plain neutral one: ungrouped is not a group, and giving it
+                  a colour would make it look like the eleventh. */}
+              <div className="mb-3 flex h-8 items-center gap-2 px-0.5">
+                <span className="flex items-center gap-1.5 rounded-full bg-muted py-1 pl-2 pr-2.5">
+                  <span className="size-2 shrink-0 rounded-full bg-neutral-400" aria-hidden />
+                  <span className="text-small font-semibold text-muted-foreground">Ungrouped</span>
+                </span>
+                <span className="tnum shrink-0 text-tiny text-muted-foreground">{board.ungrouped.tiles.length}</span>
               </div>
-            </div>
+              <div {...{ [SCROLLER_ATTR]: "row" }} className={`${SCROLLER_BLEED} quiet-scroll overflow-x-auto pb-3`}>
+                <div {...{ [LANE_ATTR]: UNGROUPED, [AXIS_ATTR]: "x", [ACCEPTS_ATTR]: "tile" }} className={`flex items-start ${LANE_GAP}`}>
+                  {withGap(board.ungrouped.tiles, gapAt(null), drag?.tileKey ?? null).map((slot) =>
+                    slot === null ? (
+                      <div key="gap" className={`${COLUMN_W} shrink-0`}>
+                        <DropGap height={drag?.height} />
+                      </div>
+                    ) : (
+                      // `shrink-0` or the row compresses its tiles to fit
+                      // instead of scrolling, which is what makes a scroller
+                      // look like a broken grid.
+                      <div key={slot.key} className={`${COLUMN_W} shrink-0`}>
+                        <TileSlot
+                          tile={slot}
+                          canEdit={canEdit}
+                          laneId={null}
+                          index={board.ungrouped.tiles.indexOf(slot)}
+                          count={board.ungrouped.tiles.length}
+                          lanes={laneNames}
+                          onPlace={placeTile}
+                          held={drag?.tileKey === slot.key}
+                          onGrab={onPointerDown}
+                          swallowClick={swallowClick}
+                        />
+                      </div>
+                    ),
+                  )}
+                </div>
+              </div>
+            </>
           )}
 
-          <div {...{ [SCROLLER_ATTR]: "columns" }} className={`${SCROLLER_BLEED} mt-4 overflow-x-auto pb-2`}>
+          <div {...{ [SCROLLER_ATTR]: "columns" }} className={`${SCROLLER_BLEED} quiet-scroll mt-6 overflow-x-auto pb-3`}>
             {/* The row of columns is a lane too, whose items are the columns —
                 see COLUMNS_LANE. `items-stretch` so a column being dragged past
                 a short one still hit-tests against a full-height band. */}
@@ -336,6 +350,7 @@ export function BoardLayout({
                     columnIndex={board.columns.findIndex((c) => c.id === slot.key)}
                     columnCount={board.columns.length}
                     gapIndex={gapAt(slot.key)}
+                    gapHeight={drag?.height}
                     heldKey={drag?.tileKey ?? null}
                     onGrab={onPointerDown}
                     swallowClick={swallowClick}
@@ -356,7 +371,16 @@ export function BoardLayout({
           x={drag.x}
           y={drag.y}
           title={drag.title}
-          mark={<span className="size-5 shrink-0 rounded-control" style={{ background: drag.accent }} />}
+          // The mark carries the colour of the lane it came FROM, so a card in
+          // the air still says where it belongs until it lands somewhere else.
+          // Ungrouped tiles have no colour and get the neutral one rather than
+          // a smudge of grey pretending to be a group.
+          mark={
+            <span
+              className="size-5 shrink-0 rounded-control"
+              style={{ background: drag.accent || "var(--color-neutral-300)" }}
+            />
+          }
         />
       )}
 
