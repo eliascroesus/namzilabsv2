@@ -117,20 +117,10 @@ export function structuralEdges(nodes: FNode[], edges: Edge[]): Edge[] {
  *
  * EXPORTED because the canvas has to place the end-of-line drop slot at the
  * same distance a mid-line one sits at, and "the same" has to be arithmetic
- * rather than a number typed twice. See TAIL_SLOT_Y in flow-canvas.
+ * rather than a number typed twice in two files. See TAIL_SLOT_Y in
+ * flow-canvas.
  */
 export const ROW_PITCH = 232;
-
-/**
- * The horizontal distance between one lane of the flow and the next — the
- * width a branch occupies.
- *
- * EXPORTED for the same reason ROW_PITCH is: the canvas's drop-target reach is
- * derived from these two, because the two axes answer different questions
- * ("which gap" and "which lane") and a single radius cannot serve both. See
- * DROP_REACH_X / DROP_REACH_Y in flow-canvas.
- */
-export const LANE_COL = 344;
 
 /** Assign 1-based step numbers in topological (top-to-bottom, left-to-right) order. */
 export function computeStepNumbers(nodes: FNode[], allEdges: Edge[]): Map<string, number> {
@@ -241,7 +231,7 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
    *
    * The value follows the card: 300px wide plus a 44px gutter.
    */
-  const COL = LANE_COL;
+  const COL = 344;
   const xById = new Map<string, number>();
   /** X under one incoming edge: the parent's lane, offset if it's a Paths branch. */
   const laneX = (edge: { source: string; handle: string | null }): number => {
@@ -512,49 +502,6 @@ function chainEndOf(startId: string, typeOf: (id: string) => string | undefined,
   }
 }
 
-/** The edge list a `{remove, add}` would leave behind. */
-function applied(edges: Edge[], wiring: { remove: Edge[]; add: Array<{ source: string; target: string }> }): Array<{ source: string; target: string }> {
-  const dropped = new Set(wiring.remove.map((e) => e.id));
-  return [...edges.filter((e) => !dropped.has(e.id)), ...wiring.add];
-}
-
-/**
- * Does this edge list contain a cycle? Iterative DFS with an on-stack marker,
- * so a graph mid-edit cannot blow the call stack the way the recursive form
- * would on a long chain.
- */
-function cycles(edges: Array<{ source: string; target: string }>): boolean {
-  const out = new Map<string, string[]>();
-  const ids = new Set<string>();
-  for (const e of edges) {
-    out.set(e.source, [...(out.get(e.source) ?? []), e.target]);
-    ids.add(e.source);
-    ids.add(e.target);
-  }
-  const state = new Map<string, 1 | 2>(); // 1 = on the stack, 2 = finished
-  for (const root of ids) {
-    if (state.get(root)) continue;
-    const stack: Array<{ id: string; i: number }> = [{ id: root, i: 0 }];
-    state.set(root, 1);
-    while (stack.length) {
-      const top = stack[stack.length - 1];
-      const kids = out.get(top.id) ?? [];
-      if (top.i >= kids.length) {
-        state.set(top.id, 2);
-        stack.pop();
-        continue;
-      }
-      const next = kids[top.i++];
-      if (state.get(next) === 1) return true;
-      if (!state.get(next)) {
-        state.set(next, 1);
-        stack.push({ id: next, i: 0 });
-      }
-    }
-  }
-  return false;
-}
-
 /**
  * WHERE A STEP GOES WHEN IT IS DRAGGED SOMEWHERE ELSE.
  *
@@ -627,27 +574,6 @@ export function moveWiring(
   nodes?: Array<{ id: string; type?: string; data?: { config?: unknown } }>,
 ): { remove: Edge[]; add: Edge[] } | null {
   if (target.after === nodeId) return null;
-
-  /**
-   * NOTHING GOES BETWEEN A HUB AND A PATH CARD — whatever is being moved.
-   *
-   * `{after: hub, handle}` means "become this branch's first step". When the
-   * branch already has a head that is an INSERT ABOVE IT, which pushes the
-   * auto-created "Path A" card into second place and breaks the one thing its
-   * name promises. Reported as "the filter gets in between split and path a",
-   * and it arrived through this ordinary path — the step being dragged was a
-   * Filter, so the hub-specific rules below never saw it.
-   *
-   * A branch's head is its Path card, permanently. Steps join a branch by
-   * landing UNDER that card, which is an ordinary chain slot the Path card
-   * already offers. The canvas stopped emitting the branch-head slots too; this
-   * is the wall behind that.
-   *
-   * A handle with nothing on it yet is not an insert — there is no head to
-   * displace — so it stays allowed.
-   */
-  if (target.handle && edges.some((e) => e.source === target.after && e.sourceHandle === target.handle)) return null;
-
   const eid = () => `e_${Math.random().toString(36).slice(2, 9)}`;
 
   const byId = new Map((nodes ?? []).map((n) => [n.id, n]));
@@ -655,119 +581,38 @@ export function moveWiring(
   const configOf = (id: string) => (byId.get(id)?.data?.config ?? null) as { paths?: Array<{ id: string }> } | null;
 
   if (typeOf(nodeId) === "paths") {
-    /**
-     * ── A SPLIT IS ONE OBJECT AND CANNOT COME APART ────────────────────────
-     *
-     * The hub, its Path cards and everything under them are a GROUP. A move
-     * either takes all of it or does not happen. Nothing else in this function
-     * is allowed to be true, because every bug this branch has ever had was the
-     * group coming apart in some new way:
-     *
-     *  - Bridging the hub out on detach re-parented both Path cards onto the
-     *    chain it was leaving and delivered an empty hub to the new slot.
-     *  - "Cut the lane you land in" — an attempt to let a hub move down into
-     *    its own subtree — left Path A stranded above the Split as a plain
-     *    filter. Which is worse, because it looks deliberate.
-     *
-     * So: the ONLY edge this ever removes from the hub is its incoming one.
-     * No branch edge is touched on any path through this branch, which is what
-     * makes the group indivisible by construction rather than by care.
-     *
-     * THE PRICE, STATED PLAINLY: a group cannot be dropped inside itself, and
-     * everything below a hub IS itself. A Split at the end of a flow can only
-     * move up. That is not a missing feature — there is no position down there
-     * that is not already part of the thing being moved — and the canvas does
-     * not offer those slots, so nothing lights up and no drag silently fails.
-     */
+    // Only the way IN is cut. Everything downstream is part of the object.
     const incoming = edges.filter((e) => e.target === nodeId);
     if (target.root) return { remove: incoming, add: [] };
     if (!target.after) return null;
 
+    // Everything the hub carries — needed twice below, and both uses are about
+    // the same hazard: a hub that keeps its subtree can be wired back into it.
     const carried = descendantsOf(nodeId, edges);
+    // Dropping a hub inside its own branch would ring. See the docstring.
+    if (carried.has(target.after)) return null;
 
-    /**
-     * ── MOVING A HUB DOWN ITS OWN LINE ─────────────────────────────────────
-     *
-     * THE GROUP IS THE HUB AND ITS PATH CARDS. It is not the whole subtree, and
-     * getting that wrong by one level is what every previous attempt did:
-     *
-     *   - Refusing every in-subtree drop meant a Split could only ever move UP,
-     *     because everything below it is its subtree.
-     *   - "Cut the lane" sent the PATH CARD up to the hub's old parent, which
-     *     stranded Path A above the Split as a plain filter.
-     *
-     * The Path card belongs to the hub and never leaves it. What actually moves
-     * out of the way is the branch's CONTENT — the ordinary steps below the
-     * Path card, which are just steps and can go above the hub perfectly well:
-     *
-     *   1 Whop                    1 Whop
-     *   2 Split                   └─ 5 Filter        <- content above the drop
-     *      ├─ 3 Path A                 └─ 2 Split       point rises into the
-     *      │    └─ 5 Filter                 ├─ 3 Path A  space the hub left
-     *      │         └─ 6 Filter            │    └─ 6 Filter   <- content below
-     *      └─ 4 Path B                      └─ 4 Path B           it stays put
-     *
-     * Every Path card is still on its own handle. Nothing about the group came
-     * apart; the steps flowed around it, which is what dragging a step past
-     * other steps means everywhere else on this canvas.
-     *
-     * `host` is the branch the drop landed in, `seam` its Path card, and
-     * `rising` that card's current child — the top of the run that goes above.
-     */
-    let host: Edge | undefined;
-    let rising: Edge | undefined;
-    if (carried.has(target.after)) {
-      // Captured: narrowing a parameter's property does not survive into a
-      // closure.
-      const after = target.after;
-      host = edges
-        .filter((e) => e.source === nodeId && e.sourceHandle)
-        .find((e) => e.target === after || descendantsOf(e.target, edges).has(after));
-      // Inside the group but down no lane at all is a shape with no answer.
-      if (!host) return null;
-      /**
-       * Dropping the hub directly under its OWN Path card has no meaning: the
-       * card is part of the group, so there is no run of content between them
-       * to rise, and the hub would have to sit below a card that hangs off it.
-       */
-      if (host.target === target.after) return null;
-      rising = edges.find((e) => e.source === host!.target && !e.sourceHandle && e.targetHandle == null);
-      if (!rising) return null;
-    }
-
-    const detached = edges.filter((e) => !incoming.includes(e) && e !== rising);
+    const detached = edges.filter((e) => !incoming.includes(e));
     const outgoing = target.handle
       ? detached.find((e) => e.source === target.after && e.sourceHandle === target.handle)
       : detached.find((e) => e.source === target.after && !e.sourceHandle && e.targetHandle == null);
 
-    /**
-     * Where a displaced step lands.
-     *
-     * Moving down its own line: under the HOST branch's Path card — that lane
-     * just emptied above the drop point, and the step was already in it, so it
-     * stays in the lane it was always in. Not path A, which may be a different
-     * lane entirely.
-     *
-     * Any other move: the tail of path A, or the hub itself when it has no
-     * branch wired yet — a degenerate shape, but one that must still land
-     * somewhere rather than strand the step it displaced.
-     */
+    // The tail of path A, or the hub itself when it has no branch wired yet —
+    // a degenerate shape, but one that must still land somewhere rather than
+    // strand the step it displaced.
     const firstHead = detached.find((e) => e.source === nodeId && e.sourceHandle === pathHandleIds({ config: configOf(nodeId) })[0])?.target;
-    const landing = host
-      ? chainEndOf(host.target, typeOf, configOf, detached)
-      : firstHead
-        ? chainEndOf(firstHead, typeOf, configOf, detached)
-        : nodeId;
+    const landing = firstHead ? chainEndOf(firstHead, typeOf, configOf, detached) : nodeId;
 
     /**
      * A DISPLACED STEP THAT IS ALREADY OURS IS NOT DISPLACED.
      *
+     * The second ring, and the one the drop-target guard above does not see.
      * Branches REJOIN: the commonest non-trivial shape in this product is a
      * Split whose paths both feed one Combine, and that Combine frequently
      * also takes a second source directly. Drop the hub under that source and
-     * `outgoing.target` is the Combine — already downstream of the hub through
-     * its own branches. Re-homing it under path A's tail would wire the end of
-     * the subtree back to its middle:
+     * `outgoing.target` is the Combine — which is already downstream of the
+     * hub through its own branches. Re-homing it under path A's tail wires the
+     * end of the subtree back to its middle:
      *
      *     src -> U, hub[pA] -> fA -> a1 -> U, U -> m
      *     drop hub after src  ==>  adds m -> U, and U -> m already exists.
@@ -778,45 +623,20 @@ export function moveWiring(
      * Neither ring needs re-homing to be prevented — it needs re-homing to be
      * SKIPPED. A target inside `carried` is reachable from the hub by
      * definition, so cutting the direct `after -> target` link cannot orphan
-     * it: the hub feeds it through the branch it was always on.
-     *
-     * A move DOWN ITS OWN LINE is the exception: the run that rose above the
-     * hub is no longer downstream of it, so what the drop point used to feed is
-     * genuinely displaced and lands back under that branch's Path card.
+     * it: the hub now feeds it through the branch it was always on. The link
+     * is still removed, because `after` reaches it through the hub now.
      */
-    const rehome = outgoing && (rising != null || !carried.has(outgoing.target)) ? outgoing : null;
+    const rehome = outgoing && !carried.has(outgoing.target) ? outgoing : null;
 
-    const result = {
-      remove: [...incoming, ...(rising ? [rising] : []), ...(outgoing ? [outgoing] : [])],
+    return {
+      remove: [...incoming, ...(outgoing ? [outgoing] : [])],
       add: [
-        // The branch content above the drop point rises into the space the hub
-        // left, under whatever the hub itself hung from.
-        ...(rising
-          ? incoming.map((i) => ({
-              id: eid(),
-              type: "insert",
-              source: i.source,
-              sourceHandle: i.sourceHandle ?? undefined,
-              target: rising!.target,
-            }))
-          : []),
         { id: eid(), type: "insert", source: target.after, sourceHandle: target.handle, target: nodeId },
         ...(rehome
           ? [{ id: eid(), type: "insert", source: landing, target: rehome.target, targetHandle: rehome.targetHandle ?? undefined }]
           : []),
       ],
     };
-
-    /**
-     * THE BACKSTOP. The rings above are reasoned about case by case; this
-     * checks rather than argues. Build the graph the move would produce and
-     * refuse it if it has a cycle.
-     *
-     * Refusing reads as a drag that did not take. A stored cycle does not: the
-     * layout's Kahn pass silently defaults every node in one to depth 0, and
-     * the flow compiles from the same edges.
-     */
-    return cycles(applied(edges, result)) ? null : result;
   }
 
   // Detach: everything touching the step, plus the bridge that closes the gap.

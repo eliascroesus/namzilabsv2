@@ -182,14 +182,16 @@ const CARD_H = 86;
  * number, and the placeholder sits at one distance from its card everywhere on
  * the canvas.
  *
- * It has been wrong in both directions. `CARD_GAP / 2` (128) was too high, and
- * then aligning it with the terminal "Add next step" button's own centre (146)
- * was still 13px short of a mid-line gap — close enough to look like a mistake
- * rather than a decision, which is exactly how it was reported.
+ * Half a card gap below the card (128) was the version that got reported. It
+ * put the placeholder's top edge 1px ABOVE the last card's bottom, so the gap
+ * opened INSIDE the card it was meant to open under, while the terminal "Add
+ * next step" button stayed lit across the same 56px — two dashed cards in one
+ * column, neither of them where a step would actually land. At `TAIL_SLOT_Y`
+ * the placeholder clears the card by 30px, which is exactly what it clears the
+ * card above it by in the middle of a line.
  *
- * The button that already occupies this spot steps aside instead of being
- * dodged: see `hideTailAdd`. Two dashed cards in one place is a worse problem
- * than either position.
+ * The button that occupies this spot steps aside rather than being dodged: see
+ * `hideTailAdd`. Exactly one dashed card is ever in this position.
  */
 const TAIL_SLOT_Y = (CARD_H + ROW_PITCH) / 2;
 /**
@@ -199,26 +201,12 @@ const TAIL_SLOT_Y = (CARD_H + ROW_PITCH) / 2;
  */
 const LANE_OFFSET = 360;
 /**
- * HOW NEAR A SLOT A HELD CARD HAS TO BE, ON EACH AXIS SEPARATELY.
- *
- * It was one radius, and both values it has been given were wrong for opposite
- * reasons. 260 is wider than the `ROW_PITCH` (232) between gaps, so every point
- * on the canvas sat inside some slot and the placeholder never went away —
- * "the hitboxes are too big". 110 fixed that and broke something worse: a hub
- * sits CENTRED over its branches, so dropping one into a lane is a diagonal of
- * half a column (172px) plus whatever the grab offset is, which no 110px circle
- * can contain. The move became impossible to make on purpose.
- *
- * The axes are not the same question. Vertical distance decides WHICH GAP, and
- * gaps are 232 apart, so 100 leaves a real dead band between neighbours — the
- * placeholder genuinely goes away when you are between two positions.
- * Horizontal distance decides WHICH LANE, and lanes are `LANE_COL` (344) apart,
- * so 220 comfortably covers the diagonal into a branch while still being under
- * the 344 that would let one lane claim a cursor sitting over another. Nearest
- * wins between two candidates either way.
+ * How near a slot a released card has to be to join it. Wider than the gap
+ * between slots so there is no dead zone between two steps, and narrow enough
+ * that a card dragged clear of the flow reads as "give this its own lane"
+ * rather than snapping back to the nearest line.
  */
-const DROP_REACH_Y = 100;
-const DROP_REACH_X = 220;
+const DROP_REACH = 260;
 
 export function FlowCanvas(props: {
   flowId: string;
@@ -1640,17 +1628,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
     /**
      * The gap between a card and the one under it — where its `+` sits.
      *
-     * A LINE'S END IS NOT A GAP, IT IS THE "Add next step" CARD, and the slot
-     * has to land ON that card rather than in the space above it. At
-     * `CARD_GAP / 2` it sat 18px high, so the placeholder overlapped the button
-     * instead of replacing it — two dashed cards fighting for one position,
-     * which is what it looked like.
-     *
-     * `TAIL_SLOT_Y` is that button's own centre, measured from the card's top:
-     * see FlowNodeCard's terminal button, which is `top-full mt-8` (32px below
-     * the card) and 56px tall (`p-3` twice around a 32px glyph). 86 + 32 + 28.
-     * The button hides while the slot is on it — see `hideTailAdd` in
-     * displayNodes — so exactly one dashed card is ever in that spot.
+     * A LINE'S END HAS NO CHILD to measure a midpoint against, so it borrows
+     * the mid-line arithmetic instead: see `TAIL_SLOT_Y`. Both branches of this
+     * expression put the slot the same distance below the card it follows.
      */
     const gapY = (top: number, childTop: number | null) =>
       childTop == null ? top + TAIL_SLOT_Y : (top + CARD_H + childTop) / 2;
@@ -1659,20 +1639,11 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       const p = layout.get(n.id);
       if (!p) continue;
       if (n.type === "paths") {
-        /**
-         * A HUB OFFERS NO SLOT OF ITS OWN, and that is the fix for "the filter
-         * gets in between split and path a".
-         *
-         * There used to be one per branch, sitting in the gap above each Path
-         * card, and dropping there meant "become this branch's first step" —
-         * which pushed the auto-created "Path A" card into second place and
-         * broke the one thing those cards promise by being named that.
-         *
-         * A branch's head is its Path card, permanently. Steps join a branch by
-         * landing UNDER that card, which is an ordinary chain slot the Path
-         * card already contributes on the pass below. Nothing is lost; one
-         * wrong target is.
-         */
+        for (const e of edges) {
+          if (e.source !== n.id || !e.sourceHandle) continue;
+          const tp = layout.get(e.target);
+          if (tp) out.push({ x: tp.x, y: gapY(p.y, tp.y), after: n.id, handle: e.sourceHandle });
+        }
       } else {
         const kid = edges.find((e) => e.source === n.id && !e.sourceHandle && e.targetHandle == null)?.target;
         const kp = kid ? layout.get(kid) : null;
@@ -1693,91 +1664,74 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
   }, [nodes, edges, layout, inDegreeById]);
 
   /**
-   * THE CARDS A SPLIT OWNS — the direct target of each of its branch handles,
-   * which is the auto-created "Path A" / "Path B" conditions step.
+   * THE ONE THING ON THIS CANVAS THAT DOES NOT DRAG: a Split and its Paths.
    *
-   * They are not draggable, and that is the point rather than a limitation. A
-   * path head is not a step that happens to sit under a hub; it IS the branch,
-   * and dragging one out was an offer to dismantle a Split by taking its lanes
-   * away one at a time — with no undo obvious enough to be worth the offer. The
-   * hub carries them now (see `moveWiring`), so the whole shape moves as one
-   * object and there is nothing a user can reach by dragging a head that they
-   * cannot reach by dragging the hub.
+   * A Split is not a step in a line, it is the SHAPE OF THE LINE — the point
+   * where one column becomes two — and its Path cards are not steps that happen
+   * to sit under it, they ARE the branches. Neither answers the question a drag
+   * asks. "Where in the order does this go?" has no meaning for a fork, and
+   * dragging a head out was an offer to dismantle a Split by taking its lanes
+   * away one at a time.
    *
-   * Only the HEADS are locked. Steps a user adds inside a branch stay draggable
-   * and reorder within it exactly as they always did.
+   * Every attempt to give the group a sensible drag produced a worse editor
+   * than not having one: a hub that carries its subtree can be dropped inside
+   * itself, a hub that leaves it behind orphans two branches, and a Path head
+   * that moves alone breaks the one promise its name makes. So the group holds
+   * still, and the flow is re-shaped by editing the Split rather than by
+   * throwing it.
+   *
+   * ONLY THE GROUP. Steps a user adds inside a branch drag and reorder exactly
+   * as every other card does, including into and out of the branch. What is
+   * locked is picking these two kinds of card UP.
+   *
+   * MEMBERSHIP IS A FACT ABOUT WIRING, NOT ABOUT A NODE. "Is a branch head" is
+   * read from the hub's handles every render, so it follows the graph: drop a
+   * step into the slot above a Path card and that step becomes the head, takes
+   * the lock, and the Path card it displaced becomes an ordinary step inside
+   * the branch that can be dragged like any other. That is a consequence of the
+   * hub still offering a slot per branch (see `dropSlots`); remove those slots
+   * and the group is fixed for the life of the Split.
    */
-  const branchHeadIds = useMemo(() => {
+  const splitGroupIds = useMemo(() => {
+    // Read from `hubs`, written to `locked`: a branch head that is ITSELF a hub
+    // is already in `hubs`, so testing the set being built would only make the
+    // result depend on edge order.
     const hubs = new Set(nodes.filter((n) => n.type === "paths").map((n) => n.id));
-    return new Set(edges.filter((e) => hubs.has(e.source) && e.sourceHandle).map((e) => e.target));
+    const locked = new Set(hubs);
+    for (const e of edges) if (e.sourceHandle && hubs.has(e.source)) locked.add(e.target);
+    return locked;
   }, [nodes, edges]);
 
   /**
-   * THE ONLY SLOTS A HELD HUB IS NOT OFFERED: its own Path cards.
+   * The slot a loose card would join. Beyond `DROP_REACH` of every slot it is
+   * a lane of its own — which is how a second source, or a chain someone wants
+   * to start over, gets made: drag it out to the side and let go.
    *
-   * This used to skip the hub's ENTIRE subtree, and that was the bug behind
-   * three rounds of "I can't move the Split deeper into the flow". `moveWiring`
-   * had already been taught to make the move — the branch's content rises past
-   * the hub and the Path cards travel with it — but this filter still deleted
-   * every one of those slots before a placeholder could be drawn, so nothing
-   * ever lit up and the drag had nowhere to land. The fix was in one file and
-   * the block was in the other.
-   *
-   * What genuinely has no answer is dropping the hub directly under one of its
-   * own Path cards: the card is part of the group, so there is no run of
-   * content between them to rise. `moveWiring` refuses exactly those, and these
-   * are exactly those — the two lists cannot drift, because both are "the
-   * targets of this hub's handles".
-   *
-   * Computed ONCE PER DRAG, not per pointer move: a drag makes about sixty
-   * calls a second and the graph cannot change while a card is in the air.
-   */
-  const heldHubPathCards = useMemo(() => {
-    if (!dragging || nodes.find((n) => n.id === dragging)?.type !== "paths") return null;
-    return new Set(edges.filter((e) => e.source === dragging && e.sourceHandle).map((e) => e.target));
-  }, [dragging, nodes, edges]);
-
-  /**
-   * The slot a loose card would join, or null when the card is not near one.
-   *
-   * THE TWO AXES DO NOT MEAN THE SAME THING, so they do not get the same
-   * tolerance. Vertical distance answers "which gap in the line", and gaps are
-   * `ROW_PITCH` apart, so it has to be tight or every point on the canvas
-   * belongs to some slot and the placeholder never goes away. Horizontal
-   * distance answers "which lane", and lanes are `LANE_COL` apart — but a hub
-   * sits CENTRED over its branches, so dropping one into a lane is always a
-   * diagonal drag of half a column or more. Judge that by the same tight radius
-   * and the move is impossible to make on purpose, which is precisely how a
-   * 110px circle behaved.
-   *
-   * So the reach is an ellipse: `DROP_REACH_Y` tall, `DROP_REACH_X` wide.
-   * Nearest still wins between two candidates, measured in the same normalised
-   * space so neither axis can dominate by unit.
+   * There is no "can this card be dropped inside itself?" filter here, and
+   * there is nothing left for one to catch. That hazard belonged to a hub that
+   * travels with its branches — the only card on the canvas that keeps
+   * descendants while it moves — and a hub cannot be picked up at all now (see
+   * `splitGroupIds`). Every other step is fully detached before its slot is
+   * read, so it has no descendants to be dropped among. `moveWiring` still
+   * refuses the move; nothing on this side has to.
    */
   const slotFor = useCallback(
     (id: string, at: { x: number; y: number }) => {
-      // Falling back to null for anything but the held card is safe: this is a
-      // handrail that stops an impossible slot lighting up, and `moveWiring` is
-      // the wall behind it.
-      const blocked = id === dragging ? heldHubPathCards : null;
       let best: (typeof dropSlots)[number] | null = null;
       let bestD = Infinity;
       for (const s of dropSlots) {
         if (s.after === id) continue;
-        if (blocked && s.after && blocked.has(s.after)) continue;
-        const dx = (s.x - at.x) / DROP_REACH_X;
-        const dy = (s.y - at.y) / DROP_REACH_Y;
-        const d = dx * dx + dy * dy;
+        const d = Math.hypot(s.x - at.x, s.y - at.y);
         if (d < bestD) {
           bestD = d;
           best = s;
         }
       }
-      // Outside the ellipse of every slot is NOT a drop. Cancelling has to be
+      // Out of reach of every slot is NOT a drop. Cancelling has to be
       // possible, and "somewhere over there" is the shape of a mistake.
-      return best && bestD < 1 ? best : null;
+      return best && bestD < DROP_REACH ? best : null;
     },
-    [dropSlots, dragging, heldHubPathCards],
+    [dropSlots],
   );
 
   /**
@@ -1819,9 +1773,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
        */
       if (home) setNodes((ns) => ns.map((n) => (n.id === node.id ? { ...n, position: home } : n)));
       if (!target) return;
-      // `nodes` is what lets a Split move as one object — the hub's type and its
-      // path order are both read from it. Without it every step, hub included,
-      // takes the ordinary detach-and-insert path. See moveWiring.
+      // `nodes` still goes in, and it is now purely a wall: it is what makes
+      // `moveWiring` refuse to re-home a Split, and no drag can reach that
+      // branch any more because a hub cannot be picked up. See `splitGroupIds`.
       const wiring = moveWiring(node.id, { after: target.after, handle: target.handle, root: target.root }, edges, nodes);
       if (!wiring) return;
       commit();
@@ -1865,9 +1819,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
           // dragged: the card stays where it is and a ghost follows the
           // cursor, so nothing on the canvas jumps until a drop is committed.
           position: layout.get(n.id) ?? n.position,
-          // A path head belongs to its Split and is carried by it — see
-          // `branchHeadIds`. Everything else on the canvas drags as before.
-          draggable: !branchHeadIds.has(n.id),
+          // A Split and its Path cards are one fixed shape — see
+          // `splitGroupIds`. Everything else on the canvas drags as before.
+          draggable: !splitGroupIds.has(n.id),
           // Drive the selection ring from OUR selection (the open config step), so
           // programmatic selection (adding/continuing to a step) highlights the right card.
           selected: n.id === selectedId,
@@ -1888,18 +1842,18 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
             /**
              * The terminal "Add next step" steps aside while a card is being
              * dropped onto its spot — the placeholder takes that exact position
-             * (see TAIL_SLOT_Y), and two dashed cards in one place reads as a
+             * (see TAIL_SLOT_Y), and two dashed cards in one column reads as a
              * rendering fault rather than as a target.
              *
              * A tail slot is the only one that can name a TERMINAL node: a
              * mid-chain slot exists because the step has a child, and a step
-             * with a child is not terminal.
+             * with a child is not terminal. A branch slot carries a `handle`.
              */
-            hideTailAdd: dropSlot?.after === n.id && !dropSlot.handle,
+            hideTailAdd: dropSlot != null && dropSlot.after === n.id && !dropSlot.handle,
           },
         };
       }),
-    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId, metricByNode, refLineById, supersededById, dragging, dropSlot, branchHeadIds],
+    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId, metricByNode, refLineById, supersededById, dragging, dropSlot, splitGroupIds],
   );
   /**
    * RUN THE WHOLE FLOW, top to bottom.
@@ -1954,27 +1908,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       const key = `${e.source}::${e.sourceHandle ?? ""}->${e.target}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      /**
-       * THE `+`s STAY UP WHILE A CARD IS CARRIED, and only the one being
-       * landed on stands down.
-       *
-       * Every `+` used to vanish for the length of a drag. That removed the
-       * only map of where a step is allowed to go at precisely the moment
-       * somebody needs it — you were left dragging over blank canvas hoping a
-       * placeholder would appear. Now they stay, and the drop placeholder
-       * REPLACES the single `+` whose gap it lands in, so the two are never in
-       * one spot and the rest keep saying "here too".
-       *
-       * An insert edge is the gap between its source and its child, so a slot
-       * named `{after, handle}` covers exactly the edge leaving that source on
-       * that handle.
-       */
-      const covered =
-        dropSlot != null && dropSlot.after === e.source && (dropSlot.handle ?? null) === (e.sourceHandle ?? null);
-      out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge, covered } });
+      out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge, carrying: dragging != null } });
     }
     return out;
-  }, [nodes, edges, insertOnEdge, selectedId, dropSlot]);
+  }, [nodes, edges, insertOnEdge, selectedId, dragging]);
 
   const empty = nodes.length === 0;
 
