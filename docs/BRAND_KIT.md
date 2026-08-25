@@ -157,17 +157,39 @@ for borderless surfaces. `shadow-sm` and friends are banned.
 ## 5. Layout & spacing
 
 4px grid. Page shape comes from primitives, not hand-set containers:
-- `PageContainer` — `max-w-6xl`, gutter steps `px-4 → sm:px-6 → lg:px-8`;
-  `width="narrow"` → `max-w-3xl` (forms, detail pages). Centered flows (auth,
-  onboarding) use `max-w-md`. It renders the page's one `<main id="main">` —
-  the skip link's target — so `AppFrame` renders a plain `<div>` unless a page
-  brings no container (the builder, via `ownsMain`).
+- `PageContainer` — **boards fill, forms stay narrow.** The default carries no
+  max-width at all: every route using it is a board or a list, whose content is
+  a repeating unit, so width buys another COLUMN rather than three stretched
+  tiles. `width="narrow"` → `max-w-3xl` at every viewport (forms, detail pages),
+  because a form gets nothing from width and a sentence run across an ultrawide
+  is four times a readable measure. Gutter steps
+  `px-4 → sm:px-6 → lg:px-8 → 2xl:px-12`; the last rung is the fill's own, since
+  once content is no longer centred in empty canvas the gutter is all that holds
+  it off the frame. Centered flows (auth, onboarding) use `max-w-md`. It renders
+  the page's one `<main id="main">` — the skip link's target — so `AppFrame`
+  renders a plain `<div>` unless a page brings no container (the builder, via
+  `ownsMain`).
 - Card padding: `p-5` default, `p-4` compact, `p-3` dense rows. Nothing else.
 - Section rhythm: `mt-8` between page sections.
-- Card grids: `gap-4 sm:grid-cols-2 xl:grid-cols-3` — one rhythm for the
-  dashboard's tiles, the flows board and the connector catalogue. Let the cards
-  stretch (no `items-start`) wherever they carry a footer, so the row's footers
-  line up; a ragged row of footers is the difference between a board and a pile.
+- Card grids: import **`BOARD_GRID`** from `ui/page` — never spell the classes.
+  It is `grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4
+  3xl:grid-cols-5`, one rhythm for the dashboard's tiles, the flows board, the
+  connector catalogue **and the two skeletons that stand in front of them**. A
+  skeleton whose grid disagrees with its page is a jump on arrival, which is the
+  one thing a skeleton exists to prevent. Let the cards stretch (no
+  `items-start`) wherever they carry a footer, so the row's footers line up; a
+  ragged row of footers is the difference between a board and a pile.
+- `3xl` (1920px) is ours, declared as `--breakpoint-3xl` in `@theme`. It exists
+  because the stock scale stops at 1536 — one monitor short of the most common
+  desktop width there is — and a fill with no rung above that is three tiles
+  stretched across a screen with room for five.
+
+**Constants shared across the server/client boundary live in a module with no
+directive.** A `"use client"` file's exports are not values on the server: the
+flight loader swaps each one for a client reference, and interpolating that into
+a `className` does not throw — it stringifies a function into the attribute.
+`day-cell.ts` (`DAY_CELL_H`) and `flow/panel-chrome.tsx` (`PANEL_SHELL`) are
+both shaped this way, each for a server component that has to read the string.
 
 ## 6. Components (`src/components/ui/`)
 

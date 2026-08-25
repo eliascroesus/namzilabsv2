@@ -51,7 +51,7 @@ const buttonVariants = cva(
         // until hovered, then unmistakable.
         // Rest was `text-neutral-400` — 2.53:1, and globals.css marks that token
         // "decorative / disabled only — never text". It was carrying real labels
-        // ("Revoke", "Delete rank", "Remove") at 13px semibold. Hover was no
+        // ("Revoke", "Delete role", "Remove") at 13px semibold. Hover was no
         // better: destructive-on-red-50 measures 4.34:1. Both states now come
         // from the danger trio — 5.68:1 at rest, 5.49:1 on hover.
         destructiveGhost: "text-muted-foreground hover:bg-danger-soft hover:text-danger-ink",

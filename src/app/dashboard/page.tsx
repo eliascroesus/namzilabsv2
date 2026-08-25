@@ -1,17 +1,15 @@
 import { ChevronDown, Plus } from "lucide-react";
 import Link from "next/link";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
-import { connections, events, flows } from "@/db/schema";
-import { unresolvedDeadLetterCountsByConnection } from "@/lib/dead-letter";
+import { connections, flows } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { AppShell } from "@/components/app-shell";
 import { buttonVariants } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
-import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { BOARD_GRID, PageContainer, PageHeader } from "@/components/ui/page";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { SourceMark } from "@/components/source-mark";
@@ -32,7 +30,7 @@ import {
   type FunnelResult,
 } from "@/lib/metrics/compute";
 import { resolveRange, RANGE_OPTIONS } from "@/lib/metrics/range";
-import { catalogEntry, eventTypeLabel } from "@/connectors/catalog";
+import { catalogEntry } from "@/connectors/catalog";
 import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ImportCoverage } from "@/connectors/types";
@@ -98,15 +96,22 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   let metrics: Metric[] = [];
   let sources: string[] = [];
-  // The five columns the feed renders, not the whole row — see the select below.
-  let recentEvents: Array<{ id: string; source: string; eventType: string; subject: string | null; occurredAt: Date }> = [];
-  let dlqByConnection: Array<{ connectionId: string; name: string; count: number }> = [];
   let connCount = 0;
   let flowCount = 0;
   let loadError: string | null = null;
 
+  /**
+   * FOUR READS, DOWN FROM SIX. The event feed and the dead-letter roll-up used
+   * to run HERE, on the most-rendered page in the product — and not merely on
+   * navigation: `FreshnessPoller` calls `router.refresh()` on every results
+   * version change, which re-runs this whole component. Two queries per render
+   * to fill a six-row card that was the least-looked-at thing on the screen.
+   *
+   * Both moved to /dashboard/activity, which has room to show fifty rows and
+   * runs them only when somebody opens it. See that page's own note.
+   */
   try {
-    [metrics, sources, recentEvents, dlqByConnection, connCount, flowCount] = await Promise.all([
+    [metrics, sources, connCount, flowCount] = await Promise.all([
       listMetrics(orgId),
       /**
        * THE SOURCES A WORKSPACE IS CONNECTED TO, not the ones its history
@@ -130,30 +135,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
        * events directly, and they are cold pages where the scan costs nothing.
        */
       connectedSources(db, orgId),
-      // Live rows only (query convention: every events read filters deleted_at,
-      // src/db/schema.ts). receivedAt ordering is intentional for an activity
-      // feed; the top-6 sort over one org's live rows is bounded and cheap.
-      //
-      // FIVE COLUMNS, NOT SEVENTEEN. The feed renders source, type, subject and
-      // a timestamp; a bare `select()` also carried `properties` — the whole
-      // provider record, which is 5–30KB per row for a Close event log entry
-      // and up to 50KB for an Instantly email — six times over, on every render
-      // and every freshness poll, to display none of it.
-      db
-        .select({
-          id: events.id,
-          source: events.source,
-          eventType: events.eventType,
-          subject: events.subject,
-          occurredAt: events.occurredAt,
-        })
-        .from(events)
-        .where(and(eq(events.orgId, orgId), isNull(events.deletedAt)))
-        .orderBy(desc(events.receivedAt))
-        .limit(6),
-      // Per-connection, not a scalar: the red number links to the page with
-      // the Replay button instead of being a dead end.
-      unresolvedDeadLetterCountsByConnection(db, orgId),
       db
         .select({ c: sql<number>`count(*)::int` })
         .from(connections)
@@ -295,12 +276,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * Sitting the ranges in one track makes them read as one control with one
    * answer, and leaves the source picker beside it as visibly separate.
    *
-   * THE TRACK CANNOT WRAP — it is `flex` at its default `nowrap`, so a seventh
-   * option can only make it wider, never make it fold. "Upcoming" is that
-   * seventh, and 8px of item padding (down from 10, and on the 4px grid the
-   * old value missed) keeps the whole track a shade over half of the
-   * `PageContainer` with the source picker still beside it. An EIGHTH option
-   * needs this measured again rather than assumed.
+   * THE TRACK CANNOT WRAP — it is `flex` at its default `nowrap`, so another
+   * option can only make it wider, never make it fold. It held seven when
+   * "Upcoming" was on it and holds six now; 8px of item padding (down from 10,
+   * and on the 4px grid the old value missed) is what kept seven inside the
+   * container with the source picker still beside it, so six has room to
+   * spare. An option ADDED here needs that measured again rather than assumed.
    *
    * THE SELECTED ITEM IS THE ACCENT WASH NOW, not a white knob. The track used
    * to be a `bg-muted` groove with a white pill riding in it — a shape that
@@ -316,8 +297,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
 
   const activeSourceLabel = boardSource ? (catalogEntry(boardSource)?.name ?? boardSource) : "All sources";
-  // Render the Subject column only when some row has one to show.
-  const hasSubjects = recentEvents.some((e) => e.subject);
   /**
    * WHEN THE BOARD ITSELF WAS LAST TRUE — the newest `computedAt` across every
    * tile on it. Each tile already carries its own as-of line; what none of them
@@ -335,9 +314,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {/* G.4: refresh the server-rendered tiles when the org's results move. */}
       <FreshnessPoller />
       <PageContainer>
+        {/* NO LEDE. It said the board holds every published flow's number,
+            recomputed on a schedule and stamped with when it was last true —
+            and every one of those three facts is already on the screen, said
+            by the thing it is about: the tiles ARE the numbers, each carries
+            its own as-of line, and the caption below states when the board as a
+            whole was last true. A sentence that narrates the page under it is
+            furniture. Same rule on every board in the product now. */}
         <PageHeader
           title="Dashboard"
-          lede="Every published flow's number in one place — recomputed on a schedule, and stamped with when it was last true."
           actions={
             <>
               {/* Every tile at once. The per-tile Refresh recomputes one flow,
@@ -485,11 +470,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <span title={formatDateTime(boardComputedAt)}>newest number {relativeTime(boardComputedAt)}</span>
               </>
             )}
-            {/* No dead-letter count here on purpose: the activity card below
-                already carries it, per connection and as a LINK to the page
-                with the Replay button on it. The same red number twice on one
-                screen, once without a door, is how a dashboard teaches people
-                to stop reading it. */}
+            {/* Still no dead-letter count here, and now for a second reason:
+                it lives on Activity, whole and per connection, as a LINK to the
+                page with the Replay button on it. A red number on a board with
+                no door is how a dashboard teaches people to stop reading it. */}
           </MetaLine>
         )}
 
@@ -514,7 +498,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           // the alternative is leaving last range's numbers on screen under a
           // pill that now says something else.
           <TileArea count={flowTiles.length + tiles.length}>
-            <div className="mt-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className={`mt-4 items-start ${BOARD_GRID}`}>
               {flowTiles.map((row) => (
                 <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} rangeKey={rangeKey} />
               ))}
@@ -525,88 +509,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </TileArea>
         )}
         </BoardControls>
-
-        {/* ── WORKSPACE ACTIVITY ────────────────────────────────────────
-            ONE SURFACE, HEADER AND ALL. The eyebrow and the connection summary
-            used to float above a separate table shell, so the section read as
-            two unrelated things stacked — and on the warm canvas a heading
-            sitting on the page beside a white table looks like a caption that
-            lost its card. The strip is now the table's own head. */}
-        <section className="mt-12">
-          <Card variant="surface" padding="none" className="overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-4 py-3">
-              <SectionHeading className="mb-0">Recent activity</SectionHeading>
-              <span className="text-tiny text-muted-foreground">
-                {connCount} connection{connCount === 1 ? "" : "s"} ·{" "}
-                {dlqByConnection.length > 0 ? (
-                  // Each count links to the connection page that hosts the
-                  // Replay button — a red number with no door was the old shape.
-                  dlqByConnection.map((d, i) => (
-                    <span key={d.connectionId}>
-                      {i > 0 && ", "}
-                      <Link href={`/connections/${d.connectionId}`} className="text-danger-ink hover:underline">
-                        {d.count} in dead-letter on {d.name}
-                      </Link>
-                    </span>
-                  ))
-                ) : (
-                  "no failures"
-                )}
-              </span>
-            </div>
-            {recentEvents.length === 0 ? (
-              <p className="px-4 py-8 text-center text-base text-muted-foreground">
-                No events ingested yet.{" "}
-                <Link href="/integrations" className="font-medium text-primary hover:underline">
-                  Connect a source
-                </Link>
-                .
-              </p>
-            ) : (
-              // The Card is the shell, so the table needs only its own
-              // horizontal scroller — a TableShell here would draw a second
-              // border and a second radius inside the first.
-              <div className="overflow-x-auto">
-                <Table>
-                  <THead>
-                    <tr>
-                      <TH>Source</TH>
-                      <TH>Type</TH>
-                      {/* A column of em-dashes is not information. Most sources
-                          carry no subject, and the empty column was taking a
-                          sixth of the table's width to say so on every row. */}
-                      {hasSubjects && <TH>Subject</TH>}
-                      <TH className="text-right">Occurred</TH>
-                    </tr>
-                  </THead>
-                  <TBody>
-                    {/* Humanised the way the builder's own pickers do it —
-                        "Close CRM · Lead created", not "close · lead_created".
-                        The raw type rides along in the title attribute, because
-                        it IS what a Filter step matches on. */}
-                    {recentEvents.map((e) => (
-                      <TR key={e.id} static>
-                        <TD>
-                          <span className="flex items-center gap-2">
-                            <SourceMark source={e.source} />
-                            <span className="truncate">{catalogEntry(e.source)?.name ?? e.source}</span>
-                          </span>
-                        </TD>
-                        <TD title={e.eventType} className="text-muted-foreground">
-                          {eventTypeLabel(e.source, e.eventType)}
-                        </TD>
-                        {hasSubjects && <TD className="text-muted-foreground">{e.subject ?? "—"}</TD>}
-                        <TD className="whitespace-nowrap text-right text-muted-foreground">
-                          {formatDateTime(new Date(e.occurredAt))}
-                        </TD>
-                      </TR>
-                    ))}
-                  </TBody>
-                </Table>
-              </div>
-            )}
-          </Card>
-        </section>
       </PageContainer>
     </AppShell>
   );

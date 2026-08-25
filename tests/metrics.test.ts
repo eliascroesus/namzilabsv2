@@ -4,7 +4,7 @@ import { createTestDb } from "./helpers/testdb";
 import { events } from "@/db/schema";
 import { computeAggregate, computeFunnel, queryEvents } from "@/lib/metrics/compute";
 import { AggregateSchema, FunnelSchema } from "@/lib/metrics/types";
-import { resolveRange } from "@/lib/metrics/range";
+import { MATERIALIZED_RANGES, RANGE_OPTIONS, resolveRange } from "@/lib/metrics/range";
 import type { DB } from "@/db/types";
 
 let db: DB;
@@ -185,42 +185,60 @@ describe("resolveRange — Today and Yesterday", () => {
 });
 
 /**
- * THE FORWARD RANGE. Every other pill ends at now, so a meeting that has not
- * happened yet was visible in exactly one place — "All time", which is returned
- * unfiltered and so counted it without saying so.
+ * THE FORWARD RANGE IS RETIRED, and this describes what replaced it.
+ *
+ * "Upcoming" was a seventh pill: strictly after now, out to a year-9999
+ * sentinel. It answered a real question — every other pill ends at now, so a
+ * meeting that has not happened yet was visible only inside "All time", which
+ * is returned unfiltered and counted it silently — but it answered it on the
+ * wrong surface. A dashboard tile is a RESULT, and a headline number that mixes
+ * what happened with what is merely scheduled is its own kind of wrong. The
+ * forward view is the Calendar, which draws days still to come quieter than
+ * days that happened.
+ *
+ * THE KEY MUST FALL BACK, NOT RESOLVE. Leaving `resolveRange` able to return
+ * "upcoming" after it left `MATERIALIZED_RANGES` was worse than either
+ * extreme: no stored tile carries the slot, so a bookmarked `?range=upcoming`
+ * rendered every metric as "—" over "Not computed yet for this range — Refresh
+ * to compute it", and Refresh could never produce it. That is a board naming a
+ * button that cannot work.
  */
-describe("resolveRange — Upcoming", () => {
-  it("starts strictly after now, so a record dated exactly now is not counted twice", () => {
-    const before = Date.now();
-    const { key, range } = resolveRange("upcoming");
-    expect(key).toBe("upcoming");
-    expect(range.from.getTime()).toBeGreaterThan(before);
+describe("resolveRange — the retired forward range", () => {
+  it("treats 'upcoming' as an unknown key and falls back", () => {
+    // Sabotage: restore the `key === "upcoming"` arm of the guard in
+    // resolveRange and this returns "upcoming" with a year-9999 end — the
+    // permanent "Not computed yet" state described above.
+    expect(resolveRange("upcoming").key).toBe("7d");
+    // ...and a real window, not a sentinel: the end is the clock.
+    expect(resolveRange("upcoming").range.to.getTime()).toBeLessThanOrEqual(Date.now());
   });
 
-  it("ends at a bound that survives being written as a date", () => {
-    const { range } = resolveRange("upcoming");
-    // Sabotage: `new Date(8_640_000_000_000_000)` is also a Date and is also
-    // "far future", but it serialises as "+275760-09-13T00:00:00.000Z" — the
-    // ISO extended-year spelling, which Postgres will not parse. Four plain
-    // digits is the whole requirement, and the SQL test below proves it.
-    expect(range.to.toISOString()).toBe("9999-12-31T23:59:59.999Z");
+  it("offers no forward pill, and materializes no forward slot", () => {
+    // The two lists a pill and a stored slot come from. Neither may carry it:
+    // one would put the pill back, the other would put the bytes back on every
+    // tile read.
+    expect(RANGE_OPTIONS.map((r) => r.key)).not.toContain("upcoming");
+    expect(MATERIALIZED_RANGES).not.toContain("upcoming");
   });
 
   /**
-   * The bound is not decorative: `compute.ts` binds it straight into
-   * `occurred_at <= $n`. This runs it through the real database.
+   * The asymmetry that made the future invisible is still real and still the
+   * reason the Calendar exists — a backward pill excludes future-dated records,
+   * through the SQL path, against the real database. This half of the old
+   * forward test outlives it.
    */
-  it("selects future-dated events through the SQL path, and only those", async () => {
+  it("still excludes future-dated events from a backward window", async () => {
     await ev({ eventType: "booked", subject: "next week", daysAgo: -7 });
     await ev({ eventType: "booked", subject: "in an hour", daysAgo: -1 / 24 });
     await ev({ eventType: "booked", subject: "yesterday", daysAgo: 1 });
 
-    const res = await computeAggregate(db, ORG, agg({ eventType: "booked" }), resolveRange("upcoming").range);
-    expect(res).toEqual({ kind: "scalar", value: 2 });
-
-    // And the backward pills still exclude them, which is the asymmetry that
-    // made the future invisible in the first place.
     const week = await computeAggregate(db, ORG, agg({ eventType: "booked" }), resolveRange("7d").range);
     expect(week).toEqual({ kind: "scalar", value: 1 });
+
+    // "All time" is the one that still contains them, unfiltered — which is
+    // exactly the gap "Upcoming" was invented to explain and the Calendar now
+    // shows properly.
+    const all = await computeAggregate(db, ORG, agg({ eventType: "booked" }), resolveRange("all").range);
+    expect(all).toEqual({ kind: "scalar", value: 1 });
   });
 });

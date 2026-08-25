@@ -1635,16 +1635,49 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
   }, [nodes, edges, layout, inDegreeById]);
 
   /**
+   * THE CARDS A SPLIT OWNS — the direct target of each of its branch handles,
+   * which is the auto-created "Path A" / "Path B" conditions step.
+   *
+   * They are not draggable, and that is the point rather than a limitation. A
+   * path head is not a step that happens to sit under a hub; it IS the branch,
+   * and dragging one out was an offer to dismantle a Split by taking its lanes
+   * away one at a time — with no undo obvious enough to be worth the offer. The
+   * hub carries them now (see `moveWiring`), so the whole shape moves as one
+   * object and there is nothing a user can reach by dragging a head that they
+   * cannot reach by dragging the hub.
+   *
+   * Only the HEADS are locked. Steps a user adds inside a branch stay draggable
+   * and reorder within it exactly as they always did.
+   */
+  const branchHeadIds = useMemo(() => {
+    const hubs = new Set(nodes.filter((n) => n.type === "paths").map((n) => n.id));
+    return new Set(edges.filter((e) => hubs.has(e.source) && e.sourceHandle).map((e) => e.target));
+  }, [nodes, edges]);
+
+  /**
    * The slot a loose card would join. Beyond `DROP_REACH` of every slot it is
    * a lane of its own — which is how a second source, or a chain someone wants
    * to start over, gets made: drag it out to the side and let go.
+   *
+   * A SPLIT CANNOT BE DROPPED INSIDE ITSELF. It travels with its branches now,
+   * so a slot within its own subtree would close a ring that the layout walks
+   * forever. `moveWiring` refuses that move outright; skipping the slots here
+   * is what stops one lighting up under the cursor first, which would read as
+   * a drop the editor then silently declined.
+   *
+   * `descendantsOf` runs per pointer move rather than being memoized, and that
+   * is deliberate: it is a DFS over a graph the flow limit keeps to a few dozen
+   * edges, and the alternative is caching a value keyed on a drag that is
+   * already in flight.
    */
   const slotFor = useCallback(
     (id: string, at: { x: number; y: number }) => {
+      const inside = nodes.find((n) => n.id === id)?.type === "paths" ? descendantsOf(id, edges) : null;
       let best: (typeof dropSlots)[number] | null = null;
       let bestD = Infinity;
       for (const s of dropSlots) {
         if (s.after === id) continue;
+        if (inside && s.after && inside.has(s.after)) continue;
         const d = Math.hypot(s.x - at.x, s.y - at.y);
         if (d < bestD) {
           bestD = d;
@@ -1655,7 +1688,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       // possible, and "somewhere over there" is the shape of a mistake.
       return best && bestD < DROP_REACH ? best : null;
     },
-    [dropSlots],
+    [dropSlots, nodes, edges],
   );
 
   /**
@@ -1697,7 +1730,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
        */
       if (home) setNodes((ns) => ns.map((n) => (n.id === node.id ? { ...n, position: home } : n)));
       if (!target) return;
-      const wiring = moveWiring(node.id, { after: target.after, handle: target.handle, root: target.root }, edges);
+      // `nodes` is what lets a Split move as one object — the hub's type and its
+      // path order are both read from it. Without it every step, hub included,
+      // takes the ordinary detach-and-insert path. See moveWiring.
+      const wiring = moveWiring(node.id, { after: target.after, handle: target.handle, root: target.root }, edges, nodes);
       if (!wiring) return;
       commit();
       setEdges((es) => {
@@ -1740,6 +1776,9 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
           // dragged: the card stays where it is and a ghost follows the
           // cursor, so nothing on the canvas jumps until a drop is committed.
           position: layout.get(n.id) ?? n.position,
+          // A path head belongs to its Split and is carried by it — see
+          // `branchHeadIds`. Everything else on the canvas drags as before.
+          draggable: !branchHeadIds.has(n.id),
           // Drive the selection ring from OUR selection (the open config step), so
           // programmatic selection (adding/continuing to a step) highlights the right card.
           selected: n.id === selectedId,
@@ -1760,7 +1799,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
           },
         };
       }),
-    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId, metricByNode, refLineById, supersededById, dragging, dropSlot],
+    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId, metricByNode, refLineById, supersededById, dragging, dropSlot, branchHeadIds],
   );
   /**
    * RUN THE WHOLE FLOW, top to bottom.

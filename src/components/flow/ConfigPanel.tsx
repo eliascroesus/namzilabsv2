@@ -579,7 +579,11 @@ function NodeConfig({
           />
           {connections.length === 0 && (
             <p className={cn(NOTE_WARN, "mt-1.5")}>
-              No connected accounts yet. Connect one in <a className="underline" href="/integrations">Integrations</a>.
+              {/* "Apps", not "Integrations": the page this lands on is titled
+                  Apps and the only rail item leading to it says Apps. A link
+                  naming a title that exists nowhere is a broken promise about
+                  where you end up. */}
+              No connected accounts yet. Connect one in <a className="underline" href="/integrations">Apps</a>.
             </p>
           )}
           {conn && <ImportStatusLine connectionId={conn.id} historyNote={catalogEntry(conn.source)?.historyNote} />}
@@ -1518,10 +1522,12 @@ function ImportStatusLine({ connectionId, historyNote }: { connectionId: string;
     // "This is everything" is true of the provider's API and can still be
     // false of the ACCOUNT — Close forgets its own event log after ~30 days.
     // Without the note, a lead the CRM shows but we never received reads as
-    // our sync losing data.
+    // our sync losing data. So the caveat stays; what went is the clause that
+    // was ALSO the caveat ("— everything the source still offers"), which said
+    // the same thing one line above a sentence that says it precisely.
     return (
       <div className="mt-1.5 space-y-1">
-        <p className="text-tiny text-success-ink">History imported — everything the source still offers.</p>
+        <p className="text-tiny text-success-ink">History imported.</p>
         {historyNote && <p className="text-tiny text-muted-foreground">{historyNote}</p>}
       </div>
     );

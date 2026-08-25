@@ -16,7 +16,8 @@ import { formatMetricValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
- * One row in "Your connections": links to the connection page, with an inline
+ * One row in the Apps page's connection list: links to the connection page,
+ * with an inline
  * rename (pencil) so users can label accounts themselves ("Sheets — sales team"),
  * and TWO ways to get rid of it.
  *

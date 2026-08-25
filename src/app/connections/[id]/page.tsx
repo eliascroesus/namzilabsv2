@@ -76,8 +76,12 @@ export default async function ConnectionPage({
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <PageContainer width="narrow">
+        {/* The back link says "Apps", matching the page it returns to and the
+            rail item that is the only way to either — a back link naming a
+            title that no longer exists is a broken promise about where you
+            land. */}
         <PageHeader
-          back={{ href: "/integrations", label: "Integrations" }}
+          back={{ href: "/integrations", label: "Apps" }}
           title={conn.name}
           lede={entry?.name ?? conn.source}
           actions={

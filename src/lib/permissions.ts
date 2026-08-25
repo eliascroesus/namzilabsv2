@@ -22,7 +22,7 @@ export const PERMISSIONS = [
   // default, because "can use everything" and "can govern everyone" are
   // different trusts everywhere this was researched (Whop's admin preset,
   // Canva's team admin, Notion's membership admin, Miro's team admin).
-  { key: "manage_workspace", label: "Manage workspace", blurb: "Invite members, create ranks and assign them" },
+  { key: "manage_workspace", label: "Manage workspace", blurb: "Invite members, create roles and assign them" },
 ] as const;
 
 export type PermissionKey = "create_flows" | "view_integrations" | "connect_integrations" | "manage_workspace";

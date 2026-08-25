@@ -1,7 +1,36 @@
 import type { DateRange } from "./compute";
 
-export type RangeKey = "today" | "yesterday" | "7d" | "30d" | "90d" | "all" | "upcoming";
+/**
+ * "upcoming" was a seventh member here. It is gone from the type as well as
+ * from the two lists below, because nothing can construct it any more —
+ * `resolveRange` falls back for it like any other unrecognised string — and a
+ * type that advertises a key no code path produces is a promise the module
+ * cannot keep. `isForwardRange` survives as the seam; see its own note.
+ */
+export type RangeKey = "today" | "yesterday" | "7d" | "30d" | "90d" | "all";
 
+/**
+ * THE PILLS ON THE BOARD. Every one of them looks BACKWARD, and that is the
+ * rule rather than an accident of which six got written.
+ *
+ * "Upcoming" used to sit at the end of this list. It was a correct answer to a
+ * real question — All time silently contains future-dated records, so a
+ * workspace could read 29.4% all-time against 21.4% over seven days with
+ * nothing on the board explaining the gap — but it answered it in the wrong
+ * room. A dashboard tile is a RESULT: one number, stamped with when it was
+ * last true. A meeting booked for Friday is not a result, and a headline
+ * figure that silently mixes what happened with what is merely scheduled is
+ * the same trap the delta guard below exists to catch, one level up.
+ *
+ * The forward view lives on the Calendar, which is shaped for it — days, laid
+ * out, with the ones still to come drawn quieter than the ones that happened
+ * (see `future` in CalendarBoard's DayCell). That is the same fact given a
+ * surface that can say "not yet" about it.
+ *
+ * The key itself is NOT retired — see `RangeKey`, `resolveRange` and
+ * `isForwardRange`, all of which still handle it. A bookmarked
+ * `?range=upcoming` has to resolve to a real window rather than throw.
+ */
 export const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "yesterday", label: "Yesterday" },
@@ -9,22 +38,6 @@ export const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
   { key: "30d", label: "Last 30 days" },
   { key: "90d", label: "Last 90 days" },
   { key: "all", label: "All time" },
-  /**
-   * LAST, AND DIRECTLY AFTER "All time" — a placement, not an afterthought.
-   *
-   * The six before it walk in one direction: each is a wider slice of the past
-   * than the one to its left, and that walk is the only ordering the row has.
-   * Dropping the single forward-looking option into the middle of it (or first,
-   * where it would read as the default) costs that ordering and buys nothing.
-   *
-   * Beside "All time" is also where it belongs by MEANING, because All time is
-   * the only other option that contains future-dated records: it is returned
-   * unfiltered, so a meeting booked for next week is already inside it. That is
-   * how one workspace read 29.4% all-time against 21.4% over the last 7 days
-   * with nothing on the board to explain the gap. "Upcoming" is that
-   * difference, now addressable on its own.
-   */
-  { key: "upcoming", label: "Upcoming" },
 ];
 
 /**
@@ -38,40 +51,47 @@ export const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
  * "one extra graph run per materialize", which was true of the first
  * implementation and has been wrong since that one was replaced; a stale cost
  * model is how a range gets left out for a price it no longer has.
+ *
+ * IT ALSO COSTS A SLOT IN EVERY STORED TILE'S JSONB, FOREVER, and that is the
+ * half the cost model above was missing. `flow_results.tile` is read on every
+ * dashboard render and every freshness refresh, and Neon bills what it
+ * returns — so a key nothing can select is bytes on the wire for every tile of
+ * every workspace, permanently. That is why "upcoming" left this list at the
+ * same time it left `RANGE_OPTIONS`: no pill can ask for it.
+ *
+ * The calendar is unaffected and does not read this constant. Its day slots
+ * come from `calendarDayRanges`, an independent list assembled beside this one
+ * in materialize.ts — which is exactly why the forward view survives the pill's
+ * removal.
  */
-export const MATERIALIZED_RANGES: RangeKey[] = ["today", "yesterday", "7d", "30d", "90d", "all", "upcoming"];
+export const MATERIALIZED_RANGES: RangeKey[] = ["today", "yesterday", "7d", "30d", "90d", "all"];
 
 const DAY_MS = 86_400_000;
 const ROLLING: Record<"7d" | "30d" | "90d", number> = { "7d": 7, "30d": 30, "90d": 90 };
 
 /**
- * The upper bound of "Upcoming": the last instant of year 9999.
- *
- * A `DateRange` is two real Dates and both ends travel — `keep()` in the flow
- * engine compares them as numbers, but `compute.ts` binds them straight into
- * SQL as `occurred_at <= $n`, so this end has to be something Postgres parses.
- * Infinity is not a Date. `new Date(8_640_000_000_000_000)` — the JS maximum —
- * is one, but it serialises as `+275760-09-13T00:00:00.000Z`, the ISO
- * extended-year spelling, which Postgres rejects. Year 9999 is the last year
- * that renders as four plain digits through every serialiser in the path, and
- * it is eight thousand years past anything a calendar will book.
- *
- * A record dated beyond it would drop out of Upcoming. That is a visible
- * omission from a forward-looking pill, not a wrong number under a backward
- * one, and it cannot happen without a source inventing dates.
- */
-const FAR_FUTURE = new Date("9999-12-31T23:59:59.999Z");
-
-/**
  * WHICH RANGES LOOK FORWARD — asked in three places, answered here once.
  *
- * The materializer needs it to tell `tileByRange` that this range's end is a
- * sentinel and not the clock (`future`), or every crossing it books lands
- * beyond the horizon. The tile needs it because a comparison's rules invert:
- * the still-filling bucket of a forward series is the FIRST one, and "vs prior"
- * has no meaning for a period nothing has happened in yet. Three copies of
- * `key === "upcoming"` is how one of those places gets missed when a second
- * forward range is added.
+ * NOTHING SELECTABLE IS FORWARD TODAY, so this returns false for every key the
+ * board can produce. It is kept, rather than deleted along with the pill, for
+ * two reasons that are not sentiment:
+ *
+ *  - It is the SEAM. The two callers encode real, non-obvious rules that a
+ *    forward range needs and a backward one must not have — the materializer
+ *    tells `tileByRange` that such a range's end is a sentinel rather than the
+ *    clock (`future`), without which every crossing it books lands beyond the
+ *    horizon; and the tile suppresses "vs prior", because a comparison's rules
+ *    invert when the still-filling bucket is the FIRST one and the period has
+ *    had nothing happen in it yet. Re-adding a forward range is then one line
+ *    here instead of a rediscovery of both rules.
+ *  - Deleting it would make `future` a hardcoded `false` at the materializer's
+ *    call site, which reads as "this range is backward" rather than as "no
+ *    range is forward" — and those are different claims.
+ *
+ * The forward view itself did not go anywhere: it is the Calendar, whose
+ * squares come from `calendarDayRanges` and are drawn quieter for days still to
+ * come. The engine's own forward handling is likewise untouched and stays
+ * covered by tests/flow-range.test.ts, which builds its window directly.
  */
 export function isForwardRange(key: string | undefined): boolean {
   return key === "upcoming";
@@ -111,33 +131,40 @@ export function rollingMsOf(key: RangeKey): number | null {
  * fewer records than a finished one, which is the whole reason "Yesterday"
  * is offered beside it.
  *
- * Every range but "Upcoming" ends at now or earlier. Calendars date a record by
- * when it WILL happen, so that cap made every future booking invisible on six
- * of the seven pills while "All time" counted them silently — the one range
- * that is deliberately never re-filtered.
+ * EVERY RANGE ENDS AT NOW OR EARLIER, and "upcoming" is no longer among the
+ * keys this accepts — it falls through to the default with every other string
+ * it does not recognise.
+ *
+ * KEEPING IT RESOLVABLE WAS THE WRONG CALL, and the reasoning that produced it
+ * is worth writing down because it sounds right. When the pill was removed the
+ * key was deliberately left working here, so that a bookmarked
+ * `?range=upcoming` would "resolve to a real window rather than throw". What it
+ * actually bought was a state nobody can leave: the key is gone from
+ * `MATERIALIZED_RANGES`, so no stored tile has a slot under it, so
+ * `flow-tile.tsx` renders every metric as "—" with "Not computed yet for this
+ * range — Refresh to compute it" — and pressing Refresh re-materializes the six
+ * ranges that exist and changes nothing, forever. A 500 is honest by
+ * comparison; this is the board lying about which button fixes it. It also
+ * mislabelled `metrics/[id]`, whose lede looks the key up in `RANGE_OPTIONS`
+ * and falls back to "last 30 days" — so the page named a window it was not
+ * showing.
+ *
+ * Falling back is the whole fix: an old link now opens the default board with
+ * the matching pill lit, which is what every other unrecognised key has always
+ * done and what a stale bookmark should do.
+ *
+ * `RangeKey`, `isForwardRange` and `FAR_FUTURE` all stay. They are the seam a
+ * forward range is re-added through, and `isForwardRange` still gates the
+ * materializer's `future` flag and the tile's delta guard — both correct and
+ * both currently inert.
  */
 export function resolveRange(key: string | undefined): { key: RangeKey; range: DateRange } {
   const now = new Date();
   const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const k: RangeKey =
-    key === "today" || key === "yesterday" || key === "30d" || key === "90d" || key === "all" || key === "upcoming"
-      ? key
-      : "7d";
+    key === "today" || key === "yesterday" || key === "30d" || key === "90d" || key === "all" ? key : "7d";
 
   if (k === "all") return { key: k, range: { from: new Date(0), to: now } };
-  if (k === "upcoming") {
-    return {
-      key: k,
-      // Strictly after now — the same one-millisecond hygiene "Yesterday" uses
-      // against "Today". A record dated exactly now belongs to the ranges that
-      // END at now, and must not also be reported as still to come.
-      //
-      // The bound is COPIED, because a Date is mutable and every other branch
-      // here hands back a fresh one: a caller that nudged this end would
-      // otherwise move it for every range resolved afterwards in the process.
-      range: { from: new Date(now.getTime() + 1), to: new Date(FAR_FUTURE) },
-    };
-  }
   if (k === "today") return { key: k, range: { from: startOfToday, to: now } };
   if (k === "yesterday") {
     return {

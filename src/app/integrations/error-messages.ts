@@ -23,7 +23,9 @@ export function integrationsErrorMessage(code: string): string {
     case "connection_limit":
       return "This workspace has reached its connection limit, so nothing was connected. Contact us and we'll raise it.";
     case "rank_forbidden":
-      return "Your rank doesn't allow managing integrations, so nothing was connected. Ask a workspace admin.";
+      // The URL code stays `rank_forbidden` — it is a wire value that older
+      // links and redirects already carry. Only the sentence says "role".
+      return "Your role doesn't allow managing integrations, so nothing was connected. Ask a workspace admin.";
     default:
       return "Something went wrong connecting that account. Nothing was connected — please try again.";
   }

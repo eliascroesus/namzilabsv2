@@ -118,7 +118,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
       <PageContainer>
         {one(sp.error) === "rank" && (
           <div className="mb-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-base text-danger-ink">
-            <p>Your rank doesn&rsquo;t allow editing flows.</p>
+            <p>Your role doesn&rsquo;t allow editing flows.</p>
             <Link
               href="/dashboard/flows"
               aria-label="Dismiss"
@@ -146,11 +146,11 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
             </Link>
           </div>
         )}
-        <PageHeader
-          title="Flows"
-          lede="Build metrics visually: connect an app, filter and aggregate, then output to your dashboard."
-          actions={createForm}
-        />
+        {/* NO LEDE. It described the builder to someone standing outside it,
+            which is the one audience that cannot use the description — and the
+            empty state below already says the only thing a first-timer needs
+            ("Press Create flow to build one step by step"), where they need it. */}
+        <PageHeader title="Flows" actions={createForm} />
 
         {flowsUnavailable ? (
           <EmptyState

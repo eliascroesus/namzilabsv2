@@ -835,3 +835,206 @@ describe("moveWiring (drag a step to a new place in the order)", () => {
     expect(add).toContain("b->c");
   });
 });
+
+/**
+ * A SPLIT MOVES AS ONE OBJECT.
+ *
+ * Every test above passes three arguments and therefore takes the ordinary
+ * detach-and-insert path — including for a hub. That is the compatibility
+ * surface: hand `moveWiring` the nodes and a Split starts carrying its
+ * branches; leave them off and nothing changes for anyone.
+ *
+ * The defect this describes was real and visible. `bridgeEdgesFor` bridges a
+ * departing step's parent to EVERY outgoing target, and a hub's outgoing
+ * targets are its path heads — so dragging a Split re-parented both branches
+ * onto the chain it was leaving and delivered an empty hub to the new slot.
+ * One drag dismantled the Split.
+ */
+describe("moveWiring — a Split carries its branches", () => {
+  /** A hub node shaped the way the canvas stores one: handles in `config.paths`. */
+  const hub = (id: string, ...handles: string[]) => ({
+    id,
+    type: "paths",
+    data: { config: { paths: handles.map((h) => ({ id: h })) } },
+  });
+  const step = (id: string) => ({ id, type: "filter", data: { config: {} } });
+
+  /**
+   * A plain DFS cycle check over the resulting edge list. Asserting on the
+   * absence of one specific bad edge would pass the day the ring forms through
+   * a different one — and a ring is the failure, not any edge in it.
+   */
+  const hasCycle = (es: Edge[]) => {
+    const out = new Map<string, string[]>();
+    for (const e of es) out.set(e.source, [...(out.get(e.source) ?? []), e.target]);
+    const state = new Map<string, 1 | 2>(); // 1 = on the stack, 2 = done
+    const walk = (id: string): boolean => {
+      const s = state.get(id);
+      if (s === 1) return true;
+      if (s === 2) return false;
+      state.set(id, 1);
+      for (const n of out.get(id) ?? []) if (walk(n)) return true;
+      state.set(id, 2);
+      return false;
+    };
+    return [...new Set(es.flatMap((e) => [e.source, e.target]))].some((id) => walk(id));
+  };
+
+  /** whop -> filter -> hub{ pA -> a1, pB -> b1 } */
+  const splitGraph = () => ({
+    nodes: [step("whop"), step("filter"), hub("hub", "pA", "pB"), step("a1"), step("b1")],
+    edges: [
+      E("whop", "filter"),
+      E("filter", "hub"),
+      E("hub", "a1", { sourceHandle: "pA" }),
+      E("hub", "b1", { sourceHandle: "pB" }),
+    ],
+  });
+
+  it("keeps both branch edges when the hub moves", () => {
+    const { nodes, edges } = splitGraph();
+    // Drag the hub up, to sit directly under whop.
+    const out = moveWiring("hub", { after: "whop" }, edges, nodes)!;
+
+    // ONLY the way in is cut. Neither branch edge is touched — this is the
+    // whole defect: they used to be removed and re-parented onto `whop`.
+    expect(out.remove.map((e) => e.id)).not.toContain("hub->a1");
+    expect(out.remove.map((e) => e.id)).not.toContain("hub->b1");
+    expect(out.remove.map((e) => e.id)).toContain("filter->hub");
+    // And no added edge re-homes a path head anywhere else.
+    expect(out.add.some((e) => e.target === "a1" || e.target === "b1")).toBe(false);
+  });
+
+  it("lands the displaced step at the END of the first path", () => {
+    const { nodes, edges } = splitGraph();
+    const out = moveWiring("hub", { after: "whop" }, edges, nodes)!;
+    const add = out.add.map((e) => `${e.source}->${e.target}`);
+
+    expect(add).toContain("whop->hub"); // the hub takes the slot
+    // `filter` was what whop fed, so it is displaced — and it joins the tail of
+    // path A rather than the head, because the head is the "Path A" conditions
+    // step whose name promises it is the branch's first step.
+    expect(add).toContain("a1->filter");
+    expect(add).not.toContain("hub->filter");
+  });
+
+  it("walks to the true tail of the first path, not just its head", () => {
+    const { nodes, edges } = splitGraph();
+    // Path A is two steps deep: hub -> a1 -> a2.
+    const out = moveWiring(
+      "hub",
+      { after: "whop" },
+      [...edges, E("a1", "a2")],
+      [...nodes, step("a2")],
+    )!;
+    const add = out.add.map((e) => `${e.source}->${e.target}`);
+    expect(add).toContain("a2->filter");
+    expect(add).not.toContain("a1->filter");
+  });
+
+  it("descends into a nested Split's own first path to find the tail", () => {
+    // Path A's line runs into a second hub, whose line continues down ITS
+    // first branch — a hub has no chain edge for the walk to follow.
+    const inner = hub("inner", "iA");
+    const out = moveWiring(
+      "hub",
+      { after: "whop" },
+      [E("whop", "filter"), E("filter", "hub"), E("hub", "inner", { sourceHandle: "pA" }), E("inner", "i1", { sourceHandle: "iA" })],
+      [step("whop"), step("filter"), hub("hub", "pA"), inner, step("i1")],
+    )!;
+    expect(out.add.map((e) => `${e.source}->${e.target}`)).toContain("i1->filter");
+  });
+
+  it("refuses a drop inside its own subtree", () => {
+    /**
+     * The guard the plain path deliberately does NOT have. Every other step is
+     * fully detached before reinsertion, so it has no descendants and cannot
+     * close a loop — see "allows dragging a step to the bottom of the line it
+     * is already in" above. A hub keeps its descendants, so this one case can
+     * ring, and a ring is a layout that walks forever.
+     */
+    const { nodes, edges } = splitGraph();
+    expect(moveWiring("hub", { after: "a1" }, edges, nodes)).toBeNull();
+    expect(moveWiring("hub", { after: "b1" }, edges, nodes)).toBeNull();
+  });
+
+  it("detaches into its own lane with every branch intact", () => {
+    const { nodes, edges } = splitGraph();
+    const out = moveWiring("hub", { root: true }, edges, nodes)!;
+    expect(out.remove.map((e) => e.id)).toEqual(["filter->hub"]);
+    // No bridge: `filter` does NOT inherit the branches. The hub takes them.
+    expect(out.add).toEqual([]);
+  });
+
+  it("still moves a hub that has no branch wired yet", () => {
+    // Degenerate but reachable, and it must not strand the step it displaces.
+    const nodes = [step("whop"), step("filter"), hub("hub", "pA")];
+    const out = moveWiring("hub", { after: "whop" }, [E("whop", "filter"), E("filter", "hub")], nodes)!;
+    const add = out.add.map((e) => `${e.source}->${e.target}`);
+    expect(add).toContain("whop->hub");
+    expect(add).toContain("hub->filter"); // nowhere else to put it
+  });
+
+  /**
+   * BRANCHES REJOIN, AND THAT IS THE SECOND RING.
+   *
+   * The guard on the drop target is not enough. The commonest non-trivial
+   * shape in this product is a Split whose paths both feed one Combine, and
+   * that Combine often takes a second source directly as well. Drop the hub
+   * under that source and the step it displaces IS the Combine — already
+   * downstream of the hub through its own branches. Re-homing it under path
+   * A's tail wires the end of the subtree back into its middle.
+   *
+   * Both shapes below produced a cycle before the `carried` check, and a
+   * cycle is a graph the engine compiles and the layout walks.
+   */
+  it("does not ring when the displaced step is a Combine its own branches feed", () => {
+    // src -> U, and hub[pA] -> fA -> a1 -> U, hub[pB] -> fB, U -> m.
+    const nodes = [step("src"), hub("hub", "pA", "pB"), step("fA"), step("a1"), step("fB"), step("U"), step("m")];
+    const edges = [
+      E("src", "U"),
+      E("hub", "fA", { sourceHandle: "pA" }),
+      E("fA", "a1"),
+      E("a1", "U"),
+      E("hub", "fB", { sourceHandle: "pB" }),
+      E("U", "m"),
+    ];
+    const out = moveWiring("hub", { after: "src" }, edges, nodes)!;
+    const dropped = new Set(out.remove.map((e) => e.id));
+    const next = [...edges.filter((e) => !dropped.has(e.id)), ...out.add];
+
+    // `m -> U` was the added edge, against an existing `U -> m`.
+    expect(next.map((e) => `${e.source}->${e.target}`)).not.toContain("m->U");
+    expect(hasCycle(next)).toBe(false);
+    // src still reaches U — now through the hub's own branch, not directly.
+    expect(next.map((e) => `${e.source}->${e.target}`)).toContain("src->hub");
+    expect(next.map((e) => `${e.source}->${e.target}`)).toContain("a1->U");
+  });
+
+  it("does not make a self-loop when path A's own tail is the displaced step", () => {
+    // The degenerate version of the same cause: the tail IS the Combine.
+    const nodes = [step("src"), hub("hub", "pA", "pB"), step("fA"), step("fB"), step("X")];
+    const edges = [E("src", "X"), E("hub", "fA", { sourceHandle: "pA" }), E("fA", "X"), E("hub", "fB", { sourceHandle: "pB" })];
+    const out = moveWiring("hub", { after: "src" }, edges, nodes)!;
+    const dropped = new Set(out.remove.map((e) => e.id));
+    const next = [...edges.filter((e) => !dropped.has(e.id)), ...out.add];
+
+    expect(next.some((e) => e.source === e.target)).toBe(false); // was X -> X
+    expect(hasCycle(next)).toBe(false);
+    expect(next.map((e) => `${e.source}->${e.target}`)).toContain("fA->X"); // X keeps its input
+  });
+
+  it("leaves an ordinary step's behaviour untouched when nodes are supplied", () => {
+    // The nodes argument must be inert for everything that is not a hub —
+    // otherwise every existing drag changes meaning the day a caller adds it.
+    const nodes = [step("a"), step("b"), step("c"), step("d")];
+    const edges = [E("a", "b"), E("b", "c"), E("c", "d")];
+    const withNodes = moveWiring("b", { after: "c" }, edges, nodes)!;
+    const without = moveWiring("b", { after: "c" }, edges)!;
+    const norm = (o: typeof withNodes) => ({
+      remove: o.remove.map((e) => e.id).sort(),
+      add: o.add.map((e) => `${e.source}->${e.target}`).sort(),
+    });
+    expect(norm(withNodes)).toEqual(norm(without));
+  });
+});

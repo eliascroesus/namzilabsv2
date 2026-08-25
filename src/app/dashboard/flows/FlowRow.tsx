@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
 import { StatusPill, type StatusPillProps } from "@/components/ui/badge";
+import { BOARD_GRID } from "@/components/ui/page";
 import { Switch } from "@/components/ui/switch";
 
 import Link from "next/link";
@@ -120,7 +121,7 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
         // and dates line up across the row even when one flow carries an extra
         // line. A ragged row of footers is the difference between a board and a
         // pile.
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className={`mt-4 ${BOARD_GRID}`}>
           {visible.map((f) => (
             <Row key={f.id} flow={f} />
           ))}

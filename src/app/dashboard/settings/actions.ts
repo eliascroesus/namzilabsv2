@@ -35,7 +35,7 @@ export async function inviteMemberAction(formData: FormData): Promise<void> {
   const { orgId, userId } = ctx;
   // Inviting is GOVERNANCE, same tier as ranks: members never add members in
   // any of the products this model was measured against.
-  if (!(await canManageRanks(getDb(), ctx))) redirect("/dashboard/settings?invite_error=Your rank doesn't allow inviting members.");
+  if (!(await canManageRanks(getDb(), ctx))) redirect("/dashboard/settings?invite_error=Your role doesn't allow inviting members.");
   const parsed = emailSchema.safeParse(formData.get("email"));
   if (!parsed.success) redirect("/dashboard/settings?invite_error=That doesn't look like an email address.");
 
@@ -58,7 +58,7 @@ export async function inviteMemberAction(formData: FormData): Promise<void> {
 export async function revokeInviteAction(formData: FormData): Promise<void> {
   const ctx = await requireOrg();
   const { orgId } = ctx;
-  if (!(await canManageRanks(getDb(), ctx))) redirect("/dashboard/settings?invite_error=Your rank doesn't allow managing invitations.");
+  if (!(await canManageRanks(getDb(), ctx))) redirect("/dashboard/settings?invite_error=Your role doesn't allow managing invitations.");
   const invitationId = String(formData.get("invitationId") ?? "");
   if (!invitationId) redirect("/dashboard/settings?invite_error=Missing invitation.");
 
@@ -91,14 +91,14 @@ export async function revokeInviteAction(formData: FormData): Promise<void> {
  * ranks restrict members, and the people who edit ranks must be un-restrictable
  * by construction or a bad edit could lock the editors out of the editor.
  */
-const ADMIN_ONLY = "Your rank doesn\u2019t allow managing ranks.";
+const ADMIN_ONLY = "Your role doesn\u2019t allow managing roles.";
 
 const KNOWN_PERMISSION_KEYS = new Set<string>(PERMISSIONS.map((p) => p.key));
 
 /** Postgres unique-violation → the human sentence, everything else verbatim. */
 function rankErrorMessage(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
-  if (msg.includes("workspace_ranks_org_name_uq")) return "A rank with that name already exists.";
+  if (msg.includes("workspace_ranks_org_name_uq")) return "A role with that name already exists.";
   return msg.slice(0, 200);
 }
 
@@ -116,7 +116,7 @@ export async function createRankAction(
   const { orgId } = ctx;
   if (!(await canManageRanks(getDb(), ctx))) return { ok: false, error: ADMIN_ONLY };
   const trimmed = name.trim();
-  if (!trimmed) return { ok: false, error: "Give the rank a name." };
+  if (!trimmed) return { ok: false, error: "Give the role a name." };
 
   // Minted app-side (not a DB default) so `inherits` can hold rank ids as
   // plain strings — see the schema comment on workspace_ranks.
@@ -141,10 +141,10 @@ export async function updateRankAction(
   if (!(await canManageRanks(getDb(), ctx))) return { ok: false, error: ADMIN_ONLY };
 
   // Validate before touching the row: a patch is applied whole or not at all.
-  if (patch.name !== undefined && !patch.name.trim()) return { ok: false, error: "Give the rank a name." };
+  if (patch.name !== undefined && !patch.name.trim()) return { ok: false, error: "Give the role a name." };
   // Self-inheritance is rejected at the door rather than trusted to the
   // cycle-safe resolver — it is always a mistake, so say so immediately.
-  if (patch.inherits?.includes(rankId)) return { ok: false, error: "A rank cannot inherit from itself." };
+  if (patch.inherits?.includes(rankId)) return { ok: false, error: "A role cannot inherit from itself." };
   // Inherited ids must be THIS org's ranks. The resolver skips unknown ids so
   // a foreign id was inert, but inert junk in a permissions table is exactly
   // where the next bug hides — reject it at the door instead.
@@ -154,7 +154,7 @@ export async function updateRankAction(
       .from(workspaceRanks)
       .where(eq(workspaceRanks.orgId, orgId));
     const known = new Set(orgRanks.map((r) => r.id));
-    if (patch.inherits.some((i) => !known.has(i))) return { ok: false, error: "Unknown rank in inherit list." };
+    if (patch.inherits.some((i) => !known.has(i))) return { ok: false, error: "Unknown role in inherit list." };
   }
   if (patch.metricKeys?.some((k) => !/^(flow|metric):/.test(k))) {
     return { ok: false, error: "Metric keys must look like flow:<id> or metric:<id>." };
@@ -182,7 +182,7 @@ export async function updateRankAction(
   } catch (e) {
     return { ok: false, error: rankErrorMessage(e) };
   }
-  if (updated.length === 0) return { ok: false, error: "Rank not found." };
+  if (updated.length === 0) return { ok: false, error: "Role not found." };
   revalidatePath("/dashboard/settings");
   return { ok: true };
 }
@@ -197,7 +197,7 @@ export async function deleteRankAction(rankId: string): Promise<{ ok: true } | {
     .delete(workspaceRanks)
     .where(and(eq(workspaceRanks.id, rankId), eq(workspaceRanks.orgId, orgId)))
     .returning({ id: workspaceRanks.id });
-  if (deleted.length === 0) return { ok: false, error: "Rank not found." };
+  if (deleted.length === 0) return { ok: false, error: "Role not found." };
 
   // A deleted rank must VANISH, not linger: its assignments go (holders fall
   // back to full access — see effectiveAccess), and it is stripped from every
@@ -241,7 +241,7 @@ export async function assignRankAction(
       .from(workspaceRanks)
       .where(and(eq(workspaceRanks.id, rankId), eq(workspaceRanks.orgId, orgId)))
       .limit(1);
-    if (!rank) return { ok: false, error: "Rank not found." };
+    if (!rank) return { ok: false, error: "Role not found." };
     // At most one rank per member (composite pk) — reassigning replaces.
     await db
       .insert(rankAssignments)

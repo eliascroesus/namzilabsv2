@@ -7,7 +7,7 @@ import { listFlowNames } from "@/lib/flow/store";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer, PageHeader } from "@/components/ui/page";
-import { calendarMonths, dayKey, monthLabel } from "@/lib/metrics/calendar";
+import { calendarMonths, dayKey } from "@/lib/metrics/calendar";
 import { CalendarBoard, type CalendarMetric } from "./CalendarBoard";
 import type { TileSpec } from "@/lib/flow/types";
 
@@ -106,10 +106,13 @@ export default async function CalendarPage() {
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <PageContainer>
-        <PageHeader
-          title="Calendar"
-          lede={`One published metric, day by day. ${monthLabel(months[0])} and ${monthLabel(months[months.length - 1])} — dates are UTC, the same days your metrics are counted in.`}
-        />
+        {/* NO LEDE. It named the two months this view keeps — which the month
+            switcher below states, and can be stepped through — and said the
+            dates are UTC. That second fact is real and is NOT dropped: it moved
+            onto the control that changes days, as a `UTC` chip beside the month
+            label, which is where somebody misreading a day boundary is actually
+            looking. See CalendarBoard. */}
+        <PageHeader title="Calendar" />
         {rows === null ? (
           <EmptyState
             className="mt-8"

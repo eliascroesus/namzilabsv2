@@ -273,10 +273,24 @@ describe("a published tile carries one value per dashboard range", () => {
     expect(byRange["30d"].value).toBe(3);
     expect(byRange["90d"].value).toBe(4);
     expect(byRange.all.value).toBe(4);
-    // Nothing is dated ahead, so the forward pill is an answered zero — a
-    // stored entry, not a missing one. The tile's "not computed yet" line
-    // belongs to rows written before this range existed and to nothing else.
-    expect(byRange.upcoming.value).toBe(0);
+    /**
+     * NO FORWARD SLOT. This used to assert `byRange.upcoming.value === 0` —
+     * nothing is dated ahead, so the forward pill was an answered zero rather
+     * than a missing entry.
+     *
+     * "Upcoming" is no longer a range the dashboard can select, so it is no
+     * longer a range worth storing: `flow_results.tile` is read on every board
+     * render and every freshness refresh, and a slot no pill can ask for is
+     * bytes on the wire for every tile of every workspace, forever. The
+     * forward view lives on the Calendar now, which builds its squares from
+     * `calendarDayRanges` and never reads this map — which is exactly why it
+     * survives the pill's removal.
+     *
+     * Pinned as ABSENT rather than deleted outright: silently dropping the
+     * line would let a re-add sail through, and the whole point is that this
+     * key costs something to carry.
+     */
+    expect(byRange.upcoming).toBeUndefined();
     // The headline value stays the flow's own definition, so a tile rendered
     // without a range (or written before this shipped) is unchanged.
     expect((row.tile as { value?: number }).value).toBe(4);

@@ -28,7 +28,7 @@ import { setEventTime, type EventTimeChoice } from "@/lib/webhooks/event-time";
  * separate, weaker grant ("view_integrations", gated on the page itself).
  * Admins and rankless members resolve to allow-all inside effectiveAccess.
  */
-const RANK_BLOCKS_INTEGRATIONS = "Your rank doesn't allow managing integrations.";
+const RANK_BLOCKS_INTEGRATIONS = "Your role doesn't allow managing integrations.";
 
 async function blockedFromManagingIntegrations(ctx: Pick<OrgContext, "orgId" | "userId" | "role">): Promise<boolean> {
   const access = await effectiveAccess(getDb(), ctx);

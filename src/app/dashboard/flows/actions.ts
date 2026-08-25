@@ -30,7 +30,7 @@ import { inngest } from "@/inngest/client";
  * allow-all inside effectiveAccess without touching the ranks table, so the
  * common case costs one assignment lookup at most.
  */
-const RANK_BLOCKS_FLOWS = "Your rank doesn't allow editing flows.";
+const RANK_BLOCKS_FLOWS = "Your role doesn't allow editing flows.";
 
 /**
  * The single gate every flow mutation passes through.

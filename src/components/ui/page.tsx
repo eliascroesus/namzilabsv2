@@ -23,19 +23,58 @@ export function PageContainer({
         // The gutter steps with the viewport. At a flat px-6 the content of a
         // page sat 24px off a phone's edge, which is fine, and 24px off a 27"
         // display's rail, which is not — a 1440px window and a 390px one were
-        // asking for the same margin.
-        "rise-in mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
-        // 1152px, up from 1024. The board is the reason: two columns of tiles
-        // on a 15" laptop left a third of the canvas empty, and a third column
-        // does not fit until the container has the width for it. Narrow pages
-        // (forms, settings) are unchanged — a form does not get better wider.
-        width === "narrow" ? "max-w-3xl" : "max-w-6xl",
+        // asking for the same margin. The 2xl rung is the fill's own: once the
+        // content stops being centred in empty canvas, the gutter is the only
+        // thing left holding it off the frame's edge.
+        "rise-in mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8 2xl:px-12",
+        /**
+         * DEFAULT FILLS. NARROW DOES NOT. That split is the whole rule.
+         *
+         * Every `default` route in the product is a BOARD — the dashboard's
+         * tiles, the flows grid, the connector catalogue, the activity feed —
+         * and a board's content is a repeating unit, so width buys another
+         * column. The cap used to be 1152px, which meant a 2560px display
+         * rendered the 15" laptop layout with 700px of dead canvas either
+         * side, and the tiles the extra room was for never appeared.
+         *
+         * Every `narrow` route is a FORM, and width buys a form nothing. A
+         * 2000px email input is worse than a 700px one, and a sentence run
+         * across an ultrawide is roughly 300 characters a line — about four
+         * times the measure anything is comfortably read at. So `narrow` is
+         * unchanged at every viewport, deliberately, and is not a smaller
+         * version of the same idea.
+         *
+         * There is no `max-w` on the fill and that is the point: the column
+         * count is what steps (see the grids on the boards themselves), so a
+         * wider screen gets MORE tiles rather than the same three stretched.
+         */
+        width === "narrow" && "max-w-3xl",
         className,
       )}
       {...props}
     />
   );
 }
+
+/**
+ * THE BOARD GRID — one spelling, five rungs, every board in the product.
+ *
+ * The dashboard's tiles, the flows board and the connector catalogue all
+ * already shared `sm:grid-cols-2 xl:grid-cols-3`, in three files, plus two
+ * more copies in the skeletons that stand in front of two of them. Five
+ * literals for one decision is precisely the drift `check:ui` exists to catch
+ * everywhere else, and adding two rungs to the fill would have made it seven.
+ *
+ * The rungs are the fill's actual argument: a board's unit repeats, so a wider
+ * viewport is worth another COLUMN rather than the same three tiles stretched.
+ * Five is the ceiling because past it a dashboard numeral stops being the
+ * loudest thing on its own card.
+ *
+ * A skeleton that mirrors a board must import this too — a placeholder grid
+ * that disagrees with the real one does the single thing a skeleton exists to
+ * prevent.
+ */
+export const BOARD_GRID = "grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5";
 
 /**
  * Title row: optional back link, one h1 recipe, optional lede, actions on

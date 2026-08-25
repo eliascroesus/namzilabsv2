@@ -11,7 +11,7 @@ import { CONNECTOR_CATALOG, catalogEntry, type ConnectorCatalogEntry } from "@/c
 import { ConnectionRow } from "./ConnectionRow";
 import { connectApiKeyAction } from "./actions";
 import { eventTimeNote, readEventTime } from "@/lib/webhooks/event-time";
-import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
+import { BOARD_GRID, PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
 import { buttonVariants } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
@@ -50,11 +50,11 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     return (
       <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
         <PageContainer>
-          <PageHeader title="Integrations" />
+          <PageHeader title="Apps" />
           <EmptyState
             className="mt-8"
             icon={<Lock />}
-            title="Your rank doesn’t include the Apps page"
+            title="Your role doesn’t include the Apps page"
             description="Ask a workspace admin if you need to see connected apps."
           />
         </PageContainer>
@@ -96,10 +96,16 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <PageContainer>
-        <PageHeader
-          title="Integrations"
-          lede="Connect a tool and its data flows into your unified dashboard. Connect an account, then preview the latest records to confirm it’s live."
-        />
+        {/* "Apps", NOT "Integrations" — the rail item is the only door to this
+            page and it has always said Apps, so the page said one word and the
+            way in said another. A first-time user clicking a thing called Apps
+            and landing on a page called Integrations has to spend a beat
+            deciding whether they went where they meant to.
+
+            No lede either: it told you to connect an account and then preview
+            the records, which is the sequence the two sections below already
+            walk you through in that order. */}
+        <PageHeader title="Apps" />
 
         {errorCode && (
           <div className="mt-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-base text-danger-ink">
@@ -122,8 +128,12 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           </div>
         )}
 
+        {/* NO HEADING ON THIS SECTION. It sat at the very top of the page under
+            an h1, labelling a list of connection rows as "Your connections" —
+            which the rows say by being there. "Add a connection" below keeps
+            its heading, because that one labels a catalogue of things you have
+            NOT connected, and without it the grid reads as more of this list. */}
         <section className="mt-8">
-          <SectionHeading className="mb-2">Your connections</SectionHeading>
           {connectionsUnavailable ? (
             <EmptyState
               icon={<Plug />}
@@ -138,15 +148,17 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
             />
           ) : (
             <>
-              {/* The two removal buttons keep two different promises, and this is
-                  where that difference is said BEFORE anyone is inside a confirm
-                  dialog: disconnect keeps everything and reverses; the trash is
-                  immediate and total. Matches disableConnection /
-                  deleteConnectionPermanently — if those change, change this. */}
-              <p className="mb-3 text-tiny text-muted-foreground">
-                Disconnecting a source pauses it and keeps all its data — reconnect any time and everything comes back.
-                Deleting one (the trash icon) permanently removes it and everything synced from it, immediately.
-              </p>
+              {/* THE DISCONNECT-VS-DELETE PARAGRAPH IS GONE FROM HERE, and it
+                  was not lost — it was already duplicated. Both confirm panels
+                  in ConnectionRow say the whole difference at the moment it is
+                  being decided: the disconnect confirm promises "you can
+                  reconnect it later and your data comes back", and the delete
+                  panel leads with what is destroyed, how many records, and
+                  "disconnect instead if you only want it to stop syncing".
+                  Standing text at the top of a page explaining two buttons
+                  nobody has pressed yet is read by nobody and skimmed past by
+                  everybody; the panel you cannot avoid is where it lands. Both
+                  icon buttons also carry it in their `title`. */}
               <div className="divide-y divide-border overflow-hidden rounded-surface border border-border bg-card shadow-card">
                 {connected.map((c) => (
                   <ConnectionRow
@@ -188,9 +200,10 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
         <section className="mt-8">
           <SectionHeading>Add a connection</SectionHeading>
-          {/* Three-up above `xl`, matching the dashboard's tiles and the flows
-              board: one grid rhythm for the whole product. */}
-          <div className="grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {/* The shared board grid, so this catalogue steps its columns exactly
+              as the dashboard's tiles and the flows board do: one rhythm for
+              the whole product, now spelled in one place. */}
+          <div className={`items-start ${BOARD_GRID}`}>
             {CONNECTOR_CATALOG.map((entry) => (
               <ConnectorCard key={entry.source} entry={entry} connectedCount={countBySource[entry.source] ?? 0} />
             ))}
@@ -265,13 +278,16 @@ function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry
               </SubmitButton>
               {/* A source with no credentials to enter (Custom Webhook) gives no
                   clue that saving is only step one — the URL it mints is the
-                  whole product, and it appears above once the row exists. */}
+                  whole product, and it appears above once the row exists.
+
+                  It points at the LIST rather than at the heading it used to
+                  name: the "Your connections" eyebrow is gone, and a note
+                  directing someone to a heading that no longer exists is worse
+                  than no note. The button it names is still exactly right. */}
               {entry.credentialFields.length === 0 && entry.instant && (
                 <p className="text-tiny text-muted-foreground">
-                  Saving creates the inbound URL. It appears under{" "}
-                  <span className="font-semibold text-foreground">Your connections</span> above — open{" "}
-                  <span className="font-semibold text-foreground">Webhook URL</span> on the new row and point any app at
-                  it.
+                  Saving creates the inbound URL. Your new connection appears at the top of this page — open{" "}
+                  <span className="font-semibold text-foreground">Webhook URL</span> on that row and point any app at it.
                 </p>
               )}
             </form>

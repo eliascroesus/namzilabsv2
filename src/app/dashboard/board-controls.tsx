@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BOARD_GRID } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
 
 /**
@@ -146,7 +147,7 @@ export function TileArea({ count, children }: { count: number; children: ReactNo
   const { pending } = useBoard();
   if (!pending) return <>{children}</>;
   return (
-    <div className="mt-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-live="polite">
+    <div className={`mt-4 items-start ${BOARD_GRID}`} aria-busy="true" aria-live="polite">
       <span className="sr-only">Loading metrics…</span>
       {Array.from({ length: Math.max(1, count) }, (_, i) => (
         // The tile's own anatomy: a title line, the numeral, a mark, a footer.

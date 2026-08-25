@@ -12,6 +12,9 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { refreshFlowAction } from "@/app/dashboard/flows/actions";
 import { formatMetricValue, relativeTime } from "@/lib/format";
 import { monthGrid, monthLabel, WEEKDAYS, type MonthKey } from "@/lib/metrics/calendar";
+// Its own directive-free module, so the server-rendered skeleton can read it
+// as a string rather than as a client reference. See day-cell.ts.
+import { DAY_CELL_H } from "./day-cell";
 import { cn } from "@/lib/utils";
 
 /** One published metric, with the day values the materializer stored for it. */
@@ -152,6 +155,19 @@ export function CalendarBoard({
               buttons either side of the label — sized for the longest month
               name there is ("September 2026"), not for the one on screen. */}
           <span className="w-40 whitespace-nowrap text-center text-lead font-semibold text-foreground">{monthLabel(month)}</span>
+          {/* THE ONE FACT THE DELETED LEDE WAS CARRYING.
+              Every value on this sheet is filed under a UTC day, so a viewer
+              east of Greenwich reading these as local days is off by one for
+              part of every evening — the difference between "Tuesday was our
+              best day" and a number they cannot reproduce. Three letters on
+              the control that changes days says it where it applies, instead
+              of a sentence at the top of the page that says it once. */}
+          <span
+            title="Days are UTC — the same days your metrics are counted in"
+            className="rounded-control bg-muted px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            UTC
+          </span>
           <Button
             variant="ghost"
             size="icon"
@@ -228,7 +244,8 @@ export function CalendarBoard({
 
       {/* THE GRID SCROLLS RATHER THAN CRUSHING ITS SQUARES. Seven columns of a
           readable width need ~640px; below that the sheet scrolls sideways
-          inside its own card instead of squeezing a number into 40px. */}
+          inside its own card instead of squeezing a number into 40px.
+          At the other end it GROWS — see DAY_CELL_H. */}
       <Card variant="surface" padding="none" className="mt-4 overflow-hidden">
         <div className="overflow-x-auto p-3 sm:p-4">
           <div className="min-w-[640px]">
@@ -244,7 +261,7 @@ export function CalendarBoard({
                 day == null ? (
                   // Not a square at all — the blanks that put the 1st under the
                   // weekday it actually fell on.
-                  <div key={`blank-${i}`} className="min-h-[92px] rounded-card" aria-hidden />
+                  <div key={`blank-${i}`} className={cn(DAY_CELL_H, "rounded-card")} aria-hidden />
                 ) : (
                   <DayCell
                     key={day.key}
@@ -324,7 +341,8 @@ function DayCell({
   return (
     <div
       className={cn(
-        "flex min-h-[92px] flex-col rounded-card border p-2 transition-colors duration-(--duration-fast)",
+        DAY_CELL_H,
+        "flex flex-col rounded-card border p-2 transition-colors duration-(--duration-fast)",
         today ? "border-primary" : "border-border",
         // A day still to come is drawn quieter — it can carry a real number
         // (a meeting already booked for Friday), but it is not a result yet.

@@ -259,6 +259,25 @@
    */
   --spacing-chrome-band: 106px;
 
+  /* --- The fifth breakpoint -----------------------------------------------
+   * 1920px, above Tailwind's stock `2xl` (1536px).
+   *
+   * THE BOARDS FILL THE SCREEN NOW, and a fill with no step above 1536 is not
+   * a fill — it is three tiles stretched to 700px each on a display that had
+   * room for five. The stock scale simply stops one monitor short of the
+   * hardware people actually buy: 1920 is the single most common desktop
+   * width there is, and everything wider inherits from it.
+   *
+   * A TOKEN RATHER THAN `min-[1920px]:`. The arbitrary variant compiles to the
+   * same media query and is invisible to every reader after the first — the
+   * number would live inline in four grids across three files with nothing
+   * naming it, which is the exact shape the radii were in before `@theme`
+   * cleared them. `3xl:` reads like the four steps beside it.
+   *
+   * 120rem, not 1920px, because the breakpoint scale it joins is in rem.
+   */
+  --breakpoint-3xl: 120rem;
+
   /* --- Motion -------------------------------------------------------------
    * THE TIMINGS WERE ALL ONE-OFFS. 0.12s, 0.16s, 0.19s, 200ms and four
    * different cubic-beziers were spread across six files, which is why some

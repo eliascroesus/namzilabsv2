@@ -457,6 +457,38 @@ export function duplicateWiring(
   };
 }
 
+/** A hub's branch handles, in the order the user made them. */
+function pathHandleIds(node: { config?: { paths?: Array<{ id: string }> } | null } | undefined): string[] {
+  return (node?.config?.paths ?? []).map((p) => p.id).filter(Boolean);
+}
+
+/**
+ * THE LAST STEP OF A LINE, descending through any Split it meets.
+ *
+ * Used to answer "where does the step I displaced go?" when a Split is dropped
+ * into the middle of a chain. Walking plain chain edges is most of it; the one
+ * subtlety is a nested hub, whose line does not continue through a chain edge
+ * at all — it continues down its FIRST branch, which is the same rule this
+ * whole move applies one level up.
+ *
+ * `seen` is not paranoia about a well-formed graph: this walks edges that are
+ * mid-edit, and a single malformed cycle here would hang the editor rather
+ * than misplace a card.
+ */
+function chainEndOf(startId: string, typeOf: (id: string) => string | undefined, configOf: (id: string) => { paths?: Array<{ id: string }> } | null | undefined, edges: Edge[]): string {
+  let cur = startId;
+  const seen = new Set<string>([cur]);
+  for (;;) {
+    const next =
+      typeOf(cur) === "paths"
+        ? edges.find((e) => e.source === cur && e.sourceHandle === pathHandleIds({ config: configOf(cur) })[0])?.target
+        : edges.find((e) => e.source === cur && !e.sourceHandle && e.targetHandle == null)?.target;
+    if (!next || seen.has(next)) return cur;
+    seen.add(next);
+    cur = next;
+  }
+}
+
 /**
  * WHERE A STEP GOES WHEN IT IS DRAGGED SOMEWHERE ELSE.
  *
@@ -474,23 +506,125 @@ export function duplicateWiring(
  *    the first step" case, which is how a second source, or a chain someone
  *    wants to rebuild from scratch, gets started.
  *
- * Returns null when there is no move to make — dropped on itself, or with no
- * slot named.
+ * Returns null when there is no move to make — dropped on itself, with no slot
+ * named, or (Splits only, see below) somewhere that would close a loop.
  *
- * NO CYCLE IS REACHABLE, and the reason is worth stating because the obvious
- * guard is wrong. Refusing a target inside the step's own subtree looks
- * prudent and forbids the commonest reorder there is: dragging a step to the
- * BOTTOM of the line it already sits in. The step is detached before it is
- * re-inserted — its children are bridged to its parent, so by the time the
- * slot is read it has no descendants at all, and inserting a parentless node
- * into a DAG cannot close a loop.
+ * ── A SPLIT MOVES AS ONE OBJECT ────────────────────────────────────────────
+ *
+ * `nodes` is optional and exists for exactly this: without it every step takes
+ * the plain path below, which is what every caller that moves an ordinary card
+ * wants and what this function did for all of them.
+ *
+ * A Split is not an ordinary card. Its branches are not "steps below it", they
+ * are PART OF IT — the hub and its paths are one shape the user built and reads
+ * as one thing. Detaching it the ordinary way calls `bridgeEdgesFor`, which
+ * bridges the parent to every outgoing target; for a hub those targets are the
+ * path heads, so both branches were re-parented onto the chain the Split just
+ * left while the Split itself travelled to its new slot EMPTY. Dragging a Split
+ * one place up the line silently dismantled it — reported, exactly, as "it
+ * fucks up everything".
+ *
+ * So a Split detaches by dropping only its INCOMING edges. Every branch edge
+ * travels with it, and so does everything hanging off those branches.
+ *
+ * WHAT HAPPENS TO THE STEP IT DISPLACES. Dropping a hub between `a` and `b`
+ * cannot mean "a → hub → b": a hub's output is its branches, and there is no
+ * chain edge leaving it for `b` to occupy. `b` joins the END OF THE FIRST
+ * PATH — the tail of the line already hanging off path A. Not the head: the
+ * head is the auto-created "Path A" conditions step, and putting the displaced
+ * step above it would push the card whose name promises it is the branch's
+ * first step into second place.
+ *
+ * ── THE CYCLE GUARD, WHICH USED TO BE UNNECESSARY ──────────────────────────
+ *
+ * This function used to argue — correctly — that no cycle was reachable,
+ * because a step is fully detached before it is re-inserted: its children are
+ * bridged to its parent, so by the time the slot is read it has no descendants
+ * at all, and inserting a parentless node into a DAG cannot close a loop. That
+ * argument is still true of every ordinary step and is why there is still no
+ * guard on the path below.
+ *
+ * It stops being true the moment a Split KEEPS its descendants. Drop a hub onto
+ * a slot inside its own branch and the graph closes a ring, which the layout
+ * walks forever. Hence the one guard, scoped to the one case that needs it.
+ * `flow-canvas` also filters these slots out of the drop targets, so the ring
+ * never even lights up; this is the wall behind that courtesy.
  */
 export function moveWiring(
   nodeId: string,
   target: { after?: string; handle?: string; root?: boolean },
   edges: Edge[],
+  /**
+   * The graph's nodes. Supply them to move a Split as one object (see above);
+   * omit them and every step, Split included, takes the ordinary path.
+   */
+  nodes?: Array<{ id: string; type?: string; data?: { config?: unknown } }>,
 ): { remove: Edge[]; add: Edge[] } | null {
   if (target.after === nodeId) return null;
+  const eid = () => `e_${Math.random().toString(36).slice(2, 9)}`;
+
+  const byId = new Map((nodes ?? []).map((n) => [n.id, n]));
+  const typeOf = (id: string) => byId.get(id)?.type;
+  const configOf = (id: string) => (byId.get(id)?.data?.config ?? null) as { paths?: Array<{ id: string }> } | null;
+
+  if (typeOf(nodeId) === "paths") {
+    // Only the way IN is cut. Everything downstream is part of the object.
+    const incoming = edges.filter((e) => e.target === nodeId);
+    if (target.root) return { remove: incoming, add: [] };
+    if (!target.after) return null;
+
+    // Everything the hub carries — needed twice below, and both uses are about
+    // the same hazard: a hub that keeps its subtree can be wired back into it.
+    const carried = descendantsOf(nodeId, edges);
+    // Dropping a hub inside its own branch would ring. See the docstring.
+    if (carried.has(target.after)) return null;
+
+    const detached = edges.filter((e) => !incoming.includes(e));
+    const outgoing = target.handle
+      ? detached.find((e) => e.source === target.after && e.sourceHandle === target.handle)
+      : detached.find((e) => e.source === target.after && !e.sourceHandle && e.targetHandle == null);
+
+    // The tail of path A, or the hub itself when it has no branch wired yet —
+    // a degenerate shape, but one that must still land somewhere rather than
+    // strand the step it displaced.
+    const firstHead = detached.find((e) => e.source === nodeId && e.sourceHandle === pathHandleIds({ config: configOf(nodeId) })[0])?.target;
+    const landing = firstHead ? chainEndOf(firstHead, typeOf, configOf, detached) : nodeId;
+
+    /**
+     * A DISPLACED STEP THAT IS ALREADY OURS IS NOT DISPLACED.
+     *
+     * The second ring, and the one the drop-target guard above does not see.
+     * Branches REJOIN: the commonest non-trivial shape in this product is a
+     * Split whose paths both feed one Combine, and that Combine frequently
+     * also takes a second source directly. Drop the hub under that source and
+     * `outgoing.target` is the Combine — which is already downstream of the
+     * hub through its own branches. Re-homing it under path A's tail wires the
+     * end of the subtree back to its middle:
+     *
+     *     src -> U, hub[pA] -> fA -> a1 -> U, U -> m
+     *     drop hub after src  ==>  adds m -> U, and U -> m already exists.
+     *
+     * Degenerate version, same cause: if path A's tail IS the Combine, the
+     * added edge is `X -> X`.
+     *
+     * Neither ring needs re-homing to be prevented — it needs re-homing to be
+     * SKIPPED. A target inside `carried` is reachable from the hub by
+     * definition, so cutting the direct `after -> target` link cannot orphan
+     * it: the hub now feeds it through the branch it was always on. The link
+     * is still removed, because `after` reaches it through the hub now.
+     */
+    const rehome = outgoing && !carried.has(outgoing.target) ? outgoing : null;
+
+    return {
+      remove: [...incoming, ...(outgoing ? [outgoing] : [])],
+      add: [
+        { id: eid(), type: "insert", source: target.after, sourceHandle: target.handle, target: nodeId },
+        ...(rehome
+          ? [{ id: eid(), type: "insert", source: landing, target: rehome.target, targetHandle: rehome.targetHandle ?? undefined }]
+          : []),
+      ],
+    };
+  }
 
   // Detach: everything touching the step, plus the bridge that closes the gap.
   const incident = edges.filter((e) => e.source === nodeId || e.target === nodeId);
@@ -511,7 +645,6 @@ export function moveWiring(
   const outgoing = target.handle
     ? detached.find((e) => e.source === target.after && e.sourceHandle === target.handle)
     : detached.find((e) => e.source === target.after && !e.sourceHandle && e.targetHandle == null);
-  const eid = () => `e_${Math.random().toString(36).slice(2, 9)}`;
   return {
     // A bridge is a new edge, so "not adding it" is how it is taken back out;
     // only an ORIGINAL edge can be removed.

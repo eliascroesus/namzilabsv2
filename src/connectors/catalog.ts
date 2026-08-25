@@ -111,6 +111,12 @@ export type ConnectorCatalogEntry = {
    * yields ~400 "Lead created" events, and a lead from six weeks ago simply
    * has no created event to import. Without this sentence, that reads as our
    * sync losing data.
+   *
+   * ONE SENTENCE. It renders under a line that already says "History
+   * imported.", in a config panel where every other field is a control — a
+   * paragraph here is read once, by the person who wrote it. State the limit
+   * and stop; the second sentence explaining what to do about it belongs on
+   * the connection page, where the button that does it lives.
    */
   historyNote?: string;
   /**
@@ -308,8 +314,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     connect: "apiKey",
     instant: true,
     poll: true,
-    historyNote:
-      "Close's event log only reaches back about 30 days, so records created before that have no “created” event here — they appear only through their newer activity (calls, meetings, emails).",
+    historyNote: "Close's event log only reaches back about 30 days.",
     /**
      * NO DECLARED rateLimits, deliberately — the DEFAULT_RPM of 60/min governs,
      * and for Close that is a conservative floor rather than a guess at a
@@ -574,8 +579,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     instant: true,
     poll: true,
     sync: "incremental",
-    historyNote:
-      "The first sync reaches back 90 days. Older payments and memberships arrive only if you import more history from this connection.",
+    historyNote: "First sync reaches back 90 days.",
     /**
      * Whop publishes one ceiling — 600 requests per minute per API credential
      * (docs.whop.com) — and does not define what it scopes "per operation" to,

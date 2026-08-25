@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CalendarDays, LayoutDashboard, Plug, Settings, Workflow } from "lucide-react";
+import { CalendarDays, LayoutDashboard, Plug, Radio, Settings, Workflow } from "lucide-react";
 
 /**
  * THE RAIL: an icon column carrying the product's one dark surface.
@@ -43,6 +43,19 @@ const NAV: Array<{ href: string; label: string; icon: ReactNode; match: (p: stri
     icon: <CalendarDays size={24} strokeWidth={2} />,
     match: (p) => p.startsWith("/dashboard/calendar"),
   },
+  // Third, and that is the ordering claim again: the two above are the same
+  // numbers seen two ways, and this is the RECORDS those numbers are made of.
+  // It sits after them and before Flows, so the rail reads outward from the
+  // answer — what it says, which days made it, what arrived, how it is built,
+  // where it comes from. It used to be a card at the foot of the dashboard,
+  // competing with the tiles for one glance while answering a different
+  // question entirely ("is data still coming in").
+  {
+    href: "/dashboard/activity",
+    label: "Activity",
+    icon: <Radio size={24} strokeWidth={2} />,
+    match: (p) => p.startsWith("/dashboard/activity"),
+  },
   { href: "/dashboard/flows", label: "Flows", icon: <Workflow size={24} strokeWidth={2} />, match: (p) => p.startsWith("/dashboard/flows") },
   {
     href: "/integrations",
@@ -67,6 +80,19 @@ export function Sidebar({
     // phone for four icons, and every table to its right paid for it. 76px
     // still holds the 40px tile and its label; the tile itself never shrinks,
     // because it is the touch target.
+    // THE ASIDE ITSELF MUST NOT SCROLL, and this is a trap worth naming because
+    // the obvious fix for a too-tall rail walks straight into it. Activity made
+    // the stack six items, which on a short viewport (a phone in landscape, a
+    // half-height window) can push the account avatar past the bottom edge — so
+    // `overflow-y-auto` here looks exactly right. It is not: when one axis is
+    // `visible` and the other is not, CSS computes the visible one to `auto`
+    // too, so this element becomes a scroll container on BOTH axes. The account
+    // panel is `absolute left-full` — it renders entirely outside this 76px
+    // column — so it would be clipped to nothing, taking the workspace switcher
+    // and Sign out with it.
+    //
+    // The scroll belongs to the NAV, which is the part that actually grows. See
+    // below.
     <aside className="flex h-full w-[76px] shrink-0 flex-col items-center px-2 sm:w-[100px] sm:px-2.5">
       {/* THE WORDMARK IS THE TOP BAR'S HEIGHT.
           The rail's mark and the canvas's top island sit at the same y, so when
@@ -87,7 +113,7 @@ export function Sidebar({
       <Link
         href="/dashboard"
         title="Namzilabs — dashboard"
-        className="mb-[11px] flex h-[72px] w-full items-center justify-center rounded-card text-title font-semibold text-white transition-opacity hover:opacity-85 focus-ring-light sm:h-[106px]"
+        className="mb-[11px] flex h-[72px] w-full shrink-0 items-center justify-center rounded-card text-title font-semibold text-white transition-opacity hover:opacity-85 focus-ring-light sm:h-[106px]"
       >
         {/* THE MARK IS NOT A NAV TILE. It used to be a white wash like the
             active item's, and once resting glyphs stopped dimming it became the
@@ -116,10 +142,29 @@ export function Sidebar({
           highlighted the whole item as one white pill, which is a different
           (and heavier) thing entirely.
 
-          The 30px gap tightens to 22px below `sm`, where vertical room is the
+          The 30px gap tightens to 18px below `sm`, where vertical room is the
           scarce thing rather than horizontal — four items at the desktop pitch
-          pushed the account avatar off a short phone viewport. */}
-      <nav className="flex w-full flex-col items-center gap-[22px] sm:gap-[30px]">
+          pushed the account avatar off a short phone viewport. It was 22px for
+          five items; Activity makes six, and 18px buys back exactly the 20px
+          the new one costs, so the mobile stack ends where it did before.
+
+          THE NAV IS THE SCROLL REGION, not the rail (see the aside's note): it
+          takes the leftover height with `flex-1 min-h-0` and scrolls inside it,
+          so the mark above and the account control below stay pinned and the
+          panel that opens beside the avatar is not clipped by anything. This is
+          the shape every rail-and-account product uses, and it is what makes a
+          seventh item free.
+
+          `-mx-1.5 px-1.5` is the range track's trick, for the same reason: a
+          bare scrollport clips its children's focus ring, so the first and last
+          item lose their outline exactly when a keyboard user reaches them. The
+          outline is 2px at 2px offset — 4px — and the 6px of padding holds it,
+          while the negative margin keeps every tile at the width it had. `-my-1
+          py-1` does the same at the two ends the scroll actually cuts.
+
+          `justify-start` so a short list stays at the top rather than centring
+          itself in the leftover space. */}
+      <nav className="-mx-1.5 -my-1 flex w-[calc(100%+0.75rem)] min-h-0 flex-1 flex-col items-center justify-start gap-[18px] overflow-y-auto overscroll-contain px-1.5 py-1 sm:gap-[30px]">
         {NAV.filter((item) => !hide?.includes(item.label)).map((item) => {
           const active = item.match(pathname);
           return (
@@ -157,9 +202,12 @@ export function Sidebar({
         })}
       </nav>
 
-      <span className="flex-1" />
-
-      <span className="pb-4">{account && <RailAccount initials={account.initials}>{account.panel}</RailAccount>}</span>
+      {/* The `flex-1` spacer that used to sit here is gone: the nav above now
+          takes the leftover height itself, which is what lets it scroll instead
+          of overflowing. Two `flex-1` children would split that space between
+          them and the nav would never fill enough of the column to need a
+          scrollbar — it would simply run past the avatar again. */}
+      <span className="shrink-0 pb-4">{account && <RailAccount initials={account.initials}>{account.panel}</RailAccount>}</span>
     </aside>
   );
 }

@@ -1,5 +1,6 @@
 import { ShellSkeleton } from "@/components/shell-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BOARD_GRID } from "@/components/ui/page";
 
 /**
  * The board's own recipe, so content lands where the shimmer stood rather than
@@ -15,11 +16,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function DashboardLoading() {
   return (
     <ShellSkeleton>
-      <Skeleton className="mt-3 h-4 w-96" />
+      {/* No lede bar: the board's h1 stands alone now, and a shimmer for a
+          sentence that never arrives is a 16px jump on every first load. */}
       <Skeleton className="mt-6 h-14 rounded-surface" />
       <Skeleton className="mt-3 h-3 w-64" />
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {Array.from({ length: 6 }, (_, i) => (
+      {/* Ten, not six: at `3xl` the real board lays five to a row, and a
+          six-tile shimmer leaves the second row visibly short of the page it
+          is standing in for. */}
+      <div className={`mt-4 ${BOARD_GRID}`}>
+        {Array.from({ length: 10 }, (_, i) => (
           <Skeleton key={i} className="h-44 rounded-surface" />
         ))}
       </div>

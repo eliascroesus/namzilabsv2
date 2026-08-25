@@ -24,15 +24,28 @@ import { PERMISSIONS, type RankRow } from "@/lib/permissions";
 import { assignRankAction, createRankAction, deleteRankAction, updateRankAction } from "./actions";
 
 /**
- * The Ranks editor. Every control here is a switch that saves the moment it
+ * The Roles editor. Every control here is a switch that saves the moment it
  * flips — optimistic flip, server call, revert plus a toast if the server
  * says no. There is deliberately NO Save button: a toggle that needs a Save
  * button is a checkbox wearing a costume, and the feature is meant to feel
  * like flipping breakers, not filling in a form.
  *
- * The rank list is seeded from server props and then OWNED here: every edit
- * lands locally first so nothing waits on a round trip to feel done. Member
- * counts stay on props — they change through the Members list, whose action
+ * THE FEATURE IS SPELLED "ROLE" IN EVERY STRING AND "rank" IN EVERY
+ * IDENTIFIER, and that split is deliberate rather than half-finished work.
+ * "Rank" was never a word anyone outside this file used for the idea; the
+ * screen it lives on already had roles on it (WorkOS's own, on the members
+ * list), and two names for one concept is a support ticket per new admin. But
+ * `workspace_ranks`, `rank_assignments`, `rankId`, `canManageRanks` and the
+ * four server actions below are a table, two columns, a foreign key and the
+ * permission model that reads them — renaming those is a migration plus a diff
+ * across `lib/permissions.ts` in exchange for nothing a user can see.
+ *
+ * So: if you are adding a string here, it says role. If you are adding a
+ * column, it says rank.
+ *
+ * The list is seeded from server props and then OWNED here: every edit lands
+ * locally first so nothing waits on a round trip to feel done. Member counts
+ * stay on props — they change through the Members list, whose action
  * revalidates this page, and keeping them off local state means they can never
  * go stale against an edit the panel didn't make.
  */
@@ -136,13 +149,13 @@ export function RanksPanel({
         showToast(res.error);
       }
     } catch {
-      showToast("Couldn't create the rank — try again.");
+      showToast("Couldn't create the role — try again.");
     } finally {
       setCreating(false);
     }
   };
 
-  // Deletion is the one edit that is NOT optimistic: losing a rank changes
+  // Deletion is the one edit that is NOT optimistic: losing a role changes
   // real people's access, so the row only disappears once the server agrees.
   const destroy = async (id: string) => {
     setConfirmingDelete(null);
@@ -155,7 +168,7 @@ export function RanksPanel({
         showToast(res.error);
       }
     } catch {
-      showToast("Couldn't delete the rank — try again.");
+      showToast("Couldn't delete the role — try again.");
     }
   };
 
@@ -168,26 +181,27 @@ export function RanksPanel({
 
   const deleteLine = (n: number) =>
     n === 0
-      ? "No one holds this rank."
-      : `${count(n, "member")} ${n === 1 ? "loses" : "lose"} this rank and ${n === 1 ? "returns" : "return"} to full access.`;
+      ? "No one holds this role."
+      : `${count(n, "member")} ${n === 1 ? "loses" : "lose"} this role and ${n === 1 ? "returns" : "return"} to full access.`;
 
   return (
     <div>
-      <p className="mb-3 text-tiny text-muted-foreground">
-        A rank limits what its members can do and which metrics they see. Members without a rank have
-        full access — restrictions begin when you assign one.
-      </p>
-
+      {/* NO PREAMBLE. It explained that a role limits what its members can do
+          and which metrics they see, and that members without one have full
+          access — and the empty state below says the second half where it
+          matters (to a workspace with no roles at all), while the first half is
+          restated by the two groups inside every card, which are literally
+          headed "Permissions" and "Metrics". */}
       {toast && <Toast>{toast}</Toast>}
 
-      {/* Each rank is a CARD — the builder's step-card anatomy (coloured mark,
+      {/* Each role is a CARD — the builder's step-card anatomy (coloured mark,
           text-lead title, text-tiny meta), stacked with air between them like
           steps on the canvas. Expanding one grows it into a panel-chrome-style
           surface: hairline-divided groups on the one white plane. */}
       <div className="flex flex-col gap-3">
         {ranks.length === 0 && (
           <p className="py-2 text-center text-small text-muted-foreground">
-            No ranks yet — everyone has full access. Create one to start limiting what members see.
+            No roles yet — everyone has full access. Create one to start limiting what members see.
           </p>
         )}
 
@@ -229,7 +243,10 @@ export function RanksPanel({
 
               {open && (
                 <div className="divide-y divide-border border-t border-border">
-                  <Group label="Permissions" hint="What members holding this rank can do.">
+                  {/* No hint: "What members holding this role can do" is the
+                      definition of the word Permissions, and every row below
+                      carries its own blurb saying what that one does. */}
+                  <Group label="Permissions">
                     {/* The master carries its own hairline: "everything" is a
                         different kind of statement from any one grant. */}
                     <div className="mb-1 border-b border-border pb-1">
@@ -257,7 +274,9 @@ export function RanksPanel({
                     ))}
                   </Group>
 
-                  <Group label="Metrics" hint="Which dashboard tiles this rank can see.">
+                  {/* Same: the rows ARE the dashboard tiles, listed by name
+                      with a switch each. */}
+                  <Group label="Metrics">
                     {/* The master stays even with an empty catalogue: the
                         blanket grant exists so "everything" doesn't go stale
                         as flows get published later. */}
@@ -287,10 +306,14 @@ export function RanksPanel({
                     )}
                   </Group>
 
-                  <Group label="Inherit from" hint="Stack another rank's grants on top of this one.">
+                  {/* This hint STAYS. "Inherit from" is the one group whose
+                      label does not say what flipping a switch in it does, and
+                      inheritance is the only control here that changes a role
+                      by way of another one. */}
+                  <Group label="Inherit from" hint="Stack another role's grants on top of this one.">
                     {others.length === 0 ? (
                       <p className="py-1.5 text-tiny text-muted-foreground">
-                        Create a second rank and it appears here.
+                        Create a second role and it appears here.
                       </p>
                     ) : (
                       others.map((o) => (
@@ -306,7 +329,11 @@ export function RanksPanel({
                     )}
                   </Group>
 
-                  <Group label="Danger" hint="Deleting a rank returns its members to full access.">
+                  {/* Stays too, and for the opposite reason to Inherit from:
+                      "Danger" names a stake without naming the consequence, and
+                      the consequence here is counter-intuitive — deleting a
+                      role WIDENS access rather than removing it. */}
+                  <Group label="Danger" hint="Deleting a role returns its members to full access.">
                     {confirmingDelete === r.id ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 py-1.5">
                         <p className="text-small text-muted-foreground">{deleteLine(holders)}</p>
@@ -315,7 +342,7 @@ export function RanksPanel({
                             Cancel
                           </Button>
                           <Button type="button" variant="destructive" size="sm" onClick={() => destroy(r.id)}>
-                            Delete rank
+                            Delete role
                           </Button>
                         </span>
                       </div>
@@ -324,7 +351,7 @@ export function RanksPanel({
                          stakes, so the trigger stays quiet until hovered —
                          the confirm step is where the red lives. */
                       <Button type="button" variant="destructiveGhost" size="sm" onClick={() => setConfirmingDelete(r.id)}>
-                        Delete rank
+                        Delete role
                       </Button>
                     )}
                   </Group>
@@ -348,8 +375,8 @@ export function RanksPanel({
                     if (e.key === "Escape") setAdding(false);
                   }}
                   required
-                  placeholder="New rank name"
-                  aria-label="New rank name"
+                  placeholder="New role name"
+                  aria-label="New role name"
                   className="max-w-sm"
                 />
                 <Button type="submit" disabled={creating || newName.trim() === ""}>
@@ -357,7 +384,7 @@ export function RanksPanel({
                 </Button>
               </div>
               {/* Whop's presets, reduced to the one that earns its place: Admin.
-                  A preset is a STARTING POINT — it creates an ordinary rank with
+                  A preset is a STARTING POINT — it creates an ordinary role with
                   both masters on, fully editable after — so the chip says what it
                   does rather than hiding it behind a name. */}
               <div className="flex items-center gap-2">
@@ -391,7 +418,7 @@ export function RanksPanel({
             <span className="flex h-7 w-7 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
               <Plus size={14} strokeWidth={2.25} />
             </span>
-            New rank
+            New role
           </button>
         )}
       </div>
@@ -400,10 +427,12 @@ export function RanksPanel({
 }
 
 /**
- * The per-member rank picker in the Members list. "Full access" is the null
- * option because NO rank means FULL access — restrictions begin when a rank
+ * The per-member role picker in the Members list. "Full access" is the null
+ * option because NO role means FULL access — restrictions begin when a role
  * is assigned — and naming the null state in the select teaches that rule
- * exactly where it applies.
+ * exactly where it applies. It is now the ONLY thing on the row that speaks
+ * about access, since the WorkOS "Member" badge that used to sit beside it has
+ * gone; see the note at its old call site in page.tsx.
  */
 export function MemberRankSelect({
   memberUserId,
@@ -437,7 +466,7 @@ export function MemberRankSelect({
   return (
     <>
       {error && <Toast>{error}</Toast>}
-      <NativeSelect value={value} onChange={(e) => change(e.target.value)} aria-label="Rank" className="w-auto">
+      <NativeSelect value={value} onChange={(e) => change(e.target.value)} aria-label="Role" className="w-auto">
         <option value="">Full access</option>
         {ranks.map((r) => (
           <option key={r.id} value={r.id}>
@@ -451,14 +480,22 @@ export function MemberRankSelect({
 
 /**
  * One hairline-divided group of the expanded editor, shaped like the config
- * panel's fields: a bold black label that IS the question, one muted line of
- * explainer under it, then the rows.
+ * panel's fields: a bold black label that IS the question, optionally one muted
+ * line of explainer under it, then the rows.
+ *
+ * `hint` IS OPTIONAL, and the two groups that dropped theirs are the reason.
+ * A hint earns its line when the label alone does not say what flipping a
+ * switch in the group does — true of "Inherit from" and of "Danger", false of
+ * "Permissions" and "Metrics", whose hints were restatements of the noun above
+ * them sitting on top of rows that each carry their own blurb. When it is
+ * absent the label sits directly on the rows rather than leaving a gap where a
+ * sentence used to be.
  */
-function Group({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
+function Group({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="px-4 py-4">
       <p className="text-base font-semibold text-foreground">{label}</p>
-      <p className="mt-0.5 text-tiny text-muted-foreground">{hint}</p>
+      {hint && <p className="mt-0.5 text-tiny text-muted-foreground">{hint}</p>}
       <div className="mt-2">{children}</div>
     </div>
   );

@@ -8,7 +8,7 @@ import { getDb, getReadDb } from "@/db/client";
 import { flows, metrics, rankAssignments, workspaceRanks } from "@/db/schema";
 import { formatDate } from "@/lib/format";
 import { AppShell } from "@/components/app-shell";
-import { Badge, StatusPill } from "@/components/ui/badge";
+import { StatusPill } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
@@ -28,12 +28,6 @@ const initials = (email: string) => {
   const parts = (email.split("@")[0] ?? "").split(/[^a-zA-Z0-9]+/).filter(Boolean);
   const s = parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : (parts[0] ?? email).slice(0, 2);
   return (s || "?").toUpperCase();
-};
-
-/** A role slug ("member", "org_admin") said in plain English. */
-const roleLabel = (slug: string) => {
-  const words = slug.replace(/[_-]+/g, " ");
-  return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
 /**
@@ -146,13 +140,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <PageContainer width="narrow">
-        <PageHeader title="Workspace settings" lede="Members, invitations and ranks." />
+        {/* NO LEDE. It listed the three section headings that follow it. */}
+        <PageHeader title="Workspace settings" />
 
         {invited && (
           <div className="mt-6 flex items-start justify-between gap-4 rounded-card border border-success-soft bg-success-soft/50 p-4 text-base text-success-ink">
+            {/* One clause. The banner used to explain that an email goes out
+                and that the same link can be copied from Pending invitations —
+                and Pending invitations is directly below with the link already
+                in a CopyField, labelled "Invite link — send it any way you
+                like". A banner narrating the section under it is furniture. */}
             <p>
-              Invitation created for <b>{invited}</b> — they&rsquo;ll get an email with a join link. Or copy the
-              same link under <b>Pending invitations</b> below and send it to them yourself.
+              Invitation sent to <b>{invited}</b>.
             </p>
             <Link
               href="/dashboard/settings"
@@ -213,11 +212,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                         ranks={rankOptions}
                       />
                     )}
-                    {m.role === "owner" ? (
-                      <StatusPill tone="brand">Owner</StatusPill>
-                    ) : (
-                      <Badge>{roleLabel(m.role)}</Badge>
-                    )}
+                    {/* THE "MEMBER" BADGE IS GONE, and only that one.
+                        The workspace's own access model is called Roles now
+                        (the section below, and the picker to the left of this),
+                        so a WorkOS role slug rendered as a badge put two
+                        different things called a role on one row — the picker
+                        said "Setter & Closer" and the badge beside it said
+                        "Member", about the same person, meaning unrelated
+                        things. "Member" was also the badge on everyone who
+                        wasn't the owner, which is a column of identical words.
+                        Owner survives because it is a distinct fact that
+                        nothing else on the row carries. */}
+                    {m.role === "owner" && <StatusPill tone="brand">Owner</StatusPill>}
                   </span>
                 </div>
               );
@@ -227,7 +233,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
         {isAdmin && (
           <section className="mt-8">
-            <SectionHeading>Ranks</SectionHeading>
+            {/* "Roles" in every string a user reads. The table, the columns and
+                every identifier under it stay `rank` — see RanksPanel's own
+                note. Renaming those is a migration across the permission model
+                for nothing anyone can see. */}
+            <SectionHeading>Roles</SectionHeading>
             <RanksPanel ranks={rankRows} memberCounts={memberCounts} catalogue={catalogue} />
           </section>
         )}
@@ -236,7 +246,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             re-checks server-side; this is the courtesy. */}
         {isAdmin && (
           <section className="mt-8">
-            <SectionHeading>Invite a teammate</SectionHeading>
+            {/* "Invite", not "Invite a teammate" — the field's own placeholder
+                is teammate@company.com and the button says Send invite, so the
+                heading was saying it a third time. */}
+            <SectionHeading>Invite</SectionHeading>
             <Card variant="surface" padding="compact">
               <form action={inviteMemberAction} className="flex gap-2">
                 <Input
@@ -252,10 +265,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 />
                 <SubmitButton pendingLabel="Sending…">Send invite</SubmitButton>
               </form>
-              <p className="mt-2.5 text-tiny text-muted-foreground">
-                An email with a join link goes out automatically — the same link appears under{" "}
-                <b>Pending invitations</b> for you to copy into Slack, a text, anywhere. Invites expire automatically.
-              </p>
+              {/* No note. It said an email goes out, that the link is also
+                  copyable from Pending invitations, and that invites expire —
+                  and Pending invitations renders directly below with the link
+                  in a labelled CopyField and the expiry date on the row. Every
+                  clause was a description of the next section down. */}
             </Card>
           </section>
         )}
