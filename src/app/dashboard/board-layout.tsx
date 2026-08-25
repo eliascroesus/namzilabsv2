@@ -266,6 +266,12 @@ export function BoardLayout({
   });
   /** The gap belongs to exactly one lane at a time, at one index. */
   const gapAt = (laneId: string | null) => (drag?.target && drag.target.laneId === laneId ? drag.target.index : null);
+  /**
+   * A sorted column gets no positional gap — see BoardColumn. It still gets the
+   * drop; what it cannot honestly show is WHERE, because the sort decides that
+   * on the next render and the placeholder would have promised otherwise.
+   */
+  const sortedIds = new Set(groups.filter((g) => g.sortKey !== "manual").map((g) => g.id));
 
   return (
     // `select-none` ONLY while something is in the air. A press moves a few
@@ -377,7 +383,8 @@ export function BoardLayout({
                     onMoveColumn={moveGroup}
                     columnIndex={board.columns.findIndex((c) => c.id === slot.key)}
                     columnCount={board.columns.length}
-                    gapIndex={gapAt(slot.key)}
+                    gapIndex={sortedIds.has(slot.key) ? null : gapAt(slot.key)}
+                    dropping={gapAt(slot.key) != null}
                     gapHeight={drag?.height}
                     heldKey={drag?.tileKey ?? null}
                     onGrab={onPointerDown}

@@ -205,7 +205,11 @@ describe("a sorted column cannot be reordered by hand", () => {
      */
     const decisions = (code(column).match(/g\.sortKey === "manual"/g) ?? []).length;
     expect(decisions, "more than one thing decides whether a column is sorted").toBe(1);
-    expect(column).toMatch(/const sortedBy = g\.sortKey === "manual" \? null :/);
+    expect(column).toMatch(/const sort = g\.sortKey === "manual" \? null :/);
+    // And the header wears it, so a column that files a dropped metric
+    // somewhere you did not aim reads as a setting rather than as a fault.
+    expect(code(column)).toMatch(/<ArrowUpDown size=\{11\} \/>/);
+    expect(code(column)).toMatch(/\{sort\.short\}/);
   });
 
   it("withholds the POSITION, never the pickup", () => {

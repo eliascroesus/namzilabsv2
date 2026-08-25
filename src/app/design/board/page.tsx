@@ -50,9 +50,11 @@ const TILES: BoardTile[] = ROWS.map((r) => ({
 
 const GROUPS: BoardGroup[] = [
   { id: "g1", name: "Total", color: "green", pos: "i", sortKey: "manual" },
-  // Deliberately SORTED: a tile in here must still be draggable OUT.
-  { id: "g2", name: "Confirmation", color: "pink", pos: "r", sortKey: "name_asc" },
-  { id: "g3", name: "User", color: "blue", pos: "v", sortKey: "manual" },
+  { id: "g2", name: "Confirmation", color: "pink", pos: "r", sortKey: "manual" },
+  // Deliberately SORTED. Its tiles must still be draggable OUT of it, and a
+  // card dropped into it must not be promised a position the sort will
+  // overrule — both of which were shipped broken.
+  { id: "g3", name: "User", color: "blue", pos: "v", sortKey: "value_desc" },
 ];
 
 const PLACEMENTS: TilePlacement[] = [
@@ -60,7 +62,7 @@ const PLACEMENTS: TilePlacement[] = [
   { tileKey: TILES[1].key, groupId: "g1", pos: "r" },
   { tileKey: TILES[2].key, groupId: "g1", pos: "v" },
   { tileKey: TILES[3].key, groupId: "g2", pos: "i" },
-  { tileKey: TILES[4].key, groupId: "g2", pos: "r" },
+  { tileKey: TILES[4].key, groupId: "g3", pos: "i" },
 ];
 
 export default function BoardLab() {

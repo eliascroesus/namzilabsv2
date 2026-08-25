@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, Check, MoreHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUpDown, Check, MoreHorizontal, Trash2 } from "lucide-react";
 import type { BoardLane } from "@/lib/board/arrange";
 import type { BoardGroup, GroupSortKey } from "@/lib/board/types";
 import { GROUP_ACCENT, groupAccent, groupBadge, groupInk, groupWash } from "@/components/flow/node-accent";
@@ -26,12 +26,12 @@ import { COLUMN_W, LANE_GAP } from "./board-shape";
  * duration, a percentage and a count cannot mean one ranking, so the menu says
  * what it actually does rather than letting the name imply something untrue.
  */
-const SORTS: Array<{ key: GroupSortKey; label: string; blurb: string }> = [
-  { key: "manual", label: "Manual", blurb: "The order you arranged by hand" },
-  { key: "name_asc", label: "Name A\u2013Z", blurb: "Alphabetical, with numbers read as numbers" },
-  { key: "name_desc", label: "Name Z\u2013A", blurb: "Reverse alphabetical" },
-  { key: "value_desc", label: "Value high\u2192low", blurb: "Biggest first, currencies together, then counts, then rates" },
-  { key: "attention", label: "Needs attention first", blurb: "Broken, then out of date, then the rest" },
+const SORTS: Array<{ key: GroupSortKey; label: string; short: string; blurb: string }> = [
+  { key: "manual", label: "Manual", short: "", blurb: "The order you arranged by hand" },
+  { key: "name_asc", label: "Name A\u2013Z", short: "A\u2013Z", blurb: "Alphabetical, with numbers read as numbers" },
+  { key: "name_desc", label: "Name Z\u2013A", short: "Z\u2013A", blurb: "Reverse alphabetical" },
+  { key: "value_desc", label: "Value high\u2192low", short: "Value", blurb: "Biggest first, currencies together, then counts, then rates" },
+  { key: "attention", label: "Needs attention first", short: "Attention", blurb: "Broken, then out of date, then the rest" },
 ];
 
 /**
@@ -61,6 +61,7 @@ export function BoardColumn({
   columnIndex,
   columnCount,
   gapIndex,
+  dropping,
   gapHeight,
   heldKey,
   onGrab,
@@ -80,6 +81,8 @@ export function BoardColumn({
   columnCount: number;
   /** Where the held tile would land in THIS column, or null if not here. */
   gapIndex: number | null;
+  /** True while the held card would land in THIS column. */
+  dropping?: boolean;
   /** The held card's own height, so the gap is the size of the hole it fills. */
   gapHeight?: number;
   heldKey: string | null;
@@ -111,7 +114,8 @@ export function BoardColumn({
    * still fine (it appends to the hidden manual order and the sort places it),
    * and dragging one OUT always is. This is the one expression that decides it.
    */
-  const sortedBy = g.sortKey === "manual" ? null : SORTS.find((s) => s.key === g.sortKey)?.label;
+  const sort = g.sortKey === "manual" ? null : (SORTS.find((s) => s.key === g.sortKey) ?? null);
+  const sortedBy = sort?.label ?? null;
 
   return (
     <section
@@ -190,6 +194,21 @@ export function BoardColumn({
             every twelve-second poll. */}
         <span className="tnum shrink-0 text-tiny text-muted-foreground">{lane.tiles.length}</span>
         <span className="flex-1" />
+
+        {/* A SORTED COLUMN SAYS SO.
+            Without this, one column takes a dropped metric wherever you aim it
+            and its neighbour always files it somewhere else, with nothing on
+            screen to say why — which reads as a bug in the board rather than as
+            a setting on the group. It was reported as exactly that. */}
+        {sort && (
+          <span
+            className="flex shrink-0 items-center gap-1 text-micro font-medium text-muted-foreground"
+            title={`Sorted by ${sort.label} — ${sort.blurb}. A metric dropped here is placed by the sort; switch to Manual to place it by hand.`}
+          >
+            <ArrowUpDown size={11} />
+            {sort.short}
+          </span>
+        )}
 
         {canEdit && (
           <Popover
@@ -356,9 +375,28 @@ export function BoardColumn({
           enough to aim at. */}
       <div
         {...{ [LANE_ATTR]: g.id, [AXIS_ATTR]: "y", [ACCEPTS_ATTR]: "tile", [SORTED_ATTR]: sortedBy ? "1" : undefined }}
-        className={`flex min-h-[140px] flex-col rounded-card p-2 ${LANE_GAP}`}
-        style={{ background: groupWash(g.color) }}
+        className={`flex min-h-[140px] flex-col rounded-card p-2 transition-shadow duration-(--duration-fast) ${LANE_GAP}`}
+        style={{
+          background: groupWash(g.color),
+          // A SORTED LANE LIGHTS UP WHOLE, because it has no position to offer.
+          // See the banner below.
+          ...(dropping && sortedBy ? { boxShadow: `inset 0 0 0 2px ${groupAccent(g.color)}` } : {}),
+        }}
       >
+        {/* THE GAP WOULD BE A LIE HERE, so there isn't one.
+            A placeholder says "it goes exactly here" — and in a sorted column
+            the sort decides, so the card would land somewhere else the instant
+            it was dropped. That is the one thing an interface only gets to do
+            once. The column lights up instead: it joins this group, and the
+            sort places it. */}
+        {dropping && sortedBy && (
+          <p
+            className="rounded-control px-2 py-1 text-center text-micro font-semibold"
+            style={{ background: groupBadge(g.color), color: groupInk(g.color) }}
+          >
+            Placed by {sortedBy}
+          </p>
+        )}
         {lane.tiles.length === 0 && gapIndex == null ? (
           /* An empty column is a header over nothing, which reads as a tile
              that failed to load. Saying what the space is for turns it into a

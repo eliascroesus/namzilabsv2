@@ -63,6 +63,11 @@ const layout = () =>
     ),
   );
 
+const p_up = async () => {
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+};
+
 async function drag(tileKey, toLane, yOffset) {
   const from = await page.locator(`[data-board-tile="${tileKey}"]`).boundingBox();
   const to = await page.locator(`[data-board-lane="${toLane}"]`).boundingBox();
@@ -135,11 +140,11 @@ console.log("\na metric in a SORTED group can still be carried out of it");
    */
   await page.reload({ waitUntil: "networkidle" });
   const now = await layout();
-  const sorted = now.g2 ?? [];
-  check(sorted.length >= 1, "the specimen has a sorted group with a tile in it", JSON.stringify(now.g2));
-  const { ghost, after } = await drag(sorted[0], "g3", 30);
+  const sorted = now.g3 ?? [];
+  check(sorted.length >= 1, "the specimen has a sorted group with a tile in it", JSON.stringify(now.g3));
+  const { ghost, after } = await drag(sorted[0], "g2", 30);
   check(ghost === 1, "it can be picked up");
-  check(after.g3.includes(sorted[0]), "and carried into another group", JSON.stringify(after.g3));
+  check(after.g2.includes(sorted[0]), "and carried into another group", JSON.stringify(after.g2));
 }
 
 console.log("\nthe gap does not jump on a grazed midpoint");
@@ -172,6 +177,47 @@ console.log("\nthe gap does not jump on a grazed midpoint");
   check(deep === 1, "the gap opens once the pointer is properly inside", `deep=${deep}`);
   void grazed;
   void target;
+}
+
+console.log("\na sorted group says so, and does not promise a position it cannot keep");
+{
+  /**
+   * Reported as "on the Confirmation group it just adds it to the bottom, I
+   * can't place it between metrics, but it works perfectly on Total". Both
+   * columns were behaving correctly; only one of them was sorted, and nothing
+   * on screen said so. Worse, the gap opened at the BOTTOM while the sort would
+   * have placed the card by value — the placeholder was promising a position
+   * that was about to be overruled.
+   */
+  await page.reload({ waitUntil: "networkidle" });
+  const header = await page.evaluate(() => {
+    const s = [...document.querySelectorAll("section")].find((x) => x.getAttribute("aria-label") === "User");
+    return s ? s.textContent.slice(0, 60) : null;
+  });
+  check(/Value/.test(header ?? ""), "the sorted column wears its sort in the header", JSON.stringify(header));
+
+  const now = await layout();
+  const from = await page.locator(`[data-board-tile="${(now.g1 ?? [])[0]}"]`).boundingBox();
+  const lane = await page.locator('[data-board-lane="g3"]').boundingBox();
+  await page.mouse.move(from.x + from.width / 2, from.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2 + 12, from.y + 50, { steps: 3 });
+  // Aim BETWEEN two metrics in the sorted column — the old build drew a gap at
+  // the bottom regardless, which is the position it could not honour.
+  await page.mouse.move(lane.x + lane.width / 2, lane.y + 200, { steps: 14 });
+  await page.waitForTimeout(160);
+  const state = await page.evaluate(() => {
+    const l = document.querySelector('[data-board-lane="g3"]');
+    return {
+      gaps: [...(l?.children ?? [])].filter((c) => String(c.className).includes("border-dashed")).length,
+      banner: l?.textContent?.includes("Placed by") ?? false,
+      lit: (l?.getAttribute("style") ?? "").includes("inset"),
+    };
+  });
+  await p_up();
+  check(state.gaps === 0, "no placeholder promises a position the sort will overrule", `gaps=${state.gaps}`);
+  check(state.banner, "it says the card will be placed by the sort");
+  check(state.lit, "and the whole column lights up instead");
 }
 
 check(errors.length === 0, "no uncaught page errors", JSON.stringify(errors));
