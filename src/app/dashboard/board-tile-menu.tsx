@@ -180,6 +180,7 @@ export function TileSlot({
            * last tile in a column was cut off at the fold.
            */
           fixed
+          exit
           align="right"
           width={232}
           anchor={
@@ -240,10 +241,16 @@ export function TileSlot({
               size="sm"
               disabled={index >= count - 1 || sortedBy != null}
               title={sortedBy ? `Sorted by ${sortedBy}` : undefined}
-              // +2 rather than +1: the tile is removed from the lane before the
-              // index is applied, so passing the neighbour below means landing
-              // one place beyond where it currently is.
-              onClick={() => move(laneId, index + 2)}
+              // ONE STEP, WHICH IS `index + 1`. It was `+ 2`, on the reasoning
+              // that the tile is removed from the lane before the index is
+              // applied — and that reasoning was simply wrong. Its removal is
+              // exactly what makes `index` already mean "before the neighbour
+              // below", so +1 steps past that neighbour and +2 skipped it. In a
+              // lane of four the difference is one place versus the bottom,
+              // which is what "move down sends it all the way down" was.
+              // `move up` was `index - 1` and correct, which is why only this
+              // one was reported.
+              onClick={() => move(laneId, index + 1)}
               className="w-full justify-start"
             >
               <ArrowDown />

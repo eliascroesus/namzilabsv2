@@ -451,3 +451,60 @@ describe("the gap does not change hands on a grazed midpoint", () => {
     expect(code(drag)).toMatch(/lane\.extent \* SWITCH_DEADBAND/);
   });
 });
+
+describe("the menu nudges by exactly one place", () => {
+  it("moves down by index + 1, not + 2", () => {
+    /**
+     * Reported as "move down sends it all the way to the bottom; move up works
+     * perfectly", and both went through the same clamp. `index` already counts
+     * among the OTHER tiles — the held one is removed before it is applied — so
+     * it already means "before the neighbour below". +1 steps past that
+     * neighbour; +2 skipped it, and in any lane the clamp then pinned it to the
+     * end. The comment on that line argued for +2 in as many words and was
+     * simply wrong.
+     */
+    expect(code(menu)).toMatch(/move\(laneId, index \+ 1\)/);
+    expect(code(menu)).not.toMatch(/move\(laneId, index \+ 2\)/);
+    expect(code(menu)).toMatch(/move\(laneId, index - 1\)/);
+  });
+
+  it("moves a column right by one for the same reason", () => {
+    // The same arithmetic one level up, and it carried the same mistake.
+    expect(code(column)).toMatch(/onMoveColumn\(g\.id, columnIndex \+ 1\)/);
+    expect(code(column)).not.toMatch(/columnIndex \+ 2/);
+  });
+});
+
+describe("a menu gets out of the way of what it just did", () => {
+  it("closes on every column action that moves the board", () => {
+    /**
+     * A colour change, a sort, a column sliding sideways — each one changes
+     * what is underneath the panel, and a panel left hanging in the same spot
+     * over a board that has moved reads as having come unstuck from the thing
+     * it belongs to.
+     *
+     * Not the delete confirmation, which has to stay long enough to be read.
+     */
+    expect(code(column)).toMatch(/const act = \(fn: \(\) => void\) => \{/);
+    for (const call of [/act\(\(\) => onRecolour/, /act\(\(\) => onSort/, /act\(\(\) => onMoveColumn\(g\.id, columnIndex - 1\)/, /act\(\(\) => onMoveColumn\(g\.id, columnIndex \+ 1\)/]) {
+      expect(code(column), `an action leaves the menu open: ${call}`).toMatch(call);
+    }
+    // The tile menu already closed itself; both now animate out rather than blink.
+    expect(code(menu)).toMatch(/^\s*exit$/m);
+    expect(code(column)).toMatch(/^\s*exit$/m);
+  });
+
+  it("holds the panel for its exit rather than dropping it, opt-in only", () => {
+    /**
+     * The pattern `NodeLibraryModal` and the config panel already use: keep it
+     * mounted, swap the animation class, unmount when it has played. Gated
+     * behind a prop so every existing Popover in the builder is untouched —
+     * this is the dashboard's need, not a change to the canvas.
+     */
+    const pop = read("src/components/flow/controls/Popover.tsx");
+    expect(pop).toMatch(/exit = false/);
+    expect(code(pop)).toMatch(/closing \? "flow-pop-out" : "flow-pop-in"/);
+    // A fixed panel must keep its measurement through the exit or it vanishes anyway.
+    expect(code(pop)).toMatch(/!\(open \|\| closing\) \|\| !fixed/);
+  });
+});

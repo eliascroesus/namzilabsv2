@@ -220,6 +220,50 @@ console.log("\na sorted group says so, and does not promise a position it cannot
   check(state.lit, "and the whole column lights up instead");
 }
 
+console.log("\nthe menu moves a metric ONE place, and gets out of the way");
+{
+  /**
+   * "Move down sends it all the way to the bottom; move up works perfectly."
+   * Both went through the same clamp — up passed `index - 1` and down passed
+   * `index + 2`, which in a lane of four is the difference between one place
+   * and the end of the lane.
+   */
+  await page.reload({ waitUntil: "networkidle" });
+  const start = (await layout()).g1 ?? [];
+  check(start.length >= 3, "the lane is long enough to tell one step from the end", JSON.stringify(start));
+
+  const menu = async (tileKey, item) => {
+    await page.locator(`[data-board-tile="${tileKey}"] button[aria-haspopup="menu"]`).click();
+    await page.waitForTimeout(120);
+    await page.getByRole("button", { name: item, exact: true }).click();
+    await page.waitForTimeout(200);
+  };
+
+  await menu(start[0], "Move down");
+  const down = (await layout()).g1 ?? [];
+  check(down[1] === start[0], "move down steps past exactly one neighbour", JSON.stringify(down));
+  check(down[down.length - 1] !== start[0], "and does NOT fall to the bottom");
+
+  const open = await page.evaluate(() => !!document.querySelector('[aria-haspopup="menu"][aria-expanded="true"]'));
+  check(!open, "the menu closes behind the move");
+}
+
+console.log("\nmoving a column closes its menu too");
+{
+  await page.reload({ waitUntil: "networkidle" });
+  const kebab = page.locator('section[aria-label="Confirmation"] button[aria-label^="Options"]');
+  await kebab.click();
+  await page.waitForTimeout(120);
+  await page.getByRole("button", { name: "Move left", exact: true }).click();
+  await page.waitForTimeout(250);
+  const stillOpen = await page.evaluate(() => !!document.querySelector('[aria-label^="Options"][aria-expanded="true"]'));
+  check(!stillOpen, "the column's menu does not hang over a board that moved");
+  const order = await page.evaluate(() =>
+    [...document.querySelectorAll("section[aria-label]")].map((s) => s.getAttribute("aria-label")),
+  );
+  check(order[0] === "Confirmation", "and the column really moved one place left", JSON.stringify(order));
+}
+
 check(errors.length === 0, "no uncaught page errors", JSON.stringify(errors));
 
 await browser.close();

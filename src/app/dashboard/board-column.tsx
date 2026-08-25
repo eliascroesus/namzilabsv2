@@ -95,6 +95,23 @@ export function BoardColumn({
   const [draft, setDraft] = useState(g.name);
   const [confirming, setConfirming] = useState(false);
 
+  /**
+   * DO IT, THEN GET OUT OF THE WAY.
+   *
+   * Every one of these menu items changes what is on screen underneath the
+   * menu — a column slides sideways, a colour changes, a sort reshuffles the
+   * cards. Leaving the panel hanging in the same spot over a board that has
+   * moved reads as the menu having come unstuck from the thing it belongs to,
+   * which is exactly how it was reported. Closing is the acknowledgement.
+   *
+   * Deliberately NOT the delete confirmation, which has to stay put long enough
+   * to be read and answered.
+   */
+  const act = (fn: () => void) => {
+    fn();
+    setMenuOpen(false);
+  };
+
   const commit = () => {
     setEditing(false);
     const next = draft.trim();
@@ -231,6 +248,7 @@ export function BoardColumn({
              * is being scrolled sideways.
              */
             fixed
+            exit
             align="right"
             width={232}
             anchor={
@@ -255,7 +273,7 @@ export function BoardColumn({
                     key={key}
                     variant="ghost"
                     size="iconSm"
-                    onClick={() => onRecolour(g.id, key)}
+                    onClick={() => act(() => onRecolour(g.id, key))}
                     aria-label={key}
                     aria-pressed={g.color === key}
                     title={key}
@@ -284,7 +302,7 @@ export function BoardColumn({
                   key={s.key}
                   variant="ghost"
                   size="sm"
-                  onClick={() => onSort(g.id, s.key)}
+                  onClick={() => act(() => onSort(g.id, s.key))}
                   aria-current={g.sortKey === s.key ? "true" : undefined}
                   title={s.blurb}
                   className="w-full justify-start"
@@ -305,7 +323,7 @@ export function BoardColumn({
                 variant="ghost"
                 size="sm"
                 disabled={columnIndex === 0}
-                onClick={() => onMoveColumn(g.id, columnIndex - 1)}
+                onClick={() => act(() => onMoveColumn(g.id, columnIndex - 1))}
                 className="w-full justify-start"
               >
                 <ArrowLeft />
@@ -315,10 +333,11 @@ export function BoardColumn({
                 variant="ghost"
                 size="sm"
                 disabled={columnIndex >= columnCount - 1}
-                // +2 rather than +1: the column is taken out of the row before
-                // the index is applied, so passing its right-hand neighbour
-                // means landing one place beyond where it is now.
-                onClick={() => onMoveColumn(g.id, columnIndex + 2)}
+                // One step, for the reason `move down` gives on a tile: the
+                // column's own removal is what makes `columnIndex` already mean
+                // "before the neighbour to the right", so +1 steps past it and
+                // +2 skipped it to the end of the row.
+                onClick={() => act(() => onMoveColumn(g.id, columnIndex + 1))}
                 className="w-full justify-start"
               >
                 <ArrowRight />

@@ -23,6 +23,7 @@ export function Popover({
   placement = "below",
   anchorRect,
   panelClassName,
+  exit = false,
 }: {
   open: boolean;
   setOpen: (o: boolean) => void;
@@ -38,8 +39,45 @@ export function Popover({
   anchorRect?: () => DOMRect | null;
   /** Override the panel's border/radius/shadow (e.g. to match the config window). */
   panelClassName?: string;
+  /**
+   * OPT-IN: hold the panel for one exit animation instead of vanishing.
+   *
+   * Off by default, so every existing caller in the builder behaves exactly as
+   * it did. The board turns it on because its menus close as a RESULT of an
+   * action — pick a colour, move a column — and a menu that blinks out of
+   * existence at the same moment its column slides sideways reads as a glitch
+   * rather than as the two things being connected.
+   *
+   * The pattern is the one `NodeLibraryModal` and the config panel already use:
+   * keep it mounted, swap the animation class, unmount when it has played.
+   */
+  exit?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
+  /** `open` is the caller's intent; `shown` is what is on screen. */
+  const [shown, setShown] = useState(open);
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setShown(true);
+      setClosing(false);
+      return;
+    }
+    if (!exit) {
+      setShown(false);
+      return;
+    }
+    if (!shown) return;
+    setClosing(true);
+    // Matches `--duration-fast`, which is what `.flow-pop-out` runs for.
+    const t = setTimeout(() => {
+      setShown(false);
+      setClosing(false);
+    }, 140);
+    return () => clearTimeout(t);
+  }, [open, exit, shown]);
+
   const [pos, setPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   // Kept in a ref so the positioning effect doesn't churn its listeners each render.
   const anchorRectRef = useRef(anchorRect);
@@ -64,7 +102,9 @@ export function Popover({
   // Fixed mode: measure the anchor and clamp to the viewport; follow it on
   // scroll (capture phase reaches the rail's inner scroller) and resize.
   useEffect(() => {
-    if (!open || !fixed) {
+    // Keep the measurement alive through the exit, or a fixed panel would be
+    // `display: none` for the whole animation and appear to vanish anyway.
+    if (!(open || closing) || !fixed) {
       setPos(null);
       return;
     }
@@ -109,7 +149,7 @@ export function Popover({
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [open, fixed, align, width, placement]);
+  }, [open, closing, fixed, align, width, placement]);
 
   const panelStyle = fixed
     ? pos
@@ -122,11 +162,11 @@ export function Popover({
   return (
     <div className="relative" ref={wrapRef}>
       {anchor}
-      {open && (
+      {shown && (
         <div
           className={`z-30 flex flex-col overflow-hidden ${panelClassName ?? "rounded-surface border border-border bg-card shadow-surface"} ${
             fixed ? "" : `absolute mt-1 ${align === "right" ? "right-0" : "left-0"}`
-          }`}
+          } ${exit ? (closing ? "flow-pop-out" : "flow-pop-in") : ""}`}
           style={panelStyle}
         >
           {children}
