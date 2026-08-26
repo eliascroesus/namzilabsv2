@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { dashboardGroups, dashboardTilePlacements, dashboardViews } from "@/db/schema";
 import type { DB } from "@/db/types";
+import { asViewKind } from "./types";
 import type { BoardGroup, BoardView, GroupSortKey, TilePlacement } from "./types";
 
 /**
@@ -37,10 +38,13 @@ import type { BoardGroup, BoardView, GroupSortKey, TilePlacement } from "./types
  */
 export async function listBoardViews(db: DB, orgId: string): Promise<BoardView[]> {
   const rows = await db
-    .select({ id: dashboardViews.id, name: dashboardViews.name, pos: dashboardViews.pos })
+    // `kind` rides along inside the SAME projection rather than in a second
+    // read: one short string per view, on a query that already runs, against
+    // the alternative of a query per poll to learn which board to draw.
+    .select({ id: dashboardViews.id, name: dashboardViews.name, pos: dashboardViews.pos, kind: dashboardViews.kind })
     .from(dashboardViews)
     .where(eq(dashboardViews.orgId, orgId));
-  return rows;
+  return rows.map((r) => ({ ...r, kind: asViewKind(r.kind) }));
 }
 
 /**

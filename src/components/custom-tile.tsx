@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Delta, GroupBars, Sparkbars, TargetBar } from "@/components/charts";
 import { FunnelView } from "@/components/funnel-view";
 import { asChartId, chartsFor, shapeOfClassic, shapeOfTile, type ChartId } from "@/lib/board/charts";
-import type { FunnelResult } from "@/lib/metrics/compute";
+import type { AggregateResult, FunnelResult } from "@/lib/metrics/compute";
 
 /**
  * ONE CHART ON A CUSTOM VIEW — and the first tile in this product that draws
@@ -54,8 +54,14 @@ type StoredTile = {
 };
 
 export type CustomTileSource =
+  /** A published flow tile: a stored `flow_results` row, windowed per range. */
   | { kind: "flow"; tile: unknown; computedAt?: Date | string | null; status?: string }
-  | { kind: "classic"; name: string; result: FunnelResult | null; target: number | null };
+  /**
+   * A classic metric, computed LIVE for the active range on every render — so
+   * unlike a flow tile it carries no `byRange` and needs no windowing here. It
+   * is already the answer to the range the page was asked for.
+   */
+  | { kind: "classic"; result: AggregateResult | FunnelResult | null; target: number | null };
 
 /**
  * A tile pointing at a metric that no longer exists.
@@ -119,22 +125,50 @@ export function CustomTile({
   const chart = asChartId(rawChart);
 
   if (source.kind === "classic") {
+    const r = source.result;
+    const funnel = r && "stages" in r ? r : null;
+    const agg = r && "kind" in r ? r : null;
+    const series = agg?.kind === "series" ? agg.series : undefined;
+    /**
+     * The classic engine's series carries no `total` — unlike a flow's, which
+     * exists precisely because a consumer holding only buckets cannot recover
+     * it — so the headline is the sum of the buckets. `MetricTile` does the
+     * same arithmetic for the same reason.
+     */
+    const value = agg?.kind === "scalar" ? agg.value : series?.reduce((a, b) => a + b.value, 0);
+    const legal = chartsFor(shapeOfClassic(r, source.target)).includes(chart);
+    /** Classic tiles have no stored format bag; the legacy tile hardcodes this too. */
+    const bag = { format: "number", precision: 2 } as const;
+
     return (
       <Card variant="surface" className="flex h-full flex-col p-4">
-        <p className="text-small font-semibold text-foreground">{title}</p>
-        {chart === "funnel" && source.result ? (
-          <div className="mt-3 flex-1 overflow-y-auto">
-            <FunnelView result={source.result} />
-          </div>
-        ) : (
-          <NoData
-            reason={
-              chartsFor(shapeOfClassic(source.result, source.target)).includes(chart)
-                ? "No data for this period."
-                : "This metric can’t be drawn this way — change the chart."
-            }
-          />
+        <p className="truncate text-small font-semibold text-foreground">{title}</p>
+        {chart !== "funnel" && (
+          <p className={cn("stat-numeral mt-1.5 text-stat leading-none", value == null && "text-muted-foreground")}>
+            {value == null ? "—" : formatMetricValue(value, bag)}
+          </p>
         )}
+        <div className="mt-2.5 flex flex-1 flex-col justify-center">
+          {!legal ? (
+            <NoData reason="This metric can’t be drawn this way — change the chart." />
+          ) : chart === "funnel" && funnel ? (
+            <div className="flex-1 overflow-y-auto">
+              <FunnelView result={funnel} />
+            </div>
+          ) : chart === "bar" ? (
+            series && series.length > 0 ? (
+              <Sparkbars series={series} format={bag} className="h-full min-h-10" />
+            ) : (
+              <NoData reason="No trend in this period." />
+            )
+          ) : chart === "progress" ? (
+            typeof source.target === "number" ? (
+              <TargetBar value={value ?? 0} target={source.target} format={bag} />
+            ) : (
+              <NoData reason="No target set on this metric." />
+            )
+          ) : null}
+        </div>
       </Card>
     );
   }

@@ -18,13 +18,18 @@ import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/fl
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { BoardControls, MetaLine, RangeLink, SourceLink, TileArea, ViewTab } from "./board-controls";
 import { BoardLayout } from "./board-layout";
+import { CustomBoard, type CanvasTile } from "./custom-board";
+import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
 import { listBoardGroups, listBoardViews, listTilePlacements } from "@/lib/board/store";
+import { listBoardTiles } from "@/lib/board/tiles-store";
 import {
   tileKeyOfFlow,
   tileKeyOfMetric,
   type BoardGroup,
   type BoardTile,
+  type BoardTileRow,
   type BoardView,
+  type BoardViewKind,
   type TilePlacement,
 } from "@/lib/board/types";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
@@ -121,6 +126,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   let groups: BoardGroup[] = [];
   let placements: TilePlacement[] = [];
   let activeView: string | null = null;
+  /** The default view has no row, so this has to answer when there is nothing to read. */
+  let activeKind: BoardViewKind = "groups";
+  let canvasRows: BoardTileRow[] = [];
   let loadError: string | null = null;
 
   /**
@@ -186,12 +194,22 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
      * rather than a page reporting that it could not find something.
      */
     activeView = views.some((v) => v.id === requestedView) ? requestedView : null;
-    groups = await listBoardGroups(db, orgId, activeView);
-    // THE THIRD BOARD READ, AND THE WHOLE COST ARGUMENT FOR IT. A view with no
-    // groups renders the plain grid, so its placements are not merely unused —
-    // they cannot exist. Sequential rather than in the Promise.all above
-    // because it has to know the answer to the first one.
-    if (groups.length > 0) placements = await listTilePlacements(db, orgId, activeView);
+    // The DEFAULT view has no row, so "which kind is it" must have an answer
+    // when there is nothing to read. It is always a groups board.
+    activeKind = views.find((v) => v.id === activeView)?.kind ?? "groups";
+    if (activeKind === "custom" && activeView) {
+      // A CUSTOM VIEW READS NEITHER GROUPS NOR PLACEMENTS, because it has
+      // neither — no columns, no lane order. Asking for them would be two
+      // queries per poll returning two empty arrays.
+      canvasRows = await listBoardTiles(db, orgId, activeView);
+    } else {
+      groups = await listBoardGroups(db, orgId, activeView);
+      // THE THIRD BOARD READ, AND THE WHOLE COST ARGUMENT FOR IT. A view with no
+      // groups renders the plain grid, so its placements are not merely unused —
+      // they cannot exist. Sequential rather than in the Promise.all above
+      // because it has to know the answer to the first one.
+      if (groups.length > 0) placements = await listTilePlacements(db, orgId, activeView);
+    }
   } catch (err) {
     // THE EXCEPTION GOES TO THE LOG, NOT TO THE PAGE. This used to set
     // `err.message` and render it verbatim, so a customer's dashboard could
@@ -304,6 +322,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   }
   const hasTiles = tiles.length > 0 || flowTiles.length > 0;
 
+
   const qs = (over: Record<string, string>) => {
     const p = new URLSearchParams();
     p.set("range", over.range ?? rangeKey);
@@ -317,9 +336,85 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   /** The default view first — it has no row, so nothing else can put it there. */
   const viewTabs: BoardView[] = [
-    { id: null, name: "Dashboard", pos: "" },
+    { id: null, name: "Dashboard", pos: "", kind: "groups" },
     ...views.slice().sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0)),
   ];
+
+  /**
+   * THE VIEW STRIP, hoisted so BOTH boards wear the same one.
+   *
+   * A groups board and a custom board disagree about almost everything —
+   * storage, geometry, what a tile even is — but the tabs above them are the
+   * same tabs, and the whole point of a view is that you can move between
+   * kinds without the furniture moving. Rendered here, on the server,
+   * because the tabs are real anchors and the `+` is a plain form post;
+   * handed to whichever board is on screen because that is what knows where
+   * its own controls go.
+   */
+  const viewStrip = (
+              /* ── THE VIEW STRIP ────────────────────────────────────────
+                 One board, several arrangements of it — Notion's view bar,
+                 doing Notion's job. Rendered here, on the server, because the
+                 tabs are real anchors and the `+` is a plain form post; handed
+                 to the board because that is what knows where its own controls
+                 go. It shares a line with "New group": both are about how the
+                 board is laid out, while the filter island above narrows which
+                 numbers are on it. */
+              <div className="-mx-1 flex flex-wrap items-center gap-1 px-1 py-1">
+                {viewTabs.map((v) => (
+                  <ViewTab
+                    key={v.id ?? "default"}
+                    href={qs({ view: v.id ?? "" })}
+                    viewId={v.id}
+                    activeView={activeView}
+                    canEdit={access.can("create_flows")}
+                    defaultHref={qs({ view: "" })}
+                  >
+                    {v.name}
+                  </ViewTab>
+                ))}
+                {access.can("create_flows") && (
+                  /* TWO KINDS OF VIEW, SO THE `+` HAS TO ASK.
+                     A <details> rather than a Popover for the same reason the
+                     source picker above is one: this page renders on the server
+                     and the `+` has always worked with no client JavaScript at
+                     all. Two plain form posts keep it that way. */
+                  <details className="group/add relative">
+                    <summary
+                      className="inline-flex size-7 cursor-pointer list-none items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-muted hover:text-foreground [&::-webkit-details-marker]:hidden"
+                      title="Add a view"
+                    >
+                      <Plus size={15} />
+                      <span className="sr-only">Add a view</span>
+                    </summary>
+                    <div className="absolute left-0 top-full z-20 mt-1.5 w-64 rounded-surface border border-border bg-card p-1 shadow-surface">
+                      {[
+                        { kind: "groups", label: "Columns", blurb: "Group your metrics into named, coloured columns." },
+                        { kind: "custom", label: "Canvas", blurb: "Place and size charts on a grid. One metric, several charts." },
+                      ].map((o) => (
+                        <form key={o.kind} action={addViewAction}>
+                          <input type="hidden" name="range" value={rangeKey} />
+                          <input type="hidden" name="source" value={boardSource ?? ""} />
+                          <input type="hidden" name="kind" value={o.kind} />
+                          <SubmitButton
+                            variant="ghost"
+                            size="sm"
+                            pendingLabel="Adding…"
+                            className="h-auto w-full justify-start px-2 py-1.5 text-left"
+                          >
+                            <span className="flex flex-col gap-0.5">
+                              <span className="text-small font-semibold text-foreground">{o.label}</span>
+                              <span className="text-tiny font-normal text-muted-foreground">{o.blurb}</span>
+                            </span>
+                          </SubmitButton>
+                        </form>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+  );
+
 
   /**
    * The range control, worn by links — range lives in the URL, so these stay
@@ -418,6 +513,47 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       };
     }),
   ];
+
+  /**
+   * A CUSTOM VIEW'S TILES — one card per stored ROW, not per metric.
+   *
+   * This is where the new table earns itself: `boardTiles` above is keyed by
+   * metric and holds each one once, because a groups board can only show it
+   * once. Here the same metric can appear three times as three charts, so the
+   * cards are built from `dashboard_tiles` rows and the metric is looked up.
+   *
+   * A row whose metric is not on the board gets `node: null` rather than being
+   * dropped. That covers a flow republished without its Output, a metric a
+   * viewer's rank hides, and a genuine delete — and the client draws the
+   * unavailable card itself, because Remove and Change metric are handlers and
+   * nothing crossing this boundary may be a function.
+   */
+  const flowByKey = new Map(flowTiles.map((r) => [tileKeyOfFlow(r.flowId, r.outputNodeId), r]));
+  const classicByKey = new Map(tiles.map((t) => [tileKeyOfMetric(t.metric.id), t]));
+  const canvasTiles: CanvasTile[] = canvasRows.map((row) => {
+    const flow = flowByKey.get(row.tileKey);
+    const classic = classicByKey.get(row.tileKey);
+    const stored = (flow?.tile ?? {}) as { name?: string };
+    const source: CustomTileSource | null = flow
+      ? { kind: "flow", tile: flow.tile, computedAt: flow.computedAt, status: flow.status }
+      : classic
+        ? {
+            kind: "classic",
+            result: classic.kind === "error" ? null : classic.result,
+            target: classic.metric.target == null ? null : Number(classic.metric.target),
+          }
+        : null;
+    const override = typeof row.config.title === "string" ? row.config.title.trim() : "";
+    const title = override || stored.name || classic?.metric.name || "Untitled";
+    return {
+      id: row.id,
+      x: row.x,
+      y: row.y,
+      w: row.w,
+      h: row.h,
+      node: <CustomTile key={row.id} chart={row.chart} title={title} rangeKey={rangeKey} source={source} rows={row.h} />,
+    };
+  });
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
@@ -608,9 +744,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           // the alternative is leaving last range's numbers on screen under a
           // pill that now says something else.
           <TileArea count={flowTiles.length + tiles.length} columns={groups.length}>
-            {/* The ARRANGEMENT is the client's; the CARDS are still rendered
-                here, on the server, and passed through as `node`. With no
-                groups this emits the same BOARD_GRID markup it always did. */}
+            {activeKind === "custom" ? (
+              /* A CUSTOM VIEW IS A DIFFERENT BOARD, not a groups board with no
+                 groups: different storage, different geometry, different tiles.
+                 It shares the view strip and the controls row, and nothing
+                 else. Keyed the same way and for the same reason — the canvas
+                 seeds its layout once, so a different view has to be a
+                 different component instance. */
+              <CustomBoard
+                key={activeView ?? "default"}
+                tiles={canvasTiles}
+                canEdit={access.can("create_flows")}
+                viewStrip={viewStrip}
+              />
+            ) : (
+            /* The ARRANGEMENT is the client's; the CARDS are still rendered
+               here, on the server, and passed through as `node`. With no
+               groups this emits the same BOARD_GRID markup it always did. */
             <BoardLayout
               // A DIFFERENT VIEW IS A DIFFERENT BOARD. BoardLayout seeds its
               // state once and ignores prop changes — that is what stops the
@@ -618,50 +768,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               // without this would leave the previous view's columns on screen.
               key={activeView ?? "default"}
               viewId={activeView}
-              viewStrip={
-                /* ── THE VIEW STRIP ────────────────────────────────────────
-                   One board, several arrangements of it — Notion's view bar,
-                   doing Notion's job. Rendered here, on the server, because the
-                   tabs are real anchors and the `+` is a plain form post; handed
-                   to the board because that is what knows where its own controls
-                   go. It shares a line with "New group": both are about how the
-                   board is laid out, while the filter island above narrows which
-                   numbers are on it. */
-                <div className="-mx-1 flex flex-wrap items-center gap-1 px-1 py-1">
-                  {viewTabs.map((v) => (
-                    <ViewTab
-                      key={v.id ?? "default"}
-                      href={qs({ view: v.id ?? "" })}
-                      viewId={v.id}
-                      activeView={activeView}
-                      canEdit={access.can("create_flows")}
-                      defaultHref={qs({ view: "" })}
-                    >
-                      {v.name}
-                    </ViewTab>
-                  ))}
-                  {access.can("create_flows") && (
-                    <form action={addViewAction}>
-                      <input type="hidden" name="range" value={rangeKey} />
-                      <input type="hidden" name="source" value={boardSource ?? ""} />
-                      <SubmitButton
-                        variant="ghost"
-                        size="sm"
-                        pendingLabel="Adding…"
-                        title="Add a view — the same metrics, arranged another way"
-                      >
-                        <Plus size={15} />
-                        <span className="sr-only">Add a view</span>
-                      </SubmitButton>
-                    </form>
-                  )}
-                </div>
-              }
+              viewStrip={viewStrip}
               tiles={boardTiles}
               groups={groups}
               placements={placements}
               canEdit={access.can("create_flows")}
             />
+            )}
           </TileArea>
         )}
         </BoardControls>

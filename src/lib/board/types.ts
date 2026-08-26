@@ -19,7 +19,36 @@ import type { ReactNode } from "react";
  * views existed. It has no row and cannot be renamed or deleted, which is the
  * price of not writing to the database on a page load. See the schema.
  */
-export type BoardView = { id: string | null; name: string; pos: string };
+export type BoardViewKind = "groups" | "custom";
+
+/** An unknown stored value reads as the board every workspace already had. */
+export const asViewKind = (v: unknown): BoardViewKind => (v === "custom" ? "custom" : "groups");
+
+export type BoardView = { id: string | null; name: string; pos: string; kind: BoardViewKind };
+
+/**
+ * ONE CHART ON A CUSTOM VIEW, as the board reads it.
+ *
+ * `x`/`y`/`w`/`h` are GRID UNITS — twelve columns, forty-pixel rows. See
+ * `src/lib/board/grid.ts`, which owns that arithmetic and is the only place it
+ * lives.
+ *
+ * `tileKey` is the same `flow:<flowId>:<outputNodeId>` / `metric:<metricId>`
+ * string a placement carries, and deliberately the same name — but unlike a
+ * placement it is NOT this row's identity. `id` is, which is what lets one
+ * metric appear on a view three times as three different charts.
+ */
+export type BoardTileRow = {
+  id: string;
+  tileKey: string;
+  chart: string;
+  /** Per-chart presentation; the rename override lives here as `title`. */
+  config: Record<string, unknown>;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
 
 /** How a group orders the tiles inside it. `manual` means "as dragged". */
 export type GroupSortKey = "manual" | "name_asc" | "name_desc" | "value_desc" | "attention";

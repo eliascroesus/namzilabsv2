@@ -424,12 +424,26 @@ export async function addViewAction(fd: FormData): Promise<void> {
 
   const last = existing.map((v) => v.pos).sort(compareKeys).at(-1) ?? null;
   const id = crypto.randomUUID();
+  /**
+   * WHICH KIND OF BOARD, chosen at creation and never changed afterwards.
+   *
+   * The two kinds store their arrangements in different tables — columns of
+   * whole metrics in `dashboard_tile_placements`, charts on a grid in
+   * `dashboard_tiles` — so switching an existing view would mean either
+   * discarding one arrangement or inventing the other, and neither is a thing
+   * a customer asked for. Making it a creation-time choice keeps that honest.
+   *
+   * Anything unrecognised reads as `groups`, the board every workspace already
+   * had, so a hand-edited form post cannot mint a view nothing can render.
+   */
+  const kind = String(fd.get("kind") ?? "") === "custom" ? "custom" : "groups";
   await db.insert(dashboardViews).values({
     id,
     orgId: ctx.orgId,
     // "View 2" because the default one is View 1 and has no row to count.
     name: `View ${existing.length + 2}`,
     pos: keyBetween(last, null),
+    kind,
   });
   // Straight onto it: a tab that appears somewhere else and waits to be found
   // is a worse answer than the one you just asked for.
