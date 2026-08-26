@@ -399,6 +399,67 @@ export function durationValueUnit(field: string, stored: string): string {
  * at the step, so only the Close template — which ships its metric
  * pre-seeded — ever got this right.
  */
+/**
+ * THE FACTS ABOUT A METRIC'S NUMBER — what it IS, as opposed to how it is shown.
+ *
+ * `factCorrected` in materialize.ts has enforced this split for durations since
+ * the "35 seconds rendered as 35m" bug: the value's unit follows the step, not
+ * the spec, because it is a fact about the data. This widens the same rule to
+ * every quantity, and the doctrine is already written down in format.ts —
+ * "valueUnit is a fact about the DATA … display is a preference about the
+ * READING".
+ *
+ * `kind` exists for one trap above all: the engine PRE-MULTIPLIES percentages
+ * (`divGuard(a, b) * 100` — the `percentage` and `percent_change` ops), so the
+ * stored number for 57.1% is 57.1, not 0.571. A render-time format override
+ * that does not know this turns 57.1% into "0.57%". The op spelled `ratio` is
+ * deliberately NOT this kind — it is a plain quotient, never multiplied.
+ *
+ * `ordered` exists for the other lie: `groupByCategories` preserves the
+ * author's stage order and pre-seeds every stage (an empty stage survives a
+ * quiet day), while `groupByField` sorts value-descending — a RANKING, not a
+ * sequence. The stored `groups` array is byte-identical either way, so nothing
+ * on the wire could tell an honest funnel from a confident lie until this
+ * stamp. Consumers arrive later; the stamp accrues now.
+ *
+ * ABSENCE MEANS UNKNOWN, NEVER A DEFAULT. Every tile published before this
+ * shipped has no `facts` until its next materialize (the stale sweep heals the
+ * fleet within its ten-minute cadence), and nothing may treat that window as
+ * anything but "the fact is not known yet".
+ */
+export type TileFacts = {
+  kind: "count" | "duration" | "ratio";
+  /** Duration only: the unit the NUMBER is counted in — a fact, never a display choice. */
+  unit?: string;
+  shape: "scalar" | "series" | "grouped" | "dataset";
+  /** Grouped only: the groups are the author's ordered stages, not a ranking. */
+  ordered?: boolean;
+  /** Grouped + ordered only: the trailing catch-all bucket's name. */
+  fallbackLabel?: string;
+};
+
+/**
+ * The config-derived half of a tile's facts — everything except `shape`, which
+ * is a property of the RUN and is stamped by `buildTile` where the shape is in
+ * hand. Reads the same step config `seedMetricFormat` reads, in the same
+ * places: at materialize, for every metric, every time — so stale specs heal
+ * with no republish.
+ */
+export function seedMetricFacts(cfg: Record<string, unknown>): Omit<TileFacts, "shape"> {
+  if (cfg.resultKind === "duration") {
+    return { kind: "duration", unit: durationValueUnit(String(cfg.field ?? ""), String(cfg.durationUnit ?? "minutes")) };
+  }
+  const facts: Omit<TileFacts, "shape"> =
+    cfg.op === "percentage" || cfg.op === "percent_change" ? { kind: "ratio" } : { kind: "count" };
+  // Calculate spells it `breakdownMode`; the standalone Group node spells it
+  // `mode`. Only the categories path preserves the author's order.
+  if ((cfg.breakdownMode ?? cfg.mode) === "categories") {
+    facts.ordered = true;
+    facts.fallbackLabel = String(cfg.fallbackLabel ?? "Other");
+  }
+  return facts;
+}
+
 export function seedMetricFormat(cfg: Record<string, unknown>): { format: "number" | "duration"; unit?: string; durationDisplay?: string } {
   if (cfg.resultKind !== "duration") return { format: "number" };
   return {
@@ -852,6 +913,12 @@ export type TileSpec = {
    * carried onto the tile so dashboard time-range controls can use it. */
   timeField?: string;
   timeUnit?: string;
+  /**
+   * What the number IS — see `TileFacts`. Stamped by `buildTile` on every
+   * materialize; ABSENT on tiles published before it shipped, until their next
+   * recompute. Absence means unknown, and every consumer must treat it so.
+   */
+  facts?: TileFacts;
   value?: number;
   series?: Array<{ bucket: string; value: number }>;
   groups?: Array<{ label: string; value: number }>;

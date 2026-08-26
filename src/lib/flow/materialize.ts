@@ -5,7 +5,7 @@ import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
 import { runFlow, buildTile, tileByRange, type CompileProvenance, type RangeSlot } from "./engine";
 import { compileEnabled } from "./compile/flags";
 import { getPublishedVersion, graphFingerprint, graphForFingerprint } from "./store";
-import { parseGraph, seedMetricFormat, type TileSpec } from "./types";
+import { parseGraph, seedMetricFormat, seedMetricFacts, type TileSpec } from "./types";
 import { resolveRange, isForwardRange, MATERIALIZED_RANGES } from "@/lib/metrics/range";
 import { calendarDayRanges } from "@/lib/metrics/calendar";
 import { streamRefsOfGraph } from "@/lib/sync/streams";
@@ -173,15 +173,25 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
      * follow the step, in either direction of staleness.
      */
     const nodeCfgById = new Map(graph.nodes.map((n) => [n.id, (n.data.config ?? {}) as Record<string, unknown>]));
-    const factCorrected = <T extends { nodeId: string; format?: string }>(m: T): T => {
+    const factCorrected = <T extends { nodeId: string; format?: string }>(m: T): T & { facts: ReturnType<typeof seedMetricFacts> } => {
       const cfg = nodeCfgById.get(m.nodeId);
-      if (!cfg) return m;
+      if (!cfg) return { ...m, facts: { kind: "count" as const } };
+      /**
+       * THE WIDER HALF OF THE SAME RULE. `seedMetricFacts` re-derives what the
+       * number IS — count, duration-with-unit, pre-multiplied ratio, ordered
+       * stages — from the step config on every materialize, exactly the way
+       * the duration healing below always has. It rides the presentation into
+       * `buildTile`, which stamps it (plus the run's shape) onto the tile.
+       */
+      const facts = seedMetricFacts(cfg);
       const derived = seedMetricFormat(cfg);
-      if (m.format !== "duration" && derived.format !== "duration") return m;
+      if (m.format !== "duration" && derived.format !== "duration") return { ...m, facts };
       // A step switched from duration back to plain number sheds its unit too:
       // `seedMetricFormat`'s number answer carries no unit key, so a bare
       // spread kept the old "minutes" and a count rendered as "56 minutes".
-      return derived.format === "duration" ? { ...m, ...derived } : { ...m, ...derived, unit: undefined, durationDisplay: undefined };
+      return derived.format === "duration"
+        ? { ...m, ...derived, facts }
+        : { ...m, ...derived, facts, unit: undefined, durationDisplay: undefined };
     };
     for (const m of graph.metrics) {
       if (!m.enabled) continue;

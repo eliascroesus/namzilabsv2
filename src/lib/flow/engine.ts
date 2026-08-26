@@ -36,6 +36,7 @@ import {
   type Series,
   type Grouped,
   type TileSpec,
+  type TileFacts,
   type KeepDirection,
 } from "./types";
 
@@ -1459,6 +1460,13 @@ export type TilePresentation = {
   /** Optional dashboard time axis: a date field to bucket a dataset endpoint by. */
   timeField?: string;
   timeUnit?: "day" | "week" | "month" | "quarter" | "year";
+  /**
+   * The config-derived half of the tile's facts (`seedMetricFacts`), attached
+   * by `factCorrected` where the step config is in hand. `buildTile` adds the
+   * run's own half — the shape — and falls back to the format when this is
+   * absent, which is the legacy Output path's answer.
+   */
+  facts?: Omit<TileFacts, "shape">;
 };
 
 /** Build a dashboard tile from a computed shape + its presentation. Shared by the
@@ -1501,9 +1509,39 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
     timeUnit: spec.timeUnit,
     sample,
   };
-  // A metric-level time reference turns a raw dataset endpoint into a time series for
-  // line/bar charts — records are counted into buckets of the chosen date field.
-  if (spec.timeField && (spec.viz === "line" || spec.viz === "bar") && shape.kind === "dataset") {
+  /**
+   * THE FACTS, STAMPED WHERE EVERY TILE PASSES THROUGH. The config half comes
+   * from the spec (`factCorrected` attaches it at materialize); the shape is
+   * the run's own. The fallback reads the FORMAT — the legacy Output path has
+   * no step config here, and a percent-formatted legacy tile is a
+   * pre-multiplied ratio in every case the engine can produce.
+   *
+   * `ordered` survives only onto a GROUPED tile: the categories config is
+   * meaningless on any other shape, and a stamp that outlives its shape is a
+   * fact that lies.
+   */
+  const kind =
+    spec.facts?.kind ?? (spec.format === "duration" ? "duration" : spec.format === "percent" ? "ratio" : "count");
+  tile.facts = {
+    kind,
+    ...(kind === "duration" ? { unit: spec.facts?.unit ?? spec.unit } : {}),
+    shape: shape.kind,
+    ...(shape.kind === "grouped" && spec.facts?.ordered
+      ? { ordered: true, fallbackLabel: spec.facts.fallbackLabel ?? "Other" }
+      : {}),
+  };
+  /**
+   * A metric-level time reference turns a raw dataset endpoint into a time
+   * series — records counted into buckets of the chosen date field.
+   *
+   * THE GATE NO LONGER ASKS THE VIZ. It read `viz === "line" || "bar"`, which
+   * made a PRESENTATION field decide whether the series was computed at all —
+   * the one place in the repo where the otherwise-decorative `viz` changed
+   * behaviour, and the reason a tile could not become a bar chart later
+   * without a republish. Same records, already in memory; presentation now
+   * chooses freely at render, and `viz` is decorative everywhere.
+   */
+  if (spec.timeField && shape.kind === "dataset") {
     const unit = spec.timeUnit ?? "month";
     const buckets = new Map<string, number>();
     for (const r of shape.records) {
@@ -1513,7 +1551,19 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
       buckets.set(key, (buckets.get(key) ?? 0) + 1);
     }
     tile.series = [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([bucket, value]) => ({ bucket, value }));
-    tile.value = round(tile.series.reduce((a, b) => a + b.value, 0));
+    /**
+     * THE HEADLINE COUNTS EVERY RECORD, not just the dated ones. This was the
+     * bucket sum, which quietly dropped any record whose time reference is
+     * empty — and "records with no date belong to no period, but must still be
+     * in All time" is doctrine with its own test (tests/flow-range.test.ts).
+     * The dataset branch below has always counted them all; now that this
+     * branch runs for every dataset-with-a-time-reference (not only the ones
+     * styled line/bar), the two must agree. The windowed ranges are untouched:
+     * their records were already date-filtered, so their count and their
+     * bucket sum are the same number, and the per-range `undated` field keeps
+     * reporting what the buckets cannot hold.
+     */
+    tile.value = shape.records.length;
     return tile;
   }
   // The metric over the whole set when the shape carried one; the sum of the

@@ -6,12 +6,13 @@ import { z } from "zod";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { getDb } from "@/db/client";
-import { dashboardGroups, dashboardTilePlacements, dashboardTiles, dashboardViews } from "@/db/schema";
+import { dashboardGroups, dashboardTilePlacements, dashboardTiles, dashboardViews, flowResults } from "@/db/schema";
 import { requireOrg, type OrgContext } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { boardGroupCap, boardPlacementCap, boardTileCap, boardViewCap } from "@/lib/limits";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
 import { CHART_IDS, defaultSize } from "@/lib/board/charts";
+import { parseTileConfig } from "@/lib/board/tile-config";
 import type { BoardTileRow } from "@/lib/board/types";
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
 import type { BoardGroup } from "@/lib/board/types";
@@ -568,11 +569,51 @@ export async function addCustomTileAction(
     }
 
     const size = defaultSize(kind.data as (typeof CHART_IDS)[number]);
+    /**
+     * THE FLOW SPEC SEEDS THE TILE'S DEFAULTS — the facts/presentation seam's
+     * founding rule: the data source suggests, the chart decides. A new tile
+     * starts from the precision and target the publisher chose, held in its
+     * own config from then on, so a later change on the flow does not silently
+     * restyle a tile someone already tuned. One narrow jsonb read, on a
+     * user-initiated add, never on the render path.
+     */
+    let config: Record<string, unknown> = {};
+    const flowKey = key.data.match(/^flow:([^:]+):(.+)$/);
+    // BEST-EFFORT, in its own try: the seed is decoration on the add, and a
+    // failure here — a malformed flow id, a dangling key — must cost the tile
+    // its defaults, never its existence.
+    try {
+      if (flowKey) {
+        const [seed] = await db
+          .select({
+            // `->>` and not `->`: a spec with `target: null` stores jsonb null,
+            // which `->` hands to the cast as the text "null" — an error —
+            // while `->>` yields SQL NULL, which is the fact being expressed.
+            precision: sql<string | null>`(${flowResults.tile} ->> 'precision')::int`,
+            target: sql<string | null>`(${flowResults.tile} ->> 'target')::numeric`,
+          })
+          .from(flowResults)
+          .where(
+            and(
+              eq(flowResults.orgId, ctx.orgId),
+              eq(flowResults.flowId, flowKey[1]),
+              eq(flowResults.outputNodeId, flowKey[2]),
+            ),
+          );
+        config = parseTileConfig({
+          ...(seed?.precision != null ? { precision: Number(seed.precision) } : {}),
+          ...(seed?.target != null ? { target: Number(seed.target) } : {}),
+        });
+      }
+    } catch {
+      config = {};
+    }
+
     const row: BoardTileRow = {
       id: crypto.randomUUID(),
       tileKey: key.data,
       chart: kind.data,
-      config: {},
+      config,
       x: 0,
       y: existing.reduce((n, b) => Math.max(n, b.y + b.h), 0),
       ...size,

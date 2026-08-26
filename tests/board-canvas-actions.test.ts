@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
-import { dashboardTiles, dashboardViews, rankAssignments, workspaceRanks } from "@/db/schema";
+import { dashboardTiles, dashboardViews, flowResults, flows, rankAssignments, workspaceRanks } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 /**
@@ -272,5 +272,77 @@ describe("writing a layout", () => {
     const [a] = await seedTwo();
     await assignEmptyRank();
     expect((await setCustomTileLayoutAction("va", [{ id: a, x: 6, y: 0, w: 6, h: 6 }])).ok).toBe(false);
+  });
+});
+
+describe("a new tile starts from the flow's own presentation", () => {
+  it("seeds precision and target from the published spec into the tile's config", async () => {
+    /**
+     * The facts/presentation seam's founding rule: the data source SUGGESTS,
+     * the chart DECIDES. The flow's precision and target become the tile's
+     * starting config — its own from then on, so a later change on the flow
+     * does not silently restyle a tile someone already tuned.
+     */
+    const [flow] = await db
+      .insert(flows)
+      .values({ orgId: A, name: "rev", draftGraph: {}, status: "published", publishedVersion: 1 })
+      .returning();
+    await db.insert(flowResults).values({
+      orgId: A,
+      flowId: flow.id,
+      version: 1,
+      outputNodeId: "o1",
+      tile: { name: "Revenue", format: "currency", precision: 2, target: 50000 },
+      status: "fresh",
+    });
+
+    const r = await addCustomTileAction("va", `flow:${flow.id}:o1`, "number");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.tile.config).toEqual({ precision: 2, target: 50000 });
+  });
+
+  it("seeds nothing when the spec has nothing to say", async () => {
+    const [flow] = await db
+      .insert(flows)
+      .values({ orgId: A, name: "plain", draftGraph: {}, status: "published", publishedVersion: 1 })
+      .returning();
+    await db.insert(flowResults).values({
+      orgId: A,
+      flowId: flow.id,
+      version: 1,
+      outputNodeId: "o1",
+      // `target: null` stores jsonb null — the value that punished `->` with a
+      // cast error and is exactly why the seed reads `->>`.
+      tile: { name: "Leads", format: "number", precision: 0, target: null },
+      status: "fresh",
+    });
+
+    const r = await addCustomTileAction("va", `flow:${flow.id}:o1`, "number");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.tile.config).toEqual({ precision: 0 });
+  });
+
+  it("will not seed from another org's flow row", async () => {
+    const [flow] = await db
+      .insert(flows)
+      .values({ orgId: B, name: "theirs", draftGraph: {}, status: "published", publishedVersion: 1 })
+      .returning();
+    await db.insert(flowResults).values({
+      orgId: B,
+      flowId: flow.id,
+      version: 1,
+      outputNodeId: "o1",
+      tile: { name: "Theirs", precision: 3, target: 9 },
+      status: "fresh",
+    });
+
+    // The key parses, the row exists — but it is not ours, so the seed finds
+    // nothing and the tile starts clean rather than from a neighbour's spec.
+    const r = await addCustomTileAction("va", `flow:${flow.id}:o1`, "number");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.tile.config).toEqual({});
   });
 });

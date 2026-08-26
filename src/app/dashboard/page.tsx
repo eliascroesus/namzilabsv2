@@ -21,6 +21,7 @@ import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
 import { chartsFor, shapeOfClassic, shapeOfTile } from "@/lib/board/charts";
+import { parseTileConfig } from "@/lib/board/tile-config";
 import { listBoardGroups, listBoardViews, listTilePlacements } from "@/lib/board/store";
 import { listBoardTiles } from "@/lib/board/tiles-store";
 import {
@@ -601,8 +602,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             target: classic.metric.target == null ? null : Number(classic.metric.target),
           }
         : null;
-    const override = typeof row.config.title === "string" ? row.config.title.trim() : "";
-    const title = override || stored.name || classic?.metric.name || "Untitled";
+    // Through the one parser, so a corrupt bag costs its own keys and nothing
+    // else — and so this file never grows a second opinion about the config's
+    // shape. Same semantics as before: an absent title follows the metric.
+    const title = parseTileConfig(row.config).title || stored.name || classic?.metric.name || "Untitled";
     return {
       id: row.id,
       x: row.x,
