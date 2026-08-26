@@ -435,3 +435,50 @@ export async function addViewAction(fd: FormData): Promise<void> {
   // is a worse answer than the one you just asked for.
   redirect(back(`view=${id}`));
 }
+
+/**
+ * RENAME A VIEW. The default view is not renameable and has no id to pass —
+ * it has no row at all, which is what makes it free (see the schema note).
+ */
+export async function renameViewAction(id: string, name: string): Promise<Result> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  if (!idSchema.safeParse(id).success) return fail("Unknown view.");
+  const parsed = nameSchema.safeParse(name);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "That name won't work.");
+  try {
+    // Id AND org, the same discipline every mutation in this file follows: an
+    // id from another workspace must find nothing rather than something.
+    await getDb()
+      .update(dashboardViews)
+      .set({ name: parsed.data, updatedAt: new Date() })
+      .where(and(eq(dashboardViews.id, id), eq(dashboardViews.orgId, ctx.orgId)));
+    return { ok: true };
+  } catch (e) {
+    return oops(e);
+  }
+}
+
+/**
+ * DELETE A VIEW, AND WITH IT THE ARRANGEMENT THAT ONLY EXISTED INSIDE IT.
+ *
+ * The groups and placements go too, and that is the FOREIGN KEY's doing rather
+ * than this function's: `view_id` cascades on both tables (migration 0027), so
+ * there is no window in which a group survives the view it belonged to. Two
+ * deletes here could half-succeed; one delete cannot.
+ *
+ * NO METRIC IS DELETED, EVER. A view is an arrangement of tiles, and the tiles
+ * belong to the board — the same promise `deleteGroupAction` makes one level
+ * down, and the reason the confirmation says so out loud.
+ */
+export async function deleteViewAction(id: string): Promise<Result> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  if (!idSchema.safeParse(id).success) return fail("Unknown view.");
+  try {
+    await getDb().delete(dashboardViews).where(and(eq(dashboardViews.id, id), eq(dashboardViews.orgId, ctx.orgId)));
+    return { ok: true };
+  } catch (e) {
+    return oops(e);
+  }
+}

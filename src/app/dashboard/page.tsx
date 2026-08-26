@@ -16,7 +16,7 @@ import { SourceMark } from "@/components/source-mark";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
-import { BoardControls, MetaLine, RangeLink, SourceLink, TileArea, ViewLink } from "./board-controls";
+import { BoardControls, MetaLine, RangeLink, SourceLink, TileArea, ViewTab } from "./board-controls";
 import { BoardLayout } from "./board-layout";
 import { listBoardGroups, listBoardViews, listTilePlacements } from "@/lib/board/store";
 import {
@@ -629,14 +629,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                    numbers are on it. */
                 <div className="-mx-1 flex flex-wrap items-center gap-1 px-1 py-1">
                   {viewTabs.map((v) => (
-                    <ViewLink
+                    <ViewTab
                       key={v.id ?? "default"}
                       href={qs({ view: v.id ?? "" })}
                       viewId={v.id}
                       activeView={activeView}
+                      canEdit={access.can("create_flows")}
+                      defaultHref={qs({ view: "" })}
                     >
                       {v.name}
-                    </ViewLink>
+                    </ViewTab>
                   ))}
                   {access.can("create_flows") && (
                     <form action={addViewAction}>

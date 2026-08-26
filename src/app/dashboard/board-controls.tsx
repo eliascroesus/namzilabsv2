@@ -2,7 +2,12 @@
 
 import { createContext, useContext, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { MoreHorizontal, PenLine, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Popover } from "@/components/flow/controls/Popover";
+import { deleteViewAction, renameViewAction } from "./board-actions";
 import { BOARD_GRID } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
@@ -31,7 +36,25 @@ import { COLUMN_W, LANE_GAP } from "./board-shape";
  * answer lands, the server's own `activeRange` takes over — there is no local
  * copy of the truth to drift.
  */
-type BoardCtx = { pending: boolean; go: (href: string, rangeKey?: string) => void; picked: string | null };
+/**
+ * WHICH CONTROL IS MID-PRESS — the dimension as well as the value.
+ *
+ * This was a bare `string`, shared by the range pills and the view tabs, and
+ * the sharing was the bug: pressing a view tab set `picked` to a view id, the
+ * range pills compared that id against "7d" and "yesterday", none matched, and
+ * every range pill went dark for the length of the navigation. Reported as
+ * "the timeline thing stops being selected for a second when swapping views".
+ *
+ * It also swallowed the DEFAULT view, whose key is the empty string: `if
+ * (rangeKey)` is false for "", so pressing "Dashboard" left the previous pick
+ * in place and lit the wrong tab on the way there.
+ *
+ * A control now trusts the optimistic value only when it is the one that was
+ * pressed, which is the rule the whole file already believed it followed.
+ */
+export type PickDim = "range" | "source" | "view";
+type Pick = { dim: PickDim; key: string };
+type BoardCtx = { pending: boolean; go: (href: string, pick?: Pick) => void; picked: Pick | null };
 
 const Ctx = createContext<BoardCtx | null>(null);
 
@@ -47,10 +70,12 @@ function useBoard(): BoardCtx {
 export function BoardControls({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [picked, setPicked] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Pick | null>(null);
 
-  const go = (href: string, rangeKey?: string) => {
-    if (rangeKey) setPicked(rangeKey);
+  const go = (href: string, pick?: Pick) => {
+    // `?? null` and not `if (pick)`: a press with no dimension (the source
+    // menu) must CLEAR the last one, or a stale pick outlives its navigation.
+    setPicked(pick ?? null);
     startTransition(() => {
       // `scroll: false`: this is a filter, not a navigation. Jumping to the top
       // of the page after changing the range loses the reader's place on a
@@ -90,7 +115,7 @@ export function RangeLink({
   // Once it settles, the server's value is the only one on screen — so a failed
   // or redirected navigation cannot leave a pill lit for a range nobody is
   // looking at.
-  const active = (pending && picked ? picked : activeRange) === rangeKey;
+  const active = (pending && picked?.dim === "range" ? picked.key : activeRange) === rangeKey;
   return (
     <a
       href={href}
@@ -100,7 +125,7 @@ export function RangeLink({
         // new tab, new window, download, or a non-primary button.
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
         e.preventDefault();
-        go(href, rangeKey);
+        go(href, { dim: "range", key: rangeKey });
       }}
       className={cn(className, active ? activeClassName : idleClassName)}
     >
@@ -142,40 +167,194 @@ export function SourceLink({ href, className, children }: { href: string; classN
  * server re-renders, instead of a second of nothing under a tab that has not
  * moved yet.
  */
-export function ViewLink({
+export function ViewTab({
   href,
   viewId,
   activeView,
+  canEdit,
+  defaultHref,
   children,
 }: {
   href: string;
   /** `null` is the default view, which has no row and no `?view=` in the URL. */
   viewId: string | null;
   activeView: string | null;
+  /** Rename and delete are gated on the same permission as everything else. */
+  canEdit: boolean;
+  /** Where to land after deleting the view you are standing on. */
+  defaultHref: string;
   children: ReactNode;
 }) {
+  const router = useRouter();
   const { pending, go, picked } = useBoard();
-  // The optimistic answer is trusted only WHILE the transition is in flight;
-  // the server's value wins the moment it settles. Same rule as RangeLink, and
-  // the reason neither holds a copy of the truth that can drift.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  /** Shown instead of the server's name until the refresh carrying it lands. */
+  const [renamed, setRenamed] = useState<string | null>(null);
+
   const key = viewId ?? "";
-  const active = (pending && picked != null ? picked : (activeView ?? "")) === key;
+  // The optimistic answer is trusted only WHILE the transition is in flight,
+  // and only when THIS dimension is the one mid-press — see PickDim.
+  const active = (pending && picked?.dim === "view" ? picked.key : (activeView ?? "")) === key;
+  const name = renamed ?? (typeof children === "string" ? children : "");
+
+  const commit = () => {
+    setEditing(false);
+    const next = draft.trim();
+    // An empty name is a tab with no handle. Snapping back says nothing
+    // happened, which is true, rather than raising an error about a field the
+    // customer has already left. The board-column rename does the same.
+    if (!viewId || !next || next === name) return;
+    setRenamed(next);
+    setMenuOpen(false);
+    void renameViewAction(viewId, next)
+      .then((r) => {
+        if (!r.ok) setRenamed(null);
+        router.refresh();
+      })
+      .catch(() => setRenamed(null));
+  };
+
+  const remove = () => {
+    if (!viewId) return;
+    setBusy(true);
+    void deleteViewAction(viewId)
+      .then((r) => {
+        setBusy(false);
+        setMenuOpen(false);
+        if (!r.ok) return;
+        // Standing on the view that just went away, so leave before the
+        // refresh does it abruptly. Deleting an OTHER tab keeps you put.
+        if (active) go(defaultHref, { dim: "view", key: "" });
+        else router.refresh();
+      })
+      .catch(() => setBusy(false));
+  };
+
+  /**
+   * THE MENU BELONGS TO THE TAB YOU ARE ON.
+   *
+   * Notion's rule, and it is the right one for a reason beyond imitation: a
+   * kebab on every tab is a row of dots competing with the names, and one that
+   * appears on hover makes every tab change width as the pointer crosses it.
+   * The default view never has one — it has no row to rename or delete.
+   */
+  const editable = canEdit && viewId != null && active;
+
   return (
-    <a
-      href={href}
-      aria-current={active ? "page" : undefined}
-      onClick={(e) => {
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-        e.preventDefault();
-        go(href, key);
-      }}
+    <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-control px-2.5 py-1.5 text-small font-semibold transition-colors duration-(--duration-fast)",
+        "inline-flex shrink-0 items-center rounded-control text-small font-semibold transition-colors duration-(--duration-fast)",
         active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
-      {children}
-    </a>
+      {editing ? (
+        <Input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") setEditing(false);
+          }}
+          aria-label={`Rename ${name}`}
+          className="h-7 w-28 px-2 py-0 text-small font-semibold"
+        />
+      ) : (
+        <a
+          href={href}
+          aria-current={active ? "page" : undefined}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            e.preventDefault();
+            go(href, { dim: "view", key });
+          }}
+          className={cn("inline-flex items-center gap-1.5 py-1.5 pl-2.5", editable ? "pr-1" : "pr-2.5")}
+        >
+          {renamed ?? children}
+        </a>
+      )}
+
+      {editable && !editing && (
+        <Popover
+          open={menuOpen}
+          setOpen={(o) => {
+            setMenuOpen(o);
+            if (!o) setConfirming(false);
+          }}
+          /* Fixed for the same reason the column kebab is: the strip sits in a
+             row that can clip, and a menu cut off at its edge loses Delete. */
+          fixed
+          align="right"
+          width={216}
+          anchor={
+            <Button
+              variant="ghost"
+              size="iconSm"
+              className="mr-0.5 size-6"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-label={`Options for ${name}`}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              <MoreHorizontal />
+            </Button>
+          }
+        >
+          <div className="cursor-default p-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
+              onClick={() => {
+                setDraft(name);
+                setEditing(true);
+                setMenuOpen(false);
+              }}
+            >
+              <PenLine />
+              Rename
+            </Button>
+
+            <div className="my-1.5 h-px bg-border" />
+
+            {confirming ? (
+              /* INLINE, not a modal — the RanksPanel precedent. The sentence
+                 says what survives, because "delete view" one inch from a
+                 board full of numbers reads like it might take them with it.
+                 It never does. */
+              <div className="px-1.5 py-1">
+                <p className="text-tiny text-muted-foreground">
+                  Delete this view? Its columns go with it. Your metrics stay on the board.
+                </p>
+                <div className="mt-2 flex gap-1.5">
+                  <Button variant="destructive" size="sm" disabled={busy} onClick={remove}>
+                    Delete
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                variant="destructiveGhost"
+                size="sm"
+                className="w-full justify-start"
+                onClick={() => setConfirming(true)}
+              >
+                <Trash2 />
+                Delete view
+              </Button>
+            )}
+          </div>
+        </Popover>
+      )}
+    </span>
   );
 }
 
@@ -198,8 +377,8 @@ export function ViewLink({
  * means no groups, and the grid is right.
  */
 export function TileArea({ count, columns, children }: { count: number; columns?: number; children: ReactNode }) {
-  const { pending } = useBoard();
-  if (!pending) return <>{children}</>;
+  const { pending, picked } = useBoard();
+  if (!pending || !answering(picked)) return <>{children}</>;
   if (columns && columns > 0) {
     return (
       <div className={`mt-4 flex items-start ${LANE_GAP} overflow-hidden`} aria-busy="true" aria-live="polite">
@@ -266,6 +445,26 @@ function TileSkeleton() {
  * collapse that layout into one item.
  */
 export function MetaLine({ className, children }: { className?: string; children: ReactNode }) {
-  const { pending } = useBoard();
-  return <p className={cn(className, "transition-opacity", pending && "opacity-0")}>{children}</p>;
+  const { pending, picked } = useBoard();
+  return <p className={cn(className, "transition-opacity", pending && answering(picked) && "opacity-0")}>{children}</p>;
+}
+
+/**
+ * IS THE NAVIGATION IN FLIGHT GOING TO CHANGE ANY NUMBER?
+ *
+ * The range and the source do: every tile is about to answer a different
+ * question, so leaving the old figures legible under a pill that now says
+ * "Today" is a wrong number shown confidently, and the skeletons are the fix.
+ *
+ * A VIEW SWITCH CHANGES NO NUMBER AT ALL. It is the same metrics in a different
+ * arrangement — a Notion view, doing what Notion views do. Skeletoning there
+ * bought nothing and cost three things at once, all of them reported: the
+ * caption blanked ("some text removes"), the board collapsed into placeholder
+ * cards and back ("it changes height and stuff"), and the whole thing had to
+ * repaint twice to arrive where it started. Holding the real tiles still while
+ * the server re-arranges them is both calmer AND more honest, because the
+ * numbers under the new tab are the numbers that were under the old one.
+ */
+function answering(picked: Pick | null): boolean {
+  return picked?.dim !== "view";
 }

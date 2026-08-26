@@ -1,5 +1,5 @@
 import { BoardLayout } from "@/app/dashboard/board-layout";
-import { BoardControls, TileArea } from "@/app/dashboard/board-controls";
+import { BoardControls, TileArea, ViewTab } from "@/app/dashboard/board-controls";
 import { PageContainer } from "@/components/ui/page";
 import { FlowTile } from "@/components/flow-tile";
 import type { BoardGroup, BoardTile, TilePlacement } from "@/lib/board/types";
@@ -79,13 +79,23 @@ export default function BoardLab() {
               canEdit
               viewId={null}
               viewStrip={
+                /* THE REAL TABS, not a drawing of them — the whole point of
+                   this page. Enough of them to show the strip wrapping rather
+                   than scrolling, with the active one wearing its kebab. */
                 <div className="-mx-1 flex flex-wrap items-center gap-1 px-1 py-1">
-                  <span className="inline-flex shrink-0 items-center rounded-control bg-accent px-2.5 py-1.5 text-small font-semibold text-accent-foreground">
-                    Dashboard
-                  </span>
-                  <span className="inline-flex shrink-0 items-center rounded-control px-2.5 py-1.5 text-small font-semibold text-muted-foreground">
-                    View 2
-                  </span>
+                  {[
+                    { id: "v2", name: "Pipeline health" },
+                    { id: "v3", name: "Revenue" },
+                    { id: "v4", name: "Team" },
+                    { id: "v5", name: "Weekly review" },
+                  ].map((v) => (
+                    <ViewTab key={v.id} href="#" viewId={v.id} activeView={null} canEdit defaultHref="#">
+                      {v.name}
+                    </ViewTab>
+                  ))}
+                  <ViewTab href="#" viewId="v6" activeView="v6" canEdit defaultHref="#">
+                    Ops
+                  </ViewTab>
                 </div>
               }
             />
