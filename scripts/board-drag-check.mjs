@@ -264,6 +264,66 @@ console.log("\nmoving a column closes its menu too");
   check(order[0] === "Confirmation", "and the column really moved one place left", JSON.stringify(order));
 }
 
+console.log("\na press on an open menu is not a press on the board");
+{
+  /**
+   * The panel renders INSIDE the card (and the column header), and both of
+   * those are drag handles — so a press on the menu's own background, the
+   * padding between its items, bubbled out and started dragging the thing
+   * underneath it.
+   */
+  await page.reload({ waitUntil: "networkidle" });
+  const start = (await layout()).g1 ?? [];
+  await page.locator(`[data-board-tile="${start[0]}"] button[aria-haspopup="menu"]`).click();
+  await page.waitForTimeout(150);
+  const panel = await page.locator("[data-board-menu]").first().boundingBox();
+  // The very top strip of the panel is its padding, above the first item.
+  await page.mouse.move(panel.x + panel.width / 2, panel.y + 3);
+  await page.mouse.down();
+  await page.mouse.move(panel.x + panel.width / 2 + 60, panel.y + 90, { steps: 10 });
+  await page.waitForTimeout(120);
+  const dragging = await page.evaluate(() => document.querySelectorAll(".fixed.z-50").length);
+  await p_up();
+  check(dragging === 0, "dragging from the menu's background moves nothing", `ghosts=${dragging}`);
+}
+
+console.log("\nthe menu does not reappear at the metric's new home");
+{
+  /**
+   * The exit animation holds the panel for a beat, which is right when it is
+   * dismissed in place and wrong when the act that dismissed it MOVES the card
+   * it is pinned to: the fixed panel re-measured against its new anchor
+   * mid-fade, so the menu blinked open again a few rows down. One frame, and it
+   * read as a glitch.
+   */
+  await page.reload({ waitUntil: "networkidle" });
+  const start = (await layout()).g1 ?? [];
+  await page.locator(`[data-board-tile="${start[0]}"] button[aria-haspopup="menu"]`).click();
+  await page.waitForTimeout(150);
+  await page.getByRole("button", { name: "Move down", exact: true }).click();
+  // One frame later the panel must already be gone, not fading somewhere else.
+  await page.waitForTimeout(30);
+  const lingering = await page.evaluate(() => document.querySelectorAll("[data-board-menu]").length);
+  check(lingering === 0, "the panel is gone the frame after the move", `panels=${lingering}`);
+}
+
+console.log("\nthe group's colour reads at the top of the column");
+{
+  await page.reload({ waitUntil: "networkidle" });
+  const bar = await page.evaluate(() => {
+    const s = [...document.querySelectorAll("section")].find((x) => x.getAttribute("aria-label") === "Total");
+    const tinted = s?.querySelector(".rounded-card");
+    const accent = tinted?.firstElementChild;
+    return {
+      tintedWrapsHeader: !!tinted?.querySelector('[aria-haspopup="menu"]'),
+      barHeight: accent ? Math.round(accent.getBoundingClientRect().height) : 0,
+      barColoured: (accent?.getAttribute("style") ?? "").includes("background"),
+    };
+  });
+  check(bar.tintedWrapsHeader, "the tint reaches the header, not just the cards");
+  check(bar.barHeight >= 3 && bar.barColoured, "and an accent bar sits across the top", JSON.stringify(bar));
+}
+
 check(errors.length === 0, "no uncaught page errors", JSON.stringify(errors));
 
 await browser.close();

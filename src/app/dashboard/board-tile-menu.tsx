@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, Check, MoreHorizontal, Plus } from "lucide-react";
 import type { BoardTile } from "@/lib/board/types";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/flow/controls/Popover";
-import { TILE_ATTR } from "./board-drag";
+import { MENU_ATTR, TILE_ATTR } from "./board-drag";
 
 /**
  * THE GAP THAT OPENS WHERE A HELD TILE WOULD LAND.
@@ -120,6 +120,19 @@ export function TileSlot({
   sortedBy?: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  /**
+   * CLOSE WITHOUT THE FADE WHEN THE ANCHOR IS ABOUT TO MOVE.
+   *
+   * The exit animation holds the panel for a beat — which is right when it is
+   * dismissed in place, and wrong when the very act that dismissed it moves the
+   * card the panel is pinned to. The fixed panel re-measures against its new
+   * anchor mid-fade, so the menu appeared to blink open again a few rows down
+   * before disappearing. One frame, and it read as a glitch.
+   *
+   * There is nothing to animate out of when the thing you were pointing at has
+   * gone somewhere else, so it simply goes.
+   */
+  const [instant, setInstant] = useState(false);
 
   // A member who may not rearrange gets the card and nothing else — not a
   // disabled control advertising something it will refuse. The identifying
@@ -127,6 +140,7 @@ export function TileSlot({
   if (!canEdit) return <>{tile.node}</>;
 
   const move = (groupId: string | null, at: number) => {
+    setInstant(true);
     setOpen(false);
     onPlace(tile.key, groupId, at);
   };
@@ -157,7 +171,11 @@ export function TileSlot({
         // is about which POSITION may be chosen, not about whether the card can
         // be carried, so it lives in the drag's `resolve` where it can tell the
         // difference. See SORTED_ATTR.
-        if ((e.target as HTMLElement).closest("button, a, input")) return;
+        // `[data-board-menu]` is the open panel. It renders INSIDE this card,
+        // so without it a press on the menu's own background — the padding
+        // between its items — bubbled out and started dragging the metric
+        // underneath. Pressing a menu is not pressing the board.
+        if ((e.target as HTMLElement).closest(`button, a, input, [${MENU_ATTR}]`)) return;
         onGrab?.(e, { key: tile.key, title: tile.title, accent: accent ?? "", kind: "tile" });
       }}
       // A CONTROL THAT DOES NOTHING MUST SAY WHY. The card is what someone
@@ -172,7 +190,10 @@ export function TileSlot({
       <div className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-(--duration-fast) focus-within:opacity-100 group-hover/slot:opacity-100 pointer-coarse:opacity-100">
         <Popover
           open={open}
-          setOpen={setOpen}
+          setOpen={(o) => {
+            setOpen(o);
+            if (o) setInstant(false);
+          }}
           /**
            * FIXED, for the reason the column's own menu is: the lane this tile
            * sits in is inside an `overflow-x-auto` scroller, and a container
@@ -180,7 +201,7 @@ export function TileSlot({
            * last tile in a column was cut off at the fold.
            */
           fixed
-          exit
+          exit={!instant}
           align="right"
           width={232}
           anchor={
@@ -205,7 +226,7 @@ export function TileSlot({
             </Button>
           }
         >
-          <div className="overflow-y-auto p-1.5">
+          <div {...{ [MENU_ATTR]: "" }} className="overflow-y-auto p-1.5">
             <p className="px-2 py-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Move to</p>
 
             {/* A tile lands at the END of the lane it is sent to. That is the

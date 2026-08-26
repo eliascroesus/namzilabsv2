@@ -152,9 +152,11 @@ describe("pointer capture, not document listeners", () => {
      * move hid which card it was. A tile carries a Refresh submit and two links,
      * and those are protected by four words rather than by a separate handle.
      */
-    expect(code(menu)).toMatch(/closest\("button, a, input"\)/);
+    // The list has since grown an open menu panel — see the MENU_ATTR test —
+    // so this checks the controls are still in it rather than the exact string.
+    expect(code(menu)).toMatch(/closest\(`button, a, input, /);
     // And the same protection on the column header, which is also its handle.
-    expect(code(column)).toMatch(/closest\("button, input"\)/);
+    expect(code(column)).toMatch(/closest\(`button, input, /);
   });
 });
 
@@ -485,13 +487,14 @@ describe("a menu gets out of the way of what it just did", () => {
      *
      * Not the delete confirmation, which has to stay long enough to be read.
      */
-    expect(code(column)).toMatch(/const act = \(fn: \(\) => void\) => \{/);
+    expect(code(column)).toMatch(/const act = \(fn: \(\) => void, movesAnchor = false\) => \{/);
     for (const call of [/act\(\(\) => onRecolour/, /act\(\(\) => onSort/, /act\(\(\) => onMoveColumn\(g\.id, columnIndex - 1\)/, /act\(\(\) => onMoveColumn\(g\.id, columnIndex \+ 1\)/]) {
       expect(code(column), `an action leaves the menu open: ${call}`).toMatch(call);
     }
-    // The tile menu already closed itself; both now animate out rather than blink.
-    expect(code(menu)).toMatch(/^\s*exit$/m);
-    expect(code(column)).toMatch(/^\s*exit$/m);
+    // The tile menu already closed itself; both now animate out rather than
+    // blink — except when the act moves the anchor, which the test below owns.
+    expect(code(menu)).toMatch(/exit=\{!instant\}/);
+    expect(code(column)).toMatch(/exit=\{!instant\}/);
   });
 
   it("holds the panel for its exit rather than dropping it, opt-in only", () => {
@@ -506,5 +509,50 @@ describe("a menu gets out of the way of what it just did", () => {
     expect(code(pop)).toMatch(/closing \? "flow-pop-out" : "flow-pop-in"/);
     // A fixed panel must keep its measurement through the exit or it vanishes anyway.
     expect(code(pop)).toMatch(/!\(open \|\| closing\) \|\| !fixed/);
+  });
+});
+
+describe("an open menu is not part of the board", () => {
+  it("stops a press on the panel from dragging what is under it", () => {
+    /**
+     * The panel renders INSIDE the card, and the column's inside its header —
+     * and both of those are drag handles. A press on the menu's own background,
+     * the padding between its items, bubbled out and started dragging the thing
+     * it was sitting on. Menu items were safe only because they happen to be
+     * buttons.
+     */
+    for (const [name, src] of [["tile", menu], ["column", column]] as const) {
+      expect(code(src), `${name} menu presses still reach the drag`).toMatch(/MENU_ATTR\}\]`\)\) return;/);
+    }
+    expect(code(menu)).toMatch(/\[MENU_ATTR\]: ""/);
+    expect(code(column)).toMatch(/\[MENU_ATTR\]: ""/);
+  });
+
+  it("skips the exit animation when the act moves the anchor", () => {
+    /**
+     * The fade holds the panel for a beat, which is right when it is dismissed
+     * in place and wrong when the very act that dismissed it MOVES the thing it
+     * is pinned to: the fixed panel re-measures against its new anchor
+     * mid-fade, so the menu appeared to blink open again at the metric's new
+     * home. One frame, and it read as a glitch rather than as polish.
+     */
+    expect(code(menu)).toMatch(/setInstant\(true\);\s*\n\s*setOpen\(false\);/);
+    expect(code(menu)).toMatch(/exit=\{!instant\}/);
+    expect(code(column)).toMatch(/exit=\{!instant\}/);
+    // A colour or a sort leaves the header where it is, so those still fade.
+    expect(code(column)).toMatch(/if \(movesAnchor\) setInstant\(true\);/);
+    expect(code(column)).toMatch(/columnIndex - 1\), true\)/);
+    expect(code(column)).toMatch(/columnIndex \+ 1\), true\)/);
+  });
+});
+
+describe("a column's colour is legible where you look for it", () => {
+  it("tints the whole column and puts its accent across the top", () => {
+    // The wash used to start BELOW the header, so the only colour up beside the
+    // name and the kebab was an 8px dot on bare canvas.
+    expect(code(column)).toMatch(/background: groupWash\(g\.color\)/);
+    expect(code(column)).toMatch(/<div className="h-1 w-full" style=\{\{ background: groupAccent\(g\.color\) \}\} aria-hidden \/>/);
+    // One tinted surface, so the bar can take its top corners.
+    expect(code(column)).toMatch(/overflow-hidden rounded-card/);
   });
 });

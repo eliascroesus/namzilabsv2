@@ -87,6 +87,13 @@ export const ACCEPTS_ATTR = "data-board-accepts";
  * that on the very next render.
  */
 export const SORTED_ATTR = "data-board-sorted";
+/**
+ * Marks an open menu panel, which renders INSIDE the thing it belongs to — a
+ * card, or a column header — and both of those are drag handles. Without it a
+ * press on the panel's own background bubbled out and started dragging the
+ * board around under an open menu.
+ */
+export const MENU_ATTR = "data-board-menu";
 export type DragKind = "tile" | "column";
 /** `data-board-lane` cannot be empty, so the ungrouped row needs a spelling. */
 export const UNGROUPED = "__ungrouped__";
