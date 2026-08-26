@@ -1,6 +1,7 @@
 import { canvasCells, GRID_COLS, ROW_UNIT_PX, type GridBox } from "@/lib/board/grid";
+import { defaultSize, type ChartId } from "@/lib/board/charts";
+import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
 import { PageContainer, SectionHeading } from "@/components/ui/page";
-import { Card } from "@/components/ui/card";
 
 /**
  * THE CUSTOM VIEW'S GRID, DRIVABLE WITHOUT AUTHENTICATION.
@@ -18,7 +19,39 @@ import { Card } from "@/components/ui/card";
  */
 export const dynamic = "force-static";
 
-type Specimen = GridBox & { label: string };
+type Specimen = GridBox & { chart: ChartId; title: string; source: CustomTileSource | null };
+
+/**
+ * Fake tiles in the SHAPE the materializer really stores, so the renderer is
+ * exercised rather than mimicked — `byRange` per period, presentation fields at
+ * the top level, and one metric that answers three ways.
+ */
+const rich = (over: Record<string, unknown> = {}): CustomTileSource => ({
+  kind: "flow",
+  status: "fresh",
+  tile: {
+    format: "number",
+    precision: 0,
+    byRange: {
+      today: {
+        value: 12,
+        series: [
+          { bucket: "2026-08-22", value: 3 },
+          { bucket: "2026-08-23", value: 6 },
+          { bucket: "2026-08-24", value: 4 },
+          { bucket: "2026-08-25", value: 9 },
+          { bucket: "2026-08-26", value: 12 },
+        ],
+        groups: [
+          { label: "Afeef", value: 7 },
+          { label: "Armaan", value: 5 },
+        ],
+      },
+      yesterday: { value: 8 },
+    },
+    ...over,
+  },
+});
 
 /**
  * Deliberately AWKWARD. A row of quarter-width tiles, a wide chart beside a tall
@@ -27,12 +60,15 @@ type Specimen = GridBox & { label: string };
  * cleanly into six columns.
  */
 const TILES: Specimen[] = [
-  { id: "t1", label: "Booked Leads · number", x: 0, y: 0, w: 3, h: 4 },
-  { id: "t2", label: "Total Leads · number", x: 3, y: 0, w: 3, h: 4 },
-  { id: "t3", label: "On Calendar · bar", x: 6, y: 0, w: 6, h: 6 },
-  { id: "t4", label: "Pickup Rate · progress", x: 0, y: 4, w: 3, h: 4 },
-  { id: "t5", label: "Claimed by rep · category", x: 3, y: 4, w: 3, h: 6 },
-  { id: "t6", label: "Speed to Lead · bar", x: 0, y: 10, w: 12, h: 6 },
+  { id: "t1", title: "Booked Leads", chart: "number", source: rich(), x: 0, y: 0, ...defaultSize("number") },
+  { id: "t2", title: "Total Leads", chart: "number", source: rich(), x: 3, y: 0, ...defaultSize("number") },
+  { id: "t3", title: "On Calendar", chart: "bar", source: rich(), x: 6, y: 0, ...defaultSize("bar") },
+  { id: "t4", title: "Pickup Rate", chart: "progress", source: rich({ target: 20 }), x: 0, y: 4, ...defaultSize("progress") },
+  { id: "t5", title: "Claimed by rep", chart: "category", source: rich(), x: 3, y: 4, ...defaultSize("category") },
+  // The dead tile — the state that keeps its box and says the metric is gone.
+  { id: "t6", title: "Revenue (deleted flow)", chart: "number", source: null, x: 7, y: 4, ...defaultSize("number") },
+  // The same metric as t3, drawn a second way. The whole point of the table.
+  { id: "t7", title: "Booked Leads, by rep", chart: "category", source: rich(), x: 0, y: 10, w: 12, h: 6 },
 ];
 
 export default function CanvasSpecimen() {
@@ -49,12 +85,7 @@ export default function CanvasSpecimen() {
         <div className="board-canvas mt-6">
           {cells.map(({ tile, vars }) => (
             <div key={tile.id} className="board-cell" style={vars as React.CSSProperties}>
-              <Card variant="surface" className="flex h-full flex-col justify-between p-4">
-                <span className="text-small font-semibold text-foreground">{tile.label}</span>
-                <span className="text-tiny text-muted-foreground tnum">
-                  {tile.w}×{tile.h}
-                </span>
-              </Card>
+              <CustomTile chart={tile.chart} title={tile.title} rangeKey="today" source={tile.source} rows={tile.h} />
             </div>
           ))}
         </div>

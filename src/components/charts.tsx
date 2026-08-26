@@ -28,14 +28,30 @@ export type GroupRow = { label: string; value: number };
  * time bucket silently shrank its own number. The chart is a mark now; the
  * tile owns the reading.
  */
-export function Sparkbars({ series, format }: { series: SeriesPoint[]; format: ChartFormat }) {
+export function Sparkbars({
+  series,
+  format,
+  className = "h-10",
+}: {
+  series: SeriesPoint[];
+  format: ChartFormat;
+  /**
+   * OPTIONAL, AND THE DEFAULT IS THE ONLY HEIGHT THIS EVER HAD. On the groups
+   * board a tile is content-height and 40px of bars is right. On a custom view
+   * the CELL owns the height — someone dragged this chart to six rows — and a
+   * fixed 40px mark leaves the rest of the box empty, which reads as a broken
+   * tile rather than a small chart. The dashboard and the /design gallery pass
+   * nothing and are untouched byte for byte.
+   */
+  className?: string;
+}) {
   const max = Math.max(1, ...series.map((s) => s.value));
   return (
     // Square bars, deliberately. A rounded cap is a radius measured against
     // the bar's WIDTH, and a twelve-bucket series stretched across a tile is
     // 50px wide per bar — the "subtle" cap renders as a row of domes. Flat
     // tops read as data at every bucket count.
-    <div className="mt-3 flex h-10 items-end gap-1" aria-hidden>
+    <div className={cn("mt-3 flex items-end gap-1", className)} aria-hidden>
       {series.map((s) => (
         <div
           key={s.bucket}
@@ -130,11 +146,24 @@ export function TargetBar({ value, target, format }: { value: number; target: nu
 }
 
 /** The top groups as horizontal bars, with the total over every record above them. */
-export function GroupBars({ groups, total, format }: { groups: GroupRow[]; total?: number | null; format: ChartFormat }) {
-  // Four, not six. The tile is a glance; the flow behind it is the place to
-  // read a full breakdown, and six rows made the grid's tallest tile set the
-  // height for every tile beside it.
-  const SHOW = 4;
+export function GroupBars({
+  groups,
+  total,
+  format,
+  show = 4,
+}: {
+  groups: GroupRow[];
+  total?: number | null;
+  format: ChartFormat;
+  /**
+   * OPTIONAL, DEFAULTING TO THE FOUR THIS ALWAYS SHOWED. Four because a tile on
+   * the groups board is a glance and six rows made the grid's tallest tile set
+   * the height for every tile beside it — a constraint a custom view does not
+   * have, because there the height was chosen deliberately.
+   */
+  show?: number;
+}) {
+  const SHOW = Math.max(1, show);
   const shown = groups.slice(0, SHOW);
   const max = Math.max(1, ...shown.map((g) => g.value));
   return (
