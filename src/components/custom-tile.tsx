@@ -78,7 +78,7 @@ function DeadTile({ title }: { title: string }) {
     <Card variant="surface" className="flex h-full flex-col p-4">
       <p className="text-small font-semibold text-muted-foreground">{title}</p>
       <div className="mt-3 flex flex-1 flex-col items-start justify-center gap-1.5">
-        <span className="inline-flex items-center gap-1.5 text-tiny font-semibold text-warning-ink">
+        <span className="inline-flex items-center gap-1.5 text-tiny font-semibold text-warn-ink">
           <AlertTriangle size={13} />
           Metric unavailable
         </span>

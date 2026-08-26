@@ -1,0 +1,170 @@
+/**
+ * DRIVE THE CUSTOM-VIEW CANVAS IN A REAL BROWSER.
+ *
+ * The reason this exists is one production incident: every SUCCESSFUL add
+ * crashed the page, and nothing in the suite could see it. The source-text
+ * tests asserted rules the code satisfied; the ad-hoc gesture script only
+ * exercised writes that FAIL (the specimen has no session); and the crash was
+ * two correct lines whose interaction only a browser executes. `/design/canvas`
+ * now mounts the board with a harness whose fake actions SUCCEED — so the one
+ * path that broke is the first path this file drives.
+ *
+ * Usage: `pnpm dev` in one terminal, `pnpm canvas:check` in another.
+ * SHOT_BASE overrides http://localhost:3000. Exits non-zero on any failure.
+ */
+import { chromium } from "playwright";
+
+const BASE = process.env.SHOT_BASE ?? "http://localhost:3000";
+const fails = [];
+const check = (ok, what, detail = "") => {
+  console.log(`  ${ok ? "ok  " : "FAIL"}  ${what}${ok || !detail ? "" : ` — ${detail}`}`);
+  if (!ok) fails.push(what);
+};
+
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1400, height: 950 } });
+const errors = [];
+page.on("pageerror", (e) => errors.push(e.message));
+
+const layout = () =>
+  page.evaluate(() =>
+    Object.fromEntries(
+      [...document.querySelectorAll("[data-canvas] [data-canvas-cell]")].map((c) => [
+        c.getAttribute("data-canvas-cell"),
+        c.style.getPropertyValue("--c12") + "|" + c.style.getPropertyValue("--r12"),
+      ]),
+    ),
+  );
+const cellCount = () => page.evaluate(() => document.querySelectorAll("[data-canvas] [data-canvas-cell]").length);
+
+const load = async () => {
+  const res = await page.goto(`${BASE}/design/canvas`, { waitUntil: "networkidle" });
+  if (!res || res.status() >= 400) {
+    console.error(`Could not load ${BASE}/design/canvas — is \`pnpm dev\` running?`);
+    process.exit(1);
+  }
+  await page.waitForTimeout(500);
+  // The live board sits below the static gallery; a pointer cannot press an
+  // element that is off screen.
+  await page.locator("[data-canvas]").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(250);
+};
+
+// ── the success-path add: the class that shipped broken ─────────────────────
+console.log("\na SUCCESSFUL add must not crash the page");
+{
+  await load();
+  const before = await cellCount();
+  check(before > 0, "the live board mounted", `cells=${before}`);
+
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: /Single number/ }).click();
+  // Step two: any eligible metric.
+  await page.locator("div[role='dialog'] button", { hasText: "Booked Leads" }).first().click();
+  await page.waitForTimeout(400);
+
+  const after = await cellCount();
+  check(after === before + 1, "the new box appears immediately", `${before} -> ${after}`);
+  // The window the crash lived in: the box exists, its card has not arrived.
+  const pendingCell = page.locator("[data-canvas-cell^='sim-added-']");
+  check((await pendingCell.count()) === 1, "the added box is the pending one");
+  check(
+    (await pendingCell.locator("[aria-busy='true']").count()) === 1,
+    "it renders a skeleton while its card is on the way",
+  );
+  check(
+    (await pendingCell.locator("button[aria-label^='Options for']").count()) === 0,
+    "and carries NO menu — the menu reading a tile that is not there was the crash",
+  );
+  check(errors.length === 0, "no uncaught page errors after the add", errors.join(" · "));
+}
+
+// ── the ghost tile: the crash's permanent form ──────────────────────────────
+console.log("\na tile deleted elsewhere leaves no ghost, and the board keeps working");
+{
+  await load();
+  const before = await cellCount();
+  await page.locator("[data-canvas-sim='remove']").click();
+  await page.waitForTimeout(300);
+  const after = await cellCount();
+  check(after === before - 1, "the box vanishes when the server no longer has it", `${before} -> ${after}`);
+
+  // The brick: with a ghost id in the batch, every layout write failed
+  // wholesale. Drag a survivor and confirm the board still moves.
+  const cell = page.locator("[data-canvas] [data-canvas-cell]").first();
+  const box = await cell.boundingBox();
+  const pre = await layout();
+  await page.mouse.move(box.x + 40, box.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 380, box.y + 30, { steps: 12 });
+  await page.waitForTimeout(150);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  check(JSON.stringify(await layout()) !== JSON.stringify(pre), "a drag after the removal still lands");
+  check(errors.length === 0, "no uncaught page errors after the removal", errors.join(" · "));
+}
+
+// ── a tile added elsewhere appears ──────────────────────────────────────────
+console.log("\na tile added elsewhere appears without a reload");
+{
+  await load();
+  const before = await cellCount();
+  await page.locator("[data-canvas-sim='add']").click();
+  await page.waitForTimeout(300);
+  check((await cellCount()) === before + 1, "membership reconciles from the prop");
+}
+
+// ── the gestures, unchanged from the ad-hoc script ──────────────────────────
+console.log("\nthe gestures still hold");
+{
+  await load();
+  let box = await page.locator("[data-canvas] [data-canvas-cell]").first().boundingBox();
+  let before = await layout();
+  await page.mouse.move(box.x + 40, box.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 340, box.y + 30, { steps: 14 });
+  await page.waitForTimeout(150);
+  check(JSON.stringify(await layout()) !== JSON.stringify(before), "the preview follows the pointer");
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+
+  await load();
+  box = await page.locator("[data-canvas] [data-canvas-cell]").first().boundingBox();
+  before = await layout();
+  await page.mouse.move(box.x + 40, box.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 380, box.y + 30, { steps: 12 });
+  await page.waitForTimeout(150);
+  const moved = JSON.stringify(await layout()) !== JSON.stringify(before);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+  check(moved && JSON.stringify(await layout()) === JSON.stringify(before), "Escape puts everything back");
+  await page.mouse.up();
+
+  await load();
+  const grip = await page.locator("[data-canvas-handle]").first().boundingBox();
+  before = await layout();
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x + 280, grip.y + 130, { steps: 12 });
+  await page.waitForTimeout(180);
+  check(JSON.stringify(await layout()) !== JSON.stringify(before), "the corner resizes the card");
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+
+  await page.setViewportSize({ width: 900, height: 900 });
+  await load();
+  const nb = await page.locator("[data-canvas] [data-canvas-cell]").first().boundingBox();
+  before = await layout();
+  await page.mouse.move(nb.x + 30, nb.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(nb.x + 300, nb.y + 30, { steps: 10 });
+  await page.waitForTimeout(180);
+  check(JSON.stringify(await layout()) === JSON.stringify(before), "a tablet grid refuses the gesture");
+  await page.mouse.up();
+}
+
+check(errors.length === 0, "no uncaught page errors anywhere", errors.join(" · "));
+await browser.close();
+console.log(fails.length ? `\nFAILED: ${fails.join(" · ")}` : "\nPASS — the canvas does what it claims, success path included.");
+process.exit(fails.length ? 1 : 0);

@@ -629,7 +629,7 @@ export async function setCustomTileAction(
   if (await blocked(ctx)) return fail(RANK_BLOCKS);
   if (!idSchema.safeParse(id).success) return fail("Unknown chart.");
 
-  const next: { chart?: string; tileKey?: string; config?: Record<string, unknown>; updatedAt: Date } = {
+  const next: { chart?: string; tileKey?: string; config?: unknown; updatedAt: Date } = {
     updatedAt: new Date(),
   };
   if (patch.chart !== undefined) {
@@ -645,7 +645,16 @@ export async function setCustomTileAction(
   if (patch.title !== undefined) {
     const t = titleSchema.safeParse(patch.title);
     if (!t.success) return fail(t.error.issues[0]?.message ?? "That name won't work.");
-    next.config = t.data ? { title: t.data } : {};
+    /**
+     * MERGED, NEVER REPLACED. This used to write `{ title }` over the whole
+     * bag, which was harmless while the title was the only key and fatal the
+     * day it is not — renaming a tile would silently reset every other setting
+     * it carries. Postgres's own jsonb operators keep it one atomic statement:
+     * `||` overlays the patch, `-` removes the key when the name is cleared.
+     */
+    next.config = t.data
+      ? sql`${dashboardTiles.config} || ${JSON.stringify({ title: t.data })}::jsonb`
+      : sql`${dashboardTiles.config} - 'title'`;
   }
 
   try {

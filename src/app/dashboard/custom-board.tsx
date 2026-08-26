@@ -7,6 +7,7 @@ import { canvasCells, compact, GRID_COLS, type GridBox } from "@/lib/board/grid"
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/flow/controls/Popover";
 import { Toast } from "@/components/ui/toast";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
 import { CHARTS, asChartId, type ChartId } from "@/lib/board/charts";
@@ -20,6 +21,23 @@ import {
   setCustomTileAction,
   setCustomTileLayoutAction,
 } from "./board-actions";
+
+/**
+ * THE WRITES, AS A SEAM. The dashboard never passes this — the defaults are the
+ * real server actions. It exists for `/design/canvas`, which injects fakes that
+ * SUCCEED: the crash that shipped lived on the success path (a successful add,
+ * then a render against a prop that had not caught up), and the specimen's real
+ * actions can only fail there, having no session. A server-action response is
+ * React flight protocol, so a Playwright `route.fulfill` cannot fake success
+ * without hand-writing that wire format — this seam is the same mock at a
+ * sturdier joint.
+ */
+export type CanvasActions = {
+  addTile: typeof addCustomTileAction;
+  deleteTile: typeof deleteCustomTileAction;
+  editTile: typeof setCustomTileAction;
+  writeLayout: typeof setCustomTileLayoutAction;
+};
 
 /**
  * A CUSTOM VIEW'S CANVAS — the client half.
@@ -59,6 +77,7 @@ export function CustomBoard({
   options,
   canEdit,
   viewStrip,
+  actions: actionOverrides,
 }: {
   /** Always a real id: the default view has no row and is always a groups view. */
   viewId: string;
@@ -72,13 +91,47 @@ export function CustomBoard({
    * rendered by the page and worn by whichever board is on screen.
    */
   viewStrip?: ReactNode;
+  /** Test seam only — see `CanvasActions`. The dashboard leaves it unset. */
+  actions?: Partial<CanvasActions>;
 }) {
   const router = useRouter();
+  const act: CanvasActions = {
+    addTile: addCustomTileAction,
+    deleteTile: deleteCustomTileAction,
+    editTile: setCustomTileAction,
+    writeLayout: setCustomTileLayoutAction,
+    ...actionOverrides,
+  };
   /**
-   * Seeded once. The `useState` initialiser is what that means: the argument is
-   * read on the first render and ignored on every one after it.
+   * POSITIONS are seeded once — the `useState` initialiser reads `tiles` on the
+   * first render and ignores it on every one after, which is what stops the
+   * twelve-second poller snapping a tile back mid-drag.
+   *
+   * MEMBERSHIP is not seeded, and that distinction is the fix for a crash that
+   * shipped. "Seeded once" exists to protect a drag from a poll; freezing
+   * WHICH tiles exist protected nothing and broke two ways: a tile added in
+   * another tab never appeared, and a tile deleted in another tab left a ghost
+   * box — which then made `setCustomTileLayoutAction` refuse every batch
+   * wholesale, so one ghost bricked all movement on the board. Additions and
+   * removals cannot clobber a gesture, so they reconcile from the live prop on
+   * every render (see `boxes` below); positions never do.
    */
   const [layout, setLayout] = useState<GridBox[]>(() => tiles.map(({ x, y, w, h, id }) => ({ id, x, y, w, h })));
+  /**
+   * The two windows where THIS CLIENT knows better than its `tiles` prop:
+   * a tile it just added (in layout, not yet read back) must survive the
+   * removal reconcile, and one it just deleted (gone from layout, still in the
+   * prop until a refresh) must not be re-added by the addition reconcile. Each
+   * entry retires itself the moment the prop catches up.
+   */
+  const pending = useRef({ adds: new Set<string>(), removes: new Set<string>() });
+  /**
+   * The menu's moves read the RECONCILED list through this ref rather than the
+   * raw state: after a remote add, the state may not know a box the screen is
+   * already showing, and a nudge computed from a list missing a member would
+   * write a layout that stacks two tiles.
+   */
+  const boxesRef = useRef<GridBox[]>([]);
   const [picking, setPicking] = useState(false);
   /** The id of the tile being repointed at a different metric, if any. */
   const [repointing, setRepointing] = useState<string | null>(null);
@@ -93,12 +146,14 @@ export function CustomBoard({
       setBusy(true);
       // NOT optimistic: the id is the server's to mint, and a tile carrying a
       // placeholder id could not be deleted or moved until it was replaced.
-      const r = await addCustomTileAction(viewId, tileKey, chart).catch(() => null);
+      const r = await act.addTile(viewId, tileKey, chart).catch(() => null);
       setBusy(false);
       if (!r) return setToast("Couldn't add that chart — the page may be out of date. Reload and try again.");
       if (!r.ok) return setToast(r.error);
       setPicking(false);
       const t: BoardTileRow = r.tile;
+      // Ours until the prop catches up — see `pending`.
+      pending.current.adds.add(t.id);
       setLayout((prev) => [...prev, { id: t.id, x: t.x, y: t.y, w: t.w, h: t.h }]);
       // The box is ours; the CARD is the server's. This is what fetches it.
       router.refresh();
@@ -126,10 +181,44 @@ export function CustomBoard({
         undo = prev;
         return packed;
       });
-      settle(setCustomTileLayoutAction(viewId, packed), () => setLayout(undo));
+      settle(act.writeLayout(viewId, packed), () => {
+        setLayout(undo);
+        // The one way this write fails wholesale is an id the view no longer
+        // has — a tile deleted somewhere else that this tab has not heard
+        // about. Refreshing brings the membership the reconcile needs to shed
+        // it, so one stale id cannot go on failing every drag.
+        router.refresh();
+      });
     },
-    [settle, viewId],
+    [router, settle, viewId],
   );
+
+  /**
+   * THE RECONCILE — membership from the prop, positions from state.
+   *
+   * A box whose card has not arrived yet KEEPS ITS PLACE and renders a
+   * skeleton with no menu. It must not collapse: gravity would pull every tile
+   * below it up and push them all back a moment later, and the menu would be
+   * reading fields off a tile that is not there — which was the crash.
+   */
+  const liveIds = new Set(tiles.map((t) => t.id));
+  // Retire pending entries the prop has caught up with. A ref mutation during
+  // render, deliberately: it is an idempotent cache prune, safe under strict
+  // mode's double render, and an effect would leave one render reading stale.
+  for (const id of pending.current.adds) if (liveIds.has(id)) pending.current.adds.delete(id);
+  for (const id of pending.current.removes) if (!liveIds.has(id)) pending.current.removes.delete(id);
+  const knownIds = new Set(layout.map((b) => b.id));
+  const boxes: GridBox[] = [
+    // Positions are the state's; a box leaves only when the server no longer
+    // has it AND this client did not just add it.
+    ...layout.filter((b) => liveIds.has(b.id) || pending.current.adds.has(b.id)),
+    // A tile that arrived from elsewhere joins at its server position.
+    ...tiles
+      .filter((t) => !knownIds.has(t.id) && !pending.current.removes.has(t.id))
+      .map(({ id, x, y, w, h }) => ({ id, x, y, w, h })),
+  ];
+
+  boxesRef.current = boxes;
 
   const rootRef = useRef<HTMLDivElement>(null);
   /**
@@ -138,32 +227,34 @@ export function CustomBoard({
    * gesture is live. That is only honest because both come from the same
    * `compact`, so what is on screen mid-drag is exactly what gets written.
    */
-  const { gesture, preview, onPointerDown, swallowClick } = useCanvasDrag(rootRef, layout, applyLayout);
+  const { gesture, preview, onPointerDown, swallowClick } = useCanvasDrag(rootRef, boxes, applyLayout);
 
   const nudge = useCallback(
     (id: string, dx: number, dy: number) => {
-      const box = layout.find((b) => b.id === id);
+      const all = boxesRef.current;
+      const box = all.find((b) => b.id === id);
       if (!box) return;
       const moved = { ...box, x: Math.max(0, Math.min(GRID_COLS - box.w, box.x + dx)), y: Math.max(0, box.y + dy) };
-      applyLayout(layout.map((b) => (b.id === id ? moved : b)), id);
+      applyLayout(all.map((b) => (b.id === id ? moved : b)), id);
     },
-    [applyLayout, layout],
+    [applyLayout],
   );
 
   const resize = useCallback(
     (id: string, w: number, h: number) => {
-      const box = layout.find((b) => b.id === id);
+      const all = boxesRef.current;
+      const box = all.find((b) => b.id === id);
       if (!box) return;
       const next = { ...box, w, h, x: Math.min(box.x, GRID_COLS - w) };
-      applyLayout(layout.map((b) => (b.id === id ? next : b)), id);
+      applyLayout(all.map((b) => (b.id === id ? next : b)), id);
     },
-    [applyLayout, layout],
+    [applyLayout],
   );
 
   /** Chart, metric and name are one partial update of one already-walled row. */
   const editTile = useCallback(
     (id: string, patch: { chart?: string; tileKey?: string; title?: string }) => {
-      settle(setCustomTileAction(id, patch), () => {});
+      settle(act.editTile(id, patch), () => {});
       // The CARD is the server's, and all three of these change it.
       router.refresh();
     },
@@ -173,30 +264,27 @@ export function CustomBoard({
   const removeTile = useCallback(
     (id: string) => {
       let undo: GridBox | undefined;
+      // Gone from here until the prop catches up — see `pending`. Without this
+      // the addition reconcile would put the box straight back, and the delete
+      // would appear to do nothing until the next refresh.
+      pending.current.removes.add(id);
       setLayout((prev) => {
         undo = prev.find((b) => b.id === id);
         return prev.filter((b) => b.id !== id);
       });
       // The hole closes itself: every render compacts, so the tiles below float
       // up without a single other row being rewritten.
-      settle(deleteCustomTileAction(id), () => setLayout((prev) => (undo ? [...prev, undo] : prev)));
+      settle(act.deleteTile(id), () => {
+        pending.current.removes.delete(id);
+        setLayout((prev) => (undo ? [...prev, undo] : prev));
+      });
     },
     [settle],
   );
 
-  /**
-   * The NODES come from props every render; the BOXES come from seeded state,
-   * so the two can briefly disagree — a row this client added and the server
-   * has not read back yet.
-   *
-   * A box whose card has not arrived KEEPS ITS PLACE and renders empty. It must
-   * not collapse: gravity would pull every tile below it up and push them all
-   * back a moment later, which reads as the board twitching rather than as one
-   * card loading.
-   */
   const nodeOf = new Map(tiles.map((t) => [t.id, t.node]));
   const byId = new Map(tiles.map((t) => [t.id, t]));
-  const cells = canvasCells(preview ?? layout);
+  const cells = canvasCells(preview ?? boxes);
   const empty = cells.length === 0;
 
   return (
@@ -244,7 +332,12 @@ export function CustomBoard({
                 onPointerDown(e, { id: tile.id, mode: "move" });
               }}
             >
-              {canEdit && (
+              {/* THE GUARD THE CRASH CAME THROUGH. `byId` is the live prop and
+                  `tile.id` is the reconciled layout, and in the add window the
+                  prop has not caught up yet — `byId.get` is undefined, and the
+                  old `!` fed it to a menu that read `.title` off it. A box in
+                  that window gets a skeleton and NO menu. */}
+              {canEdit && byId.has(tile.id) && (
                 <TileMenu
                   tile={byId.get(tile.id)!}
                   index={i}
@@ -257,7 +350,7 @@ export function CustomBoard({
                   swallowClick={swallowClick}
                 />
               )}
-              {nodeOf.get(tile.id)}
+              {nodeOf.get(tile.id) ?? <PendingCard />}
               {canEdit && (
                 /* The corner grip. Deliberately NOT `.fixed.z-50` and NOT
                    `border-dashed`: `scripts/board-drag-check.mjs` counts
@@ -298,6 +391,21 @@ export function CustomBoard({
         />
       )}
       {toast && <Toast action={{ label: "Dismiss", onClick: () => setToast(null) }}>{toast}</Toast>}
+    </div>
+  );
+}
+
+/**
+ * A box whose card has not arrived yet — the moment between this client
+ * writing a row and the refresh carrying its server-rendered card. It holds
+ * the tile's exact footprint so nothing below it moves when the card lands.
+ */
+function PendingCard() {
+  return (
+    <div className="h-full rounded-surface border border-border bg-card p-4 shadow-card" aria-busy="true">
+      <Skeleton className="h-4 w-2/5" />
+      <Skeleton className="mt-3 h-9 w-1/2" />
+      <Skeleton className="mt-3 h-10 w-full" />
     </div>
   );
 }

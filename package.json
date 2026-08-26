@@ -15,7 +15,8 @@
     "db:generate": "drizzle-kit generate",
     "inngest:dev": "npx inngest-cli@latest dev",
     "shot": "node scripts/screenshot.mjs",
-    "board:drag": "node scripts/board-drag-check.mjs"
+    "board:drag": "node scripts/board-drag-check.mjs",
+    "canvas:check": "node scripts/canvas-check.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

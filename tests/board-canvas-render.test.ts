@@ -13,6 +13,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {}, refresh:
 vi.mock("@/app/dashboard/board-actions", () => ({
   addCustomTileAction: async () => ({ ok: true, tile: { id: "new", tileKey: "metric:m1", chart: "number", config: {}, x: 0, y: 0, w: 3, h: 4 } }),
   deleteCustomTileAction: async () => ({ ok: true }),
+  setCustomTileAction: async () => ({ ok: true }),
+  setCustomTileLayoutAction: async () => ({ ok: true }),
 }));
 
 const { CustomBoard } = await import("@/app/dashboard/custom-board");

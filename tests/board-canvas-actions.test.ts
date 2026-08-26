@@ -195,6 +195,24 @@ describe("changing what a chart is", () => {
     expect((await row(id)).config).toEqual({});
   });
 
+  it("MERGES config on rename — an unrelated key survives", async () => {
+    /**
+     * THE CLOBBER REGRESSION. This action used to write `{ title }` over the
+     * whole bag, harmless while the title was the only key and fatal the day
+     * presentation lives there: renaming a tile would silently reset its
+     * colour, sort and everything else it carries.
+     */
+    const id = await seed();
+    await db.update(dashboardTiles).set({ config: { color: "teal", limit: 5 } }).where(eq(dashboardTiles.id, id));
+
+    await setCustomTileAction(id, { title: "Renamed" });
+    expect((await row(id)).config).toEqual({ color: "teal", limit: 5, title: "Renamed" });
+
+    // Clearing the name removes ONLY the title key.
+    await setCustomTileAction(id, { title: "" });
+    expect((await row(id)).config).toEqual({ color: "teal", limit: 5 });
+  });
+
   it("refuses a chart it cannot draw, a key it cannot parse, and another org's row", async () => {
     const id = await seed();
     expect((await setCustomTileAction(id, { chart: "pie" })).ok).toBe(false);

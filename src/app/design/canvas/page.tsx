@@ -1,7 +1,7 @@
 import { canvasCells, GRID_COLS, ROW_UNIT_PX, type GridBox } from "@/lib/board/grid";
 import { defaultSize, type ChartId } from "@/lib/board/charts";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
-import { CustomBoard } from "@/app/dashboard/custom-board";
+import { CanvasHarness } from "./harness";
 import { PageContainer, SectionHeading } from "@/components/ui/page";
 
 /**
@@ -102,12 +102,10 @@ export default function CanvasSpecimen() {
 
         <SectionHeading className="mt-12">The live board — drag a card, drag its corner</SectionHeading>
         <p className="mt-1 text-small text-muted-foreground">
-          The real component, with the real gestures. Saving fails here because there is no session, which is what makes
-          this the one place the optimistic revert is visible.
+          The real component with the server played by the harness: writes SUCCEED here, because the crash that shipped
+          lived on the success path. The two buttons are another tab editing the same view.
         </p>
-        <CustomBoard
-          viewId="design"
-          canEdit
+        <CanvasHarness
           options={TILES.map((t) => ({ key: t.id, title: t.title, charts: ["number", "bar", "category"] }))}
           tiles={TILES.map((t) => ({
             id: t.id,

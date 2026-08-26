@@ -44,7 +44,16 @@ export function FreshnessPoller({ intervalMs = 12_000 }: { intervalMs?: number }
 
     // Coming back to the tab checks immediately — the user expects current data.
     const onVisible = () => {
-      if (document.visibilityState === "visible") void tick();
+      if (document.visibilityState !== "visible") return;
+      /**
+       * THE PENDING TIMER DIES FIRST. `tick` always schedules its successor,
+       * so calling it with one already queued FORKS the chain — every
+       * tab-focus added another concurrent 12-second loop, and a tab focused
+       * five times was polling six times per interval, forever. One chain,
+       * whoever starts it.
+       */
+      if (timer) clearTimeout(timer);
+      void tick();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {

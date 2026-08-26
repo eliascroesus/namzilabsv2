@@ -114,7 +114,10 @@ describe("the preview and the write are one answer", () => {
     expect(code(drag)).toMatch(/return compact\(/);
     // ...and the board re-packs with the id the gesture actually moved, so the
     // held tile cannot be swapped back behind the one it landed on.
-    expect(code(board)).toMatch(/useCanvasDrag\(rootRef, layout, applyLayout\)/);
+    // `boxes`, not raw state: the gesture must see the membership-reconciled
+    // list, or a tile that arrived from another tab is undraggable and a ghost
+    // participates in every hit test.
+    expect(code(board)).toMatch(/useCanvasDrag\(rootRef, boxes, applyLayout\)/);
     expect(code(board)).toMatch(/compact\(next, GRID_COLS, movedId\)/);
   });
 
@@ -163,5 +166,45 @@ describe("the harness's selectors stay unambiguous", () => {
     expect(grip).not.toMatch(/fixed/);
     expect(grip).not.toMatch(/border-dashed/);
     expect(grip).toMatch(/cursor-se-resize/);
+  });
+});
+
+describe("membership reconciles from the prop; positions never do", () => {
+  const board = readFileSync(join(process.cwd(), "src/app/dashboard/custom-board.tsx"), "utf8");
+  const body = board.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("keeps the two pending windows, and retires them when the prop catches up", () => {
+    /**
+     * The crash that shipped: a successful add put a box in the seeded layout,
+     * the prop had not caught up, and `byId.get(id)!` fed undefined to a menu
+     * that read `.title` off it. The permanent form: a tile deleted in another
+     * tab left a ghost box, and the layout action's wholesale refusal then
+     * failed every subsequent move on the board.
+     */
+    expect(body).toMatch(/pending\.current\.adds\.add\(t\.id\)/);
+    expect(body).toMatch(/pending\.current\.removes\.add\(id\)/);
+    expect(body).toMatch(/if \(liveIds\.has\(id\)\) pending\.current\.adds\.delete\(id\)/);
+    expect(body).toMatch(/if \(!liveIds\.has\(id\)\) pending\.current\.removes\.delete\(id\)/);
+  });
+
+  it("drops a box the server no longer has, unless this client just added it", () => {
+    expect(body).toMatch(/layout\.filter\(\(b\) => liveIds\.has\(b\.id\) \|\| pending\.current\.adds\.has\(b\.id\)\)/);
+  });
+
+  it("admits a tile that arrived from elsewhere, at its server position", () => {
+    expect(body).toMatch(/!knownIds\.has\(t\.id\) && !pending\.current\.removes\.has\(t\.id\)/);
+  });
+
+  it("never renders a menu for a box whose tile has not arrived", () => {
+    // Sabotage: restore the bare `byId.get(tile.id)!` and every successful add
+    // crashes the page again, exactly as it did in production.
+    expect(body).toMatch(/canEdit && byId\.has\(tile\.id\) &&/);
+    expect(body).toMatch(/nodeOf\.get\(tile\.id\) \?\? <PendingCard \/>/);
+  });
+
+  it("re-learns membership when a layout write is refused wholesale", () => {
+    // One stale id must not go on failing every drag until a reload.
+    const applyLayout = body.slice(body.indexOf("const applyLayout"), body.indexOf("const rootRef"));
+    expect(applyLayout).toMatch(/router\.refresh\(\)/);
   });
 });

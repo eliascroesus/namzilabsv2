@@ -83,7 +83,13 @@ export function AddTilePicker({
                 variant="secondary"
                 disabled={n === 0}
                 onClick={() => setChart(c.id)}
-                className="h-auto w-full items-start justify-start gap-3 p-3 text-left"
+                /* `whitespace-normal` overrides the Button base's `nowrap` for
+                   THIS card only — the blurbs are sentences, and un-wrappable
+                   sentences overflowed into the neighbouring card and forced a
+                   horizontal scrollbar on the whole modal. The base keeps its
+                   nowrap: real buttons are labels, and a wrapping label is a
+                   different bug. */
+                className="h-auto w-full items-start justify-start gap-3 whitespace-normal p-3 text-left"
                 title={n === 0 ? `No metric on this board can be drawn as a ${c.label.toLowerCase()}` : undefined}
               >
                 <Icon className="mt-0.5 shrink-0 text-muted-foreground" />
