@@ -20,6 +20,7 @@ import { BoardControls, MetaLine, RangeLink, SourceLink, TileArea, ViewTab } fro
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
+import { chartsFor, shapeOfClassic, shapeOfTile } from "@/lib/board/charts";
 import { listBoardGroups, listBoardViews, listTilePlacements } from "@/lib/board/store";
 import { listBoardTiles } from "@/lib/board/tiles-store";
 import {
@@ -28,6 +29,7 @@ import {
   type BoardGroup,
   type BoardTile,
   type BoardTileRow,
+  type CustomTileOption,
   type BoardView,
   type BoardViewKind,
   type TilePlacement,
@@ -528,6 +530,35 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * unavailable card itself, because Remove and Change metric are handlers and
    * nothing crossing this boundary may be a function.
    */
+  /**
+   * EVERY METRIC THE PICKER MAY OFFER, with the charts each one supports.
+   *
+   * Computed HERE, on the server, by the same `chartsFor` the renderer enforces
+   * with — so what the picker offers and what a tile draws cannot drift apart.
+   * Plain data, so it crosses the boundary beside the cards.
+   *
+   * The permission gate falls out for free: `flowTiles` and `tiles` have both
+   * already been filtered through `access.canSeeMetric`, so a metric a viewer's
+   * rank hides is simply not in this list and cannot be added.
+   */
+  const tileOptions: CustomTileOption[] = [
+    ...flowTiles.map((row) => {
+      const stored = (row.tile ?? {}) as { name?: string };
+      return {
+        key: tileKeyOfFlow(row.flowId, row.outputNodeId),
+        title: stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`,
+        charts: chartsFor(shapeOfTile(row.tile)) as string[],
+      };
+    }),
+    ...tiles.map((t) => ({
+      key: tileKeyOfMetric(t.metric.id),
+      title: t.metric.name,
+      charts: chartsFor(
+        shapeOfClassic(t.kind === "error" ? null : t.result, t.metric.target == null ? null : Number(t.metric.target)),
+      ) as string[],
+    })),
+  ].filter((o) => o.charts.length > 0);
+
   const flowByKey = new Map(flowTiles.map((r) => [tileKeyOfFlow(r.flowId, r.outputNodeId), r]));
   const classicByKey = new Map(tiles.map((t) => [tileKeyOfMetric(t.metric.id), t]));
   const canvasTiles: CanvasTile[] = canvasRows.map((row) => {
@@ -753,7 +784,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                  different component instance. */
               <CustomBoard
                 key={activeView ?? "default"}
+                viewId={activeView!}
                 tiles={canvasTiles}
+                options={tileOptions}
                 canEdit={access.can("create_flows")}
                 viewStrip={viewStrip}
               />

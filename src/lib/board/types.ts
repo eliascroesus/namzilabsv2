@@ -27,6 +27,18 @@ export const asViewKind = (v: unknown): BoardViewKind => (v === "custom" ? "cust
 export type BoardView = { id: string | null; name: string; pos: string; kind: BoardViewKind };
 
 /**
+ * ONE METRIC THE PICKER MAY OFFER, and the charts its shape supports.
+ *
+ * PLAIN DATA — no functions — so it crosses the RSC boundary beside `BoardTile`
+ * for the same reason and under the same rule. `charts` is computed on the
+ * SERVER by `chartsFor`, and the picker filters with it rather than deriving it
+ * again: two definitions of "can be drawn as" is precisely the gap between what
+ * an interface offers and what it draws, which is the gap this whole feature
+ * exists to close.
+ */
+export type CustomTileOption = { key: string; title: string; charts: string[] };
+
+/**
  * ONE CHART ON A CUSTOM VIEW, as the board reads it.
  *
  * `x`/`y`/`w`/`h` are GRID UNITS — twelve columns, forty-pixel rows. See

@@ -6,11 +6,13 @@ import { z } from "zod";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { getDb } from "@/db/client";
-import { dashboardGroups, dashboardTilePlacements, dashboardViews } from "@/db/schema";
+import { dashboardGroups, dashboardTilePlacements, dashboardTiles, dashboardViews } from "@/db/schema";
 import { requireOrg, type OrgContext } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
-import { boardGroupCap, boardPlacementCap, boardViewCap } from "@/lib/limits";
+import { boardGroupCap, boardPlacementCap, boardTileCap, boardViewCap } from "@/lib/limits";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
+import { CHART_IDS, defaultSize } from "@/lib/board/charts";
+import type { BoardTileRow } from "@/lib/board/types";
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
 import type { BoardGroup } from "@/lib/board/types";
 
@@ -491,6 +493,108 @@ export async function deleteViewAction(id: string): Promise<Result> {
   if (!idSchema.safeParse(id).success) return fail("Unknown view.");
   try {
     await getDb().delete(dashboardViews).where(and(eq(dashboardViews.id, id), eq(dashboardViews.orgId, ctx.orgId)));
+    return { ok: true };
+  } catch (e) {
+    return oops(e);
+  }
+}
+
+/** The same vocabulary `dashboard_tile_placements` validates, for the same keys. */
+const tileKeySchema = z
+  .string()
+  .max(200)
+  .regex(/^(flow:[^:]+:.+|metric:[^:]+)$/, "Bad tile key.");
+
+const chartSchema = z.string().refine((c) => (CHART_IDS as string[]).includes(c), "That isn't a chart we draw.");
+
+/**
+ * THE VIEW A WRITE IS FOR, RE-WALLED TO THE ORG AND CHECKED FOR ITS KIND.
+ *
+ * The id arrives from a browser, so one belonging to another workspace must
+ * find nothing rather than something. The KIND check is the second half: a
+ * groups view stores its arrangement in a different table entirely, and a chart
+ * written against one would be a row nothing renders and nothing can reach.
+ */
+async function customView(orgId: string, viewId: string): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ kind: dashboardViews.kind })
+    .from(dashboardViews)
+    .where(and(eq(dashboardViews.id, viewId), eq(dashboardViews.orgId, orgId)));
+  return row?.kind === "custom";
+}
+
+/**
+ * ADD A CHART TO A CUSTOM VIEW.
+ *
+ * NOT OPTIMISTIC, and for the reason `createGroupAction` states: the id is the
+ * server's to mint, and a tile that appears under a placeholder id cannot be
+ * dragged, resized or deleted until it is replaced.
+ *
+ * IT LANDS AT THE BOTTOM-LEFT and gravity does the rest. Placing it there and
+ * letting `compact` float it up is what makes a new chart slot into the gap
+ * beside the last row instead of starting a lonely new one — and it means the
+ * board has exactly one placement algorithm, shared by this action, the drag
+ * preview and every render.
+ */
+export async function addCustomTileAction(
+  viewId: string,
+  tileKey: string,
+  chart: string,
+): Promise<Result<{ tile: BoardTileRow }>> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  if (!idSchema.safeParse(viewId).success) return fail("Unknown view.");
+  const key = tileKeySchema.safeParse(tileKey);
+  if (!key.success) return fail(key.error.issues[0]?.message ?? "Unknown metric.");
+  const kind = chartSchema.safeParse(chart);
+  if (!kind.success) return fail(kind.error.issues[0]?.message ?? "Unknown chart.");
+
+  try {
+    const db = getDb();
+    if (!(await customView(ctx.orgId, viewId))) return fail("That view can't hold charts.");
+
+    const existing = await db
+      .select({ y: dashboardTiles.y, h: dashboardTiles.h })
+      .from(dashboardTiles)
+      .where(and(eq(dashboardTiles.orgId, ctx.orgId), eq(dashboardTiles.viewId, viewId)));
+
+    const cap = boardTileCap();
+    if (existing.length >= cap) {
+      return fail(`This view has reached its limit of ${cap} charts. Remove one to add another.`);
+    }
+
+    const size = defaultSize(kind.data as (typeof CHART_IDS)[number]);
+    const row: BoardTileRow = {
+      id: crypto.randomUUID(),
+      tileKey: key.data,
+      chart: kind.data,
+      config: {},
+      x: 0,
+      y: existing.reduce((n, b) => Math.max(n, b.y + b.h), 0),
+      ...size,
+    };
+    await db.insert(dashboardTiles).values({ ...row, orgId: ctx.orgId, viewId });
+    return { ok: true, tile: row };
+  } catch (e) {
+    return oops(e);
+  }
+}
+
+/**
+ * REMOVE A CHART. The metric is untouched — a layout act never deletes a
+ * metric, the same promise `deleteGroupAction` makes one level up.
+ *
+ * The hole it leaves closes itself: every render compacts, so the tiles below
+ * float up without this action rewriting a single other row.
+ */
+export async function deleteCustomTileAction(id: string): Promise<Result> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  if (!idSchema.safeParse(id).success) return fail("Unknown chart.");
+  try {
+    await getDb()
+      .delete(dashboardTiles)
+      .where(and(eq(dashboardTiles.id, id), eq(dashboardTiles.orgId, ctx.orgId)));
     return { ok: true };
   } catch (e) {
     return oops(e);

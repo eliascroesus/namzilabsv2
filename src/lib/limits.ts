@@ -79,3 +79,19 @@ export function boardPlacementCap(): number {
 export function boardViewCap(): number {
   return intEnv("MAX_BOARD_VIEWS_PER_ORG", 30);
 }
+
+/**
+ * How many charts one custom view may hold.
+ *
+ * PER VIEW, not per org, and that is the honest unit: a view is what renders,
+ * so it is what a runaway count would actually break. A workspace with twenty
+ * views has twenty boards, each of which is fine.
+ *
+ * The same blast-radius bound as the rest — high enough that no real board runs
+ * into it, low enough that a scripted client cannot mint ten thousand rows. It
+ * doubles as the batch limit on the layout write, so one request cannot ask for
+ * more rows than a view is allowed to have.
+ */
+export function boardTileCap(): number {
+  return intEnv("MAX_BOARD_TILES_PER_VIEW", 60);
+}
