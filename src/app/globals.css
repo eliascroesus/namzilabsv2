@@ -593,6 +593,55 @@ select:-webkit-autofill {
   background-color: var(--color-neutral-400);
 }
 
+/* THE CUSTOM VIEW'S CANVAS — one DOM, three renderings.
+
+   The column COUNT is the only thing that changes with the viewport, and it
+   changes HERE rather than in React. A breakpoint hook would need `matchMedia`,
+   which the server does not have, so the first paint would be the wrong grid and
+   hydration would swap it — a visible reshuffle on every load of the page the
+   product opens on. Each cell instead carries all three geometries as custom
+   properties and the media query picks one. No JavaScript, no flash, no
+   server/client mismatch to reconcile.
+
+   `grid-auto-rows` is 24px against a 16px gap, which is a PITCH of 40 — the
+   `ROW_UNIT_PX` the resize gesture converts pixels to rows with. The two numbers
+   are one fact spelled two ways, and src/lib/board/grid.ts owns it; a tile `h`
+   rows tall measures `h * 40 - 16` px. If they ever disagree, a tile settles a
+   row away from where it was dropped.
+
+   The cells are placed on explicit grid lines, so DOM order does not decide
+   position — it decides TAB order, and it is the desktop reading order at every
+   width, which is the only order that is honest on a phone. */
+.board-canvas {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  grid-auto-rows: 24px;
+  gap: 16px;
+}
+.board-cell {
+  grid-column: var(--c1);
+  grid-row: var(--r1);
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .board-canvas {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .board-cell {
+    grid-column: var(--c6);
+    grid-row: var(--r6);
+  }
+}
+@media (min-width: 1024px) {
+  .board-canvas {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+  .board-cell {
+    grid-column: var(--c12);
+    grid-row: var(--r12);
+  }
+}
+
 /* Tabular numerals, opt-in per element — never global, per every reference
    product (Stripe: "tnum" on metric spans only). For numbers that update in
    place: a metric that reflows as it ticks reads as jitter, not change. */
