@@ -219,7 +219,13 @@ export function useCanvasDrag(
       const onUp = () => finish(true);
       const onAbort = () => finish(false);
       const onKey = (ev: KeyboardEvent) => {
-        if (ev.key === "Escape") finish(false);
+        if (ev.key !== "Escape") return;
+        // A LIVE GESTURE OWNS ESCAPE. The tile settings panel also listens for
+        // it, on the window, and both fired — cancelling the drag AND closing a
+        // panel nobody asked to close. Marking the event consumed lets the
+        // outer listener stand down; it costs nothing when no panel is open.
+        ev.preventDefault();
+        finish(false);
       };
 
       window.addEventListener("pointermove", onMove);

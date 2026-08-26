@@ -217,6 +217,76 @@ describe("changing what a chart is", () => {
     expect((await row(id)).config).toEqual({ color: "teal", limit: 5 });
   });
 
+  it("writes a whole presentation bag, merging rather than replacing", async () => {
+    /**
+     * THE PANEL'S WRITE PATH. Every setting now goes through the mechanism the
+     * title's clear-on-empty invented, so the two cannot drift — and the merge
+     * happens in Postgres rather than here, because a read-modify-write would
+     * lose an edit made in another tab between the two statements.
+     */
+    const id = await seed();
+    await setCustomTileAction(id, { config: { color: "teal", precision: 2 } });
+    expect((await row(id)).config).toEqual({ color: "teal", precision: 2 });
+
+    // A second write touches only its own keys.
+    await setCustomTileAction(id, { config: { limit: 5 } });
+    expect((await row(id)).config).toEqual({ color: "teal", precision: 2, limit: 5 });
+  });
+
+  it("removes exactly the keys it was asked to clear", async () => {
+    const id = await seed();
+    await setCustomTileAction(id, { config: { color: "teal", precision: 2, target: 40 } });
+
+    await setCustomTileAction(id, { clear: ["target"] });
+    expect((await row(id)).config).toEqual({ color: "teal", precision: 2 });
+
+    // Clearing is how "follow the metric again" is spelled — storing a zero
+    // would be a goal of nothing, which is a different claim.
+    expect((await row(id)).config).not.toHaveProperty("target");
+  });
+
+  it("sets and clears in ONE statement, and a key in both ends up set", async () => {
+    const id = await seed();
+    await setCustomTileAction(id, { config: { color: "teal", limit: 5 } });
+    await setCustomTileAction(id, { config: { color: "olive" }, clear: ["limit", "color"] });
+    // Removal is applied first, then the overlay — the only reading of a single
+    // patch that makes sense.
+    expect((await row(id)).config).toEqual({ color: "olive" });
+  });
+
+  it("preserves a key this build has never heard of", async () => {
+    /**
+     * The forward half of the compatibility promise. `parseTileConfig` ignores
+     * unknown keys on READ; `||` must not strip them on WRITE, or today's build
+     * editing a colour would silently delete a setting tomorrow's build added.
+     */
+    const id = await seed();
+    await db
+      .update(dashboardTiles)
+      .set({ config: { color: "teal", sparkleMode: "extreme" } })
+      .where(eq(dashboardTiles.id, id));
+
+    await setCustomTileAction(id, { config: { precision: 1 } });
+    expect((await row(id)).config).toEqual({ color: "teal", sparkleMode: "extreme", precision: 1 });
+  });
+
+  it("refuses a setting it cannot parse instead of silently dropping it", async () => {
+    /**
+     * `parseTileConfig` drops what it cannot read — right for a row written by
+     * an older build, WRONG for accepting a write: a panel sending a bad limit
+     * would get `{ ok: true }` and no limit, and the control would look broken
+     * with nothing to blame. Shrinkage is refused out loud.
+     */
+    const id = await seed();
+    expect((await setCustomTileAction(id, { config: { limit: 999 } })).ok).toBe(false);
+    expect((await setCustomTileAction(id, { config: { color: "not-a-colour" } })).ok).toBe(false);
+    expect((await setCustomTileAction(id, { config: { rangeKey: "upcoming" } })).ok).toBe(false);
+    expect((await setCustomTileAction(id, { config: { nonsense: 1 } })).ok).toBe(false);
+    expect((await setCustomTileAction(id, { clear: ["nonsense"] })).ok).toBe(false);
+    // None of the refusals wrote anything.
+    expect((await row(id)).config).toEqual({});
+  });
+
   it("refuses a chart it cannot draw, a key it cannot parse, and another org's row", async () => {
     const id = await seed();
     expect((await setCustomTileAction(id, { chart: "sunburst" })).ok).toBe(false);

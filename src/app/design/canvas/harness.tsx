@@ -3,6 +3,8 @@
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CustomBoard, type CanvasActions, type CanvasTile } from "@/app/dashboard/custom-board";
+import { TileConfigPanel } from "@/app/dashboard/tile-config-panel";
+import type { TileConfig } from "@/lib/board/tile-config";
 import type { CustomTileOption } from "@/lib/board/types";
 
 /**
@@ -49,6 +51,7 @@ export function CanvasHarness({ tiles: initial, options }: { tiles: CanvasTile[]
       ...prev,
       {
         id: `sim-remote-${n}`,
+        tileKey: `flow:sim:${n}`,
         x: 0,
         y: 99,
         w: 3,
@@ -68,7 +71,10 @@ export function CanvasHarness({ tiles: initial, options }: { tiles: CanvasTile[]
   const remoteDelete = () => setTiles((prev) => prev.slice(0, -1));
 
   return (
-    <div>
+    /* `data-canvas-harness` scopes the browser check to the LIVE board: the
+       gallery above mounts panel specimens carrying the same `data-tile-panel`
+       hook, and an unscoped locator matched all three. */
+    <div {...{ "data-canvas-harness": "" }}>
       <div className="mb-3 flex gap-2">
         <Button variant="secondary" size="sm" onClick={remoteAdd} {...{ "data-canvas-sim": "add" }}>
           Simulate remote add
@@ -78,6 +84,55 @@ export function CanvasHarness({ tiles: initial, options }: { tiles: CanvasTile[]
         </Button>
       </div>
       <CustomBoard viewId="design" tiles={tiles} options={options} rangeKey="today" canEdit actions={actions} />
+    </div>
+  );
+}
+
+/**
+ * THE TILE SETTINGS PANEL, SHOWN IN PLACE RATHER THAN OVER EVERYTHING.
+ *
+ * The panel is `fixed` — correct on the dashboard, where it is an overlay
+ * pinned to the viewport — and that would make a gallery specimen hover over
+ * the whole design page forever. The wrapper below has a transform on it, and
+ * a transformed ancestor becomes the containing block for its fixed
+ * descendants, so the real component with its real classes lays out inside the
+ * box instead. Nothing about the panel is changed to be photographable, which
+ * is the only way a specimen stays honest.
+ *
+ * Both tabs are mounted side by side because a screenshot cannot click.
+ */
+export function PanelSpecimen({ options }: { options: CustomTileOption[] }) {
+  const [config, setConfig] = useState<TileConfig>({ color: "teal", showDelta: true });
+  const apply = (set: TileConfig, clear?: Array<keyof TileConfig>) =>
+    setConfig((c) => {
+      const next: Record<string, unknown> = { ...c, ...set };
+      for (const k of clear ?? []) delete next[k];
+      return next as TileConfig;
+    });
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {(["data", "style"] as const).map((tab) => (
+        <div key={tab} className="relative h-[600px] overflow-hidden rounded-surface [transform:translateZ(0)]">
+          <TileConfigPanel
+            chart="bar"
+            charts={["number", "line", "area", "bar", "category", "table"]}
+            config={config}
+            metricName="Booked Leads"
+            tileKey="flow:demo:t1"
+            metricTarget={20}
+            isFlow
+            boardRange="7d"
+            options={options}
+            busy={false}
+            initialTab={tab}
+            onClose={() => {}}
+            onChart={() => {}}
+            onMetric={() => {}}
+            onConfig={apply}
+          />
+        </div>
+      ))}
     </div>
   );
 }

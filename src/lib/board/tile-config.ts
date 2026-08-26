@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
+import { MATERIALIZED_RANGES, type RangeKey } from "@/lib/metrics/range";
+import type { ChartId } from "./charts";
 
 /**
  * A CUSTOM TILE'S PRESENTATION — everything about HOW its number is shown,
@@ -33,7 +35,7 @@ const KEYS = {
   /** Decimal places, capped where legibility ends. */
   precision: z.number().int().min(0).max(4),
   /** A GROUP_ACCENT key — a key, not a hex, so a palette re-solve restyles every board at once. */
-  color: z.string().refine((c) => c in GROUP_ACCENT),
+  color: z.string().refine((c) => Object.hasOwn(GROUP_ACCENT, c)),
   /** The tile's own goal. Seeded from the flow's target; null clears it. */
   target: z.number().finite().nullable(),
   showDelta: z.boolean(),
@@ -46,6 +48,18 @@ const KEYS = {
   limit: z.number().int().min(1).max(50),
   donut: z.boolean(),
   legend: z.enum(["right", "bottom", "none"]),
+  /**
+   * THIS TILE'S OWN PERIOD, overriding the board's pills.
+   *
+   * Costs nothing to store and nothing to compute: every materialized range
+   * already rides in the tile's `byRange`, so an override is a different key
+   * read from data the client is holding — no round trip, no second query.
+   * FLOW TILES ONLY, and that is a hard limit rather than a policy: a classic
+   * metric is computed live for the ONE range the page resolved, so a stored
+   * override would be read against a window nobody computed. The panel does
+   * not offer it for classic tiles and the renderer ignores it for them.
+   */
+  rangeKey: z.enum(MATERIALIZED_RANGES as [RangeKey, ...RangeKey[]]),
 } as const;
 
 export type TileConfig = { [K in keyof typeof KEYS]?: z.infer<(typeof KEYS)[K]> };
@@ -92,7 +106,13 @@ export function parseTileConfig(raw: unknown): TileConfig {
  * attribute. The same argument `node-accent.ts` makes for group colours.
  */
 export function accentOf(color?: string): string {
-  return color && color in GROUP_ACCENT ? GROUP_ACCENT[color] : "var(--color-brand-600)";
+  /**
+   * `Object.hasOwn`, not `in` — `in` walks the prototype chain, so "constructor"
+   * and "toString" passed the schema and then resolved to a FUNCTION here,
+   * which React stringifies into the style attribute. An own-property check
+   * closes the write path and degrades anything already stored to the default.
+   */
+  return color && Object.hasOwn(GROUP_ACCENT, color) ? GROUP_ACCENT[color] : "var(--color-brand-600)";
 }
 
 /**
@@ -111,4 +131,66 @@ export const SLICE_ORDER = ["blue", "orange", "teal", "violet", "amber", "indigo
 export function sliceAccent(index: number, label?: string): string {
   if (label === "Other") return GROUP_ACCENT.grey;
   return GROUP_ACCENT[SLICE_ORDER[index % SLICE_ORDER.length]] ?? GROUP_ACCENT.grey;
+}
+
+/**
+ * WHICH SETTINGS EACH CHART ACTUALLY USES — one table, read by BOTH sides.
+ *
+ * The panel reads it to decide what to OFFER; the renderer reads it to decide
+ * what to HONOUR. That is the whole point of writing it down once, and it is
+ * the same rule `chartsFor` enforces one level up: a question asked in two
+ * places gets two answers eventually.
+ *
+ * The failure it prevents is specific and quiet. Set a colour on a bar chart,
+ * switch the tile to a pie, and the stored `color` is still there — the pie
+ * draws from `SLICE_ORDER` and cannot use it. Without this table the panel
+ * would keep showing a colour picker that changes nothing, which is a control
+ * lying about what it does. With it, the picker is simply not offered, and
+ * `honoured()` drops the key before the mark ever sees it, so a stale setting
+ * from a previous chart cannot leak into the next one either.
+ *
+ * A key is listed ONLY where the mark reads it — checked against the marks:
+ * `PieChart` and `GoalBar` take no accent, so `pie` and `progress` offer no
+ * colour; `FunnelView` takes nothing but its result, so `funnel` offers only
+ * the two settings every tile has; `ChartTable` formats nothing itself, so it
+ * takes `precision` (which reaches it through the format bag) but not `sort`
+ * or `limit`, which it does not apply.
+ *
+ * `title` and `rangeKey` are on every chart because they are properties of the
+ * TILE rather than of the drawing. `rangeKey` is additionally gated on the
+ * source being a flow — see its note above; that is a fact about the data, not
+ * about the chart, so it lives at the call site rather than in this table.
+ */
+const EVERY_TILE = ["title", "rangeKey"] as const;
+
+export const CONFIG_FIELDS = {
+  number: [...EVERY_TILE, "color", "precision", "showDelta", "showSpark", "showGoal", "target"],
+  line: [...EVERY_TILE, "color", "precision", "showGoal", "target"],
+  area: [...EVERY_TILE, "color", "precision", "showGoal", "target"],
+  bar: [...EVERY_TILE, "color", "precision", "showGoal", "target", "showLabels"],
+  category: [...EVERY_TILE, "color", "precision", "sort", "limit"],
+  pie: [...EVERY_TILE, "precision", "limit", "donut", "legend"],
+  progress: [...EVERY_TILE, "precision", "target"],
+  funnel: [...EVERY_TILE],
+  pipeline: [...EVERY_TILE, "color"],
+  table: [...EVERY_TILE, "precision"],
+} as const satisfies Record<ChartId, readonly (keyof TileConfig)[]>;
+
+/** What this chart offers, in the order the panel should show it. */
+export function fieldsFor(chart: ChartId): readonly (keyof TileConfig)[] {
+  return CONFIG_FIELDS[chart] ?? EVERY_TILE;
+}
+
+/**
+ * The config a chart is allowed to see — every other key dropped.
+ *
+ * The renderer calls this instead of reading the raw bag, so a setting left
+ * behind by a previous chart cannot change what the current one draws. Cheap
+ * enough to run per render: ten keys, one pass.
+ */
+export function honoured(chart: ChartId, config: TileConfig): TileConfig {
+  const allowed = new Set<string>(fieldsFor(chart));
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(config)) if (allowed.has(k)) out[k] = v;
+  return out as TileConfig;
 }

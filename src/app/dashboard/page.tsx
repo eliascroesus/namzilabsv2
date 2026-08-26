@@ -626,6 +626,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       w: row.w,
       h: row.h,
       chart: row.chart,
+      tileKey: row.tileKey,
       metricName: stored.name ?? classic?.metric.name ?? "Untitled",
       // Through the one parser, so a corrupt bag costs its own keys and
       // nothing else. The CLIENT derives the title — it owns the optimistic

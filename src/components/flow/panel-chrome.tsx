@@ -21,8 +21,15 @@
  */
 export const PANEL_SHELL ="flex flex-col overflow-hidden rounded-surface border border-border bg-card shadow-surface";
 
-/** Set the step up, then run it. A step that cannot be run offers only the first. */
-export type PanelTab ="configure" |"test";
+/**
+ * Set the step up, then run it. A step that cannot be run offers only the first.
+ *
+ * This is the FLOW BUILDER's tab vocabulary, and it stays named here because it
+ * is a fact about a step panel — not about tab rows in general. `PanelTabs`
+ * below is generic over its ids, so the dashboard's tile panel brings its own
+ * two words without either side learning the other's.
+ */
+export type PanelTab = "configure" | "test";
 
 /**
  * The tab row. `data-config-tabs` is load-bearing — the field browser measures
@@ -31,15 +38,22 @@ export type PanelTab ="configure" |"test";
  * The active underline is `primary`. It was brand-500, one step off the
  * product's own accent — and this is the single accent moment in the panel,
  * which is the one place two almost-identical blues cannot be afforded.
+ *
+ * GENERIC OVER ITS IDS rather than fixed to `PanelTab`. The repo had three tab
+ * implementations and no primitive; a second panel that needed two different
+ * words would have made it four. `T extends string` costs nothing at either
+ * call site — `tabs={["configure", "test"]}` still infers the narrow union, so
+ * a typo in `active` is still a type error — and it means the next panel
+ * reuses this row instead of copying it.
  */
-export function PanelTabs({
- tabs,
- active,
- onSelect,
+export function PanelTabs<T extends string>({
+  tabs,
+  active,
+  onSelect,
 }: {
- tabs: readonly PanelTab[];
- active: PanelTab;
- onSelect: (tab: PanelTab) => void;
+  tabs: readonly T[];
+  active: T;
+  onSelect: (tab: T) => void;
 }) {
  return (
  <div data-config-tabs className="flex gap-5 border-b border-border bg-card px-5">

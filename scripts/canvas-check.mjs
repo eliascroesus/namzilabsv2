@@ -60,7 +60,11 @@ console.log("\na SUCCESSFUL add must not crash the page");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   // ONE press: the chart lands immediately, bound to the first metric that can
   // draw it. There is no metric step — that decision moved onto the tile.
-  await page.getByRole("button", { name: /Single number/ }).click();
+  //
+  // Addressed by `data-add-chart` rather than by its label: the settings panel
+  // lists chart types too, so "Single number" now names two buttons on this
+  // page and a label match resolved to both.
+  await page.locator("[data-add-chart='number']").click();
   await page.waitForTimeout(400);
   check(
     (await page.locator("div[role='dialog']").count()) === 0,
@@ -116,6 +120,92 @@ console.log("\na tile added elsewhere appears without a reload");
   await page.locator("[data-canvas-sim='add']").click();
   await page.waitForTimeout(300);
   check((await cellCount()) === before + 1, "membership reconciles from the prop");
+}
+
+// ── the tile settings panel ─────────────────────────────────────────────────
+console.log("\nclicking a tile opens its settings — and nothing else does");
+{
+  await load();
+  // t3 is the BAR tile, chosen deliberately: its mark reads the accent, so an
+  // optimistic colour change is visible in its markup. A scorecard's colour
+  // only reaches its trend line, and asserting against one proved nothing.
+  const cell = page.locator("[data-canvas] [data-canvas-cell='t3']");
+  // Scoped to the live board — the gallery above shows panel specimens too.
+  const panel = page.locator("[data-canvas-harness] [data-tile-panel]");
+
+  // A PLAIN CLICK on the card opens it. This is the whole gesture, and it is
+  // only possible because `swallowClick` already tells a click from a drag.
+  const box = await cell.boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(300);
+  check((await panel.count()) === 1, "a click on the card opens the panel");
+
+  // It opens on Data, because a freshly added chart is bound to whichever
+  // metric could draw it and "is this the right one?" is the standing question.
+  check((await panel.getByRole("button", { name: "style" }).count()) === 1, "both tabs are there");
+  await panel.getByRole("button", { name: "style" }).click();
+  await page.waitForTimeout(250);
+  check((await panel.getByText("Colour", { exact: true }).count()) === 1, "Style carries the colour swatches");
+
+  // AN OPTIMISTIC WRITE: the harness's editTile answers `{ ok: true }` and
+  // echoes nothing, so anything that appears came from the overlay alone.
+  const before = await cell.innerHTML();
+  await panel.getByRole("button", { name: "olive", exact: true }).click();
+  await page.waitForTimeout(500);
+  check((await cell.innerHTML()) !== before, "the colour applies without waiting for the server");
+
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+  check((await panel.count()) === 0, "Escape closes it");
+
+  // THE TWO WAYS IT MUST NOT OPEN. `swallowClick` is read-and-clear and click
+  // BUBBLES, so a kebab press that consumed the flag there would leave the
+  // cell handler to read `false` and open the panel as the event rose. The
+  // control guard is what stops it, and this is the check that would notice.
+  const kebab = page.locator("button[aria-label^='Options for']").first();
+  await kebab.click();
+  await page.waitForTimeout(250);
+  check((await panel.count()) === 0, "the kebab opens its menu, not the panel");
+
+  // AND NEITHER DOES THE MENU'S PROSE. `Popover` renders its panel inline —
+  // `fixed` moves where it paints, not where it sits — so everything in the
+  // menu is a DOM descendant of the cell. Pressing the kebab BUTTON was always
+  // caught by the cell guard's `button` clause; pressing a heading inside the
+  // open menu was not, and opened the settings panel behind it.
+  const heading = page.locator("[data-canvas] h2:text-is('Draw as')").first();
+  if (await heading.count()) {
+    await heading.click();
+    await page.waitForTimeout(250);
+    check((await panel.count()) === 0, "clicking the menu's own text does not open the panel");
+  } else {
+    check(false, "could not find the menu's heading to click");
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(150);
+
+  // THE POINTERLESS WAY IN. The card is a plain div, so the menu is the only
+  // route a keyboard has to any of these settings.
+  await kebab.click();
+  await page.waitForTimeout(250);
+  // Scoped to the live board AND exact: `name` matches a substring by default,
+  // so an unscoped "Chart settings" also hit the gallery specimens' "Close
+  // chart settings" buttons, which sit higher up the page.
+  await page.locator("[data-canvas]").getByRole("button", { name: "Chart settings", exact: true }).click();
+  await page.waitForTimeout(300);
+  check((await panel.count()) === 1, "the menu offers Chart settings, so a keyboard can reach it");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+
+  // A DRAG must not open it either — the click that ends a gesture is swallowed.
+  const b2 = await cell.boundingBox();
+  await page.mouse.move(b2.x + b2.width / 2, b2.y + b2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b2.x + b2.width / 2 + 260, b2.y + b2.height / 2 + 40, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  check((await panel.count()) === 0, "a drag does not open the panel");
+
+  check(errors.length === 0, "no uncaught page errors around the panel", errors.join(" · "));
 }
 
 // ── the gestures, unchanged from the ad-hoc script ──────────────────────────

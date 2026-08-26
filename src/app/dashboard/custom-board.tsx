@@ -20,6 +20,7 @@ import {
   Plus,
   Repeat,
   Rows3,
+  SlidersHorizontal,
   Table as TableIcon,
   Target,
   TrendingUp,
@@ -39,6 +40,7 @@ import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
 import { CANVAS_ATTR, CELL_ATTR, HANDLE_ATTR, useCanvasDrag } from "./canvas-drag";
 import { useSettle } from "./board-settle";
 import { MetricPicker } from "./add-tile-picker";
+import { TileConfigPanel } from "./tile-config-panel";
 import {
   addCustomTileAction,
   deleteCustomTileAction,
@@ -95,6 +97,12 @@ export type CanvasTile = GridBox & {
   data: CustomTileSource | null;
   /** What it is drawn as now, so the menu can tick the current one. */
   chart: string;
+  /**
+   * WHICH METRIC IT POINTS AT. The panel's metric list ticks the current one,
+   * and a list of candidates with nothing marked cannot say where you already
+   * are — which is the difference between choosing and re-choosing.
+   */
+  tileKey: string;
   /** What its METRIC could be drawn as — computed on the server by `chartsFor`. */
   charts: string[];
   /** The metric's own name — the fallback when no title override is set. */
@@ -191,14 +199,24 @@ export function CustomBoard({
         const t = tilesRef.current.find((x) => x.id === id);
         if (!t) continue;
         const chartCaught = o.chart === undefined || o.chart === t.chart;
-        const titleCaught = o.config?.title === undefined ? true : o.config.title === t.config.title;
-        if (chartCaught && titleCaught) next.delete(id);
+        /**
+         * EVERY key the overlay carries, not just the title. An entry retires
+         * when the prop agrees with all of it — including a cleared key, whose
+         * overlay value is `undefined` and whose settled prop value is also
+         * `undefined`, so the same comparison covers both directions.
+         */
+        const bag = t.config as Record<string, unknown>;
+        const configCaught =
+          !o.config || Object.entries(o.config).every(([k, v]) => bag[k] === v);
+        if (chartCaught && configCaught) next.delete(id);
       }
       return next.size === m.size ? m : next;
     });
   }, [tiles]);
   /** The id of the tile being repointed at a different metric, if any. */
   const [repointing, setRepointing] = useState<string | null>(null);
+  /** Which tile's settings are open. One at a time — the panel is one panel. */
+  const [configuring, setConfiguring] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -324,9 +342,18 @@ export function CustomBoard({
     [applyLayout],
   );
 
-  /** Chart, metric and name are one partial update of one already-walled row. */
+  /** Chart, metric, name and every presentation key are one partial update. */
   const editTile = useCallback(
-    (id: string, patch: { chart?: string; tileKey?: string; title?: string }) => {
+    (
+      id: string,
+      patch: {
+        chart?: string;
+        tileKey?: string;
+        title?: string;
+        config?: TileConfig;
+        clear?: Array<keyof TileConfig>;
+      },
+    ) => {
       /**
        * A METRIC REPOINT is the one edit whose DATA lives on the server — the
        * new metric's slices have to be fetched — so it refreshes. Chart and
@@ -341,21 +368,73 @@ export function CustomBoard({
       let prev: { chart?: string; config?: TileConfig } | undefined;
       setOverlay((m) => {
         prev = m.get(id);
+        /**
+         * A CLEARED KEY IS CARRIED AS AN EXPLICIT `undefined`, not as an
+         * absence. The overlay is spread OVER the server's bag, so a key that
+         * is merely missing falls through to the stored value — which would
+         * make "clear the goal" look like nothing happened until the refresh
+         * landed. Spreading `{ target: undefined }` shadows it immediately.
+         */
+        const cleared = Object.fromEntries((patch.clear ?? []).map((k) => [k, undefined]));
+        const touched = patch.config || patch.clear || patch.title !== undefined;
         const next = new Map(m);
         next.set(id, {
           ...prev,
           ...(patch.chart !== undefined ? { chart: patch.chart } : {}),
-          ...(patch.title !== undefined
-            ? { config: { ...prev?.config, title: patch.title.trim() || undefined } }
+          ...(touched
+            ? {
+                config: {
+                  ...prev?.config,
+                  ...(patch.title !== undefined ? { title: patch.title.trim() || undefined } : {}),
+                  ...patch.config,
+                  ...cleared,
+                },
+              }
             : {}),
         });
         return next;
       });
+      /**
+       * REVERT ONLY THE KEYS THIS WRITE TOUCHED — which is what `useSettle`'s
+       * own note promises ("never a whole snapshot, because a neighbouring
+       * gesture may be in flight") and what putting `prev` back wholesale
+       * quietly broke the moment there was more than one setting to change.
+       *
+       * Two edits are trivially concurrent here: nothing disables the panel
+       * while a write is out, so a colour and a toggle 200ms apart are both in
+       * flight. Restoring a snapshot then does one of two wrong things —
+       * it discards a NEIGHBOUR THAT SUCCEEDED (its value vanishes from the
+       * screen, and no refresh brings it back, because a config write moves
+       * neither `resultsVersion` nor `router`), or it REINSTATES A FAILED
+       * edit's value from the snapshot the later edit captured, leaving an
+       * overlay key the server will never agree with — so the retire effect
+       * can never delete it and the tile is wrong until a reload.
+       */
+      const touched: Array<keyof TileConfig> = [
+        ...(patch.title !== undefined ? (["title"] as Array<keyof TileConfig>) : []),
+        ...(Object.keys(patch.config ?? {}) as Array<keyof TileConfig>),
+        ...(patch.clear ?? []),
+      ];
       settle(act.editTile(id, patch), () =>
         setOverlay((m) => {
+          const cur = m.get(id);
+          if (!cur) return m;
+          const config: Record<string, unknown> = { ...cur.config };
+          for (const k of touched) {
+            // `k in prev.config` rather than a truthiness test: a CLEARED key
+            // is stored as an explicit `undefined`, and putting that back is
+            // different from deleting the key.
+            if (prev?.config && k in prev.config) config[k] = (prev.config as Record<string, unknown>)[k];
+            else delete config[k];
+          }
+          const chart = patch.chart !== undefined ? prev?.chart : cur.chart;
           const next = new Map(m);
-          if (prev) next.set(id, prev);
-          else next.delete(id);
+          if (chart === undefined && Object.keys(config).length === 0) next.delete(id);
+          else
+            next.set(id, {
+              ...(chart !== undefined ? { chart } : {}),
+              ...(Object.keys(config).length > 0 ? { config: config as TileConfig } : {}),
+            });
           return next;
         }),
       );
@@ -370,6 +449,10 @@ export function CustomBoard({
       // the addition reconcile would put the box straight back, and the delete
       // would appear to do nothing until the next refresh.
       pending.current.removes.add(id);
+      // And close its settings if they are open. `configuring` is only read
+      // through `byId`, so a stale id renders nothing — but it also never
+      // clears, and the panel would come back the moment an id was reused.
+      setConfiguring((c) => (c === id ? null : c));
       setLayout((prev) => {
         undo = prev.find((b) => b.id === id);
         return prev.filter((b) => b.id !== id);
@@ -399,7 +482,14 @@ export function CustomBoard({
         {
           ...t,
           chart: o.chart ?? t.chart,
-          config: o.config ? { ...t.config, ...o.config, title: o.config.title } : t.config,
+          /**
+           * A PLAIN SPREAD, and the `title: o.config.title` that used to follow
+           * it is gone. It was a no-op while the title was the only key the
+           * overlay ever carried, and a bug the moment it was not: it forced
+           * the title to the overlay's value even when this edit had only
+           * touched a colour, wiping a name the server still had.
+           */
+          config: o.config ? { ...t.config, ...o.config } : t.config,
         },
       ] as const;
     }),
@@ -408,7 +498,21 @@ export function CustomBoard({
   const empty = cells.length === 0;
 
   return (
-    <div ref={rootRef}>
+    <div
+      ref={rootRef}
+      /**
+       * THE BOARD GIVES BACK THE SPACE THE PANEL TAKES. The panel is pinned to
+       * the viewport, so without this it simply sits ON TOP of the right-hand
+       * tiles — including, on a wide board, the very tile being configured.
+       * Padding the board narrows its columns and the grid reflows, so what is
+       * being edited stays visible while it is edited.
+       *
+       * `xl:` only: below that the board is already one or two columns wide and
+       * squeezing it further would be worse than the overlap. The transition
+       * matches the kit's own so the reflow reads as one movement.
+       */
+      className={`transition-[padding] duration-(--duration-fast) ${configuring && canEdit ? "xl:pr-[25rem]" : ""}`}
+    >
       {/* The controls row, in the same place and shape the groups board puts it:
           the view strip on the left, the one door on the right. On a canvas
           that door reads "Add" rather than "New group". */}
@@ -454,6 +558,30 @@ export function CustomBoard({
                 if ((e.target as HTMLElement).closest(`button, a, input, [${HANDLE_ATTR}]`)) return;
                 onPointerDown(e, { id: tile.id, mode: "move" });
               }}
+              onClick={(e) => {
+                if (!canEdit) return;
+                /**
+                 * OPEN THE SETTINGS — guarded twice, for two different reasons.
+                 *
+                 * `swallowClick` is READ-AND-CLEAR, and it is consumed FIRST,
+                 * before the control guard — because a guard that returns
+                 * early leaves the flag set for the NEXT click. A resize proves
+                 * it: the grip takes pointer capture, so the terminal click
+                 * retargets to the grip, the guard matched `[data-canvas-handle]`
+                 * and returned, and the stale flag then swallowed the next
+                 * ordinary click, which did nothing at all.
+                 *
+                 * The CONTROL guard still decides what to DO: a click that came
+                 * from a button, a link or the grip is that control's business.
+                 * The tile menu is handled at its own wrapper — its popover is
+                 * a DOM descendant of this cell (no portal), so its text is not
+                 * a `button` and would otherwise bubble to here.
+                 */
+                const wasDrag = swallowClick();
+                if ((e.target as HTMLElement).closest(`button, a, input, [${HANDLE_ATTR}]`)) return;
+                if (wasDrag) return;
+                if (byId.has(tile.id)) setConfiguring(tile.id);
+              }}
             >
               {/* THE GUARD THE CRASH CAME THROUGH. `byId` is the live prop and
                   `tile.id` is the reconciled layout, and in the add window the
@@ -466,6 +594,7 @@ export function CustomBoard({
                   index={i}
                   onChart={(c) => editTile(tile.id, { chart: c })}
                   onRename={(t) => editTile(tile.id, { title: t })}
+                  onConfigure={() => setConfiguring(tile.id)}
                   onChangeMetric={() => setRepointing(tile.id)}
                   onNudge={(dx, dy) => nudge(tile.id, dx, dy)}
                   onResize={(w, h) => resize(tile.id, w, h)}
@@ -507,6 +636,42 @@ export function CustomBoard({
           ))}
         </div>
       )}
+
+      {configuring &&
+        canEdit &&
+        (() => {
+          /* The tile may have been deleted in another tab while the panel was
+             open — the same prop-lag window the crash came through. No row, no
+             panel, rather than a panel reading `.config` off undefined. */
+          const t = byId.get(configuring);
+          if (!t) return null;
+          const flow = t.data?.kind === "flow";
+          const stored = flow ? ((t.data as { tile?: { target?: number | null } }).tile ?? {}) : null;
+          return (
+            <TileConfigPanel
+              /* Keyed by tile: the panel holds uncontrolled drafts (the name
+                 field, the number rows), and re-targeting one instance at
+                 another tile would carry them across. */
+              key={configuring}
+              chart={t.chart}
+              charts={t.charts}
+              config={t.config}
+              metricName={t.metricName}
+              tileKey={t.tileKey}
+              metricTarget={
+                flow ? stored?.target : t.data?.kind === "classic" ? t.data.target : null
+              }
+              isFlow={flow}
+              boardRange={rangeKey}
+              options={options}
+              busy={busy}
+              onClose={() => setConfiguring(null)}
+              onChart={(c) => editTile(configuring, { chart: c })}
+              onMetric={(tileKey) => editTile(configuring, { tileKey })}
+              onConfig={(set, clear) => editTile(configuring, { config: set, clear })}
+            />
+          );
+        })()}
 
       {repointing && (
         /* The chart is staying; only the data under it moves — and the list is
@@ -588,6 +753,7 @@ function AddChartMenu({
           return (
             <Button
               key={c.id}
+              {...{ "data-add-chart": c.id }}
               variant="ghost"
               size="sm"
               disabled={busy || !first}
@@ -648,6 +814,7 @@ function TileMenu({
   index,
   onChart,
   onRename,
+  onConfigure,
   onChangeMetric,
   onNudge,
   onResize,
@@ -659,6 +826,8 @@ function TileMenu({
   /** True when the press that just ended was a drag, so it must not open this. */
   swallowClick: () => boolean;
   onChart: (c: ChartId) => void;
+  /** Open the settings panel — the menu is the path a keyboard can take. */
+  onConfigure: () => void;
   onRename: (title: string) => void;
   onChangeMetric: () => void;
   onNudge: (dx: number, dy: number) => void;
@@ -688,7 +857,29 @@ function TileMenu({
   const legal = CHARTS.filter((c) => tile.charts.includes(c.id));
 
   return (
-    <div className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-(--duration-fast) focus-within:opacity-100 group-hover/cell:opacity-100 pointer-coarse:opacity-100">
+    <div
+      /**
+       * THE MENU'S POINTER EVENTS ARE THE MENU'S — and POINTERDOWN is the
+       * load-bearing half, which is not obvious.
+       *
+       * `Popover` renders its panel inline rather than through a portal
+       * (`position: fixed` moves where it paints, not where it sits), so
+       * everything in the menu is a descendant of the tile's cell. The cell's
+       * guard skips `button, a, input`, and the menu's PROSE is none of those —
+       * so pressing the "Draw as" heading STARTED A DRAG of the tile behind it.
+       * That gesture then called `setPointerCapture` on the cell, which
+       * retargets the eventual click to the cell too: a `click` guard alone
+       * never ran, because by then the event's target was no longer inside this
+       * div. The trace showed the bubble path beginning at the cell.
+       *
+       * Stopping both here covers the anchor and the panel at once, this div
+       * being the one ancestor of both, and fixes the older half as well: the
+       * tile no longer creeps when a menu press wanders.
+       */
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-(--duration-fast) focus-within:opacity-100 group-hover/cell:opacity-100 pointer-coarse:opacity-100"
+    >
       <Popover
         open={open}
         setOpen={(o) => {
@@ -747,6 +938,18 @@ function TileMenu({
               Rename
             </Button>
           )}
+
+          {/* THE KEYBOARD'S WAY INTO THE PANEL. Clicking the card opens it, and
+              the card is a plain div — not focusable, no key handler — so
+              without this every setting the panel owns (period, colour,
+              decimals, goal, order, legend) was reachable by pointer only. The
+              kebab is already in the tab order, so the menu is where the
+              pointerless path belongs; making the whole card a button instead
+              would nest it inside the move gesture and around the grip. */}
+          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => act(onConfigure)}>
+            <SlidersHorizontal />
+            Chart settings
+          </Button>
 
           {legal.length > 1 && (
             <>

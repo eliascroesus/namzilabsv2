@@ -380,8 +380,13 @@ export function BoardColumn({
                      them with it. It never does. */
                   <div className="px-1.5 py-1">
                     <p className="text-tiny text-muted-foreground">
-                      Delete this group? Its {lane.tiles.length} metric{lane.tiles.length === 1 ? "" : "s"} move back to the
-                      row above.
+                      {/* ONE STRING: the space after a JSX expression is kept
+                          by esbuild and dropped by SWC when the text wraps, so
+                          this read "metricsmove back to the row above" in the
+                          browser. See `custom-tile.tsx` for the full account. */}
+                      {`Delete this group? Its ${lane.tiles.length} metric${
+                        lane.tiles.length === 1 ? "" : "s"
+                      } move back to the row above.`}
                     </p>
                     <div className="mt-2 flex gap-1.5">
                       <Button variant="destructive" size="sm" disabled={busy} onClick={() => onDelete(g.id)}>

@@ -12,7 +12,7 @@ import { effectiveAccess } from "@/lib/permissions";
 import { boardGroupCap, boardPlacementCap, boardTileCap, boardViewCap } from "@/lib/limits";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
 import { CHART_IDS, defaultSize } from "@/lib/board/charts";
-import { parseTileConfig } from "@/lib/board/tile-config";
+import { parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
 import type { BoardTileRow } from "@/lib/board/types";
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
 import type { BoardGroup } from "@/lib/board/types";
@@ -664,7 +664,7 @@ const titleSchema = z.string().trim().max(60, "That name is too long.");
  */
 export async function setCustomTileAction(
   id: string,
-  patch: { chart?: string; tileKey?: string; title?: string },
+  patch: { chart?: string; tileKey?: string; title?: string; config?: unknown; clear?: string[] },
 ): Promise<Result> {
   const ctx = await requireOrg();
   if (await blocked(ctx)) return fail(RANK_BLOCKS);
@@ -683,19 +683,71 @@ export async function setCustomTileAction(
     if (!k.success) return fail(k.error.issues[0]?.message ?? "Unknown metric.");
     next.tileKey = k.data;
   }
+
+  /**
+   * THE PRESENTATION BAG — set some keys, remove others, in ONE statement.
+   *
+   * `title` is no longer special. It was the first key to need "an empty value
+   * REMOVES the override rather than storing it", and every other setting needs
+   * the same thing for the same reason: a cleared goal must go back to
+   * following the flow's, not store a goal of nothing. So the title's mechanism
+   * became the general one, and the `title` argument is now just a shorthand
+   * that funnels into it — one code path, which is what stops the two drifting.
+   *
+   * MERGED, NEVER REPLACED, and the merge happens in POSTGRES rather than here.
+   * A read-modify-write would lose a concurrent edit from another tab between
+   * the two statements; `||` and `-` compose into one atomic update, and `||`
+   * preserves keys this build has never heard of, which is the forward half of
+   * the compatibility promise `parseTileConfig` makes on the read side.
+   */
+  const set: Record<string, unknown> = {};
+  const drop: string[] = [];
+
   if (patch.title !== undefined) {
     const t = titleSchema.safeParse(patch.title);
     if (!t.success) return fail(t.error.issues[0]?.message ?? "That name won't work.");
+    if (t.data) set.title = t.data;
+    else drop.push("title");
+  }
+
+  if (patch.config !== undefined) {
     /**
-     * MERGED, NEVER REPLACED. This used to write `{ title }` over the whole
-     * bag, which was harmless while the title was the only key and fatal the
-     * day it is not — renaming a tile would silently reset every other setting
-     * it carries. Postgres's own jsonb operators keep it one atomic statement:
-     * `||` overlays the patch, `-` removes the key when the name is cleared.
+     * VALIDATED BY THE SAME PARSER THE RENDERER USES, then checked for
+     * SHRINKAGE. `parseTileConfig` silently drops what it cannot parse — right
+     * for reading a row written by an older build, wrong for accepting a write:
+     * a panel sending a bad `limit` would get `{ ok: true }` and no limit. So
+     * anything that does not survive the parse is refused out loud instead.
      */
-    next.config = t.data
-      ? sql`${dashboardTiles.config} || ${JSON.stringify({ title: t.data })}::jsonb`
-      : sql`${dashboardTiles.config} - 'title'`;
+    const raw = patch.config;
+    if (typeof raw !== "object" || raw == null || Array.isArray(raw)) return fail("That setting won't work.");
+    const parsed = parseTileConfig(raw) as Record<string, unknown>;
+    const sent = Object.keys(raw as Record<string, unknown>);
+    const kept = new Set(Object.keys(parsed));
+    const rejected = sent.filter((k) => !kept.has(k));
+    if (rejected.length) return fail(`That setting won't work: ${rejected.join(", ")}.`);
+    Object.assign(set, parsed);
+  }
+
+  if (patch.clear !== undefined) {
+    // Every export of a "use server" module is a public endpoint, so the SHAPE
+    // is checked before it is used: `.filter` on a non-array throws, and a
+    // throw here escapes the try/catch below and rejects the action rather than
+    // returning a refusal the client knows how to show.
+    if (!Array.isArray(patch.clear)) return fail("That setting won't work.");
+    // Only keys this build KNOWS are removable — an arbitrary string here would
+    // let a caller strip anything out of the bag, including a future build's.
+    const unknown = patch.clear.filter((k) => !(TILE_CONFIG_KEYS as string[]).includes(k));
+    if (unknown.length) return fail(`That setting won't work: ${unknown.join(", ")}.`);
+    drop.push(...patch.clear);
+  }
+
+  if (drop.length || Object.keys(set).length) {
+    let expr = sql`${dashboardTiles.config}`;
+    // Remove first, then overlay: a key in both lists ends up SET, which is the
+    // only reading that makes sense for a single patch.
+    for (const key of drop) expr = sql`${expr} - ${key}`;
+    if (Object.keys(set).length) expr = sql`${expr} || ${JSON.stringify(set)}::jsonb`;
+    next.config = expr;
   }
 
   try {

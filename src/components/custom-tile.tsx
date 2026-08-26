@@ -15,7 +15,8 @@ import { Pipeline } from "@/components/board-charts/pipeline";
 import { ChartTable } from "@/components/board-charts/table";
 import { ChartHover } from "@/components/chart-hover";
 import { asChartId, chartsFor, shapeOfClassic, shapeOfTile, type ChartId } from "@/lib/board/charts";
-import { accentOf, type TileConfig } from "@/lib/board/tile-config";
+import { accentOf, honoured, type TileConfig } from "@/lib/board/tile-config";
+import { RANGE_OPTIONS } from "@/lib/metrics/range";
 import { bucketLabel, type BucketUnit } from "@/lib/board/scale";
 import type { AggregateResult, FunnelResult } from "@/lib/metrics/compute";
 import type { ImportCoverage } from "@/connectors/types";
@@ -110,13 +111,14 @@ function DeadTile({ title }: { title: string }) {
 export function CustomTile({
   chart: rawChart,
   title,
-  rangeKey,
+  rangeKey: boardRange,
   source,
-  config = {},
+  config: rawConfig = {},
   cols = 6,
 }: {
   chart: string;
   title: string;
+  /** The BOARD's period. A tile may override it — see `config.rangeKey`. */
   rangeKey: string;
   source: CustomTileSource | null;
   /** The tile's presentation. Facts stay with the metric; these are choices. */
@@ -126,7 +128,29 @@ export function CustomTile({
 }) {
   if (!source) return <DeadTile title={title} />;
   const chart = asChartId(rawChart);
+  /**
+   * ONLY THE SETTINGS THIS CHART USES. Switching a tile from bar to pie leaves
+   * the old `color` in the bag, and the pie draws from `SLICE_ORDER` — so
+   * without this the stored key would sit there being read by nothing, and the
+   * panel and the renderer would need to agree separately about that. They
+   * read one table instead. See `CONFIG_FIELDS`.
+   */
+  const config = honoured(chart, rawConfig);
   const accent = accentOf(config.color);
+
+  /**
+   * WHOSE PERIOD THIS TILE ANSWERS FOR.
+   *
+   * A flow tile carries every materialized range in its `byRange`, so an
+   * override is a different key read from data already in hand. A CLASSIC
+   * metric is computed live for the one range the page resolved, so its
+   * override is ignored here rather than trusted — reading `byRange` it does
+   * not have would silently answer for the board's period while the title
+   * claimed otherwise, which is the one failure a per-tile range must not have.
+   */
+  const overridden = source.kind === "flow" && config.rangeKey != null && config.rangeKey !== boardRange;
+  const rangeKey = overridden ? config.rangeKey! : boardRange;
+  const rangeLabel = overridden ? RANGE_OPTIONS.find((r) => r.key === rangeKey)?.label : undefined;
 
   // ── normalise both sources to one shape ───────────────────────────────────
   const stored: StoredTile = source.kind === "flow" ? ((source.tile ?? {}) as StoredTile) : {};
@@ -137,7 +161,15 @@ export function CustomTile({
 
   if (source.kind === "flow") {
     const slot = stored.byRange?.[rangeKey];
-    const missing = stored.byRange != null && slot == null;
+    /**
+     * A PIN THE TILE CANNOT HONOUR IS A MISSING PERIOD, not a licence to fall
+     * back. Without `|| overridden`, a tile whose stored jsonb predates
+     * `byRange` (no slot map at all) answered a pin by dropping through to its
+     * un-windowed top-level figures — printing an all-time number under a
+     * "Today" marker, which is precisely the confident wrong answer the marker
+     * was added to prevent.
+     */
+    const missing = slot == null && (stored.byRange != null || overridden);
     w = {
       ...(slot ?? { value: stored.value, series: stored.series, groups: stored.groups }),
       unavailable:
@@ -215,6 +247,7 @@ export function CustomTile({
   return (
     <ChartFrame
       title={title}
+      rangeLabel={rangeLabel}
       /* A funnel, a pipeline and a table have no single figure to head. */
       headline={
         chart === "funnel" || chart === "pipeline" || chart === "table" ? undefined : w.unavailable ? null : fmt(w.value)
@@ -233,13 +266,20 @@ export function CustomTile({
           {footer && <ChartFooter>{footer}</ChartFooter>}
           {!w.unavailable && undated > 0 && (
             <p className="mt-2 text-tiny text-warn-ink">
-              {/* The whole subject-and-verb is ONE string, not three ternaries
-                  spliced between text nodes. JSX drops the whitespace around an
-                  expression when the surrounding text wraps, and it shipped
-                  "3 records carryno date" — invisible to every source-text
-                  assertion, caught by looking at the page. */}
-              {undated === 1 ? "1 record carries" : `${undated} records carry`} no date in this metric&rsquo;s time
-              reference — counted in All time, in no period.
+              {/* ONE STRING, NO JSX TEXT NODES AT ALL — and that is not
+                  fussiness, it is the second fix for this sentence.
+
+                  It shipped as "3 records carryno date". The first repair kept
+                  an expression next to wrapped prose and asserted the rendered
+                  output, which PASSED under vitest and stayed broken in the
+                  browser: esbuild keeps the space that begins a text node on
+                  the same line as the expression before it, and Next's SWC
+                  transform drops it. A test cannot arbitrate that — it runs
+                  under the transform that agrees with it.
+
+                  So the sentence does not ask. Nothing here is a JSX text node,
+                  so no transform gets an opinion about its whitespace. */}
+              {`${undated === 1 ? "1 record carries" : `${undated} records carry`} no date in this metric’s time reference — counted in All time, in no period.`}
             </p>
           )}
         </>

@@ -36,6 +36,7 @@ import type { ImportCoverage } from "@/connectors/types";
  */
 export function ChartFrame({
   title,
+  rangeLabel,
   headline,
   delta,
   status,
@@ -50,6 +51,8 @@ export function ChartFrame({
   children,
 }: {
   title: string;
+  /** Set only when this tile overrides the board's period. See the header. */
+  rangeLabel?: string;
   /**
    * Pre-formatted, because the formatter lives where the data does. `null`
    * prints the em-dash ("no answer" and "the answer is zero" are different
@@ -76,7 +79,27 @@ export function ChartFrame({
   return (
     <Card variant="surface" className="flex h-full flex-col overflow-hidden p-4">
       <div className="flex items-start justify-between gap-2">
-        <p className="truncate text-small font-semibold text-foreground">{title}</p>
+        <p className="flex min-w-0 items-baseline text-small font-semibold text-foreground">
+          {/* The TITLE truncates; the period marker does not. It sits at the
+              end of the line, and `truncate` ellipsises the END — so with one
+              truncating span the marker was the first thing to disappear, on
+              exactly the narrow tiles most likely to carry a pin. A tile
+              answering a different period than the pill above it with no
+              visible sign is the one failure this marker exists to prevent, so
+              it is the title that yields. */}
+          <span className="truncate">{title}</span>
+          {/* THE TILE'S OWN PERIOD, PRINTED ONLY WHEN IT DISAGREES with the
+              board's pills. A tile silently answering a different question
+              from the one the pill above says is being asked is the whole risk
+              a per-tile range carries, so the override announces itself — and
+              a tile following the board says nothing, because there is nothing
+              to say. Inside the truncating line on purpose: the metric's name
+              yields first, since the period is the shorter and the surprising
+              half. */}
+          {rangeLabel && (
+            <span className="ml-1.5 shrink-0 whitespace-nowrap font-medium text-muted-foreground">· {rangeLabel}</span>
+          )}
+        </p>
         <span className="flex shrink-0 items-center gap-1.5">
           {status && <Freshness status={status} />}
           {computedAt && (

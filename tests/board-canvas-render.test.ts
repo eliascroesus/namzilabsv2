@@ -41,6 +41,7 @@ type CanvasTile = Parameters<typeof CustomBoard>[0]["tiles"][number];
 
 const tile = (id: string, over: Partial<CanvasTile> = {}): CanvasTile => ({
   id,
+  tileKey: `flow:f1:${id}`,
   x: 0,
   y: 0,
   w: 3,

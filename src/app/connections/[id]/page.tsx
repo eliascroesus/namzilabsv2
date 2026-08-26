@@ -156,8 +156,14 @@ export default async function ConnectionPage({
             by polling. */}
         {syncGuarantee(conn.source) === "webhook-only" && (
           <div className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
-            <b>Webhook-only source.</b> {entry?.name ?? conn.source} offers no reliable way to re-read
-            history, so your data here is as complete as the webhooks that actually arrived. If a
+            {/* `{" "}` rather than a bare space: the space that begins a JSX
+                text node on the same line as an expression survives esbuild
+                and is DROPPED by Next's SWC transform, so this read
+                "Calendlyoffers no reliable way" in the browser while every
+                test agreed it was fine. See `custom-tile.tsx`. */}
+            <b>Webhook-only source.</b> {entry?.name ?? conn.source}{" "}
+            offers no reliable way to re-read history, so your data here is as complete as the webhooks
+            that actually arrived. If a
             webhook is missed while the provider or endpoint is down, that event will be absent until
             the provider redelivers it. Sources with polling don&rsquo;t have this limitation.
           </div>

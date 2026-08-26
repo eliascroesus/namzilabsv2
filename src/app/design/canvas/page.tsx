@@ -1,7 +1,7 @@
 import { canvasCells, GRID_COLS, ROW_UNIT_PX, type GridBox } from "@/lib/board/grid";
 import { defaultSize, type ChartId } from "@/lib/board/charts";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
-import { CanvasHarness } from "./harness";
+import { CanvasHarness, PanelSpecimen } from "./harness";
 import { BOARD_GRID, PageContainer, SectionHeading } from "@/components/ui/page";
 
 /**
@@ -231,15 +231,33 @@ export default function CanvasSpecimen() {
           ))}
         </div>
 
+        <SectionHeading className="mt-12">The tile settings panel</SectionHeading>
+        <p className="mt-1 text-small text-muted-foreground">
+          Both tabs at once, because a screenshot can&rsquo;t click. On the dashboard this is one panel pinned to the
+          right of the viewport, opened by clicking a tile — the swatches and switches here are live.
+        </p>
+        <div className="mt-4">
+          <PanelSpecimen
+            options={TILES.map((t) => ({ key: `flow:demo:${t.id}`, title: t.title, charts: ["number", "bar", "category"] }))}
+          />
+        </div>
+
         <SectionHeading className="mt-12">The live board — drag a card, drag its corner</SectionHeading>
         <p className="mt-1 text-small text-muted-foreground">
           The real component with the server played by the harness: writes SUCCEED here, because the crash that shipped
           lived on the success path. The two buttons are another tab editing the same view.
         </p>
         <CanvasHarness
-          options={TILES.map((t) => ({ key: t.id, title: t.title, charts: ["number", "bar", "category"] }))}
+          /* The SAME key shape the tiles carry, or the panel's metric list has
+             nothing to tick and the specimen quietly misrepresents it. */
+          options={TILES.map((t) => ({
+            key: `flow:demo:${t.id}`,
+            title: t.title,
+            charts: ["number", "bar", "category"],
+          }))}
           tiles={TILES.map((t) => ({
             id: t.id,
+            tileKey: `flow:demo:${t.id}`,
             x: t.x,
             y: t.y,
             w: t.w,

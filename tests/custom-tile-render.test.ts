@@ -345,3 +345,149 @@ describe("the delta tells the truth or says nothing", () => {
     expect(html).not.toContain("yesterday");
   });
 });
+
+/**
+ * A TILE THAT ANSWERS FOR ITS OWN PERIOD.
+ *
+ * Every materialized range already rides in the tile's `byRange`, so pinning
+ * one is a different key read from data the client is already holding — no
+ * round trip, no second query. The risk it carries is the whole reason these
+ * exist: a tile silently answering a different question from the one the pill
+ * above it says is being asked. So the override has to announce itself, and it
+ * has to be refused where it cannot be honoured.
+ */
+describe("the tile's own period", () => {
+  const TWO_PERIODS = {
+    format: "number",
+    precision: 0,
+    byRange: { today: { value: 12 }, "7d": { value: 99 } },
+  };
+
+  it("reads the pinned slot rather than the board's", () => {
+    const html = renderToStaticMarkup(
+      createElement(CustomTile, {
+        chart: "number",
+        title: "Booked",
+        rangeKey: "today",
+        source: flow(TWO_PERIODS),
+        config: { rangeKey: "7d" as const },
+      }),
+    );
+    expect(html).toContain("99");
+    expect(html).not.toContain(">12<");
+  });
+
+  it("says so beside the title, because a silent override is the failure", () => {
+    const pinned = renderToStaticMarkup(
+      createElement(CustomTile, {
+        chart: "number",
+        title: "Booked",
+        rangeKey: "today",
+        source: flow(TWO_PERIODS),
+        config: { rangeKey: "7d" as const },
+      }),
+    );
+    expect(pinned).toContain("Last 7 days");
+  });
+
+  it("says nothing when it agrees with the board — there is nothing to say", () => {
+    const following = renderToStaticMarkup(
+      createElement(CustomTile, {
+        chart: "number",
+        title: "Booked",
+        rangeKey: "7d",
+        source: flow(TWO_PERIODS),
+        config: { rangeKey: "7d" as const },
+      }),
+    );
+    expect(following).not.toContain("Last 7 days");
+    expect(following).toContain("99");
+  });
+
+  it("IGNORES the pin on a classic metric, which has only one computed period", () => {
+    /**
+     * A classic metric is computed live for the one range the page resolved.
+     * Honouring a stored override would read a window nobody computed — and
+     * worse, would print a label claiming a period the number is not for.
+     */
+    const html = renderToStaticMarkup(
+      createElement(CustomTile, {
+        chart: "number",
+        title: "Pickup",
+        rangeKey: "today",
+        source: { kind: "classic" as const, result: { kind: "scalar" as const, value: 7 }, target: null },
+        config: { rangeKey: "7d" as const },
+      }),
+    );
+    expect(html).toContain("7");
+    expect(html).not.toContain("Last 7 days");
+  });
+});
+
+describe("only the settings this chart uses reach the mark", () => {
+  it("ignores a setting left behind by a previous chart", () => {
+    /**
+     * Set a colour on a bar chart, switch the tile to a pie: the stored key
+     * survives (switch back and it returns) but the pie draws from
+     * `SLICE_ORDER` and must not read it. `honoured()` drops it before the mark
+     * is called, so the panel and the renderer cannot disagree about which
+     * settings are live.
+     */
+    const groups = {
+      format: "number",
+      precision: 0,
+      byRange: { today: { groups: [{ label: "Pro", value: 6 }, { label: "Free", value: 4 }] } },
+    };
+    const withColor = renderToStaticMarkup(
+      createElement(CustomTile, {
+        chart: "pie",
+        title: "Plan",
+        rangeKey: "today",
+        source: flow(groups),
+        config: { color: "olive" as const },
+      }),
+    );
+    const without = renderToStaticMarkup(
+      createElement(CustomTile, { chart: "pie", title: "Plan", rangeKey: "today", source: flow(groups) }),
+    );
+    // Byte-identical: the colour changed nothing, which is why the panel does
+    // not offer it. Sabotage: add "color" to CONFIG_FIELDS.pie and this still
+    // passes — but the panel then shows a swatch that does nothing, which is
+    // what tests/tile-config.test.ts asserts against.
+    expect(withColor).toBe(without);
+  });
+});
+
+describe("a pin the tile cannot honour", () => {
+  it("says the period was not computed instead of showing un-windowed figures", () => {
+    /**
+     * A tile stored before `byRange` existed has only top-level figures. Asked
+     * for a pinned period it used to fall through to those and print an
+     * ALL-TIME number under a "Today" marker — a confidently wrong answer of
+     * exactly the species the marker was added to prevent.
+     */
+    const html = renderToStaticMarkup(
+      createElement(CustomTile, {
+        chart: "number",
+        title: "Booked",
+        rangeKey: "7d",
+        source: flow({ format: "number", precision: 0, value: 500 }),
+        config: { rangeKey: "today" as const },
+      }),
+    );
+    expect(html).not.toContain("500");
+    expect(html).toContain("Not computed yet for this period");
+  });
+
+  it("still falls back for a tile that is NOT pinned — the old path is intact", () => {
+    const html = renderToStaticMarkup(
+      createElement(CustomTile, {
+        chart: "number",
+        title: "Booked",
+        rangeKey: "7d",
+        source: flow({ format: "number", precision: 0, value: 500 }),
+      }),
+    );
+    expect(html).toContain("500");
+  });
+});

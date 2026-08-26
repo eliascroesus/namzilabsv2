@@ -36,7 +36,20 @@ describe("the gesture always ends, however it ends", () => {
     expect(code(drag)).toMatch(/const onAbort = \(\) => finish\(false\)/);
     expect(code(drag)).toMatch(/window\.addEventListener\("pointercancel", onAbort\)/);
     expect(code(drag)).toMatch(/window\.addEventListener\("blur", onAbort\)/);
-    expect(code(drag)).toMatch(/ev\.key === "Escape"/);
+    // Escape cancels — the handler now guards the key and returns early, so
+    // this reads BOTH halves rather than one spelling of the comparison.
+    expect(code(drag)).toMatch(/ev\.key !== "Escape"\) return;/);
+    expect(code(drag)).toMatch(/finish\(false\);/);
+  });
+
+  it("CLAIMS Escape when it cancels, so an outer panel does not also close", () => {
+    /**
+     * The tile settings panel listens for Escape on the window too. Both fired:
+     * one press abandoned a drag AND closed a panel nobody asked to close.
+     * A live gesture is the inner layer, so it marks the event consumed and the
+     * panel stands down on `defaultPrevented`.
+     */
+    expect(code(drag)).toMatch(/ev\.preventDefault\(\)/);
   });
 
   it("is idempotent, because pointerup and blur can both arrive", () => {
