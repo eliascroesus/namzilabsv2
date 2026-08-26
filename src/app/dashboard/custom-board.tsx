@@ -2,15 +2,22 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, MoreHorizontal, Plus, Trash2 } from "lucide-react";
-import { canvasCells, type GridBox } from "@/lib/board/grid";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, LayoutGrid, MoreHorizontal, PenLine, Plus, Repeat, Trash2 } from "lucide-react";
+import { canvasCells, compact, GRID_COLS, type GridBox } from "@/lib/board/grid";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/flow/controls/Popover";
 import { Toast } from "@/components/ui/toast";
-import type { ChartId } from "@/lib/board/charts";
+import { Input } from "@/components/ui/input";
+import { SectionHeading } from "@/components/ui/page";
+import { CHARTS, asChartId, type ChartId } from "@/lib/board/charts";
 import type { BoardTileRow, CustomTileOption } from "@/lib/board/types";
 import { AddTilePicker } from "./add-tile-picker";
-import { addCustomTileAction, deleteCustomTileAction } from "./board-actions";
+import {
+  addCustomTileAction,
+  deleteCustomTileAction,
+  setCustomTileAction,
+  setCustomTileLayoutAction,
+} from "./board-actions";
 
 /**
  * A CUSTOM VIEW'S CANVAS — the client half.
@@ -36,6 +43,12 @@ import { addCustomTileAction, deleteCustomTileAction } from "./board-actions";
 export type CanvasTile = GridBox & {
   /** The server-rendered card. Placed, never inspected — same contract as `BoardTile.node`. */
   node: ReactNode;
+  /** What it is drawn as now, so the menu can tick the current one. */
+  chart: string;
+  /** What its METRIC could be drawn as — computed on the server by `chartsFor`. */
+  charts: string[];
+  /** The name on the card: the override, or the metric's own. */
+  title: string;
 };
 
 export function CustomBoard({
@@ -65,6 +78,8 @@ export function CustomBoard({
    */
   const [layout, setLayout] = useState<GridBox[]>(() => tiles.map(({ x, y, w, h, id }) => ({ id, x, y, w, h })));
   const [picking, setPicking] = useState(false);
+  /** The id of the tile being repointed at a different metric, if any. */
+  const [repointing, setRepointing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -110,6 +125,61 @@ export function CustomBoard({
     [router, viewId],
   );
 
+  /**
+   * WRITE A WHOLE LAYOUT, because moving one tile moves its neighbours.
+   *
+   * Gravity is applied HERE, by the same `compact` every render uses and the
+   * pointer gestures will preview with, and what it returns is exactly what is
+   * written. So the board can never be recompacted from a partial answer, and
+   * what you asked for is what gets stored.
+   *
+   * `first` is the tile being moved: it wins ties on its row, which is what
+   * makes "move up" put it ABOVE the tile it was under rather than settling
+   * back where it started.
+   */
+  const applyLayout = useCallback(
+    (next: GridBox[], movedId: string) => {
+      const packed = compact(next, GRID_COLS, movedId);
+      let undo: GridBox[] = [];
+      setLayout((prev) => {
+        undo = prev;
+        return packed;
+      });
+      settle(setCustomTileLayoutAction(viewId, packed), () => setLayout(undo));
+    },
+    [settle, viewId],
+  );
+
+  const nudge = useCallback(
+    (id: string, dx: number, dy: number) => {
+      const box = layout.find((b) => b.id === id);
+      if (!box) return;
+      const moved = { ...box, x: Math.max(0, Math.min(GRID_COLS - box.w, box.x + dx)), y: Math.max(0, box.y + dy) };
+      applyLayout(layout.map((b) => (b.id === id ? moved : b)), id);
+    },
+    [applyLayout, layout],
+  );
+
+  const resize = useCallback(
+    (id: string, w: number, h: number) => {
+      const box = layout.find((b) => b.id === id);
+      if (!box) return;
+      const next = { ...box, w, h, x: Math.min(box.x, GRID_COLS - w) };
+      applyLayout(layout.map((b) => (b.id === id ? next : b)), id);
+    },
+    [applyLayout, layout],
+  );
+
+  /** Chart, metric and name are one partial update of one already-walled row. */
+  const editTile = useCallback(
+    (id: string, patch: { chart?: string; tileKey?: string; title?: string }) => {
+      settle(setCustomTileAction(id, patch), () => {});
+      // The CARD is the server's, and all three of these change it.
+      router.refresh();
+    },
+    [router, settle],
+  );
+
   const removeTile = useCallback(
     (id: string) => {
       let undo: GridBox | undefined;
@@ -135,6 +205,7 @@ export function CustomBoard({
    * card loading.
    */
   const nodeOf = new Map(tiles.map((t) => [t.id, t.node]));
+  const byId = new Map(tiles.map((t) => [t.id, t]));
   const cells = canvasCells(layout);
   const empty = cells.length === 0;
 
@@ -165,9 +236,20 @@ export function CustomBoard({
         </div>
       ) : (
         <div className="board-canvas mt-4">
-          {cells.map(({ tile, vars }) => (
+          {cells.map(({ tile, vars }, i) => (
             <div key={tile.id} className="board-cell group/cell relative" style={vars as React.CSSProperties}>
-              {canEdit && <TileMenu onDelete={() => removeTile(tile.id)} />}
+              {canEdit && (
+                <TileMenu
+                  tile={byId.get(tile.id)!}
+                  index={i}
+                  onChart={(c) => editTile(tile.id, { chart: c })}
+                  onRename={(t) => editTile(tile.id, { title: t })}
+                  onChangeMetric={() => setRepointing(tile.id)}
+                  onNudge={(dx, dy) => nudge(tile.id, dx, dy)}
+                  onResize={(w, h) => resize(tile.id, w, h)}
+                  onDelete={() => removeTile(tile.id)}
+                />
+              )}
               {nodeOf.get(tile.id)}
             </div>
           ))}
@@ -175,42 +257,227 @@ export function CustomBoard({
       )}
 
       {picking && <AddTilePicker options={options} busy={busy} onClose={() => setPicking(false)} onAdd={addTile} />}
+      {repointing && (
+        /* The same picker, opened at its SECOND step: the chart is already
+           chosen, so the only question is which metric — and the list is
+           filtered to metrics that can be drawn that way, which is what stops a
+           repoint leaving a tile asking for a drawing its new metric cannot
+           give. */
+        <AddTilePicker
+          options={options}
+          busy={busy}
+          lockedChart={asChartId(byId.get(repointing)?.chart)}
+          onClose={() => setRepointing(null)}
+          onAdd={(tileKey) => {
+            editTile(repointing, { tileKey });
+            setRepointing(null);
+          }}
+        />
+      )}
       {toast && <Toast action={{ label: "Dismiss", onClick: () => setToast(null) }}>{toast}</Toast>}
     </div>
   );
 }
 
 /**
- * The tile's own menu. Remove only, for now — changing the chart, the metric
- * and the name each need the picker back and arrive with it.
+ * THE TILE'S OWN MENU — and the whole feature, without a pointer.
+ *
+ * Built BEFORE the drag and the resize, deliberately, which is the `TileSlot`
+ * precedent one level up: every arrangement a gesture can reach is reachable
+ * here too, so the hardest part of the feature stays optional rather than
+ * load-bearing. It is also simply the better path for anyone who dislikes
+ * dragging, and the only path for anyone who cannot.
+ *
+ * Change chart is an inline list rather than a second modal, because the answer
+ * is four items long and already known — the metric's legal charts were
+ * computed on the server. Change METRIC is the modal, because that list is as
+ * long as the workspace's metrics and wants a search box.
  */
-function TileMenu({ onDelete }: { onDelete: () => void }) {
+function TileMenu({
+  tile,
+  index,
+  onChart,
+  onRename,
+  onChangeMetric,
+  onNudge,
+  onResize,
+  onDelete,
+}: {
+  tile: CanvasTile;
+  index: number;
+  onChart: (c: ChartId) => void;
+  onRename: (title: string) => void;
+  onChangeMetric: () => void;
+  onNudge: (dx: number, dy: number) => void;
+  onResize: (w: number, h: number) => void;
+  onDelete: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(tile.title);
+
+  /** Do it, then get out of the way — every item below moves what is underneath. */
+  const act = (fn: () => void) => {
+    fn();
+    setOpen(false);
+  };
+
+  const commit = () => {
+    setEditing(false);
+    const next = draft.trim();
+    // An empty name CLEARS the override, so the tile follows its metric again.
+    // Unchanged means nothing happened, which is true.
+    if (next !== tile.title) onRename(next);
+  };
+
+  const legal = CHARTS.filter((c) => tile.charts.includes(c.id));
+
   return (
     <div className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-(--duration-fast) focus-within:opacity-100 group-hover/cell:opacity-100 pointer-coarse:opacity-100">
       <Popover
         open={open}
         setOpen={(o) => {
           setOpen(o);
-          if (!o) setConfirming(false);
+          if (!o) {
+            setConfirming(false);
+            setEditing(false);
+          }
         }}
         fixed
         align="right"
-        width={224}
+        width={248}
         anchor={
           <Button
             variant="ghost"
             size="iconSm"
             onClick={() => setOpen((o) => !o)}
-            aria-label="Chart options"
+            aria-label={`Options for ${tile.title}`}
             aria-haspopup="menu"
           >
             <MoreHorizontal />
           </Button>
         }
       >
-        <div className="cursor-default p-1.5">
+        <div className="cursor-default overflow-y-auto p-1.5">
+          {editing ? (
+            <div className="px-1 py-1">
+              <Input
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commit}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commit();
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                aria-label={`Rename ${tile.title}`}
+                placeholder="Follow the metric's name"
+                className="h-8 text-small"
+              />
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
+              onClick={() => {
+                setDraft(tile.title);
+                setEditing(true);
+              }}
+            >
+              <PenLine />
+              Rename
+            </Button>
+          )}
+
+          {legal.length > 1 && (
+            <>
+              <SectionHeading className="px-1.5 pb-1 pt-2">Draw as</SectionHeading>
+              {legal.map((c) => (
+                <Button
+                  key={c.id}
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start"
+                  onClick={() => act(() => onChart(c.id))}
+                >
+                  <Check className={tile.chart === c.id ? "" : "invisible"} />
+                  {c.label}
+                </Button>
+              ))}
+            </>
+          )}
+
+          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => act(onChangeMetric)}>
+            <Repeat />
+            Change metric
+          </Button>
+
+          <SectionHeading className="px-1.5 pb-1 pt-2">Width</SectionHeading>
+          <div className="flex gap-1 px-1">
+            {[
+              { label: "¼", w: 3 },
+              { label: "½", w: 6 },
+              { label: "⅔", w: 8 },
+              { label: "Full", w: 12 },
+            ].map((o) => (
+              <Button
+                key={o.w}
+                variant={tile.w === o.w ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 justify-center px-0"
+                aria-label={`${o.label} width`}
+                onClick={() => act(() => onResize(o.w, tile.h))}
+              >
+                {o.label}
+              </Button>
+            ))}
+          </div>
+
+          <SectionHeading className="px-1.5 pb-1 pt-2">Height</SectionHeading>
+          <div className="flex gap-1 px-1">
+            {[
+              { label: "Short", h: 4 },
+              { label: "Medium", h: 6 },
+              { label: "Tall", h: 9 },
+            ].map((o) => (
+              <Button
+                key={o.h}
+                variant={tile.h === o.h ? "secondary" : "ghost"}
+                size="sm"
+                className="flex-1 justify-center px-0"
+                onClick={() => act(() => onResize(tile.w, o.h))}
+              >
+                {o.label}
+              </Button>
+            ))}
+          </div>
+
+          <SectionHeading className="px-1.5 pb-1 pt-2">Move</SectionHeading>
+          <div className="flex gap-1 px-1">
+            {[
+              { Icon: ArrowLeft, dx: -1, dy: 0, label: "left" },
+              { Icon: ArrowRight, dx: 1, dy: 0, label: "right" },
+              { Icon: ArrowUp, dx: 0, dy: -1, label: "up" },
+              { Icon: ArrowDown, dx: 0, dy: 1, label: "down" },
+            ].map(({ Icon, dx, dy, label }) => (
+              <Button
+                key={label}
+                variant="ghost"
+                size="sm"
+                className="flex-1 justify-center px-0"
+                aria-label={`Move ${tile.title} ${label}`}
+                disabled={(dx === -1 && tile.x === 0) || (dy === -1 && index === 0)}
+                onClick={() => act(() => onNudge(dx, dy))}
+              >
+                <Icon />
+              </Button>
+            ))}
+          </div>
+
+          <div className="my-1.5 h-px bg-border" />
+
           {confirming ? (
             /* Inline, the RanksPanel precedent. The sentence says what SURVIVES,
                because "remove" an inch from a number reads like it might take

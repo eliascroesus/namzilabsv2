@@ -43,15 +43,25 @@ const SEARCH_AT = 8;
 export function AddTilePicker({
   options,
   busy,
+  lockedChart,
   onClose,
   onAdd,
 }: {
   options: CustomTileOption[];
   busy: boolean;
+  /**
+   * OPEN AT THE SECOND STEP, with the chart already decided — which is what
+   * "Change metric" is: the drawing is staying, only the data under it moves.
+   * It also keeps the list filtered to metrics that can be drawn that way, so a
+   * repoint cannot leave a tile asking for something its new metric cannot give.
+   */
+  lockedChart?: ChartId;
   onClose: () => void;
   onAdd: (tileKey: string, chart: ChartId) => void;
 }) {
-  const [chart, setChart] = useState<ChartId | null>(null);
+  const [picked, setPicked] = useState<ChartId | null>(null);
+  const chart = lockedChart ?? picked;
+  const setChart = setPicked;
   const [query, setQuery] = useState("");
 
   const countFor = (id: ChartId) => options.filter((o) => o.charts.includes(id)).length;
@@ -105,9 +115,11 @@ export function AddTilePicker({
           rather than announcing "Add a chart" over a list of metrics. */}
       <ModalTitle>Choose a metric for this {label}</ModalTitle>
       <div className="mt-3 flex items-center gap-2">
-        <Button variant="link" size="sm" onClick={() => setChart(null)} className="px-0">
-          ← Back to charts
-        </Button>
+        {!lockedChart && (
+          <Button variant="link" size="sm" onClick={() => setChart(null)} className="px-0">
+            ← Back to charts
+          </Button>
+        )}
         {eligible.length > SEARCH_AT && (
           <Input
             autoFocus

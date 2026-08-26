@@ -23,7 +23,8 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ getDb: () => db, getReadDb: () => db }));
 vi.mock("@/lib/auth", () => ({ requireOrg: async () => ctx }));
 
-const { addCustomTileAction, deleteCustomTileAction } = await import("@/app/dashboard/board-actions");
+const { addCustomTileAction, deleteCustomTileAction, setCustomTileAction, setCustomTileLayoutAction } =
+  await import("@/app/dashboard/board-actions");
 
 const A = "org_a";
 const B = "org_b";
@@ -157,5 +158,101 @@ describe("removing a chart", () => {
     await assignEmptyRank();
     expect((await deleteCustomTileAction(a.tile.id)).ok).toBe(false);
     expect(await tilesOf("va")).toHaveLength(1);
+  });
+});
+
+describe("changing what a chart is", () => {
+  const seed = async () => {
+    const r = await addCustomTileAction("va", "flow:f1:o1", "number");
+    if (!r.ok) throw new Error("setup failed");
+    return r.tile.id;
+  };
+  const row = async (id: string) => (await db.select().from(dashboardTiles).where(eq(dashboardTiles.id, id)))[0];
+
+  it("changes the drawing without touching the metric", async () => {
+    const id = await seed();
+    expect((await setCustomTileAction(id, { chart: "bar" })).ok).toBe(true);
+    const r = await row(id);
+    expect(r.chart).toBe("bar");
+    expect(r.tileKey).toBe("flow:f1:o1");
+  });
+
+  it("repoints at another metric without touching the drawing", async () => {
+    const id = await seed();
+    expect((await setCustomTileAction(id, { tileKey: "metric:m9" })).ok).toBe(true);
+    const r = await row(id);
+    expect(r.tileKey).toBe("metric:m9");
+    expect(r.chart).toBe("number");
+  });
+
+  it("stores a rename, and an empty one CLEARS it", async () => {
+    const id = await seed();
+    await setCustomTileAction(id, { title: "Revenue, this week" });
+    expect((await row(id)).config).toEqual({ title: "Revenue, this week" });
+    // Otherwise renaming a flow would silently stop updating a chart that had
+    // once been renamed and then renamed back.
+    await setCustomTileAction(id, { title: "  " });
+    expect((await row(id)).config).toEqual({});
+  });
+
+  it("refuses a chart it cannot draw, a key it cannot parse, and another org's row", async () => {
+    const id = await seed();
+    expect((await setCustomTileAction(id, { chart: "pie" })).ok).toBe(false);
+    expect((await setCustomTileAction(id, { tileKey: "nope" })).ok).toBe(false);
+    ctx = { orgId: B, userId: "user_1", role: "member" };
+    expect((await setCustomTileAction(id, { chart: "bar" })).ok).toBe(true);
+    // Reports success for the zero rows it was allowed to touch; what matters
+    // is that the row did not move.
+    expect((await row(id)).chart).toBe("number");
+  });
+});
+
+describe("writing a layout", () => {
+  const seedTwo = async () => {
+    const a = await addCustomTileAction("va", "flow:f1:o1", "number");
+    const b = await addCustomTileAction("va", "flow:f1:o2", "number");
+    if (!a.ok || !b.ok) throw new Error("setup failed");
+    return [a.tile.id, b.tile.id] as const;
+  };
+
+  it("writes every box in one statement, each with its own values", async () => {
+    const [a, b] = await seedTwo();
+    const r = await setCustomTileLayoutAction("va", [
+      { id: a, x: 6, y: 0, w: 6, h: 6 },
+      { id: b, x: 0, y: 0, w: 6, h: 4 },
+    ]);
+    expect(r.ok).toBe(true);
+    const rows = await tilesOf("va");
+    // Sabotage: put a literal in the upsert's `set` instead of `excluded` and
+    // both rows get the first tile's box.
+    expect(rows.find((t) => t.id === a)).toMatchObject({ x: 6, w: 6, h: 6 });
+    expect(rows.find((t) => t.id === b)).toMatchObject({ x: 0, w: 6, h: 4 });
+  });
+
+  it("refuses the WHOLE batch when one id is not on this view", async () => {
+    const [a] = await seedTwo();
+    const r = await setCustomTileLayoutAction("va", [
+      { id: a, x: 6, y: 0, w: 6, h: 6 },
+      { id: "someone-elses", x: 0, y: 0, w: 3, h: 4 },
+    ]);
+    expect(r.ok).toBe(false);
+    /**
+     * All-or-nothing on purpose. A per-row `where` would write the rows it was
+     * allowed to and skip the rest, leaving a compacted grid half-applied —
+     * which means overlapping tiles that nothing fixes until the next drag.
+     */
+    expect((await tilesOf("va")).find((t) => t.id === a)).toMatchObject({ x: 0, w: 3 });
+  });
+
+  it("refuses a box that does not fit the grid", async () => {
+    const [a] = await seedTwo();
+    expect((await setCustomTileLayoutAction("va", [{ id: a, x: 11, y: 0, w: 13, h: 4 }])).ok).toBe(false);
+    expect((await setCustomTileLayoutAction("va", [{ id: a, x: -1, y: 0, w: 3, h: 4 }])).ok).toBe(false);
+  });
+
+  it("refuses a caller whose rank does not allow it", async () => {
+    const [a] = await seedTwo();
+    await assignEmptyRank();
+    expect((await setCustomTileLayoutAction("va", [{ id: a, x: 6, y: 0, w: 6, h: 6 }])).ok).toBe(false);
   });
 });

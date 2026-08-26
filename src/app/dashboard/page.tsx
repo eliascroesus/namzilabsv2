@@ -582,6 +582,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       y: row.y,
       w: row.w,
       h: row.h,
+      chart: row.chart,
+      title,
+      // What its METRIC could be drawn as — the same `chartsFor` the renderer
+      // enforces with, so the menu can never offer a chart the tile refuses.
+      charts: chartsFor(flow ? shapeOfTile(flow.tile) : shapeOfClassic(classic && classic.kind !== "error" ? classic.result : null, classic?.metric.target == null ? null : Number(classic.metric.target))) as string[],
       node: <CustomTile key={row.id} chart={row.chart} title={title} rangeKey={rangeKey} source={source} rows={row.h} />,
     };
   });

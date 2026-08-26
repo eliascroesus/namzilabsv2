@@ -38,6 +38,9 @@ const tile = (id: string, over: Partial<CanvasTile> = {}): CanvasTile => ({
   y: 0,
   w: 3,
   h: 4,
+  chart: "number",
+  charts: ["number", "bar"],
+  title: `Metric ${id}`,
   node: createElement("p", null, `card ${id}`),
   ...over,
 });

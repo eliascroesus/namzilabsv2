@@ -93,6 +93,10 @@ const inView = (col: AnyPgColumn, viewId: string | null) => (viewId == null ? is
 const EXCLUDED_POS = sql.raw(`excluded."pos"`);
 const EXCLUDED_GROUP = sql.raw(`excluded."group_id"`);
 const EXCLUDED_VIEW = sql.raw(`excluded."view_id"`);
+const EXCLUDED_X = sql.raw(`excluded."x"`);
+const EXCLUDED_Y = sql.raw(`excluded."y"`);
+const EXCLUDED_W = sql.raw(`excluded."w"`);
+const EXCLUDED_H = sql.raw(`excluded."h"`);
 
 export async function createGroupAction(name: string, viewId: string | null = null): Promise<Result<{ group: BoardGroup }>> {
   const ctx = await requireOrg();
@@ -595,6 +599,128 @@ export async function deleteCustomTileAction(id: string): Promise<Result> {
     await getDb()
       .delete(dashboardTiles)
       .where(and(eq(dashboardTiles.id, id), eq(dashboardTiles.orgId, ctx.orgId)));
+    return { ok: true };
+  } catch (e) {
+    return oops(e);
+  }
+}
+
+const titleSchema = z.string().trim().max(60, "That name is too long.");
+
+/**
+ * CHANGE WHAT A CHART IS — its drawing, its metric, or its name.
+ *
+ * ONE ACTION FOR THREE EDITS, because they are one edit as far as the database
+ * is concerned: a partial update of a row already re-walled to the org. Three
+ * actions would be three copies of the same gate, and every export in a
+ * "use server" module is a public endpoint, so fewer is safer as well as
+ * shorter.
+ *
+ * The TITLE lives in `config` rather than in a column of its own. An empty one
+ * CLEARS the override rather than storing "", so the tile goes back to
+ * following the metric's own name — otherwise renaming a flow would silently
+ * stop updating a chart that had once been renamed and then renamed back.
+ */
+export async function setCustomTileAction(
+  id: string,
+  patch: { chart?: string; tileKey?: string; title?: string },
+): Promise<Result> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  if (!idSchema.safeParse(id).success) return fail("Unknown chart.");
+
+  const next: { chart?: string; tileKey?: string; config?: Record<string, unknown>; updatedAt: Date } = {
+    updatedAt: new Date(),
+  };
+  if (patch.chart !== undefined) {
+    const c = chartSchema.safeParse(patch.chart);
+    if (!c.success) return fail(c.error.issues[0]?.message ?? "Unknown chart.");
+    next.chart = c.data;
+  }
+  if (patch.tileKey !== undefined) {
+    const k = tileKeySchema.safeParse(patch.tileKey);
+    if (!k.success) return fail(k.error.issues[0]?.message ?? "Unknown metric.");
+    next.tileKey = k.data;
+  }
+  if (patch.title !== undefined) {
+    const t = titleSchema.safeParse(patch.title);
+    if (!t.success) return fail(t.error.issues[0]?.message ?? "That name won't work.");
+    next.config = t.data ? { title: t.data } : {};
+  }
+
+  try {
+    await getDb()
+      .update(dashboardTiles)
+      .set(next)
+      .where(and(eq(dashboardTiles.id, id), eq(dashboardTiles.orgId, ctx.orgId)));
+    return { ok: true };
+  } catch (e) {
+    return oops(e);
+  }
+}
+
+const boxSchema = z.object({
+  id: idSchema,
+  x: z.number().int().min(0).max(11),
+  y: z.number().int().min(0).max(400),
+  w: z.number().int().min(1).max(12),
+  h: z.number().int().min(1).max(60),
+});
+
+/**
+ * WHERE THE CHARTS SIT — the one write every move and every resize goes through,
+ * whether it came from a menu or a pointer.
+ *
+ * A BATCH, because moving one tile can move its neighbours: gravity is applied
+ * by `compact` on the client, and what it returns is what gets written, so the
+ * board never has to be recompacted from a partial answer.
+ *
+ * EVERY ID IS RE-WALLED BEFORE ANYTHING IS WRITTEN, and the batch is refused
+ * WHOLESALE if any one of them does not belong to this org and view. A
+ * per-row `where` would silently write the rows it was allowed to and skip the
+ * rest, leaving a layout half-applied — which on a compacted grid means
+ * overlapping tiles that nothing will fix until the next drag.
+ */
+export async function setCustomTileLayoutAction(
+  viewId: string,
+  items: Array<{ id: string; x: number; y: number; w: number; h: number }>,
+): Promise<Result> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  if (!idSchema.safeParse(viewId).success) return fail("Unknown view.");
+  const parsed = z.array(boxSchema).max(boardTileCap()).safeParse(items);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "That layout won't work.");
+  if (parsed.data.length === 0) return { ok: true };
+
+  try {
+    const db = getDb();
+    const ids = parsed.data.map((i) => i.id);
+    const mine = await db
+      .select({ id: dashboardTiles.id })
+      .from(dashboardTiles)
+      .where(
+        and(eq(dashboardTiles.orgId, ctx.orgId), eq(dashboardTiles.viewId, viewId), inArray(dashboardTiles.id, ids)),
+      );
+    if (mine.length !== ids.length) return fail("Some of those charts aren't on this view.");
+
+    // One statement whatever the item count. `excluded` is the row Postgres was
+    // ASKED to insert, and it is the only way a multi-row upsert can give each
+    // row its own value — a literal here would write one tile's box onto every
+    // row in the batch. The re-wall above is what makes the insert branch
+    // unreachable for a foreign id.
+    await db
+      .insert(dashboardTiles)
+      .values(parsed.data.map((i) => ({ ...i, orgId: ctx.orgId, viewId, tileKey: "", chart: "number", config: {} })))
+      .onConflictDoUpdate({
+        target: dashboardTiles.id,
+        set: {
+          x: EXCLUDED_X,
+          y: EXCLUDED_Y,
+          w: EXCLUDED_W,
+          h: EXCLUDED_H,
+          updatedAt: new Date(),
+        },
+      });
     return { ok: true };
   } catch (e) {
     return oops(e);
