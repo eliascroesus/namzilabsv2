@@ -216,6 +216,37 @@ console.log("\nclicking a tile opens its settings — and nothing else does");
   check(errors.length === 0, "no uncaught page errors around the panel", errors.join(" · "));
 }
 
+// ── blocks ──────────────────────────────────────────────────────────────────
+console.log("\na block is furniture: it lands with no metric and wears no card");
+{
+  await load();
+  const before = await cellCount();
+
+  // ONE PRESS, AND NO METRIC STEP — there is nothing to bind. The board here
+  // has metrics, but a heading would be offerable on an empty one too.
+  await page.locator(LIVE).getByRole("button", { name: "Add", exact: true }).click();
+  await page.waitForTimeout(200);
+  const heading = page.locator(`${LIVE} [data-add-chart='heading']`);
+  check(await heading.isEnabled(), "a heading is always offerable, metric or not");
+  await heading.click();
+  await page.waitForTimeout(400);
+
+  check((await cellCount()) === before + 1, "it lands", `${before} -> ${await cellCount()}`);
+  check((await page.locator("div[role='dialog']").count()) === 0, "no metric step, and no error overlay");
+
+  // The gallery's own specimens are the ones to inspect: they are rendered
+  // with real config, and the live board's new tile has no card yet.
+  const blocks = page.locator("[data-blocks]");
+  await blocks.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(200);
+  const cards = await blocks.locator(".rounded-surface, .shadow-card").count();
+  check(cards === 0, "no card chrome on any block", `found ${cards}`);
+  check((await blocks.getByText("Acquisition").count()) >= 1, "a heading draws its words");
+  check((await blocks.getByRole("presentation").count()) >= 1, "a divider is a rule, not a box");
+
+  check(errors.length === 0, "no uncaught page errors around blocks", errors.join(" · "));
+}
+
 // ── a view holding a row this viewer may not see ────────────────────────────
 console.log("\na view with a hidden chart is read-only, and says so");
 {

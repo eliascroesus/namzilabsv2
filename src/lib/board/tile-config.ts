@@ -60,6 +60,19 @@ const KEYS = {
    * not offer it for classic tiles and the renderer ignores it for them.
    */
   rangeKey: z.enum(MATERIALIZED_RANGES as [RangeKey, ...RangeKey[]]),
+  /**
+   * A BLOCK'S CONTENT — the heading's words, or the note's paragraph.
+   *
+   * It lives in `config` like every other presentation key, and goes through
+   * the same per-key parser: a corrupt `text` costs `text` and nothing else,
+   * so a block with a bad value falls back to its placeholder rather than
+   * taking the tile's colour and title down with it.
+   *
+   * One cap for both kinds. 2000 is a paragraph or two — past that it is not a
+   * note on a dashboard, and the cap is what stops a tile row growing without
+   * bound in a jsonb column read on every render.
+   */
+  text: z.string().trim().min(1).max(2000),
 } as const;
 
 export type TileConfig = { [K in keyof typeof KEYS]?: z.infer<(typeof KEYS)[K]> };
@@ -174,6 +187,21 @@ export const CONFIG_FIELDS = {
   funnel: [...EVERY_TILE],
   pipeline: [...EVERY_TILE, "color"],
   table: [...EVERY_TILE, "precision"],
+
+  /**
+   * BLOCKS OFFER NO PERIOD, because they answer no question about data — a
+   * heading pinned to "Last 7 days" is a control with nothing behind it. They
+   * are the reason `EVERY_TILE` is a constant to spread rather than a rule
+   * applied blindly to every row in this table.
+   *
+   * `title` stays on all three even though the panel does not show it: it is
+   * what the tile MENU renames, and what the panel's own header reads. A
+   * divider has nothing else — no content, no colour, no size beyond the grid's
+   * — and that is the honest entry rather than an omission.
+   */
+  heading: ["title", "text"],
+  text: ["title", "text"],
+  divider: ["title"],
 } as const satisfies Record<ChartId, readonly (keyof TileConfig)[]>;
 
 /** What this chart offers, in the order the panel should show it. */

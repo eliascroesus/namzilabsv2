@@ -106,6 +106,49 @@ describe("adding a chart", () => {
     expect(await tilesOf("va")).toHaveLength(0);
   });
 
+  it("accepts the three block sentinels and no other", async () => {
+    /**
+     * A block points at nothing, so its key names the KIND. The pattern is
+     * spelled out rather than loosened to `block:.+`: an unrecognised kind
+     * would reach the renderer as a tile that is neither a chart nor anything
+     * drawable, and a tile key arrives from a browser.
+     */
+    for (const kind of ["heading", "text", "divider"]) {
+      const r = await addCustomTileAction("va", `block:${kind}`, kind);
+      expect(r.ok, `block:${kind} should be addable`).toBe(true);
+    }
+    expect((await tilesOf("va")).map((t) => t.tileKey).sort()).toEqual([
+      "block:divider",
+      "block:heading",
+      "block:text",
+    ]);
+
+    expect((await addCustomTileAction("va", "block:sunburst", "number")).ok).toBe(false);
+    expect((await addCustomTileAction("va", "block:", "number")).ok).toBe(false);
+    expect((await addCustomTileAction("va", "block:heading:extra", "heading")).ok).toBe(false);
+    expect(await tilesOf("va")).toHaveLength(3);
+  });
+
+  it("lands a block at its own default size, with no metric to seed from", async () => {
+    await addCustomTileAction("va", "block:heading", "heading");
+    const [row] = await tilesOf("va");
+    expect({ w: row.w, h: row.h }).toEqual({ w: 12, h: 2 });
+    expect(row.config).toEqual({});
+  });
+
+  it("refuses a row whose chart and key disagree about being a block", async () => {
+    /**
+     * The row says what it is twice, and two representations of one fact
+     * disagree eventually unless something refuses it: the renderer branches on
+     * the chart, the page's classifier branches on the key, and a mismatch
+     * renders differently depending on which half is consulted.
+     */
+    expect((await addCustomTileAction("va", "flow:f1:o1", "heading")).ok).toBe(false);
+    expect((await addCustomTileAction("va", "block:heading", "number")).ok).toBe(false);
+    expect((await addCustomTileAction("va", "block:heading", "divider")).ok).toBe(false);
+    expect(await tilesOf("va")).toHaveLength(0);
+  });
+
   it("refuses a caller whose rank does not allow rearranging the board", async () => {
     await assignEmptyRank();
     const r = await addCustomTileAction("va", "flow:f1:o1", "number");
@@ -285,6 +328,28 @@ describe("changing what a chart is", () => {
     expect((await setCustomTileAction(id, { clear: ["nonsense"] })).ok).toBe(false);
     // None of the refusals wrote anything.
     expect((await row(id)).config).toEqual({});
+  });
+
+  it("refuses to half-turn an existing tile into a block", async () => {
+    const id = await seed();
+    // Chart alone, or key alone, would leave the two halves disagreeing.
+    expect((await setCustomTileAction(id, { chart: "heading" })).ok).toBe(false);
+    expect((await setCustomTileAction(id, { tileKey: "block:heading" })).ok).toBe(false);
+    expect((await setCustomTileAction(id, { chart: "heading", tileKey: "block:text" })).ok).toBe(false);
+    expect((await row(id)).chart).toBe("number");
+    // Together and agreeing is a coherent row, so it is allowed.
+    expect((await setCustomTileAction(id, { chart: "heading", tileKey: "block:heading" })).ok).toBe(true);
+  });
+
+  it("stores a block's words through the same per-key parser", async () => {
+    const r = await addCustomTileAction("va", "block:heading", "heading");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    await setCustomTileAction(r.tile.id, { config: { text: "  Acquisition  " } });
+    expect((await row(r.tile.id)).config).toEqual({ text: "Acquisition" });
+    // And a value the schema refuses is refused, not silently dropped.
+    expect((await setCustomTileAction(r.tile.id, { config: { text: "x".repeat(2001) } })).ok).toBe(false);
+    expect((await row(r.tile.id)).config).toEqual({ text: "Acquisition" });
   });
 
   it("refuses a chart it cannot draw, a key it cannot parse, and another org's row", async () => {

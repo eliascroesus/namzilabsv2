@@ -171,8 +171,8 @@ describe("adding lands immediately; the metric question is asked later", () => {
      * chart bound to the FIRST metric that can draw it — the options list the
      * page already computed — and changing the metric happens on the tile.
      */
-    expect(board).toMatch(/const first = options\.find\(\(o\) => o\.charts\.includes\(c\.id\)\)/);
-    expect(board).toMatch(/onPick\(c\.id, first\.key\)/);
+    expect(board).toMatch(/options\.find\(\(o\) => o\.charts\.includes\(c\.id\)\)/);
+    expect(board).toMatch(/onPick\(c\.id, key\)/);
     // A popover in the + view menu's shape, never a modal.
     const menu = board.slice(board.indexOf("function AddChartMenu"), board.indexOf("function PendingCard"));
     expect(menu).toContain("<Popover");
@@ -181,7 +181,21 @@ describe("adding lands immediately; the metric question is asked later", () => {
 
   it("greys an undrawable chart with the reason, and never hides it", () => {
     expect(board).toContain("No metric here can be drawn this way yet.");
-    expect(board).toMatch(/disabled=\{busy \|\| !first\}/);
+    expect(board).toMatch(/disabled=\{busy \|\| !key\}/);
+  });
+
+  it("offers a block whatever the board holds, because there is nothing to bind", () => {
+    /**
+     * Every chart above is bound to the first metric that can draw it, and is
+     * greyed with the reason when nothing can. A heading has no metric to bind
+     * and therefore cannot be unavailable — it is offerable on an empty board
+     * exactly as on a full one, which is the point of furniture.
+     */
+    expect(board).toMatch(/const first = block \? null : options\.find/);
+    expect(board).toMatch(/const key = block \? blockTileKey\(block\) : first\?\.key/);
+    // And they are their own section, under a rule: nine items in one flat
+    // list says drawings and furniture are the same kind of thing.
+    expect(board).toMatch(/block === "heading" && <div className="my-1 h-px bg-border" \/>/);
   });
 
   it("the two-step modal is gone, and only the change-metric picker survives", () => {

@@ -1,3 +1,4 @@
+import { blockKindOf } from "./charts";
 import type { ReactNode } from "react";
 
 /**
@@ -161,5 +162,13 @@ export type CanvasRowFate = "render" | "hidden" | "dead";
 
 export function canvasRowFate(tileKey: string, joined: boolean, existing: ReadonlySet<string>): CanvasRowFate {
   if (joined) return "render";
+  /**
+   * A BLOCK JOINS TO NOTHING BY DESIGN, so it has to be answered before the
+   * two "joined to nothing" cases below. A heading points at no metric and is
+   * in no unfiltered set, which is indistinguishable from a deleted one to
+   * every test this function performs — so without this line every block on
+   * every board renders "It isn't published any more."
+   */
+  if (blockKindOf(tileKey)) return "render";
   return existing.has(tileKey) ? "hidden" : "dead";
 }

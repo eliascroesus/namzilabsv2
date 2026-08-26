@@ -120,7 +120,68 @@ export const CHARTS = [
     minW: 3,
     minH: 4,
   },
+  /**
+   * ── BLOCKS ─────────────────────────────────────────────────────────────
+   *
+   * Furniture, not drawings. A board that has grown past a screenful needs
+   * somewhere to say "Acquisition" and somewhere to write the sentence about
+   * what counts as a lead — and those are tiles in every way that matters to
+   * the grid (a box, a position, a size, a drag) and in no way that matters to
+   * a metric. They carry the `block:` tile key, bind to nothing, and
+   * `chartsFor` NEVER returns them: "heading" is not a way of drawing Booked
+   * Leads, and offering it as one would be exactly the category error the rest
+   * of this file exists to prevent.
+   *
+   * They live at the end of the list because the picker shows them in their
+   * own section, below a divider, after every real chart.
+   */
+  {
+    id: "heading",
+    label: "Heading",
+    blurb: "A title for the section under it.",
+    w: 12,
+    h: 2,
+    minW: 3,
+    minH: 1,
+  },
+  {
+    id: "text",
+    label: "Text",
+    blurb: "A note — what a number means, or where it came from.",
+    w: 6,
+    h: 3,
+    minW: 2,
+    minH: 2,
+  },
+  {
+    id: "divider",
+    label: "Divider",
+    blurb: "A rule across the board, to end one section and start another.",
+    w: 12,
+    h: 1,
+    minW: 2,
+    minH: 1,
+  },
 ] as const;
+
+/**
+ * THE BLOCK KINDS, and the tile key each one carries.
+ *
+ * A block's key is `block:<id>` — a sentinel rather than a foreign key, because
+ * there is nothing to point at. `tileKeySchema` accepts exactly these three;
+ * it was not loosened to `block:.+`, since an unrecognised block kind would
+ * reach the renderer as a tile that is neither a chart nor anything drawable.
+ */
+export const BLOCK_IDS = ["heading", "text", "divider"] as const;
+export type BlockId = (typeof BLOCK_IDS)[number];
+
+export const blockTileKey = (id: BlockId) => `block:${id}`;
+
+/** Is this tile furniture rather than a number? Asked wherever a metric would be. */
+export function blockKindOf(tileKey: string): BlockId | null {
+  const kind = tileKey.startsWith("block:") ? tileKey.slice(6) : null;
+  return kind && (BLOCK_IDS as readonly string[]).includes(kind) ? (kind as BlockId) : null;
+}
 
 /**
  * STACKED BARS ARE ABSENT, AND NOT BECAUSE NOBODY GOT TO THEM.
@@ -255,7 +316,14 @@ export function chartsFor(shape: MetricShape): ChartId[] {
   if (shape.groups) out.push("category", "pie");
   if (shape.target && shape.scalar) out.push("progress");
   if (shape.series || shape.groups) out.push("table");
-  return out;
+  /**
+   * NO BLOCK IS EVER REACHABLE FROM HERE, and the filter says so rather than
+   * relying on nobody adding one to a branch above. A block is furniture: it
+   * draws no metric, so "which charts can draw this metric" cannot have one as
+   * an answer. `tests/board-charts.test.ts` walks every one of the 32 possible
+   * shapes and asserts it.
+   */
+  return out.filter((id) => !(BLOCK_IDS as readonly string[]).includes(id));
 }
 
 /**

@@ -11,7 +11,7 @@ import { requireOrg, type OrgContext } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { boardGroupCap, boardPlacementCap, boardTileCap, boardViewCap } from "@/lib/limits";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
-import { CHART_IDS, defaultSize } from "@/lib/board/charts";
+import { BLOCK_IDS, CHART_IDS, blockKindOf, defaultSize } from "@/lib/board/charts";
 import { parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
 import type { BoardTileRow } from "@/lib/board/types";
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
@@ -504,11 +504,40 @@ export async function deleteViewAction(id: string): Promise<Result> {
   }
 }
 
-/** The same vocabulary `dashboard_tile_placements` validates, for the same keys. */
+/**
+ * The same vocabulary `dashboard_tile_placements` validates, for the same keys,
+ * plus the `block:` sentinel.
+ *
+ * A block points at nothing — a heading has no metric — so its key names the
+ * KIND instead. The three are spelled out rather than admitted as `block:.+`
+ * on purpose: a loosened pattern would accept `block:sunburst`, which reaches
+ * the renderer as a tile that is neither a chart nor anything drawable, and the
+ * whole reason this schema is strict is that a tile key arrives from a browser.
+ */
 const tileKeySchema = z
   .string()
   .max(200)
-  .regex(/^(flow:[^:]+:.+|metric:[^:]+)$/, "Bad tile key.");
+  .regex(new RegExp(`^(flow:[^:]+:.+|metric:[^:]+|block:(${BLOCK_IDS.join("|")}))$`), "Bad tile key.");
+
+/**
+ * A BLOCK'S CHART AND ITS KEY MUST BE THE SAME WORD.
+ *
+ * The row says what it is twice — `chart: "heading"` and
+ * `tile_key: "block:heading"` — and two representations of one fact disagree
+ * eventually unless something refuses the disagreement. The renderer branches
+ * on the chart; the page's row classifier branches on the key; a row carrying
+ * `chart: "heading"` with a flow's key would be furniture bound to a metric,
+ * which is not a thing, and would render differently depending on which half
+ * was consulted.
+ *
+ * Both directions are refused: a block chart demands its own sentinel, and a
+ * block sentinel demands its own chart.
+ */
+function blockMismatch(chart: string, tileKey: string): boolean {
+  const byChart = (BLOCK_IDS as readonly string[]).includes(chart);
+  const byKey = blockKindOf(tileKey);
+  return byChart !== (byKey !== null) || (byKey !== null && byKey !== chart);
+}
 
 const chartSchema = z.string().refine((c) => (CHART_IDS as string[]).includes(c), "That isn't a chart we draw.");
 
@@ -578,6 +607,8 @@ export async function addCustomTileAction(
      * user-initiated add, never on the render path.
      */
     let config: Record<string, unknown> = {};
+    if (blockMismatch(kind.data, key.data)) return fail("That isn't a chart we draw.");
+
     const flowKey = key.data.match(/^flow:([^:]+):(.+)$/);
     // BEST-EFFORT, in its own try: the seed is decoration on the add, and a
     // failure here — a malformed flow id, a dangling key — must cost the tile
@@ -682,6 +713,25 @@ export async function setCustomTileAction(
     const k = tileKeySchema.safeParse(patch.tileKey);
     if (!k.success) return fail(k.error.issues[0]?.message ?? "Unknown metric.");
     next.tileKey = k.data;
+  }
+  /**
+   * A TILE CANNOT BE HALF-TURNED INTO A BLOCK. Chart and key must move
+   * together or not at all — see `blockMismatch`. Nothing in the interface asks
+   * for this (a block's panel offers no chart list, and `chartsFor` never
+   * returns a block for a metric), so a patch touching one side alone is a
+   * caller doing something the product does not do, and it would leave a row
+   * whose two halves disagree about what it is.
+   */
+  if (next.chart !== undefined || next.tileKey !== undefined) {
+    const touchesBlock =
+      (next.chart !== undefined && (BLOCK_IDS as readonly string[]).includes(next.chart)) ||
+      (next.tileKey !== undefined && blockKindOf(next.tileKey) !== null);
+    if (touchesBlock && (next.chart === undefined || next.tileKey === undefined)) {
+      return fail("That isn't a chart we draw.");
+    }
+    if (next.chart !== undefined && next.tileKey !== undefined && blockMismatch(next.chart, next.tileKey)) {
+      return fail("That isn't a chart we draw.");
+    }
   }
 
   /**

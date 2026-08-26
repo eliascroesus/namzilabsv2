@@ -119,14 +119,32 @@ describe("classic metrics, which are computed live rather than stored", () => {
 });
 
 describe("the chart vocabulary", () => {
-  it("is exactly the five that have a mark behind them", () => {
+  it("is exactly the ten drawings and the three blocks", () => {
     /**
-     * Pie, line, area and table have NO renderer in charts.tsx. Offering one
-     * and drawing bars is the precise lie this feature exists to correct, so
-     * they are absent until their marks are written. Adding an id here without
-     * a branch in custom-tile.tsx puts the lie back.
+     * Every id here has a mark behind it. The rule this pins is the one the
+     * file was born for: an id with no renderer would be offered and then draw
+     * something else, which is the lie the whole registry exists to correct.
+     *
+     * The last three are BLOCKS — furniture, not drawings — and they are in
+     * this list because a block IS a tile the grid places and the renderer
+     * branches on. What they are not is an answer to "what can this metric be
+     * drawn as", which `chartsFor` enforces separately and exhaustively.
      */
-    expect(CHART_IDS).toEqual(["number", "line", "area", "bar", "category", "pie", "progress", "funnel", "pipeline", "table"]);
+    expect(CHART_IDS).toEqual([
+      "number",
+      "line",
+      "area",
+      "bar",
+      "category",
+      "pie",
+      "progress",
+      "funnel",
+      "pipeline",
+      "table",
+      "heading",
+      "text",
+      "divider",
+    ]);
   });
 
   it("is the same vocabulary the schema comment promises", () => {

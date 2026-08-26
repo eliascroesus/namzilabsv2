@@ -19,7 +19,7 @@ import { BoardControls, MetaLine, RangeLink, SourceLink, TileArea, ViewTab } fro
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import type { CustomTileSource } from "@/components/custom-tile";
-import { chartsFor, shapeOfClassic, shapeOfTile } from "@/lib/board/charts";
+import { CHARTS, blockKindOf, chartsFor, shapeOfClassic, shapeOfTile } from "@/lib/board/charts";
 import { parseTileConfig } from "@/lib/board/tile-config";
 import { listBoardGroups, listBoardViews, listTilePlacements } from "@/lib/board/store";
 import { listBoardTiles } from "@/lib/board/tiles-store";
@@ -628,6 +628,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const classic = classicByKey.get(row.tileKey);
     if (fateOf(row) === "hidden") return [];
     const stored = (flow?.tile ?? {}) as { name?: string };
+    /** Furniture: no metric to name it after, no freshness to rank. */
+    const block = blockKindOf(row.tileKey);
     /**
      * THE WHOLE CONTRACT, not the half that used to cross. `unpublished`,
      * `importing` and `error` were dropped right here — the rows carry all
@@ -663,7 +665,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       h: row.h,
       chart: row.chart,
       tileKey: row.tileKey,
-      metricName: stored.name ?? classic?.metric.name ?? "Untitled",
+      // A block is named after its KIND — "Heading", "Divider" — so the tile
+      // menu has something to call it. "Untitled" is what a metric with no name
+      // is, and a divider is not an untitled anything.
+      metricName: block
+        ? (CHARTS.find((c) => c.id === block)?.label ?? "Block")
+        : (stored.name ?? classic?.metric.name ?? "Untitled"),
       // Through the one parser, so a corrupt bag costs its own keys and
       // nothing else. The CLIENT derives the title — it owns the optimistic
       // rename, and a derivation here would be a second opinion it overrides.
@@ -673,7 +680,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       charts: chartsFor(flow ? shapeOfTile(flow.tile) : shapeOfClassic(classic && classic.kind !== "error" ? classic.result : null, classic?.metric.target == null ? null : Number(classic.metric.target))) as string[],
       // The groups board's own attention rules, extended to the canvas: a dead
       // tile ranks as stale rather than fine, because "needs a look" is true.
-      attention: flow ? attentionOf(flow, value) : classic?.kind === "error" ? 3 : classic ? 0 : 1,
+      // A block can never need a look: it has no run to fail, no result to go
+      // stale, and no published version to drift from. Without this it ranked
+      // as `1` — the "dead metric" tier — and sorted above real problems.
+      attention: block ? 0 : flow ? attentionOf(flow, value) : classic?.kind === "error" ? 3 : classic ? 0 : 1,
       data: source,
     }];
   });

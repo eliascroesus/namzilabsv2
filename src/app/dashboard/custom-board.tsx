@@ -13,7 +13,9 @@ import {
   Filter,
   FilterX,
   Hash,
+  Heading2,
   LayoutGrid,
+  Minus,
   MoreHorizontal,
   PenLine,
   PieChart,
@@ -24,6 +26,7 @@ import {
   Table as TableIcon,
   Target,
   TrendingUp,
+  Type,
   Trash2,
 } from "lucide-react";
 import { canvasCells, compact, GRID_COLS, type GridBox } from "@/lib/board/grid";
@@ -33,7 +36,7 @@ import { Toast } from "@/components/ui/toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
-import { CHARTS, asChartId, type ChartId } from "@/lib/board/charts";
+import { CHARTS, asChartId, blockKindOf, blockTileKey, type BlockId, type ChartId } from "@/lib/board/charts";
 import type { BoardTileRow, CustomTileOption } from "@/lib/board/types";
 import type { TileConfig } from "@/lib/board/tile-config";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
@@ -737,6 +740,9 @@ const CHART_ICONS: Record<ChartId, typeof Hash> = {
   funnel: Filter,
   pipeline: FilterX,
   table: TableIcon,
+  heading: Heading2,
+  text: Type,
+  divider: Minus,
 };
 
 /**
@@ -779,22 +785,32 @@ function AddChartMenu({
       <div className="cursor-default p-1">
         {CHARTS.map((c) => {
           const Icon = CHART_ICONS[c.id];
-          /** The opening move: the first metric that can draw this chart. */
-          const first = options.find((o) => o.charts.includes(c.id));
+          const block = blockKindOf(blockTileKey(c.id as BlockId));
+          /**
+           * A BLOCK NEEDS NO METRIC AND CANNOT BE UNAVAILABLE. Every chart above
+           * binds to the first metric that can draw it, and is greyed with the
+           * reason when nothing can; a heading has nothing to bind and is
+           * therefore always offerable, on an empty board as much as a full one.
+           */
+          const first = block ? null : options.find((o) => o.charts.includes(c.id));
+          const key = block ? blockTileKey(block) : first?.key;
           return (
+            <div key={c.id}>
+              {/* The rule between drawings and furniture. They are different
+                  kinds of thing and a flat list of nine says they are not. */}
+              {block === "heading" && <div className="my-1 h-px bg-border" />}
             <Button
-              key={c.id}
               {...{ "data-add-chart": c.id }}
               variant="ghost"
               size="sm"
-              disabled={busy || !first}
+              disabled={busy || !key}
               onClick={() => {
-                if (!first) return;
+                if (!key) return;
                 setOpen(false);
-                onPick(c.id, first.key);
+                onPick(c.id, key);
               }}
               className="h-auto w-full items-start justify-start gap-2.5 whitespace-normal px-2 py-2 text-left"
-              title={!first ? `No metric on this board can be drawn as a ${c.label.toLowerCase()}` : undefined}
+              title={!key ? `No metric on this board can be drawn as a ${c.label.toLowerCase()}` : undefined}
             >
               <Icon className="mt-0.5 shrink-0 text-muted-foreground" />
               <span className="flex min-w-0 flex-col gap-0.5">
@@ -804,6 +820,7 @@ function AddChartMenu({
                 </span>
               </span>
             </Button>
+            </div>
           );
         })}
       </div>

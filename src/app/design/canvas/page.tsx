@@ -218,6 +218,28 @@ export default function CanvasSpecimen() {
           ))}
         </div>
 
+        {/* Furniture, at its own default size, so the proportions are the
+            real ones — a heading is full width and two rows tall, a divider is
+            full width and one. None of them wears a card. */}
+        <SectionHeading className="mt-12">Blocks</SectionHeading>
+        <p className="mt-1 text-small text-muted-foreground">
+          Tiles with no metric: a heading, a note and a rule. They drag and resize like any other tile and bind to
+          nothing.
+        </p>
+        <div className="mt-4 space-y-2" {...{ "data-blocks": "" }}>
+          {[
+            { chart: "heading" as const, config: { text: "Acquisition" } },
+            { chart: "text" as const, config: { text: "Counts a lead from the first reply, not the first send.\nExcludes anyone already in Close." } },
+            { chart: "divider" as const, config: {} },
+            { chart: "heading" as const, config: {} },
+            { chart: "text" as const, config: {} },
+          ].map(({ chart, config }, i) => (
+            <div key={`${chart}-${i}`} style={{ height: `${defaultSize(chart).h * ROW_UNIT_PX}px` }}>
+              <CustomTile chart={chart} title={chart} rangeKey="today" source={null} config={config} cols={12} />
+            </div>
+          ))}
+        </div>
+
         <SectionHeading className="mt-12">Every state</SectionHeading>
         <p className="mt-1 text-small text-muted-foreground">
           One chart, every way it can fail to be a plain number. A state that replaces the mark and a state that

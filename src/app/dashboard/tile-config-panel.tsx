@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input, NativeSelect } from "@/components/ui/input";
+import { Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { FieldHint, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import { PANEL_SHELL, PanelTabs } from "@/components/flow/panel-chrome";
 import { GROUP_ACCENT, groupAccent } from "@/components/flow/node-accent";
-import { CHARTS, asChartId, type ChartId } from "@/lib/board/charts";
+import { CHARTS, asChartId, blockKindOf, blockTileKey, type BlockId, type ChartId } from "@/lib/board/charts";
 import { fieldsFor, type TileConfig } from "@/lib/board/tile-config";
 import { RANGE_OPTIONS, MATERIALIZED_RANGES } from "@/lib/metrics/range";
 import { MetricList } from "./add-tile-picker";
@@ -187,8 +187,18 @@ export function TileConfigPanel({
   /** Set some keys, clear others. Both halves optimistic; see the header. */
   onConfig: (set: TileConfig, clear?: Array<keyof TileConfig>) => void;
 }) {
-  const [tab, setTab] = useState<Tab>(initialTab);
   const chart = asChartId(rawChart);
+  /**
+   * A BLOCK HAS NO DATA TAB, and the tab is HIDDEN rather than shown empty.
+   *
+   * Every control on Data asks something about a metric — which one, over what
+   * period, ordered how — and a heading has no metric to ask about. A tab that
+   * opens onto nothing is worse than no tab: it reads as a feature that failed
+   * to load rather than one that does not apply.
+   */
+  const block = blockKindOf(blockTileKey(chart as BlockId));
+  const tabs = block ? (["style"] as const) : TABS;
+  const [tab, setTab] = useState<Tab>(block ? "style" : initialTab);
   const offers = new Set<string>(fieldsFor(chart));
 
   // Escape closes it. The panel covers part of the board, so there has to be a
@@ -227,7 +237,7 @@ export function TileConfigPanel({
         </Button>
       </div>
 
-      <PanelTabs tabs={TABS} active={tab} onSelect={setTab} />
+      <PanelTabs tabs={tabs} active={tab} onSelect={setTab} />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col gap-5 p-5">
@@ -307,6 +317,34 @@ export function TileConfigPanel({
                 />
               )}
             </>
+          ) : block ? (
+            /* ONLY its content. A block has no chart to change (`chartsFor`
+               never offers one), no colour, no decimals and no goal — the field
+               table says so, and this reads the table rather than repeating it. */
+            offers.has("text") ? (
+              <Row
+                label={block === "heading" ? "Heading" : "Note"}
+                hint={block === "heading" ? undefined : "Line breaks are kept."}
+              >
+                <Textarea
+                  defaultValue={config.text ?? ""}
+                  key={config.text ?? ""}
+                  placeholder={block === "heading" ? "Acquisition" : "What this section shows, and where the numbers come from."}
+                  aria-label={block === "heading" ? "Heading" : "Note"}
+                  maxLength={2000}
+                  rows={block === "heading" ? 2 : 6}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v !== (config.text ?? "")) set("text", v || undefined);
+                  }}
+                  className="w-full"
+                />
+              </Row>
+            ) : (
+              <p className="text-small text-muted-foreground">
+                A divider has nothing to set — drag its edges to change how much room it takes.
+              </p>
+            )
           ) : (
             <>
               <Row label="Chart">

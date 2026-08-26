@@ -154,3 +154,44 @@ describe("what the panel refuses to inherit", () => {
     expect((src.match(/offers\.has\(/g) ?? []).length).toBeGreaterThan(6);
   });
 });
+
+describe("a block's panel", () => {
+  /**
+   * A block has no metric, so every control on Data — which one, over what
+   * period, ordered how — asks a question it cannot have. The tab is HIDDEN
+   * rather than rendered empty: a tab that opens onto nothing reads as a
+   * feature that failed to load rather than one that does not apply.
+   */
+  const block = (chart: string, config = {}) =>
+    render({ chart, charts: [], config, metricName: chart === "divider" ? "Divider" : "Heading" });
+
+  it("has no Data tab at all", () => {
+    expect(both({ chart: "bar" })).toContain(">data<");
+    for (const kind of ["heading", "text", "divider"]) {
+      expect(block(kind), `${kind} must not offer a Data tab`).not.toContain(">data<");
+      expect(block(kind), `${kind} still has its Style tab`).toContain(">style<");
+    }
+  });
+
+  it("shows the content field and nothing else", () => {
+    const heading = block("heading", { text: "Acquisition" });
+    expect(heading).toContain("Acquisition");
+    // None of the chart furniture: no chart list, no colour, no decimals, no
+    // goal. `fieldsFor` says so and the panel reads it rather than repeating it.
+    for (const absent of ["Chart", "Colour", "Decimals", "Goal", "Legend", "Period"]) {
+      expect(heading, `a heading must not offer "${absent}"`).not.toContain(`>${absent}<`);
+    }
+  });
+
+  it("tells the truth about a divider, which has nothing to set", () => {
+    const html = block("divider");
+    expect(html).toContain("nothing to set");
+    // An empty panel would read as broken; a sentence reads as an answer.
+    expect(html).not.toContain("<textarea");
+  });
+
+  it("labels the field for what the block IS", () => {
+    expect(block("heading")).toContain(">Heading<");
+    expect(block("text")).toContain(">Note<");
+  });
+});

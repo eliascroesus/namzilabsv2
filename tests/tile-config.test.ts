@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { accentOf, fieldsFor, honoured, parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
-import { CHART_IDS } from "@/lib/board/charts";
+import { BLOCK_IDS, CHART_IDS } from "@/lib/board/charts";
 import { MATERIALIZED_RANGES } from "@/lib/metrics/range";
 
 /**
@@ -108,9 +108,15 @@ describe("what each chart offers", () => {
       for (const f of fields) {
         expect(TILE_CONFIG_KEYS, `${id} offers "${f}", which is not a config key`).toContain(f);
       }
-      // Every tile can be renamed and can pin its own period, whatever it draws.
+      // Every tile can be renamed, whatever it is.
       expect(fields, `${id} must offer a name`).toContain("title");
-      expect(fields, `${id} must offer a period`).toContain("rangeKey");
+      /**
+       * A PERIOD ONLY IF THERE IS DATA TO WINDOW. Blocks are furniture — a
+       * heading pinned to "Last 7 days" would be a control with nothing behind
+       * it — so the rule is per kind rather than universal.
+       */
+      const isBlock = (BLOCK_IDS as readonly string[]).includes(id);
+      expect(fields.includes("rangeKey"), `${id} and its period`).toBe(!isBlock);
     }
   });
 

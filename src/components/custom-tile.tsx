@@ -14,7 +14,16 @@ import { PieChart, pieFooter } from "@/components/board-charts/pie";
 import { Pipeline } from "@/components/board-charts/pipeline";
 import { ChartTable } from "@/components/board-charts/table";
 import { ChartHover } from "@/components/chart-hover";
-import { asChartId, chartsFor, shapeOfClassic, shapeOfTile, type ChartId } from "@/lib/board/charts";
+import {
+  asChartId,
+  blockKindOf,
+  blockTileKey,
+  chartsFor,
+  shapeOfClassic,
+  shapeOfTile,
+  type BlockId,
+  type ChartId,
+} from "@/lib/board/charts";
 import { accentOf, honoured, type TileConfig } from "@/lib/board/tile-config";
 import { RANGE_OPTIONS } from "@/lib/metrics/range";
 import { bucketLabel, type BucketUnit } from "@/lib/board/scale";
@@ -108,6 +117,51 @@ function DeadTile({ title }: { title: string }) {
   );
 }
 
+/**
+ * FURNITURE, NOT A CARD.
+ *
+ * A heading is text ON the canvas, not a card containing text, and a divider is
+ * a rule rather than a box — so these deliberately skip `Card` and the whole
+ * `ChartFrame` apparatus. There is no freshness to report, no period to window,
+ * no headline and nothing that can fail to be computed: every state the frame
+ * exists to carry is a state a block cannot be in.
+ *
+ * THEY RENDER BEFORE THE DEAD-METRIC CHECK, which is the load-bearing detail.
+ * A block's `source` is null exactly as a deleted metric's is — it points at
+ * nothing on purpose — so any order but this one draws every heading on every
+ * board as "It isn't published any more. Publish it again."
+ *
+ * Empty content renders a PLACEHOLDER rather than nothing at all: an empty
+ * block is invisible, and an invisible tile still occupies its grid box, so a
+ * board would have a hole in it that can only be found by dragging into it.
+ */
+function Block({ kind, text }: { kind: "heading" | "text" | "divider"; text?: string }) {
+  if (kind === "divider") {
+    // Centred in its row rather than sitting at the top of it, so the tile's
+    // height reads as the space around the rule instead of space under it.
+    return (
+      <div className="flex h-full items-center" role="presentation">
+        <span className="h-px w-full bg-border" />
+      </div>
+    );
+  }
+  const empty = !text;
+  const words = text || (kind === "heading" ? "Heading" : "Write a note…");
+  return (
+    <div className={`flex h-full min-w-0 flex-col justify-center ${empty ? "text-muted-foreground" : ""}`}>
+      {kind === "heading" ? (
+        <h3 className="truncate text-title font-semibold text-foreground">{words}</h3>
+      ) : (
+        // `whitespace-pre-line` so a paragraph typed with line breaks keeps
+        // them; the tile's own height decides how much of it is on screen.
+        <p className="min-h-0 overflow-y-auto whitespace-pre-line text-small leading-relaxed text-muted-foreground quiet-scroll">
+          {words}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function CustomTile({
   chart: rawChart,
   title,
@@ -126,8 +180,15 @@ export function CustomTile({
   /** The tile's width in grid columns — only the pie's legend side reads it. */
   cols?: number;
 }) {
-  if (!source) return <DeadTile title={title} />;
   const chart = asChartId(rawChart);
+  /**
+   * BEFORE the dead-metric check — see `Block`. A block points at no metric, so
+   * its `source` is null for a completely different reason than a deleted one's.
+   */
+  const block = blockKindOf(blockTileKey(chart as BlockId));
+  if (block) return <Block kind={block} text={honoured(chart, rawConfig).text} />;
+
+  if (!source) return <DeadTile title={title} />;
   /**
    * ONLY THE SETTINGS THIS CHART USES. Switching a tile from bar to pie leaves
    * the old `color` in the bag, and the pie draws from `SLICE_ORDER` — so
