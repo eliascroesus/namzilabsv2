@@ -133,6 +133,53 @@ export function SourceLink({ href, className, children }: { href: string; classN
 }
 
 /**
+ * ONE TAB IN THE VIEW STRIP.
+ *
+ * A real `<a href>` for the same reasons the range pills are: the view lives in
+ * the URL, so back and forward work and a link pasted into Slack opens on the
+ * view the sender was looking at. What the transition adds is that the press
+ * LANDS immediately — the tab lights and the board becomes skeletons while the
+ * server re-renders, instead of a second of nothing under a tab that has not
+ * moved yet.
+ */
+export function ViewLink({
+  href,
+  viewId,
+  activeView,
+  children,
+}: {
+  href: string;
+  /** `null` is the default view, which has no row and no `?view=` in the URL. */
+  viewId: string | null;
+  activeView: string | null;
+  children: ReactNode;
+}) {
+  const { pending, go, picked } = useBoard();
+  // The optimistic answer is trusted only WHILE the transition is in flight;
+  // the server's value wins the moment it settles. Same rule as RangeLink, and
+  // the reason neither holds a copy of the truth that can drift.
+  const key = viewId ?? "";
+  const active = (pending && picked != null ? picked : (activeView ?? "")) === key;
+  return (
+    <a
+      href={href}
+      aria-current={active ? "page" : undefined}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        go(href, key);
+      }}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-control px-2.5 py-1.5 text-small font-semibold transition-colors duration-(--duration-fast)",
+        active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      {children}
+    </a>
+  );
+}
+
+/**
  * The tiles, or their shape while the next set is on its way.
  *
  * SKELETONS RATHER THAN A DIMMED COPY. Fading the old numbers keeps them

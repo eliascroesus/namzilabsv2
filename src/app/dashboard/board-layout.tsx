@@ -59,11 +59,21 @@ export function BoardLayout({
   groups: seedGroups,
   placements: seedPlacements,
   canEdit,
+  viewId,
 }: {
   tiles: BoardTile[];
   groups: BoardGroup[];
   placements: TilePlacement[];
   canEdit: boolean;
+  /**
+   * Which view this board IS. `null` is the default one.
+   *
+   * Every write carries it, because a column and a position belong to a view.
+   * The page also passes it as this component's `key` — see the note above
+   * about seeding once: without a remount, switching views would leave the
+   * previous view's board on screen with the new view's props ignored.
+   */
+  viewId: string | null;
 }) {
   // The `useState` initialisers are what "seeded once" means: the arguments are
   // read on the first render and ignored on every one after it.
@@ -148,23 +158,23 @@ export function BoardLayout({
       const undoKeys = new Set(next.map((n) => n.tileKey));
       applyPlacements(next);
       // Key-scoped revert: put back only what this patch touched.
-      settle(setTilePlacementsAction(next), () =>
+      settle(setTilePlacementsAction(next, viewId), () =>
         setPlacements((prev) => [...prev.filter((p) => !undoKeys.has(p.tileKey)), ...undo]),
       );
     },
-    [board, placements, applyPlacements, settle],
+    [board, placements, applyPlacements, settle, viewId],
   );
 
   const addGroup = useCallback(async () => {
     setBusy(true);
     // NOT optimistic: the id is the server's to mint, and a column that appears
     // with a placeholder id cannot be dropped into until it is replaced.
-    const r = await createGroupAction("New group").catch(() => null);
+    const r = await createGroupAction("New group", viewId).catch(() => null);
     setBusy(false);
     if (!r) return setToast("Couldn't add a group — the page may be out of date. Reload and try again.");
     if (!r.ok) return setToast(r.error);
     setGroups((prev) => [...prev, r.group]);
-  }, []);
+  }, [viewId]);
 
   const renameGroup = useCallback((id: string, name: string) => {
     let undo: string | undefined;
@@ -200,14 +210,14 @@ export function BoardLayout({
   const removeGroup = useCallback(
     async (id: string) => {
       setBusy(true);
-      const r = await deleteGroupAction(id).catch(() => null);
+      const r = await deleteGroupAction(id, viewId).catch(() => null);
       setBusy(false);
       if (!r) return setToast("Couldn't delete that group — the page may be out of date. Reload and try again.");
       if (!r.ok) return setToast(r.error);
       applyPlacements(r.moved.map((m) => ({ tileKey: m.tileKey, groupId: null, pos: m.pos })));
       setGroups((prev) => prev.filter((g) => g.id !== id));
     },
-    [applyPlacements],
+    [applyPlacements, viewId],
   );
 
   const setSort = useCallback((id: string, sortKey: GroupSortKey) => {

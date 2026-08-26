@@ -881,6 +881,34 @@ export const workspaceOwners = pgTable("workspace_owners", {
 });
 
 /**
+ * ONE WAY OF LOOKING AT THE DASHBOARD — a Notion view.
+ *
+ * The metrics are the same in every view; what differs is the arrangement, so a
+ * view owns COLUMNS AND POSITIONS and nothing else. "Sales" and "Ops" are two
+ * readings of one set of numbers rather than two dashboards.
+ *
+ * `view_id` IS NULLABLE ON BOTH TABLES BELOW, AND NULL IS THE DEFAULT VIEW —
+ * the board every workspace already has. That is what makes this migration
+ * additive: no backfill, no view row conjured on first read, and every group
+ * and placement written before views existed keeps working untouched. The
+ * default view is therefore the one thing that cannot be renamed or deleted,
+ * which is the price of not writing to the database on a page load.
+ */
+export const dashboardViews = pgTable(
+  "dashboard_views",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    name: text("name").notNull(),
+    /** Fractional order key — the same scheme as everything else on the board. */
+    pos: text("pos").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("dashboard_views_org_idx").on(t.orgId)],
+);
+
+/**
  * A COLUMN ON THE DASHBOARD — a named, coloured group the customer created to
  * put their metrics in.
  *
@@ -919,10 +947,12 @@ export const dashboardGroups = pgTable(
     pos: text("pos").notNull(),
     /** manual | name_asc | name_desc | value_desc | attention */
     sortKey: text("sort_key").notNull().default("manual"),
+    /** Which view this column belongs to. NULL is the default view. */
+    viewId: text("view_id").references(() => dashboardViews.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("dashboard_groups_org_idx").on(t.orgId)],
+  (t) => [index("dashboard_groups_org_idx").on(t.orgId), index("dashboard_groups_view_idx").on(t.viewId)],
 );
 
 /**
@@ -967,11 +997,29 @@ export const dashboardTilePlacements = pgTable(
     /** "flow:<flowId>:<outputNodeId>" | "metric:<metricId>" — see src/lib/board/types.ts. */
     tileKey: text("tile_key").notNull(),
     groupId: text("group_id").references(() => dashboardGroups.id, { onDelete: "set null" }),
+    /** Which view this position is for. NULL is the default view. */
+    viewId: text("view_id").references(() => dashboardViews.id, { onDelete: "cascade" }),
     pos: text("pos").notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
-    primaryKey({ name: "dashboard_tile_placements_pk", columns: [t.orgId, t.tileKey] }),
+    /**
+     * ONE PLACEMENT PER TILE PER VIEW, and the view is part of the key because
+     * a tile sits somewhere different in each of them.
+     *
+     * THE LIVE INDEX IS `NULLS NOT DISTINCT` (migration 0027) AND THIS
+     * DECLARATION CANNOT SAY SO — drizzle-orm exposes the modifier on table
+     * constraints, not on `uniqueIndex()`. Exactly the situation
+     * `stream_fields_key_uq` documents above, and it matters for the same
+     * reason: NULL is the DEFAULT view, so two placements for one tile in the
+     * default view must collide rather than both be stored. The migration file
+     * is the truth; the schema audit compares names and types, so nothing
+     * downstream is fooled.
+     *
+     * It replaced a `(org_id, tile_key)` primary key, which could only describe
+     * a board with one view.
+     */
+    uniqueIndex("dashboard_placements_key_uq").on(t.orgId, t.viewId, t.tileKey),
     // The FK's ON DELETE SET NULL scans this table for every group deletion,
     // across every org. That is the reader this index exists for — the
     // dashboard's own read rides the primary key's org_id prefix and needs

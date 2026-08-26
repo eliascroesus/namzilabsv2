@@ -96,7 +96,7 @@ describe("what the board costs on every freshness poll", () => {
      * every workspace is that workspace — so the second query is conditional
      * and the common case stays at one.
      */
-    expect(page).toMatch(/if \(groups\.length > 0\) placements = await listTilePlacements\(db, orgId\)/);
+    expect(page).toMatch(/if \(groups\.length > 0\) placements = await listTilePlacements\(db, orgId, activeView\)/);
   });
 
   it("never counts, joins or queries per tile", () => {
@@ -115,7 +115,10 @@ describe("what the board costs on every freshness poll", () => {
     // A wide column added to either table later must not ride along on the
     // hottest page in the product — the `dashboard-tiles.test.ts` discipline.
     expect(store).not.toMatch(/\.select\(\)/);
-    expect(store.match(/\.select\(\{/g) ?? []).toHaveLength(2);
+    // Three now: views, groups, placements. Views rides the page's existing
+    // Promise.all; the other two are sequential because which groups to fetch
+    // depends on which view is active.
+    expect(store.match(/\.select\(\{/g) ?? []).toHaveLength(3);
   });
 });
 
@@ -130,5 +133,40 @@ describe("the tile bridge", () => {
     expect(types).toMatch(/node: ReactNode;/);
     expect(types).not.toMatch(/=>\s*void/);
     expect(types).not.toMatch(/^\s*on[A-Z]\w*[?]?:/m);
+  });
+});
+
+describe("views", () => {
+  it("remounts the board when the view changes", () => {
+    /**
+     * THE ONE THING THAT WOULD SILENTLY BREAK VIEWS. `BoardLayout` seeds its
+     * state once and ignores prop changes — that is what stops the
+     * twelve-second poller clobbering a drag — so switching tabs would leave
+     * the previous view's columns on screen with the new view's props ignored.
+     * A key is what makes a different view a different board.
+     */
+    expect(page).toMatch(/key=\{activeView \?\? "default"\}/);
+    expect(page).toMatch(/viewId=\{activeView\}/);
+  });
+
+  it("falls back to the default view rather than erroring on an unknown one", () => {
+    // A stale link, or one shared after the view was deleted, opens the board.
+    expect(page).toMatch(/views\.some\(\(v\) => v\.id === requestedView\) \? requestedView : null/);
+  });
+
+  it("carries the view through every other filter link", () => {
+    // Or changing the range would silently throw you back to the default board.
+    expect(page).toMatch(/if \(v\) p\.set\("view", v\)/);
+  });
+
+  it("asks for the default view with IS NULL, never `= NULL`", () => {
+    /**
+     * `= NULL` is never true in SQL. It does not error — it matches nothing,
+     * which on a board reads as "all my groups vanished".
+     */
+    const store = read("src/lib/board/store.ts");
+    const actions = read("src/app/dashboard/board-actions.ts");
+    expect(code(store).match(/viewId == null \? isNull\(/g) ?? []).toHaveLength(2);
+    expect(code(actions)).toMatch(/viewId == null \? isNull\(col\) : eq\(col, viewId\)/);
   });
 });

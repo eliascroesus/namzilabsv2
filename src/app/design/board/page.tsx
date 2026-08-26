@@ -72,7 +72,7 @@ export default function BoardLab() {
       <PageContainer>
         <BoardControls>
           <TileArea count={TILES.length} columns={GROUPS.length}>
-            <BoardLayout tiles={TILES} groups={GROUPS} placements={PLACEMENTS} canEdit />
+            <BoardLayout tiles={TILES} groups={GROUPS} placements={PLACEMENTS} canEdit viewId={null} />
           </TileArea>
         </BoardControls>
       </PageContainer>

@@ -411,8 +411,8 @@ describe("a write that never answered is a write that failed", () => {
     const settled = (code(layout).match(/settle\(/g) ?? []).length;
     expect(settled, "an optimistic write bypasses the one place that handles failure").toBeGreaterThanOrEqual(5);
     // The two awaited writes carry their own catch rather than going through it.
-    expect(code(layout)).toMatch(/createGroupAction\("New group"\)\.catch/);
-    expect(code(layout)).toMatch(/deleteGroupAction\(id\)\.catch/);
+    expect(code(layout)).toMatch(/createGroupAction\("New group", viewId\)\.catch/);
+    expect(code(layout)).toMatch(/deleteGroupAction\(id, viewId\)\.catch/);
   });
 });
 

@@ -1,7 +1,7 @@
-import { and, eq, sql } from "drizzle-orm";
-import { dashboardGroups, dashboardTilePlacements } from "@/db/schema";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { dashboardGroups, dashboardTilePlacements, dashboardViews } from "@/db/schema";
 import type { DB } from "@/db/types";
-import type { BoardGroup, GroupSortKey, TilePlacement } from "./types";
+import type { BoardGroup, BoardView, GroupSortKey, TilePlacement } from "./types";
 
 /**
  * THE BOARD'S TWO READS, AND THE BUDGET THEY LIVE INSIDE.
@@ -31,7 +31,23 @@ import type { BoardGroup, GroupSortKey, TilePlacement } from "./types";
  * ungrouped board over a customer's real arrangement and call it their layout —
  * the same lie `publishedFlowTiles` documents at length for tiles.
  */
-export async function listBoardGroups(db: DB, orgId: string): Promise<BoardGroup[]> {
+/**
+ * THE VIEWS A WORKSPACE HAS MADE — not counting the default one, which has no
+ * row. The page prepends it, so the strip always has at least one tab.
+ */
+export async function listBoardViews(db: DB, orgId: string): Promise<BoardView[]> {
+  const rows = await db
+    .select({ id: dashboardViews.id, name: dashboardViews.name, pos: dashboardViews.pos })
+    .from(dashboardViews)
+    .where(eq(dashboardViews.orgId, orgId));
+  return rows;
+}
+
+/**
+ * `viewId` of null is the default view, and `IS NULL` is how it is asked for —
+ * `= NULL` is never true in SQL and would silently return an empty board.
+ */
+export async function listBoardGroups(db: DB, orgId: string, viewId: string | null): Promise<BoardGroup[]> {
   const rows = await db
     .select({
       id: dashboardGroups.id,
@@ -41,14 +57,14 @@ export async function listBoardGroups(db: DB, orgId: string): Promise<BoardGroup
       sortKey: dashboardGroups.sortKey,
     })
     .from(dashboardGroups)
-    .where(eq(dashboardGroups.orgId, orgId));
+    .where(and(eq(dashboardGroups.orgId, orgId), viewId == null ? isNull(dashboardGroups.viewId) : eq(dashboardGroups.viewId, viewId)));
   // Ordering is `arrangeBoard`'s job, not SQL's — see the collation note in
   // order.ts. The comparator that puts these in order is the same one the
   // client uses, which is the entire point of not doing it here.
   return rows.map((r) => ({ ...r, sortKey: r.sortKey as GroupSortKey }));
 }
 
-export async function listTilePlacements(db: DB, orgId: string): Promise<TilePlacement[]> {
+export async function listTilePlacements(db: DB, orgId: string, viewId: string | null): Promise<TilePlacement[]> {
   return db
     .select({
       tileKey: dashboardTilePlacements.tileKey,
@@ -56,7 +72,12 @@ export async function listTilePlacements(db: DB, orgId: string): Promise<TilePla
       pos: dashboardTilePlacements.pos,
     })
     .from(dashboardTilePlacements)
-    .where(eq(dashboardTilePlacements.orgId, orgId));
+    .where(
+      and(
+        eq(dashboardTilePlacements.orgId, orgId),
+        viewId == null ? isNull(dashboardTilePlacements.viewId) : eq(dashboardTilePlacements.viewId, viewId),
+      ),
+    );
 }
 
 /**

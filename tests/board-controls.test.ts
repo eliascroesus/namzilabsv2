@@ -18,7 +18,7 @@ import { renderToStaticMarkup } from "react-dom/server";
  */
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {} }) }));
 
-import { BoardControls, MetaLine, RangeLink, TileArea } from "@/app/dashboard/board-controls";
+import { BoardControls, MetaLine, RangeLink, TileArea, ViewLink } from "@/app/dashboard/board-controls";
 
 // Children go in the props bag rather than as a third argument: these
 // components declare `children` as required, and `createElement`'s overloads
@@ -77,5 +77,47 @@ describe("a control outside the provider", () => {
     // regression with no symptom until someone complains the board feels slow
     // again.
     expect(() => renderToStaticMarkup(pill("today", "today"))).toThrow(/inside <BoardControls>/);
+  });
+});
+
+describe("the view tabs", () => {
+  const tab = (id: string | null, active: string | null, name: string) =>
+    createElement(ViewLink, {
+      key: id ?? "default",
+      href: id ? `/dashboard?range=7d&view=${id}` : "/dashboard?range=7d",
+      viewId: id,
+      activeView: active,
+      children: name,
+    });
+
+  it("are real links carrying their own view", () => {
+    /**
+     * The same promise the range pills make, for the same reasons: the view is
+     * in the URL, so a link pasted into Slack opens on the view its sender was
+     * looking at, and back and forward work. All of that dies silently the day
+     * someone turns these into `<button onClick>`.
+     */
+    const html = board([tab(null, null, "Dashboard"), tab("v2", null, "Ops")]);
+    expect(html).toContain('href="/dashboard?range=7d"');
+    expect(html).toContain('href="/dashboard?range=7d&amp;view=v2"');
+    expect(html).toContain("Dashboard");
+    expect(html).toContain("Ops");
+  });
+
+  it("mark exactly one tab as current, including the default one", () => {
+    /**
+     * The default view has no row and no `?view=` in the URL, so its id is null
+     * and "no view selected" and "the default view is selected" are the SAME
+     * state. A screen reader hearing several identical links and no indication
+     * of which is on is the failure this pins — the same one the range track
+     * had before `aria-current`.
+     */
+    const onDefault = board([tab(null, null, "Dashboard"), tab("v2", null, "Ops")]);
+    expect(onDefault.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(onDefault.indexOf('aria-current="page"')).toBeLessThan(onDefault.indexOf("Ops"));
+
+    const onOps = board([tab(null, "v2", "Dashboard"), tab("v2", "v2", "Ops")]);
+    expect(onOps.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(onOps.indexOf('aria-current="page"')).toBeGreaterThan(onOps.indexOf("Dashboard"));
   });
 });

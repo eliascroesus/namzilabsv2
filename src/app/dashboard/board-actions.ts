@@ -1,12 +1,15 @@
 "use server";
 
+import { redirect } from "next/navigation";
+
 import { z } from "zod";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { getDb } from "@/db/client";
-import { dashboardGroups, dashboardTilePlacements } from "@/db/schema";
+import { dashboardGroups, dashboardTilePlacements, dashboardViews } from "@/db/schema";
 import { requireOrg, type OrgContext } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
-import { boardGroupCap, boardPlacementCap } from "@/lib/limits";
+import { boardGroupCap, boardPlacementCap, boardViewCap } from "@/lib/limits";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
 import type { BoardGroup } from "@/lib/board/types";
@@ -76,10 +79,20 @@ const posSchema = z
  * MULTI-ROW upsert can set each row to its own value: a literal in the `set`
  * would write one item's position onto every row in the batch.
  */
+/**
+ * WHICH VIEW A WRITE IS FOR, as a predicate.
+ *
+ * `= NULL` is never true in SQL, so the default view — whose `view_id` is NULL
+ * — has to be asked for with `IS NULL`. Getting this wrong does not error; it
+ * silently matches nothing, which on a board reads as "my groups vanished".
+ */
+const inView = (col: AnyPgColumn, viewId: string | null) => (viewId == null ? isNull(col) : eq(col, viewId));
+
 const EXCLUDED_POS = sql.raw(`excluded."pos"`);
 const EXCLUDED_GROUP = sql.raw(`excluded."group_id"`);
+const EXCLUDED_VIEW = sql.raw(`excluded."view_id"`);
 
-export async function createGroupAction(name: string): Promise<Result<{ group: BoardGroup }>> {
+export async function createGroupAction(name: string, viewId: string | null = null): Promise<Result<{ group: BoardGroup }>> {
   const ctx = await requireOrg();
   if (await blocked(ctx)) return fail(RANK_BLOCKS);
   const parsed = nameSchema.safeParse(name);
@@ -90,7 +103,7 @@ export async function createGroupAction(name: string): Promise<Result<{ group: B
     const existing = await db
       .select({ pos: dashboardGroups.pos })
       .from(dashboardGroups)
-      .where(eq(dashboardGroups.orgId, ctx.orgId));
+      .where(and(eq(dashboardGroups.orgId, ctx.orgId), inView(dashboardGroups.viewId, viewId)));
     const cap = boardGroupCap();
     if (existing.length >= cap) {
       return fail(`This workspace has reached its limit of ${cap} groups. Delete one to add another.`);
@@ -108,7 +121,7 @@ export async function createGroupAction(name: string): Promise<Result<{ group: B
       pos: keyBetween(last, null),
       sortKey: "manual",
     };
-    await db.insert(dashboardGroups).values({ ...group, orgId: ctx.orgId });
+    await db.insert(dashboardGroups).values({ ...group, orgId: ctx.orgId, viewId });
     return { ok: true, group };
   } catch (e) {
     return oops(e);
@@ -164,7 +177,7 @@ export async function setGroupColorAction(id: string, color: string): Promise<Re
  * safety net behind it: if this ever stops running, the tiles still come home
  * to Ungrouped instead of pointing at a group that is gone.
  */
-export async function deleteGroupAction(id: string): Promise<Result<{ moved: Array<{ tileKey: string; pos: string }> }>> {
+export async function deleteGroupAction(id: string, viewId: string | null = null): Promise<Result<{ moved: Array<{ tileKey: string; pos: string }> }>> {
   const ctx = await requireOrg();
   if (await blocked(ctx)) return fail(RANK_BLOCKS);
   if (!idSchema.safeParse(id).success) return fail("Unknown group.");
@@ -177,7 +190,7 @@ export async function deleteGroupAction(id: string): Promise<Result<{ moved: Arr
         pos: dashboardTilePlacements.pos,
       })
       .from(dashboardTilePlacements)
-      .where(eq(dashboardTilePlacements.orgId, ctx.orgId));
+      .where(and(eq(dashboardTilePlacements.orgId, ctx.orgId), inView(dashboardTilePlacements.viewId, viewId)));
 
     const leaving = rows.filter((r) => r.groupId === id).sort((a, b) => compareKeys(a.pos, b.pos));
     let moved: Array<{ tileKey: string; pos: string }> = [];
@@ -194,10 +207,10 @@ export async function deleteGroupAction(id: string): Promise<Result<{ moved: Arr
       moved = leaving.map((r, i) => ({ tileKey: r.tileKey, pos: keys[i] }));
       await db
         .insert(dashboardTilePlacements)
-        .values(moved.map((m) => ({ orgId: ctx.orgId, tileKey: m.tileKey, groupId: null, pos: m.pos })))
+        .values(moved.map((m) => ({ orgId: ctx.orgId, viewId, tileKey: m.tileKey, groupId: null, pos: m.pos })))
         .onConflictDoUpdate({
-          target: [dashboardTilePlacements.orgId, dashboardTilePlacements.tileKey],
-          set: { groupId: EXCLUDED_GROUP, pos: EXCLUDED_POS, updatedAt: new Date() },
+          target: [dashboardTilePlacements.orgId, dashboardTilePlacements.viewId, dashboardTilePlacements.tileKey],
+          set: { groupId: EXCLUDED_GROUP, viewId: EXCLUDED_VIEW, pos: EXCLUDED_POS, updatedAt: new Date() },
         });
     }
 
@@ -232,6 +245,7 @@ export async function deleteGroupAction(id: string): Promise<Result<{ moved: Arr
  */
 export async function setTilePlacementsAction(
   items: Array<{ tileKey: string; groupId: string | null; pos: string }>,
+  viewId: string | null = null,
 ): Promise<Result> {
   const ctx = await requireOrg();
   if (await blocked(ctx)) return fail(RANK_BLOCKS);
@@ -272,7 +286,12 @@ export async function setTilePlacementsAction(
       const mine = await db
         .select({ id: dashboardGroups.id })
         .from(dashboardGroups)
-        .where(and(eq(dashboardGroups.orgId, ctx.orgId), inArray(dashboardGroups.id, named)));
+        .where(
+          and(eq(dashboardGroups.orgId, ctx.orgId), inView(dashboardGroups.viewId, viewId), inArray(dashboardGroups.id, named)),
+        );
+      // A group id from a browser is re-walled to the org AND to the view: a
+      // tile filed into a column that belongs to a different view would render
+      // in neither.
       if (mine.length !== named.length) return fail("Unknown group.");
     }
 
@@ -292,10 +311,10 @@ export async function setTilePlacementsAction(
 
     await db
       .insert(dashboardTilePlacements)
-      .values(parsed.data.map((i) => ({ orgId: ctx.orgId, tileKey: i.tileKey, groupId: i.groupId, pos: i.pos })))
+      .values(parsed.data.map((i) => ({ orgId: ctx.orgId, viewId, tileKey: i.tileKey, groupId: i.groupId, pos: i.pos })))
       .onConflictDoUpdate({
-        target: [dashboardTilePlacements.orgId, dashboardTilePlacements.tileKey],
-        set: { groupId: EXCLUDED_GROUP, pos: EXCLUDED_POS, updatedAt: new Date() },
+        target: [dashboardTilePlacements.orgId, dashboardTilePlacements.viewId, dashboardTilePlacements.tileKey],
+        set: { groupId: EXCLUDED_GROUP, viewId: EXCLUDED_VIEW, pos: EXCLUDED_POS, updatedAt: new Date() },
       });
     return { ok: true };
   } catch (e) {
@@ -363,4 +382,56 @@ export async function setGroupSortAction(id: string, sortKey: string): Promise<R
   } catch (e) {
     return oops(e);
   }
+}
+
+/**
+ * A NEW WAY OF LOOKING AT THE SAME METRICS.
+ *
+ * It arrives empty of COLUMNS, not empty of metrics — every tile is still on
+ * it, sitting in the ungrouped row until it is filed. That is what a view is:
+ * one set of numbers, several arrangements. A view that owned which metrics
+ * exist would be a second dashboard wearing a tab.
+ *
+ * A PLAIN FORM POST, so the `+` needs no client boundary of its own — the shape
+ * "Refresh all" already uses. It carries the range and source as hidden fields
+ * and hands them back on the redirect, because landing on a new view should not
+ * also silently reset the period you were looking at.
+ *
+ * Its only voice is that redirect, so a refusal is a query param the page
+ * renders as a banner — the convention every FormData action here follows.
+ */
+export async function addViewAction(fd: FormData): Promise<void> {
+  const ctx = await requireOrg();
+  const back = (extra: string) => {
+    const p = new URLSearchParams();
+    const range = String(fd.get("range") ?? "");
+    const source = String(fd.get("source") ?? "");
+    if (range) p.set("range", range);
+    if (source) p.set("source", source);
+    return `/dashboard?${p.toString()}${p.size ? "&" : ""}${extra}`;
+  };
+  if (await blocked(ctx)) redirect(back("error=rank"));
+
+  const db = getDb();
+  const existing = await db
+    .select({ pos: dashboardViews.pos })
+    .from(dashboardViews)
+    .where(eq(dashboardViews.orgId, ctx.orgId));
+
+  const cap = boardViewCap();
+  // The default view has no row, so it is not in `existing` — hence the `+ 1`.
+  if (existing.length + 1 >= cap) redirect(back("error=view_limit"));
+
+  const last = existing.map((v) => v.pos).sort(compareKeys).at(-1) ?? null;
+  const id = crypto.randomUUID();
+  await db.insert(dashboardViews).values({
+    id,
+    orgId: ctx.orgId,
+    // "View 2" because the default one is View 1 and has no row to count.
+    name: `View ${existing.length + 2}`,
+    pos: keyBetween(last, null),
+  });
+  // Straight onto it: a tab that appears somewhere else and waits to be found
+  // is a worse answer than the one you just asked for.
+  redirect(back(`view=${id}`));
 }

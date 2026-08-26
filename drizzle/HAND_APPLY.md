@@ -857,3 +857,104 @@ columns.
 > applies here too at merge time. Like 0024 and 0025, this migration carries no
 > `drizzle/meta/0026_snapshot.json` — it was hand-written, and the journal entry
 > uses a synthetic `when` stamp continuing that pair's sequence.
+
+## 0027 — `dashboard_views` (a Notion-style view bar over the board)
+
+A view is one WAY OF LOOKING at the dashboard. The metrics are the same in every
+view; what differs is the arrangement, so a view owns columns and positions and
+nothing else — "Sales" and "Ops" are two readings of one set of numbers rather
+than two dashboards.
+
+Unlike 0026 this one ALTERS existing tables. It is still safe to paste twice —
+every statement is `IF NOT EXISTS` or wrapped — but read the two notes first.
+
+- **`view_id` IS NULLABLE, AND NULL IS THE DEFAULT VIEW.** That is what makes
+  this additive: no backfill, and no view row conjured behind a page load. Every
+  group and placement written before views existed keeps working untouched, as
+  the board the workspace already had. The price is that the default view is the
+  one thing that cannot be renamed or deleted; a later migration can give it a
+  real row if that is ever wanted.
+- **The placement key gains the view, and it must be `NULLS NOT DISTINCT`.** A
+  tile sits somewhere different in each view, so `(org_id, tile_key)` can no
+  longer identify a placement. Postgres treats NULLs as distinct by default,
+  which would let a tile hold two placements in the DEFAULT view and both be
+  stored — the modifier is what makes them collide. Same technique migration
+  0021 used on `stream_fields_key_uq`, and drizzle still cannot express it in a
+  `uniqueIndex()`, so the schema declaration under-describes the live index on
+  purpose.
+
+```sql
+CREATE TABLE IF NOT EXISTS "dashboard_views" (
+  "id"         text PRIMARY KEY NOT NULL,
+  "org_id"     text NOT NULL,
+  "name"       text NOT NULL,
+  "pos"        text COLLATE "C" NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "dashboard_views_org_idx"
+  ON "dashboard_views" USING btree ("org_id");
+
+ALTER TABLE "dashboard_groups"           ADD COLUMN IF NOT EXISTS "view_id" text;
+ALTER TABLE "dashboard_tile_placements"  ADD COLUMN IF NOT EXISTS "view_id" text;
+
+DO $$ BEGIN
+ ALTER TABLE "dashboard_groups"
+   ADD CONSTRAINT "dashboard_groups_view_id_dashboard_views_id_fk"
+   FOREIGN KEY ("view_id") REFERENCES "public"."dashboard_views"("id")
+   ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+ ALTER TABLE "dashboard_tile_placements"
+   ADD CONSTRAINT "dashboard_tile_placements_view_id_dashboard_views_id_fk"
+   FOREIGN KEY ("view_id") REFERENCES "public"."dashboard_views"("id")
+   ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+CREATE INDEX IF NOT EXISTS "dashboard_groups_view_idx"
+  ON "dashboard_groups" USING btree ("view_id");
+
+-- The placement key gains the view. NULLS NOT DISTINCT is load-bearing: see above.
+ALTER TABLE "dashboard_tile_placements" DROP CONSTRAINT IF EXISTS "dashboard_tile_placements_pk";
+
+CREATE UNIQUE INDEX IF NOT EXISTS "dashboard_placements_key_uq"
+  ON "dashboard_tile_placements" USING btree ("org_id","view_id","tile_key") NULLS NOT DISTINCT;
+```
+
+Verify (expect 1, 6, 1, 1, 1):
+
+```sql
+SELECT
+  (SELECT count(*) FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='dashboard_views')           AS views_table_should_be_1,
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='dashboard_views')           AS view_cols_should_be_6,
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='dashboard_groups'
+      AND column_name='view_id')                                            AS groups_have_view_id,
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='dashboard_tile_placements'
+      AND column_name='view_id')                                            AS placements_have_view_id,
+  (SELECT count(*) FROM pg_indexes
+    WHERE schemaname='public' AND indexname='dashboard_placements_key_uq')  AS new_key_should_be_1;
+```
+
+Confirm the NULLs really do collide — this is the one that would rot quietly
+(expect `nulls_not_distinct` = `true`):
+
+```sql
+SELECT i.indnullsnotdistinct AS nulls_not_distinct
+FROM pg_index i
+JOIN pg_class c ON c.oid = i.indexrelid
+WHERE c.relname = 'dashboard_placements_key_uq';
+```
+
+`scripts/schema-audit.sql` was regenerated alongside this: 21 tables, 210
+columns.
+
+> **Numbering note.** 0016 is still reserved by the unmerged
+> `batch5/retention-purge` branch. Like 0024–0026 this migration carries no
+> drizzle snapshot and its journal entry uses a synthetic `when` stamp
+> continuing that sequence.

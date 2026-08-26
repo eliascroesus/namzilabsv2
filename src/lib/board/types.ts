@@ -12,6 +12,15 @@ import type { ReactNode } from "react";
  * browser or a database.
  */
 
+/**
+ * ONE WAY OF LOOKING AT THE BOARD.
+ *
+ * `id: null` is the DEFAULT view — the board every workspace already had before
+ * views existed. It has no row and cannot be renamed or deleted, which is the
+ * price of not writing to the database on a page load. See the schema.
+ */
+export type BoardView = { id: string | null; name: string; pos: string };
+
 /** How a group orders the tiles inside it. `manual` means "as dragged". */
 export type GroupSortKey = "manual" | "name_asc" | "name_desc" | "value_desc" | "attention";
 

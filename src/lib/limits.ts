@@ -68,3 +68,14 @@ export function boardGroupCap(): number {
 export function boardPlacementCap(): number {
   return intEnv("MAX_BOARD_PLACEMENTS_PER_ORG", 2000);
 }
+
+/**
+ * How many views one workspace may put above its board.
+ *
+ * The same blast-radius bound as the rest, and it counts the default view — the
+ * one with no row — so a workspace really can have this many tabs rather than
+ * this many plus one.
+ */
+export function boardViewCap(): number {
+  return intEnv("MAX_BOARD_VIEWS_PER_ORG", 30);
+}

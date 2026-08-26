@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (20 tables, 202 columns).
+-- QUERY 1 — tables and columns (21 tables, 210 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -73,13 +73,21 @@ WITH expected (tbl, col) AS (
     ('dashboard_groups', 'color'),
     ('dashboard_groups', 'pos'),
     ('dashboard_groups', 'sort_key'),
+    ('dashboard_groups', 'view_id'),
     ('dashboard_groups', 'created_at'),
     ('dashboard_groups', 'updated_at'),
     ('dashboard_tile_placements', 'org_id'),
     ('dashboard_tile_placements', 'tile_key'),
     ('dashboard_tile_placements', 'group_id'),
+    ('dashboard_tile_placements', 'view_id'),
     ('dashboard_tile_placements', 'pos'),
     ('dashboard_tile_placements', 'updated_at'),
+    ('dashboard_views', 'id'),
+    ('dashboard_views', 'org_id'),
+    ('dashboard_views', 'name'),
+    ('dashboard_views', 'pos'),
+    ('dashboard_views', 'created_at'),
+    ('dashboard_views', 'updated_at'),
     ('dead_letter', 'id'),
     ('dead_letter', 'org_id'),
     ('dead_letter', 'connection_id'),
@@ -252,7 +260,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (39 expected).
+-- QUERY 2 (optional) — indexes (42 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -265,7 +273,10 @@ WITH expected (tbl, idx) AS (
     ('connections', 'connections_status_idx'),
     ('connections', 'connections_due_sweep_idx'),
     ('dashboard_groups', 'dashboard_groups_org_idx'),
+    ('dashboard_groups', 'dashboard_groups_view_idx'),
+    ('dashboard_tile_placements', 'dashboard_placements_key_uq'),
     ('dashboard_tile_placements', 'dashboard_placements_group_idx'),
+    ('dashboard_views', 'dashboard_views_org_idx'),
     ('dead_letter', 'dead_letter_conn_idx'),
     ('dead_letter', 'dead_letter_raw_event_idx'),
     ('delivery_log', 'delivery_log_conn_idx'),

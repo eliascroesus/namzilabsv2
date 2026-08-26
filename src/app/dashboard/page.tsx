@@ -16,13 +16,21 @@ import { SourceMark } from "@/components/source-mark";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
-import { BoardControls, MetaLine, RangeLink, SourceLink, TileArea } from "./board-controls";
+import { BoardControls, MetaLine, RangeLink, SourceLink, TileArea, ViewLink } from "./board-controls";
 import { BoardLayout } from "./board-layout";
-import { listBoardGroups, listTilePlacements } from "@/lib/board/store";
-import { tileKeyOfFlow, tileKeyOfMetric, type BoardGroup, type BoardTile, type TilePlacement } from "@/lib/board/types";
+import { listBoardGroups, listBoardViews, listTilePlacements } from "@/lib/board/store";
+import {
+  tileKeyOfFlow,
+  tileKeyOfMetric,
+  type BoardGroup,
+  type BoardTile,
+  type BoardView,
+  type TilePlacement,
+} from "@/lib/board/types";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
 import { publishedFlowTiles, unpublishedFlowIds } from "@/lib/flow/materialize";
 import { refreshAllFlowsAction } from "@/app/dashboard/flows/actions";
+import { addViewAction } from "./board-actions";
 import { listMetrics, type Metric } from "@/lib/metrics/store";
 import { parseDefinition } from "@/lib/metrics/types";
 import {
@@ -96,13 +104,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
   const { key: rangeKey, range } = resolveRange(one(sp.range) || "7d");
   const boardSource = one(sp.source) || null;
+  /**
+   * WHICH VIEW, from the URL, beside the range and the source.
+   *
+   * Empty is the DEFAULT view — the board that existed before views did, whose
+   * groups carry a null `view_id`. So every link anyone has already shared
+   * still lands somewhere real.
+   */
+  const requestedView = one(sp.view) || null;
 
   let metrics: Metric[] = [];
   let sources: string[] = [];
   let connCount = 0;
   let flowCount = 0;
+  let views: BoardView[] = [];
   let groups: BoardGroup[] = [];
   let placements: TilePlacement[] = [];
+  let activeView: string | null = null;
   let loadError: string | null = null;
 
   /**
@@ -115,16 +133,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * Both moved to /dashboard/activity, which has room to show fifty rows and
    * runs them only when somebody opens it. See that page's own note.
    *
-   * The fifth is the board's groups, added when the dashboard learned to hold
-   * columns. It is CONCURRENT with the other four, so it costs no wall clock,
-   * and it is one narrow read of a table that holds a handful of rows per
-   * workspace. Its partner — the placements — is CONDITIONAL and sits below the
-   * try, because a workspace with no groups cannot have any, and at launch
-   * every workspace is that workspace. Same budget as everything else on this
-   * page: whatever runs here runs every twelve seconds in every open tab.
+   * The fifth is the board's VIEWS, and it is the only one of the three board
+   * reads that can run concurrently: which groups to fetch depends on which
+   * view is active, and that depends on this answer. So views ride along here
+   * for free, and groups and placements are sequential below.
+   *
+   * Same budget as everything else on this page: whatever runs here runs every
+   * twelve seconds in every open tab, so all three are narrow, column-listed
+   * reads of tables holding a handful of rows per workspace.
    */
   try {
-    [metrics, sources, connCount, flowCount, groups] = await Promise.all([
+    [metrics, sources, connCount, flowCount, views] = await Promise.all([
       listMetrics(orgId),
       /**
        * THE SOURCES A WORKSPACE IS CONNECTED TO, not the ones its history
@@ -159,13 +178,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         .from(flows)
         .where(eq(flows.orgId, orgId))
         .then((r) => Number(r[0]?.c ?? 0)),
-      listBoardGroups(db, orgId),
+      listBoardViews(db, orgId),
     ]);
-    // THE SECOND BOARD READ, AND THE WHOLE COST ARGUMENT FOR IT. A workspace
-    // with no groups renders the plain grid, so its placements are not merely
-    // unused — they cannot exist. Sequential rather than in the Promise.all
-    // above because it has to know the answer to the first one.
-    if (groups.length > 0) placements = await listTilePlacements(db, orgId);
+    /**
+     * A VIEW THE WORKSPACE DOES NOT HAVE IS THE DEFAULT VIEW, not an error. A
+     * stale link, or one shared after the view was deleted, opens the board
+     * rather than a page reporting that it could not find something.
+     */
+    activeView = views.some((v) => v.id === requestedView) ? requestedView : null;
+    groups = await listBoardGroups(db, orgId, activeView);
+    // THE THIRD BOARD READ, AND THE WHOLE COST ARGUMENT FOR IT. A view with no
+    // groups renders the plain grid, so its placements are not merely unused —
+    // they cannot exist. Sequential rather than in the Promise.all above
+    // because it has to know the answer to the first one.
+    if (groups.length > 0) placements = await listTilePlacements(db, orgId, activeView);
   } catch (err) {
     // THE EXCEPTION GOES TO THE LOG, NOT TO THE PAGE. This used to set
     // `err.message` and render it verbatim, so a customer's dashboard could
@@ -282,8 +308,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const p = new URLSearchParams();
     p.set("range", over.range ?? rangeKey);
     if (over.source ?? boardSource) p.set("source", over.source ?? boardSource ?? "");
+    // The view rides along with every other filter link, so switching the range
+    // does not silently throw you back to the default board.
+    const v = over.view !== undefined ? over.view : (activeView ?? "");
+    if (v) p.set("view", v);
     return `/dashboard?${p.toString()}`;
   };
+
+  /** The default view first — it has no row, so nothing else can put it there. */
+  const viewTabs: BoardView[] = [
+    { id: null, name: "Dashboard", pos: "" },
+    ...views.slice().sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0)),
+  ];
 
   /**
    * The range control, worn by links — range lives in the URL, so these stay
@@ -429,6 +465,39 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             share a client boundary so the press can land before the server
             answers — see board-controls.tsx. */}
         <BoardControls>
+        {/* ── THE VIEW STRIP ────────────────────────────────────────────
+            One board, several arrangements of it — Notion's view bar, doing
+            Notion's job. It sits ABOVE the filter island rather than inside it
+            because it answers a different kind of question: the island narrows
+            WHICH NUMBERS you are looking at, and this one chooses HOW THEY ARE
+            LAID OUT. Two answers in one control would read as one.
+
+            The tabs are real anchors, so the view survives a paste into Slack;
+            the `+` is a plain form post, so it needs no client boundary of its
+            own — the same shape "Refresh all" already uses in the header. */}
+        <div className="-mx-1 mt-6 flex max-w-full items-center gap-1 overflow-x-auto px-1 pb-1">
+          {viewTabs.map((v) => (
+            <ViewLink key={v.id ?? "default"} href={qs({ view: v.id ?? "" })} viewId={v.id} activeView={activeView}>
+              {v.name}
+            </ViewLink>
+          ))}
+          {access.can("create_flows") && (
+            <form action={addViewAction}>
+              <input type="hidden" name="range" value={rangeKey} />
+              <input type="hidden" name="source" value={boardSource ?? ""} />
+              <SubmitButton
+                variant="ghost"
+                size="sm"
+                pendingLabel="Adding…"
+                title="Add a view — the same metrics, arranged another way"
+              >
+                <Plus size={15} />
+                <span className="sr-only">Add a view</span>
+              </SubmitButton>
+            </form>
+          )}
+        </div>
+
         {/* ── THE FILTER BAR, AS AN ISLAND ──────────────────────────────
             Two questions, two controls, one surface. They used to sit loose on
             the page: on white that was merely plain, and on the warm canvas it
@@ -575,7 +644,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             {/* The ARRANGEMENT is the client's; the CARDS are still rendered
                 here, on the server, and passed through as `node`. With no
                 groups this emits the same BOARD_GRID markup it always did. */}
-            <BoardLayout tiles={boardTiles} groups={groups} placements={placements} canEdit={access.can("create_flows")} />
+            <BoardLayout
+              // A DIFFERENT VIEW IS A DIFFERENT BOARD. BoardLayout seeds its
+              // state once and ignores prop changes — that is what stops the
+              // twelve-second poller clobbering a drag — so switching views
+              // without this would leave the previous view's columns on screen.
+              key={activeView ?? "default"}
+              viewId={activeView}
+              tiles={boardTiles}
+              groups={groups}
+              placements={placements}
+              canEdit={access.can("create_flows")}
+            />
           </TileArea>
         )}
         </BoardControls>

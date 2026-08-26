@@ -24,6 +24,7 @@ import { groupAccent, groupBadge, groupInk, groupWash } from "@/components/flow/
 // The actions reach for the database the moment the module loads. Nothing here
 // submits anything; what is under test is what the board SAYS.
 vi.mock("@/app/dashboard/board-actions", () => ({
+  addViewAction: async () => {},
   createGroupAction: async () => ({ ok: true }),
   renameGroupAction: async () => ({ ok: true }),
   setGroupColorAction: async () => ({ ok: true }),
@@ -55,7 +56,7 @@ const render = (props: {
   groups: BoardGroup[];
   placements: TilePlacement[];
   canEdit: boolean;
-}) => renderToStaticMarkup(createElement(BoardLayout, props));
+}) => renderToStaticMarkup(createElement(BoardLayout, { ...props, viewId: null }));
 
 const TILES = [tile("metric:a", "Revenue"), tile("metric:b", "Leads")];
 
