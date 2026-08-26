@@ -2,7 +2,29 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BarChart3, Check, Filter, Hash, LayoutGrid, MoreHorizontal, PenLine, Plus, Repeat, Rows3, Target, Trash2 } from "lucide-react";
+import {
+  AreaChart,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  BarChart3,
+  Check,
+  Filter,
+  FilterX,
+  Hash,
+  LayoutGrid,
+  MoreHorizontal,
+  PenLine,
+  PieChart,
+  Plus,
+  Repeat,
+  Rows3,
+  Table as TableIcon,
+  Target,
+  TrendingUp,
+  Trash2,
+} from "lucide-react";
 import { canvasCells, compact, GRID_COLS, type GridBox } from "@/lib/board/grid";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/flow/controls/Popover";
@@ -460,7 +482,8 @@ export function CustomBoard({
                     title={t.config.title || t.metricName}
                     rangeKey={rangeKey}
                     source={t.data}
-                    rows={tile.h}
+                    config={t.config}
+                    cols={tile.w}
                   />
                 );
               })()}
@@ -509,10 +532,15 @@ export function CustomBoard({
 /** Chart id → its icon, shared by the Add menu and nothing else yet. */
 const CHART_ICONS: Record<ChartId, typeof Hash> = {
   number: Hash,
+  line: TrendingUp,
+  area: AreaChart,
   bar: BarChart3,
   category: Rows3,
+  pie: PieChart,
   progress: Target,
   funnel: Filter,
+  pipeline: FilterX,
+  table: TableIcon,
 };
 
 /**

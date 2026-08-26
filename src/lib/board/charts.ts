@@ -40,9 +40,27 @@ export const CHARTS = [
     minH: 3,
   },
   {
+    id: "line",
+    label: "Line",
+    blurb: "The trend as one continuous reading, gaps and all.",
+    w: 6,
+    h: 6,
+    minW: 3,
+    minH: 4,
+  },
+  {
+    id: "area",
+    label: "Area",
+    blurb: "The trend, with the amount underneath it filled in.",
+    w: 6,
+    h: 6,
+    minW: 3,
+    minH: 4,
+  },
+  {
     id: "bar",
     label: "Bar chart",
-    blurb: "One bar per period, so the shape of a trend is visible at a glance.",
+    blurb: "One bar per period, anchored at zero so height means magnitude.",
     w: 6,
     h: 6,
     minW: 3,
@@ -56,6 +74,15 @@ export const CHARTS = [
     h: 6,
     minW: 3,
     minH: 4,
+  },
+  {
+    id: "pie",
+    label: "Pie",
+    blurb: "Each group's share of the whole, with the small ones rolled up.",
+    w: 4,
+    h: 6,
+    minW: 3,
+    minH: 5,
   },
   {
     id: "progress",
@@ -75,7 +102,37 @@ export const CHARTS = [
     minW: 4,
     minH: 5,
   },
+  {
+    id: "pipeline",
+    label: "Pipeline",
+    blurb: "The same stages, narrowing toward the close.",
+    w: 6,
+    h: 7,
+    minW: 4,
+    minH: 5,
+  },
+  {
+    id: "table",
+    label: "Table",
+    blurb: "The numbers themselves, row by row.",
+    w: 4,
+    h: 6,
+    minW: 3,
+    minH: 4,
+  },
 ] as const;
+
+/**
+ * STACKED BARS ARE ABSENT, AND NOT BECAUSE NOBODY GOT TO THEM.
+ *
+ * A stack needs a value per group PER BUCKET, and no such shape exists
+ * anywhere in the engine — `Shape` is scalar | series | grouped | dataset, and
+ * a tile carries one `series` or one `groups`, never a matrix of both. So
+ * there is no config key, no greyed option and no "coming soon": offering a
+ * control for data that cannot exist is the same lie as offering a chart with
+ * no renderer. The day the engine materializes a two-dimensional shape,
+ * stacking becomes a new id here with its own legality rule.
+ */
 
 export type ChartId = (typeof CHARTS)[number]["id"];
 
@@ -180,12 +237,24 @@ export function shapeOfClassic(
  * be progressing toward.
  */
 export function chartsFor(shape: MetricShape): ChartId[] {
-  if (shape.funnel) return ["funnel"];
+  /**
+   * A FUNNEL IS ONLY EVER ITS OWN STAGES — as a list of bars (`funnel`) or as
+   * the narrowing shape (`pipeline`), which are two drawings of one dataset.
+   *
+   * Neither is offered over a GROUPED flow metric yet, and that wait is
+   * deliberate: `groupByCategories` preserves the author's stage order while
+   * `groupByField` sorts a ranking, and only the `facts.ordered` stamp can
+   * tell them apart. That stamp began accruing on materialize; until a tile
+   * carries one, drawing its groups as a funnel would be a lie told in the
+   * author's own labels.
+   */
+  if (shape.funnel) return ["funnel", "pipeline"];
   const out: ChartId[] = [];
   if (shape.scalar) out.push("number");
-  if (shape.series) out.push("bar");
-  if (shape.groups) out.push("category");
+  if (shape.series) out.push("line", "area", "bar");
+  if (shape.groups) out.push("category", "pie");
   if (shape.target && shape.scalar) out.push("progress");
+  if (shape.series || shape.groups) out.push("table");
   return out;
 }
 

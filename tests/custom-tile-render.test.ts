@@ -58,6 +58,38 @@ const RICH = {
   },
 };
 
+/**
+ * PROSE ASSERTED AS PROSE, not as source text.
+ *
+ * Every sentence on a tile is spliced together from expressions, and JSX drops
+ * the whitespace around an expression when the line wraps — which shipped
+ * "3 records carryno date in this metric's time reference". A source-text
+ * assertion cannot see that: the file contains the space. Only the rendered
+ * string does, so the rendered string is what these read.
+ */
+describe("the sentences the tile writes", () => {
+  const undated = (n: number) =>
+    render("number", flow({ format: "number", precision: 0, byRange: { today: { value: 12, undated: n } } }))
+      .replace(/<[^>]*>/g, "")
+      .replace(/&#x27;|&rsquo;|\u2019/g, "'");
+
+  it("keeps its words apart when it counts undated records", () => {
+    expect(undated(3)).toContain("3 records carry no date");
+    // Sabotage: splice the plural back in as `carr{n === 1 ? "ies" : "y"}` and
+    // this reads "carryno date" again.
+    expect(undated(3)).not.toMatch(/carry\S/);
+  });
+
+  it("agrees with itself about one record", () => {
+    expect(undated(1)).toContain("1 record carries no date");
+    expect(undated(1)).not.toContain("records");
+  });
+
+  it("says nothing at all when every record is dated", () => {
+    expect(undated(0)).not.toContain("no date");
+  });
+});
+
 describe("the chart is honoured, not inferred", () => {
   it("draws the same data two different ways when asked for two different charts", () => {
     // THE ASSERTION FlowTile CANNOT PASS. Presence-driven rendering returns the
@@ -69,14 +101,20 @@ describe("the chart is honoured, not inferred", () => {
 
     expect(asNumber).not.toBe(asBar);
     expect(asBar).not.toBe(asCategory);
-    // ...and each one draws its own mark. Sparkbars titles each bar with its
-    // bucket; GroupBars prints the group's name.
-    expect(asBar).toContain("2026-08-25");
+    // ...and each one draws its own mark: the bars label their buckets, the
+    // breakdown prints the group's name.
+    //
+    // "Aug 25", not "2026-08-25" — the kit prints bucket keys through
+    // `bucketLabel`, because a raw ISO key on an axis is a storage detail
+    // leaking onto the card. Both spellings are asserted, so a regression that
+    // put the key back would fail here rather than merely look wrong.
+    expect(asBar).toContain("Aug 25");
+    expect(asBar).not.toContain("2026-08-25");
     expect(asBar).not.toContain("Afeef");
     expect(asCategory).toContain("Afeef");
-    expect(asCategory).not.toContain("2026-08-25");
+    expect(asCategory).not.toContain("Aug 25");
     expect(asNumber).not.toContain("Afeef");
-    expect(asNumber).not.toContain("2026-08-25");
+    expect(asNumber).not.toContain("Aug 25");
   });
 
   it("prints the headline on every chart but the funnel", () => {

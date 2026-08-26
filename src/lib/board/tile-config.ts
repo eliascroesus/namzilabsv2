@@ -82,3 +82,33 @@ export function parseTileConfig(raw: unknown): TileConfig {
   }
   return out as TileConfig;
 }
+
+/**
+ * The tile's accent, resolved from its stored palette KEY.
+ *
+ * A key, never a hex — re-solving a hue for contrast then restyles every board
+ * at once with no backfill, and a key this palette has since dropped degrades
+ * to the kit's own mark colour instead of rendering `undefined` into a style
+ * attribute. The same argument `node-accent.ts` makes for group colours.
+ */
+export function accentOf(color?: string): string {
+  return color && color in GROUP_ACCENT ? GROUP_ACCENT[color] : "var(--color-brand-600)";
+}
+
+/**
+ * THE PIE'S SLICE ORDER — fixed, never cycled per tile.
+ *
+ * Categorical colour has one job: the same entity reads as the same colour
+ * everywhere. Rotating the sequence per tile would repaint "Enterprise" green
+ * on one chart and pink on the next, which is worse than no colour at all. So
+ * the order is a constant, drawn from the palette by KEY (no new hexes), and
+ * chosen for separation rather than for walking the wheel: adjacent entries
+ * are far apart in hue, and "Other" is always the neutral grey so the
+ * roll-up never competes with a real group for attention.
+ */
+export const SLICE_ORDER = ["blue", "orange", "teal", "violet", "amber", "indigo", "pink", "olive"] as const;
+
+export function sliceAccent(index: number, label?: string): string {
+  if (label === "Other") return GROUP_ACCENT.grey;
+  return GROUP_ACCENT[SLICE_ORDER[index % SLICE_ORDER.length]] ?? GROUP_ACCENT.grey;
+}

@@ -97,7 +97,11 @@ describe("adding a chart", () => {
   });
 
   it("refuses a chart it cannot draw and a key it cannot parse", async () => {
-    expect((await addCustomTileAction("va", "flow:f1:o1", "pie")).ok).toBe(false);
+    // "sunburst" is the example precisely because it is NOT in CHART_IDS —
+    // this slot used to read "pie", which the chart kit then made real. The
+    // test caught that, which is the point; the guard is membership, so the
+    // example has to be something the kit has never claimed to draw.
+    expect((await addCustomTileAction("va", "flow:f1:o1", "sunburst")).ok).toBe(false);
     expect((await addCustomTileAction("va", "not-a-key", "number")).ok).toBe(false);
     expect(await tilesOf("va")).toHaveLength(0);
   });
@@ -215,7 +219,7 @@ describe("changing what a chart is", () => {
 
   it("refuses a chart it cannot draw, a key it cannot parse, and another org's row", async () => {
     const id = await seed();
-    expect((await setCustomTileAction(id, { chart: "pie" })).ok).toBe(false);
+    expect((await setCustomTileAction(id, { chart: "sunburst" })).ok).toBe(false);
     expect((await setCustomTileAction(id, { tileKey: "nope" })).ok).toBe(false);
     ctx = { orgId: B, userId: "user_1", role: "member" };
     expect((await setCustomTileAction(id, { chart: "bar" })).ok).toBe(true);

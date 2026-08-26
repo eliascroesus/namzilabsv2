@@ -34,7 +34,7 @@ const tileWith = (over: Record<string, unknown>) => ({ format: "number", precisi
 describe("what a stored flow tile can be drawn as", () => {
   it("offers a trend only when there is a trend", () => {
     const series = shapeOfTile(tileWith({ value: 12, series: [{ bucket: "2026-08", value: 12 }] }));
-    expect(chartsFor(series)).toEqual(["number", "bar"]);
+    expect(chartsFor(series)).toEqual(["number", "line", "area", "bar", "table"]);
     // Sabotage: return "bar" unconditionally and every scalar metric offers a
     // chart that renders an empty box under a real number.
     expect(chartsFor(shapeOfTile(tileWith({ value: 12 })))).toEqual(["number"]);
@@ -42,7 +42,7 @@ describe("what a stored flow tile can be drawn as", () => {
 
   it("offers a breakdown only when there are groups", () => {
     const grouped = shapeOfTile(tileWith({ value: 9, groups: [{ label: "Afeef", value: 9 }] }));
-    expect(chartsFor(grouped)).toEqual(["number", "category"]);
+    expect(chartsFor(grouped)).toEqual(["number", "category", "pie", "table"]);
   });
 
   it("offers progress only when a target was set", () => {
@@ -54,7 +54,7 @@ describe("what a stored flow tile can be drawn as", () => {
 
   it("offers both when a metric has both a trend and a breakdown", () => {
     const both = shapeOfTile(tileWith({ value: 5, series: [{ bucket: "x", value: 5 }], groups: [{ label: "a", value: 5 }] }));
-    expect(chartsFor(both)).toEqual(["number", "bar", "category"]);
+    expect(chartsFor(both)).toEqual(["number", "line", "area", "bar", "category", "pie", "table"]);
   });
 
   it("offers nothing at all for a tile that has never answered", () => {
@@ -99,13 +99,13 @@ describe("classic metrics, which are computed live rather than stored", () => {
     const funnel = shapeOfClassic({ stages: [{}, {}] }, null);
     // Deriving a funnel from a grouped metric would be a confident lie unless
     // the groups really are ordered stages, and nothing can know that.
-    expect(chartsFor(funnel)).toEqual(["funnel"]);
+    expect(chartsFor(funnel)).toEqual(["funnel", "pipeline"]);
     expect(chartsFor(funnel)).not.toContain("number");
   });
 
   it("never offers a breakdown, because the classic engine has no grouped shape", () => {
     const series = shapeOfClassic({ kind: "series", series: [1, 2] }, null);
-    expect(chartsFor(series)).toEqual(["number", "bar"]);
+    expect(chartsFor(series)).toEqual(["number", "line", "area", "bar", "table"]);
     expect(chartsFor(shapeOfClassic({ kind: "scalar" }, null))).toEqual(["number"]);
   });
 
@@ -126,7 +126,7 @@ describe("the chart vocabulary", () => {
      * they are absent until their marks are written. Adding an id here without
      * a branch in custom-tile.tsx puts the lie back.
      */
-    expect(CHART_IDS).toEqual(["number", "bar", "category", "progress", "funnel"]);
+    expect(CHART_IDS).toEqual(["number", "line", "area", "bar", "category", "pie", "progress", "funnel", "pipeline", "table"]);
   });
 
   it("is the same vocabulary the schema comment promises", () => {
@@ -143,8 +143,11 @@ describe("the chart vocabulary", () => {
   });
 
   it("degrades an unknown stored value rather than rendering undefined", () => {
-    expect(asChartId("pie")).toBe("number");
+    // "pie" used to be the example of an unknown id; it is a real chart now,
+    // which is exactly the churn this assertion is supposed to have.
+    expect(asChartId("sunburst")).toBe("number");
     expect(asChartId(undefined)).toBe("number");
+    expect(asChartId("pie")).toBe("pie");
     expect(asChartId("bar")).toBe("bar");
   });
 });
