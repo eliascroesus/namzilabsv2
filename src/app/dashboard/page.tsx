@@ -230,8 +230,28 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     metrics = metrics.filter((m) => access.canSeeMetric(`metric:${m.id}`));
   }
 
+  /**
+   * ON A CUSTOM VIEW, ONLY THE CLASSIC METRICS THE CANVAS POINTS AT ARE
+   * COMPUTED. These are the expensive rows on this page: each aggregate is a
+   * live `events` query per render, and a funnel is one query PER STAGE, run
+   * serially — and this whole block re-runs on every `router.refresh()` and
+   * every freshness poll. A canvas referencing none of them was paying for all
+   * of them.
+   *
+   * The canvas cannot grow new classic references: the add menu offers flow
+   * metrics only (classics are out of `tileOptions` below), so this set only
+   * ever shrinks. Tiles that already point at a classic metric keep rendering,
+   * which is why the referenced ones still compute rather than none.
+   *
+   * The groups boards are untouched — every visible metric is ON that board,
+   * so every compute is consumed.
+   */
+  const referencedKeys = new Set(canvasRows.map((r) => r.tileKey));
+  const classicsToCompute =
+    activeKind === "custom" ? metrics.filter((m) => referencedKeys.has(tileKeyOfMetric(m.id))) : metrics;
+
   const tiles: Tile[] = await Promise.all(
-    metrics.map(async (metric): Promise<Tile> => {
+    classicsToCompute.map(async (metric): Promise<Tile> => {
       try {
         const def = parseDefinition(metric.definition);
         if (def.kind === "funnel") {
@@ -322,7 +342,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // failure's message when the earlier Promise.all already set one.
     loadError ??= err instanceof Error ? err.message : String(err);
   }
-  const hasTiles = tiles.length > 0 || flowTiles.length > 0;
+  /**
+   * "Is there anything to show" counts what the ACTIVE view shows: a canvas
+   * shows its own rows (and the empty canvas is real content — the invitation
+   * to add), while the groups boards show every metric. `tiles` alone stopped
+   * being that answer when custom views began computing only the classics they
+   * reference.
+   */
+  const hasTiles = activeKind === "custom" || tiles.length > 0 || flowTiles.length > 0;
 
 
   const qs = (over: Record<string, string>) => {
@@ -537,9 +564,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * with — so what the picker offers and what a tile draws cannot drift apart.
    * Plain data, so it crosses the boundary beside the cards.
    *
-   * The permission gate falls out for free: `flowTiles` and `tiles` have both
-   * already been filtered through `access.canSeeMetric`, so a metric a viewer's
-   * rank hides is simply not in this list and cannot be added.
+   * The permission gate falls out for free: `flowTiles` has already been
+   * filtered through `access.canSeeMetric`, so a metric a viewer's rank hides
+   * is simply not in this list and cannot be added.
+   *
+   * CLASSIC METRICS ARE DELIBERATELY ABSENT. They compute live on every render
+   * — a funnel is one serial query per stage — and "add as many charts as you
+   * want" plus "some charts recompute live" is how a dashboard gets slow
+   * exactly when it gets popular. Custom views offer flow metrics only; the
+   * classic tiles that already exist keep rendering, and the compute gate
+   * above shrinks with them.
    */
   const tileOptions: CustomTileOption[] = [
     ...flowTiles.map((row) => {
@@ -550,13 +584,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         charts: chartsFor(shapeOfTile(row.tile)) as string[],
       };
     }),
-    ...tiles.map((t) => ({
-      key: tileKeyOfMetric(t.metric.id),
-      title: t.metric.name,
-      charts: chartsFor(
-        shapeOfClassic(t.kind === "error" ? null : t.result, t.metric.target == null ? null : Number(t.metric.target)),
-      ) as string[],
-    })),
   ].filter((o) => o.charts.length > 0);
 
   const flowByKey = new Map(flowTiles.map((r) => [tileKeyOfFlow(r.flowId, r.outputNodeId), r]));
@@ -744,7 +771,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         {hasTiles && (
           <MetaLine className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-tiny text-muted-foreground">
             <span className="tnum">
-              {tiles.length + flowTiles.length} metric{tiles.length + flowTiles.length === 1 ? "" : "s"}
+              {activeKind === "custom"
+                ? `${canvasRows.length} chart${canvasRows.length === 1 ? "" : "s"}`
+                : `${tiles.length + flowTiles.length} metric${tiles.length + flowTiles.length === 1 ? "" : "s"}`}
             </span>
             {boardComputedAt && (
               <>

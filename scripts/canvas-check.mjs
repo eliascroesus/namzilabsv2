@@ -58,10 +58,14 @@ console.log("\na SUCCESSFUL add must not crash the page");
   check(before > 0, "the live board mounted", `cells=${before}`);
 
   await page.getByRole("button", { name: "Add", exact: true }).click();
+  // ONE press: the chart lands immediately, bound to the first metric that can
+  // draw it. There is no metric step — that decision moved onto the tile.
   await page.getByRole("button", { name: /Single number/ }).click();
-  // Step two: any eligible metric.
-  await page.locator("div[role='dialog'] button", { hasText: "Booked Leads" }).first().click();
   await page.waitForTimeout(400);
+  check(
+    (await page.locator("div[role='dialog']").count()) === 0,
+    "no metric step ever appears",
+  );
 
   const after = await cellCount();
   check(after === before + 1, "the new box appears immediately", `${before} -> ${after}`);

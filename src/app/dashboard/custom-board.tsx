@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, LayoutGrid, MoreHorizontal, PenLine, Plus, Repeat, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BarChart3, Check, Filter, Hash, LayoutGrid, MoreHorizontal, PenLine, Plus, Repeat, Rows3, Target, Trash2 } from "lucide-react";
 import { canvasCells, compact, GRID_COLS, type GridBox } from "@/lib/board/grid";
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/flow/controls/Popover";
@@ -14,7 +14,7 @@ import { CHARTS, asChartId, type ChartId } from "@/lib/board/charts";
 import type { BoardTileRow, CustomTileOption } from "@/lib/board/types";
 import { CANVAS_ATTR, CELL_ATTR, HANDLE_ATTR, useCanvasDrag } from "./canvas-drag";
 import { useSettle } from "./board-settle";
-import { AddTilePicker } from "./add-tile-picker";
+import { MetricPicker } from "./add-tile-picker";
 import {
   addCustomTileAction,
   deleteCustomTileAction,
@@ -141,6 +141,15 @@ export function CustomBoard({
   /** See `useSettle` — one copy of the failure path, shared with the groups board. */
   const settle = useSettle(setToast);
 
+  /**
+   * ADD LANDS IMMEDIATELY — Looker's behaviour, and the correction of a flow
+   * that shipped wrong. The old picker asked chart, then METRIC, then landed;
+   * but the metric question does not need answering up front, because every
+   * chart has an obvious opening move: the first metric on the board that can
+   * be drawn that way, from the `options` list already in hand. Whoever wants
+   * a different one clicks the tile and changes it — which is where that
+   * decision belongs, next to the thing it changes.
+   */
   const addTile = useCallback(
     async (tileKey: string, chart: ChartId) => {
       setBusy(true);
@@ -295,10 +304,13 @@ export function CustomBoard({
       <div className="mt-4 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">{viewStrip}</div>
         {canEdit && (
-          <Button variant="secondary" size="sm" onClick={() => setPicking(true)} disabled={busy}>
-            <Plus />
-            Add
-          </Button>
+          <AddChartMenu
+            open={picking}
+            setOpen={setPicking}
+            busy={busy}
+            options={options}
+            onPick={(chart, tileKey) => addTile(tileKey, chart)}
+          />
         )}
       </div>
 
@@ -372,19 +384,17 @@ export function CustomBoard({
         </div>
       )}
 
-      {picking && <AddTilePicker options={options} busy={busy} onClose={() => setPicking(false)} onAdd={addTile} />}
       {repointing && (
-        /* The same picker, opened at its SECOND step: the chart is already
-           chosen, so the only question is which metric — and the list is
+        /* The chart is staying; only the data under it moves — and the list is
            filtered to metrics that can be drawn that way, which is what stops a
            repoint leaving a tile asking for a drawing its new metric cannot
            give. */
-        <AddTilePicker
+        <MetricPicker
           options={options}
           busy={busy}
-          lockedChart={asChartId(byId.get(repointing)?.chart)}
+          chart={asChartId(byId.get(repointing)?.chart)}
           onClose={() => setRepointing(null)}
-          onAdd={(tileKey) => {
+          onPick={(tileKey) => {
             editTile(repointing, { tileKey });
             setRepointing(null);
           }}
@@ -392,6 +402,86 @@ export function CustomBoard({
       )}
       {toast && <Toast action={{ label: "Dismiss", onClick: () => setToast(null) }}>{toast}</Toast>}
     </div>
+  );
+}
+
+/** Chart id → its icon, shared by the Add menu and nothing else yet. */
+const CHART_ICONS: Record<ChartId, typeof Hash> = {
+  number: Hash,
+  bar: BarChart3,
+  category: Rows3,
+  progress: Target,
+  funnel: Filter,
+};
+
+/**
+ * THE ADD MENU — chart types only, in the `+ view` menu's own shape.
+ *
+ * A compact popover rather than a modal, because the question is one press
+ * deep: which drawing. There is deliberately NO metric step — see `addTile`.
+ * A chart nothing on the board can draw is GREYED WITH THE REASON, never
+ * hidden: "Breakdown" missing entirely reads as a product that does not do
+ * breakdowns, while "no metric here can be drawn this way yet" reads as a fact
+ * about this workspace's data, which is what it is.
+ */
+function AddChartMenu({
+  open,
+  setOpen,
+  busy,
+  options,
+  onPick,
+}: {
+  open: boolean;
+  setOpen: (o: boolean) => void;
+  busy: boolean;
+  options: CustomTileOption[];
+  onPick: (chart: ChartId, tileKey: string) => void;
+}) {
+  return (
+    <Popover
+      open={open}
+      setOpen={setOpen}
+      fixed
+      align="right"
+      width={288}
+      anchor={
+        <Button variant="secondary" size="sm" onClick={() => setOpen(!open)} disabled={busy} aria-haspopup="menu" aria-expanded={open}>
+          <Plus />
+          Add
+        </Button>
+      }
+    >
+      <div className="cursor-default p-1">
+        {CHARTS.map((c) => {
+          const Icon = CHART_ICONS[c.id];
+          /** The opening move: the first metric that can draw this chart. */
+          const first = options.find((o) => o.charts.includes(c.id));
+          return (
+            <Button
+              key={c.id}
+              variant="ghost"
+              size="sm"
+              disabled={busy || !first}
+              onClick={() => {
+                if (!first) return;
+                setOpen(false);
+                onPick(c.id, first.key);
+              }}
+              className="h-auto w-full items-start justify-start gap-2.5 whitespace-normal px-2 py-2 text-left"
+              title={!first ? `No metric on this board can be drawn as a ${c.label.toLowerCase()}` : undefined}
+            >
+              <Icon className="mt-0.5 shrink-0 text-muted-foreground" />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-small font-semibold text-foreground">{c.label}</span>
+                <span className="text-tiny font-normal text-muted-foreground">
+                  {first ? c.blurb : "No metric here can be drawn this way yet."}
+                </span>
+              </span>
+            </Button>
+          );
+        })}
+      </div>
+    </Popover>
   );
 }
 

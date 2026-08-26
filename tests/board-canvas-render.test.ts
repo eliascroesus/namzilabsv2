@@ -18,7 +18,7 @@ vi.mock("@/app/dashboard/board-actions", () => ({
 }));
 
 const { CustomBoard } = await import("@/app/dashboard/custom-board");
-const { AddTilePicker } = await import("@/app/dashboard/add-tile-picker");
+const { MetricPicker } = await import("@/app/dashboard/add-tile-picker");
 type CanvasTile = Parameters<typeof CustomBoard>[0]["tiles"][number];
 
 /**
@@ -145,44 +145,66 @@ describe("the page branches on the view's kind", () => {
   });
 });
 
-describe("the add-a-chart picker", () => {
-  const opt = (key: string, title: string, charts: string[]): CustomTileOption => ({ key, title, charts });
-  const picker = (options: CustomTileOption[]) =>
-    renderToStaticMarkup(
-      createElement(AddTilePicker, { options, busy: false, onClose: () => {}, onAdd: () => {} }),
-    );
+describe("adding lands immediately; the metric question is asked later", () => {
+  const board = readFileSync(join(process.cwd(), "src/app/dashboard/custom-board.tsx"), "utf8");
+  const picker = readFileSync(join(process.cwd(), "src/app/dashboard/add-tile-picker.tsx"), "utf8");
 
-  it("offers every chart, and says which are drawable here", () => {
-    const html = picker([opt("metric:m1", "Booked Leads", ["number", "bar"])]);
-    expect(html).toContain("Single number");
-    expect(html).toContain("Bar chart");
-    expect(html).toContain("Breakdown");
-  });
-
-  it("disables a chart no metric here can be drawn as — with the reason", () => {
+  it("the Add menu is a popover of chart types with NO metric step", () => {
     /**
-     * Hiding it would read as a product that does not do breakdowns. Showing it
-     * greyed with "no metric here can be drawn this way" reads as a fact about
-     * this workspace's data, which is what it is. A disabled control that does
-     * not say why is a dead end.
+     * The shipped flow asked chart → metric → landed, in a modal, and the
+     * metric step was the wrong question at the wrong time. Add now lands the
+     * chart bound to the FIRST metric that can draw it — the options list the
+     * page already computed — and changing the metric happens on the tile.
      */
-    const html = picker([opt("metric:m1", "Booked Leads", ["number"])]);
-    expect(html).toContain("No metric here can be drawn this way yet.");
-    expect(html).toMatch(/disabled/);
+    expect(board).toMatch(/const first = options\.find\(\(o\) => o\.charts\.includes\(c\.id\)\)/);
+    expect(board).toMatch(/onPick\(c\.id, first\.key\)/);
+    // A popover in the + view menu's shape, never a modal.
+    const menu = board.slice(board.indexOf("function AddChartMenu"), board.indexOf("function PendingCard"));
+    expect(menu).toContain("<Popover");
+    expect(menu).not.toContain("<Modal");
   });
 
-  it("opens on the chart step, not the metric step", () => {
-    // Chart first is the useful order: it lets step two list only metrics that
-    // can actually be drawn that way, which is a filter that removes wrong
-    // answers. Metric first would show every chart with most of them disabled.
-    const html = picker([opt("metric:m1", "Booked Leads", ["number"])]);
-    expect(html).toContain("Add a chart");
-    expect(html).not.toContain("Booked Leads");
+  it("greys an undrawable chart with the reason, and never hides it", () => {
+    expect(board).toContain("No metric here can be drawn this way yet.");
+    expect(board).toMatch(/disabled=\{busy \|\| !first\}/);
   });
 
-  it("shows nothing at all when the board has no metrics", () => {
-    const html = picker([]);
-    expect(html).toContain("No metric here can be drawn this way yet.");
+  it("the two-step modal is gone, and only the change-metric picker survives", () => {
+    expect(picker).not.toMatch(/AddTilePicker|lockedChart|Back to charts|Add a chart/);
+    expect(picker).toContain("export function MetricPicker");
+  });
+
+  it("the change-metric picker lists only metrics the staying chart can draw", () => {
+    const html = renderToStaticMarkup(
+      createElement(MetricPicker, {
+        options: [
+          { key: "flow:f1:o1", title: "Booked Leads", charts: ["number", "bar"] },
+          { key: "flow:f1:o2", title: "Pickup Rate", charts: ["number"] },
+        ],
+        chart: "bar",
+        busy: false,
+        onClose: () => {},
+        onPick: () => {},
+      }),
+    );
+    expect(html).toContain("Booked Leads");
+    // A repoint must never leave a tile asking for a drawing its new metric
+    // cannot give — the scalar-only metric is simply not offered.
+    expect(html).not.toContain("Pickup Rate");
+    expect(html).toContain("Choose a metric for this bar chart");
+  });
+
+  it("says so honestly when nothing can be drawn that way", () => {
+    const html = renderToStaticMarkup(
+      createElement(MetricPicker, {
+        options: [{ key: "metric:m1", title: "Deals", charts: ["number"] }],
+        chart: "funnel",
+        busy: false,
+        onClose: () => {},
+        onPick: () => {},
+      }),
+    );
+    expect(html).toContain("Nothing here can be drawn as a funnel yet.");
   });
 });
 
@@ -215,5 +237,35 @@ describe("one copy of the failure path", () => {
       // working, and the next edit to one of them silently diverges.
       expect(src, `${name} re-implements settle`).not.toMatch(/const settle = useCallback\(/);
     }
+  });
+});
+
+describe("a canvas computes only the classic metrics it points at", () => {
+  const page = readFileSync(join(process.cwd(), "src/app/dashboard/page.tsx"), "utf8");
+
+  it("gates the live computes on the view's kind and the canvas's own references", () => {
+    /**
+     * The expensive rows on the hottest page: each classic aggregate is a live
+     * events query per render, a funnel one query PER STAGE, serially — and
+     * the whole block re-runs on every refresh and every freshness poll. A
+     * canvas referencing none of them was paying for all of them.
+     */
+    expect(page).toMatch(/const referencedKeys = new Set\(canvasRows\.map\(\(r\) => r\.tileKey\)\)/);
+    expect(page).toMatch(/activeKind === "custom" \? metrics\.filter\(\(m\) => referencedKeys\.has\(tileKeyOfMetric\(m\.id\)\)\) : metrics/);
+    expect(page).toMatch(/classicsToCompute\.map\(/);
+  });
+
+  it("offers flow metrics only in the picker, so the referenced set can only shrink", () => {
+    // Sabotage: spread `tiles` back into tileOptions and every new chart can
+    // re-introduce a live per-render compute.
+    const options = page.slice(page.indexOf("const tileOptions"), page.indexOf("].filter((o) => o.charts.length > 0)"));
+    expect(options).toContain("flowTiles.map");
+    expect(options).not.toContain("tileKeyOfMetric");
+  });
+
+  it("still treats a canvas as content when its computed subset is empty", () => {
+    // An empty canvas is real content — the invitation to add — and must not
+    // fall through to the onboarding checklist.
+    expect(page).toMatch(/const hasTiles = activeKind === "custom" \|\| tiles\.length > 0 \|\| flowTiles\.length > 0/);
   });
 });
