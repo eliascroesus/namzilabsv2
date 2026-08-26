@@ -465,39 +465,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             share a client boundary so the press can land before the server
             answers — see board-controls.tsx. */}
         <BoardControls>
-        {/* ── THE VIEW STRIP ────────────────────────────────────────────
-            One board, several arrangements of it — Notion's view bar, doing
-            Notion's job. It sits ABOVE the filter island rather than inside it
-            because it answers a different kind of question: the island narrows
-            WHICH NUMBERS you are looking at, and this one chooses HOW THEY ARE
-            LAID OUT. Two answers in one control would read as one.
-
-            The tabs are real anchors, so the view survives a paste into Slack;
-            the `+` is a plain form post, so it needs no client boundary of its
-            own — the same shape "Refresh all" already uses in the header. */}
-        <div className="-mx-1 mt-6 flex max-w-full items-center gap-1 overflow-x-auto px-1 pb-1">
-          {viewTabs.map((v) => (
-            <ViewLink key={v.id ?? "default"} href={qs({ view: v.id ?? "" })} viewId={v.id} activeView={activeView}>
-              {v.name}
-            </ViewLink>
-          ))}
-          {access.can("create_flows") && (
-            <form action={addViewAction}>
-              <input type="hidden" name="range" value={rangeKey} />
-              <input type="hidden" name="source" value={boardSource ?? ""} />
-              <SubmitButton
-                variant="ghost"
-                size="sm"
-                pendingLabel="Adding…"
-                title="Add a view — the same metrics, arranged another way"
-              >
-                <Plus size={15} />
-                <span className="sr-only">Add a view</span>
-              </SubmitButton>
-            </form>
-          )}
-        </div>
-
         {/* ── THE FILTER BAR, AS AN ISLAND ──────────────────────────────
             Two questions, two controls, one surface. They used to sit loose on
             the page: on white that was merely plain, and on the warm canvas it
@@ -651,6 +618,43 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               // without this would leave the previous view's columns on screen.
               key={activeView ?? "default"}
               viewId={activeView}
+              viewStrip={
+                /* ── THE VIEW STRIP ────────────────────────────────────────
+                   One board, several arrangements of it — Notion's view bar,
+                   doing Notion's job. Rendered here, on the server, because the
+                   tabs are real anchors and the `+` is a plain form post; handed
+                   to the board because that is what knows where its own controls
+                   go. It shares a line with "New group": both are about how the
+                   board is laid out, while the filter island above narrows which
+                   numbers are on it. */
+                <div className="-mx-1 flex max-w-full items-center gap-1 overflow-x-auto px-1 py-1">
+                  {viewTabs.map((v) => (
+                    <ViewLink
+                      key={v.id ?? "default"}
+                      href={qs({ view: v.id ?? "" })}
+                      viewId={v.id}
+                      activeView={activeView}
+                    >
+                      {v.name}
+                    </ViewLink>
+                  ))}
+                  {access.can("create_flows") && (
+                    <form action={addViewAction}>
+                      <input type="hidden" name="range" value={rangeKey} />
+                      <input type="hidden" name="source" value={boardSource ?? ""} />
+                      <SubmitButton
+                        variant="ghost"
+                        size="sm"
+                        pendingLabel="Adding…"
+                        title="Add a view — the same metrics, arranged another way"
+                      >
+                        <Plus size={15} />
+                        <span className="sr-only">Add a view</span>
+                      </SubmitButton>
+                    </form>
+                  )}
+                </div>
+              }
               tiles={boardTiles}
               groups={groups}
               placements={placements}

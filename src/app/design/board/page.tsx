@@ -72,7 +72,23 @@ export default function BoardLab() {
       <PageContainer>
         <BoardControls>
           <TileArea count={TILES.length} columns={GROUPS.length}>
-            <BoardLayout tiles={TILES} groups={GROUPS} placements={PLACEMENTS} canEdit viewId={null} />
+            <BoardLayout
+              tiles={TILES}
+              groups={GROUPS}
+              placements={PLACEMENTS}
+              canEdit
+              viewId={null}
+              viewStrip={
+                <div className="-mx-1 flex max-w-full items-center gap-1 overflow-x-auto px-1 py-1">
+                  <span className="inline-flex shrink-0 items-center rounded-control bg-accent px-2.5 py-1.5 text-small font-semibold text-accent-foreground">
+                    Dashboard
+                  </span>
+                  <span className="inline-flex shrink-0 items-center rounded-control px-2.5 py-1.5 text-small font-semibold text-muted-foreground">
+                    View 2
+                  </span>
+                </div>
+              }
+            />
           </TileArea>
         </BoardControls>
       </PageContainer>

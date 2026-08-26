@@ -350,6 +350,28 @@ console.log("\nthe colour picker");
   check(swatch.cursor !== "grab", "the grab cursor stops at the menu", `cursor=${swatch.cursor}`);
 }
 
+console.log("\nthe board's own controls share one row, above the columns");
+{
+  /**
+   * Which view on the left, "New group" on the right. Both are about how the
+   * board is LAID OUT; the filter island above narrows which numbers are on
+   * it. One question per line — the strip used to sit above the island, which
+   * put two different questions in the same stack.
+   */
+  await page.reload({ waitUntil: "networkidle" });
+  const row = await page.evaluate(() => {
+    const btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("New group"));
+    const tab = [...document.querySelectorAll("span, a")].find((e) => e.textContent?.trim() === "Dashboard");
+    const col = document.querySelector("[data-board-lane]:not([data-board-accepts='column'])");
+    if (!btn || !tab || !col) return null;
+    const [b, t, c] = [btn.getBoundingClientRect(), tab.getBoundingClientRect(), col.getBoundingClientRect()];
+    return { sameRow: Math.abs(b.top - t.top) < 24, tabLeftOfButton: t.left < b.left, aboveColumns: b.bottom <= c.top };
+  });
+  check(row?.sameRow === true, "the view tabs sit on the same line as New group", JSON.stringify(row));
+  check(row?.tabLeftOfButton === true, "tabs left, New group right");
+  check(row?.aboveColumns === true, "and the row is above the columns");
+}
+
 check(errors.length === 0, "no uncaught page errors", JSON.stringify(errors));
 
 await browser.close();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { arrangeBoard, type BoardLane } from "@/lib/board/arrange";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
@@ -60,6 +60,7 @@ export function BoardLayout({
   placements: seedPlacements,
   canEdit,
   viewId,
+  viewStrip,
 }: {
   tiles: BoardTile[];
   groups: BoardGroup[];
@@ -74,6 +75,18 @@ export function BoardLayout({
    * previous view's board on screen with the new view's props ignored.
    */
   viewId: string | null;
+  /**
+   * The view tabs, rendered on the SERVER and passed through — same trick the
+   * tiles use, and for the same reason: they are links that must work without
+   * JavaScript, and this component is the only thing that knows where the
+   * board's own controls sit.
+   *
+   * They live on this row rather than above the filter island because both
+   * halves answer the same question — how the board is laid out — while the
+   * island narrows which numbers are on it. Two answers on one line, one
+   * question per line.
+   */
+  viewStrip?: ReactNode;
 }) {
   // The `useState` initialisers are what "seeded once" means: the arguments are
   // read on the first render and ignored on every one after it.
@@ -290,16 +303,20 @@ export function BoardLayout({
     // card's own name. Permanent `select-none` would be the lazy fix and would
     // cost the ability to copy a number off the board.
     <div ref={rootRef} className={drag ? "select-none" : undefined}>
-      {/* THE ONE DOOR to a new column. On the caption line rather than in the
-          page header, because that line is already about the board as a whole —
-          which is exactly what a group is — and because the header's two
-          buttons are about the numbers, not their arrangement. */}
-      {canEdit && (
-        <div className="mt-4 flex justify-end">
-          <Button variant="secondary" size="sm" onClick={addGroup} disabled={busy}>
-            <Plus size={15} />
-            New group
-          </Button>
+      {/* THE BOARD'S OWN CONTROL ROW: which view on the left, and the one door
+          to a new column on the right. Both are about ARRANGEMENT, which is why
+          they share a line and why that line sits directly above the columns
+          rather than up beside the range pills — those narrow which numbers are
+          shown, which is a different question. */}
+      {(viewStrip || canEdit) && (
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">{viewStrip}</div>
+          {canEdit && (
+            <Button variant="secondary" size="sm" onClick={addGroup} disabled={busy} className="shrink-0">
+              <Plus size={15} />
+              New group
+            </Button>
+          )}
         </div>
       )}
 
