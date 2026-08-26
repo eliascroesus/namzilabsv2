@@ -67,7 +67,12 @@ export const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
 export const MATERIALIZED_RANGES: RangeKey[] = ["today", "yesterday", "7d", "30d", "90d", "all"];
 
 const DAY_MS = 86_400_000;
-const ROLLING: Record<"7d" | "30d" | "90d", number> = { "7d": 7, "30d": 30, "90d": 90 };
+/**
+ * How many whole UTC days each backward pill spans, TODAY INCLUDED. "Last 7
+ * days" is today and the six days before it, so it starts six midnights ago —
+ * see `resolveRange` for why these are whole days rather than rolling hours.
+ */
+const WINDOW_DAYS: Record<"today" | "7d" | "30d" | "90d", number> = { today: 1, "7d": 7, "30d": 30, "90d": 90 };
 
 /**
  * WHICH RANGES LOOK FORWARD — asked in three places, answered here once.
@@ -98,24 +103,23 @@ export function isForwardRange(key: string | undefined): boolean {
 }
 
 /**
- * The length of a rolling range, or null for the fixed ones. A rolling
- * window's start moves with the clock, so a record dated `t` falls out of it
- * at exactly `t + length` — the fact the materializer uses to compute the
- * precise moment a stored tile's numbers can next change without any new data
- * arriving. Fixed ranges (today/yesterday/all) only ever change membership at
- * a UTC midnight, which the caller accounts for separately.
+ * NO PILL IS A ROLLING WINDOW ANY MORE, which is why `rollingMsOf` is gone from
+ * this module rather than returning null from it.
  *
- * "Upcoming" answers null with the fixed ones, and not because it is static —
- * its START moves with the clock. It is simply not a BACKWARD window, so
- * nothing falls out of it at a fixed offset from a record's own date; a record
- * leaves it at exactly its own timestamp, which is the same instant it enters
- * every now-ended range. `trackCrossing` in engine.ts already books that moment
- * from the record itself. A length here would invent shed times (`t + length`)
- * that describe nothing.
+ * It existed to tell the materializer the exact instant a stored tile's numbers
+ * could next change with no new data: a window ending at the CLOCK sheds the
+ * record dated `t` at precisely `t + length`, and booking those moments is what
+ * let a quiet flow stop re-reading its whole history every ten minutes. Every
+ * window below is now anchored to midnight at BOTH ends, so membership cannot
+ * change between midnights at all — and `tileByRange` already seeds
+ * `nextChangeMs` with the next UTC midnight unconditionally. Shed times would
+ * now be strictly redundant recomputes: the same tile, re-read at 14:07,
+ * because a record aged out of a boundary that had not moved.
+ *
+ * The ENGINE keeps its rolling support (`rollingMs` on `tileByRange`'s window
+ * argument, covered by tests/flow-range.test.ts). It is the dashboard that no
+ * longer has a rolling window to describe.
  */
-export function rollingMsOf(key: RangeKey): number | null {
-  return key === "7d" || key === "30d" || key === "90d" ? ROLLING[key] * DAY_MS : null;
-}
 
 /**
  * Resolve a range key to a concrete {from, to} window.
@@ -127,13 +131,48 @@ export function rollingMsOf(key: RangeKey): number | null {
  * metric depending on who opened it, and disagree with the identical preset
  * inside a flow. One definition, both places.
  *
- * "Today" runs to NOW, not to end-of-day — a period still in progress holds
- * fewer records than a finished one, which is the whole reason "Yesterday"
- * is offered beside it.
+ * EVERY WINDOW IS A WHOLE NUMBER OF WHOLE UTC DAYS, ENDING TONIGHT. "Today" is
+ * midnight to 23:59:59.999, not midnight to the clock, and "Last 7 days" is
+ * today plus the six days before it.
  *
- * EVERY RANGE ENDS AT NOW OR EARLIER, and "upcoming" is no longer among the
- * keys this accepts — it falls through to the default with every other string
- * it does not recognise.
+ * THIS REVERSES A DELIBERATE DECISION, so here is the one it reverses and why
+ * it was wrong. The window used to end at NOW, the argument being that a period
+ * still in progress holds fewer records than a finished one and pretending
+ * otherwise reports a part-day as a whole one — which is exactly right when a
+ * record is dated WHEN IT HAPPENED.
+ *
+ * Half this product's records are dated when they WILL happen. A Calendly
+ * meeting booked for 16:00 is a row dated 16:00, and read at 13:00 it sat
+ * outside a window that stopped at 13:00 — so the board showed 0 bookings on a
+ * day with three of them, and drew "-100% vs yesterday" underneath, because
+ * "Yesterday" is a complete day and was being compared against a half-finished
+ * one. Reported as "it shows 0 until the meetings have happened".
+ *
+ * The engine had ALREADY conceded this in the place it hurt most: "All time" is
+ * returned unfiltered by `tileByRange` precisely because "Calendly meetings are
+ * dated when they will happen, so filtering would drop every future booking out
+ * of the total". So All time counted that meeting, Today did not, and the
+ * calendar — whose squares are whole days — counted it too. Three surfaces,
+ * three answers, one stored tile. The windows are now the same windows, and
+ * `tests/range-covers-scheduled.test.ts` pins each pill to the calendar squares
+ * it should equal the sum of.
+ *
+ * THE START HAD TO MOVE WITH THE END. A window running from `now - 7 days` to
+ * midnight tonight would span seven days plus however much of today had
+ * elapsed — seven and a half days of data under a label reading seven, and a
+ * total that changed all day without any data arriving.
+ *
+ * "All time" ends tonight too, and NOT at a far-future sentinel, even though it
+ * means what it says. `tileByRange` derives its notion of "now" from the
+ * largest end among the ranges it is handed (see its note): one sentinel here
+ * would put every record in the past, book no crossings at all, and freeze
+ * `nextChangeAt` in year 9999. The flow path never feels the bound anyway — it
+ * flags `all` and returns the run untouched — and for classic metrics tonight
+ * is both wider than the clock it replaced and consistent with every pill
+ * beside it.
+ *
+ * "upcoming" is no longer among the keys this accepts — it falls through to the
+ * default with every other string it does not recognise.
  *
  * KEEPING IT RESOLVABLE WAS THE WRONG CALL, and the reasoning that produced it
  * is worth writing down because it sounds right. When the pill was removed the
@@ -160,19 +199,22 @@ export function rollingMsOf(key: RangeKey): number | null {
  */
 export function resolveRange(key: string | undefined): { key: RangeKey; range: DateRange } {
   const now = new Date();
-  const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const startOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  // 23:59:59.999 — the same last instant `calendarDayRanges` gives every one of
+  // its squares, and the same hygiene "Yesterday" already used against "Today":
+  // one millisecond short of the next midnight, so no record lands in two
+  // windows and none falls between them.
+  const endOfToday = new Date(startOfToday + DAY_MS - 1);
   const k: RangeKey =
     key === "today" || key === "yesterday" || key === "30d" || key === "90d" || key === "all" ? key : "7d";
 
-  if (k === "all") return { key: k, range: { from: new Date(0), to: now } };
-  if (k === "today") return { key: k, range: { from: startOfToday, to: now } };
+  if (k === "all") return { key: k, range: { from: new Date(0), to: endOfToday } };
   if (k === "yesterday") {
     return {
       key: k,
-      // Ends one millisecond before today begins, so a record at 23:59:59.999
-      // is inside yesterday and midnight exactly is not counted twice.
-      range: { from: new Date(startOfToday.getTime() - DAY_MS), to: new Date(startOfToday.getTime() - 1) },
+      range: { from: new Date(startOfToday - DAY_MS), to: new Date(startOfToday - 1) },
     };
   }
-  return { key: k, range: { from: new Date(now.getTime() - ROLLING[k] * DAY_MS), to: now } };
+  // today | 7d | 30d | 90d — n whole days back from tonight, today included.
+  return { key: k, range: { from: new Date(startOfToday - (WINDOW_DAYS[k] - 1) * DAY_MS), to: endOfToday } };
 }

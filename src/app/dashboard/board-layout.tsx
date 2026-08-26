@@ -309,8 +309,12 @@ export function BoardLayout({
           rather than up beside the range pills — those narrow which numbers are
           shown, which is a different question. */}
       {(viewStrip || canEdit) && (
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <div className="min-w-0">{viewStrip}</div>
+        <div className="mt-4 flex items-start justify-between gap-3">
+          {/* WRAPS RATHER THAN SCROLLS. A scroller here put a grey bar under
+              two tabs and capped the strip at a width nothing asked for; tabs
+              are short and there is a whole row of space, so they simply fill
+              it and fold onto a second line when there are enough of them. */}
+          <div className="min-w-0 flex-1">{viewStrip}</div>
           {canEdit && (
             <Button variant="secondary" size="sm" onClick={addGroup} disabled={busy} className="shrink-0">
               <Plus size={15} />

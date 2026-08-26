@@ -374,4 +374,65 @@ describe("materializeFlow stores the days on the tile", () => {
     // from "this metric cannot answer for that day".
     expect(Object.keys(tile.byDay ?? {})).toHaveLength(calendarDayRanges(now).length);
   });
+
+  /**
+   * THE BUG AS THE USER SAW IT, END TO END: two numbers for the same day, from
+   * the same stored tile, on two surfaces.
+   *
+   * "the numbers dont show accurately... it shows 0 until the meetings have
+   * happened... on calendar it displays all the data correctly". Both halves of
+   * this tile come from ONE `tileByRange` call over ONE run, so the only thing
+   * that could ever have made them disagree was the windows — and they did: a
+   * calendar square is the whole day, and the dashboard's "Today" stopped at
+   * the clock. Every Calendly meeting booked for later in the day sat inside
+   * one and outside the other.
+   *
+   * The unit-level version of this lives in tests/range-covers-scheduled.test.ts.
+   * This is the same fact asserted against a materialized row, because that is
+   * the artefact both surfaces actually read.
+   */
+  it("puts the same number on the pill and the calendar square, for a booking still to come", async () => {
+    const connId = randomUUID();
+    await db.insert(connections).values({ id: connId, orgId: ORG, source: "webhook", name: "Hook", status: "active", authType: "none" });
+    const graph = {
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: connId, source: "webhook" } } },
+        { id: "c", type: "formula", data: { config: { op: "count" } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "c" }],
+      metrics: [{ nodeId: "c", enabled: true, name: "Meetings", viz: "number", format: "number", precision: 0 }],
+    };
+    const [flow] = await db
+      .insert(flows)
+      .values({ orgId: ORG, name: "booked", draftGraph: graph, status: "published", publishedVersion: 1 })
+      .returning();
+    await db.insert(flowVersions).values({ flowId: flow.id, orgId: ORG, version: 1, graph });
+
+    const now = new Date();
+    const startOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    // Halfway from this instant to midnight: always still ahead of the clock,
+    // always still today. A fixed "+3 hours" fails after 21:00 UTC, which is a
+    // test that teaches people to re-run rather than read.
+    const laterToday = Date.now() + Math.floor((startOfToday + DAY - Date.now()) / 2);
+    await db.insert(events).values([
+      { eventId: "m1", orgId: ORG, connectionId: connId, source: "webhook", eventType: "e", subject: "happened", occurredAt: new Date(startOfToday + 60_000), properties: {} },
+      { eventId: "m2", orgId: ORG, connectionId: connId, source: "webhook", eventType: "e", subject: "booked for later", occurredAt: new Date(laterToday), properties: {} },
+    ]);
+
+    await materializeFlow(db, ORG, flow.id);
+    const [row] = await db.select().from(flowResults).where(eq(flowResults.flowId, flow.id));
+    const tile = row.tile as {
+      byRange?: Record<string, { value?: number }>;
+      byDay?: Record<string, { value: number }>;
+    };
+
+    const today = dayKey(now);
+    // Sabotage: end "today" at `now` in resolveRange — the shipped bug — and
+    // the square reads 2 while the pill reads 1.
+    expect(tile.byDay?.[today]?.value).toBe(2);
+    expect(tile.byRange?.today?.value).toBe(2);
+    expect(tile.byRange?.today?.value).toBe(tile.byDay?.[today]?.value);
+    // And the wider pills cannot report less than the narrower one they contain.
+    for (const key of ["7d", "30d", "90d"]) expect(tile.byRange?.[key]?.value).toBe(2);
+  });
 });

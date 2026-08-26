@@ -149,21 +149,32 @@ describe("drill-down", () => {
  * dates every record in UTC, and a dashboard that defined the day locally
  * would disagree with the identical preset inside a flow.
  */
-describe("resolveRange — Today and Yesterday", () => {
-  const startOfTodayUtc = () => {
-    const n = new Date();
-    return Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());
-  };
+/** Shared by both range blocks below — the boundary every pill is anchored to. */
+const startOfTodayUtc = () => {
+  const n = new Date();
+  return Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());
+};
 
-  it("Today starts at UTC midnight and runs to now, not to end of day", () => {
+describe("resolveRange — Today and Yesterday", () => {
+  it("Today is the whole UTC day, so a meeting booked for later today counts today", () => {
     const { key, range } = resolveRange("today");
     expect(key).toBe("today");
     expect(range.from.getTime()).toBe(startOfTodayUtc());
-    // Sabotage: end the window at end-of-day and a still-running period is
-    // reported as a finished one — the partial-period lie the flow presets
-    // carry a warning about.
-    expect(range.to.getTime()).toBeLessThanOrEqual(Date.now());
-    expect(range.to.getTime()).toBeGreaterThan(startOfTodayUtc() - 1);
+    /**
+     * THIS ASSERTION USED TO BE ITS OWN OPPOSITE, and the reversal is the fix.
+     *
+     * It read "runs to now, not to end of day", and called ending at end-of-day
+     * a sabotage that reports a still-running period as a finished one. True of
+     * records dated when something HAPPENED; backwards for the Calendly and
+     * Google Calendar rows that make up half this product, which are dated when
+     * something WILL happen. Ending at the clock meant a 16:00 booking was
+     * invisible until 16:00 — the board reading 0 on a day with three meetings
+     * on it, while the calendar beside it read 3 from the very same tile.
+     *
+     * See tests/range-covers-scheduled.test.ts, which pins each pill to the
+     * calendar squares it must equal the sum of.
+     */
+    expect(range.to.getTime()).toBe(startOfTodayUtc() + 86_400_000 - 1);
   });
 
   it("Yesterday is the whole previous UTC day, ending the instant before today", () => {
@@ -209,8 +220,11 @@ describe("resolveRange — the retired forward range", () => {
     // resolveRange and this returns "upcoming" with a year-9999 end — the
     // permanent "Not computed yet" state described above.
     expect(resolveRange("upcoming").key).toBe("7d");
-    // ...and a real window, not a sentinel: the end is the clock.
-    expect(resolveRange("upcoming").range.to.getTime()).toBeLessThanOrEqual(Date.now());
+    // ...and a real window, not a sentinel: the end is tonight's last
+    // millisecond, which is what every backward pill now ends at. The failure
+    // this guards is a year-9999 end reaching `tileByRange`, where the largest
+    // end among the ranges IS its notion of "now".
+    expect(resolveRange("upcoming").range.to.getTime()).toBe(startOfTodayUtc() + 86_400_000 - 1);
   });
 
   it("offers no forward pill, and materializes no forward slot", () => {
@@ -222,23 +236,44 @@ describe("resolveRange — the retired forward range", () => {
   });
 
   /**
-   * The asymmetry that made the future invisible is still real and still the
-   * reason the Calendar exists — a backward pill excludes future-dated records,
-   * through the SQL path, against the real database. This half of the old
-   * forward test outlives it.
+   * A BACKWARD WINDOW STOPS AT TONIGHT — not at this instant, and not at next
+   * week. Through the SQL path, against the real database, because this is the
+   * boundary the flow path and the classic path have to agree on.
+   *
+   * The asymmetry that made the future invisible was REAL and is now much
+   * smaller: a booking made for later today belongs to today and is counted,
+   * while one made for next week is still outside every backward pill and is
+   * the reason the Calendar exists. What changed is where the line falls —
+   * midnight tonight instead of whenever the page happened to be opened.
    */
-  it("still excludes future-dated events from a backward window", async () => {
+  it("counts a booking made for later today, and still excludes next week", async () => {
+    /**
+     * "LATER TODAY" IS MEASURED AGAINST MIDNIGHT, NOT THE STOPWATCH.
+     *
+     * A literal `-1/24` (an hour from now) leaves this test failing between
+     * 23:00 and midnight UTC, when an hour from now is tomorrow and genuinely
+     * outside the window. Halfway to the next midnight is always still today —
+     * the same fix `tests/materialize-stale.test.ts` documents for the same
+     * reason.
+     */
+    const startOfToday = startOfTodayUtc();
+    const laterToday = (startOfToday + 86_400_000 - Date.now()) / 2;
     await ev({ eventType: "booked", subject: "next week", daysAgo: -7 });
-    await ev({ eventType: "booked", subject: "in an hour", daysAgo: -1 / 24 });
+    await ev({ eventType: "booked", subject: "later today", daysAgo: -laterToday / 86_400_000 });
     await ev({ eventType: "booked", subject: "yesterday", daysAgo: 1 });
 
+    // Sabotage: end the window at `now` — the shipped bug — and this is 1,
+    // which is the board reading 0 bookings on a day full of them.
     const week = await computeAggregate(db, ORG, agg({ eventType: "booked" }), resolveRange("7d").range);
-    expect(week).toEqual({ kind: "scalar", value: 1 });
+    expect(week).toEqual({ kind: "scalar", value: 2 });
 
-    // "All time" is the one that still contains them, unfiltered — which is
-    // exactly the gap "Upcoming" was invented to explain and the Calendar now
-    // shows properly.
+    const today = await computeAggregate(db, ORG, agg({ eventType: "booked" }), resolveRange("today").range);
+    expect(today).toEqual({ kind: "scalar", value: 1 });
+
+    // "All time" ends tonight as well, and deliberately: its end is what
+    // `tileByRange` reads as "now". Next week's meeting lives on the Calendar,
+    // which is the surface shaped to say "not yet".
     const all = await computeAggregate(db, ORG, agg({ eventType: "booked" }), resolveRange("all").range);
-    expect(all).toEqual({ kind: "scalar", value: 1 });
+    expect(all).toEqual({ kind: "scalar", value: 2 });
   });
 });

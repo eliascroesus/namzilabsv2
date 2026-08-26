@@ -378,31 +378,33 @@ describe("the stored crossing, end to end", () => {
     return (r.tile as { nextChangeAt?: string }).nextChangeAt;
   };
 
-  it("books the record still to come, not the forward range's far-future end", async () => {
+  it("books midnight for a record still to come, because it is already counted", async () => {
     const org = "org_crossing";
     const flowId = await publishCountFlow(org);
     /**
-     * THE FUTURE RECORD HAS TO OUTLAST THE SUITE, NOT THE STOPWATCH.
+     * THIS TEST USED TO ASSERT THE OPPOSITE, AND THE INVERSION IS THE POINT.
      *
-     * This was `now + 2 minutes`, and it failed once on a loaded full run:
-     * more than two minutes passed between writing the event and materializing,
-     * the record was PAST by the time the crossing was computed, and the tile
-     * correctly booked midnight instead. A race, not a regression — but a test
-     * that fails on a busy machine teaches people to re-run rather than read,
-     * which is the opposite of what this file is for.
+     * It read "books the RECORD's moment, not the day cap": a window ending at
+     * the clock gained a record dated 16:00 at exactly 16:00, so the tile had
+     * to be recomputed then, and `tileByRange` booked that instant.
      *
-     * Halfway to the next UTC midnight is always still ahead when materialize
-     * runs and always inside the day cap, so `min(record, midnight)` is the
-     * record. The one window where that distinction cannot be drawn at all is
-     * the last few minutes before midnight, where every candidate crossing IS
-     * midnight; there the strict half of the assertion is skipped rather than
-     * loosened, because a bound that only sometimes means something is worse
-     * than one that says when it does not apply.
+     * Every dashboard window is now a whole UTC day, ending at 23:59:59.999 —
+     * the fix for a board that read 0 bookings on a day with three of them
+     * because they had not happened yet. A record dated 16:00 is therefore
+     * inside today's window at 09:00 already, and the count does not change
+     * when the clock reaches it. There is nothing to recompute, and booking a
+     * crossing there would re-read the flow's entire history to reproduce a
+     * byte-identical tile — which is the single largest source of egress in
+     * the product, and the reason crossings exist at all.
+     *
+     * So membership can only change at midnight, and midnight is what is
+     * stored. The half-way-to-midnight record is kept exactly as it was,
+     * because a record still ahead of the clock is still the only thing that
+     * could wrongly book an early crossing.
      */
     const startedAt = Date.now();
     const midnight = nextMidnightAfter(startedAt);
-    const headroomMs = midnight - startedAt;
-    const soon = startedAt + Math.floor(headroomMs / 2);
+    const soon = startedAt + Math.floor((midnight - startedAt) / 2);
     await event(org, "soon", new Date(soon));
     await event(org, "past", new Date(startedAt - 3 * DAY_MS));
 
@@ -411,20 +413,14 @@ describe("the stored crossing, end to end", () => {
 
     expect(iso).toBeTruthy();
     // Four plain digits. The extended-year spelling ("+010000-…") is what
-    // Postgres refuses, and it is the exact shape a dropped `future` produces.
+    // Postgres refuses, and it is the exact shape a dropped `future` produces —
+    // a sentinel end setting `now`, putting every record in the past.
     expect(iso).toMatch(/^\d{4}-/);
     const at = Date.parse(iso!);
     expect(Number.isFinite(at)).toBe(true);
-    expect(at).toBeLessThanOrEqual(midnight);
-    expect(at).toBeGreaterThan(startedAt);
-
-    // And it is the RECORD's moment, not the day cap: drop the `future` flag
-    // and every record reads as past against a sentinel "now", so no crossing
-    // is booked at all and this is midnight instead.
-    if (headroomMs > 10 * 60_000) {
-      expect(at).toBeLessThanOrEqual(soon);
-      expect(at).toBeLessThan(midnight);
-    }
+    // Sabotage: restore `rollingMs` on the materializer's ranges and the past
+    // record sheds at `t + 7d`, pulling this hours earlier than it needs to be.
+    expect(at).toBe(midnight);
   });
 
   it("a far-future record cannot poison the org's expiry sweep", async () => {

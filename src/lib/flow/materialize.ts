@@ -6,7 +6,7 @@ import { runFlow, buildTile, tileByRange, type CompileProvenance, type RangeSlot
 import { compileEnabled } from "./compile/flags";
 import { getPublishedVersion, graphFingerprint, graphForFingerprint } from "./store";
 import { parseGraph, seedMetricFormat, type TileSpec } from "./types";
-import { resolveRange, rollingMsOf, isForwardRange, MATERIALIZED_RANGES } from "@/lib/metrics/range";
+import { resolveRange, isForwardRange, MATERIALIZED_RANGES } from "@/lib/metrics/range";
 import { calendarDayRanges } from "@/lib/metrics/calendar";
 import { streamRefsOfGraph } from "@/lib/sync/streams";
 
@@ -261,7 +261,11 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
         // `tileByRange` derives "now" from these ends — it has to skip those
         // or every crossing it computes lands beyond the horizon.
         future: isForwardRange(key),
-        rollingMs: rollingMsOf(key) ?? undefined,
+        // NO `rollingMs`. Every window above is midnight-anchored at both ends
+        // now, so nothing sheds at `t + length`; membership changes only at UTC
+        // midnight, which `tileByRange` already books unconditionally. Passing
+        // shed times here bought nothing but extra mid-afternoon recomputes of
+        // an unchanged tile. See the note where `rollingMsOf` used to live.
       };
     });
     /**

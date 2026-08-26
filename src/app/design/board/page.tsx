@@ -79,7 +79,7 @@ export default function BoardLab() {
               canEdit
               viewId={null}
               viewStrip={
-                <div className="-mx-1 flex max-w-full items-center gap-1 overflow-x-auto px-1 py-1">
+                <div className="-mx-1 flex flex-wrap items-center gap-1 px-1 py-1">
                   <span className="inline-flex shrink-0 items-center rounded-control bg-accent px-2.5 py-1.5 text-small font-semibold text-accent-foreground">
                     Dashboard
                   </span>

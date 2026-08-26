@@ -627,7 +627,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                    go. It shares a line with "New group": both are about how the
                    board is laid out, while the filter island above narrows which
                    numbers are on it. */
-                <div className="-mx-1 flex max-w-full items-center gap-1 overflow-x-auto px-1 py-1">
+                <div className="-mx-1 flex flex-wrap items-center gap-1 px-1 py-1">
                   {viewTabs.map((v) => (
                     <ViewLink
                       key={v.id ?? "default"}

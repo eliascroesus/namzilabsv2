@@ -2331,17 +2331,40 @@ function timeWindow(cfg: { mode: string; preset: string; from?: string; to?: str
   const startOfWeek = startOfDay - dow * 86_400_000;
   const startOfMonth = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
   const day = 86_400_000;
+  /**
+   * A PERIOD IN PROGRESS ENDS WHEN THE PERIOD ENDS, NOT AT THIS INSTANT.
+   *
+   * "Today" used to run to `now`, matching the dashboard pill of the same name,
+   * and both were wrong for the same reason: a Calendly meeting booked for 16:00
+   * is a record DATED 16:00, so at 13:00 it fell outside a window that stopped
+   * at 13:00. A flow filtered to "today" saw none of the afternoon's bookings,
+   * and the number it published read 0 on a day with three of them.
+   *
+   * This is the same fact the "between" branch above already conceded for an
+   * empty "To" — "a Google Calendar filtered 'from 11 Aug onwards' returned 9 of
+   * 20 matching meetings, because the other 11 are SCHEDULED". A preset naming a
+   * period is that same "onwards", bounded: the period is the window.
+   *
+   * The completed presets beside these were always whole periods, so this makes
+   * the two halves of the switch agree — and keeps the promise `resolveRange`
+   * makes in range.ts, that a preset here and the pill of the same name are one
+   * definition in both places.
+   *
+   * The ROLLING presets below are deliberately untouched. "Last 7 days" is
+   * chosen for being clock-relative rather than calendar-aligned, and running it
+   * to the end of today would make it seven days plus a few hours.
+   */
   switch (cfg.preset) {
     case "today":
-      return { start: startOfDay, end: now };
+      return { start: startOfDay, end: startOfDay + day - 1 };
     case "yesterday":
       return { start: startOfDay - day, end: startOfDay - 1 };
     case "this_week":
-      return { start: startOfWeek, end: now };
+      return { start: startOfWeek, end: startOfWeek + 7 * day - 1 };
     case "last_week":
       return { start: startOfWeek - 7 * day, end: startOfWeek - 1 };
     case "this_month":
-      return { start: startOfMonth, end: now };
+      return { start: startOfMonth, end: Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) - 1 };
     case "last_month": {
       const startPrev = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1);
       return { start: startPrev, end: startOfMonth - 1 };
