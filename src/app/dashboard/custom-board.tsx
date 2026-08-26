@@ -119,6 +119,7 @@ export function CustomBoard({
   options,
   rangeKey,
   canEdit,
+  layoutFrozen = false,
   viewStrip,
   actions: actionOverrides,
 }: {
@@ -130,6 +131,17 @@ export function CustomBoard({
   /** The board's active range — the tiles window their own data with it. */
   rangeKey: string;
   canEdit: boolean;
+  /**
+   * THIS VIEW HOLDS A ROW THIS VIEWER CANNOT SEE, so nobody may rearrange it
+   * from here. The hidden row is absent from `tiles` — that is the whole point
+   * — which means `compact` would float the survivors into its space and the
+   * write would overlap it for everyone else. Server-computed and passed down:
+   * the client has no way to know what it was not sent.
+   *
+   * It freezes the ARRANGEMENT only. Editing what a chart is remains fine —
+   * those writes touch one row and move nothing.
+   */
+  layoutFrozen?: boolean;
   /**
    * The same tabs the groups board wears. A view's whole promise is that you
    * can move between kinds without the furniture moving, so the strip is
@@ -310,6 +322,13 @@ export function CustomBoard({
   ];
 
   boxesRef.current = boxes;
+
+  /**
+   * MAY THIS VIEWER MOVE THINGS? Editing what a chart IS stays available under
+   * a frozen layout — those writes touch one row. Only the three paths that
+   * call `writeLayout` are closed: the drag, the menu's nudges, and resize.
+   */
+  const canArrange = canEdit && !layoutFrozen;
 
   const rootRef = useRef<HTMLDivElement>(null);
   /**
@@ -529,6 +548,17 @@ export function CustomBoard({
         )}
       </div>
 
+      {/* ONE LINE, ONCE, UNDER THE CONTROLS. Enough to explain why nothing
+          moves, and deliberately not enough to describe what is hidden: naming
+          it, counting it or hinting at its shape would leak the thing the
+          omission exists to protect. */}
+      {layoutFrozen && canEdit && (
+        <p className="mt-2 text-tiny text-muted-foreground">
+          This view includes a chart your access doesn&rsquo;t cover, so its arrangement is locked. You can still
+          change how the charts you can see are drawn.
+        </p>
+      )}
+
       {empty ? (
         <div className="mt-4 flex flex-col items-center justify-center rounded-surface border border-dashed border-border py-16 text-center">
           <LayoutGrid className="size-5 text-muted-foreground" aria-hidden />
@@ -548,9 +578,9 @@ export function CustomBoard({
               style={vars as React.CSSProperties}
               className={`board-cell group/cell relative transition-opacity duration-(--duration-fast) ${
                 gesture?.id === tile.id ? "opacity-70" : ""
-              } ${canEdit ? "cursor-grab [touch-action:none]" : ""}`}
+              } ${canArrange ? "cursor-grab [touch-action:none]" : ""}`}
               onPointerDown={(e) => {
-                if (!canEdit) return;
+                if (!canArrange) return;
                 // The whole card is the move handle, so the controls inside it
                 // have to be protected by name — the same guard, and the same
                 // reason, as the groups board's TileSlot. The RESIZE handle is
@@ -596,6 +626,7 @@ export function CustomBoard({
                   onRename={(t) => editTile(tile.id, { title: t })}
                   onConfigure={() => setConfiguring(tile.id)}
                   onChangeMetric={() => setRepointing(tile.id)}
+                  canArrange={canArrange}
                   onNudge={(dx, dy) => nudge(tile.id, dx, dy)}
                   onResize={(w, h) => resize(tile.id, w, h)}
                   onDelete={() => removeTile(tile.id)}
@@ -616,7 +647,7 @@ export function CustomBoard({
                   />
                 );
               })()}
-              {canEdit && (
+              {canArrange && (
                 /* The corner grip. Deliberately NOT `.fixed.z-50` and NOT
                    `border-dashed`: `scripts/board-drag-check.mjs` counts
                    elements by those exact selectors to find the groups board's
@@ -816,6 +847,7 @@ function TileMenu({
   onRename,
   onConfigure,
   onChangeMetric,
+  canArrange,
   onNudge,
   onResize,
   onDelete,
@@ -830,6 +862,8 @@ function TileMenu({
   onConfigure: () => void;
   onRename: (title: string) => void;
   onChangeMetric: () => void;
+  /** False when a row on this view is hidden from the viewer — see `layoutFrozen`. */
+  canArrange: boolean;
   onNudge: (dx: number, dy: number) => void;
   onResize: (w: number, h: number) => void;
   onDelete: () => void;
@@ -974,67 +1008,76 @@ function TileMenu({
             Change metric
           </Button>
 
-          <SectionHeading className="px-1.5 pb-1 pt-2">Width</SectionHeading>
-          <div className="flex gap-1 px-1">
-            {[
-              { label: "¼", w: 3 },
-              { label: "½", w: 6 },
-              { label: "⅔", w: 8 },
-              { label: "Full", w: 12 },
-            ].map((o) => (
-              <Button
-                key={o.w}
-                variant={tile.w === o.w ? "secondary" : "ghost"}
-                size="sm"
-                className="flex-1 justify-center px-0"
-                aria-label={`${o.label} width`}
-                onClick={() => act(() => onResize(o.w, tile.h))}
-              >
-                {o.label}
-              </Button>
-            ))}
-          </div>
+          {/* WIDTH, HEIGHT AND MOVE ARE ARRANGEMENT — the three menu paths
+              that call `writeLayout`. They go away entirely rather than
+              greying out: a disabled row invites a hover to explain itself,
+              and the explanation already sits under the board where it can be
+              read once instead of four times. */}
+          {canArrange && (
+            <>
+            <SectionHeading className="px-1.5 pb-1 pt-2">Width</SectionHeading>
+            <div className="flex gap-1 px-1">
+              {[
+                { label: "¼", w: 3 },
+                { label: "½", w: 6 },
+                { label: "⅔", w: 8 },
+                { label: "Full", w: 12 },
+              ].map((o) => (
+                <Button
+                  key={o.w}
+                  variant={tile.w === o.w ? "secondary" : "ghost"}
+                  size="sm"
+                  className="flex-1 justify-center px-0"
+                  aria-label={`${o.label} width`}
+                  onClick={() => act(() => onResize(o.w, tile.h))}
+                >
+                  {o.label}
+                </Button>
+              ))}
+            </div>
 
-          <SectionHeading className="px-1.5 pb-1 pt-2">Height</SectionHeading>
-          <div className="flex gap-1 px-1">
-            {[
-              { label: "Short", h: 4 },
-              { label: "Medium", h: 6 },
-              { label: "Tall", h: 9 },
-            ].map((o) => (
-              <Button
-                key={o.h}
-                variant={tile.h === o.h ? "secondary" : "ghost"}
-                size="sm"
-                className="flex-1 justify-center px-0"
-                onClick={() => act(() => onResize(tile.w, o.h))}
-              >
-                {o.label}
-              </Button>
-            ))}
-          </div>
+            <SectionHeading className="px-1.5 pb-1 pt-2">Height</SectionHeading>
+            <div className="flex gap-1 px-1">
+              {[
+                { label: "Short", h: 4 },
+                { label: "Medium", h: 6 },
+                { label: "Tall", h: 9 },
+              ].map((o) => (
+                <Button
+                  key={o.h}
+                  variant={tile.h === o.h ? "secondary" : "ghost"}
+                  size="sm"
+                  className="flex-1 justify-center px-0"
+                  onClick={() => act(() => onResize(tile.w, o.h))}
+                >
+                  {o.label}
+                </Button>
+              ))}
+            </div>
 
-          <SectionHeading className="px-1.5 pb-1 pt-2">Move</SectionHeading>
-          <div className="flex gap-1 px-1">
-            {[
-              { Icon: ArrowLeft, dx: -1, dy: 0, label: "left" },
-              { Icon: ArrowRight, dx: 1, dy: 0, label: "right" },
-              { Icon: ArrowUp, dx: 0, dy: -1, label: "up" },
-              { Icon: ArrowDown, dx: 0, dy: 1, label: "down" },
-            ].map(({ Icon, dx, dy, label }) => (
-              <Button
-                key={label}
-                variant="ghost"
-                size="sm"
-                className="flex-1 justify-center px-0"
-                aria-label={`Move ${title} ${label}`}
-                disabled={(dx === -1 && tile.x === 0) || (dy === -1 && index === 0)}
-                onClick={() => act(() => onNudge(dx, dy))}
-              >
-                <Icon />
-              </Button>
-            ))}
-          </div>
+            <SectionHeading className="px-1.5 pb-1 pt-2">Move</SectionHeading>
+            <div className="flex gap-1 px-1">
+              {[
+                { Icon: ArrowLeft, dx: -1, dy: 0, label: "left" },
+                { Icon: ArrowRight, dx: 1, dy: 0, label: "right" },
+                { Icon: ArrowUp, dx: 0, dy: -1, label: "up" },
+                { Icon: ArrowDown, dx: 0, dy: 1, label: "down" },
+              ].map(({ Icon, dx, dy, label }) => (
+                <Button
+                  key={label}
+                  variant="ghost"
+                  size="sm"
+                  className="flex-1 justify-center px-0"
+                  aria-label={`Move ${title} ${label}`}
+                  disabled={(dx === -1 && tile.x === 0) || (dy === -1 && index === 0)}
+                  onClick={() => act(() => onNudge(dx, dy))}
+                >
+                  <Icon />
+                </Button>
+              ))}
+            </div>
+            </>
+          )}
 
           <div className="my-1.5 h-px bg-border" />
 

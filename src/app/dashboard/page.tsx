@@ -24,6 +24,7 @@ import { parseTileConfig } from "@/lib/board/tile-config";
 import { listBoardGroups, listBoardViews, listTilePlacements } from "@/lib/board/store";
 import { listBoardTiles } from "@/lib/board/tiles-store";
 import {
+  canvasRowFate,
   tileKeyOfFlow,
   tileKeyOfMetric,
   type BoardGroup,
@@ -222,6 +223,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     loadError = "unavailable";
   }
 
+  /**
+   * EVERY KEY THAT EXISTS, taken BEFORE the rank filter below.
+   *
+   * A canvas row whose metric this viewer may not see joins to nothing, and
+   * "joins to nothing" is also what a genuinely deleted metric looks like —
+   * two completely different facts arriving as the same `undefined`. Without
+   * this set the canvas told a restricted viewer "It isn't published any more.
+   * Publish it again", which is false, and printed the tile's title while
+   * saying it. See `canvasTiles` for what each case renders.
+   */
+  const existingKeys = new Set(metrics.map((m) => tileKeyOfMetric(m.id)));
+
   // Filter the SOURCE list, not the rendering: every classic-metric surface on
   // this page (aggregate tiles, funnel tiles, drill-in links) derives from
   // `metrics`, so a hidden metric cannot leak through any section — and its
@@ -268,6 +281,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   let flowTiles: FlowResultRow[] = [];
   try {
     const allRows = await publishedFlowTiles(db, orgId);
+    // Before the filter — see `existingKeys` above. A flow tile this viewer's
+    // rank hides must be told apart from one that no longer exists.
+    for (const r of allRows) existingKeys.add(tileKeyOfFlow(r.flowId, r.outputNodeId));
     // Same as the metrics filter above: drop hidden flows at the source, so
     // neither the tiles nor the import-badge join below ever see them.
     const rows = access.admin ? allRows : allRows.filter((r) => access.canSeeMetric(`flow:${r.flowId}`));
@@ -588,9 +604,29 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const flowByKey = new Map(flowTiles.map((r) => [tileKeyOfFlow(r.flowId, r.outputNodeId), r]));
   const classicByKey = new Map(tiles.map((t) => [tileKeyOfMetric(t.metric.id), t]));
-  const canvasTiles: CanvasTile[] = canvasRows.map((row) => {
+  /**
+   * A ROW THIS VIEWER MAY NOT SEE IS NOT RENDERED AS ANYTHING.
+   *
+   * Both filters above drop hidden metrics at the source, so a canvas row
+   * pointing at one joined to nothing and fell through to `source: null` —
+   * which draws `DeadTile`. That was wrong twice over: it printed the tile's
+   * TITLE (the override lives on the row, which is not permission-filtered),
+   * and it said "It isn't published any more. Publish it again" to somebody
+   * whose only problem is that they are not allowed to look at it.
+   *
+   * `existingKeys` is what separates the two: taken before either filter, it
+   * still contains a hidden metric's key and never contained a deleted one.
+   * Hidden → the row is omitted here and NOTHING about it crosses to the
+   * client. Genuinely gone → `DeadTile`, which is the right answer and stays.
+   */
+  const fateOf = (row: BoardTileRow) =>
+    canvasRowFate(row.tileKey, flowByKey.has(row.tileKey) || classicByKey.has(row.tileKey), existingKeys);
+  const hiddenOnThisView = canvasRows.filter((row) => fateOf(row) === "hidden").length;
+
+  const canvasTiles: CanvasTile[] = canvasRows.flatMap((row) => {
     const flow = flowByKey.get(row.tileKey);
     const classic = classicByKey.get(row.tileKey);
+    if (fateOf(row) === "hidden") return [];
     const stored = (flow?.tile ?? {}) as { name?: string };
     /**
      * THE WHOLE CONTRACT, not the half that used to cross. `unpublished`,
@@ -619,7 +655,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           }
         : null;
     const value = flow ? tileValueForRange(flow.tile, rangeKey) : null;
-    return {
+    return [{
       id: row.id,
       x: row.x,
       y: row.y,
@@ -639,7 +675,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       // tile ranks as stale rather than fine, because "needs a look" is true.
       attention: flow ? attentionOf(flow, value) : classic?.kind === "error" ? 3 : classic ? 0 : 1,
       data: source,
-    };
+    }];
   });
 
   return (
@@ -851,6 +887,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 options={tileOptions}
                 rangeKey={rangeKey}
                 canEdit={access.can("create_flows")}
+                /**
+                 * WHY THE ARRANGEMENT IS FROZEN FOR THIS VIEWER — computed on
+                 * the server, because the client cannot see what was omitted.
+                 *
+                 * An omitted row is gone from this viewer's layout, so any drag
+                 * lets `compact` reflow the survivors up into the hidden tile's
+                 * space — and `setCustomTileLayoutAction` would write that,
+                 * overlapping a tile for everyone who CAN see it. One viewer's
+                 * permissions must not rearrange another's board.
+                 */
+                layoutFrozen={hiddenOnThisView > 0}
                 viewStrip={viewStrip}
               />
             ) : (

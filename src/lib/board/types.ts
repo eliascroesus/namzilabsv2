@@ -135,3 +135,31 @@ export type BoardTile = {
  */
 export const tileKeyOfFlow = (flowId: string, outputNodeId: string) => `flow:${flowId}:${outputNodeId}`;
 export const tileKeyOfMetric = (metricId: string) => `metric:${metricId}`;
+
+/**
+ * WHAT A CANVAS ROW IS, once the permission filters have already run.
+ *
+ * A row whose metric this viewer may not see and a row whose metric no longer
+ * exists arrive at the renderer as the same thing: a `tileKey` that joins to
+ * nothing. Telling them apart needs a fact from BEFORE the filter, and getting
+ * it wrong is not cosmetic — the canvas told restricted viewers "It isn't
+ * published any more. Publish it again", printing the tile's title beside a
+ * sentence that was false for them.
+ *
+ *   "render" — the metric joined; draw the tile.
+ *   "hidden" — it exists but this viewer's rank covers it. The row is dropped
+ *              on the SERVER and nothing about it crosses to the client, title
+ *              included. Not a placeholder, not an empty box: absent.
+ *   "dead"   — it is in no unfiltered set, so it is genuinely gone. `DeadTile`,
+ *              which keeps its box and says so, because somebody chose that
+ *              chart and put it in that spot and republishing brings it back.
+ *
+ * `existing` must be assembled BEFORE `canSeeMetric` runs, or every hidden row
+ * reads as dead and the leak comes straight back.
+ */
+export type CanvasRowFate = "render" | "hidden" | "dead";
+
+export function canvasRowFate(tileKey: string, joined: boolean, existing: ReadonlySet<string>): CanvasRowFate {
+  if (joined) return "render";
+  return existing.has(tileKey) ? "hidden" : "dead";
+}

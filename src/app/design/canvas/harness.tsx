@@ -26,7 +26,16 @@ import type { CustomTileOption } from "@/lib/board/types";
  * removes from it (the box must vanish rather than ghost — the ghost was what
  * bricked every subsequent move).
  */
-export function CanvasHarness({ tiles: initial, options }: { tiles: CanvasTile[]; options: CustomTileOption[] }) {
+export function CanvasHarness({
+  tiles: initial,
+  options,
+  layoutFrozen = false,
+}: {
+  tiles: CanvasTile[];
+  options: CustomTileOption[];
+  /** Stands in for "this view holds a row your rank hides" — see `layoutFrozen`. */
+  layoutFrozen?: boolean;
+}) {
   const [tiles, setTiles] = useState(initial);
   const minted = useRef(0);
 
@@ -83,7 +92,15 @@ export function CanvasHarness({ tiles: initial, options }: { tiles: CanvasTile[]
           Simulate remote delete
         </Button>
       </div>
-      <CustomBoard viewId="design" tiles={tiles} options={options} rangeKey="today" canEdit actions={actions} />
+      <CustomBoard
+        viewId="design"
+        tiles={tiles}
+        options={options}
+        rangeKey="today"
+        canEdit
+        layoutFrozen={layoutFrozen}
+        actions={actions}
+      />
     </div>
   );
 }

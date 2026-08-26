@@ -15,6 +15,13 @@
 import { chromium } from "playwright";
 
 const BASE = process.env.SHOT_BASE ?? "http://localhost:3000";
+/**
+ * EVERY SELECTOR BELOW IS SCOPED TO THE LIVE BOARD. `/design/canvas` now shows
+ * three boards — the gallery's specimens, a deliberately frozen one, and this
+ * — so a bare `[data-canvas]` matches more than one and Playwright's strict
+ * mode refuses it. `data-live-board` names the one with working actions.
+ */
+const LIVE = "[data-live-board]";
 const fails = [];
 const check = (ok, what, detail = "") => {
   console.log(`  ${ok ? "ok  " : "FAIL"}  ${what}${ok || !detail ? "" : ` — ${detail}`}`);
@@ -29,13 +36,14 @@ page.on("pageerror", (e) => errors.push(e.message));
 const layout = () =>
   page.evaluate(() =>
     Object.fromEntries(
-      [...document.querySelectorAll("[data-canvas] [data-canvas-cell]")].map((c) => [
+      [...document.querySelectorAll("[data-live-board] [data-canvas] [data-canvas-cell]")].map((c) => [
         c.getAttribute("data-canvas-cell"),
         c.style.getPropertyValue("--c12") + "|" + c.style.getPropertyValue("--r12"),
       ]),
     ),
   );
-const cellCount = () => page.evaluate(() => document.querySelectorAll("[data-canvas] [data-canvas-cell]").length);
+const cellCount = () =>
+  page.evaluate(() => document.querySelectorAll("[data-live-board] [data-canvas] [data-canvas-cell]").length);
 
 const load = async () => {
   const res = await page.goto(`${BASE}/design/canvas`, { waitUntil: "networkidle" });
@@ -46,7 +54,7 @@ const load = async () => {
   await page.waitForTimeout(500);
   // The live board sits below the static gallery; a pointer cannot press an
   // element that is off screen.
-  await page.locator("[data-canvas]").scrollIntoViewIfNeeded();
+  await page.locator(`${LIVE} [data-canvas]`).scrollIntoViewIfNeeded();
   await page.waitForTimeout(250);
 };
 
@@ -57,14 +65,14 @@ console.log("\na SUCCESSFUL add must not crash the page");
   const before = await cellCount();
   check(before > 0, "the live board mounted", `cells=${before}`);
 
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.locator(LIVE).getByRole("button", { name: "Add", exact: true }).click();
   // ONE press: the chart lands immediately, bound to the first metric that can
   // draw it. There is no metric step — that decision moved onto the tile.
   //
   // Addressed by `data-add-chart` rather than by its label: the settings panel
   // lists chart types too, so "Single number" now names two buttons on this
   // page and a label match resolved to both.
-  await page.locator("[data-add-chart='number']").click();
+  await page.locator(`${LIVE} [data-add-chart='number']`).click();
   await page.waitForTimeout(400);
   check(
     (await page.locator("div[role='dialog']").count()) === 0,
@@ -74,7 +82,7 @@ console.log("\na SUCCESSFUL add must not crash the page");
   const after = await cellCount();
   check(after === before + 1, "the new box appears immediately", `${before} -> ${after}`);
   // The window the crash lived in: the box exists, its card has not arrived.
-  const pendingCell = page.locator("[data-canvas-cell^='sim-added-']");
+  const pendingCell = page.locator(`${LIVE} [data-canvas-cell^='sim-added-']`);
   check((await pendingCell.count()) === 1, "the added box is the pending one");
   check(
     (await pendingCell.locator("[aria-busy='true']").count()) === 1,
@@ -92,14 +100,14 @@ console.log("\na tile deleted elsewhere leaves no ghost, and the board keeps wor
 {
   await load();
   const before = await cellCount();
-  await page.locator("[data-canvas-sim='remove']").click();
+  await page.locator(`${LIVE} [data-canvas-sim='remove']`).click();
   await page.waitForTimeout(300);
   const after = await cellCount();
   check(after === before - 1, "the box vanishes when the server no longer has it", `${before} -> ${after}`);
 
   // The brick: with a ghost id in the batch, every layout write failed
   // wholesale. Drag a survivor and confirm the board still moves.
-  const cell = page.locator("[data-canvas] [data-canvas-cell]").first();
+  const cell = page.locator(`${LIVE} [data-canvas] [data-canvas-cell]`).first();
   const box = await cell.boundingBox();
   const pre = await layout();
   await page.mouse.move(box.x + 40, box.y + 30);
@@ -117,7 +125,7 @@ console.log("\na tile added elsewhere appears without a reload");
 {
   await load();
   const before = await cellCount();
-  await page.locator("[data-canvas-sim='add']").click();
+  await page.locator(`${LIVE} [data-canvas-sim='add']`).click();
   await page.waitForTimeout(300);
   check((await cellCount()) === before + 1, "membership reconciles from the prop");
 }
@@ -129,9 +137,9 @@ console.log("\nclicking a tile opens its settings — and nothing else does");
   // t3 is the BAR tile, chosen deliberately: its mark reads the accent, so an
   // optimistic colour change is visible in its markup. A scorecard's colour
   // only reaches its trend line, and asserting against one proved nothing.
-  const cell = page.locator("[data-canvas] [data-canvas-cell='t3']");
+  const cell = page.locator(`${LIVE} [data-canvas] [data-canvas-cell='t3']`);
   // Scoped to the live board — the gallery above shows panel specimens too.
-  const panel = page.locator("[data-canvas-harness] [data-tile-panel]");
+  const panel = page.locator(`${LIVE} [data-tile-panel]`);
 
   // A PLAIN CLICK on the card opens it. This is the whole gesture, and it is
   // only possible because `swallowClick` already tells a click from a drag.
@@ -162,7 +170,7 @@ console.log("\nclicking a tile opens its settings — and nothing else does");
   // BUBBLES, so a kebab press that consumed the flag there would leave the
   // cell handler to read `false` and open the panel as the event rose. The
   // control guard is what stops it, and this is the check that would notice.
-  const kebab = page.locator("button[aria-label^='Options for']").first();
+  const kebab = page.locator(`${LIVE} button[aria-label^='Options for']`).first();
   await kebab.click();
   await page.waitForTimeout(250);
   check((await panel.count()) === 0, "the kebab opens its menu, not the panel");
@@ -172,7 +180,7 @@ console.log("\nclicking a tile opens its settings — and nothing else does");
   // menu is a DOM descendant of the cell. Pressing the kebab BUTTON was always
   // caught by the cell guard's `button` clause; pressing a heading inside the
   // open menu was not, and opened the settings panel behind it.
-  const heading = page.locator("[data-canvas] h2:text-is('Draw as')").first();
+  const heading = page.locator(`${LIVE} [data-canvas] h2:text-is('Draw as')`).first();
   if (await heading.count()) {
     await heading.click();
     await page.waitForTimeout(250);
@@ -190,7 +198,7 @@ console.log("\nclicking a tile opens its settings — and nothing else does");
   // Scoped to the live board AND exact: `name` matches a substring by default,
   // so an unscoped "Chart settings" also hit the gallery specimens' "Close
   // chart settings" buttons, which sit higher up the page.
-  await page.locator("[data-canvas]").getByRole("button", { name: "Chart settings", exact: true }).click();
+  await page.locator(`${LIVE} [data-canvas]`).getByRole("button", { name: "Chart settings", exact: true }).click();
   await page.waitForTimeout(300);
   check((await panel.count()) === 1, "the menu offers Chart settings, so a keyboard can reach it");
   await page.keyboard.press("Escape");
@@ -208,11 +216,63 @@ console.log("\nclicking a tile opens its settings — and nothing else does");
   check(errors.length === 0, "no uncaught page errors around the panel", errors.join(" · "));
 }
 
+// ── a view holding a row this viewer may not see ────────────────────────────
+console.log("\na view with a hidden chart is read-only, and says so");
+{
+  await load();
+  const frozen = page.locator("[data-frozen-board]");
+  await frozen.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(250);
+
+  check(
+    (await frozen.getByText("arrangement is locked").count()) === 1,
+    "it says why, once",
+  );
+
+  // THE MENU'S ARRANGEMENT ROWS ARE GONE — checkable only here, because a
+  // Popover renders nothing until it is opened.
+  await frozen.locator("button[aria-label^='Options for']").first().click();
+  await page.waitForTimeout(250);
+  const menu = frozen.locator("div.cursor-default");
+  const rows = (await menu.allInnerTexts()).join(" ");
+  check(!/\bWidth\b/.test(rows) && !/\bMove\b/.test(rows), "no Width, Height or Move in the menu", rows.slice(0, 90));
+  // ...but what a chart IS can still be changed: those writes touch one row.
+  check(/Chart settings/.test(rows), "the chart can still be restyled");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(150);
+
+  // AND THE GESTURE ITSELF DOES NOTHING. This is the one that matters: a drag
+  // here would let `compact` reflow the survivors into the hidden tile's space
+  // and write that, overlapping it for everyone who CAN see it.
+  const cell = frozen.locator("[data-canvas-cell]").first();
+  const before = await page.evaluate(() =>
+    [...document.querySelectorAll("[data-frozen-board] [data-canvas-cell]")].map(
+      (c) => c.style.getPropertyValue("--c12") + "|" + c.style.getPropertyValue("--r12"),
+    ),
+  );
+  const box = await cell.boundingBox();
+  await page.mouse.move(box.x + 40, box.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 420, box.y + 30, { steps: 12 });
+  await page.waitForTimeout(150);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(() =>
+    [...document.querySelectorAll("[data-frozen-board] [data-canvas-cell]")].map(
+      (c) => c.style.getPropertyValue("--c12") + "|" + c.style.getPropertyValue("--r12"),
+    ),
+  );
+  check(JSON.stringify(before) === JSON.stringify(after), "a drag moves nothing at all", `${before} -> ${after}`);
+  check((await frozen.locator("[data-canvas-handle]").count()) === 0, "and there is no resize grip");
+
+  check(errors.length === 0, "no uncaught page errors on a frozen board", errors.join(" · "));
+}
+
 // ── the gestures, unchanged from the ad-hoc script ──────────────────────────
 console.log("\nthe gestures still hold");
 {
   await load();
-  let box = await page.locator("[data-canvas] [data-canvas-cell]").first().boundingBox();
+  let box = await page.locator(`${LIVE} [data-canvas] [data-canvas-cell]`).first().boundingBox();
   let before = await layout();
   await page.mouse.move(box.x + 40, box.y + 30);
   await page.mouse.down();
@@ -223,7 +283,7 @@ console.log("\nthe gestures still hold");
   await page.waitForTimeout(300);
 
   await load();
-  box = await page.locator("[data-canvas] [data-canvas-cell]").first().boundingBox();
+  box = await page.locator(`${LIVE} [data-canvas] [data-canvas-cell]`).first().boundingBox();
   before = await layout();
   await page.mouse.move(box.x + 40, box.y + 30);
   await page.mouse.down();
@@ -236,7 +296,7 @@ console.log("\nthe gestures still hold");
   await page.mouse.up();
 
   await load();
-  const grip = await page.locator("[data-canvas-handle]").first().boundingBox();
+  const grip = await page.locator(`${LIVE} [data-canvas-handle]`).first().boundingBox();
   before = await layout();
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
   await page.mouse.down();
@@ -248,7 +308,7 @@ console.log("\nthe gestures still hold");
 
   await page.setViewportSize({ width: 900, height: 900 });
   await load();
-  const nb = await page.locator("[data-canvas] [data-canvas-cell]").first().boundingBox();
+  const nb = await page.locator(`${LIVE} [data-canvas] [data-canvas-cell]`).first().boundingBox();
   before = await layout();
   await page.mouse.move(nb.x + 30, nb.y + 30);
   await page.mouse.down();

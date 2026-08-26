@@ -231,6 +231,32 @@ export default function CanvasSpecimen() {
           ))}
         </div>
 
+        {/* A board a restricted viewer would get: the hidden row is not here,
+            and because it is not here nothing may be rearranged — `compact`
+            would float these up into its space and the write would overlap it
+            for everyone who can see it. */}
+        <SectionHeading className="mt-12">A view holding a chart you can&rsquo;t see</SectionHeading>
+        <div {...{ "data-frozen-board": "" }}>
+          <CanvasHarness
+            layoutFrozen
+            options={[]}
+            tiles={TILES.slice(0, 3).map((t) => ({
+              id: t.id,
+              tileKey: `flow:demo:${t.id}`,
+              x: t.x,
+              y: t.y,
+              w: t.w,
+              h: t.h,
+              chart: t.chart,
+              charts: ["number", "bar", "category"],
+              metricName: t.title,
+              config: {},
+              attention: 0 as const,
+              data: t.source,
+            }))}
+          />
+        </div>
+
         <SectionHeading className="mt-12">The tile settings panel</SectionHeading>
         <p className="mt-1 text-small text-muted-foreground">
           Both tabs at once, because a screenshot can&rsquo;t click. On the dashboard this is one panel pinned to the
@@ -247,6 +273,7 @@ export default function CanvasSpecimen() {
           The real component with the server played by the harness: writes SUCCEED here, because the crash that shipped
           lived on the success path. The two buttons are another tab editing the same view.
         </p>
+        <div {...{ "data-live-board": "" }}>
         <CanvasHarness
           /* The SAME key shape the tiles carry, or the panel's metric list has
              nothing to tick and the specimen quietly misrepresents it. */
@@ -272,6 +299,7 @@ export default function CanvasSpecimen() {
             data: t.source,
           }))}
         />
+        </div>
       </PageContainer>
     </div>
   );
