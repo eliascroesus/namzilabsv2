@@ -958,3 +958,101 @@ columns.
 > `batch5/retention-purge` branch. Like 0024–0026 this migration carries no
 > drizzle snapshot and its journal entry uses a synthetic `when` stamp
 > continuing that sequence.
+
+## 0028 — `dashboard_tiles` + `dashboard_views.kind` (custom views: a grid of charts)
+
+Adds the second kind of dashboard view. A `groups` view is what every view is
+today — colour columns of whole metric tiles, stored in
+`dashboard_tile_placements`. A `custom` view is a twelve-column grid of CHART
+tiles, stored in the new table. The existing table is untouched, so no board
+anyone has built changes shape.
+
+It ALTERS one existing table (`dashboard_views` gains `kind`) and creates one.
+Safe to paste twice — every statement is `IF NOT EXISTS` or wrapped in the
+duplicate-object guard.
+
+Load-bearing, and easy to lose in a re-paste:
+
+- **`kind` MUST land `NOT NULL DEFAULT 'groups'`.** `addViewAction` does not name
+  the column, so a missing default makes every new view fail to insert, and a
+  nullable one makes existing views read as neither kind. The default is also
+  what makes this migration need no backfill: every view written before today is
+  a groups view, which is exactly what the default says.
+- **`view_id` on `dashboard_tiles` IS `NOT NULL`**, unlike the same column on the
+  two neighbouring tables. There, NULL means "the default view"; the default view
+  has no row and is always a groups view, so it can hold none of these. A
+  nullable column here would describe a state that cannot exist.
+- **THERE IS NO FOREIGN KEY ON `tile_key`, AND THERE MUST NOT BE ONE.** Same
+  reason `dashboard_tile_placements.tile_key` has none: `materializeFlow` deletes
+  the `flow_results` rows whose outputNodeId left the published set on every
+  republish, so a reference would let republishing a flow destroy a customer's
+  layout. Tiles are allowed to dangle; the renderer keeps their place and says
+  the metric is gone.
+- **`x`/`y`/`w`/`h` are GRID UNITS, not pixels** — twelve columns, forty-pixel
+  rows. The stored layout is always the twelve-column one; narrower viewports
+  reflow at render time and never write back.
+
+```sql
+CREATE TABLE IF NOT EXISTS "dashboard_tiles" (
+  "id"         text PRIMARY KEY NOT NULL,
+  "org_id"     text NOT NULL,
+  "view_id"    text NOT NULL,
+  "tile_key"   text NOT NULL,
+  "chart"      text NOT NULL,
+  "config"     jsonb DEFAULT '{}'::jsonb NOT NULL,
+  "x"          integer NOT NULL,
+  "y"          integer NOT NULL,
+  "w"          integer NOT NULL,
+  "h"          integer NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE "dashboard_views" ADD COLUMN IF NOT EXISTS "kind" text DEFAULT 'groups' NOT NULL;
+
+DO $$ BEGIN
+ ALTER TABLE "dashboard_tiles" ADD CONSTRAINT "dashboard_tiles_view_id_dashboard_views_id_fk"
+   FOREIGN KEY ("view_id") REFERENCES "public"."dashboard_views"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+
+CREATE INDEX IF NOT EXISTS "dashboard_tiles_view_idx" ON "dashboard_tiles" USING btree ("org_id","view_id");
+```
+
+Verify (expect 1, 12, 1, 1, 1):
+
+```sql
+SELECT
+  (SELECT count(*) FROM information_schema.tables
+    WHERE table_schema='public' AND table_name='dashboard_tiles')            AS tiles_table_should_be_1,
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='dashboard_tiles')            AS tile_cols_should_be_12,
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='dashboard_views'
+      AND column_name='kind')                                                AS views_have_kind,
+  (SELECT count(*) FROM pg_indexes
+    WHERE schemaname='public' AND indexname='dashboard_tiles_view_idx')      AS tiles_idx_should_be_1,
+  (SELECT count(*) FROM information_schema.table_constraints
+    WHERE table_schema='public'
+      AND constraint_name='dashboard_tiles_view_id_dashboard_views_id_fk')   AS view_fk_should_be_1;
+```
+
+And the one that would rot quietly — `kind` landing nullable or without its
+default. Both leave every screen looking correct until the next view is created,
+at which point the insert fails with a NOT NULL violation on a column nobody
+names. Expect `'groups'::text` and `NO`:
+
+```sql
+SELECT column_default, is_nullable
+FROM information_schema.columns
+WHERE table_schema='public' AND table_name='dashboard_views' AND column_name='kind';
+```
+
+`scripts/schema-audit.sql` was regenerated alongside this: 22 tables, 223
+columns.
+
+> **Numbering note.** 0016 is still reserved by the unmerged
+> `batch5/retention-purge` branch. Like 0024–0027 this migration carries no
+> drizzle snapshot and its journal entry uses a synthetic `when` stamp
+> continuing that sequence.

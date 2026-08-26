@@ -902,6 +902,28 @@ export const dashboardViews = pgTable(
     name: text("name").notNull(),
     /** Fractional order key — the same scheme as everything else on the board. */
     pos: text("pos").notNull(),
+    /**
+     * WHAT KIND OF ARRANGEMENT THIS VIEW HOLDS, and therefore which table its
+     * layout lives in.
+     *
+     *   "groups" — named colour columns of whole metric tiles, stored in
+     *              `dashboard_tile_placements`. Every view before this column
+     *              existed, which is why the default is what it is.
+     *   "custom" — a twelve-column grid of chart tiles, stored in
+     *              `dashboard_tiles`.
+     *
+     * TWO KINDS, TWO STORAGE MODELS, ON PURPOSE. The two arrangements disagree
+     * about what a tile even IS — a placement is keyed on the metric, so a
+     * metric appears once, while a custom tile has its own id precisely so one
+     * metric can be a number, a trend and a breakdown side by side. Bending one
+     * table over both would make the shared column mean different things in
+     * different rows, and no existing board would survive the migration.
+     *
+     * The DEFAULT VIEW HAS NO ROW, so it is "groups" by construction and cannot
+     * be anything else — the same "absence is the default" trick `view_id IS
+     * NULL` already plays, and the reason this column needs no backfill.
+     */
+    kind: text("kind").notNull().default("groups"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -1026,4 +1048,66 @@ export const dashboardTilePlacements = pgTable(
     // nothing here.
     index("dashboard_placements_group_idx").on(t.groupId),
   ],
+);
+
+/**
+ * ONE CHART ON A CUSTOM VIEW — a metric, a way of drawing it, and a footprint.
+ *
+ * THE BREAK FROM `dashboard_tile_placements`, AND THE WHOLE REASON THIS TABLE
+ * EXISTS: identity is this row's own `id`, not the metric it points at. A
+ * placement is keyed `(org_id, view_id, tile_key)`, so a metric can appear on a
+ * board exactly once. Here the same metric can be a headline number, a trend and
+ * a breakdown by rep, side by side — which is the question people actually ask
+ * of a dashboard and the one the column view could not answer.
+ *
+ * `view_id` IS NOT NULL, unlike its neighbours. NULL means "the default view"
+ * over there, and the default view has no row of its own so it is always a
+ * GROUPS view — it can hold none of these. A nullable column here would describe
+ * a state that cannot exist.
+ *
+ * THERE IS NO FOREIGN KEY ON `tile_key`, FOR THE REASON THE PLACEMENTS TABLE
+ * SETS OUT ABOVE AT LENGTH: `materializeFlow` deletes the `flow_results` rows
+ * whose outputNodeId left the published set on every republish, so a reference
+ * would let republishing a flow quietly destroy a customer's layout. A tile is
+ * allowed to DANGLE, and unlike a placement it is not filtered away at read —
+ * it keeps its place and its size and says the metric is gone, because a chart
+ * someone deliberately placed and sized should not vanish without explanation.
+ * Republish the flow and the same tile lights up again.
+ *
+ * `x`/`y`/`w`/`h` ARE GRID UNITS, NOT PIXELS — twelve columns across, and a
+ * row unit of forty pixels (`GRID_COLS` / `ROW_UNIT_PX` in src/lib/board/grid.ts,
+ * which is the only place that arithmetic lives). Storing units rather than
+ * pixels is what lets one saved layout render at twelve columns, six and one
+ * without a second stored layout to keep in step.
+ *
+ * The stored layout is always the TWELVE-column one. Narrow viewports reflow it
+ * at render time and never write back — see `reflow`.
+ *
+ * `config` is per-chart presentation (a title override today) and is deliberately
+ * a jsonb blob rather than columns: it differs per chart type, and a column per
+ * chart option would be a migration every time a chart gains a setting.
+ */
+export const dashboardTiles = pgTable(
+  "dashboard_tiles",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    viewId: text("view_id")
+      .notNull()
+      .references(() => dashboardViews.id, { onDelete: "cascade" }),
+    /** "flow:<flowId>:<outputNodeId>" | "metric:<metricId>" — see src/lib/board/types.ts. */
+    tileKey: text("tile_key").notNull(),
+    /** number | bar | category | progress | funnel — see src/lib/board/charts.ts. */
+    chart: text("chart").notNull(),
+    config: jsonb("config").notNull().default({}),
+    x: integer("x").notNull(),
+    y: integer("y").notNull(),
+    w: integer("w").notNull(),
+    h: integer("h").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  // The read is always "every tile on this view of this org", so the index is
+  // the read. No index on `source_key`: nothing looks a tile up by its metric.
+  (t) => [index("dashboard_tiles_view_idx").on(t.orgId, t.viewId)],
 );

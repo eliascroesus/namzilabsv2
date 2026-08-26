@@ -87,6 +87,10 @@ const TABLES: Record<string, Classification> = {
     by: "one row per view a human added above their board — the default view has no row at all, so this counts only the extra tabs",
   },
   dashboard_groups: { kind: "bounded", by: "one row per column a human created, per view" },
+  dashboard_tiles: {
+    kind: "bounded",
+    by: "one row per chart a human placed on a custom view, capped per org by boardTileCap(). Unlike a placement it does NOT outlive its metric quietly — a tile whose source is gone keeps its place and renders as unavailable, so the ceiling is what someone deliberately put on a board rather than everything ever published, and deleting the view cascades them away",
+  },
   dashboard_tile_placements: {
     kind: "bounded",
     by: "at most one row per (org, tile) — the composite PK enforces it, and a drag is an upsert rather than an append. Placements outlive their tile ON PURPOSE (a republished flow gets its column back), so the ceiling is every tile the workspace has ever published rather than the tiles it has now; deleting the flow or metric clears them, and the write action caps the set",

@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (21 tables, 210 columns).
+-- QUERY 1 — tables and columns (22 tables, 223 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -82,10 +82,23 @@ WITH expected (tbl, col) AS (
     ('dashboard_tile_placements', 'view_id'),
     ('dashboard_tile_placements', 'pos'),
     ('dashboard_tile_placements', 'updated_at'),
+    ('dashboard_tiles', 'id'),
+    ('dashboard_tiles', 'org_id'),
+    ('dashboard_tiles', 'view_id'),
+    ('dashboard_tiles', 'tile_key'),
+    ('dashboard_tiles', 'chart'),
+    ('dashboard_tiles', 'config'),
+    ('dashboard_tiles', 'x'),
+    ('dashboard_tiles', 'y'),
+    ('dashboard_tiles', 'w'),
+    ('dashboard_tiles', 'h'),
+    ('dashboard_tiles', 'created_at'),
+    ('dashboard_tiles', 'updated_at'),
     ('dashboard_views', 'id'),
     ('dashboard_views', 'org_id'),
     ('dashboard_views', 'name'),
     ('dashboard_views', 'pos'),
+    ('dashboard_views', 'kind'),
     ('dashboard_views', 'created_at'),
     ('dashboard_views', 'updated_at'),
     ('dead_letter', 'id'),
@@ -260,7 +273,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (42 expected).
+-- QUERY 2 (optional) — indexes (43 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -276,6 +289,7 @@ WITH expected (tbl, idx) AS (
     ('dashboard_groups', 'dashboard_groups_view_idx'),
     ('dashboard_tile_placements', 'dashboard_placements_key_uq'),
     ('dashboard_tile_placements', 'dashboard_placements_group_idx'),
+    ('dashboard_tiles', 'dashboard_tiles_view_idx'),
     ('dashboard_views', 'dashboard_views_org_idx'),
     ('dead_letter', 'dead_letter_conn_idx'),
     ('dead_letter', 'dead_letter_raw_event_idx'),
