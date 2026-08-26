@@ -1,6 +1,7 @@
 import { canvasCells, GRID_COLS, ROW_UNIT_PX, type GridBox } from "@/lib/board/grid";
 import { defaultSize, type ChartId } from "@/lib/board/charts";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
+import { CustomBoard } from "@/app/dashboard/custom-board";
 import { PageContainer, SectionHeading } from "@/components/ui/page";
 
 /**
@@ -17,7 +18,16 @@ import { PageContainer, SectionHeading } from "@/components/ui/page";
  * The geometry here is real: `canvasCells` is the function the dashboard calls,
  * and the CSS is the same two classes. Only the cards are fake.
  */
-export const dynamic = "force-static";
+/**
+ * DYNAMIC, not static: this mounts the REAL `CustomBoard`, which imports the
+ * board's server actions, and a statically rendered page cannot carry those.
+ *
+ * The writes will fail here — there is no session — and that is useful rather
+ * than a limitation: it is the only place the optimistic revert and its toast
+ * can be watched happening. What is being verified is the GESTURE, which is
+ * entirely client-side: the preview, the packing, and the teardown.
+ */
+export const dynamic = "force-dynamic";
 
 type Specimen = GridBox & { chart: ChartId; title: string; source: CustomTileSource | null };
 
@@ -89,6 +99,28 @@ export default function CanvasSpecimen() {
             </div>
           ))}
         </div>
+
+        <SectionHeading className="mt-12">The live board — drag a card, drag its corner</SectionHeading>
+        <p className="mt-1 text-small text-muted-foreground">
+          The real component, with the real gestures. Saving fails here because there is no session, which is what makes
+          this the one place the optimistic revert is visible.
+        </p>
+        <CustomBoard
+          viewId="design"
+          canEdit
+          options={TILES.map((t) => ({ key: t.id, title: t.title, charts: ["number", "bar", "category"] }))}
+          tiles={TILES.map((t) => ({
+            id: t.id,
+            x: t.x,
+            y: t.y,
+            w: t.w,
+            h: t.h,
+            chart: t.chart,
+            charts: ["number", "bar", "category"],
+            title: t.title,
+            node: <CustomTile chart={t.chart} title={t.title} rangeKey="today" source={t.source} rows={t.h} />,
+          }))}
+        />
       </PageContainer>
     </div>
   );

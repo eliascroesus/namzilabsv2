@@ -221,14 +221,14 @@ function measure(
  * Found by driving the real frame in a browser rather than by reading it, which
  * is the only way this class of bug ever surfaces.
  */
-function pageScrollerOf(el: HTMLElement | null): HTMLElement | null {
+export function pageScrollerOf(el: HTMLElement | null): HTMLElement | null {
   for (let n = el; n; n = n.parentElement) {
     const oy = getComputedStyle(n).overflowY;
     if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight) return n;
   }
   return null;
 }
-const scrollTopOf = (s: HTMLElement | null) => (s ? s.scrollTop : window.scrollY);
+export const scrollTopOf = (s: HTMLElement | null) => (s ? s.scrollTop : window.scrollY);
 
 /** How far outside a band a value sits — zero when it is inside. */
 const outside = (v: number, lo: number, hi: number) => (v < lo ? lo - v : v > hi ? v - hi : 0);

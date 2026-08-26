@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, LayoutGrid, MoreHorizontal, PenLine, Plus, Repeat, Trash2 } from "lucide-react";
 import { canvasCells, compact, GRID_COLS, type GridBox } from "@/lib/board/grid";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
 import { CHARTS, asChartId, type ChartId } from "@/lib/board/charts";
 import type { BoardTileRow, CustomTileOption } from "@/lib/board/types";
+import { CANVAS_ATTR, CELL_ATTR, HANDLE_ATTR, useCanvasDrag } from "./canvas-drag";
 import { AddTilePicker } from "./add-tile-picker";
 import {
   addCustomTileAction,
@@ -150,6 +151,15 @@ export function CustomBoard({
     [settle, viewId],
   );
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  /**
+   * The gesture's preview is the LAYOUT, not a ghost floating over one: the
+   * cells move under the pointer because `preview` replaces `layout` while a
+   * gesture is live. That is only honest because both come from the same
+   * `compact`, so what is on screen mid-drag is exactly what gets written.
+   */
+  const { gesture, preview, onPointerDown, swallowClick } = useCanvasDrag(rootRef, layout, applyLayout);
+
   const nudge = useCallback(
     (id: string, dx: number, dy: number) => {
       const box = layout.find((b) => b.id === id);
@@ -206,11 +216,11 @@ export function CustomBoard({
    */
   const nodeOf = new Map(tiles.map((t) => [t.id, t.node]));
   const byId = new Map(tiles.map((t) => [t.id, t]));
-  const cells = canvasCells(layout);
+  const cells = canvasCells(preview ?? layout);
   const empty = cells.length === 0;
 
   return (
-    <div>
+    <div ref={rootRef}>
       {/* The controls row, in the same place and shape the groups board puts it:
           the view strip on the left, the one door on the right. On a canvas
           that door reads "Add" rather than "New group". */}
@@ -235,9 +245,25 @@ export function CustomBoard({
           </p>
         </div>
       ) : (
-        <div className="board-canvas mt-4">
+        <div className="board-canvas mt-4" {...{ [CANVAS_ATTR]: "" }}>
           {cells.map(({ tile, vars }, i) => (
-            <div key={tile.id} className="board-cell group/cell relative" style={vars as React.CSSProperties}>
+            <div
+              key={tile.id}
+              {...{ [CELL_ATTR]: tile.id }}
+              style={vars as React.CSSProperties}
+              className={`board-cell group/cell relative transition-opacity duration-(--duration-fast) ${
+                gesture?.id === tile.id ? "opacity-70" : ""
+              } ${canEdit ? "cursor-grab [touch-action:none]" : ""}`}
+              onPointerDown={(e) => {
+                if (!canEdit) return;
+                // The whole card is the move handle, so the controls inside it
+                // have to be protected by name — the same guard, and the same
+                // reason, as the groups board's TileSlot. The RESIZE handle is
+                // in this list too: it starts its own gesture.
+                if ((e.target as HTMLElement).closest(`button, a, input, [${HANDLE_ATTR}]`)) return;
+                onPointerDown(e, { id: tile.id, mode: "move" });
+              }}
+            >
               {canEdit && (
                 <TileMenu
                   tile={byId.get(tile.id)!}
@@ -248,9 +274,26 @@ export function CustomBoard({
                   onNudge={(dx, dy) => nudge(tile.id, dx, dy)}
                   onResize={(w, h) => resize(tile.id, w, h)}
                   onDelete={() => removeTile(tile.id)}
+                  swallowClick={swallowClick}
                 />
               )}
               {nodeOf.get(tile.id)}
+              {canEdit && (
+                /* The corner grip. Deliberately NOT `.fixed.z-50` and NOT
+                   `border-dashed`: `scripts/board-drag-check.mjs` counts
+                   elements by those exact selectors to find the groups board's
+                   ghost and placeholder, and a second thing wearing them would
+                   quietly change what that harness measures. */
+                <span
+                  {...{ [HANDLE_ATTR]: tile.id }}
+                  role="presentation"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    onPointerDown(e, { id: tile.id, mode: "resize" });
+                  }}
+                  className="absolute bottom-0.5 right-0.5 z-10 size-4 cursor-se-resize rounded-control opacity-0 [touch-action:none] after:absolute after:bottom-1 after:right-1 after:size-2 after:rounded-control after:border-b-2 after:border-r-2 after:border-neutral-400 focus-within:opacity-100 group-hover/cell:opacity-100 pointer-coarse:opacity-100"
+                />
+              )}
             </div>
           ))}
         </div>
@@ -302,9 +345,12 @@ function TileMenu({
   onNudge,
   onResize,
   onDelete,
+  swallowClick,
 }: {
   tile: CanvasTile;
   index: number;
+  /** True when the press that just ended was a drag, so it must not open this. */
+  swallowClick: () => boolean;
   onChart: (c: ChartId) => void;
   onRename: (title: string) => void;
   onChangeMetric: () => void;
@@ -351,7 +397,10 @@ function TileMenu({
           <Button
             variant="ghost"
             size="iconSm"
-            onClick={() => setOpen((o) => !o)}
+            onClick={() => {
+              if (swallowClick()) return;
+              setOpen((o) => !o);
+            }}
             aria-label={`Options for ${tile.title}`}
             aria-haspopup="menu"
           >
