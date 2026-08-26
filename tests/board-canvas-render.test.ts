@@ -10,6 +10,11 @@ import type { CustomTileOption } from "@/lib/board/types";
 // anything — what is under test is what the canvas SAYS. Same mock-then-import
 // shape `board-render.test.ts` uses for the groups board.
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {}, refresh: () => {} }) }));
+// The client tile renders FlowTile's shared pieces, whose module imports the
+// flow refresh action — a "use server" file that reaches for the database the
+// moment node (not the bundler) evaluates it.
+vi.mock("server-only", () => ({}));
+vi.mock("@/app/dashboard/flows/actions", () => ({ refreshFlowAction: async () => ({}) }));
 vi.mock("@/app/dashboard/board-actions", () => ({
   addCustomTileAction: async () => ({ ok: true, tile: { id: "new", tileKey: "metric:m1", chart: "number", config: {}, x: 0, y: 0, w: 3, h: 4 } }),
   deleteCustomTileAction: async () => ({ ok: true }),
@@ -42,20 +47,25 @@ const tile = (id: string, over: Partial<CanvasTile> = {}): CanvasTile => ({
   h: 4,
   chart: "number",
   charts: ["number", "bar"],
-  title: `Metric ${id}`,
-  node: createElement("p", null, `card ${id}`),
+  metricName: `Metric ${id}`,
+  config: {},
+  attention: 0,
+  // A minimal live source: the card renders CLIENT-side from this data now.
+  data: { kind: "flow", tile: { format: "number", precision: 0, byRange: { today: { value: 7 } } }, status: "fresh" },
   ...over,
 });
 
 const render = (tiles: CanvasTile[], canEdit = true, options: CustomTileOption[] = []) =>
-  renderToStaticMarkup(createElement(CustomBoard, { viewId: "v1", tiles, canEdit, options }));
+  renderToStaticMarkup(createElement(CustomBoard, { viewId: "v1", tiles, canEdit, options, rangeKey: "today" }));
 
 describe("the canvas places what it is given", () => {
-  it("emits one cell per tile, carrying the card it was handed", () => {
+  it("emits one cell per tile, rendered from the DATA it was handed", () => {
+    // The rendering-model change: no server node crosses the boundary — the
+    // board renders CustomTile itself, from each tile's data.
     const html = render([tile("a"), tile("b", { x: 3 })]);
     expect(html.match(/board-cell/g) ?? []).toHaveLength(2);
-    expect(html).toContain("card a");
-    expect(html).toContain("card b");
+    expect(html).toContain("Metric a");
+    expect(html).toContain("Metric b");
   });
 
   it("gives every cell all three renderings", () => {
@@ -87,21 +97,25 @@ describe("the canvas places what it is given", () => {
   });
 });
 
-describe("a tile with no card", () => {
-  it("keeps its box rather than letting the grid reflow around it", () => {
+describe("a tile whose metric is gone", () => {
+  it("keeps its box and says so, rather than letting the grid reflow around it", () => {
     /**
-     * The nodes come from props and the boxes from seeded state, so the two can
-     * briefly disagree — a row added by this client and not yet read back. A
-     * box that lost its card must NOT collapse, because gravity would then pull
-     * every tile below it up and push them back a moment later.
-     *
-     * Note this is not the dead-METRIC state: the page passes a real card for
-     * that (`CustomTile` with `source: null`), because Remove and Change metric
-     * are handlers and nothing crossing this boundary may be a function.
+     * `data: null` is the dead-metric state — the tile renders client-side
+     * now, so the unavailable card comes from the SAME component as every
+     * other state, and the box must not collapse: gravity would pull every
+     * tile below it up and push them back a moment later.
      */
-    const html = render([tile("a"), { ...tile("b"), x: 3, node: null }]);
+    const html = render([tile("a"), { ...tile("b"), x: 3, data: null }]);
     expect(html.match(/board-cell/g) ?? []).toHaveLength(2);
     expect(html).toContain("--c12:4 / span 3");
+    expect(html).toContain("Metric unavailable");
+  });
+
+  it("renders the live tile's number from its data, client-side", () => {
+    // The rendering-model change in one assertion: no server node crosses the
+    // boundary, and the figure on screen came out of the DATA prop.
+    const html = render([tile("a")]);
+    expect(html).toContain(">7<");
   });
 });
 

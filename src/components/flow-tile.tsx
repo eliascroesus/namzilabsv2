@@ -286,6 +286,19 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
 }
 
 /**
+ * The slice of a tile the delta rules read — structural, so the custom tile's
+ * own narrower type satisfies it without importing this file's whole `Tile`.
+ * EXPORTED because the canvas fabricated its own comparison once (`?? 0`
+ * printed "+100%" whenever yesterday was missing) and one set of honesty rules
+ * is the entire point of these.
+ */
+export type DeltaTile = {
+  value?: number;
+  series?: Array<{ bucket: string; value: number }>;
+  byRange?: Record<string, { value?: number; unavailable?: string }>;
+};
+
+/**
  * WHAT THIS NUMBER CAN HONESTLY BE COMPARED TO.
  *
  * Only two comparisons exist in the data, and neither is invented:
@@ -310,9 +323,9 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
  * answer to "compared to what" for the future — a booking made for next month
  * is not a movement against anything — so Upcoming gets no delta.
  */
-function deriveDelta(
-  stored: Tile,
-  t: Tile,
+export function deriveDelta(
+  stored: DeltaTile,
+  t: DeltaTile,
   rangeKey?: string,
 ): { current: number; previous: number; since: string } | null {
   const current = t.value;
@@ -353,7 +366,7 @@ function deriveDelta(
  * The link lands on the editor, where the toolbar carries the other half of
  * this fix and the same words on its primary button.
  */
-function NotLive({ flowId }: { flowId: string }) {
+export function NotLive({ flowId }: { flowId: string }) {
   return (
     <p className="mt-2 flex items-start gap-1.5 text-tiny text-warn-ink">
       <PencilLine size={14} className="mt-px shrink-0" aria-hidden />
@@ -386,7 +399,7 @@ function NotLive({ flowId }: { flowId: string }) {
  * get their own line (`NotLive`) — folding them in here would make a fresh
  * number computed from an old flow indistinguishable from an honest one.
  */
-function Freshness({ status }: { status: string }) {
+export function Freshness({ status }: { status: string }) {
   if (status === "fresh") {
     return (
       <span

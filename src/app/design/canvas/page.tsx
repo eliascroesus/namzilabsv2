@@ -115,8 +115,12 @@ export default function CanvasSpecimen() {
             h: t.h,
             chart: t.chart,
             charts: ["number", "bar", "category"],
-            title: t.title,
-            node: <CustomTile chart={t.chart} title={t.title} rangeKey="today" source={t.source} rows={t.h} />,
+            metricName: t.title,
+            config: {},
+            attention: 0 as const,
+            // DATA, not markup — the tile renders client-side now, which is
+            // the whole rendering-model change this page exists to exercise.
+            data: t.source,
           }))}
         />
       </PageContainer>

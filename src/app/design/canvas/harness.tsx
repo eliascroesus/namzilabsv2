@@ -55,10 +55,12 @@ export function CanvasHarness({ tiles: initial, options }: { tiles: CanvasTile[]
         h: 4,
         chart: "number",
         charts: ["number"],
-        title: `Remote ${n}`,
-        // No card — the reconciled box renders the pending skeleton, which is
-        // exactly what a real remote add looks like before its refresh lands.
-        node: null,
+        metricName: `Remote ${n}`,
+        config: {},
+        attention: 1,
+        // A dead source — the card that says the metric is gone, which is what
+        // a remote add of a metric this page cannot resolve looks like.
+        data: null,
       },
     ]);
   };
@@ -75,7 +77,7 @@ export function CanvasHarness({ tiles: initial, options }: { tiles: CanvasTile[]
           Simulate remote delete
         </Button>
       </div>
-      <CustomBoard viewId="design" tiles={tiles} options={options} canEdit actions={actions} />
+      <CustomBoard viewId="design" tiles={tiles} options={options} rangeKey="today" canEdit actions={actions} />
     </div>
   );
 }

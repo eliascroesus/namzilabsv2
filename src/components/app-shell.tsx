@@ -1,8 +1,8 @@
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import { inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import { requestAccess } from "@/lib/auth";
 import { connections, flows } from "@/db/schema";
-import { effectiveAccess } from "@/lib/permissions";
 import { AppFrame } from "./app-frame";
 import { OrgSwitcher } from "./org-switcher";
 import { Button } from "@/components/ui/button";
@@ -74,7 +74,9 @@ export async function AppShell({
   let hide: string[] | undefined;
   try {
     const role = memberships.data.find((m) => m.organizationId === orgId)?.role?.slug;
-    const access = await effectiveAccess(getDb(), { orgId, userId, role });
+    // Same request-scoped resolution the page used — `cache()` makes this the
+    // FIRST call's answer rather than a second set of queries.
+    const access = await requestAccess(orgId, userId, role);
     if (!access.can("view_integrations")) hide = ["Apps"];
   } catch {
     // Full rail on failure — never a broken frame.

@@ -1,5 +1,8 @@
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
+import { getReadDb } from "@/db/client";
+import { effectiveAccess } from "@/lib/permissions";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import type { UserInfo } from "@workos-inc/authkit-nextjs";
 
@@ -38,3 +41,22 @@ export async function getOrgContext(): Promise<OrgContext | null> {
   if (!auth.user || !auth.organizationId) return null;
   return { userId: auth.user.id, orgId: auth.organizationId, role: auth.role, auth };
 }
+
+/**
+ * THE REQUEST'S ACCESS, RESOLVED ONCE.
+ *
+ * `effectiveAccess` runs twice per render of the most-rendered page in the
+ * product — once for the page's own gates and once for the AppShell's rail —
+ * each resolution up to three queries for a ranked member, with nothing
+ * remembering the first answer. React's `cache()` dedupes per request, and the
+ * key is the three STRINGS rather than a context object precisely because
+ * `cache` compares arguments by identity: two call sites building their own
+ * `{orgId, userId}` objects would never hit.
+ *
+ * Lives here rather than in permissions.ts because that module deliberately
+ * takes its DB as an argument (PGlite drives it in tests) and stays importable
+ * anywhere; this wrapper is the server-only, request-scoped convenience.
+ */
+export const requestAccess = cache((orgId: string, userId: string, role?: string) =>
+  effectiveAccess(getReadDb(), { orgId, userId, role }),
+);

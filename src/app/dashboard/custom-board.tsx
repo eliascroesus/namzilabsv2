@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BarChart3, Check, Filter, Hash, LayoutGrid, MoreHorizontal, PenLine, Plus, Repeat, Rows3, Target, Trash2 } from "lucide-react";
 import { canvasCells, compact, GRID_COLS, type GridBox } from "@/lib/board/grid";
@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
 import { CHARTS, asChartId, type ChartId } from "@/lib/board/charts";
 import type { BoardTileRow, CustomTileOption } from "@/lib/board/types";
+import type { TileConfig } from "@/lib/board/tile-config";
+import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
 import { CANVAS_ATTR, CELL_ATTR, HANDLE_ATTR, useCanvasDrag } from "./canvas-drag";
 import { useSettle } from "./board-settle";
 import { MetricPicker } from "./add-tile-picker";
@@ -61,20 +63,31 @@ export type CanvasActions = {
  * fact.
  */
 export type CanvasTile = GridBox & {
-  /** The server-rendered card. Placed, never inspected — same contract as `BoardTile.node`. */
-  node: ReactNode;
+  /**
+   * THE CARD'S DATA, NOT ITS MARKUP. The tile renders CLIENT-SIDE now — that is
+   * what lets a chart or style edit apply the instant it is chosen, with no
+   * server round-trip standing between a press and its pixel. The server still
+   * paints the first HTML (client components SSR), and the twelve-second poll
+   * still refreshes this prop, so the numbers stay as live as they ever were.
+   */
+  data: CustomTileSource | null;
   /** What it is drawn as now, so the menu can tick the current one. */
   chart: string;
   /** What its METRIC could be drawn as — computed on the server by `chartsFor`. */
   charts: string[];
-  /** The name on the card: the override, or the metric's own. */
-  title: string;
+  /** The metric's own name — the fallback when no title override is set. */
+  metricName: string;
+  /** The tile's parsed presentation bag. Optimistic edits overlay it. */
+  config: TileConfig;
+  /** The same rules the groups board sorts by: 3 error · 2 unpublished · 1 stale · 0 fine. */
+  attention: 0 | 1 | 2 | 3;
 };
 
 export function CustomBoard({
   viewId,
   tiles,
   options,
+  rangeKey,
   canEdit,
   viewStrip,
   actions: actionOverrides,
@@ -84,6 +97,8 @@ export function CustomBoard({
   tiles: CanvasTile[];
   /** Every metric this viewer may see, with the charts each one supports. */
   options: CustomTileOption[];
+  /** The board's active range — the tiles window their own data with it. */
+  rangeKey: string;
   canEdit: boolean;
   /**
    * The same tabs the groups board wears. A view's whole promise is that you
@@ -133,6 +148,33 @@ export function CustomBoard({
    */
   const boxesRef = useRef<GridBox[]>([]);
   const [picking, setPicking] = useState(false);
+  /**
+   * OPTIMISTIC PRESENTATION, keyed by tile. A style or chart edit lands here
+   * first and renders on the next frame; the server is told behind it, and a
+   * refused write puts the PREVIOUS value back — a real revert now, where the
+   * old server-rendered model could only shrug (`() => {}`) and let the next
+   * refresh quietly undo the screen. An entry retires when the prop catches up
+   * with what it says.
+   */
+  const [overlay, setOverlay] = useState<Map<string, { chart?: string; config?: TileConfig }>>(new Map());
+  const tilesRef = useRef(tiles);
+  tilesRef.current = tiles;
+  useEffect(() => {
+    // Retire overlay entries the server prop has caught up with — otherwise a
+    // stale entry would mask a LATER edit from another tab forever.
+    setOverlay((m) => {
+      if (m.size === 0) return m;
+      const next = new Map(m);
+      for (const [id, o] of m) {
+        const t = tilesRef.current.find((x) => x.id === id);
+        if (!t) continue;
+        const chartCaught = o.chart === undefined || o.chart === t.chart;
+        const titleCaught = o.config?.title === undefined ? true : o.config.title === t.config.title;
+        if (chartCaught && titleCaught) next.delete(id);
+      }
+      return next.size === m.size ? m : next;
+    });
+  }, [tiles]);
   /** The id of the tile being repointed at a different metric, if any. */
   const [repointing, setRepointing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -263,9 +305,38 @@ export function CustomBoard({
   /** Chart, metric and name are one partial update of one already-walled row. */
   const editTile = useCallback(
     (id: string, patch: { chart?: string; tileKey?: string; title?: string }) => {
-      settle(act.editTile(id, patch), () => {});
-      // The CARD is the server's, and all three of these change it.
-      router.refresh();
+      /**
+       * A METRIC REPOINT is the one edit whose DATA lives on the server — the
+       * new metric's slices have to be fetched — so it refreshes. Chart and
+       * title are presentation over data already in hand: they render now,
+       * from the overlay, and never wait on a round trip.
+       */
+      if (patch.tileKey !== undefined) {
+        settle(act.editTile(id, patch), () => {});
+        router.refresh();
+        return;
+      }
+      let prev: { chart?: string; config?: TileConfig } | undefined;
+      setOverlay((m) => {
+        prev = m.get(id);
+        const next = new Map(m);
+        next.set(id, {
+          ...prev,
+          ...(patch.chart !== undefined ? { chart: patch.chart } : {}),
+          ...(patch.title !== undefined
+            ? { config: { ...prev?.config, title: patch.title.trim() || undefined } }
+            : {}),
+        });
+        return next;
+      });
+      settle(act.editTile(id, patch), () =>
+        setOverlay((m) => {
+          const next = new Map(m);
+          if (prev) next.set(id, prev);
+          else next.delete(id);
+          return next;
+        }),
+      );
     },
     [router, settle],
   );
@@ -291,8 +362,26 @@ export function CustomBoard({
     [settle],
   );
 
-  const nodeOf = new Map(tiles.map((t) => [t.id, t.node]));
-  const byId = new Map(tiles.map((t) => [t.id, t]));
+  /**
+   * THE TILE AS THE SCREEN SHOULD SHOW IT — the server's row with this
+   * client's optimistic presentation on top. The overlay retires itself the
+   * moment the prop agrees with it, so a settled edit and a fresh read are
+   * indistinguishable, which is the definition of optimistic done right.
+   */
+  const byId = new Map(
+    tiles.map((t) => {
+      const o = overlay.get(t.id);
+      if (!o) return [t.id, t] as const;
+      return [
+        t.id,
+        {
+          ...t,
+          chart: o.chart ?? t.chart,
+          config: o.config ? { ...t.config, ...o.config, title: o.config.title } : t.config,
+        },
+      ] as const;
+    }),
+  );
   const cells = canvasCells(preview ?? boxes);
   const empty = cells.length === 0;
 
@@ -362,7 +451,19 @@ export function CustomBoard({
                   swallowClick={swallowClick}
                 />
               )}
-              {nodeOf.get(tile.id) ?? <PendingCard />}
+              {(() => {
+                const t = byId.get(tile.id);
+                if (!t) return <PendingCard />;
+                return (
+                  <CustomTile
+                    chart={t.chart}
+                    title={t.config.title || t.metricName}
+                    rangeKey={rangeKey}
+                    source={t.data}
+                    rows={tile.h}
+                  />
+                );
+              })()}
               {canEdit && (
                 /* The corner grip. Deliberately NOT `.fixed.z-50` and NOT
                    `border-dashed`: `scripts/board-drag-check.mjs` counts
@@ -539,7 +640,8 @@ function TileMenu({
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(tile.title);
+  const title = tile.config.title || tile.metricName;
+  const [draft, setDraft] = useState(title);
 
   /** Do it, then get out of the way — every item below moves what is underneath. */
   const act = (fn: () => void) => {
@@ -552,7 +654,7 @@ function TileMenu({
     const next = draft.trim();
     // An empty name CLEARS the override, so the tile follows its metric again.
     // Unchanged means nothing happened, which is true.
-    if (next !== tile.title) onRename(next);
+    if (next !== title) onRename(next);
   };
 
   const legal = CHARTS.filter((c) => tile.charts.includes(c.id));
@@ -579,7 +681,7 @@ function TileMenu({
               if (swallowClick()) return;
               setOpen((o) => !o);
             }}
-            aria-label={`Options for ${tile.title}`}
+            aria-label={`Options for ${title}`}
             aria-haspopup="menu"
           >
             <MoreHorizontal />
@@ -598,7 +700,7 @@ function TileMenu({
                   if (e.key === "Enter") commit();
                   if (e.key === "Escape") setEditing(false);
                 }}
-                aria-label={`Rename ${tile.title}`}
+                aria-label={`Rename ${title}`}
                 placeholder="Follow the metric's name"
                 className="h-8 text-small"
               />
@@ -609,7 +711,7 @@ function TileMenu({
               size="sm"
               className="w-full justify-start"
               onClick={() => {
-                setDraft(tile.title);
+                setDraft(title);
                 setEditing(true);
               }}
             >
@@ -694,7 +796,7 @@ function TileMenu({
                 variant="ghost"
                 size="sm"
                 className="flex-1 justify-center px-0"
-                aria-label={`Move ${tile.title} ${label}`}
+                aria-label={`Move ${title} ${label}`}
                 disabled={(dx === -1 && tile.x === 0) || (dy === -1 && index === 0)}
                 onClick={() => act(() => onNudge(dx, dy))}
               >

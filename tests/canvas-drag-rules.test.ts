@@ -199,7 +199,9 @@ describe("membership reconciles from the prop; positions never do", () => {
     // Sabotage: restore the bare `byId.get(tile.id)!` and every successful add
     // crashes the page again, exactly as it did in production.
     expect(body).toMatch(/canEdit && byId\.has\(tile\.id\) &&/);
-    expect(body).toMatch(/nodeOf\.get\(tile\.id\) \?\? <PendingCard \/>/);
+    // The card renders from DATA now, and a box whose tile has not arrived
+    // still gets the skeleton — same window, same rule, new spelling.
+    expect(body).toMatch(/if \(!t\) return <PendingCard \/>;/);
   });
 
   it("re-learns membership when a layout write is refused wholesale", () => {

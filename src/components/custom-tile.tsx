@@ -1,11 +1,16 @@
+"use client";
+
+import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatMetricValue, relativeTime } from "@/lib/format";
+import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
 import { Card } from "@/components/ui/card";
-import { Delta, GroupBars, Sparkbars, TargetBar } from "@/components/charts";
+import { Delta, GroupBars, ImportProgress, Sparkbars, TargetBar } from "@/components/charts";
 import { FunnelView } from "@/components/funnel-view";
+import { Freshness, NotLive, deriveDelta } from "@/components/flow-tile";
 import { asChartId, chartsFor, shapeOfClassic, shapeOfTile, type ChartId } from "@/lib/board/charts";
 import type { AggregateResult, FunnelResult } from "@/lib/metrics/compute";
+import type { ImportCoverage } from "@/connectors/types";
 
 /**
  * ONE CHART ON A CUSTOM VIEW — and the first tile in this product that draws
@@ -49,13 +54,32 @@ type StoredTile = {
       series?: Array<{ bucket: string; value: number }>;
       groups?: Array<{ label: string; value: number }>;
       unavailable?: string;
+      /** Records with no date under the time reference — in no period, but real. */
+      undated?: number;
     }
   >;
 };
 
 export type CustomTileSource =
-  /** A published flow tile: a stored `flow_results` row, windowed per range. */
-  | { kind: "flow"; tile: unknown; computedAt?: Date | string | null; status?: string }
+  /**
+   * A published flow tile: the stored `flow_results` row, windowed per range —
+   * ALL its slices, because a per-tile range override reads whichever one the
+   * tile asks for — plus every axis the groups board already reports. Three of
+   * these (`unpublished`, `importing`, `error`) used to be dropped where the
+   * source was built, which is how the canvas rendered NONE of the five states
+   * a FlowTile carries.
+   */
+  | {
+      kind: "flow";
+      tile: unknown;
+      computedAt?: Date | string | null;
+      status?: string;
+      unpublished?: boolean;
+      importing?: ImportCoverage;
+      error?: string | null;
+      /** The editor link's other half — an error with no door out is a taunt. */
+      flowId?: string;
+    }
   /**
    * A classic metric, computed LIVE for the active range on every render — so
    * unlike a flow tile it carries no `byRange` and needs no windowing here. It
@@ -205,13 +229,30 @@ export function CustomTile({
   const legal = chartsFor(shapeOfTile(stored)).includes(chart);
   const fmt = (v: number | undefined) => formatMetricValue(v, t);
 
+  /**
+   * THE SAME HONESTY RULES THE GROUPS BOARD FOUGHT FOR, not a re-derivation.
+   * This tile used to fabricate its own comparison — `?? 0` printed "+100%"
+   * whenever yesterday was missing or unavailable — which is precisely the
+   * confident lie `deriveDelta` exists to refuse.
+   */
+  const delta = unavailable || chart !== "number" ? null : deriveDelta(stored, t, rangeKey);
+
   return (
     <Card variant="surface" className="flex h-full flex-col p-4">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         <p className="truncate text-small font-semibold text-foreground">{title}</p>
-        {source.computedAt && (
-          <span className="shrink-0 text-tiny text-muted-foreground">{relativeTime(new Date(source.computedAt))}</span>
-        )}
+        <span className="flex shrink-0 items-center gap-1.5">
+          {/* Quiet when fine, loud when not — the FlowTile vocabulary, and now
+              the same component. `status` used to reach this file and be spent
+              on rewording one sentence: a flow whose last run FAILED rendered
+              as a calm, unmarked chart over its stale number. */}
+          {source.status && !(missing && source.status === "fresh") && <Freshness status={source.status} />}
+          {source.computedAt && (
+            <span className="text-tiny text-muted-foreground" title={formatDateTime(new Date(source.computedAt))}>
+              {relativeTime(new Date(source.computedAt))}
+            </span>
+          )}
+        </span>
       </div>
 
       {/* THE HEADLINE, on every chart but the funnel. A chart without its
@@ -224,9 +265,7 @@ export function CustomTile({
                 answer is zero" are different facts. */}
             {unavailable ? "—" : fmt(t.value)}
           </p>
-          {chart === "number" && !unavailable && typeof t.value === "number" && rangeKey === "today" && (
-            <Delta current={t.value} previous={stored.byRange?.yesterday?.value ?? 0} format={t} since="yesterday" />
-          )}
+          {delta && <Delta current={delta.current} previous={delta.previous} format={t} since={delta.since} />}
         </div>
       )}
 
@@ -258,6 +297,33 @@ export function CustomTile({
           )
         ) : null}
       </div>
+
+      {/* THE QUALIFIERS — they ride alongside the number rather than replacing
+          it, exactly as on the groups board, because each one changes what the
+          figure MEANS without changing what it is. All of these were silently
+          dropped where the source was built; a customer mid-import, or reading
+          a number from a flow they had already rewritten, saw a clean tile. */}
+      {source.unpublished && source.flowId && <NotLive flowId={source.flowId} />}
+      {source.status === "error" && source.error && (
+        <p className="mt-2 text-tiny text-danger-ink">
+          {source.error.length > 160 ? `${source.error.slice(0, 160)}…` : source.error}{" "}
+          {source.flowId && (
+            <Link
+              href={`/dashboard/flows/${source.flowId}`}
+              className="rounded-control font-medium underline underline-offset-2 hover:no-underline"
+            >
+              Fix in the editor
+            </Link>
+          )}
+        </p>
+      )}
+      {!unavailable && windowed?.undated != null && windowed.undated > 0 && (
+        <p className="mt-2 text-tiny text-warn-ink">
+          {windowed.undated} record{windowed.undated === 1 ? "" : "s"} carr{windowed.undated === 1 ? "ies" : "y"} no
+          date in this metric&rsquo;s time reference — counted in All time, in no period.
+        </p>
+      )}
+      {source.importing && <ImportProgress importing={source.importing} />}
     </Card>
   );
 }

@@ -3,8 +3,7 @@ import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
 import { connections, flows } from "@/db/schema";
-import { requireOrg } from "@/lib/auth";
-import { effectiveAccess } from "@/lib/permissions";
+import { requireOrg, requestAccess } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { buttonVariants } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -19,7 +18,7 @@ import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { BoardControls, MetaLine, RangeLink, SourceLink, TileArea, ViewTab } from "./board-controls";
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
-import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
+import type { CustomTileSource } from "@/components/custom-tile";
 import { chartsFor, shapeOfClassic, shapeOfTile } from "@/lib/board/charts";
 import { parseTileConfig } from "@/lib/board/tile-config";
 import { listBoardGroups, listBoardViews, listTilePlacements } from "@/lib/board/store";
@@ -99,7 +98,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // Rank-based metric visibility, resolved once for the whole page. Admins and
   // members with no rank short-circuit to allow-all inside effectiveAccess, so
   // the common case costs at most one assignment lookup.
-  const access = await effectiveAccess(db, { orgId, userId, role });
+  const access = await requestAccess(orgId, userId, role);
 
   /**
    * THE NORMALIZED KEY, not the one in the URL. `resolveRange` already falls
@@ -593,8 +592,25 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const flow = flowByKey.get(row.tileKey);
     const classic = classicByKey.get(row.tileKey);
     const stored = (flow?.tile ?? {}) as { name?: string };
+    /**
+     * THE WHOLE CONTRACT, not the half that used to cross. `unpublished`,
+     * `importing` and `error` were dropped right here — the rows carry all
+     * three — which is why a customer mid-import, or reading a number from a
+     * flow they had already rewritten, saw a clean unmarked tile. The stored
+     * jsonb rides intact: every `byRange` slice (a per-tile range override
+     * reads whichever it asks for), the facts, and the presentation fields.
+     */
     const source: CustomTileSource | null = flow
-      ? { kind: "flow", tile: flow.tile, computedAt: flow.computedAt, status: flow.status }
+      ? {
+          kind: "flow",
+          tile: flow.tile,
+          computedAt: flow.computedAt,
+          status: flow.status,
+          unpublished: flow.unpublished,
+          importing: flow.importing,
+          error: flow.error,
+          flowId: flow.flowId,
+        }
       : classic
         ? {
             kind: "classic",
@@ -602,10 +618,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             target: classic.metric.target == null ? null : Number(classic.metric.target),
           }
         : null;
-    // Through the one parser, so a corrupt bag costs its own keys and nothing
-    // else — and so this file never grows a second opinion about the config's
-    // shape. Same semantics as before: an absent title follows the metric.
-    const title = parseTileConfig(row.config).title || stored.name || classic?.metric.name || "Untitled";
+    const value = flow ? tileValueForRange(flow.tile, rangeKey) : null;
     return {
       id: row.id,
       x: row.x,
@@ -613,11 +626,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       w: row.w,
       h: row.h,
       chart: row.chart,
-      title,
+      metricName: stored.name ?? classic?.metric.name ?? "Untitled",
+      // Through the one parser, so a corrupt bag costs its own keys and
+      // nothing else. The CLIENT derives the title — it owns the optimistic
+      // rename, and a derivation here would be a second opinion it overrides.
+      config: parseTileConfig(row.config),
       // What its METRIC could be drawn as — the same `chartsFor` the renderer
       // enforces with, so the menu can never offer a chart the tile refuses.
       charts: chartsFor(flow ? shapeOfTile(flow.tile) : shapeOfClassic(classic && classic.kind !== "error" ? classic.result : null, classic?.metric.target == null ? null : Number(classic.metric.target))) as string[],
-      node: <CustomTile key={row.id} chart={row.chart} title={title} rangeKey={rangeKey} source={source} rows={row.h} />,
+      // The groups board's own attention rules, extended to the canvas: a dead
+      // tile ranks as stale rather than fine, because "needs a look" is true.
+      attention: flow ? attentionOf(flow, value) : classic?.kind === "error" ? 3 : classic ? 0 : 1,
+      data: source,
     };
   });
 
@@ -828,6 +848,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 viewId={activeView!}
                 tiles={canvasTiles}
                 options={tileOptions}
+                rangeKey={rangeKey}
                 canEdit={access.can("create_flows")}
                 viewStrip={viewStrip}
               />

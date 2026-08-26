@@ -1,7 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
+
+// The tile is a client component whose import graph passes through
+// flow-tile.tsx and its "use server" refresh action — mocked, because node
+// evaluates what the bundler would have severed.
+vi.mock("server-only", () => ({}));
+vi.mock("@/app/dashboard/flows/actions", () => ({ refreshFlowAction: async () => ({}) }));
+
+const { CustomTile } = await import("@/components/custom-tile");
+type CustomTileSource = Parameters<typeof CustomTile>[0]["source"] & {};
 
 /**
  * THE TILE THAT DRAWS WHAT IT WAS ASKED TO DRAW.
@@ -162,5 +170,140 @@ describe("every tile fills the box the grid gave it", () => {
     for (const source of [flow(RICH), null]) {
       expect(render("number", source)).toContain("h-full");
     }
+  });
+});
+
+describe("the marks stay importable from a client component", () => {
+  /**
+   * `custom-tile.tsx` is a client component now, so everything it renders
+   * enters the client bundle. Three properties make that safe, and each one is
+   * a single careless edit away from gone:
+   *
+   *   no hooks — the marks are pure functions of their props;
+   *   no `server-only` — nothing in their import graph refuses the client;
+   *   `import type` on `@/lib/metrics/compute` — that module imports drizzle
+   *   and the db schema, and ONE dropped `type` keyword ships the entire
+   *   database layer to every browser.
+   */
+  it("charts.tsx and funnel-view.tsx carry no hooks and no server-only import", async () => {
+    const { readFileSync } = await import("node:fs");
+    for (const p of ["src/components/charts.tsx", "src/components/funnel-view.tsx"]) {
+      const src = readFileSync(p, "utf8");
+      expect(src, `${p} grew a hook`).not.toMatch(/\buse(State|Effect|Ref|Callback|Memo)\b/);
+      expect(src, `${p} refuses the client`).not.toMatch(/server-only/);
+    }
+  });
+
+  it("every compute reference stays import type, or drizzle enters the client bundle", async () => {
+    const { readFileSync } = await import("node:fs");
+    for (const p of ["src/components/funnel-view.tsx", "src/components/custom-tile.tsx"]) {
+      const src = readFileSync(p, "utf8");
+      const refs = src.match(/import .* from "@\/lib\/metrics\/compute"/g) ?? [];
+      for (const ref of refs) {
+        expect(ref, `${p}: ${ref}`).toMatch(/^import type /);
+      }
+    }
+  });
+});
+
+describe("the five states, now that the boundary carries them", () => {
+  /**
+   * A FlowTile has always rendered these; the canvas rendered NONE of them —
+   * three were dropped where the source was built, one was spent rewording a
+   * sentence, one was missing from the type. A customer mid-import, or reading
+   * a number from a flow they had already rewritten, saw a clean unmarked tile.
+   */
+  const base = { format: "number", precision: 0, byRange: { today: { value: 4 } } };
+
+  it("a stale tile wears the pill, not a calm dot", () => {
+    const html = render("number", { kind: "flow", tile: base, status: "stale" });
+    expect(html).toContain("Refreshing soon");
+  });
+
+  it("a failed run says so loudly, WITH the door out", () => {
+    const html = render("number", {
+      kind: "flow",
+      tile: base,
+      status: "error",
+      error: "The Close connection was refused.",
+      flowId: "f1",
+    });
+    // Before: status "error" only reworded the missing-range sentence — a flow
+    // whose last run FAILED rendered as a calm chart over its stale number.
+    expect(html).toContain("Error");
+    expect(html).toContain("The Close connection was refused.");
+    expect(html).toContain("/dashboard/flows/f1");
+    expect(html).toContain("Fix in the editor");
+  });
+
+  it("an unpublished flow warns that the number is the published version's", () => {
+    const html = render("number", { kind: "flow", tile: base, status: "fresh", unpublished: true, flowId: "f1" });
+    expect(html).toContain("Edited since publishing");
+    expect(html).toContain("Review &amp; publish");
+  });
+
+  it("an import in progress shows its coverage", () => {
+    const html = render("number", {
+      kind: "flow",
+      tile: base,
+      status: "fresh",
+      importing: { coveredMs: 12 * 86_400_000, targetMs: 90 * 86_400_000 },
+    });
+    expect(html).toContain("Still importing");
+    expect(html).toContain("12 of 90 days");
+  });
+
+  it("undated records are reported beside the number they are missing from", () => {
+    const html = render("number", {
+      kind: "flow",
+      tile: { ...base, byRange: { today: { value: 4, undated: 2 } } },
+      status: "fresh",
+    });
+    expect(html).toContain("2 records carry no date");
+  });
+
+  it("the timestamp explains itself on hover", () => {
+    const html = render("number", { kind: "flow", tile: base, status: "fresh", computedAt: "2026-08-26T12:00:00Z" });
+    expect(html).toMatch(/title="[^"]*2026/);
+  });
+});
+
+describe("the delta tells the truth or says nothing", () => {
+  it("never fabricates +100% when yesterday is missing", () => {
+    /**
+     * The `?? 0` bug: a today tile whose yesterday entry was absent compared
+     * against zero and printed a confident +100%. `deriveDelta`'s rules —
+     * shared from the groups board, not re-derived — refuse a comparison with
+     * no honest prior.
+     */
+    const html = render("number", {
+      kind: "flow",
+      tile: { format: "number", precision: 0, byRange: { today: { value: 4 } } },
+      status: "fresh",
+    });
+    expect(html).not.toContain("+100%");
+    expect(html).not.toContain("yesterday");
+  });
+
+  it("compares against a real yesterday when one exists", () => {
+    const html = render("number", {
+      kind: "flow",
+      tile: { format: "number", precision: 0, byRange: { today: { value: 4 }, yesterday: { value: 2 } } },
+      status: "fresh",
+    });
+    expect(html).toContain("yesterday");
+  });
+
+  it("refuses an unavailable yesterday exactly like a missing one", () => {
+    const html = render("number", {
+      kind: "flow",
+      tile: {
+        format: "number",
+        precision: 0,
+        byRange: { today: { value: 4 }, yesterday: { unavailable: "Division by zero." } },
+      },
+      status: "fresh",
+    });
+    expect(html).not.toContain("yesterday");
   });
 });
