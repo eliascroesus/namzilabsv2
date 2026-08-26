@@ -39,6 +39,26 @@ export const NODE_ACCENT: Record<string, string> = {
 /**
  * THE BOARD-GROUP PALETTE — a second vocabulary, in the same file on purpose.
  *
+ * ELEVEN HUES ROUND THE WHEEL PLUS A NEUTRAL, spaced evenly rather than picked.
+ * It began as the step palette's own seven, which cluster where a FLOW needed
+ * them and leave the rainbow lopsided — two blues, no yellow at all. These are
+ * every ~30° from red to pink, so the picker reads as a spectrum.
+ *
+ * EVERY ONE IS SOLVED, NOT CHOSEN: the most vivid version of its hue that still
+ * clears 3.05:1 against white. A hue too light at full saturation is darkened;
+ * one too dark is lightened TOWARD WHITE, which is what makes indigo a
+ * periwinkle rather than ink. Run that rule against the old values and it
+ * reproduces them — blue comes back as the identical #009ED3 — which is how it
+ * was checked before the rest were re-solved by it.
+ *
+ * `amber` is the honest cost of the rule. Real yellow measures about 1.1:1 on
+ * white, so the brightest yellow that can also be an 8px dot on a white card is
+ * a gold. Naming it amber is more truthful than shipping a yellow nobody can
+ * see and calling the contrast rule optional.
+ *
+ * NO KEY IS EVER REMOVED, only added. A group stores the key, so dropping one
+ * would silently reset every column wearing it to grey.
+ *
  * A step's colour is IDENTITY: a Filter is always indigo, and the map above is
  * a lookup, not a choice. A group's colour is a LABEL the customer picked for a
  * column they named. Two different jobs, so two different maps — kept in one
@@ -49,36 +69,26 @@ export const NODE_ACCENT: Record<string, string> = {
  * `nodeAccent()` falls through that map by type name: a group hue that happened
  * to answer a node-type lookup is a coincidence waiting to be a bug.
  *
- * TEN HUES, SPACED BY WHAT THE EYE CAN SEPARATE AT DOT SIZE — which is a much
- * stricter test than a swatch. Two hues 15° apart are obviously different at
- * 40px and identical at the 8px dot a column header wears, which is why real
- * yellow (40°) is absent: beside orange (25°) it read as one colour twice.
- *
- * Eight are the step palette's own values, restated rather than re-picked —
- * one green in this product, not two. Only `grey` and `teal` are new, and both
- * are solved the same way everything above is: saturation near the top of the
- * gamut, then lightness down to the highest value still clearing 3.05:1 against
- * white. Teal sits at 168° rather than the 172° that first suggested itself,
- * because 27° of separation from blue survives at dot size and 21° does not.
- *
  * `grey` is the exception to the solve, and deliberately: it is the "no colour"
  * default, so it comes from the kit's own warm neutral ramp
  * (`--color-neutral-500`, the same value `--muted-foreground` uses) rather than
  * being pushed to the contrast edge. A neutral has no vividness to preserve,
  * and the edge-solved version was a washed-out beige that read as a rendering
- * fault next to nine confident hues.
+ * fault next to eleven confident hues.
  */
 export const GROUP_ACCENT: Record<string, string> = {
-  grey: "#6b6660", //  --color-neutral-500, the kit's own warm grey
-  red: "#F76262", //   0°
-  orange: "#F66700", //  25°
-  olive: "#71A20D", //  75°
-  green: "#0EAB0E", // 120°
-  teal: "#00A786", // 168° — the one real gap in the wheel
-  blue: "#009ED3", // 195°
-  indigo: "#8176F9", // 245°
-  violet: "#D95FF2", // 290°
-  pink: "#F856A7", // 330°
+  grey: "#6b6660", //      --color-neutral-500, the kit's own warm grey
+  red: "#FF5B55", //   2°
+  orange: "#ED6E00", //  28°
+  amber: "#BB8C00", //  45°
+  olive: "#78A000", //  75°
+  green: "#00AB17", // 128°
+  teal: "#00A780", // 166°
+  cyan: "#00A0C8", // 192°
+  blue: "#2B95FF", // 210°
+  indigo: "#9382FF", // 248°
+  violet: "#DD57FF", // 288°
+  pink: "#FF4DA6", // 330°
 };
 
 /** The order the picker offers them in — round the wheel, grey first. */
@@ -107,7 +117,7 @@ function blend(a: string, b: string, p: number): string {
  *
  * A column wears its colour the way Notion's do — a tinted badge around the
  * name and a wash behind the cards — and the moment a colour becomes a
- * BACKGROUND, the thing on top of it has to be legible on all ten hues, not on
+ * BACKGROUND, the thing on top of it has to be legible on EVERY hue, not on
  * the two somebody happened to check.
  *
  * The numbers are measured (see the ratios below), not chosen:
@@ -117,7 +127,7 @@ function blend(a: string, b: string, p: number): string {
  *     tiles are the loud thing on this screen; the column is furniture.
  *   · `groupBadge` — 16% over white, the pill behind the name.
  *   · `groupInk`  — 60% accent into near-black. On its own badge that measures
- *     5.28:1 at the worst hue (orange) and better on the other nine, so the
+ *     5.29:1 at the worst hue (red) and better on the other eleven, so the
  *     name clears AA at the small size it is set in. The accent ITSELF would
  *     not: these hues are solved to 3.05:1 on white, which is a rule for a
  *     4px mark and nowhere near enough for 13px text.

@@ -324,6 +324,32 @@ console.log("\nthe group's colour reads at the top of the column");
   check(bar.barHeight >= 3 && bar.barColoured, "and an accent bar sits across the top", JSON.stringify(bar));
 }
 
+console.log("\nthe colour picker");
+{
+  await page.reload({ waitUntil: "networkidle" });
+  await page.locator('section[aria-label="Total"] button[aria-label^="Options"]').click();
+  await page.waitForTimeout(250);
+  const swatch = await page.evaluate(() => {
+    const panel = document.querySelector("[data-board-menu]");
+    const sw = panel.querySelector("button[aria-label] > span");
+    const cs = getComputedStyle(sw);
+    const box = sw.getBoundingClientRect();
+    // The panel's own padding, above the first swatch — not over any control.
+    const r = panel.getBoundingClientRect();
+    const gap = document.elementFromPoint(r.left + r.width / 2, r.top + 3);
+    return {
+      radius: parseFloat(cs.borderTopLeftRadius),
+      size: Math.round(box.width),
+      swatches: panel.querySelectorAll("button[aria-label] > span").length,
+      cursor: getComputedStyle(gap).cursor,
+    };
+  });
+  // A disc is radius === half the box. A rounded square is a fraction of it.
+  check(swatch.radius > 0 && swatch.radius < swatch.size / 3, "the swatches are rounded squares, not discs", JSON.stringify(swatch));
+  check(swatch.swatches === 12, "the palette spans the rainbow, twelve of them", `${swatch.swatches}`);
+  check(swatch.cursor !== "grab", "the grab cursor stops at the menu", `cursor=${swatch.cursor}`);
+}
+
 check(errors.length === 0, "no uncaught page errors", JSON.stringify(errors));
 
 await browser.close();

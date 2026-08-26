@@ -284,10 +284,12 @@ export function BoardColumn({
                 </Button>
               }
             >
-              <div {...{ [MENU_ATTR]: "" }} className="overflow-y-auto p-1.5">
+              <div {...{ [MENU_ATTR]: "" }} className="cursor-default overflow-y-auto p-1.5">
                 {/* THE COLOURS, as a grid of the thing being chosen. A list of
-                    names would be ten rows to say what ten dots say at a glance. */}
-                <div className="grid grid-cols-5 gap-1 p-1">
+                    names would be twelve rows to say what twelve swatches say
+                    at a glance, and two rows of six reads as a spectrum rather
+                    than as a list that happens to be coloured. */}
+                <div className="grid grid-cols-6 gap-1 p-1">
                   {Object.keys(GROUP_ACCENT).map((key) => (
                     <Button
                       key={key}
@@ -299,8 +301,13 @@ export function BoardColumn({
                       title={key}
                       className="flex items-center justify-center"
                     >
+                      {/* A ROUNDED SQUARE, not a disc. Twelve circles in a grid
+                          read as a bag of dots; squares tile, and the larger
+                          filled area shows the hue better at this size. The
+                          radius is derived from the control's own rather than
+                          typed, so it stays in proportion if that moves. */}
                       <span
-                        className="flex size-4 items-center justify-center rounded-full"
+                        className="flex size-5 items-center justify-center rounded-[calc(var(--radius-control)-3px)]"
                         style={{ background: groupAccent(key) }}
                       >
                         {/* White reads on every hue in this palette — each one is

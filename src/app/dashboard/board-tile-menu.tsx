@@ -226,7 +226,11 @@ export function TileSlot({
             </Button>
           }
         >
-          <div {...{ [MENU_ATTR]: "" }} className="overflow-y-auto p-1.5">
+          {/* THE GRAB CURSOR STOPS AT THE MENU. It is set on the card, which
+              is the drag handle, and an absolutely-positioned panel inside it
+              inherits it — so the whole dropdown claimed to be draggable while
+              you were reading it. A menu is pointed at, not picked up. */}
+          <div {...{ [MENU_ATTR]: "" }} className="cursor-default overflow-y-auto p-1.5">
             <p className="px-2 py-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Move to</p>
 
             {/* A tile lands at the END of the lane it is sent to. That is the
