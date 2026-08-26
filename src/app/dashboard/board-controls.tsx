@@ -11,6 +11,7 @@ import { deleteViewAction, renameViewAction } from "./board-actions";
 import { BOARD_GRID } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
+import { canvasCells, type GridBox } from "@/lib/board/grid";
 
 /**
  * THE BOARD'S FILTERS, ANSWERING IMMEDIATELY.
@@ -376,9 +377,45 @@ export function ViewTab({
  * the count is there to prevent, arriving by the other door. Absent (or zero)
  * means no groups, and the grid is right.
  */
-export function TileArea({ count, columns, children }: { count: number; columns?: number; children: ReactNode }) {
+export function TileArea({
+  count,
+  columns,
+  canvas,
+  children,
+}: {
+  count: number;
+  columns?: number;
+  /**
+   * The CANVAS's own boxes, when the active view is a custom one.
+   *
+   * A third shape, for the reason the second one exists. `columns` is zero on a
+   * canvas — it has no groups — so without this a range press would swap a grid
+   * of placed charts for a three-up column of skeletons and swap it back, which
+   * is precisely the "it changes height and stuff" this component was already
+   * fixed for once. Skeletons at the STORED footprints keep every box where it
+   * was, so only the numbers inside them change.
+   */
+  canvas?: GridBox[];
+  children: ReactNode;
+}) {
   const { pending, picked } = useBoard();
   if (!pending || !answering(picked)) return <>{children}</>;
+  if (canvas && canvas.length > 0) {
+    return (
+      <div className="board-canvas mt-4" aria-busy="true" aria-live="polite">
+        <span className="sr-only">Loading metrics…</span>
+        {canvasCells(canvas).map(({ tile, vars }) => (
+          <div key={tile.id} className="board-cell" style={vars as React.CSSProperties}>
+            <div className="h-full rounded-surface border border-border bg-card p-5 shadow-card">
+              <Skeleton className="h-4 w-2/5" />
+              <Skeleton className="mt-3 h-9 w-1/2" />
+              <Skeleton className="mt-3 h-10 w-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
   if (columns && columns > 0) {
     return (
       <div className={`mt-4 flex items-start ${LANE_GAP} overflow-hidden`} aria-busy="true" aria-live="polite">

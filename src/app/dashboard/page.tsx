@@ -779,7 +779,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           // Swapped for same-sized skeletons the instant a filter is pressed:
           // the alternative is leaving last range's numbers on screen under a
           // pill that now says something else.
-          <TileArea count={flowTiles.length + tiles.length} columns={groups.length}>
+          <TileArea
+            count={flowTiles.length + tiles.length}
+            columns={groups.length}
+            canvas={activeKind === "custom" ? canvasTiles : undefined}
+          >
             {activeKind === "custom" ? (
               /* A CUSTOM VIEW IS A DIFFERENT BOARD, not a groups board with no
                  groups: different storage, different geometry, different tiles.

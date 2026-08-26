@@ -12,6 +12,7 @@ import { SectionHeading } from "@/components/ui/page";
 import { CHARTS, asChartId, type ChartId } from "@/lib/board/charts";
 import type { BoardTileRow, CustomTileOption } from "@/lib/board/types";
 import { CANVAS_ATTR, CELL_ATTR, HANDLE_ATTR, useCanvasDrag } from "./canvas-drag";
+import { useSettle } from "./board-settle";
 import { AddTilePicker } from "./add-tile-picker";
 import {
   addCustomTileAction,
@@ -84,29 +85,8 @@ export function CustomBoard({
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  /**
-   * A WRITE THAT NEVER ANSWERED IS A WRITE THAT FAILED.
-   *
-   * Both halves matter. A server action can RESOLVE `{ ok: false }` — a refused
-   * permission — and it can also REJECT outright, because Next mints a new
-   * action id per deploy and a tab left open across one calls an id the server
-   * has forgotten. Without the `.catch`, that second case leaves the optimistic
-   * change on screen with nothing written behind it.
-   *
-   * `BoardLayout` carries the same helper for the same reason. Two copies is
-   * how this bug comes back, and hoisting them into one hook is the last
-   * tidying in the plan.
-   */
-  const settle = useCallback((p: Promise<{ ok: true } | { ok: false; error: string }>, revert: () => void) => {
-    p.then((r) => {
-      if (r.ok) return;
-      revert();
-      setToast(r.error);
-    }).catch(() => {
-      revert();
-      setToast("Couldn't save that — the page may be out of date. Reload and try again.");
-    });
-  }, []);
+  /** See `useSettle` — one copy of the failure path, shared with the groups board. */
+  const settle = useSettle(setToast);
 
   const addTile = useCallback(
     async (tileKey: string, chart: ChartId) => {

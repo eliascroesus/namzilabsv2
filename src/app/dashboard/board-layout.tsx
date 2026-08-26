@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
+import { useSettle } from "./board-settle";
 import { arrangeBoard, type BoardLane } from "@/lib/board/arrange";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
 import type { BoardGroup, BoardTile, GroupSortKey, TilePlacement } from "@/lib/board/types";
@@ -110,20 +111,13 @@ export function BoardLayout({
    *
    * So every write goes through here. A rejection is treated exactly like
    * `{ok:false}` — put it back, and SAY so.
+   *
+   * THE IMPLEMENTATION MOVED, and only the implementation. It lives in
+   * `useSettle` now because the custom canvas makes optimistic writes too and
+   * needs the identical answer — and two copies of this is precisely how the
+   * missing `.catch` comes back.
    */
-  const settle = useCallback(
-    (p: Promise<{ ok: true } | { ok: false; error: string }>, revert: () => void) => {
-      p.then((r) => {
-        if (r.ok) return;
-        revert();
-        setToast(r.error);
-      }).catch(() => {
-        revert();
-        setToast("Couldn't save that — the page may be out of date. Reload and try again.");
-      });
-    },
-    [],
-  );
+  const settle = useSettle(setToast);
   const [busy, setBusy] = useState(false);
 
   const board = arrangeBoard(tiles, groups, placements);

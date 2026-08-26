@@ -183,3 +183,35 @@ describe("the add-a-chart picker", () => {
     expect(html).toContain("No metric here can be drawn this way yet.");
   });
 });
+
+describe("a range press does not reshape a canvas", () => {
+  const src = readFileSync(join(process.cwd(), "src/app/dashboard/board-controls.tsx"), "utf8");
+  const page = readFileSync(join(process.cwd(), "src/app/dashboard/page.tsx"), "utf8");
+
+  it("skeletons at the stored footprints rather than in a three-up grid", () => {
+    /**
+     * `columns` is zero on a canvas — it has no groups — so without a third
+     * shape the skeleton falls through to BOARD_GRID, and pressing a range pill
+     * swaps a grid of placed charts for a column of placeholders and swaps it
+     * back. That is exactly the "it changes height and stuff" this component
+     * was already fixed for once, arriving by a different door.
+     */
+    expect(src).toMatch(/canvas\?: GridBox\[\]/);
+    expect(src).toMatch(/if \(canvas && canvas\.length > 0\)/);
+    expect(src).toMatch(/canvasCells\(canvas\)/);
+    expect(page).toMatch(/canvas=\{activeKind === "custom" \? canvasTiles : undefined\}/);
+  });
+});
+
+describe("one copy of the failure path", () => {
+  it("is shared by both boards, because two copies is how the bug comes back", () => {
+    const layout = readFileSync(join(process.cwd(), "src/app/dashboard/board-layout.tsx"), "utf8");
+    const canvas = readFileSync(join(process.cwd(), "src/app/dashboard/custom-board.tsx"), "utf8");
+    for (const [name, src] of [["board-layout", layout], ["custom-board", canvas]] as const) {
+      expect(src, `${name} must use the shared hook`).toMatch(/useSettle\(setToast\)/);
+      // Sabotage: paste the .then/.catch back into either file. It keeps
+      // working, and the next edit to one of them silently diverges.
+      expect(src, `${name} re-implements settle`).not.toMatch(/const settle = useCallback\(/);
+    }
+  });
+});

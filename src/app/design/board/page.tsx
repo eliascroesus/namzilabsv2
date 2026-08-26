@@ -83,6 +83,11 @@ export default function BoardLab() {
                    this page. Enough of them to show the strip wrapping rather
                    than scrolling, with the active one wearing its kebab. */
                 <div className="-mx-1 flex flex-wrap items-center gap-1 px-1 py-1">
+                  {/* The DEFAULT view first, named as the real strip names it —
+                      it has no row, so nothing else can put it there. */}
+                  <ViewTab href="#" viewId={null} activeView={null} canEdit defaultHref="#">
+                    Dashboard
+                  </ViewTab>
                   {[
                     { id: "v2", name: "Pipeline health" },
                     { id: "v3", name: "Revenue" },
