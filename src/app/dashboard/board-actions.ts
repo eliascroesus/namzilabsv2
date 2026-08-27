@@ -12,7 +12,7 @@ import { effectiveAccess } from "@/lib/permissions";
 import { boardGroupCap, boardPlacementCap, boardTileCap, boardViewCap } from "@/lib/limits";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
 import { compact, GRID_COLS } from "@/lib/board/grid";
-import { BLOCK_IDS, CHART_IDS, blockKindOf, defaultSize } from "@/lib/board/charts";
+import { BLOCK_IDS, CHART_IDS, asChartId, blockKindOf, defaultSize, minSize } from "@/lib/board/charts";
 import { parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
 import type { BoardTileRow } from "@/lib/board/types";
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
@@ -1096,12 +1096,36 @@ export async function setCustomTileLayoutAction(
     const db = getDb();
     const ids = parsed.data.map((i) => i.id);
     const mine = await db
-      .select({ id: dashboardTiles.id })
+      .select({ id: dashboardTiles.id, chart: dashboardTiles.chart })
       .from(dashboardTiles)
       .where(
         and(eq(dashboardTiles.orgId, ctx.orgId), eq(dashboardTiles.viewId, viewId), inArray(dashboardTiles.id, ids)),
       );
     if (mine.length !== ids.length) return fail("Some of those charts aren't on this view.");
+
+    /**
+     * THE FLOOR IS ENFORCED HERE, WHICH IS THE ONLY PLACE IT CAN BE.
+     *
+     * The drag clamps and the menu's presets clamp, but both are the client
+     * asking politely — `boxSchema` accepts `w: 1, h: 1` for anything, and this
+     * is a "use server" export, so a stale tab or a hand-made call could still
+     * write a chart into a box too small to draw it. Below its minimum a
+     * cartesian tile has no height left for its axis frame and
+     * `overflow-hidden` eats the plot: the card keeps its border and its number
+     * and silently loses its chart.
+     *
+     * Clamped rather than refused. A batch is the whole board — one undersized
+     * box must not reject a legitimate rearrangement of forty others — and the
+     * floor is a fact about the chart, not a mistake the customer made.
+     */
+    const chartOf = new Map(mine.map((r) => [r.id, r.chart]));
+    const boxes = parsed.data.map((i) => {
+      const min = minSize(asChartId(chartOf.get(i.id)));
+      const w = Math.max(min.w, i.w);
+      const h = Math.max(min.h, i.h);
+      // Widening can push a right-hand tile off the grid.
+      return { ...i, w, h, x: Math.min(i.x, GRID_COLS - w) };
+    });
 
     // One statement whatever the item count. `excluded` is the row Postgres was
     // ASKED to insert, and it is the only way a multi-row upsert can give each
@@ -1110,7 +1134,7 @@ export async function setCustomTileLayoutAction(
     // unreachable for a foreign id.
     await db
       .insert(dashboardTiles)
-      .values(parsed.data.map((i) => ({ ...i, orgId: ctx.orgId, viewId, tileKey: "", chart: "number", config: {} })))
+      .values(boxes.map((i) => ({ ...i, orgId: ctx.orgId, viewId, tileKey: "", chart: "number", config: {} })))
       .onConflictDoUpdate({
         target: dashboardTiles.id,
         set: {

@@ -1494,7 +1494,16 @@ export function headlineValue(shape: Shape): number | undefined {
   return undefined;
 }
 
-export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowRecord[]): TileSpec {
+export function buildTile(
+  spec: TilePresentation,
+  shape: Shape,
+  sample: FlowRecord[],
+  /**
+   * The window these records were kept for, when there is one. Present only
+   * from `tileByRange`; the un-windowed run has no bounds to seed against.
+   */
+  window?: { start: number; end: number },
+): TileSpec {
   const tile: TileSpec = {
     name: spec.name,
     description: spec.description,
@@ -1549,6 +1558,36 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
       if (t == null) continue;
       const key = bucketKey(new Date(t).toISOString(), unit);
       buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+    /**
+     * A COUNT'S QUIET DAY IS A ZERO, AND THE CHART STARTS WHERE THE PERIOD DOES.
+     *
+     * The engine only emits buckets that had records, so a series began at the
+     * first record rather than at the start of the window — "Last 30 days"
+     * drew a chart that started eleven days in, which reads as the metric
+     * having been switched on then. And a silent Tuesday in the middle was
+     * absent rather than zero.
+     *
+     * `padSeries` renders an absent bucket as a HOLE, which is the right
+     * universal default and the wrong one here. Its own note says why: "for a
+     * count, zero would happen to be true; for an average it would be
+     * fabricated." When the fact says COUNT, zero is not a guess — no records
+     * matched, so the count is zero — so every bucket in the window is seeded,
+     * and the line goes to the floor instead of stopping short.
+     *
+     * NOT for a ratio or a duration: no denominator and no samples means the
+     * value is unknown, and drawing that as zero is the fabrication the hole
+     * exists to avoid. Those keep their gaps.
+     */
+    const seedZeros = window != null && (spec.facts?.kind ?? "count") === "count";
+    if (seedZeros) {
+      // Bounded by the same 400 the stored jsonb can afford; a window wider
+      // than its unit can spell simply keeps the buckets it has.
+      for (let t = window.start, n = 0; t <= window.end && n < 400; n++) {
+        const key = bucketKey(new Date(t).toISOString(), unit);
+        if (!buckets.has(key)) buckets.set(key, 0);
+        t = stepBucket(t, unit);
+      }
     }
     tile.series = [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([bucket, value]) => ({ bucket, value }));
     /**
@@ -1642,6 +1681,20 @@ export type RangeSlot = NonNullable<TileSpec["byRange"]>[string];
  * "all" keeps the metric's unit: it is the one window whose length is unknown
  * here, and the publisher's choice is the only sensible answer for it.
  */
+/**
+ * One bucket forward, in UTC. Deliberately calendar arithmetic rather than a
+ * fixed millisecond stride: months and years are not constant lengths, and a
+ * 30-day stride walking a year drifts a bucket every February.
+ */
+function stepBucket(ms: number, unit: NonNullable<TilePresentation["timeUnit"]>): number {
+  const d = new Date(ms);
+  if (unit === "day") return d.setUTCDate(d.getUTCDate() + 1);
+  if (unit === "week") return d.setUTCDate(d.getUTCDate() + 7);
+  if (unit === "month") return d.setUTCMonth(d.getUTCMonth() + 1);
+  if (unit === "quarter") return d.setUTCMonth(d.getUTCMonth() + 3);
+  return d.setUTCFullYear(d.getUTCFullYear() + 1);
+}
+
 export function bucketUnitForWindow(spanMs: number): NonNullable<TilePresentation["timeUnit"]> {
   const DAY = 86_400_000;
   const days = spanMs / DAY;
@@ -1944,7 +1997,7 @@ export function tileByRange(
        * metric's declared unit.
        */
       const unit = range.all ? spec.timeUnit : bucketUnitForWindow(range.end - range.start);
-      const tile = ex.tile ?? buildTile({ ...spec, timeUnit: unit }, ex.shape, ex.sample);
+      const tile = ex.tile ?? buildTile({ ...spec, timeUnit: unit }, ex.shape, ex.sample, { start: range.start, end: range.end });
       const records = recordsBehind(ex, memo);
       out[range.key] = {
         value: tile.value,
