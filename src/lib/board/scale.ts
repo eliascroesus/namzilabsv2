@@ -66,24 +66,96 @@ function round10(v: number): number {
  * sequence whose rhythm is unknown fabricates exactly what this exists to
  * prevent.
  */
+/**
+ * THE BUCKET A TIMESTAMP FALLS IN — the same spelling `bucketKey` uses in the
+ * engine, which is what makes the two sets of keys comparable at all.
+ *
+ * Duplicated rather than imported: `engine.ts` is the whole flow runtime and
+ * this runs in a client component. `tests/board-scale.test.ts` pins the two
+ * against each other across every unit, so a divergence fails rather than
+ * silently producing keys that never line up.
+ */
+export function bucketKeyOf(ms: number, unit: BucketUnit): string {
+  const d = new Date(ms);
+  const iso = d.toISOString();
+  const y = d.getUTCFullYear();
+  if (unit === "year") return String(y);
+  if (unit === "month") return iso.slice(0, 7);
+  if (unit === "quarter") return `${y}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+  if (unit === "week") {
+    // ISO week, Thursday rule — the same arithmetic `isoWeek` does.
+    const t = new Date(Date.UTC(y, d.getUTCMonth(), d.getUTCDate()));
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+    const start = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    const week = Math.ceil(((t.getTime() - start.getTime()) / 86_400_000 + 1) / 7);
+    return `${t.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+  }
+  return iso.slice(0, 10);
+}
+
+/**
+ * FILL THE GAPS — and, when a window is given, fill out to its EDGES.
+ *
+ * Two separate honesty problems, one function:
+ *
+ *   WHERE THE CHART STARTS. The engine emits only buckets that had records, so
+ *   a series began at the first record rather than at the start of the period:
+ *   "Last 30 days" drew a chart starting eleven days in, which reads as the
+ *   metric having been switched on then rather than as a month with a quiet
+ *   first half. Given the window, the series is extended to cover it.
+ *
+ *   WHAT A QUIET BUCKET MEANS. `fill` is `null` by default and that stays the
+ *   right universal answer — see the file header. But the caller sometimes
+ *   KNOWS: a COUNT with no matching records counted zero, which is not a guess,
+ *   and drawing it as a hole makes a line stop short of the floor it genuinely
+ *   reaches. A ratio with no denominator is unknown and keeps its gap.
+ *
+ * Done here rather than in the engine deliberately. Seeding at materialize
+ * would put thirty points per range into the stored jsonb — read on every
+ * dashboard render and billed by the byte — and would only reach a tile after
+ * its next recompute. This costs nothing stored and works on rows written
+ * before it existed.
+ */
 export function padSeries(
   series: Array<{ bucket: string; value: number }>,
   unit?: BucketUnit,
+  opts?: {
+    /** What an absent bucket means. `null` is a hole; `0` is a measured zero. */
+    fill?: number | null;
+    /**
+     * The period on screen, so the chart can span it. Omit for "all time".
+     * Named `period`, not `window`: this module is pinned against touching
+     * anything DOM-shaped, and `window.from` reads as the global to a scanner
+     * that cannot know better — which is the scanner behaving correctly.
+     */
+    period?: { from: number; to: number };
+  },
 ): Array<{ bucket: string; value: number | null }> {
-  if (!unit || series.length < 2) return series;
+  if (!unit) return series;
+  const fill = opts?.fill ?? null;
   const steps = series.map((s) => bucketIndex(s.bucket, unit));
   if (steps.some((n) => n == null)) return series;
 
+  let lo = steps.length > 0 ? steps[0]! : null;
+  let hi = steps.length > 0 ? steps[steps.length - 1]! : null;
+  if (opts?.period) {
+    const wLo = bucketIndex(bucketKeyOf(opts.period.from, unit), unit);
+    const wHi = bucketIndex(bucketKeyOf(opts.period.to, unit), unit);
+    if (wLo != null && wHi != null && wHi - wLo <= 400) {
+      lo = lo == null ? wLo : Math.min(lo, wLo);
+      hi = hi == null ? wHi : Math.max(hi, wHi);
+    }
+  }
+  if (lo == null || hi == null) return series;
+  // Past a screen's worth the gap says what it needs to as one, and a two-point
+  // series years apart must not mint thousands of slots.
+  if (hi - lo > 400) return series;
+
+  const byIndex = new Map(series.map((s, i) => [steps[i]!, s.value]));
   const out: Array<{ bucket: string; value: number | null }> = [];
-  for (let i = 0; i < series.length; i++) {
-    out.push(series[i]);
-    if (i === series.length - 1) break;
-    const from = steps[i]!;
-    const to = steps[i + 1]!;
-    // Cap the fill: a two-point series years apart must not mint thousands of
-    // holes — past a screen's worth, the gap says what it needs to as one.
-    const missing = Math.min(Math.max(0, to - from - 1), 60);
-    for (let g = 1; g <= missing; g++) out.push({ bucket: bucketAt(from + g, unit), value: null });
+  for (let i = lo; i <= hi; i++) {
+    const v = byIndex.get(i);
+    out.push({ bucket: bucketAt(i, unit), value: v === undefined ? fill : v });
   }
   return out;
 }

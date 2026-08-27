@@ -26,7 +26,7 @@ import {
   type ChartId,
 } from "@/lib/board/charts";
 import { accentOf, honoured, type TileConfig } from "@/lib/board/tile-config";
-import { RANGE_OPTIONS } from "@/lib/metrics/range";
+import { RANGE_OPTIONS, resolveRange } from "@/lib/metrics/range";
 import { bucketLabel, type BucketUnit } from "@/lib/board/scale";
 import type { AggregateResult, FunnelResult } from "@/lib/metrics/compute";
 import type { ImportCoverage } from "@/connectors/types";
@@ -61,6 +61,7 @@ type StoredTile = {
   durationDisplay?: string;
   target?: number | null;
   timeUnit?: string;
+  facts?: { kind?: string };
   value?: number;
   series?: SeriesPoint[];
   groups?: GroupRow[];
@@ -312,6 +313,32 @@ export function CustomTile({
   const anChart = `${/^[aeiou]/.test(chartLabel) ? "an" : "a"} ${chartLabel}`;
 
   /**
+   * SPAN THE PERIOD, AND KNOW WHAT A QUIET BUCKET MEANT.
+   *
+   * The engine emits only buckets that had records, so a series starts at the
+   * first record: "Last 30 days" drew a chart beginning eleven days in, which
+   * reads as the metric having been switched on then. Handing the mark the
+   * window makes it span what the pill above the board is promising.
+   *
+   * And the FACT decides what an absent bucket means. A count with no matching
+   * records counted zero — measured, not guessed — so the line reaches the
+   * floor instead of stopping short. A ratio has no denominator and a duration
+   * has no samples, so those stay holes; `scale.ts`'s header argues why that is
+   * the right default everywhere the caller cannot be sure.
+   *
+   * "All time" gets no period: its start is whenever the data starts, which is
+   * exactly what the series already says.
+   */
+  const factKind =
+    stored.facts?.kind ??
+    (stored.format === "duration" ? "duration" : stored.format === "percent" ? "ratio" : "count");
+  const pad = (() => {
+    if (source.kind !== "flow" || rangeKey === "all") return { fill: factKind === "count" ? 0 : null };
+    const { range } = resolveRange(rangeKey);
+    return { fill: factKind === "count" ? 0 : null, period: { from: range.from.getTime(), to: range.to.getTime() } };
+  })();
+
+  /**
    * WHY THIS PERIOD HAS NOTHING TO DRAW — distinct from "can't answer", and
    * distinct again from "this metric can never be drawn this way". Three
    * different facts, three different sentences, none of them a blank box.
@@ -419,7 +446,7 @@ export function CustomTile({
       <ChartHover>
         {chart === "number" ? (
           <>
-            {config.showSpark && hasSeries && <Sparkline series={w.series!} accent={accent} unit={unit} />}
+            {config.showSpark && hasSeries && <Sparkline series={w.series!} accent={accent} unit={unit} pad={pad} />}
             {config.showGoal && target != null && <GoalBar value={w.value ?? 0} target={target} format={bag} />}
           </>
         ) : chart === "line" || chart === "area" ? (
@@ -428,6 +455,7 @@ export function CustomTile({
             format={bag}
             accent={accent}
             unit={unit}
+            pad={pad}
             area={chart === "area"}
             target={config.showGoal ? target : null}
           />
@@ -437,6 +465,7 @@ export function CustomTile({
             format={bag}
             accent={accent}
             unit={unit}
+            pad={pad}
             target={config.showGoal ? target : null}
             showLabels={config.showLabels}
           />

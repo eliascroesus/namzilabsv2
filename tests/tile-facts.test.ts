@@ -222,9 +222,19 @@ describe("the factless window is safe", () => {
      * legacy row and proves it draws.
      */
     const { readFileSync } = await import("node:fs");
-    for (const p of ["src/components/custom-tile.tsx", "src/lib/board/charts.ts"]) {
-      expect(readFileSync(p, "utf8"), `${p} consumes facts before it needs to`).not.toMatch(/\.facts\b/);
-    }
+    // `charts.ts` decides legality from the SHAPE of the stored data and must
+    // keep doing so: a tile with no facts is still perfectly drawable.
+    expect(readFileSync("src/lib/board/charts.ts", "utf8")).not.toMatch(/\.facts\b/);
+
+    /**
+     * `custom-tile.tsx` is the second consumer — it asks `facts.kind` whether a
+     * quiet bucket is a measured zero or an unknown. Absence falls back to the
+     * FORMAT, which is the same derivation `buildTile` does when a spec carries
+     * no facts, so a pre-stamp row behaves exactly as it always did.
+     */
+    const custom = readFileSync("src/components/custom-tile.tsx", "utf8");
+    expect(custom).toMatch(/stored\.facts\?\.kind\s*\?\?/);
+
     const tile = readFileSync("src/components/flow-tile.tsx", "utf8");
     // Optional chaining and a NEGATIVE comparison: a missing `facts`, or a
     // missing `shape` inside it, both fall through to "draw it". Sabotage:

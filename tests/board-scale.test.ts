@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { arcPath, bucketLabel, niceTicks, padSeries, pieSlices, stageWidths } from "@/lib/board/scale";
+import { arcPath, bucketLabel, niceTicks, bucketKeyOf,
+  padSeries, pieSlices, stageWidths } from "@/lib/board/scale";
 
 /**
  * THE CHART KIT'S ARITHMETIC, ASSERTED RATHER THAN EYEBALLED.
@@ -202,6 +203,99 @@ describe("the module stays usable from either side of the boundary", () => {
   it("carries no directive and touches nothing but numbers", () => {
     const src = readFileSync(join(process.cwd(), "src/lib/board/scale.ts"), "utf8");
     expect(src).not.toMatch(/^\s*"use client"/m);
-    expect(src).not.toMatch(/document\.|window\.|Math\.random/);
+    // Comments EXPLAIN why the module avoids these and must not be able to
+    // trip the rule by naming them — the same `code()` discipline the drag and
+    // chart-kit suites use. A comment cannot touch the DOM.
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toMatch(/document\.|window\.|Math\.random/);
+  });
+});
+
+/**
+ * WHERE A CHART STARTS, AND WHAT A QUIET BUCKET MEANS.
+ *
+ * The engine emits only buckets that had records, so a series began at the
+ * FIRST RECORD rather than at the start of the period: "Last 30 days" drew a
+ * chart starting eleven days in, which reads as the metric having been switched
+ * on then rather than as a month with a quiet first half.
+ *
+ * And a hole is the right universal rendering of an absent bucket — the header
+ * of `scale.ts` argues it — but the caller sometimes KNOWS better. A count with
+ * no matching records counted zero; that is measured, not guessed, and drawing
+ * it as a hole makes the line stop short of a floor it genuinely reaches. A
+ * ratio with no denominator stays unknown.
+ */
+describe("padding to the window", () => {
+  const at = (iso: string) => new Date(iso).getTime();
+
+  it("extends BACK to the start of the period, not to the first record", () => {
+    const series = [
+      { bucket: "2026-08-12", value: 3 },
+      { bucket: "2026-08-13", value: 5 },
+    ];
+    const out = padSeries(series, "day", { fill: 0, period: { from: at("2026-07-29"), to: at("2026-08-13") } });
+    expect(out[0].bucket).toBe("2026-07-29");
+    expect(out[0].value).toBe(0);
+    expect(out).toHaveLength(16);
+  });
+
+  it("extends FORWARD to the end of the period too", () => {
+    const out = padSeries([{ bucket: "2026-08-01", value: 2 }], "day", {
+      fill: 0,
+      period: { from: at("2026-08-01"), to: at("2026-08-05") },
+    });
+    expect(out.map((p) => p.value)).toEqual([2, 0, 0, 0, 0]);
+  });
+
+  it("keeps every measured value where it was", () => {
+    // Sabotage: overwrite rather than only filling absences, and every number
+    // on the board is replaced by its own padding.
+    const out = padSeries([{ bucket: "2026-08-03", value: 7 }], "day", {
+      fill: 0,
+      period: { from: at("2026-08-01"), to: at("2026-08-04") },
+    });
+    expect(out.find((p) => p.bucket === "2026-08-03")?.value).toBe(7);
+    expect(out.reduce((a, b) => a + (b.value ?? 0), 0)).toBe(7);
+  });
+
+  it("still holes a quiet bucket when the caller does not claim it is zero", () => {
+    const out = padSeries([{ bucket: "2026-08-01", value: 2 }, { bucket: "2026-08-04", value: 5 }], "day");
+    expect(out.map((p) => p.value)).toEqual([2, null, null, 5]);
+  });
+
+  it("refuses a window too wide to draw rather than minting thousands of slots", () => {
+    const out = padSeries([{ bucket: "2020-01-01", value: 1 }], "day", {
+      fill: 0,
+      period: { from: at("2020-01-01"), to: at("2026-01-01") },
+    });
+    expect(out).toHaveLength(1);
+  });
+
+  it("spells its bucket keys exactly as the engine does", () => {
+    /**
+     * The pin that makes the whole thing work: these keys are compared against
+     * keys the ENGINE wrote, so a divergence produces two sets that never line
+     * up — every bucket reads absent and every real value is dropped.
+     * Duplicated rather than imported because `engine.ts` is the flow runtime
+     * and this runs in a client component, so the SPELLING is pinned instead.
+     */
+    const ms = (iso: string) => new Date(`${iso}T12:00:00.000Z`).getTime();
+    expect(bucketKeyOf(ms("2026-08-27"), "day")).toBe("2026-08-27");
+    expect(bucketKeyOf(ms("2026-08-27"), "month")).toBe("2026-08");
+    expect(bucketKeyOf(ms("2026-08-27"), "quarter")).toBe("2026-Q3");
+    expect(bucketKeyOf(ms("2026-02-27"), "quarter")).toBe("2026-Q1");
+    expect(bucketKeyOf(ms("2026-08-27"), "year")).toBe("2026");
+    // The ISO week's Thursday rule, at both ends of a year boundary: 29 Dec
+    // 2025 is a Monday whose Thursday falls in 2026.
+    expect(bucketKeyOf(ms("2025-12-29"), "week")).toBe("2026-W01");
+    expect(bucketKeyOf(ms("2026-01-01"), "week")).toBe("2026-W01");
+    expect(bucketKeyOf(ms("2026-08-27"), "week")).toBe("2026-W35");
+
+    // And the engine still spells them the same way.
+    const engine = readFileSync(join(process.cwd(), "src/lib/flow/engine.ts"), "utf8");
+    const body = engine.slice(engine.indexOf("function bucketKey("), engine.indexOf("function isoWeek("));
+    for (const spelling of ['iso.slice(0, 7)', 'iso.slice(0, 10)', "-Q", "-W", "String(y)"]) {
+      expect(body, `engine bucketKey no longer uses ${spelling}`).toContain(spelling);
+    }
   });
 });

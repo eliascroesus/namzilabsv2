@@ -110,6 +110,7 @@ export function LineChart({
   format,
   accent,
   unit,
+  pad,
   area = false,
   target,
 }: {
@@ -117,10 +118,12 @@ export function LineChart({
   format: ChartFormat;
   accent: string;
   unit?: BucketUnit;
+  /** Period + fill, so the chart spans what the pill promises. See `padSeries`. */
+  pad?: Parameters<typeof padSeries>[2];
   area?: boolean;
   target?: number | null;
 }) {
-  const points = padSeries(series, unit);
+  const points = padSeries(series, unit, pad);
   const values = points.map((p) => p.value).filter((v): v is number => v != null);
   // The target bounds the axis in BOTH directions. Folded into the max alone,
   // a negative goal put the dashed line 250% below the viewBox — invisible,
@@ -234,6 +237,7 @@ export function BarsVertical({
   format,
   accent,
   unit,
+  pad,
   target,
   showLabels = false,
 }: {
@@ -241,10 +245,12 @@ export function BarsVertical({
   format: ChartFormat;
   accent: string;
   unit?: BucketUnit;
+  /** Period + fill, so the chart spans what the pill promises. See `padSeries`. */
+  pad?: Parameters<typeof padSeries>[2];
   target?: number | null;
   showLabels?: boolean;
 }) {
-  const points = padSeries(series, unit);
+  const points = padSeries(series, unit, pad);
   const values = points.map((p) => p.value).filter((v): v is number => v != null);
   // The target bounds the axis in BOTH directions. Folded into the max alone,
   // a negative goal put the dashed line 250% below the viewBox — invisible,

@@ -167,11 +167,16 @@ describe("a view holding a hidden row is read-only", () => {
     const src = readFileSync(join(process.cwd(), "src/app/dashboard/custom-board.tsx"), "utf8");
 
     expect(src).toContain("const canArrange = canEdit && !layoutFrozen;");
-    // The drag, the grip, and the menu's Width/Height/Move block.
+    // The drag strip, the grip, and the menu's Width/Height/Move block.
     expect((src.match(/canArrange/g) ?? []).length).toBeGreaterThanOrEqual(5);
-    // Sabotage: change the gesture guard back to `canEdit` and this fails.
-    expect(src).toContain("if (!canArrange) return;");
-    expect(src).not.toMatch(/onPointerDown=\{\(e\) => \{\s*if \(!canEdit\) return;/);
+    /**
+     * The gesture is gated by NOT RENDERING its handle rather than by an early
+     * return: the drag surface is the card's top half, and a strip that does
+     * not exist cannot be pressed. Same for the corner grip. Sabotage: render
+     * either unconditionally and a frozen board becomes draggable again.
+     */
+    expect(src).toMatch(/\{canArrange && \(\s*<span[\s\S]{0,400}?cursor-grab/);
+    expect(src).toMatch(/\{canArrange && \(\s*\/\* The corner grip/);
   });
 
   it("is unchanged for a viewer who can see everything", () => {

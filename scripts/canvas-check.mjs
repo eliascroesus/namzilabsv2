@@ -207,10 +207,12 @@ console.log("\nclicking a tile opens its settings — and nothing else does");
   await page.waitForTimeout(200);
 
   // A DRAG must not open it either — the click that ends a gesture is swallowed.
+  // From the card's HEAD: the top half is the handle now, so a press lower down
+  // is an ordinary click and would legitimately open the panel.
   const b2 = await cell.boundingBox();
-  await page.mouse.move(b2.x + b2.width / 2, b2.y + b2.height / 2);
+  await page.mouse.move(b2.x + 60, b2.y + 20);
   await page.mouse.down();
-  await page.mouse.move(b2.x + b2.width / 2 + 260, b2.y + b2.height / 2 + 40, { steps: 12 });
+  await page.mouse.move(b2.x + 60 + 260, b2.y + 20 + 40, { steps: 12 });
   await page.mouse.up();
   await page.waitForTimeout(300);
   check((await panel.count()) === 0, "a drag does not open the panel");
@@ -329,6 +331,34 @@ console.log("\na view with a hidden chart is read-only, and says so");
   check((await frozen.locator("[data-canvas-handle]").count()) === 0, "and there is no resize grip");
 
   check(errors.length === 0, "no uncaught page errors on a frozen board", errors.join(" · "));
+}
+
+// ── the handle is the head of the card ──────────────────────────────────────
+console.log("\nonly the top half of a card drags it");
+{
+  await load();
+  const cell = page.locator(`${LIVE} [data-canvas] [data-canvas-cell]`).first();
+  const box = await cell.boundingBox();
+  const before = await layout();
+
+  // BELOW the handle: the chart's own area, where a press is for pointing at a
+  // bar, not for shoving the board. It must move nothing.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height - 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 300, box.y + box.height - 20, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  check(JSON.stringify(await layout()) === JSON.stringify(before), "a press on the chart moves nothing");
+
+  // ABOVE it: the title bar, which is what moves.
+  await page.mouse.move(box.x + 60, box.y + 16);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 60 + 320, box.y + 16, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(350);
+  check(JSON.stringify(await layout()) !== JSON.stringify(before), "a press on the head still drags");
+
+  check(errors.length === 0, "no uncaught page errors around the handle", errors.join(" · "));
 }
 
 // ── the gestures, unchanged from the ad-hoc script ──────────────────────────

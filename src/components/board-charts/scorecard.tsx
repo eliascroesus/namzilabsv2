@@ -15,12 +15,15 @@ export function Sparkline({
   series,
   accent,
   unit,
+  pad,
 }: {
   series: SeriesPoint[];
   accent: string;
   unit?: BucketUnit;
+  /** Period + fill, so the chart spans what the pill promises. See `padSeries`. */
+  pad?: Parameters<typeof padSeries>[2];
 }) {
-  const points = padSeries(series, unit);
+  const points = padSeries(series, unit, pad);
   const values = points.map((p) => p.value).filter((v): v is number => v != null);
   if (values.length < 2) return null;
   const lo = Math.min(...values);

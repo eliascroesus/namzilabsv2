@@ -628,16 +628,7 @@ export function CustomBoard({
               style={vars as React.CSSProperties}
               className={`board-cell group/cell relative transition-opacity duration-(--duration-fast) ${
                 gesture?.id === tile.id ? "opacity-70" : ""
-              } ${canArrange ? "cursor-grab [touch-action:none]" : ""}`}
-              onPointerDown={(e) => {
-                if (!canArrange) return;
-                // The whole card is the move handle, so the controls inside it
-                // have to be protected by name — the same guard, and the same
-                // reason, as the groups board's TileSlot. The RESIZE handle is
-                // in this list too: it starts its own gesture.
-                if ((e.target as HTMLElement).closest(`button, a, input, [${HANDLE_ATTR}]`)) return;
-                onPointerDown(e, { id: tile.id, mode: "move" });
-              }}
+              }`}
               onClick={(e) => {
                 if (!canEdit) return;
                 /**
@@ -697,6 +688,29 @@ export function CustomBoard({
                   />
                 );
               })()}
+              {/**
+                * THE HEAD OF THE CARD IS THE HANDLE, not all of it.
+                *
+                * The whole cell used to start the gesture, so the chart itself
+                * was a grab surface: the cursor read "move" over a plot you
+                * were trying to point at, and a stray press on a bar shoved the
+                * board around. The top half holds the title and the number and
+                * nothing worth pointing at — so that is what moves, the way a
+                * window's title bar does. The marks below keep their tooltips.
+                *
+                * A real element rather than a class on the cell: `cursor` does
+                * not apply to a `pointer-events: none` layer, so the affordance
+                * and the press have to be the same thing. It sits UNDER the
+                * menu (z-10 against the menu's z-20), and a click on it still
+                * bubbles to the cell, which is what opens the settings panel.
+                */}
+              {canArrange && (
+                <span
+                  aria-hidden
+                  className="absolute inset-x-0 top-0 z-10 h-1/2 cursor-grab [touch-action:none]"
+                  onPointerDown={(e) => onPointerDown(e, { id: tile.id, mode: "move" })}
+                />
+              )}
               {canArrange && (
                 /* The corner grip. Deliberately NOT `.fixed.z-50` and NOT
                    `border-dashed`: `scripts/board-drag-check.mjs` counts
@@ -975,7 +989,7 @@ function TileMenu({
        */
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
-      className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-(--duration-fast) focus-within:opacity-100 group-hover/cell:opacity-100 pointer-coarse:opacity-100"
+      className="absolute right-2 top-2 z-20 opacity-0 transition-opacity duration-(--duration-fast) focus-within:opacity-100 group-hover/cell:opacity-100 pointer-coarse:opacity-100"
     >
       <Popover
         open={open}
