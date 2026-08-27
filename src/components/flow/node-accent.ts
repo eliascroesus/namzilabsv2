@@ -106,12 +106,6 @@ export function groupAccent(key: string): string {
   return GROUP_ACCENT[key] ?? GROUP_ACCENT.grey;
 }
 
-/** Mix two hexes, `p` of the first. Both must be `#rrggbb`. */
-function blend(a: string, b: string, p: number): string {
-  const ch = (i: number) => Math.round(parseInt(a.slice(i, i + 2), 16) * p + parseInt(b.slice(i, i + 2), 16) * (1 - p));
-  return `#${[1, 3, 5].map((i) => ch(i).toString(16).padStart(2, "0")).join("")}`;
-}
-
 /**
  * A GROUP'S THREE SURFACES, SOLVED RATHER THAN EYEBALLED.
  *
@@ -132,21 +126,42 @@ function blend(a: string, b: string, p: number): string {
  *     not: these hues are solved to 3.05:1 on white, which is a rule for a
  *     4px mark and nowhere near enough for 13px text.
  */
-const CANVAS = "#f1efec";
-const WHITE = "#ffffff";
-/** The dark end every group ink is mixed toward — warm, so it sits on canvas. */
-const INK = "#1a1400";
-
+/**
+ * MIXED BY CSS, NOT BY JAVASCRIPT — because the surface being mixed INTO is
+ * now a different colour in each theme.
+ *
+ * These three used to `blend()` against the literals `#f1efec` (the canvas),
+ * `#ffffff` (a card) and a near-black ink, all resolved at render time on the
+ * server. That is fine while there is one theme and fatal the moment there are
+ * two: the server cannot know which one the browser will paint, so a dark board
+ * got pale pink and pale blue columns with dark cards sitting on them.
+ *
+ * `color-mix()` defers the same arithmetic to the browser, where the token has
+ * already resolved to the right value for the active theme. The RESULT in light
+ * mode is what it always was — same hues, same percentages, same three
+ * surfaces — and the dark theme now gets its own washes for free.
+ *
+ * The hand-rolled `blend()` these used to share is gone with them — nothing
+ * else mixed colours, and `GROUP_ACCENT` itself is a fixed palette that was
+ * never blended.
+ */
 export function groupWash(key: string): string {
-  return blend(groupAccent(key), CANVAS, 0.06);
+  // 6% over the working surface. Enough to tell two columns apart down the
+  // page, far too little to compete with a tile sitting on it.
+  return `color-mix(in srgb, ${groupAccent(key)} 6%, var(--color-canvas-bg))`;
 }
 
 export function groupBadge(key: string): string {
-  return blend(groupAccent(key), WHITE, 0.16);
+  // 16% over a card — the pill behind the group's name.
+  return `color-mix(in srgb, ${groupAccent(key)} 16%, var(--color-card))`;
 }
 
 export function groupInk(key: string): string {
-  return blend(groupAccent(key), INK, 0.6);
+  // 60% accent into the theme's far end: near-black on a light badge, near-white
+  // on a dark one. The accents themselves are solved to 3.05:1 on white, which
+  // is a rule for a 4px mark and nowhere near enough for 13px text — the mix is
+  // what carries the name.
+  return `color-mix(in srgb, ${groupAccent(key)} 60%, var(--group-ink-end))`;
 }
 
 /** Relative luminance, sRGB. */

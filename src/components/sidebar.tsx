@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CalendarDays, LayoutDashboard, Plug, Radio, Settings, Workflow } from "lucide-react";
+import { ThemeToggle } from "@/components/theme";
 
 /**
  * THE RAIL: an icon column carrying the product's one dark surface.
@@ -207,6 +208,13 @@ export function Sidebar({
           of overflowing. Two `flex-1` children would split that space between
           them and the nav would never fill enough of the column to need a
           scrollbar — it would simply run past the avatar again. */}
+      {/* The theme toggle sits ABOVE the account, not inside its panel: it is
+          a control people flip on a whim (and to check their own work), and
+          burying a whim behind two clicks is how a theme goes unused. The rail
+          is a dark surface in both themes, so it takes the light focus ring. */}
+      <span className="shrink-0 pb-1">
+        <ThemeToggle className="text-ink-400 hover:bg-white/10 hover:text-ink-50 focus-ring-light" />
+      </span>
       <span className="shrink-0 pb-4">{account && <RailAccount initials={account.initials}>{account.panel}</RailAccount>}</span>
     </aside>
   );

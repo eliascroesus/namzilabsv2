@@ -73,31 +73,59 @@ type Rule = {
   allow?: Record<string, string>;
 };
 
+/**
+ * THE CLOSED SETS.
+ *
+ * These three rules never banned "stock Tailwind" for its own sake — they
+ * banned a SECOND scale, because `text-lg` beside `text-title` is two 17px-ish
+ * sizes that never quite match, and that is what an interface assembled from
+ * two systems looks like. The set is now spelled Untitled UI's way so vendored
+ * components compile, and the eight legacy names are in it while the app is
+ * migrated surface by surface. What matters is that it is still CLOSED:
+ * `text-2xl`, `rounded-3xl`-that-is-not-ours and `shadow-inner` are as
+ * uncompilable as they ever were, and the day the legacy half empties out it
+ * comes off this list rather than being left as a courtesy.
+ */
 /** Radius suffixes the kit owns. Anything else — including bare `rounded`. */
-const RADIUS_OK = /(control|card|surface|frame|full|none|var\(--radius)/;
-/** Shadow rungs the kit owns (both finishes of the one ladder). */
-const SHADOW_OK = /^(card|card-hover|island|panel|surface|raised|lifted|float|pop|none)$/;
+const RADIUS_OK = /^(xs|sm|md|lg|xl|2xl|3xl|4xl|control|card|surface|frame|full|none)$/;
+/** Shadow rungs the kit owns (Untitled UI's ladder, plus the ringed twins). */
+const SHADOW_OK = /^(xs|sm|md|lg|xl|2xl|3xl|card|card-hover|island|panel|surface|raised|lifted|float|pop|none)$/;
 
 const RULES: Rule[] = [
   {
-    name: "stock type scale",
-    why: "the kit's eight sizes are the only sizes — text-lg beside text-title is two 17px-ish that never match",
-    find: (line) => line.match(/\btext-(?:xs|sm|lg|[2-9]?xl)\b/)?.[0] ?? null,
+    name: "off-scale type",
+    why: "text-2xl and up are not in the theme, so they compile to NOTHING — the text silently renders at its inherited size",
+    /**
+     * `xs`/`sm`/`md`/`lg`/`xl` and the four `display-*` steps ARE the scale
+     * now, so the only sizes left to ban are the ones `@theme` does not
+     * define — and those are worth banning precisely because Tailwind emits no
+     * rule for them: the class looks right in the source, has no effect in the
+     * browser, and nothing anywhere reports it. Everything else under `text-`
+     * is a colour, policed by the raw-palette rule below.
+     */
+    find: (line) => line.match(/\btext-[2-9]xl\b/)?.[0] ?? null,
   },
   {
     name: "off-kit radius",
-    why: "four radii (control/card/surface/frame) + full; a fifth radius is how cards stop matching",
+    why: "one radius ladder; a fifth radius from somewhere else is how cards stop matching",
     find: (line) => {
-      for (const m of line.matchAll(/\brounded(?:-[a-z]{1,2})?(?:-\[[^\]]*\]|-[a-z0-9-]+)?(?=[\s"'`}:]|$)/g)) {
-        const token = m[0];
-        if (token === "rounded" || !RADIUS_OK.test(token)) return token;
+      for (const m of line.matchAll(/\brounded(?:-(?:t|r|b|l|tl|tr|br|bl|s|e|ss|se|es|ee))?(?:-(\[[^\]]*\]|[a-z0-9-]+))?(?=[\s"'`}:]|$)/g)) {
+        const suffix = m[1];
+        if (suffix === undefined) return m[0]; // bare `rounded`
+        if (suffix.startsWith("[")) {
+          // Arbitrary values are allowed only when derived from a kit token,
+          // e.g. rounded-[calc(var(--radius-control)-2px)].
+          if (!suffix.includes("var(--radius")) return m[0];
+          continue;
+        }
+        if (!RADIUS_OK.test(suffix)) return m[0];
       }
       return null;
     },
   },
   {
     name: "stock shadow",
-    why: "elevation is the kit's one ladder; shadow-sm is a rung from someone else's",
+    why: "elevation is one ladder; a rung from someone else's is a surface floating at a height nothing else uses",
     find: (line) => {
       for (const m of line.matchAll(/\bshadow-([a-z0-9-]+)\b/g)) {
         if (!SHADOW_OK.test(m[1])) return m[0];

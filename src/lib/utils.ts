@@ -22,7 +22,36 @@ import { extendTailwindMerge } from "tailwind-merge";
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
-      "font-size": [{ text: ["micro", "tiny", "small", "lead", "title", "display", "stat", "hero"] }],
+      /**
+       * BOTH SPELLINGS, because both compile.
+       *
+       * `xs`/`sm`/`lg` and friends are already in tailwind-merge's own default
+       * font-size group, so they need no help — but `md`, `display-xs` and the
+       * rest of Untitled UI's scale are NOT stock Tailwind sizes, and the eight
+       * legacy names survive as aliases while the app is migrated surface by
+       * surface. Anything missing from this list is treated as a text COLOUR
+       * and silently eats the colour before it.
+       */
+      "font-size": [
+        {
+          text: [
+            "md",
+            "display-xs",
+            "display-sm",
+            "display-md",
+            "display-lg",
+            "micro",
+            "tiny",
+            "small",
+            "lead",
+            "title",
+            "display",
+            "stat",
+            "hero",
+            "banner",
+          ],
+        },
+      ],
     },
   },
 });

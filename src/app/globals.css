@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/**
+ * `dark:` FOLLOWS THE CLASS, NOT THE OPERATING SYSTEM.
+ *
+ * Tailwind v4 ships `dark:` wired to `prefers-color-scheme`, which cannot be
+ * overridden by a user who wants the other theme — the media query does not
+ * care what our toggle thinks. Redefining the variant against `.dark` on the
+ * root element makes the class the single source of truth, and `next-themes`
+ * is what puts it there (including on the server's first paint, so there is no
+ * flash of the wrong theme).
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ==========================================================================
  * THE UI KIT — the whole visual language, in one place.
  *
@@ -176,52 +188,83 @@
    *
    * Kept as tokens so the dot grid, the page behind it and the edge colour can
    * never drift apart again.
+   *
+   * THE VALUES MOVED TO `:root` / `.dark`. A token declared in `@theme` is a
+   * constant — it cannot answer differently under a `.dark` ancestor, because
+   * that class is not in scope when Tailwind resolves it. So everything the
+   * theme SWITCHES (the canvas, the rail, the state trios, the roles) is
+   * declared there and bridged back into utility-space by `@theme inline`.
+   * The raw ramps above stay here: a palette is a palette in both themes; it
+   * is the roles built on it that move.
    */
-  --color-canvas-bg: #f1efec;
-  /* CHOSEN AT 83% ZOOM, NOT AT 100%.
-     React Flow scales the dot pattern with the viewport, so a 1px dot is
-     already sub-pixel by the time you have zoomed out enough to see a whole
-     flow — which is where people actually work. A first pass at #e7e4f2/1px
-     measured as pleasantly subtle at 100% and rendered as literally nothing
-     at 83%: a flat lavender field, no texture at all. This value was picked by
-     rendering React Flow's own pattern maths at both zooms and looking.
-     It is still a depth cue, not content — it should read as texture at a
-     glance and vanish the moment you look at a card.
-     tests/canvas-tokens.test.ts pins the gap to the 20–45 band that keeps it
-     both visible when zoomed out and lighter than any card's border. */
-  --color-canvas-dot: #d8d4ce;
-  --color-canvas-edge: #b4ada3;
 
   /* --- Type scale ---------------------------------------------------------
-   * EIGHT SIZES, AND NOTHING BETWEEN THEM. The app had accumulated 9px, 10px,
-   * 11px, 12px, 13px, 14px, 15px, 17px and 24px, mostly as one-off arbitrary
-   * values, so two labels doing the same job in two panels were different
-   * sizes. Anything below `micro` is unreadable at a glance and was being
-   * used for real content.
+   * UNTITLED UI'S PITCH, UNDER THE KIT'S DISCIPLINE.
+   *
+   * The rule that mattered was never the spelling — it was that the set is
+   * CLOSED, so two labels doing the same job cannot be different sizes. The
+   * kit's own names (micro/tiny/small/base/lead/title/display/stat) enforced
+   * that, but they also meant no component from shadcn or Untitled UI could be
+   * pasted in and render: `--text-*: initial` above clears the stock scale, so
+   * a `text-sm` on a vendored component resolves to NOTHING and the component
+   * arrives silently unstyled.
+   *
+   * So the scale is now spelled the way the rest of the world spells it, with
+   * Untitled UI's values, and `scripts/check-ui.ts` still enforces a closed set
+   * — just a different one. `text-2xl` upwards remains uncompilable.
+   *
+   * The eight old names survive below as ALIASES onto the new steps. That is
+   * what keeps this a token commit: a hundred component files keep compiling,
+   * `src/components/charts.tsx` stays byte-identical under its SHA-256 freeze,
+   * and each surface drops its legacy spelling as it gets rebuilt anyway.
    */
-  --text-micro: 0.6875rem; /* 11px — badges, chips, table micro-labels */
-  --text-micro--line-height: 1rem;
-  --text-tiny: 0.75rem; /* 12px — helper text, captions */
-  --text-tiny--line-height: 1.125rem;
-  --text-small: 0.8125rem; /* 13px — dense UI: field labels, options */
-  --text-small--line-height: 1.25rem;
-  --text-base: 0.875rem; /* 14px — the app's default body */
-  --text-base--line-height: 1.375rem;
-  --text-lead: 0.9375rem; /* 15px — panel titles, nav */
-  --text-lead--line-height: 1.5rem;
-  --text-title: 1.0625rem; /* 17px — section + modal titles */
-  --text-title--line-height: 1.5rem;
-  --text-display: 1.5rem; /* 24px — page headings */
-  --text-display--line-height: 2rem;
+  --text-xs: 0.75rem; /* 12px */
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.875rem; /* 14px — the app's default body */
+  --text-sm--line-height: 1.25rem;
+  --text-md: 1rem; /* 16px */
+  --text-md--line-height: 1.5rem;
+  --text-lg: 1.125rem; /* 18px */
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem; /* 20px */
+  --text-xl--line-height: 1.875rem;
+  --text-display-xs: 1.5rem; /* 24px — page headings */
+  --text-display-xs--line-height: 2rem;
+  --text-display-sm: 1.875rem; /* 30px */
+  --text-display-sm--line-height: 2.375rem;
+  --text-display-md: 2.25rem; /* 36px — the tile's headline number */
+  --text-display-md--line-height: 2.75rem;
+  --text-display-lg: 3rem; /* 48px — the landing hero */
+  --text-display-lg--line-height: 3.75rem;
+
+  /* THE OLD NAMES, POINTED AT THE NEW STEPS.
+     Two pairs collapse — micro and tiny both become `xs`, small and base both
+     become `sm` — which is the re-pitch, not an oversight: an 11px semibold
+     badge and a 13px field label were each a step nobody could pick out of a
+     line-up, and Untitled UI does not have them. Everything else moves up one
+     notch: lead 15→16, title 17→18. */
+  --text-micro: var(--text-xs);
+  --text-micro--line-height: var(--text-xs--line-height);
+  --text-tiny: var(--text-xs);
+  --text-tiny--line-height: var(--text-xs--line-height);
+  --text-small: var(--text-sm);
+  --text-small--line-height: var(--text-sm--line-height);
+  --text-base: var(--text-sm);
+  --text-base--line-height: var(--text-sm--line-height);
+  --text-lead: var(--text-md);
+  --text-lead--line-height: var(--text-md--line-height);
+  --text-title: var(--text-lg);
+  --text-title--line-height: var(--text-lg--line-height);
+  --text-display: var(--text-display-xs);
+  --text-display--line-height: var(--text-display-xs--line-height);
   /* The metric numeral — the dashboard's one size above display, because a
-     tile's number is the product's payoff and 24px reads as a label. It exists
-     as a token so the number can never drift per-tile again, and it is always
+     tile's number is the product's payoff and 24px reads as a label. Always
      set with .stat-numeral (display face + tabular figures). */
-  --text-stat: 2.25rem; /* 36px — the tile's headline number, nothing else */
-  --text-stat--line-height: 2.5rem;
+  --text-stat: var(--text-display-md);
+  --text-stat--line-height: var(--text-display-md--line-height);
   /* Marketing only — the landing hero. In-app nothing goes past `stat`. */
-  --text-hero: 2.5rem; /* 40px */
-  --text-hero--line-height: 2.75rem;
+  --text-hero: var(--text-display-lg);
+  --text-hero--line-height: var(--text-display-lg--line-height);
   /* The landing's one oversized moment, and the only size in the kit that
      exists purely to be impressive. Fluid, because a fixed 64px headline is a
      four-line wall on a phone: it resolves to `hero` on a narrow screen and
@@ -233,13 +276,23 @@
    * Three steps. Controls, cards, floating surfaces. Everything else was a
    * one-off.
    */
-  /* Mirotone's scale (8 / 16) with a card step between. The kit briefly ran
-   * 10/14/20 on the theory that rounder reads as playful; against the actual
-   * reference that read as soft rather than crisp. Miro is tighter than it
-   * looks in memory. */
-  --radius-control: 0.5rem; /* 8px — inputs, buttons, nav items */
-  --radius-card: 0.75rem; /* 12px — tiles, sections, list rows */
-  --radius-surface: 1rem; /* 16px — step cards, panels, modals, popovers */
+  /* Untitled UI's ladder. The three steps the kit already used are IN it —
+     8, 12 and 16 — so the shapes on screen do not move; what changes is that
+     `rounded-md` / `rounded-lg` / `rounded-xl` now compile, which is what lets
+     a vendored component arrive looking like itself. */
+  --radius-xs: 0.25rem; /* 4px */
+  --radius-sm: 0.375rem; /* 6px */
+  --radius-md: 0.5rem; /* 8px — inputs, buttons, nav items */
+  --radius-lg: 0.625rem; /* 10px */
+  --radius-xl: 0.75rem; /* 12px — tiles, sections, list rows */
+  --radius-2xl: 1rem; /* 16px — step cards, panels, modals, popovers */
+  --radius-3xl: 1.25rem; /* 20px */
+  --radius-4xl: 1.5rem; /* 24px */
+
+  /* The kit's names, kept as aliases. Same pixels, so nothing reshapes. */
+  --radius-control: var(--radius-md);
+  --radius-card: var(--radius-xl);
+  --radius-surface: var(--radius-2xl);
   /* 32px — the frame's own corner, where the canvas is cut into the rail's
      wash. Bigger than any radius INSIDE the app on purpose: this one is not a
      component, it is the edge of the application itself, and at surface's 16px
@@ -290,6 +343,19 @@
    * and one of the things that separates a palette that was assembled from one
    * that was chosen.
    */
+  /* UNTITLED UI'S LADDER, CAST IN THIS PRODUCT'S WARM INK.
+     Their geometry — the offsets and blurs — because it is a better-tuned
+     ladder than the one here; their neutral (10 13 18) replaced by the warm
+     (41 37 33) this file already argued for, since a blue-grey shadow under a
+     warm-white card is light arriving from a different room. */
+  --shadow-xs: 0 1px 2px 0 rgb(41 37 33 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(41 37 33 / 0.1), 0 1px 2px -1px rgb(41 37 33 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(41 37 33 / 0.1), 0 2px 4px -2px rgb(41 37 33 / 0.1);
+  --shadow-lg: 0 12px 16px -4px rgb(41 37 33 / 0.08), 0 4px 6px -2px rgb(41 37 33 / 0.03);
+  --shadow-xl: 0 20px 24px -4px rgb(41 37 33 / 0.08), 0 8px 8px -4px rgb(41 37 33 / 0.03);
+  --shadow-2xl: 0 24px 48px -12px rgb(41 37 33 / 0.18);
+  --shadow-3xl: 0 32px 64px -12px rgb(41 37 33 / 0.14);
+
   --shadow-raised: 0 0 0 1px rgb(41 37 33 / 0.05), 0 1px 2px rgb(41 37 33 / 0.05), 0 2px 4px -2px rgb(41 37 33 / 0.06);
   --shadow-lifted: 0 0 0 1px rgb(41 37 33 / 0.06), 0 2px 4px rgb(41 37 33 / 0.05), 0 10px 20px -6px rgb(41 37 33 / 0.12);
   --shadow-float: 0 0 0 1px rgb(41 37 33 / 0.07), 0 4px 8px -2px rgb(41 37 33 / 0.06), 0 16px 28px -8px rgb(41 37 33 / 0.14);
@@ -308,22 +374,22 @@
      card replaces raised, card-hover replaces lifted, island replaces float,
      panel replaces pop. shadcn's surfaces are border + soft shadow, which is
      exactly this half of the ladder. */
-  --shadow-card: 0 1px 2px rgb(41 37 33 / 0.05), 0 2px 4px -2px rgb(41 37 33 / 0.06);
-  --shadow-card-hover: 0 2px 4px rgb(41 37 33 / 0.05), 0 10px 20px -6px rgb(41 37 33 / 0.12);
-  --shadow-island: 0 4px 8px -2px rgb(41 37 33 / 0.06), 0 16px 28px -8px rgb(41 37 33 / 0.14);
+  --shadow-card: var(--shadow-sm);
+  --shadow-card-hover: var(--shadow-md);
+  --shadow-island: var(--shadow-lg);
   /* MODALS ONLY — pop minus its ring. Its 56px 0.2 halo is sized for a
      centred dialog over a dimmed backdrop. Docked to the canvas it spread
      DARKER than the 1px border it surrounded, so the ramp reversed at the
      edge and the hairline read as a light stripe inside a bruise instead of
      as an edge. The config panel takes `shadow-island`: it is another
      surface floating on the canvas, exactly like the toolbar islands. */
-  --shadow-panel: 0 8px 16px -4px rgb(41 37 33 / 0.08), 0 28px 56px -12px rgb(41 37 33 / 0.2);
+  --shadow-panel: var(--shadow-2xl);
   /* THE ONE SHADOW EVERY FLOATING SURFACE USES — the step picker's own
      elevation, minus its 1px ring because all of them draw a real border.
      The top bar, the step cards, the config panel and the picker were on
      four different rungs; a canvas where every floating thing sits at the
      same height is the point, and one token is how it stays that way. */
-  --shadow-surface: 0 6px 12px -3px rgb(41 37 33 / 0.07), 0 20px 40px -10px rgb(41 37 33 / 0.16);
+  --shadow-surface: var(--shadow-xl);
 
   /* --- The rail ------------------------------------------------------------
    * THE 30 IN A 60/30/10 SPLIT. White canvas is the 60, this rail is the 30,
@@ -338,8 +404,9 @@
    */
   /* FLAT, not a gradient. It was a three-stop wash so a 100px column would
      not read as a slab; at this value it does not need the help, and a flat
-     colour is one number a future edit cannot get half-right. */
-  --color-rail: var(--color-ink-950);
+     colour is one number a future edit cannot get half-right.
+     The value itself is in `:root` / `.dark` — see the note in the canvas
+     section for why anything the theme switches cannot live in `@theme`. */
 
   /* --- State, as tokens rather than raw palette picks ---------------------
    * Green/amber/red were being reached for directly all over the app, which
@@ -355,16 +422,10 @@
    * and red measures 6.1 reads as inconsistent weight even when nobody can say
    * why. The previous greens and ambers sat at 4.38 and 4.41 — under AA for
    * the 11px semibold these are actually set in.
+   *
+   * The nine values are in `:root` / `.dark`, because a state wash is exactly
+   * the kind of thing that has to invert with the theme.
    */
-  --color-success: #16a34a;
-  --color-success-soft: #e8f6e9;
-  --color-success-ink: #14713a; /* 5.44:1 on its soft */
-  --color-warn: #e8720c;
-  --color-warn-soft: #fceedf;
-  --color-warn-ink: #a44a07; /* 5.18:1 on its soft */
-  --color-danger: #dc2626;
-  --color-danger-soft: #fbe6e3;
-  --color-danger-ink: #b42318; /* 5.49:1 on its soft */
 }
 
 :root {
@@ -416,6 +477,119 @@
      these two equal for the same reason. */
   --input: var(--border);
   --ring: var(--color-brand-400);
+
+  /* shadcn components that do their own `calc()` off a single base radius. */
+  --radius: 0.5rem;
+
+  /* ---- State ------------------------------------------------------------
+   * Each state is a trio: the colour itself (dots, strokes), a soft wash
+   * (badge/banner fill), and an ink (text ON the wash). The inks are SOLVED,
+   * not picked — each is the darkest step that still looks like its hue,
+   * chosen so ink-on-its-own-soft lands in a 5.2–5.5:1 band. A badge row where
+   * green measures 4.4 and red measures 6.1 reads as inconsistent weight even
+   * when nobody can say why.
+   */
+  --success: #16a34a;
+  --success-soft: #e8f6e9;
+  --success-ink: #14713a; /* 5.44:1 on its soft */
+  --warn: #e8720c;
+  --warn-soft: #fceedf;
+  --warn-ink: #a44a07; /* 5.18:1 on its soft */
+  --danger: #dc2626;
+  --danger-soft: #fbe6e3;
+  --danger-ink: #b42318; /* 5.49:1 on its soft */
+
+  /* ---- The working surface and the rail ---------------------------------- */
+  --canvas-bg: #f1efec;
+  --canvas-dot: #d8d4ce;
+  --canvas-edge: #b4ada3;
+  --rail: var(--color-ink-950);
+
+  /* The far end a group's name is mixed toward — see `groupInk` in
+     node-accent.ts. Warm near-black here so the label sits on its own pale
+     badge; near-white in the dark theme, where the badge is the dark thing. */
+  --group-ink-end: #1a1400;
+}
+
+/**
+ * DARK.
+ *
+ * THE PROBLEM THIS THEME HAD TO SOLVE. In light mode the rail is the dark
+ * thing in a light app, and `AppFrame` cuts a 32px notch out of the page so
+ * the rail's wash shows through it. Take the light away and that contrast is
+ * gone — rail and page are both dark, and the notch stops meaning anything.
+ *
+ * So separation comes from ELEVATION instead, and the ladder runs the other
+ * way: the rail is the darkest surface, the page sits one step above it, and
+ * cards sit above that. Coming forward means getting lighter, which is how a
+ * dark interface expresses depth, and the notch still reads because the rail
+ * is still a different (darker) surface from the page beside it.
+ *
+ * Every value below is cut from the ramps already in `@theme` — no new greys —
+ * so the two themes are demonstrably the same palette at two exposures.
+ */
+.dark {
+  --background: var(--color-neutral-900); /* #211f1d — the page */
+  --foreground: var(--color-ink-50); /* 15.2:1 on the page */
+
+  --card: var(--color-neutral-800); /* #2c2a26 — one step forward */
+  --card-foreground: var(--color-ink-50);
+  --popover: var(--color-neutral-800);
+  --popover-foreground: var(--color-ink-50);
+
+  /* brand-600 is 7.19:1 on white and only 1.5:1 on this page — it disappears.
+     brand-500 is the ramp's own "hover-on-dark" step and carries white at
+     5.18:1, past AA for the semibold labels these buttons are set in. */
+  --primary: var(--color-brand-500);
+  --primary-foreground: #ffffff;
+
+  --secondary: var(--color-neutral-800);
+  --secondary-foreground: var(--color-ink-50);
+
+  --muted: var(--color-neutral-800);
+  --muted-foreground: var(--color-neutral-400); /* 6.49:1 on page, 5.66:1 on card */
+
+  /* The light theme's accent is a brand TINT (brand-50). Its dark twin has to
+     be a brand SHADE, or a selected row glows brighter than the primary
+     button. 6.71:1 for the ink on it. */
+  --accent: #1e2450;
+  --accent-foreground: var(--color-brand-300);
+
+  /* Unchanged: red-600 carries white at 4.53:1, so the destructive button is
+     the same object in both themes rather than inverting into a pale pill. */
+  --destructive: var(--color-red-600);
+  --destructive-foreground: #ffffff;
+
+  --border: var(--color-neutral-700);
+  --input: var(--border);
+  --ring: var(--color-brand-400); /* 4.24:1 on a card — past the 3:1 non-text bar */
+
+  /* State, re-solved for dark rather than inverted by eye.
+     The light trios put dark ink on a pale wash at 5.2–5.5:1; flipping that
+     naively gives a MID-tone ink on near-black, which reads muddy. These are
+     light ink on a lifted wash, solved to 6.9–7.0:1 — and, more to the point,
+     solved to within 0.07 of EACH OTHER, which is what the band was always
+     for. The solids are solved separately, per hue, to 4.6:1 on a card:
+     equal HSL lightness is not equal luminance, and a green and a red set to
+     the same lightness differ by more than 2:1. */
+  --success: #25a75b; /* 4.61:1 on a card */
+  --success-soft: #244c35;
+  --success-ink: #ace7c5; /* 6.94:1 on its soft */
+  --warn: #da7925; /* 4.60:1 */
+  --warn-soft: #4c3724;
+  --warn-ink: #e7c7ac; /* 7.00:1 on its soft */
+  --danger: #da756c; /* 4.60:1 */
+  --danger-soft: #4c2724;
+  --danger-ink: #e7b1ac; /* 6.95:1 on its soft */
+
+  /* The canvas is the page, and the rail drops below it. The dot keeps the
+     same 20–45 per-channel separation the light theme was tuned to — it is a
+     texture that must survive being zoomed out, not a colour. */
+  --canvas-bg: var(--color-neutral-900);
+  --canvas-dot: #3f3c38; /* Δ 30, 29, 27 from the canvas */
+  --canvas-edge: #55504a;
+  --rail: #151412; /* below neutral-900, so the rail is still the floor */
+  --group-ink-end: #f8f6f3;
 }
 
 /* Roles become utilities: `bg-primary`, `text-muted-foreground`,
@@ -441,6 +615,23 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* The state trios and the working surface, bridged the same way, so
+     `bg-success-soft`, `text-warn-ink`, `bg-canvas-bg` and `.bg-rail` all
+     answer to the theme instead of being frozen at their light values. */
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-ink: var(--warn-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+  --color-canvas-bg: var(--canvas-bg);
+  --color-canvas-dot: var(--canvas-dot);
+  --color-canvas-edge: var(--canvas-edge);
+  --color-rail: var(--rail);
 }
 
 /**
@@ -451,14 +642,20 @@
  * to declare once or get wrong everywhere.
  */
 html {
-  /* The product is light-only for now, and SAYING so is not a no-op: without
-     it, a visitor whose OS is in dark mode gets dark-rendered scrollbars,
-     spinners, and native <select> popups against our white surfaces. Declaring
-     it also stops the form controls from being repainted at hydration. */
+  /* SAYING WHICH THEME IS ON is not a no-op: it decides how the browser paints
+     scrollbars, spinners, native <select> popups and form controls, none of
+     which we style. Get it wrong and a visitor whose OS is dark sees dark
+     scrollbars against our white surfaces — and every control is repainted at
+     hydration when the class finally lands.
+     Declared per-theme rather than once, because there are two now. */
   color-scheme: light;
   /* Anchored headings otherwise land flush against the top of the viewport
      with their first line under the edge. */
   scroll-padding-top: 5rem;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 /**

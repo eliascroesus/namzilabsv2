@@ -26,6 +26,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
  * legibility and buy nothing.
  */
 const instrument = Instrument_Sans({ subsets: ["latin"], variable: "--font-instrument", display: "swap" });
+import { ThemeProvider } from "@/components/theme";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import type { UserInfo, NoUserInfo } from "@workos-inc/authkit-nextjs";
@@ -46,8 +47,17 @@ export const metadata: Metadata = {
  * that pairing the navigation would sit beneath the camera cutout.
  */
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
-  colorScheme: "light",
+  /**
+   * TWO COLOURS NOW, ONE PER THEME. A single `#ffffff` left the address bar
+   * glowing white above a dark app — the one piece of chrome a dark theme
+   * cannot fix from CSS, because the browser paints it from this tag.
+   * Both are pinned to `--background` by tests/design-swatches.test.ts.
+   */
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#211f1d" },
+  ],
+  colorScheme: "light dark",
   viewportFit: "cover",
 };
 
@@ -63,7 +73,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <html lang="en">
+    // `suppressHydrationWarning` is required, not defensive: next-themes stamps
+    // the theme class onto <html> from a blocking script before React hydrates,
+    // so this one element is knowingly different on the client. See theme.tsx.
+    <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${instrument.variable}`}>
         {/* The first stop on every tab order. Without it, reaching a page's
             content by keyboard means tabbing the whole navigation rail again
@@ -74,7 +87,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           Skip to content
         </a>
-        <AuthKitProvider initialAuth={initialAuth}>{children}</AuthKitProvider>
+        <ThemeProvider>
+          <AuthKitProvider initialAuth={initialAuth}>{children}</AuthKitProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

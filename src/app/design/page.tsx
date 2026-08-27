@@ -78,15 +78,23 @@ const INK: Array<{ step: string; cls: string; hex: string }> = [
   { step: "100", cls: "bg-ink-100", hex: "#e9e5df" },
   { step: "50", cls: "bg-ink-50", hex: "#f8f6f3" },
 ];
+/**
+ * UNTITLED UI'S SCALE. The legacy names still compile as aliases onto these
+ * steps while the app is migrated surface by surface, so this table lists the
+ * step you should REACH FOR — not the eight spellings currently in the tree.
+ *
+ * Two pairs collapsed on the way in: micro (11px) and tiny (12px) both became
+ * `xs`, and small (13px) and base (14px) both became `sm`. Neither pair was a
+ * step anyone could pick out of a line-up.
+ */
 const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample: string }> = [
-  { token: "text-stat", cls: "stat-numeral text-stat", px: "36px", use: "Headline numbers, via formatMetricValue — set in the display face", sample: "1,204" },
-  { token: "text-display", cls: "font-display text-display font-semibold", px: "24px", use: "Page titles (PageHeader) — display face", sample: "Speed to lead" },
-  { token: "text-title", cls: "text-title font-semibold tracking-tight", px: "17px", use: "Card and modal titles", sample: "Speed to lead" },
-  { token: "text-lead", cls: "text-lead font-semibold", px: "15px", use: "Panel titles, hero list rows", sample: "Speed to lead" },
-  { token: "text-base", cls: "text-base", px: "14px", use: "Body, field labels — the default", sample: "Speed to lead" },
-  { token: "text-small", cls: "text-small", px: "13px", use: "Dense UI: menu items, options", sample: "Speed to lead" },
-  { token: "text-tiny", cls: "text-tiny", px: "12px", use: "Helper text, captions, rail labels", sample: "Speed to lead" },
-  { token: "text-micro", cls: "text-micro font-semibold uppercase tracking-wide", px: "11px", use: "Badges, chips, section eyebrows", sample: "Speed to lead" },
+  { token: "text-display-md", cls: "stat-numeral text-display-md", px: "36px", use: "Headline numbers, via formatMetricValue — set in the display face", sample: "1,204" },
+  { token: "text-display-xs", cls: "font-display text-display-xs font-semibold", px: "24px", use: "Page titles (PageHeader) — display face", sample: "Speed to lead" },
+  { token: "text-xl", cls: "text-xl font-semibold tracking-tight", px: "20px", use: "The step above a card title, where a section needs one", sample: "Speed to lead" },
+  { token: "text-lg", cls: "text-lg font-semibold tracking-tight", px: "18px", use: "Card and modal titles", sample: "Speed to lead" },
+  { token: "text-md", cls: "text-md font-semibold", px: "16px", use: "Panel titles, hero list rows", sample: "Speed to lead" },
+  { token: "text-sm", cls: "text-sm", px: "14px", use: "Body, field labels, menu items — the default", sample: "Speed to lead" },
+  { token: "text-xs", cls: "text-xs", px: "12px", use: "Helper text, captions, rail labels, badges", sample: "Speed to lead" },
 ];
 const RADII: Array<{ cls: string; label: string; body: string }> = [
   { cls: "rounded-control", label: "control · 8px", body: "Buttons, inputs, menu rows" },
@@ -255,7 +263,7 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Type" note="Eight sizes in-app and nothing between them. Weights stop at font-semibold — font-bold does not exist here.">
+        <Section title="Type" note="Untitled UI's scale, and nothing between the steps. The kit's old names (micro/tiny/small/base/lead/title/display/stat) still compile as aliases while the app migrates, but new work reaches for these. Weights stop at font-semibold — font-bold does not exist here.">
           <Card padding="none" className="divide-y divide-border">
             {TYPE.map((t) => (
               <div key={t.token} className="flex items-baseline gap-4 px-4 py-3">

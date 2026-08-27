@@ -65,6 +65,36 @@ describe("the /design swatch captions match the tokens they render", () => {
 });
 
 /**
+ * THE SAME PROMISE, FOR THE TYPE TABLE — which did not have one, and drifted
+ * the first time the scale moved.
+ *
+ * The kit page prints a pixel value beside every step. When the scale was
+ * re-pitched onto Untitled UI's, `text-title` went 17px → 18px and the page
+ * carried on claiming 17px: a documentation page stating a number the product
+ * contradicts, with nothing to notice. Colour captions have been pinned since
+ * the day they were written; this is the other half of the same table.
+ */
+describe("the /design type captions match the scale", () => {
+  const rows = [...page.matchAll(/\{\s*token:\s*"text-([a-z-]+)",[^}]*?px:\s*"(\d+)px"/g)].map((m) => ({
+    token: m[1],
+    px: Number(m[2]),
+  }));
+
+  it("finds the table (a parse matching nothing would pass everything)", () => {
+    expect(rows.length).toBeGreaterThanOrEqual(6);
+  });
+
+  for (const { token: name, px } of rows) {
+    it(`text-${name} is captioned ${px}px`, () => {
+      const m = css.match(new RegExp(`--text-${name}:\\s*([0-9.]+)rem\\s*;`));
+      expect(m, `--text-${name} is not a rem literal in globals.css`).toBeTruthy();
+      // 16px root, which is what every browser ships and nothing here changes.
+      expect(Number(m![1]) * 16).toBe(px);
+    });
+  }
+});
+
+/**
  * THE BROWSER CHROME IS PART OF THE PAGE.
  *
  * `<meta name="theme-color">` paints mobile Safari's and Chrome's own address
@@ -80,14 +110,42 @@ describe("the /design swatch captions match the tokens they render", () => {
 describe("the theme-color meta matches the app background", () => {
   const layout = readFileSync(join(root, "src/app/layout.tsx"), "utf8");
 
-  it("declares a themeColor", () => {
-    expect(layout).toMatch(/themeColor:\s*"#[0-9a-fA-F]{6}"/);
+  /**
+   * ONE COLOUR PER THEME. A single themeColor left the address bar glowing
+   * white above a dark app — the one piece of chrome a dark theme cannot fix
+   * from CSS, because the browser paints it from this tag and nothing else.
+   */
+  const declared = [...layout.matchAll(/color:\s*"(#[0-9a-fA-F]{6})"/g)].map((m) => m[1].toLowerCase());
+
+  it("declares one themeColor per scheme", () => {
+    expect(layout).toMatch(/prefers-color-scheme: light/);
+    expect(layout).toMatch(/prefers-color-scheme: dark/);
+    expect(declared).toHaveLength(2);
   });
 
-  it("equals --background", () => {
-    const declared = layout.match(/themeColor:\s*"(#[0-9a-fA-F]{6})"/)?.[1].toLowerCase();
-    const background = css.match(/--background:\s*(#[0-9a-fA-F]{6})\s*;/)?.[1].toLowerCase();
+  /**
+   * `--background` is a hex in `:root` and an alias in `.dark` (it points at
+   * the warm neutral ramp), so the dark side is resolved one hop rather than
+   * being re-typed here — which is the whole point: the meta tag and the
+   * stylesheet must not be able to hold two different opinions.
+   */
+  const resolve = (selector: string) => {
+    const src = css.match(new RegExp(`(?:^|\\n)${selector}\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+    const direct = src.match(/--background:\s*(#[0-9a-fA-F]{6})\s*;/)?.[1];
+    if (direct) return direct.toLowerCase();
+    const alias = src.match(/--background:\s*var\(--([a-z0-9-]+)\)/)?.[1];
+    return css.match(new RegExp(`--${alias}:\\s*(#[0-9a-fA-F]{6})\\s*;`))?.[1].toLowerCase();
+  };
+
+  it("the light one equals --background in :root", () => {
+    const background = resolve(":root");
     expect(background).toBeTruthy();
-    expect(declared).toBe(background);
+    expect(declared[0]).toBe(background);
+  });
+
+  it("the dark one equals --background in .dark", () => {
+    const background = resolve("\\.dark");
+    expect(background).toBeTruthy();
+    expect(declared[1]).toBe(background);
   });
 });
