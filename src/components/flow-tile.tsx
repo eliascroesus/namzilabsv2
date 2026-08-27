@@ -39,6 +39,10 @@ type Tile = {
     {
       value?: number;
       series?: Array<{ bucket: string; value: number }>;
+      /** This period's own bucket size, when it carries a series. */
+      unit?: string;
+      /** The series was built for the charts, not measured — see `withTrends`. */
+      assembled?: boolean;
       groups?: Array<{ label: string; value: number }>;
       unavailable?: string;
       undated?: number;
@@ -205,7 +209,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
         <p className="mt-2.5 text-tiny text-muted-foreground" title={unavailable}>
           {unavailable.length > 160 ? `${unavailable.slice(0, 160)}…` : unavailable}
         </p>
-      ) : t.series && t.series.length > 0 && drawsItsSeries(t) ? (
+      ) : t.series && t.series.length > 0 && drawsItsSeries(windowed?.assembled === true, stored, t) ? (
         <Sparkbars series={t.series} format={t} />
       ) : t.groups && t.groups.length > 0 ? (
         <GroupBars groups={t.groups} total={t.value} format={t} />
@@ -312,9 +316,9 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
  * so under the old engine its dataset-derived series could only exist if the
  * viz already allowed it. Having one is proof it passed the test.
  */
-function drawsItsSeries(t: Tile): boolean {
+function drawsItsSeries(assembled: boolean, stored: Tile, t: Tile): boolean {
   /**
-   * A SCALAR'S TREND WAS ASSEMBLED FOR THE CHARTS, NOT MEASURED BY THE METRIC.
+   * AN ASSEMBLED TREND WAS MADE FOR THE CHARTS, NOT MEASURED BY THE METRIC.
    *
    * Acceptance Rate has ONE number per period. Its per-bucket points exist so a
    * custom view can draw a line over them — see `withTrends` — and drawing them
@@ -322,9 +326,15 @@ function drawsItsSeries(t: Tile): boolean {
    * board nobody asked to change. `Sparkbars` normalises to its own max, so a
    * rate living between 90% and 95% renders as a row of near-full blocks: the
    * exact regression the rest of this function was written to undo.
+   *
+   * THE SLOT SAYS SO ITSELF. Two inferences were tried first and both were
+   * wrong for real stored rows: `facts.shape === "scalar"` misses a legacy
+   * Output tile, which carries no facts at all, and "no top-level series"
+   * misses a tile that legitimately holds one per range and none at the top.
+   * The code that assembles a trend is the only thing that knows it did.
    */
-  if (t.facts?.shape === "scalar") return false;
-  return t.facts?.shape !== "dataset" || t.viz === "line" || t.viz === "bar";
+  if (assembled) return false;
+  return stored.facts?.shape !== "dataset" || t.viz === "line" || t.viz === "bar";
 }
 
 /**
@@ -336,10 +346,8 @@ function drawsItsSeries(t: Tile): boolean {
  */
 export type DeltaTile = {
   value?: number;
-  /** Read only to refuse an assembled trend a delta — see `deriveDelta`. */
-  facts?: { shape?: string };
   series?: Array<{ bucket: string; value: number }>;
-  byRange?: Record<string, { value?: number; unavailable?: string }>;
+  byRange?: Record<string, { value?: number; unavailable?: string; assembled?: boolean }>;
 };
 
 /**
@@ -384,12 +392,17 @@ export function deriveDelta(
   }
 
   const series = t.series;
+  // The window's own slot knows whether its points were measured or assembled.
+  const assembled = rangeKey ? stored.byRange?.[rangeKey]?.assembled === true : false;
   /**
    * The same rule `drawsItsSeries` states: an assembled trend draws a SHAPE, it
    * does not yield numbers. "+8 pts vs prior" off two single days, under a
    * headline that is a thirty-day rate, is a comparison the card is not making.
    */
-  if (series && series.length >= 3 && t.facts?.shape !== "scalar") {
+  // The same rule, same reason: an assembled trend draws a shape, it does not
+  // yield numbers. "+8 pts vs prior" off two single days, under a headline that
+  // is a thirty-day rate, is a comparison the card is not making.
+  if (series && series.length >= 3 && !assembled) {
     const last = series[series.length - 2];
     const prior = series[series.length - 3];
     if (last?.value != null && prior?.value != null) {

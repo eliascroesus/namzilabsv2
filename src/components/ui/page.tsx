@@ -12,7 +12,7 @@ export function PageContainer({
   className,
   width = "default",
   ...props
-}: React.ComponentProps<"main"> & { width?: "default" | "narrow" }) {
+}: React.ComponentProps<"main"> & { width?: "default" | "narrow" | "full" }) {
   return (
     <main
       // `id="main"` is the skip link's target, and it lives HERE rather than on
@@ -25,6 +25,9 @@ export function PageContainer({
         // display's rail, which is not — a 1440px window and a 390px one were
         // asking for the same margin.
         "rise-in mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+        // `full` keeps the step but adds Notion's own outer margin at the sizes
+        // where a bare `lg:px-8` leaves a board hanging off the rail.
+        width === "full" && "xl:px-14 2xl:px-24",
         /**
          * THE PAGE HAS A WIDTH, AND IT DOES NOT CHASE THE WINDOW.
          *
@@ -46,7 +49,19 @@ export function PageContainer({
          * width; a form gets nothing from being wider, and a sentence run past
          * this is well over a readable measure.
          */
-        width === "narrow" ? "max-w-3xl" : "max-w-6xl",
+        /**
+         * `full` IS THE BOARD'S OWN EXCEPTION, and it is the customer's call
+         * rather than a reversal of the argument above.
+         *
+         * That argument still holds for a FORM and for a page of prose: a
+         * measure that chases the window gives a sentence no stable shape. A
+         * dashboard is the one page where the opposite is true — it is a grid
+         * of fixed-size cards, so a wider window means MORE CARDS PER ROW and
+         * not bigger cards, which is exactly what Notion's own full-width
+         * database does and exactly what was asked for. The card is the stable
+         * unit here; the column count is not supposed to be.
+         */
+        width === "narrow" ? "max-w-3xl" : width === "full" ? "" : "max-w-6xl",
         className,
       )}
       {...props}

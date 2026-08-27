@@ -570,17 +570,14 @@ export function CustomBoard({
     <div
       ref={rootRef}
       /**
-       * THE BOARD GIVES BACK THE SPACE THE PANEL TAKES. The panel is pinned to
-       * the viewport, so without this it simply sits ON TOP of the right-hand
-       * tiles — including, on a wide board, the very tile being configured.
-       * Padding the board narrows its columns and the grid reflows, so what is
-       * being edited stays visible while it is edited.
+       * THE PANEL OVERLAYS; THE BOARD DOES NOT MOVE.
        *
-       * `xl:` only: below that the board is already one or two columns wide and
-       * squeezing it further would be worse than the overlap. The transition
-       * matches the kit's own so the reflow reads as one movement.
+       * This used to pad the board so the grid reflowed out from under the
+       * panel, which sounded considerate and read as the whole dashboard
+       * flinching every time a settings panel opened — every card resized and
+       * re-laid-out to make room for a thing that is already floating above
+       * them. A panel is an overlay; overlays overlap.
        */
-      className={`transition-[padding] duration-(--duration-fast) ${configuring && canEdit ? "xl:pr-[25rem]" : ""}`}
     >
       {/* The controls row, in the same place and shape the groups board puts it:
           the view strip on the left, the one door on the right. On a canvas

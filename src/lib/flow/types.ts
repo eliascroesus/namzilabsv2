@@ -953,6 +953,24 @@ export type TileSpec = {
        * metric's own unit, which is what every row written before this says.
        */
       unit?: "day" | "week" | "month" | "quarter" | "year";
+      /**
+       * THIS SERIES WAS ASSEMBLED FOR THE CHARTS, NOT MEASURED BY THE METRIC.
+       *
+       * A metric that measures one number per period — a rate, a revenue total,
+       * a duration — gets a per-bucket trend built for it by `withTrends`, so a
+       * custom view can draw a line over numbers the calendar already shows.
+       * The groups board must NOT draw those: it picks its mark by presence,
+       * and `Sparkbars` normalises to its own max, so a rate living between 90%
+       * and 95% renders as a row of near-full blocks.
+       *
+       * A FLAG RATHER THAN AN INFERENCE, and that is the lesson rather than the
+       * preference. "The tile has no top-level series" and "`facts.shape` is
+       * scalar" both looked like they meant this and both were wrong for real
+       * stored rows — a legacy Output tile carries no facts, and a tile can
+       * legitimately hold a per-range series with none at the top. The one
+       * thing that knows is the code that assembled it.
+       */
+      assembled?: boolean;
       groups?: Array<{ label: string; value: number }>;
       /** Why this range has no number — shown instead of one, never in place of one. */
       unavailable?: string;

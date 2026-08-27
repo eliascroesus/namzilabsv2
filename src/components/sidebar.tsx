@@ -93,7 +93,7 @@ export function Sidebar({
     //
     // The scroll belongs to the NAV, which is the part that actually grows. See
     // below.
-    <aside className="flex h-full w-[76px] shrink-0 flex-col items-center px-2 sm:w-[100px] sm:px-2.5">
+    <aside className="flex h-full w-[84px] shrink-0 flex-col items-center px-2 sm:w-[124px] sm:px-3">
       {/* THE WORDMARK IS THE TOP BAR'S HEIGHT.
           The rail's mark and the canvas's top island sit at the same y, so when
           they were different heights the two read as misaligned furniture. It

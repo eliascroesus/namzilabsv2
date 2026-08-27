@@ -78,7 +78,10 @@ describe("the page container and the skeleton that stands in for it", () => {
      * page's classes (it cannot render PageContainer — that is `<main
      * id="main">` and carries `rise-in`), and it has drifted from it twice.
      */
-    expect(page).toContain('width === "narrow" ? "max-w-3xl" : "max-w-6xl"');
+    // `full` is the board's own exception — a grid of fixed-size cards gains
+    // COLUMNS as the window grows, which is the one page where chasing the
+    // viewport is right. The two capped widths are unchanged.
+    expect(page).toContain('width === "narrow" ? "max-w-3xl" : width === "full" ? "" : "max-w-6xl"');
     expect(skeleton).toContain('width === "narrow" ? "max-w-3xl" : "max-w-6xl"');
 
     // The uncapped spelling. Its return means the fill is back and the pair is

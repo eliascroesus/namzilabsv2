@@ -236,11 +236,18 @@ describe("the factless window is safe", () => {
     expect(custom).toMatch(/stored\.facts\?\.kind\s*\?\?/);
 
     const tile = readFileSync("src/components/flow-tile.tsx", "utf8");
+    /**
+     * `facts` decides LESS than it did, not more. Whether a series was
+     * assembled for the charts or measured by the metric is now a flag the
+     * assembler sets, not a shape anyone infers — two inferences off `facts`
+     * and off the tile's own series were both wrong for real stored rows.
+     */
+    expect(tile).toContain("if (assembled) return false;");
     // Optional chaining and a NEGATIVE comparison: a missing `facts`, or a
     // missing `shape` inside it, both fall through to "draw it". Sabotage:
     // rewrite this as `t.facts?.shape === "series"` and every tile published
     // before the stamp shipped silently loses its sparkline.
-    expect(tile).toContain('t.facts?.shape !== "dataset"');
+    expect(tile).toContain('stored.facts?.shape !== "dataset"');
   });
 
   it("the type itself says absence means unknown", async () => {

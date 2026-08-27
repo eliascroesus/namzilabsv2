@@ -164,9 +164,24 @@ function withTrends(
   out: Record<string, RangeSlot>,
   all: Record<string, RangeSlot>,
   ranges: Array<{ key: string; start: number; end: number; all?: boolean }>,
-  shape: string | undefined,
 ): Record<string, RangeSlot> {
-  if (shape !== "scalar") return out;
+  /**
+   * "ONE NUMBER PER PERIOD" IS ASKED OF THE DATA, not of the `facts` stamp.
+   *
+   * The first version gated on `facts.shape === "scalar"`, which is the same
+   * question asked of a field that a legacy Output-node tile may simply not
+   * carry — those tiles are built inside `execOutput` rather than by the
+   * `factCorrected` path above, so the stamp can be absent and every metric
+   * behind one silently got no trend. Percentages were the visible casualty.
+   *
+   * The condition that actually matters is structural: this metric measures a
+   * single figure per window, so no slot of it carries a breakdown or a series
+   * of its own. Reading it off the slots needs no stamp and cannot go stale —
+   * and it still refuses a grouped tile, where writing a trend would flip a
+   * live table from listing groups to listing periods.
+   */
+  const measuresOneNumber = Object.values(out).every((s) => !s.groups && !s.series);
+  if (!measuresOneNumber) return out;
   for (const r of ranges) {
     if (r.all) continue;
     const slot = out[r.key];
@@ -183,6 +198,8 @@ function withTrends(
     // windows carried their own buckets and tells the customer to refresh, and
     // the axis falls back to the metric's declared unit and prints raw keys.
     slot.unit = bucketUnitForWindow(r.end - r.start);
+    // Says what it is, so no reader has to infer it — see the note on the type.
+    slot.assembled = true;
   }
   return out;
 }
@@ -415,12 +432,7 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
               // The SUPERSET, so no bucket key can leak into `byRange` and mint
               // a phantom pill. `byDay` still takes `dayKeys` alone, so the
               // calendar's own payload is unchanged.
-              byRange: withTrends(
-                dashboardRanges(derived.byRange, trendKeys),
-                derived.byRange,
-                ranges,
-                (t.tile as { facts?: { shape?: string } }).facts?.shape,
-              ),
+              byRange: withTrends(dashboardRanges(derived.byRange, trendKeys), derived.byRange, ranges),
               byDay: dayValues(derived.byRange, dayKeys),
               nextChangeAt: nextChangeAtIso(derived.nextChangeMs, slidingCapMs, asOf),
             }

@@ -192,3 +192,39 @@ describe("a percentage metric can be drawn as a trend", () => {
     }
   });
 });
+
+describe("the trend says what it is", () => {
+  it("marks itself assembled, so no reader has to infer it", async () => {
+    /**
+     * TWO INFERENCES WERE TRIED FIRST AND BOTH WERE WRONG for real stored rows.
+     * `facts.shape === "scalar"` misses a legacy Output-node tile, which is
+     * built inside `execOutput` and carries no facts at all — that is why the
+     * percentage metrics stayed unpickable after the first attempt. "No
+     * top-level series" misses a tile that legitimately holds one per range and
+     * none at the top, which is a shape `tests/flow-tile-range.test.ts` already
+     * pins. The code that assembles a trend is the only thing that knows.
+     */
+    const { tile } = await seedRate([
+      { daysAgo: 1, leads: 4, booked: 2 },
+      { daysAgo: 2, leads: 10, booked: 1 },
+    ]);
+    expect((tile.byRange?.["7d"] as { assembled?: boolean })?.assembled).toBe(true);
+    // A range with no assembled trend does not claim one.
+    expect((tile.byRange?.today as { assembled?: boolean })?.assembled).toBeUndefined();
+  });
+
+  it("gives one to a metric with no facts at all", async () => {
+    /**
+     * The legacy shape, which is what the first fix missed. `withTrends` asks
+     * the DATA whether the metric measures one number per period — no slot
+     * carrying groups or a series of its own — rather than reading a stamp that
+     * may never have been written.
+     */
+    const { tile } = await seedRate([
+      { daysAgo: 1, leads: 4, booked: 2 },
+      { daysAgo: 2, leads: 10, booked: 1 },
+    ]);
+    const stripped = { ...tile, facts: undefined };
+    expect(chartsFor(shapeOfTile(stripped))).toContain("line");
+  });
+});

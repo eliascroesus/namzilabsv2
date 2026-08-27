@@ -726,7 +726,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       {/* G.4: refresh the server-rendered tiles when the org's results move. */}
       <FreshnessPoller />
-      <PageContainer>
+      <PageContainer width="full">
         {/* NO LEDE. It said the board holds every published flow's number,
             recomputed on a schedule and stamped with when it was last true —
             and every one of those three facts is already on the screen, said
