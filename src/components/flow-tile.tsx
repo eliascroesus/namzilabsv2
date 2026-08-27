@@ -29,6 +29,8 @@ type Tile = {
   currency?: string;
   precision?: number;
   target?: number | null;
+  /** Stamped at materialize. `shape` is what tells the two series apart — see `drawsItsSeries`. */
+  facts?: { kind?: string; shape?: string };
   value?: number;
   series?: Array<{ bucket: string; value: number }>;
   groups?: Array<{ label: string; value: number }>;
@@ -203,7 +205,7 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
         <p className="mt-2.5 text-tiny text-muted-foreground" title={unavailable}>
           {unavailable.length > 160 ? `${unavailable.slice(0, 160)}…` : unavailable}
         </p>
-      ) : t.series && t.series.length > 0 ? (
+      ) : t.series && t.series.length > 0 && drawsItsSeries(t) ? (
         <Sparkbars series={t.series} format={t} />
       ) : t.groups && t.groups.length > 0 ? (
         <GroupBars groups={t.groups} total={t.value} format={t} />
@@ -283,6 +285,35 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
       </div>
     </Card>
   );
+}
+
+/**
+ * DOES THIS BOARD DRAW THIS SERIES? — the render half of a gate that used to
+ * live in the engine.
+ *
+ * `buildTile` computed a dataset's series only when the publisher had asked for
+ * a time chart: `spec.timeField && (viz === "line" || viz === "bar") &&
+ * dataset`. The viz clause left that gate so a custom view could switch a tile
+ * to bars later without a republish — right for the canvas, where the chart is
+ * chosen per tile, and it silently changed THIS board, where the mark is picked
+ * from presence. Every dataset metric with a time reference gained a series,
+ * and tiles that had shown a bare number for months grew a chart under it.
+ *
+ * The condition was never about whether the data should EXIST. It was about
+ * whether the groups board should draw it, so it belongs here.
+ *
+ * TWO SOURCES OF `series`, and only one of them was ever gated:
+ *   · `facts.shape === "dataset"` — the branch that widened. Ask the viz, as
+ *     the engine used to.
+ *   · anything else, including a natively bucketed `"series"` metric — never
+ *     gated, always drawn. Gating on the viz alone would have stripped these.
+ *
+ * A ROW WITH NO `facts` DRAWS, and that is not a guess: it predates the stamp,
+ * so under the old engine its dataset-derived series could only exist if the
+ * viz already allowed it. Having one is proof it passed the test.
+ */
+function drawsItsSeries(t: Tile): boolean {
+  return t.facts?.shape !== "dataset" || t.viz === "line" || t.viz === "bar";
 }
 
 /**

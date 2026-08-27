@@ -208,11 +208,29 @@ describe("the factless window is safe", () => {
    * facts yet; these pins are the promise that the first consumer cannot make
    * absence mean anything but "unknown".
    */
-  it("no renderer requires facts today", async () => {
+  it("no renderer requires facts, now that one finally reads them", async () => {
+    /**
+     * `flow-tile.tsx` is the first consumer — `drawsItsSeries` asks
+     * `facts.shape` whether a series came from the branch that used to be
+     * viz-gated. This pin was written for exactly that moment: it never
+     * demanded that nothing read facts forever, it demanded that the first
+     * thing to read them could not make ABSENCE mean anything but "unknown".
+     *
+     * So the assertion moves from "nobody reads it" to the property underneath:
+     * the one reader is permissive on absence, and the two that still do not
+     * read it still do not. `tests/flow-tile-sparkline.test.ts` renders the
+     * legacy row and proves it draws.
+     */
     const { readFileSync } = await import("node:fs");
-    for (const p of ["src/components/flow-tile.tsx", "src/components/custom-tile.tsx", "src/lib/board/charts.ts"]) {
-      expect(readFileSync(p, "utf8"), `${p} consumes facts before a consumer exists`).not.toMatch(/\.facts\b/);
+    for (const p of ["src/components/custom-tile.tsx", "src/lib/board/charts.ts"]) {
+      expect(readFileSync(p, "utf8"), `${p} consumes facts before it needs to`).not.toMatch(/\.facts\b/);
     }
+    const tile = readFileSync("src/components/flow-tile.tsx", "utf8");
+    // Optional chaining and a NEGATIVE comparison: a missing `facts`, or a
+    // missing `shape` inside it, both fall through to "draw it". Sabotage:
+    // rewrite this as `t.facts?.shape === "series"` and every tile published
+    // before the stamp shipped silently loses its sparkline.
+    expect(tile).toContain('t.facts?.shape !== "dataset"');
   });
 
   it("the type itself says absence means unknown", async () => {
