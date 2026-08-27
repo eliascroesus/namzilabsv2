@@ -1642,6 +1642,70 @@ export type RangeSlot = NonNullable<TileSpec["byRange"]>[string];
  * "all" keeps the metric's unit: it is the one window whose length is unknown
  * here, and the publisher's choice is the only sensible answer for it.
  */
+/** The start of the bucket a moment falls in, in UTC. */
+function bucketFloorMs(ms: number, unit: NonNullable<TilePresentation["timeUnit"]>): number {
+  const d = new Date(ms);
+  const y = d.getUTCFullYear();
+  if (unit === "year") return Date.UTC(y, 0, 1);
+  if (unit === "quarter") return Date.UTC(y, Math.floor(d.getUTCMonth() / 3) * 3, 1);
+  if (unit === "month") return Date.UTC(y, d.getUTCMonth(), 1);
+  const midnight = Date.UTC(y, d.getUTCMonth(), d.getUTCDate());
+  // Back to Monday, the same weekday arithmetic `isoWeek` uses.
+  if (unit === "week") return midnight - ((new Date(midnight).getUTCDay() + 6) % 7) * 86_400_000;
+  return midnight;
+}
+
+/** One bucket forward, by the calendar rather than a fixed stride. */
+function bucketNextMs(ms: number, unit: NonNullable<TilePresentation["timeUnit"]>): number {
+  const d = new Date(ms);
+  if (unit === "day") return d.setUTCDate(d.getUTCDate() + 1);
+  if (unit === "week") return d.setUTCDate(d.getUTCDate() + 7);
+  if (unit === "month") return d.setUTCMonth(d.getUTCMonth() + 1);
+  if (unit === "quarter") return d.setUTCMonth(d.getUTCMonth() + 3);
+  return d.setUTCFullYear(d.getUTCFullYear() + 1);
+}
+
+/**
+ * THE WINDOWS ONE RANGE'S TREND IS MADE OF — one per bucket, at the size the
+ * window already implies.
+ *
+ * A bucket's value has to be the metric over THAT bucket's records. There is no
+ * other honest spelling for a rate, an average or a distinct count: half of
+ * seven daily rates is not the week's rate, and the tile carries no fact that
+ * could say when folding is safe — `facts.kind` is "count" for `sum`, `avg`,
+ * `median`, `min`, `max` and `count_distinct` alike. So nothing is ever folded;
+ * every point is re-run, which is what `tileByRange` already does per window
+ * for the calendar.
+ *
+ * IT REFUSES AN UNBOUNDED SPAN, and that is arithmetic rather than caution.
+ * "All time" starts at the EPOCH — `resolveRange` returns `new Date(0)` — so
+ * minting its months is six hundred-odd windows per tile per materialize, each
+ * a full traversal of the run. All time keeps the metric's own unit and gets no
+ * assembled trend.
+ */
+export function bucketWindowsFor(start: number, end: number): Array<{ key: string; start: number; end: number }> {
+  // THE SECOND LOCK, and it has to be on the SPAN rather than on the bucket
+  // count: all-time starts at the epoch, which is fifty-odd YEAR buckets — well
+  // under any count cap, and fifty-odd full traversals of the run for a chart
+  // nothing asked for. 1200 days is where `bucketUnitForWindow` stops offering
+  // months, so no window a dashboard pill can produce comes near it.
+  if (!(end > start) || end - start > 1200 * 86_400_000) return [];
+  const unit = bucketUnitForWindow(end - start);
+  const out: Array<{ key: string; start: number; end: number }> = [];
+  for (let t = bucketFloorMs(start, unit); t <= end; t = bucketNextMs(t, unit)) {
+    // 30d/day is 30 and 90d/week is 14; anything past a screenful is a window
+    // this was not meant for.
+    if (out.length >= 64) return [];
+    const next = bucketNextMs(t, unit);
+    out.push({
+      key: bucketKey(new Date(t).toISOString(), unit),
+      start: Math.max(t, start),
+      end: Math.min(next - 1, end),
+    });
+  }
+  return out;
+}
+
 export function bucketUnitForWindow(spanMs: number): NonNullable<TilePresentation["timeUnit"]> {
   const DAY = 86_400_000;
   const days = spanMs / DAY;

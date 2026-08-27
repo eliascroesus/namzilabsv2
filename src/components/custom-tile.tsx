@@ -61,7 +61,7 @@ type StoredTile = {
   durationDisplay?: string;
   target?: number | null;
   timeUnit?: string;
-  facts?: { kind?: string };
+  facts?: { kind?: string; shape?: string };
   value?: number;
   series?: SeriesPoint[];
   groups?: GroupRow[];

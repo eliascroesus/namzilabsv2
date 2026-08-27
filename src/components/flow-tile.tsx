@@ -313,6 +313,17 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
  * viz already allowed it. Having one is proof it passed the test.
  */
 function drawsItsSeries(t: Tile): boolean {
+  /**
+   * A SCALAR'S TREND WAS ASSEMBLED FOR THE CHARTS, NOT MEASURED BY THE METRIC.
+   *
+   * Acceptance Rate has ONE number per period. Its per-bucket points exist so a
+   * custom view can draw a line over them — see `withTrends` — and drawing them
+   * here would grow sparkbars under every rate, revenue and duration card on a
+   * board nobody asked to change. `Sparkbars` normalises to its own max, so a
+   * rate living between 90% and 95% renders as a row of near-full blocks: the
+   * exact regression the rest of this function was written to undo.
+   */
+  if (t.facts?.shape === "scalar") return false;
   return t.facts?.shape !== "dataset" || t.viz === "line" || t.viz === "bar";
 }
 
@@ -325,6 +336,8 @@ function drawsItsSeries(t: Tile): boolean {
  */
 export type DeltaTile = {
   value?: number;
+  /** Read only to refuse an assembled trend a delta — see `deriveDelta`. */
+  facts?: { shape?: string };
   series?: Array<{ bucket: string; value: number }>;
   byRange?: Record<string, { value?: number; unavailable?: string }>;
 };
@@ -371,7 +384,12 @@ export function deriveDelta(
   }
 
   const series = t.series;
-  if (series && series.length >= 3) {
+  /**
+   * The same rule `drawsItsSeries` states: an assembled trend draws a SHAPE, it
+   * does not yield numbers. "+8 pts vs prior" off two single days, under a
+   * headline that is a thirty-day rate, is a comparison the card is not making.
+   */
+  if (series && series.length >= 3 && t.facts?.shape !== "scalar") {
     const last = series[series.length - 2];
     const prior = series[series.length - 3];
     if (last?.value != null && prior?.value != null) {

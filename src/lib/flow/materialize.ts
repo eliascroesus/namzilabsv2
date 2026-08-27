@@ -2,7 +2,15 @@ import { and, asc, eq, inArray, lt, notInArray, or, sql, type SQL, type SQLWrapp
 import { backfillJobs, connections, flowResults, flows, flowVersions } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
-import { runFlow, buildTile, tileByRange, type CompileProvenance, type RangeSlot } from "./engine";
+import {
+  runFlow,
+  buildTile,
+  bucketUnitForWindow,
+  bucketWindowsFor,
+  tileByRange,
+  type CompileProvenance,
+  type RangeSlot,
+} from "./engine";
 import { compileEnabled } from "./compile/flags";
 import { getPublishedVersion, graphFingerprint, graphForFingerprint } from "./store";
 import { parseGraph, seedMetricFormat, seedMetricFacts, type TileSpec } from "./types";
@@ -121,6 +129,60 @@ function dayValues(
     const slot = byRange[key];
     if (!slot || slot.value == null || !Number.isFinite(slot.value)) continue;
     out[key] = slot.records != null && slot.records > 0 ? { value: slot.value, records: slot.records } : { value: slot.value };
+  }
+  return out;
+}
+
+/**
+ * A TREND FOR EVERY BOUNDED RANGE, ASSEMBLED FROM WINDOWS EACH ANSWERED ON ITS
+ * OWN — never composed.
+ *
+ * THE COMPLAINT: "if I can see it on the calendar view then I should be able to
+ * see it in the charts." It was exactly right. A percentage, a currency total
+ * and a duration are `shape.kind === "scalar"` at the endpoint, so `buildTile`
+ * never writes them a `series` — and `chartsFor` offers line, area and bar only
+ * to a metric that has one. Meanwhile the per-day numbers already existed and
+ * were already paid for: the calendar renders them, out of this same
+ * `tileByRange` call, for every shape there is. This files them where the chart
+ * looks.
+ *
+ * NOTHING IS SUMMED OR AVERAGED. Each point is the metric over its own window —
+ * a day's rate is that day's numerator over that day's denominator, a week's is
+ * the week's. Folding days into a week is wrong for everything except a count
+ * or a sum, and the tile carries no fact that could tell those apart.
+ *
+ * SCALARS ONLY. A dataset, a bucketed series and a breakdown already carry what
+ * they measured; writing a trend into a breakdown's slot would flip a live
+ * table tile from listing groups to listing periods.
+ *
+ * A WINDOW WITH NO ANSWER IS ABSENT, not zero — a rate whose denominator
+ * emptied stored `unavailable` and has no value at all. The renderer turns the
+ * gap into a hole for a ratio and into a measured zero for a count, which is
+ * the same doctrine `byDay` follows.
+ */
+function withTrends(
+  out: Record<string, RangeSlot>,
+  all: Record<string, RangeSlot>,
+  ranges: Array<{ key: string; start: number; end: number; all?: boolean }>,
+  shape: string | undefined,
+): Record<string, RangeSlot> {
+  if (shape !== "scalar") return out;
+  for (const r of ranges) {
+    if (r.all) continue;
+    const slot = out[r.key];
+    if (!slot || slot.unavailable || slot.series) continue;
+    const points = bucketWindowsFor(r.start, r.end)
+      .map((b) => ({ bucket: b.key, value: all[b.key]?.value }))
+      .filter((p): p is { bucket: string; value: number } => p.value != null && Number.isFinite(p.value));
+    // ONE POINT IS NOT A TREND. The tile refuses to draw it and says so, so
+    // storing one is bytes on every dashboard render for a chart that cannot
+    // exist. Today and Yesterday are one day long by definition.
+    if (points.length < 2) continue;
+    slot.series = points;
+    // NOT OPTIONAL: absent, the renderer reads the slot as a row written before
+    // windows carried their own buckets and tells the customer to refresh, and
+    // the axis falls back to the metric's declared unit and prints raw keys.
+    slot.unit = bucketUnitForWindow(r.end - r.start);
   }
   return out;
 }
@@ -310,16 +372,55 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
      */
     const slidingCapMs = graphHasSlidingWindow(graph) ? asOf.getTime() + 60 * 60 * 1000 : Infinity;
     const dayKeys = new Set(dayRanges.map((d) => d.key));
+
+    /**
+     * THE TREND WINDOWS THE CALENDAR HAS NOT ALREADY PAID FOR.
+     *
+     * A day bucket key and a calendar day key are the same string — `bucketKey`
+     * spells a day `iso.slice(0, 10)` and so does `dayKey` — and `resolveRange`
+     * and `calendarDayRanges` mint the same midnight-to-midnight window. So
+     * Today, Yesterday, Last 7 days and Last 30 days are day-grained and every
+     * window they need is ALREADY in `dayRanges`: they cost nothing. Only the
+     * weeks of Last 90 days are new, and there are thirteen of them.
+     *
+     * Deduped by key rather than by trusting that arithmetic to line up, which
+     * also covers the one day a month-boundary range can reach past the
+     * calendar's own two-month horizon.
+     */
+    const trendKeys = new Set(dayKeys);
+    const trendRanges: typeof dayRanges = [];
+    for (const r of ranges) {
+      if (r.all) continue;
+      for (const b of bucketWindowsFor(r.start, r.end)) {
+        if (trendKeys.has(b.key)) continue;
+        trendKeys.add(b.key);
+        // `tracksCrossings: false` for the reason `calendarDayRanges` gives:
+        // these windows are READ from the run and get no vote on when the tile
+        // next changes.
+        trendRanges.push({ key: b.key, start: b.start, end: b.end, tracksCrossings: false });
+      }
+    }
+
     for (const t of tiles) {
       const spec = presentationOf.get(t.nodeId);
-      const derived = spec ? tileByRange(graph, nodes, t.nodeId, spec, [...ranges, ...dayRanges]) : undefined;
+      const derived = spec
+        ? tileByRange(graph, nodes, t.nodeId, spec, [...ranges, ...dayRanges, ...trendRanges])
+        : undefined;
       // `nextChangeAt` rides in the tile jsonb, so no migration — and the
       // expiry can read it in SQL. See its docstring in types.ts.
       const tile =
         derived && Object.keys(derived.byRange).length > 0
           ? {
               ...t.tile,
-              byRange: dashboardRanges(derived.byRange, dayKeys),
+              // The SUPERSET, so no bucket key can leak into `byRange` and mint
+              // a phantom pill. `byDay` still takes `dayKeys` alone, so the
+              // calendar's own payload is unchanged.
+              byRange: withTrends(
+                dashboardRanges(derived.byRange, trendKeys),
+                derived.byRange,
+                ranges,
+                (t.tile as { facts?: { shape?: string } }).facts?.shape,
+              ),
               byDay: dayValues(derived.byRange, dayKeys),
               nextChangeAt: nextChangeAtIso(derived.nextChangeMs, slidingCapMs, asOf),
             }
