@@ -474,9 +474,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                             variant="ghost"
                             size="sm"
                             pendingLabel="Adding…"
-                            className="h-auto w-full justify-start px-2 py-1.5 text-left"
+                            /* `whitespace-normal` because `buttonVariants`'
+                               base is `whitespace-nowrap`: the blurb refused to
+                               wrap and ran straight out of the panel. The same
+                               inherited nowrap overflowed the chart picker when
+                               it was a modal. */
+                            className="h-auto w-full justify-start whitespace-normal px-2 py-1.5 text-left"
                           >
-                            <span className="flex flex-col gap-0.5">
+                            <span className="flex min-w-0 flex-col gap-0.5">
                               <span className="text-small font-semibold text-foreground">{o.label}</span>
                               <span className="text-tiny font-normal text-muted-foreground">{o.blurb}</span>
                             </span>

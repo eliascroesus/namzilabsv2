@@ -491,3 +491,67 @@ describe("a pin the tile cannot honour", () => {
     expect(html).toContain("500");
   });
 });
+
+describe("a trend with nothing to trend", () => {
+  const oneBucket = { series: [{ bucket: "2026-08", value: 26 }], value: 26 };
+
+  it("names the chart, so two tiles of one metric are told apart", () => {
+    const html = renderToStaticMarkup(
+      createElement(CustomTile, {
+        chart: "area",
+        title: "On Calendar",
+        rangeKey: "7d",
+        source: flow({ format: "number", precision: 0, byRange: { "7d": { ...oneBucket, unit: "day" } } }),
+      }),
+    );
+    expect(html).toContain("an area needs at least two");
+  });
+
+  it("says a stale row is stale rather than blaming the range", () => {
+    /**
+     * A slot with a series but NO unit was bucketed by the old engine, which
+     * used the metric's declared `timeUnit` — "month" by default — so a week
+     * came back as one point and so would ninety days. Telling somebody to
+     * pick a longer range is advice that cannot work; the row needs recomputing
+     * and every tile does that at least daily.
+     */
+    const html = renderToStaticMarkup(
+      createElement(CustomTile, {
+        chart: "line",
+        title: "On Calendar",
+        rangeKey: "7d",
+        source: flow({ format: "number", precision: 0, timeUnit: "month", byRange: { "7d": oneBucket } }),
+      }),
+    );
+    expect(html).toContain("Refresh all");
+    expect(html).not.toContain("pick a longer range");
+  });
+
+  it("draws the trend once the window carries enough points", () => {
+    const html = renderToStaticMarkup(
+      createElement(CustomTile, {
+        chart: "line",
+        title: "On Calendar",
+        rangeKey: "7d",
+        source: flow({
+          format: "number",
+          precision: 0,
+          byRange: {
+            "7d": {
+              unit: "day",
+              value: 26,
+              series: [
+                { bucket: "2026-08-24", value: 9 },
+                { bucket: "2026-08-25", value: 8 },
+                { bucket: "2026-08-26", value: 9 },
+              ],
+            },
+          },
+        }),
+      }),
+    );
+    expect(html).not.toContain("needs at least two");
+    // Labelled in the slice's OWN unit — days, not the metric's declared month.
+    expect(html).toContain("Aug 24");
+  });
+});

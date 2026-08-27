@@ -15,6 +15,7 @@ import { Pipeline } from "@/components/board-charts/pipeline";
 import { ChartTable } from "@/components/board-charts/table";
 import { ChartHover } from "@/components/chart-hover";
 import {
+  CHARTS,
   asChartId,
   blockKindOf,
   blockTileKey,
@@ -223,6 +224,7 @@ export function CustomTile({
 
   // ── normalise both sources to one shape ───────────────────────────────────
   const stored: StoredTile = source.kind === "flow" ? ((source.tile ?? {}) as StoredTile) : {};
+  let slotOf: NonNullable<StoredTile["byRange"]>[string] | undefined;
   let w: Windowed;
   let legal: boolean;
   let bag: ChartFormat;
@@ -230,6 +232,7 @@ export function CustomTile({
 
   if (source.kind === "flow") {
     const slot = stored.byRange?.[rangeKey];
+    slotOf = slot;
     /**
      * A PIN THE TILE CANNOT HONOUR IS A MISSING PERIOD, not a licence to fall
      * back. Without `|| overridden`, a tile whose stored jsonb predates
@@ -289,6 +292,24 @@ export function CustomTile({
   const hasSeries = (w.series?.length ?? 0) > 0;
   const hasGroups = (w.groups?.length ?? 0) > 0;
   const undated = w.undated ?? 0;
+  /**
+   * A SERIES COMPUTED BEFORE WINDOWS CARRIED THEIR OWN BUCKET SIZE.
+   *
+   * Each range is bucketed to suit its length now, and the size travels in the
+   * slot. A slot with a series but NO unit was written by the old engine, which
+   * bucketed every window by the metric's declared `timeUnit` — "month" by
+   * default, so seven days came back as a single point. That is a stale ROW,
+   * not a short period, and telling somebody to "pick a longer range" when
+   * Last 90 days would answer the same way is advice that cannot work.
+   *
+   * Every tile recomputes at least once per UTC day, and "Refresh all" does it
+   * now, so this window is temporary — but it is exactly the window somebody is
+   * looking at the first time they see it.
+   */
+  const stale = source.kind === "flow" && !!slotOf?.series && slotOf.unit == null;
+  const chartLabel = (CHARTS.find((c) => c.id === chart) ?? CHARTS[0]).label.toLowerCase();
+  /** "an area", "a line". One rule beats a table of exceptions for this list. */
+  const anChart = `${/^[aeiou]/.test(chartLabel) ? "an" : "a"} ${chartLabel}`;
 
   /**
    * WHY THIS PERIOD HAS NOTHING TO DRAW — distinct from "can't answer", and
@@ -307,7 +328,9 @@ export function CustomTile({
          * The headline above already says what that number is.
          */
         (chart === "line" || chart === "area" || chart === "bar") && (w.series?.length ?? 0) < 2
-        ? "Only one point in this period — pick a longer range to see a trend."
+        ? stale
+          ? `This ${chartLabel} hasn’t been recomputed since periods started carrying their own buckets — press Refresh all above.`
+          : `Only one point in this period — ${anChart} needs at least two.`
       : (chart === "category" || chart === "pie") && !hasGroups
         ? "No breakdown in this period."
         : chart === "pie" && !(w.groups ?? []).some((g) => g.value > 0)

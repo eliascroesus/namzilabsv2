@@ -260,7 +260,11 @@ export function TileConfigPanel({
     >
       <div className="flex items-start gap-3 border-b border-border bg-card px-5 py-4">
         <div className="min-w-0 flex-1">
-          <p className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">Chart settings</p>
+          {/* The eyebrow names the CHART, not the panel: "Chart settings" over
+              a title the tile already shows said nothing the header did not. */}
+          <p className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+            {(CHARTS.find((c) => c.id === chart) ?? CHARTS[0]).label}
+          </p>
           <p className="mt-0.5 truncate text-title font-semibold text-foreground">{config.title || metricName}</p>
         </div>
         <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="Close chart settings" title="Close">

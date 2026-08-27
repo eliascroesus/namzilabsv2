@@ -1005,6 +1005,13 @@ function TileMenu({
         }
       >
         <div className="cursor-default overflow-y-auto p-1.5">
+          {/* WHAT THIS TILE IS. The "Draw as" list used to answer this as a
+              side effect of offering the alternatives; the list moved to the
+              settings panel, and without a word here two tiles of the same
+              metric drawn two ways are indistinguishable at a glance. */}
+          <p className="px-1.5 pb-1.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+            {CHARTS.find((c) => c.id === asChartId(tile.chart))?.label ?? "Chart"}
+          </p>
           {editing ? (
             <div className="px-1 py-1">
               <Input
