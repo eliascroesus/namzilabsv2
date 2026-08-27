@@ -43,20 +43,17 @@ export function ShellSkeleton({
     // purpose: PageContainer is `<main id="main">` and carries `rise-in`, and a
     // fallback must not render a second main landmark (nor animate in, only to
     // animate in again when the real page arrives).
-    <div className="bg-rail flex h-dvh">
-      {/* The rail's own width, and it has to be EXACTLY the rail's width.
-          This read `w-[76px] sm:w-[100px]` against a rail that is
-          `w-[84px] sm:w-[124px]`, so every navigation slid the whole page 8px
-          sideways on a phone and 24px on a desktop at the moment the real
-          route landed — the precise jolt a skeleton exists to prevent, caused
-          by the skeleton. Pinned against `sidebar.tsx` below. */}
-      <div className="w-[84px] shrink-0 sm:w-[124px]" />
+    <div className="flex h-dvh bg-background">
+      {/* The sidebar's own width, and it has to be EXACTLY the sidebar's width.
+          Pinned against `sidebar.tsx` by tests/page-width.test.ts, which caught
+          this the moment the rail became a column. */}
+      <div className="w-[248px] shrink-0 border-r border-border bg-sidebar" />
       {/* `overflow-y-auto`, matching AppShell's own surface — with
           `overflow-hidden` a classic scrollbar appeared only after the swap and
           stole width from the canvas column at the same moment. The wash and
           the 32px notch are mirrors too: without them the skeleton is a square
           white sheet that squares off the app's own corner for a frame. */}
-      <div className="flex-1 overflow-y-auto rounded-l-frame bg-canvas-bg">
+      <div className="flex-1 overflow-y-auto bg-canvas-bg">
         {/* Not <main>: PageContainer renders the page's one main landmark. */}
         <div
           className={`mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8 ${

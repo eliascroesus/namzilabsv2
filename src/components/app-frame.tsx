@@ -69,7 +69,7 @@ export function AppFrame({
   // the canvas, not the viewport. It belongs here rather than in a wrapper each
   // page remembers to add — the builder had exactly such a wrapper, and it was
   // one nesting level doing nothing else.
-  const className = `relative min-w-0 flex-1 rounded-l-frame ${surface}`;
+  const className = `relative min-w-0 flex-1 ${surface}`;
 
   return (
     // `h-dvh`, not `h-screen`: on mobile Safari `100vh` is the height the
@@ -84,7 +84,7 @@ export function AppFrame({
     // the home indicator. Padding the FRAME rather than the rail keeps the
     // colour full-bleed and moves only the content.
     <div
-      className="bg-rail flex h-dvh"
+      className="flex h-dvh bg-background"
       style={{
         paddingLeft: "env(safe-area-inset-left)",
         paddingRight: "env(safe-area-inset-right)",

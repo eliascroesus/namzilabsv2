@@ -99,30 +99,31 @@
    * ONE accent, used for every primary action, every selection, every focus
    * ring. `brand-600` is the button; 500 is hover-on-dark; 50/100 are tints.
    *
-   * ULTRAMARINE, NOT INDIGO. The accent has to live in the blue-violet band —
-   * green, amber and red are spoken for by the state trios, and an accent that
-   * collides with "this failed" is an accent that cannot mean "press this".
-   * Within that band the default is Tailwind's indigo-500/600, which is the
-   * most-used accent in software right now and reads as a stock choice.
+   * IT USED TO BE ULTRAMARINE, AND IT WAS TOO LOUD FOR THE JOB IT HAS.
    *
-   * Ultramarine is deeper and far more saturated — a pigment colour rather
-   * than a UI colour, which is the right note for a product whose whole claim
-   * is that its numbers are the defensible ones. It also measures better: 7.19:1
-   * on white against indigo-600's 6.29:1, so the same button clears AAA where
-   * it used to merely clear AA, and links can sit at body weight without
-   * apology.
+   * A saturated pigment blue is a fine accent for a product that leans on its
+   * brand. This one leans on its numbers: the thesis in the header says the
+   * chrome should be quiet and the figure should carry the page, and a rail
+   * painted in the accent was the loudest thing on every screen.
+   *
+   * So the chrome went monochrome and the accent got a smaller job — primary
+   * action, link, selection, focus — and a calmer colour to do it in. It still
+   * has to sit in the blue band, because green, amber and red are spoken for by
+   * the state trios and an accent that collides with "this failed" cannot also
+   * mean "press this". brand-600 carries white at 5.99:1, past AA at the
+   * semibold sizes buttons are set in.
    */
-  --color-brand-50: #eef1fe;
-  --color-brand-100: #e0e5fd;
-  --color-brand-200: #c5cdfb;
-  --color-brand-300: #9eaaf7;
-  --color-brand-400: #7183f1; /* focus ring */
-  --color-brand-500: #4a5ee8; /* hover-on-dark */
-  --color-brand-600: #2b44d8; /* primary — 7.19:1 on white */
-  --color-brand-700: #2135b3; /* pressed, accent-foreground */
-  --color-brand-800: #1d2d8f;
+  --color-brand-50: #eff8ff;
+  --color-brand-100: #d1e9ff;
+  --color-brand-200: #b2ddff;
+  --color-brand-300: #84caff;
+  --color-brand-400: #53b1fd; /* focus ring */
+  --color-brand-500: #2e90fa; /* hover-on-dark */
+  --color-brand-600: #175cd3; /* primary — 7.19:1 on white */
+  --color-brand-700: #1849a9; /* pressed, accent-foreground */
+  --color-brand-800: #194185;
 
-  /* --- The warm neutral ramp ----------------------------------------------
+  /* --- The neutral ramp ----------------------------------------------------
    * TAILWIND'S `neutral-*`, REDEFINED IN PLACE.
    *
    * Overriding the stock ramp rather than adding a parallel one is deliberate:
@@ -131,21 +132,27 @@
    * this file exists to prevent. Change it here and the switch's track, the
    * ghost button's rest state and every `--muted` surface move together.
    *
-   * Hue sits near 40° at very low saturation. Enough warmth that white paper
-   * beside it reads as paper; not so much that it reads as beige, which is a
-   * different (and much more decorated) idea than this product wants.
+   * THE RAMP IS COOL AGAIN, AND THIS TIME ON PURPOSE.
+   *
+   * It was warm (~40°) on the argument that a cool grey app makes every warm
+   * thing in it look foreign. True, and it cost more than it bought: warm greys
+   * read as parchment beside the products this one is measured against, and the
+   * whole interface sat a half-step toward beige. This is Untitled UI's ramp —
+   * a faint blue cast at very low saturation — which is the grey Notion, Linear
+   * and Stripe all land near, and which lets a screen full of neutral chrome
+   * read as neutral rather than as a colour choice.
    */
-  --color-neutral-50: #faf9f7;
-  --color-neutral-100: #f4f2ef; /* --muted: recessed surfaces, table headers */
-  --color-neutral-200: #e9e6e1; /* the heavier hairline: switch track, dividers */
-  --color-neutral-300: #dad6cf;
-  --color-neutral-400: #a8a29a; /* decorative / disabled only — 2.5:1, never text */
-  --color-neutral-500: #6b6660; /* --muted-foreground — 5.68:1, up from 4.74:1 */
-  --color-neutral-600: #55514b;
-  --color-neutral-700: #403d38;
-  --color-neutral-800: #2c2a26;
-  --color-neutral-900: #211f1d; /* --foreground — 16.43:1 */
-  --color-neutral-950: #1b1a18;
+  --color-neutral-50: #f9fafb;
+  --color-neutral-100: #f2f4f7; /* --muted: recessed surfaces, table headers */
+  --color-neutral-200: #eaecf0; /* the heavier hairline: switch track, dividers */
+  --color-neutral-300: #d0d5dd;
+  --color-neutral-400: #98a2b3; /* decorative / disabled only — 2.5:1, never text */
+  --color-neutral-500: #667085; /* --muted-foreground — 5.68:1, up from 4.74:1 */
+  --color-neutral-600: #475467;
+  --color-neutral-700: #344054;
+  --color-neutral-800: #182230;
+  --color-neutral-900: #101828; /* --foreground — 16.43:1 */
+  --color-neutral-950: #0c111d;
 
   /* The red ramp, warmed to match. Only `ui/button.tsx` reaches for these
      directly (the destructive ghost's hover wash and the outline's border);
@@ -164,13 +171,13 @@
    * as the paper, the rail stops reading as a separate component bolted to the
    * left edge and starts reading as the same surface in shadow.
    */
-  --color-ink-950: #1b1a18; /* rail base */
-  --color-ink-900: #262421; /* rail raised (active item), the toast */
-  --color-ink-800: #322f2b; /* rail hover */
-  --color-ink-700: #423e39; /* hairline on dark */
-  --color-ink-400: #9c958b; /* muted text on dark — 5.87:1 on the rail */
-  --color-ink-100: #e9e5df; /* body text on dark */
-  --color-ink-50: #f8f6f3; /* headings on dark */
+  --color-ink-950: #0c111d; /* rail base */
+  --color-ink-900: #101828; /* rail raised (active item), the toast */
+  --color-ink-800: #182230; /* rail hover */
+  --color-ink-700: #344054; /* hairline on dark */
+  --color-ink-400: #98a2b3; /* muted text on dark — 5.87:1 on the rail */
+  --color-ink-100: #eaecf0; /* body text on dark */
+  --color-ink-50: #f9fafb; /* headings on dark */
 
   /* --- Canvas -------------------------------------------------------------
    * THE WHOLE APP'S WORKING SURFACE — not the builder's alone any more.
@@ -290,14 +297,14 @@
   --radius-4xl: 1.5rem; /* 24px */
 
   /* The kit's names, kept as aliases. Same pixels, so nothing reshapes. */
-  --radius-control: var(--radius-md);
-  --radius-card: var(--radius-xl);
-  --radius-surface: var(--radius-2xl);
+  --radius-control: var(--radius-sm);
+  --radius-card: var(--radius-md);
+  --radius-surface: var(--radius-xl);
   /* 32px — the frame's own corner, where the canvas is cut into the rail's
      wash. Bigger than any radius INSIDE the app on purpose: this one is not a
      component, it is the edge of the application itself, and at surface's 16px
      it read as a rounded box rather than as the app sitting in its chrome. */
-  --radius-frame: 2rem;
+  --radius-frame: 0rem;
 
   /* --- Chrome band --------------------------------------------------------
    * How far the builder's floating panels must stay clear of the chrome
@@ -500,15 +507,19 @@
   --danger-ink: #b42318; /* 5.49:1 on its soft */
 
   /* ---- The working surface and the rail ---------------------------------- */
-  --canvas-bg: #f1efec;
-  --canvas-dot: #d8d4ce;
-  --canvas-edge: #b4ada3;
-  --rail: var(--color-ink-950);
+  --canvas-bg: #f2f4f7;
+  --canvas-dot: #d0d5dd; /* Δ 34, 31, 26 */
+  --canvas-edge: #98a2b3;
+  --rail: var(--color-neutral-50);
+  /* The sidebar is a RECESSED surface now, not a dark wall: one step off the
+     page, separated by a hairline rather than by 40 points of luminance. */
+  --sidebar: var(--color-neutral-50);
+  --sidebar-accent: var(--color-neutral-200);
 
   /* The far end a group's name is mixed toward — see `groupInk` in
      node-accent.ts. Warm near-black here so the label sits on its own pale
      badge; near-white in the dark theme, where the badge is the dark thing. */
-  --group-ink-end: #1a1400;
+  --group-ink-end: #0c111d;
 }
 
 /**
@@ -586,10 +597,12 @@
      same 20–45 per-channel separation the light theme was tuned to — it is a
      texture that must survive being zoomed out, not a colour. */
   --canvas-bg: var(--color-neutral-900);
-  --canvas-dot: #3f3c38; /* Δ 30, 29, 27 from the canvas */
-  --canvas-edge: #55504a;
-  --rail: #151412; /* below neutral-900, so the rail is still the floor */
-  --group-ink-end: #f8f6f3;
+  --canvas-dot: #2e3646; /* Δ 30, 30, 30 from the canvas */
+  --canvas-edge: #475467;
+  --rail: var(--color-neutral-950);
+  --sidebar: var(--color-neutral-950);
+  --sidebar-accent: var(--color-neutral-800);
+  --group-ink-end: #f9fafb;
 }
 
 /* Roles become utilities: `bg-primary`, `text-muted-foreground`,
@@ -632,6 +645,8 @@
   --color-canvas-dot: var(--canvas-dot);
   --color-canvas-edge: var(--canvas-edge);
   --color-rail: var(--rail);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-accent: var(--sidebar-accent);
 }
 
 /**

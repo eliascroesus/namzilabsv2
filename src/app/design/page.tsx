@@ -61,23 +61,23 @@ export const metadata = { title: "Namzilabs — UI kit" };
  * indigo hexes — a kit page confidently lying about the kit.
  */
 const BRAND: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "50", cls: "bg-brand-50", hex: "#eef1fe" },
-  { step: "100", cls: "bg-brand-100", hex: "#e0e5fd" },
-  { step: "200", cls: "bg-brand-200", hex: "#c5cdfb" },
-  { step: "300", cls: "bg-brand-300", hex: "#9eaaf7" },
-  { step: "400", cls: "bg-brand-400", hex: "#7183f1" },
-  { step: "500", cls: "bg-brand-500", hex: "#4a5ee8" },
-  { step: "600", cls: "bg-brand-600", hex: "#2b44d8" },
-  { step: "700", cls: "bg-brand-700", hex: "#2135b3" },
+  { step: "50", cls: "bg-brand-50", hex: "#eff8ff" },
+  { step: "100", cls: "bg-brand-100", hex: "#d1e9ff" },
+  { step: "200", cls: "bg-brand-200", hex: "#b2ddff" },
+  { step: "300", cls: "bg-brand-300", hex: "#84caff" },
+  { step: "400", cls: "bg-brand-400", hex: "#53b1fd" },
+  { step: "500", cls: "bg-brand-500", hex: "#2e90fa" },
+  { step: "600", cls: "bg-brand-600", hex: "#175cd3" },
+  { step: "700", cls: "bg-brand-700", hex: "#1849a9" },
 ];
 const INK: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "950", cls: "bg-ink-950", hex: "#1b1a18" },
-  { step: "900", cls: "bg-ink-900", hex: "#262421" },
-  { step: "800", cls: "bg-ink-800", hex: "#322f2b" },
-  { step: "700", cls: "bg-ink-700", hex: "#423e39" },
-  { step: "400", cls: "bg-ink-400", hex: "#9c958b" },
-  { step: "100", cls: "bg-ink-100", hex: "#e9e5df" },
-  { step: "50", cls: "bg-ink-50", hex: "#f8f6f3" },
+  { step: "950", cls: "bg-ink-950", hex: "#0c111d" },
+  { step: "900", cls: "bg-ink-900", hex: "#101828" },
+  { step: "800", cls: "bg-ink-800", hex: "#182230" },
+  { step: "700", cls: "bg-ink-700", hex: "#344054" },
+  { step: "400", cls: "bg-ink-400", hex: "#98a2b3" },
+  { step: "100", cls: "bg-ink-100", hex: "#eaecf0" },
+  { step: "50", cls: "bg-ink-50", hex: "#f9fafb" },
 ];
 /**
  * UNTITLED UI'S SCALE. The legacy names still compile as aliases onto these
@@ -98,10 +98,10 @@ const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample:
   { token: "text-xs", cls: "text-xs", px: "12px", use: "Helper text, captions, rail labels, badges", sample: "Speed to lead" },
 ];
 const RADII: Array<{ cls: string; label: string; body: string }> = [
-  { cls: "rounded-control", label: "control · 8px", body: "Buttons, inputs, menu rows" },
-  { cls: "rounded-card", label: "card · 12px", body: "Tiles, list rows, rail tiles" },
-  { cls: "rounded-surface", label: "surface · 16px", body: "Panels, modals, tables, step cards" },
-  { cls: "rounded-frame", label: "frame · 32px", body: "The app's own left edge" },
+  { cls: "rounded-control", label: "control · 6px", body: "Buttons, inputs, menu rows" },
+  { cls: "rounded-card", label: "card · 8px", body: "Tiles, list rows, rail tiles" },
+  { cls: "rounded-surface", label: "surface · 12px", body: "Panels, modals, tables, step cards" },
+  { cls: "rounded-frame", label: "frame · 0", body: "Retired — the sidebar is flush with the page now" },
 ];
 /**
  * SAMPLE DAYS FOR THE CALENDAR SECTION.
@@ -208,9 +208,9 @@ export default function DesignPage() {
 
         <Section
           title="Colour"
-          note="One accent: ultramarine. brand-600 is every primary action and link (7.19:1 on white), brand-400 the focus ring, 50/100 the selection washes. Ink is the warm dark end of the neutral scale — the rail sits on ink-950, the toast on ink-900. Everything else is a role (bg-card, border-border, text-muted-foreground) or a state trio."
+          note="One accent, used sparingly: brand-600 is the primary action and the link (5.99:1 on white), brand-400 the focus ring, 50/100 the selection washes. The chrome itself is monochrome — the sidebar is a recessed neutral surface, not a coloured wall — so the accent only ever marks what you pressed or what is selected. Ink is the dark end of the same cool ramp, and carries the dark theme. Everything else is a role (bg-card, border-border, text-muted-foreground) or a state trio."
         >
-          <p className="mb-2 text-tiny font-medium text-muted-foreground">Accent — ultramarine, brand-*</p>
+          <p className="mb-2 text-tiny font-medium text-muted-foreground">Accent — brand-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
             {BRAND.map((s) => (
               <div key={s.step} className="min-w-0 flex-1">
@@ -222,7 +222,7 @@ export default function DesignPage() {
               </div>
             ))}
           </div>
-          <p className="mb-2 mt-5 text-tiny font-medium text-muted-foreground">Ink — warm dark surfaces, ink-*</p>
+          <p className="mb-2 mt-5 text-tiny font-medium text-muted-foreground">Ink — dark surfaces, ink-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
             {INK.map((s) => (
               <div key={s.step} className="min-w-0 flex-1">

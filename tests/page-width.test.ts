@@ -91,7 +91,7 @@ describe("the page container and the skeleton that stands in for it", () => {
     expect(skeleton).not.toContain('"max-w-3xl" : ""');
   });
 
-  it("reserve the SAME width for the rail, at both rungs", () => {
+  it("reserve the SAME width for the sidebar", () => {
     /**
      * THE JOLT THIS FILE CLAIMED TO PREVENT, AND DIDN'T.
      *
@@ -104,16 +104,16 @@ describe("the page container and the skeleton that stands in for it", () => {
      * Read out of each file rather than typed here, so the pair cannot agree
      * with this test while disagreeing with each other.
      */
-    const railWidths = (src: string) => {
+    const railWidth = (src: string) => {
       // Comments stripped first. Prose explaining the rule is not the rule —
-      // the note above the skeleton's rail quotes both the old widths and the
-      // new ones, and an unstripped scan reads the first pair it finds.
+      // the notes on both sides quote widths, and an unstripped scan reads the
+      // first number it finds rather than the one in force.
       const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-      const aside = code.match(/w-\[(\d+)px\][^"]*?sm:w-\[(\d+)px\]/);
-      if (!aside) throw new Error("could not find a two-rung rail width");
-      return { base: aside[1], sm: aside[2] };
+      const m = code.match(/w-\[(\d+)px\]/);
+      if (!m) throw new Error("could not find a sidebar width");
+      return m[1];
     };
-    expect(railWidths(skeleton)).toEqual(railWidths(sidebar));
+    expect(railWidth(skeleton)).toEqual(railWidth(sidebar));
   });
 });
 
