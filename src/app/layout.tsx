@@ -27,6 +27,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
  */
 const instrument = Instrument_Sans({ subsets: ["latin"], variable: "--font-instrument", display: "swap" });
 import { ThemeProvider } from "@/components/theme";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import type { UserInfo, NoUserInfo } from "@workos-inc/authkit-nextjs";
@@ -87,8 +88,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           Skip to content
         </a>
+        {/* `delayDuration={0}` is set in the component, not here: this product's
+            tooltips label icon-only controls, and a control whose only label
+            appears after a beat is a control you have to hover twice. */}
         <ThemeProvider>
-          <AuthKitProvider initialAuth={initialAuth}>{children}</AuthKitProvider>
+          <TooltipProvider>
+            <AuthKitProvider initialAuth={initialAuth}>{children}</AuthKitProvider>
+          </TooltipProvider>
         </ThemeProvider>
       </body>
     </html>

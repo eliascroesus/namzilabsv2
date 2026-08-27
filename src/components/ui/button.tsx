@@ -1,5 +1,16 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
+/**
+ * The LEAF package, not the `radix-ui` barrel.
+ *
+ * `import { Slot } from "radix-ui"` re-exports Dialog, DropdownMenu and every
+ * other primitive through one entry point — all of them `"use client"`. This
+ * file is deliberately NOT a client component (see below), and pulling that
+ * barrel in would drag the whole of Radix into the server graph behind the
+ * most-imported component in the app. `@radix-ui/react-slot` carries no
+ * directive and does nothing but clone its child.
+ */
+import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 
 /**
@@ -72,10 +83,27 @@ const buttonVariants = cva(
   },
 );
 
-export type ButtonProps = React.ComponentProps<"button"> & VariantProps<typeof buttonVariants>;
+export type ButtonProps = React.ComponentProps<"button"> &
+  VariantProps<typeof buttonVariants> & {
+    /**
+     * Render the CHILD as the button instead of emitting a `<button>`.
+     *
+     * The kit's answer to "a link that looks like a button" has been
+     * `className={buttonVariants({ variant })}` on an `<a>` — 23 call sites
+     * composing a class string by hand. That works, but it is the same
+     * component expressed two ways, and only one of them gets a new prop when
+     * `Button` grows one.
+     *
+     * It is also what the vendored Radix components need: `<DialogClose
+     * asChild><Button/></DialogClose>` hands the trigger's behaviour DOWN to
+     * whatever it wraps, and that only composes if this can do the same.
+     */
+    asChild?: boolean;
+  };
 
-export function Button({ className, variant, size, ...props }: ButtonProps) {
-  return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+export function Button({ className, variant, size, asChild, ...props }: ButtonProps) {
+  const Comp = asChild ? Slot : "button";
+  return <Comp className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 }
 
 export { buttonVariants };

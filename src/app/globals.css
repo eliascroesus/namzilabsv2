@@ -659,6 +659,31 @@ html.dark {
 }
 
 /**
+ * THE STACKING ORDER, WRITTEN DOWN — because it stopped being local.
+ *
+ * Until Radix arrived there was not a single `createPortal` in `src/`. Every
+ * overlay was `position: fixed` plus a z-index, resolved inside whatever
+ * container it happened to be declared in, and the numbers only had to agree
+ * with their neighbours. Radix portals to `document.body`, so its surfaces now
+ * stack against the WHOLE app rather than against their parent, and the
+ * numbers have to mean the same thing everywhere.
+ *
+ * The ladder, lowest first:
+ *
+ *   10  in-flow chrome — a card's resize grip, a sticky panel footer
+ *   20  docked panels — the builder's config rail, the tile settings panel
+ *   30  anchored surfaces — popovers, dropdown menus, the field browser
+ *   40  the drag layer — the ghost under the cursor and its drop slot, which
+ *       must ride ABOVE the menus a drag can start from
+ *   50  modal surfaces — dialogs, sheets, their scrims, and toasts
+ *
+ * Radix ships its overlays at 50, which is the rung they belong on. The one
+ * thing to watch: a drag that starts inside an open dropdown is at 40 while
+ * the menu is at 30, which is the order that makes the ghost visible — the
+ * reverse looked like the card had been swallowed.
+ */
+
+/**
  * THE 300ms TAP DELAY, REMOVED. Mobile Safari waits a third of a second after
  * every tap to see whether a second one is coming (double-tap to zoom). On
  * controls, that delay is indistinguishable from the app being slow, and it is

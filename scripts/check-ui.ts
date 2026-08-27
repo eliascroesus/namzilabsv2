@@ -113,9 +113,12 @@ const RULES: Rule[] = [
         const suffix = m[1];
         if (suffix === undefined) return m[0]; // bare `rounded`
         if (suffix.startsWith("[")) {
-          // Arbitrary values are allowed only when derived from a kit token,
-          // e.g. rounded-[calc(var(--radius-control)-2px)].
-          if (!suffix.includes("var(--radius")) return m[0];
+          // Arbitrary values are allowed when derived from a kit token, e.g.
+          // rounded-[calc(var(--radius-control)-2px)] — and when they are
+          // `inherit`, which introduces no radius at all: it is how a scroller
+          // or a mask takes the corner of whatever it is clipping, and banning
+          // it would force a literal that could then drift from its parent.
+          if (!suffix.includes("var(--radius") && suffix !== "[inherit]") return m[0];
           continue;
         }
         if (!RADIUS_OK.test(suffix)) return m[0];

@@ -25,6 +25,7 @@ import { CalendarBoard, type CalendarMetric } from "@/app/dashboard/calendar/Cal
 import { calendarMonths, dayKey, daysInMonth } from "@/lib/metrics/calendar";
 import { Delta, GroupBars, Sparkbars, TargetBar } from "@/components/charts";
 import { SourceMark } from "@/components/source-mark";
+import { PrimitiveSpecimens } from "./primitives";
 
 /**
  * THE BRAND KIT, RENDERED.
@@ -331,6 +332,13 @@ export default function DesignPage() {
             </Button>
             <Button disabled>Disabled</Button>
           </div>
+        </Section>
+
+        <Section
+          title="Primitives"
+          note="The Radix layer, styled to this kit. Every one of these replaces something the app hand-rolled — a focus trap that re-queried the DOM on each keypress, a 177-line popover positioner, three tab strips that answered no arrow keys, and ~130 title attributes a keyboard user could never reach. Worth testing with the keyboard rather than the pointer: that is the half that changed."
+        >
+          <PrimitiveSpecimens />
         </Section>
 
         <Section
