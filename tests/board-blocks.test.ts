@@ -155,17 +155,24 @@ describe("how a block renders", () => {
         source: { kind: "flow", status: "fresh", tile: { format: "number", byRange: { today: { value: 1 } } } },
       } as never),
     );
-    // `Card` brings all three; a block brings none of them.
-    for (const chrome of ["rounded-surface", "shadow-card", "bg-card"]) {
-      expect(chartTile, `a chart tile has ${chrome}`).toContain(chrome);
-      expect(heading, `a block must not have ${chrome}`).not.toContain(chrome);
-    }
+    /**
+     * `data-tile-card` rather than `rounded-surface` / `shadow-card` /
+     * `bg-card`. The claim is "a chart wears a card and a block does not",
+     * which is a fact about the TILE; spelling it as three Tailwind classes
+     * made it a fact about the stylesheet, so re-pitching a radius token would
+     * have failed it while the product stayed correct — and, worse, renaming
+     * one of those classes would have made it pass while a heading grew a card.
+     */
+    expect(chartTile, "a chart tile wears a card").toContain("data-tile-card");
+    expect(heading, "a block must not wear a card").not.toContain("data-tile-card");
   });
 
   it("draws the divider as a rule and not as a box", () => {
     const html = render("divider");
+    // `h-px` stays: a one-pixel height is the rule ITSELF, not chrome around
+    // it, and no re-skin makes a divider taller than a hairline.
     expect(html).toContain("h-px");
-    expect(html).not.toContain("rounded-surface");
+    expect(html).not.toContain("data-tile-card");
     // Nothing to read out: it is decoration, and a screen reader announcing
     // "divider, blank" on every section break is noise.
     expect(html).toContain('role="presentation"');

@@ -279,6 +279,10 @@ export function ViewTab({
 
   return (
     <span
+      // `scripts/board-drag-check.mjs` proves the view strip shares a row with
+      // New group. It found this by scanning `span, a` for the exact text
+      // "Dashboard" — so both the element type and the copy were load-bearing.
+      data-view-tab
       className={cn(
         "inline-flex shrink-0 items-center rounded-control text-small font-semibold transition-colors duration-(--duration-fast)",
         active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",

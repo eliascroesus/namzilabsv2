@@ -37,6 +37,12 @@ export function DropSlotNode() {
 export function DragGhost({ x, y, title, mark }: { x: number; y: number; title: string; mark: React.ReactNode }) {
   return (
     <div
+      // `scripts/board-drag-check.mjs` counts the ghosts on screen to prove a
+      // press became a drag. It used to count `.fixed.z-50`, which meant a
+      // restyle could delete the harness's only handle on this element without
+      // failing anything. The attribute is the handle now; the classes are free
+      // to change.
+      data-drag-ghost
       className="pointer-events-none fixed z-50 flex w-[240px] items-center gap-2.5 rounded-surface border border-border bg-card p-2.5 shadow-panel"
       style={{ left: x + 14, top: y + 14, opacity: 0.95 }}
     >

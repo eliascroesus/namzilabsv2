@@ -86,7 +86,11 @@ export function ChartFrame({
 }) {
   const blocked = unavailable ?? emptyReason;
   return (
-    <Card variant="surface" className="flex h-full flex-col overflow-hidden p-4">
+    // `data-tile-card` marks the chrome a BLOCK must not have. The harness and
+    // `tests/board-blocks.test.ts` both used to look for the literal classes
+    // `rounded-surface` / `shadow-card` / `bg-card`, which made "a heading wears
+    // no card" a statement about Tailwind rather than about the tile.
+    <Card data-tile-card variant="surface" className="flex h-full flex-col overflow-hidden p-4">
       <div className="flex items-start justify-between gap-2">
         <p className="flex min-w-0 items-baseline text-small font-semibold text-foreground">
           {/* The TITLE truncates; the period marker does not. It sits at the

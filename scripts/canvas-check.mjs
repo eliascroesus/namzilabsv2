@@ -182,7 +182,7 @@ console.log("\nclicking a tile opens its settings — and nothing else does");
   // open menu was not, and opened the settings panel behind it.
   // Any non-button prose inside the open menu. ("Draw as" used to be here; the
   // chart list moved to the settings panel, which owns every tile choice now.)
-  const heading = page.locator(`${LIVE} [data-canvas] h2:text-is('Width')`).first();
+  const heading = page.locator(`${LIVE} [data-canvas] [data-menu-prose]`).first();
   if (await heading.count()) {
     await heading.click();
     await page.waitForTimeout(250);
@@ -256,6 +256,25 @@ console.log("\na block is furniture: it lands with no metric and wears no card")
   await load();
   const before = await cellCount();
 
+  /**
+   * THE POSITIVE CONTROL, and it has to run HERE — before this scenario adds a
+   * block of its own, while every tile on the board is still a chart.
+   *
+   * "No card chrome on any block" is a count of zero, and a count of zero is
+   * also what a missing marker gives you: drop `data-tile-card` from
+   * `ChartFrame` and the block check sails through while every chart on the
+   * board has quietly lost its card. The old spelling counted
+   * `.rounded-surface, .shadow-card` and had the same hole — hidden only
+   * because those classes were everywhere by accident.
+   */
+  const liveCards = await page.locator(`${LIVE} [data-tile-card]`).count();
+  const liveCells = await page.locator(`${LIVE} [data-canvas-cell]`).count();
+  check(
+    liveCells > 0 && liveCards === liveCells,
+    "every chart on the live board wears a card, so the next check can mean something",
+    `${liveCards} cards / ${liveCells} cells`,
+  );
+
   // ONE PRESS, AND NO METRIC STEP — there is nothing to bind. The board here
   // has metrics, but a heading would be offerable on an empty one too.
   await page.locator(LIVE).getByRole("button", { name: "Add", exact: true }).click();
@@ -273,7 +292,7 @@ console.log("\na block is furniture: it lands with no metric and wears no card")
   const blocks = page.locator("[data-blocks]");
   await blocks.scrollIntoViewIfNeeded();
   await page.waitForTimeout(200);
-  const cards = await blocks.locator(".rounded-surface, .shadow-card").count();
+  const cards = await blocks.locator("[data-tile-card]").count();
   check(cards === 0, "no card chrome on any block", `found ${cards}`);
   check((await blocks.getByText("Acquisition").count()) >= 1, "a heading draws its words");
   check((await blocks.getByRole("presentation").count()) >= 1, "a divider is a rule, not a box");
@@ -298,7 +317,7 @@ console.log("\na view with a hidden chart is read-only, and says so");
   // Popover renders nothing until it is opened.
   await frozen.locator("button[aria-label^='Options for']").first().click();
   await page.waitForTimeout(250);
-  const menu = frozen.locator("div.cursor-default");
+  const menu = frozen.locator("[data-tile-menu]");
   const rows = (await menu.allInnerTexts()).join(" ");
   check(!/\bWidth\b/.test(rows) && !/\bMove\b/.test(rows), "no Width, Height or Move in the menu", rows.slice(0, 90));
   // ...but what a chart IS can still be changed: those writes touch one row.

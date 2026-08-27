@@ -29,6 +29,7 @@ const read = (p: string) => readFileSync(join(root, p), "utf8");
 
 const page = read("src/components/ui/page.tsx");
 const skeleton = read("src/components/shell-skeleton.tsx");
+const sidebar = read("src/components/sidebar.tsx");
 const css = read("src/app/globals.css");
 
 /**
@@ -88,6 +89,31 @@ describe("the page container and the skeleton that stands in for it", () => {
     // out of step with the kit again.
     expect(page).not.toMatch(/width === "narrow" && "max-w-3xl"/);
     expect(skeleton).not.toContain('"max-w-3xl" : ""');
+  });
+
+  it("reserve the SAME width for the rail, at both rungs", () => {
+    /**
+     * THE JOLT THIS FILE CLAIMED TO PREVENT, AND DIDN'T.
+     *
+     * The skeleton reserved `w-[76px] sm:w-[100px]` against a rail that is
+     * `w-[84px] sm:w-[124px]`, so the content column was 8px too wide on a
+     * phone and 24px too wide on a desktop until the real route landed — and
+     * then everything slid sideways. The suite pinned the gutter and both caps
+     * and never once compared the third measurement the two files share.
+     *
+     * Read out of each file rather than typed here, so the pair cannot agree
+     * with this test while disagreeing with each other.
+     */
+    const railWidths = (src: string) => {
+      // Comments stripped first. Prose explaining the rule is not the rule —
+      // the note above the skeleton's rail quotes both the old widths and the
+      // new ones, and an unstripped scan reads the first pair it finds.
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      const aside = code.match(/w-\[(\d+)px\][^"]*?sm:w-\[(\d+)px\]/);
+      if (!aside) throw new Error("could not find a two-rung rail width");
+      return { base: aside[1], sm: aside[2] };
+    };
+    expect(railWidths(skeleton)).toEqual(railWidths(sidebar));
   });
 });
 

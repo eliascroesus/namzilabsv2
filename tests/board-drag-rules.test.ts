@@ -551,7 +551,15 @@ describe("a column's colour is legible where you look for it", () => {
     // The wash used to start BELOW the header, so the only colour up beside the
     // name and the kebab was an 8px dot on bare canvas.
     expect(code(column)).toMatch(/background: groupWash\(g\.color\)/);
-    expect(code(column)).toMatch(/<div className="h-1 w-full" style=\{\{ background: groupAccent\(g\.color\) \}\} aria-hidden \/>/);
+    /**
+     * The bar exists, is a hairline across the full width, and is painted with
+     * the column's own accent. Matching the ENTIRE element verbatim — className,
+     * style, `aria-hidden` and the self-closing slash — meant adding so much as a
+     * test hook to it failed a test about colour, and it did: `data-lane-accent`
+     * landed here first and this line was the only thing that noticed.
+     */
+    expect(code(column)).toMatch(/data-lane-accent[\s\S]{0,120}?background: groupAccent\(g\.color\)/);
+    expect(code(column)).toMatch(/data-lane-accent[\s\S]{0,80}?h-1 w-full/);
     // One tinted surface, so the bar can take its top corners.
     expect(code(column)).toMatch(/overflow-hidden rounded-card/);
   });

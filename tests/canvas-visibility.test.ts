@@ -175,8 +175,26 @@ describe("a view holding a hidden row is read-only", () => {
      * not exist cannot be pressed. Same for the corner grip. Sabotage: render
      * either unconditionally and a frozen board becomes draggable again.
      */
-    expect(src).toMatch(/\{canArrange && \(\s*<span[\s\S]{0,400}?cursor-grab/);
-    expect(src).toMatch(/\{canArrange && \(\s*\/\* The corner grip/);
+    /**
+     * Anchored on what each handle IS — the grab cursor, and the resize
+     * handle's own attribute — rather than on the element that carries it. The
+     * old spelling pinned a literal `<span>` and the opening words of a code
+     * comment, so re-skinning the strip failed a test about permissions.
+     *
+     * Comments are stripped before measuring, because the window is a proximity
+     * claim about CODE. Left in, the distance from a guard to the thing it
+     * guards grows every time somebody explains it — which is exactly what
+     * happened here, and the note that broke this was one about not coupling
+     * tests to appearance.
+     *
+     * 200 is measured: it reaches the strip's cursor from its own guard (+134)
+     * and the grip's attribute from the grip's (+81), while the grip's guard
+     * carries no grab cursor at all and the strip's is 387 away from
+     * HANDLE_ATTR. Neither guard can satisfy the other's assertion.
+     */
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/\{canArrange && \([\s\S]{0,200}?cursor-grab/);
+    expect(code).toMatch(/\{canArrange && \([\s\S]{0,200}?HANDLE_ATTR/);
   });
 
   it("is unchanged for a viewer who can see everything", () => {

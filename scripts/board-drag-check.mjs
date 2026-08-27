@@ -76,13 +76,13 @@ async function drag(tileKey, toLane, yOffset) {
   // Past DRAG_START_PX, so the press becomes a drag.
   await page.mouse.move(from.x + from.width / 2 + 10, from.y + 50, { steps: 3 });
   await page.waitForTimeout(80);
-  const ghost = await page.evaluate(() => document.querySelectorAll(".fixed.z-50").length);
+  const ghost = await page.evaluate(() => document.querySelectorAll("[data-drag-ghost]").length);
   await page.mouse.move(to.x + to.width / 2, to.y + yOffset, { steps: 15 });
   await page.waitForTimeout(150);
   const gap = await page.evaluate(
     (ln) =>
       [...(document.querySelector(`[data-board-lane="${ln}"]`)?.children ?? [])].filter((c) =>
-        String(c.className).includes("border-dashed"),
+        c.matches("[data-drop-gap]"),
       ).length,
     toLane,
   );
@@ -161,7 +161,7 @@ console.log("\nthe gap does not jump on a grazed midpoint");
   await page.waitForTimeout(140);
   const grazed = await page.evaluate(() =>
     [...(document.querySelector('[data-board-lane="g2"]')?.children ?? [])].filter((c) =>
-      String(c.className).includes("border-dashed"),
+      c.matches("[data-drop-gap]"),
     ).length,
   );
   // Well inside it — the gap must be there by now.
@@ -169,7 +169,7 @@ console.log("\nthe gap does not jump on a grazed midpoint");
   await page.waitForTimeout(140);
   const deep = await page.evaluate(() =>
     [...(document.querySelector('[data-board-lane="g2"]')?.children ?? [])].filter((c) =>
-      String(c.className).includes("border-dashed"),
+      c.matches("[data-drop-gap]"),
     ).length,
   );
   await page.mouse.up();
@@ -209,7 +209,7 @@ console.log("\na sorted group says so, and does not promise a position it cannot
   const state = await page.evaluate(() => {
     const l = document.querySelector('[data-board-lane="g3"]');
     return {
-      gaps: [...(l?.children ?? [])].filter((c) => String(c.className).includes("border-dashed")).length,
+      gaps: [...(l?.children ?? [])].filter((c) => c.matches("[data-drop-gap]")).length,
       banner: l?.textContent?.includes("Placed by") ?? false,
       lit: (l?.getAttribute("style") ?? "").includes("inset"),
     };
@@ -282,7 +282,7 @@ console.log("\na press on an open menu is not a press on the board");
   await page.mouse.down();
   await page.mouse.move(panel.x + panel.width / 2 + 60, panel.y + 90, { steps: 10 });
   await page.waitForTimeout(120);
-  const dragging = await page.evaluate(() => document.querySelectorAll(".fixed.z-50").length);
+  const dragging = await page.evaluate(() => document.querySelectorAll("[data-drag-ghost]").length);
   await p_up();
   check(dragging === 0, "dragging from the menu's background moves nothing", `ghosts=${dragging}`);
 }
@@ -312,8 +312,8 @@ console.log("\nthe group's colour reads at the top of the column");
   await page.reload({ waitUntil: "networkidle" });
   const bar = await page.evaluate(() => {
     const s = [...document.querySelectorAll("section")].find((x) => x.getAttribute("aria-label") === "Total");
-    const tinted = s?.querySelector(".rounded-card");
-    const accent = tinted?.firstElementChild;
+    const tinted = s?.querySelector("[data-lane-tint]");
+    const accent = tinted?.querySelector("[data-lane-accent]");
     return {
       tintedWrapsHeader: !!tinted?.querySelector('[aria-haspopup="menu"]'),
       barHeight: accent ? Math.round(accent.getBoundingClientRect().height) : 0,
@@ -331,7 +331,7 @@ console.log("\nthe colour picker");
   await page.waitForTimeout(250);
   const swatch = await page.evaluate(() => {
     const panel = document.querySelector("[data-board-menu]");
-    const sw = panel.querySelector("button[aria-label] > span");
+    const sw = panel.querySelector("[data-swatch]");
     const cs = getComputedStyle(sw);
     const box = sw.getBoundingClientRect();
     // The panel's own padding, above the first swatch — not over any control.
@@ -340,7 +340,7 @@ console.log("\nthe colour picker");
     return {
       radius: parseFloat(cs.borderTopLeftRadius),
       size: Math.round(box.width),
-      swatches: panel.querySelectorAll("button[aria-label] > span").length,
+      swatches: panel.querySelectorAll("[data-swatch]").length,
       cursor: getComputedStyle(gap).cursor,
     };
   });
@@ -361,7 +361,7 @@ console.log("\nthe board's own controls share one row, above the columns");
   await page.reload({ waitUntil: "networkidle" });
   const row = await page.evaluate(() => {
     const btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("New group"));
-    const tab = [...document.querySelectorAll("span, a")].find((e) => e.textContent?.trim() === "Dashboard");
+    const tab = document.querySelector("[data-view-tab]");
     const col = document.querySelector("[data-board-lane]:not([data-board-accepts='column'])");
     if (!btn || !tab || !col) return null;
     const [b, t, c] = [btn.getBoundingClientRect(), tab.getBoundingClientRect(), col.getBoundingClientRect()];

@@ -34,6 +34,11 @@ export function DropGap({ accent, height }: { accent?: string; height?: number }
   const brand = accent == null;
   return (
     <div
+      // The harness counts the gaps inside a lane to prove the drop landed
+      // where it was aimed. It used to filter the lane's children by
+      // `border-dashed` — a class three other elements also carry — so the
+      // count was only ever right by luck. This attribute is the handle.
+      data-drop-gap
       className={`pointer-events-none flex w-full items-center justify-center rounded-surface border-2 border-dashed ${
         brand ? "border-primary bg-accent/40" : ""
       }`}

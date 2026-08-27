@@ -63,9 +63,14 @@ const TILES = [tile("metric:a", "Revenue"), tile("metric:b", "Leads")];
 describe("with no groups", () => {
   it("emits the same grid the dashboard emitted before this feature", () => {
     const html = render({ tiles: TILES, groups: [], placements: [], canEdit: true });
-    // The exact class string, imported rather than typed here, so this test and
-    // the component cannot agree on something that is no longer the grid.
-    expect(html).toContain(`class="mt-4 items-start ${BOARD_GRID}"`);
+    // BOARD_GRID is imported rather than typed, so this test and the component
+    // cannot agree on something that is no longer the grid.
+    //
+    // The surrounding spacing is deliberately NOT pinned here any more. Matching
+    // the whole `class="mt-4 items-start …"` attribute meant a re-pitch of the
+    // page's rhythm failed a test about the GRID, and `tests/board-shape.test.ts`
+    // already pins that exact string at the source, where it belongs.
+    expect(html).toContain(BOARD_GRID);
     // And none of the board's own furniture.
     expect(html).not.toContain("Nothing in this group yet");
     expect(html).not.toContain("overflow-x-auto");

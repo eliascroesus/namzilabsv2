@@ -44,7 +44,13 @@ export function ShellSkeleton({
     // fallback must not render a second main landmark (nor animate in, only to
     // animate in again when the real page arrives).
     <div className="bg-rail flex h-dvh">
-      <div className="w-[76px] shrink-0 sm:w-[100px]" />
+      {/* The rail's own width, and it has to be EXACTLY the rail's width.
+          This read `w-[76px] sm:w-[100px]` against a rail that is
+          `w-[84px] sm:w-[124px]`, so every navigation slid the whole page 8px
+          sideways on a phone and 24px on a desktop at the moment the real
+          route landed — the precise jolt a skeleton exists to prevent, caused
+          by the skeleton. Pinned against `sidebar.tsx` below. */}
+      <div className="w-[84px] shrink-0 sm:w-[124px]" />
       {/* `overflow-y-auto`, matching AppShell's own surface — with
           `overflow-hidden` a classic scrollbar appeared only after the swap and
           stole width from the canvas column at the same moment. The wash and

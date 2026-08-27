@@ -709,11 +709,13 @@ export function CustomBoard({
                 />
               )}
               {canArrange && (
-                /* The corner grip. Deliberately NOT `.fixed.z-50` and NOT
-                   `border-dashed`: `scripts/board-drag-check.mjs` counts
-                   elements by those exact selectors to find the groups board's
-                   ghost and placeholder, and a second thing wearing them would
-                   quietly change what that harness measures. */
+                /* The corner grip. It used to be spelled to avoid `.fixed.z-50`
+                   and `border-dashed`, because `scripts/board-drag-check.mjs`
+                   counted the groups board's ghost and placeholder by those
+                   exact classes and a second element wearing one would have
+                   quietly changed what the harness measured. That harness now
+                   counts `[data-drag-ghost]` and `[data-drop-gap]`, so this
+                   grip is free to be styled like anything else. */
                 <span
                   {...{ [HANDLE_ATTR]: tile.id }}
                   role="presentation"
@@ -1015,7 +1017,9 @@ function TileMenu({
           </Button>
         }
       >
-        <div className="cursor-default overflow-y-auto p-1.5">
+        {/* `data-tile-menu`: the harness found this panel by `div.cursor-default`
+            — a utility class, on a div, chosen because nothing better existed. */}
+        <div data-tile-menu className="cursor-default overflow-y-auto p-1.5">
           {/* WHAT THIS TILE IS. The "Draw as" list used to answer this as a
               side effect of offering the alternatives; the list moved to the
               settings panel, and without a word here two tiles of the same
@@ -1093,7 +1097,10 @@ function TileMenu({
               read once instead of four times. */}
           {canArrange && (
             <>
-            <SectionHeading className="px-1.5 pb-1 pt-2">Width</SectionHeading>
+            {/* The harness clicks this to prove non-button prose inside an open
+                menu does not fall through and open the settings panel. It found
+                it by `h2:text-is('Width')` — element type plus exact copy. */}
+            <SectionHeading data-menu-prose className="px-1.5 pb-1 pt-2">Width</SectionHeading>
             <div className="flex gap-1 px-1">
               {[
                 { label: "¼", w: 3 },

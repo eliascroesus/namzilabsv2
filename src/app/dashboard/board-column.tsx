@@ -154,8 +154,12 @@ export function BoardColumn({
           strength: at a glance down a row of columns it is the colour, not the
           name, that tells them apart.
           `overflow-hidden` so the bar takes the container's top corners. */}
-      <div className="overflow-hidden rounded-card" style={{ background: groupWash(g.color) }}>
-        <div className="h-1 w-full" style={{ background: groupAccent(g.color) }} aria-hidden />
+      {/* `data-lane-tint` / `data-lane-accent`: the harness proved the wash
+          reaches the header and that a coloured bar caps the column. It found
+          them by `.rounded-card` and `firstElementChild` — a class shared with
+          half the product, and a DOM position that any wrapper would break. */}
+      <div data-lane-tint className="overflow-hidden rounded-card" style={{ background: groupWash(g.color) }}>
+        <div data-lane-accent className="h-1 w-full" style={{ background: groupAccent(g.color) }} aria-hidden />
         {/* A ROW, NOT A CARD. A header inside a card inside a column is three
             boxes drawn for one label, and the column's tiles are already cards.
             It is also the column's own drag handle — the whole header, because
@@ -307,6 +311,7 @@ export function BoardColumn({
                           radius is derived from the control's own rather than
                           typed, so it stays in proportion if that moves. */}
                       <span
+                        data-swatch
                         className="flex size-5 items-center justify-center rounded-[calc(var(--radius-control)-3px)]"
                         style={{ background: groupAccent(key) }}
                       >

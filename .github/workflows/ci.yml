@@ -43,3 +43,13 @@ jobs:
       # nobody. Its tests kept passing because the tests were the only callers.
       - name: Orphan exports
         run: pnpm check:orphans
+
+      # The brand gate — nine rules over every file in src/: the kit's type
+      # scale, its four radii, its one elevation ladder, no raw palette classes,
+      # no hex literals outside four allowlisted files, no hand-rolled buttons.
+      #
+      # It has always been a local script, which is the wrong place for it: the
+      # whole point is to catch a component that drifts off the system, and the
+      # commit that does that is exactly the one nobody thought to run it on.
+      - name: UI kit
+        run: pnpm check:ui

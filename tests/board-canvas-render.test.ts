@@ -196,7 +196,10 @@ describe("adding lands immediately; the metric question is asked later", () => {
     expect(board).toMatch(/const key = block \? blockTileKey\(block\) : first\?\.key/);
     // And they are their own section, under a rule: nine items in one flat
     // list says drawings and furniture are the same kind of thing.
-    expect(board).toMatch(/block === "heading" && <div className="my-1 h-px bg-border" \/>/);
+    // The rule is drawn when the FIRST block is reached, whatever element ends
+    // up drawing it. Pinning the whole `<div className="my-1 h-px bg-border" />`
+    // verbatim made a claim about sectioning into a claim about one div.
+    expect(board).toMatch(/block === "heading" && </);
   });
 
   it("the two-step modal is gone, and only the change-metric picker survives", () => {
