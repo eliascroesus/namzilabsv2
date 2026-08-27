@@ -178,8 +178,21 @@ describe("a view switch is a re-arrangement, not a re-answer", () => {
     // Sabotage: gate these on `pending` alone — the shipped behaviour — and the
     // board skeletons and the caption blanks for a switch that cannot change a
     // single number on screen.
-    expect(src).toContain("if (!pending || !answering(picked)) return <>{children}</>;");
+    // The gate itself is unchanged: a view switch never reaches the skeleton
+    // branch, so the real tiles stay mounted at their real sizes.
+    expect(src).toContain("if (!pending || !answering(picked)) {");
     expect(src).toMatch(/pending && answering\(picked\) && "opacity-0"/);
+    /**
+     * ...but "hold them still" was implemented as "change nothing at all", so a
+     * tab press moved the pill and then sat there for a whole round trip with
+     * no sign it had been heard. Opacity shifts no box by a pixel — it cannot
+     * bring back the height change or the blanked caption this test exists to
+     * prevent — while still saying the arrangement is being replaced.
+     */
+    expect(src).toMatch(/pending && "pointer-events-none opacity-55"/);
+    expect(src, "the wash must not be able to reflow the board").not.toMatch(
+      /pending && ".*(h-|w-|p-|m-|hidden|grid-cols)/,
+    );
     expect(src).toMatch(/function answering\(picked: Pick \| null\): boolean \{\s*return picked\?\.dim !== "view";/);
   });
 });

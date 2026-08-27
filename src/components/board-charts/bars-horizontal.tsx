@@ -45,7 +45,7 @@ export function BarsHorizontal({
     <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto quiet-scroll">
       {shown.map((g) => (
         <div key={g.label} className="flex items-center gap-2" data-tip={`${g.label} · ${formatMetricValue(g.value, format)}`}>
-          <span className="w-24 shrink-0 truncate text-tiny text-muted-foreground" title={g.label}>
+          <span className="min-w-0 max-w-24 flex-1 truncate text-tiny text-muted-foreground" title={g.label}>
             {g.label}
           </span>
           <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -54,7 +54,7 @@ export function BarsHorizontal({
               style={{ width: `${Math.max((g.value / max) * 100, 2)}%`, background: accent }}
             />
           </span>
-          <span className="tnum w-16 shrink-0 text-right text-tiny text-foreground">
+          <span className="tnum max-w-24 shrink-0 truncate text-right text-tiny text-foreground" title={formatMetricValue(g.value, format)}>
             {formatMetricValue(g.value, format)}
           </span>
         </div>

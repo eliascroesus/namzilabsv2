@@ -62,6 +62,72 @@ describe("the cartesian marks", () => {
     expect((path.match(/M /g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 
+  it("DRAWS an isolated bucket instead of emitting an unstrokable moveto", () => {
+    /**
+     * THE BUG THIS FILE ASSERTED FOR WEEKS. `padSeries` turns a quiet bucket
+     * into a null and each run opens with `M`, so a run of ONE emitted a lone
+     * moveto — which no SVG renderer strokes. Alternate-day data therefore drew
+     * a completely blank plot, and the subpath count above passed green over it,
+     * because two invisible runs are still two `M`s.
+     *
+     * A zero-length segment picks up `stroke-linecap="round"` and renders as
+     * the dot it always should have been. Sabotage: drop the `L` and every run
+     * of one vanishes again.
+     */
+    const html = renderToStaticMarkup(
+      createElement(LineChart, {
+        series: series(["2026-08-01", 3], ["2026-08-03", 5], ["2026-08-05", 4]),
+        format: FMT,
+        accent: "#000",
+        unit: "day",
+      }),
+    );
+    const path = html.match(/ d="([^"]*)"/g)?.find((d) => d.includes("M")) ?? "";
+    // Every run must carry a drawing command, not just a cursor move.
+    for (const run of path.split("M ").slice(1)) {
+      expect(run.trim(), `a run with no L draws nothing: "${run.trim()}"`).toContain("L");
+    }
+  });
+
+  it("breaks the AREA at the gaps too, rather than filling across them", () => {
+    /**
+     * The fill was one polygon over the non-null points, so it ran straight
+     * across every quiet bucket while the stroke honestly broke — a confident
+     * shape covering days with no data. One polygon per run, so both marks tell
+     * the same story.
+     */
+    const html = renderToStaticMarkup(
+      createElement(LineChart, {
+        series: series(["2026-08-01", 3], ["2026-08-04", 6]),
+        format: FMT,
+        accent: "#000",
+        unit: "day",
+        area: true,
+      }),
+    );
+    const fill = html.match(/ d="([^"]*)"/g)?.find((d) => d.includes("Z")) ?? "";
+    // Two runs, two closed polygons.
+    expect((fill.match(/Z/g) ?? []).length).toBe(2);
+  });
+
+  it("keeps a negative goal on the axis instead of drawing it off-canvas", () => {
+    // The target was folded into the max but not the min, so a negative goal
+    // rendered 250% below a `0 0 100 100` viewBox: invisible, with nothing to
+    // say the goal existed.
+    const html = renderToStaticMarkup(
+      createElement(LineChart, {
+        series: series(["a", 10], ["b", 20]),
+        format: FMT,
+        accent: "#000",
+        target: -50,
+      }),
+    );
+    const dashed = html.match(/<line[^>]*stroke-dasharray[^>]*>/)?.[0] ?? "";
+    const y = Number(dashed.match(/y1="([-\d.]+)"/)?.[1] ?? NaN);
+    expect(y).toBeGreaterThanOrEqual(0);
+    expect(y).toBeLessThanOrEqual(100);
+  });
+
   it("prints axis labels through the metric's own formatter", () => {
     // A duration axis reads "2h 10m", not 7800 — an axis that disagrees with
     // the headline above it is two claims about one number.

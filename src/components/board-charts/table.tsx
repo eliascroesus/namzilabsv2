@@ -38,8 +38,11 @@ export function ChartTable({
             </TR>
           </THead>
           <TBody>
-            {slice.map((r) => (
-              <TR key={r.label}>
+            {/* Keyed by POSITION as well as label: two rows can share one —
+                `bucketLabel` drops the year, so "W34" repeats across years and
+                a monthly series over All time repeats "Aug 1". */}
+            {slice.map((r, i) => (
+              <TR key={`${r.label}-${i}`}>
                 <TD className="max-w-0 truncate">{r.label}</TD>
                 <TD className="tnum text-right">{r.value}</TD>
               </TR>

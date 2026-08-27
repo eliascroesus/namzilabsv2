@@ -941,6 +941,18 @@ export type TileSpec = {
     {
       value?: number;
       series?: Array<{ bucket: string; value: number }>;
+      /**
+       * THE BUCKET SIZE OF **THIS** WINDOW'S SERIES, which is not the metric's
+       * declared `timeUnit` and must not be read as it.
+       *
+       * A metric declares one unit for itself — defaulting to "month" — and a
+       * seven-day window bucketed monthly is a single point: a line drew one
+       * dot and labelled it "Aug '26" under a pill that said seven days. Each
+       * window is bucketed to suit its own length now (`bucketUnitForWindow`),
+       * so the size travels with the slice that used it. ABSENT means the
+       * metric's own unit, which is what every row written before this says.
+       */
+      unit?: "day" | "week" | "month" | "quarter" | "year";
       groups?: Array<{ label: string; value: number }>;
       /** Why this range has no number — shown instead of one, never in place of one. */
       unavailable?: string;

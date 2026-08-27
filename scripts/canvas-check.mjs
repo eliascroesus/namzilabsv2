@@ -180,7 +180,9 @@ console.log("\nclicking a tile opens its settings — and nothing else does");
   // menu is a DOM descendant of the cell. Pressing the kebab BUTTON was always
   // caught by the cell guard's `button` clause; pressing a heading inside the
   // open menu was not, and opened the settings panel behind it.
-  const heading = page.locator(`${LIVE} [data-canvas] h2:text-is('Draw as')`).first();
+  // Any non-button prose inside the open menu. ("Draw as" used to be here; the
+  // chart list moved to the settings panel, which owns every tile choice now.)
+  const heading = page.locator(`${LIVE} [data-canvas] h2:text-is('Width')`).first();
   if (await heading.count()) {
     await heading.click();
     await page.waitForTimeout(250);

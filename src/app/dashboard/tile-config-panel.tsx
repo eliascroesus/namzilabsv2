@@ -45,13 +45,37 @@ import type { CustomTileOption } from "@/lib/board/types";
 const TABS = ["data", "style"] as const;
 type Tab = (typeof TABS)[number];
 
-/** A labelled row. The panel is a stack of these and nothing else. */
+/**
+ * A labelled field. The panel is a stack of these and nothing else, so the
+ * rhythm between them IS the panel's design: one label size, one gap, one hint
+ * position. `mb-1.5` comes from `FieldLabel`, which is the kit's single value
+ * for it.
+ */
 function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <FieldLabel>{label}</FieldLabel>
       {children}
       {hint && <FieldHint>{hint}</FieldHint>}
+    </div>
+  );
+}
+
+/**
+ * A hairline between groups of fields.
+ *
+ * Six controls in one flat column is a list to be read top to bottom; the same
+ * six in three named groups is a form to be scanned. The rule carries the
+ * grouping without a second type size or a second surface colour — the panel is
+ * ONE plane, the argument `panel-chrome.tsx` makes for the builder's.
+ */
+function Group({ label, children }: { label?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-4 border-t border-border pt-4 first:border-t-0 first:pt-0">
+      {label && (
+        <p className="-mb-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      )}
+      {children}
     </div>
   );
 }
@@ -225,7 +249,14 @@ export function TileConfigPanel({
     <aside
       data-tile-panel
       aria-label={`Settings for ${config.title || metricName}`}
-      className={`fixed bottom-4 right-4 top-4 z-30 w-[min(380px,calc(100vw-2rem))] ${PANEL_SHELL}`}
+      /**
+       * AS TALL AS ITS CONTENT, capped at the viewport — not pinned top AND
+       * bottom. A divider's panel has one sentence in it and a scorecard's has
+       * six controls; stretching both to the full window left most of the
+       * surface empty and made a short form look like a long one that had
+       * failed to load. `max-h` keeps the scroll behaviour for the tallest.
+       */
+      className={`fixed right-4 top-4 z-30 max-h-[calc(100dvh-2rem)] w-[min(384px,calc(100vw-2rem))] ${PANEL_SHELL}`}
     >
       <div className="flex items-start gap-3 border-b border-border bg-card px-5 py-4">
         <div className="min-w-0 flex-1">
@@ -239,20 +270,28 @@ export function TileConfigPanel({
 
       <PanelTabs tabs={tabs} active={tab} onSelect={setTab} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex min-h-full flex-col gap-5 p-5">
+      <div className="min-h-0 flex-1 overflow-y-auto quiet-scroll">
+        <div className="flex flex-col gap-4 p-4">
           {tab === "data" ? (
             <>
+              <Group>
               <Row
                 label="Metric"
                 hint={`Only metrics that can be drawn as a ${(
                   CHARTS.find((c) => c.id === chart) ?? CHARTS[0]
                 ).label.toLowerCase()} are listed.`}
               >
-                <MetricList options={options} chart={chart} busy={busy} selected={tileKey} onPick={onMetric} />
+                {/* A bordered, scrolling box so the list reads as a LIST
+                    rather than as loose rows floating in the panel — the same
+                    containment the kit's Table gives a set of rows. */}
+                <div className="rounded-control border border-border p-1">
+                  <MetricList options={options} chart={chart} busy={busy} selected={tileKey} onPick={onMetric} />
+                </div>
               </Row>
+              </Group>
 
               {offers.has("rangeKey") && (
+                <Group label="Window">
                 <Row
                   label="Period"
                   hint={
@@ -279,8 +318,12 @@ export function TileConfigPanel({
                     ))}
                   </NativeSelect>
                 </Row>
+                </Group>
               )}
 
+              {(offers.has("sort") || offers.has("limit")) && (
+                <Group label="Rows">
+                  <>
               {offers.has("sort") && (
                 <Row label="Order">
                   <NativeSelect
@@ -316,6 +359,9 @@ export function TileConfigPanel({
                   onCommit={(n) => set("limit", n == null ? undefined : Math.max(1, Math.min(50, Math.round(n))))}
                 />
               )}
+                  </>
+                </Group>
+              )}
             </>
           ) : block ? (
             /* ONLY its content. A block has no chart to change (`chartsFor`
@@ -347,6 +393,7 @@ export function TileConfigPanel({
             )
           ) : (
             <>
+              <Group>
               <Row label="Chart">
                 {/* Only what this METRIC can be drawn as. The list came from the
                     server's `chartsFor`; offering an illegal one here and
@@ -384,7 +431,10 @@ export function TileConfigPanel({
                   className="h-8 w-full"
                 />
               </Row>
+              </Group>
 
+              <Group label="Appearance">
+                <>
               {offers.has("color") && (
                 <Row
                   label="Colour"
@@ -451,6 +501,11 @@ export function TileConfigPanel({
                 />
               )}
 
+                </>
+              </Group>
+
+              <Group label="What to show">
+                <>
               {offers.has("showGoal") && (
                 <ToggleRow
                   label="Mark the goal"
@@ -504,6 +559,8 @@ export function TileConfigPanel({
                   </NativeSelect>
                 </Row>
               )}
+                </>
+              </Group>
             </>
           )}
         </div>

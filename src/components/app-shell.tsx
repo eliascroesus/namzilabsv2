@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import { inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
@@ -24,6 +25,36 @@ import { signOutAction } from "@/app/actions";
  * All tenant data still comes from the authenticated session — never the
  * browser.
  */
+/**
+ * THE WORKSPACE SWITCHER'S LIST, CACHED — because it is the last thing on the
+ * critical path and it almost never changes.
+ *
+ * `AppShell` renders only after the page's own body has finished every await,
+ * so this WorkOS call is strictly ADDITIVE to the database chain rather than
+ * overlapping it: measured at ~175ms, paid on every view switch, every range
+ * press and every twelve-second poller refresh. A membership list changes when
+ * somebody joins or leaves a workspace, which is not a per-render event.
+ *
+ * Five minutes, keyed by user. `unstable_cache` has its own store and works
+ * under `force-dynamic`; the tag is here so an invite flow can drop it the day
+ * one wants to.
+ */
+const listMemberships = unstable_cache(
+  async (uid: string): Promise<Array<{ organizationId: string; organizationName: string; roleSlug?: string }>> => {
+    const res = await getWorkOS().userManagement.listOrganizationMemberships({ userId: uid, statuses: ["active"] });
+    // Only the three fields the shell reads — a cache entry should not hold a
+    // whole SDK response, and this one crosses a serialization boundary. The
+    // role travels because the rank gate below reads it.
+    return res.data.map((m) => ({
+      organizationId: m.organizationId,
+      organizationName: m.organizationName,
+      roleSlug: m.role?.slug,
+    }));
+  },
+  ["org-memberships"],
+  { revalidate: 300, tags: ["memberships"] },
+);
+
 export async function AppShell({
   userId,
   orgId,
@@ -35,11 +66,10 @@ export async function AppShell({
   userEmail?: string | null;
   children: React.ReactNode;
 }) {
-  const workos = getWorkOS();
-  const memberships = await workos.userManagement.listOrganizationMemberships({ userId, statuses: ["active"] });
+  const memberships = await listMemberships(userId);
   // Dedupe by org id (a duplicated membership row must never render twice).
   const seen = new Set<string>();
-  let orgs = memberships.data
+  let orgs = memberships
     .map((m) => ({ id: m.organizationId, name: m.organizationName }))
     .filter((o) => !seen.has(o.id) && (seen.add(o.id), true));
 
@@ -73,7 +103,7 @@ export async function AppShell({
   // any hiccup the frame shows the full rail rather than failing.
   let hide: string[] | undefined;
   try {
-    const role = memberships.data.find((m) => m.organizationId === orgId)?.role?.slug;
+    const role = memberships.find((m) => m.organizationId === orgId)?.roleSlug;
     // Same request-scoped resolution the page used — `cache()` makes this the
     // FIRST call's answer rather than a second set of queries.
     const access = await requestAccess(orgId, userId, role);

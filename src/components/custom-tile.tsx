@@ -65,7 +65,15 @@ type StoredTile = {
   groups?: GroupRow[];
   byRange?: Record<
     string,
-    { value?: number; series?: SeriesPoint[]; groups?: GroupRow[]; unavailable?: string; undated?: number }
+    {
+      value?: number;
+      series?: SeriesPoint[];
+      /** THIS window's bucket size, which is not the metric's declared one. */
+      unit?: string;
+      groups?: GroupRow[];
+      unavailable?: string;
+      undated?: number;
+    }
   >;
 };
 
@@ -266,7 +274,17 @@ export function CustomTile({
     target = config.target !== undefined ? config.target : source.target;
   }
 
-  const unit = stored.timeUnit as BucketUnit | undefined;
+  /**
+   * THE SLICE'S OWN BUCKET SIZE, falling back to the metric's declared one.
+   *
+   * Each window is bucketed to suit its length, so "Last 7 days" is days even
+   * on a metric that declares itself monthly. Labelling those days with the
+   * metric's unit would print "Aug '26" seven times; the slot carries the size
+   * that was actually used. Absent = a row written before this shipped, whose
+   * series really is in the metric's declared unit.
+   */
+  const unit = ((source.kind === "flow" ? stored.byRange?.[rangeKey]?.unit : undefined) ??
+    stored.timeUnit) as BucketUnit | undefined;
   const fmt = (v?: number) => formatMetricValue(v, bag);
   const hasSeries = (w.series?.length ?? 0) > 0;
   const hasGroups = (w.groups?.length ?? 0) > 0;
@@ -281,10 +299,36 @@ export function CustomTile({
     ? "This metric can’t be drawn this way — change the chart."
     : (chart === "line" || chart === "area" || chart === "bar") && !hasSeries
       ? "No trend in this period."
+      : /**
+         * ONE POINT IS NOT A TREND. "Today" over a daily bucket is a single
+         * reading, and a line through it drew a lone dot on an empty grid while
+         * a bar drew one full-height block — both of which read as a broken
+         * chart rather than as the honest "there is only one number here".
+         * The headline above already says what that number is.
+         */
+        (chart === "line" || chart === "area" || chart === "bar") && (w.series?.length ?? 0) < 2
+        ? "Only one point in this period — pick a longer range to see a trend."
       : (chart === "category" || chart === "pie") && !hasGroups
         ? "No breakdown in this period."
-        : chart === "progress" && target == null
-          ? "No goal set — add one in the tile’s settings."
+        : chart === "pie" && !(w.groups ?? []).some((g) => g.value > 0)
+          ? /**
+             * A PIE OF NOTHING-ABOVE-ZERO. `pieSlices` excludes non-positive
+             * values — a share of a negative is not a thing — so a breakdown
+             * of refunds alone left the mark area blank, with the reason
+             * exiled to the footnote, slipping past `ChartFrame`'s guarantee
+             * that a blocked state REPLACES the mark rather than emptying it.
+             */
+            "Nothing above zero to divide into shares."
+          : chart === "progress" && !(target != null && target > 0)
+            ? /**
+               * A GOAL OF ZERO IS NOT A GOAL. `target == null` alone let a
+               * mistyped 0 through to `GoalBar`, whose own `target > 0` guard
+               * then reported 0% however large the number — a bar of progress
+               * against nothing, indistinguishable from an honest zero.
+               */
+              target == null
+              ? "No goal set — add one in the tile’s settings."
+              : "A goal of zero has nothing to progress toward."
           : (chart === "funnel" || chart === "pipeline") && !w.funnel
             ? "Only a funnel metric can be drawn this way."
             : chart === "table" && !hasSeries && !hasGroups

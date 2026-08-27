@@ -25,7 +25,8 @@ export function Sparkline({
   if (values.length < 2) return null;
   const lo = Math.min(...values);
   const hi = Math.max(...values);
-  const x = (i: number) => (i / (points.length - 1)) * 100;
+  // A one-point sparkline sits in the middle rather than dividing by zero.
+  const x = (i: number) => (points.length === 1 ? 50 : (i / (points.length - 1)) * 100);
   // Not `niceTicks`: a sparkline has no axis to be honest about, and anchoring
   // a 95→100 run at zero would flatten it into a line with no shape at all.
   const y = (v: number) => (hi === lo ? 50 : 90 - ((v - lo) / (hi - lo)) * 80);
@@ -37,7 +38,10 @@ export function Sparkline({
       open = false;
       return;
     }
-    runs.push(`${open ? "L" : "M"} ${x(i)} ${y(p.value)}`);
+    // `M p L p`, not `M p` — a lone moveto is never stroked, so an isolated
+    // bucket vanished. See `LineChart`, which had the same bug.
+    const at = `${x(i)} ${y(p.value)}`;
+    runs.push(open ? `L ${at}` : `M ${at} L ${at}`);
     open = true;
   });
 

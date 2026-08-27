@@ -448,7 +448,30 @@ export function TileArea({
   children: ReactNode;
 }) {
   const { pending, picked } = useBoard();
-  if (!pending || !answering(picked)) return <>{children}</>;
+  /**
+   * A VIEW SWITCH GETS A WASH, NOT A SKELETON — and it used to get nothing.
+   *
+   * `answering()` is still false for a view, so the real tiles stay mounted:
+   * skeletoning here is what blanked the caption, collapsed the board and
+   * repainted twice, and that argument holds. But "hold the tiles still" was
+   * implemented as "change nothing at all", so pressing a tab moved the pill
+   * and then sat there for the length of a full server round trip with no sign
+   * anything had been heard. That is the whole of "it takes a solid second".
+   *
+   * Opacity shifts no box by a pixel, costs no reflow, and says the true thing:
+   * this arrangement is being replaced. It also covers the range press's own
+   * gap between the pill lighting up and the skeletons arriving.
+   */
+  if (!pending || !answering(picked)) {
+    return (
+      <div
+        aria-busy={pending || undefined}
+        className={cn("transition-opacity duration-(--duration-fast)", pending && "pointer-events-none opacity-55")}
+      >
+        {children}
+      </div>
+    );
+  }
   if (canvas && canvas.length > 0) {
     return (
       <div className="board-canvas mt-4" aria-busy="true" aria-live="polite">

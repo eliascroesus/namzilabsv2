@@ -96,10 +96,28 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const { orgId, userId, role, auth } = await requireOrg();
   const db = getReadDb(); // read-only surface: rides the DB_DRIVER_READ soak seam (B.3)
 
-  // Rank-based metric visibility, resolved once for the whole page. Admins and
-  // members with no rank short-circuit to allow-all inside effectiveAccess, so
-  // the common case costs at most one assignment lookup.
-  const access = await requestAccess(orgId, userId, role);
+  /**
+   * TWO READS THAT DEPEND ON NOTHING BUT THE ORG, STARTED HERE AND AWAITED
+   * WHERE THEY ARE ACTUALLY NEEDED.
+   *
+   * The Neon HTTP driver is one round trip per query with no pipelining, so on
+   * this page DEPTH is the only thing that costs: measured against the real
+   * endpoint, a single query is ~110ms warm and five in parallel are ~112ms.
+   * A view switch was a chain of six to nine of them, and two of the links were
+   * false: `access` was awaited at the top and not read until the metric filter
+   * two hundred lines down, and `publishedFlowTiles` takes only `db` and
+   * `orgId` yet queued behind every board read and the classic compute.
+   *
+   * Both now overlap the `Promise.all` below instead of preceding it. Rank
+   * visibility still resolves once for the whole page — `effectiveAccess` is
+   * `cache()`d, so AppShell shares this very promise and attaches its own
+   * handler.
+   */
+  const accessP = requestAccess(orgId, userId, role);
+  const flowRowsP = publishedFlowTiles(db, orgId).catch((e) => {
+    console.error("[dashboard] published tiles read failed", e);
+    return null;
+  });
 
   /**
    * THE NORMALIZED KEY, not the one in the URL. `resolveRange` already falls
@@ -239,6 +257,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // this page (aggregate tiles, funnel tiles, drill-in links) derives from
   // `metrics`, so a hidden metric cannot leak through any section — and its
   // compute below is never even run.
+  const access = await accessP;
   if (!access.admin) {
     metrics = metrics.filter((m) => access.canSeeMetric(`metric:${m.id}`));
   }
@@ -280,7 +299,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // Published-flow tiles come from stored (materialized) results — no live recompute.
   let flowTiles: FlowResultRow[] = [];
   try {
-    const allRows = await publishedFlowTiles(db, orgId);
+    // Started before the board reads — see `flowRowsP`. `null` is the read
+    // having failed, which the catch below already knew how to answer.
+    const allRows = await flowRowsP;
+    if (!allRows) throw new Error("published tiles unavailable");
     // Before the filter — see `existingKeys` above. A flow tile this viewer's
     // rank hides must be told apart from one that no longer exists.
     for (const r of allRows) existingKeys.add(tileKeyOfFlow(r.flowId, r.outputNodeId));
@@ -322,19 +344,28 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
      * confirms each one against the rule the BUILDER uses, so a tile cannot
      * accuse a flow whose editor shows no pill.
      */
-    let unpublished = new Set<string>();
-    try {
+    /**
+     * BOTH DECORATIONS AT ONCE. They are two independent reads of the same
+     * `rows` — neither needs the other's answer — and awaiting them in sequence
+     * put two more round trips on the critical path for two annotations. Each
+     * keeps its own failure: a marker or a badge may go missing, never the
+     * numbers under them.
+     */
+    const [unpubResult, progressResult] = await Promise.allSettled([
       // Nothing on the board, nothing to annotate — a workspace mid-onboarding
       // should not pay for a graph comparison to decorate zero tiles.
-      if (rows.length > 0) unpublished = await unpublishedFlowIds(db, orgId);
+      rows.length > 0 ? unpublishedFlowIds(db, orgId) : Promise.resolve(new Set<string>()),
+      importProgressByStreamRef(db, orgId, rows.flatMap((r) => streamRefsOfProvenance(r.provenance))),
+    ]);
+
+    let unpublished = new Set<string>();
+    if (unpubResult.status === "fulfilled") {
+      unpublished = unpubResult.value;
       if (unpublished.size > 0) flowTiles = flowTiles.map((r) => (unpublished.has(r.flowId) ? { ...r, unpublished: true } : r));
-    } catch {
-      // No marker rather than no dashboard.
     }
 
-    try {
-      const refs = rows.flatMap((r) => streamRefsOfProvenance(r.provenance));
-      const progress = await importProgressByStreamRef(db, orgId, refs);
+    if (progressResult.status === "fulfilled") {
+      const progress = progressResult.value;
       flowTiles = rows.map((r) => {
         const mine = streamRefsOfProvenance(r.provenance)
           .map((ref) => progress.get(`${ref.connectionId}:${ref.configHash}`))
@@ -346,8 +377,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         // decorated above has to be re-applied rather than assumed to survive.
         return { ...r, importing, unpublished: unpublished.has(r.flowId) };
       });
-    } catch {
-      // No badge rather than no dashboard.
     }
   } catch (err) {
     // A failed tile read is a LOAD ERROR, never an empty state. The bare
@@ -435,7 +464,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     <div className="absolute left-0 top-full z-20 mt-1.5 w-64 rounded-surface border border-border bg-card p-1 shadow-surface">
                       {[
                         { kind: "groups", label: "Columns", blurb: "Group your metrics into named, coloured columns." },
-                        { kind: "custom", label: "Canvas", blurb: "Place and size charts on a grid. One metric, several charts." },
+                        { kind: "custom", label: "Custom", blurb: "Place and size charts on a grid. One metric, several charts." },
                       ].map((o) => (
                         <form key={o.kind} action={addViewAction}>
                           <input type="hidden" name="range" value={rangeKey} />

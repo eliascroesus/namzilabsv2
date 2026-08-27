@@ -9,7 +9,6 @@ import {
   ArrowRight,
   ArrowUp,
   BarChart3,
-  Check,
   Copy as CopyIcon,
   Filter,
   FilterX,
@@ -37,7 +36,7 @@ import { Toast } from "@/components/ui/toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
-import { CHARTS, asChartId, blockKindOf, blockTileKey, type BlockId, type ChartId } from "@/lib/board/charts";
+import { CHARTS, asChartId, blockKindOf, blockTileKey, minSize, type BlockId, type ChartId } from "@/lib/board/charts";
 import type { BoardTileRow, CustomTileOption } from "@/lib/board/types";
 import type { TileConfig } from "@/lib/board/tile-config";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
@@ -344,7 +343,16 @@ export function CustomBoard({
    * gesture is live. That is only honest because both come from the same
    * `compact`, so what is on screen mid-drag is exactly what gets written.
    */
-  const { gesture, preview, onPointerDown, swallowClick } = useCanvasDrag(rootRef, boxes, applyLayout);
+  /**
+   * THE MINIMUM IS A PROPERTY OF THE CHART, not of the grid. Read through the
+   * live prop so a tile that changed chart is clamped by its NEW mark's floor
+   * on the very next gesture.
+   */
+  const minOf = useCallback(
+    (id: string) => minSize(asChartId(tiles.find((t) => t.id === id)?.chart)),
+    [tiles],
+  );
+  const { gesture, preview, onPointerDown, swallowClick } = useCanvasDrag(rootRef, boxes, applyLayout, minOf);
 
   const nudge = useCallback(
     (id: string, dx: number, dy: number) => {
@@ -362,10 +370,15 @@ export function CustomBoard({
       const all = boxesRef.current;
       const box = all.find((b) => b.id === id);
       if (!box) return;
-      const next = { ...box, w, h, x: Math.min(box.x, GRID_COLS - w) };
+      // The menu's size presets applied NO floor at all — "Short" on a line
+      // chart clipped its whole plot away.
+      const min = minOf(id);
+      const w2 = Math.max(min.w, w);
+      const h2 = Math.max(min.h, h);
+      const next = { ...box, w: w2, h: h2, x: Math.min(box.x, GRID_COLS - w2) };
       applyLayout(all.map((b) => (b.id === id ? next : b)), id);
     },
-    [applyLayout],
+    [applyLayout, minOf],
   );
 
   /** Chart, metric, name and every presentation key are one partial update. */
@@ -659,7 +672,6 @@ export function CustomBoard({
                 <TileMenu
                   tile={byId.get(tile.id)!}
                   index={i}
-                  onChart={(c) => editTile(tile.id, { chart: c })}
                   onRename={(t) => editTile(tile.id, { title: t })}
                   onConfigure={() => setConfiguring(tile.id)}
                   onChangeMetric={() => setRepointing(tile.id)}
@@ -851,7 +863,7 @@ function AddChartMenu({
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-small font-semibold text-foreground">{c.label}</span>
                 <span className="text-tiny font-normal text-muted-foreground">
-                  {first ? c.blurb : "No metric here can be drawn this way yet."}
+                  {key ? c.blurb : "No metric here can be drawn this way yet."}
                 </span>
               </span>
             </Button>
@@ -895,7 +907,6 @@ function PendingCard() {
 function TileMenu({
   tile,
   index,
-  onChart,
   onRename,
   onConfigure,
   onChangeMetric,
@@ -910,7 +921,6 @@ function TileMenu({
   index: number;
   /** True when the press that just ended was a drag, so it must not open this. */
   swallowClick: () => boolean;
-  onChart: (c: ChartId) => void;
   /** Open the settings panel — the menu is the path a keyboard can take. */
   onConfigure: () => void;
   onRename: (title: string) => void;
@@ -942,7 +952,6 @@ function TileMenu({
     if (next !== title) onRename(next);
   };
 
-  const legal = CHARTS.filter((c) => tile.charts.includes(c.id));
 
   return (
     <div
@@ -1039,24 +1048,12 @@ function TileMenu({
             Chart settings
           </Button>
 
-          {legal.length > 1 && (
-            <>
-              <SectionHeading className="px-1.5 pb-1 pt-2">Draw as</SectionHeading>
-              {legal.map((c) => (
-                <Button
-                  key={c.id}
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start"
-                  onClick={() => act(() => onChart(c.id))}
-                >
-                  <Check className={tile.chart === c.id ? "" : "invisible"} />
-                  {c.label}
-                </Button>
-              ))}
-            </>
-          )}
-
+          {/* NO "DRAW AS" LIST HERE. The chart lived in this menu when the menu
+              was the only place a tile could be changed; the settings panel now
+              owns every choice about a tile, shows the same `chartsFor`-legal
+              list with its blurbs, and previews the change against the real
+              data. Two places to pick a chart is two places to keep in step,
+              and the menu's copy had no room to say WHY an option was missing. */}
           <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => act(onChangeMetric)}>
             <Repeat />
             Change metric

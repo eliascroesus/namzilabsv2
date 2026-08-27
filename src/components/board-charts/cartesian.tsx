@@ -122,10 +122,22 @@ export function LineChart({
 }) {
   const points = padSeries(series, unit);
   const values = points.map((p) => p.value).filter((v): v is number => v != null);
-  const { ticks, lo, hi } = niceTicks(Math.min(...values), Math.max(...values, target ?? -Infinity));
+  // The target bounds the axis in BOTH directions. Folded into the max alone,
+  // a negative goal put the dashed line 250% below the viewBox — invisible,
+  // with nothing to say the goal existed.
+  const { ticks, lo, hi } = niceTicks(Math.min(...values, target ?? Infinity), Math.max(...values, target ?? -Infinity));
   const x = (i: number) => (points.length === 1 ? 50 : (i / (points.length - 1)) * 100);
 
-  // One `M` per unbroken run, so a gap is a gap.
+  /**
+   * One `M` per unbroken run, so a gap is a gap.
+   *
+   * A NEW RUN OPENS WITH A ZERO-LENGTH SEGMENT — `M p L p`, not `M p` — and
+   * that is not decoration. An isolated bucket is a run of ONE, and a lone
+   * `moveto` is never stroked by any SVG renderer: a series of alternate days
+   * drew a completely blank plot. The zero-length line picks up
+   * `stroke-linecap="round"` and reads as the dot it should always have been,
+   * and costs a multi-point run nothing but a repeated first coordinate.
+   */
   const runs: string[] = [];
   let open = false;
   points.forEach((p, i) => {
@@ -133,29 +145,39 @@ export function LineChart({
       open = false;
       return;
     }
-    runs.push(`${open ? "L" : "M"} ${x(i)} ${yPct(p.value, lo, hi)}`);
+    const at = `${x(i)} ${yPct(p.value, lo, hi)}`;
+    runs.push(open ? `L ${at}` : `M ${at} L ${at}`);
     open = true;
   });
 
-  // The fill is closed to the zero line, not to the bottom of the box: an area
-  // hanging under a negative value should hang from zero.
+  /**
+   * The fill is closed to the zero line, not to the bottom of the box: an area
+   * hanging under a negative value should hang from zero.
+   *
+   * ONE POLYGON PER RUN, for the same reason the stroke breaks into subpaths.
+   * A single polygon over the non-null points ran the fill straight across
+   * every quiet bucket — a confident filled shape covering days that have no
+   * data, under a line that had honestly broken. That is precisely the claim
+   * `padSeries` exists to prevent, told in a different colour.
+   */
   const base = yPct(Math.max(lo, Math.min(hi, 0)), lo, hi);
-  const filled = points
-    .map((p, i) => ({ p, i }))
-    .filter(({ p }) => p.value != null)
-    .map(({ p, i }) => `${i === 0 ? "" : "L"} ${x(i)} ${yPct(p.value!, lo, hi)}`);
+  const areaRuns: string[] = [];
+  let run: Array<{ i: number; v: number }> = [];
+  const flush = () => {
+    if (run.length > 0) {
+      const pts = run.map((r) => `L ${x(r.i)} ${yPct(r.v, lo, hi)}`).join(" ");
+      areaRuns.push(`M ${x(run[0].i)} ${base} ${pts} L ${x(run[run.length - 1].i)} ${base} Z`);
+    }
+    run = [];
+  };
+  points.forEach((p, i) => (p.value == null ? flush() : run.push({ i, v: p.value })));
+  flush();
 
   return (
     <AxisFrame ticks={ticks} format={format} labels={edgeLabels(points.map((p) => p.bucket), unit)}>
       <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
         <Gridlines ticks={ticks} lo={lo} hi={hi} />
-        {area && filled.length > 1 && (
-          <path
-            d={`M ${x(0)} ${base} ${filled.join(" ")} L ${x(points.length - 1)} ${base} Z`}
-            fill={accent}
-            fillOpacity={0.12}
-          />
-        )}
+        {area && areaRuns.length > 0 && <path d={areaRuns.join(" ")} fill={accent} fillOpacity={0.12} />}
         {target != null && (
           <line
             x1="0"
@@ -224,7 +246,10 @@ export function BarsVertical({
 }) {
   const points = padSeries(series, unit);
   const values = points.map((p) => p.value).filter((v): v is number => v != null);
-  const { ticks, lo, hi } = niceTicks(Math.min(...values), Math.max(...values, target ?? -Infinity));
+  // The target bounds the axis in BOTH directions. Folded into the max alone,
+  // a negative goal put the dashed line 250% below the viewBox — invisible,
+  // with nothing to say the goal existed.
+  const { ticks, lo, hi } = niceTicks(Math.min(...values, target ?? Infinity), Math.max(...values, target ?? -Infinity));
   const zero = yPct(Math.max(lo, Math.min(hi, 0)), lo, hi);
   const slot = 100 / points.length;
 

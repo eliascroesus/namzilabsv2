@@ -130,7 +130,9 @@ describe("the preview and the write are one answer", () => {
     // `boxes`, not raw state: the gesture must see the membership-reconciled
     // list, or a tile that arrived from another tab is undraggable and a ghost
     // participates in every hit test.
-    expect(code(board)).toMatch(/useCanvasDrag\(rootRef, boxes, applyLayout\)/);
+    // `minOf` is the fourth argument: the resize floor is a property of the
+    // CHART, and one global 2x3 squashed a line chart's axis frame to nothing.
+    expect(code(board)).toMatch(/useCanvasDrag\(rootRef, boxes, applyLayout, minOf\)/);
     expect(code(board)).toMatch(/compact\(next, GRID_COLS, movedId\)/);
   });
 

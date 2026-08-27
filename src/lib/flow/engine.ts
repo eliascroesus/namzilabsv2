@@ -1616,6 +1616,40 @@ export type RangeSlot = NonNullable<TileSpec["byRange"]>[string];
  * up to a sentinel bound (see range.ts). It is the one range whose end is NOT
  * the clock, which is why it must announce itself — `future` below.
  */
+/**
+ * WHAT SIZE BUCKET THIS WINDOW DESERVES.
+ *
+ * A metric's `timeUnit` is a publish-time choice about the metric as a whole,
+ * and it defaults to "month". Read literally, "Last 7 days" bucketed by month
+ * is ONE bucket — so a line drew a single dot, a bar drew one full-height
+ * block, and the axis carried a lone "Aug '26" under a pill that said seven
+ * days. The chart was answering a different question from the one on screen.
+ *
+ * The window decides instead, capped by the metric's own unit so a
+ * quarterly metric is never forced into days. Roughly a dozen to forty points:
+ * enough to read a shape, few enough to stay legible in a tile and small
+ * enough that the stored jsonb — read on every dashboard render, and billed by
+ * the byte — does not grow a row per hour.
+ *
+ * "all" keeps the metric's unit: it is the one window whose length is unknown
+ * here, and the publisher's choice is the only sensible answer for it.
+ */
+const UNIT_ORDER = ["day", "week", "month", "quarter", "year"] as const;
+
+export function bucketUnitForWindow(
+  spanMs: number,
+  declared: TilePresentation["timeUnit"],
+): NonNullable<TilePresentation["timeUnit"]> {
+  const DAY = 86_400_000;
+  const days = spanMs / DAY;
+  const fitted = days <= 45 ? "day" : days <= 180 ? "week" : days <= 1200 ? "month" : "year";
+  // Never finer than the metric asked for. A metric declared quarterly has no
+  // meaningful daily shape, and pretending otherwise invents precision.
+  const floor = declared ?? "month";
+  const order = UNIT_ORDER as readonly string[];
+  return order.indexOf(fitted) < order.indexOf(floor) && declared != null ? floor : fitted;
+}
+
 export function tileByRange(
   graph: FlowGraph,
   nodes: Map<string, NodeExec>,
@@ -1906,11 +1940,21 @@ export function tileByRange(
 
     try {
       const ex = windowed(nodeId);
-      const tile = ex.tile ?? buildTile(spec, ex.shape, ex.sample);
+      /**
+       * THE WINDOW'S OWN BUCKET SIZE — see `bucketUnitForWindow`. `all` is the
+       * one range whose length this function does not know, so it keeps the
+       * metric's declared unit.
+       */
+      const unit = range.all ? spec.timeUnit : bucketUnitForWindow(range.end - range.start, spec.timeUnit);
+      const tile = ex.tile ?? buildTile({ ...spec, timeUnit: unit }, ex.shape, ex.sample);
       const records = recordsBehind(ex, memo);
       out[range.key] = {
         value: tile.value,
         series: tile.series,
+        // STORED PER SLOT, because it now varies by window: the renderer labels
+        // buckets with it, and reading the tile's declared unit would print
+        // "Aug '26" over what are actually days.
+        ...(tile.series && unit ? { unit } : {}),
         groups: tile.groups,
         ...(records > 0 ? { records } : {}),
         ...(undated > 0 ? { undated } : {}),

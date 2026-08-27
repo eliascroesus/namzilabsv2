@@ -49,6 +49,11 @@ const CANVAS_START_PX = 4;
 const CANVAS_SCROLL_EDGE = 64;
 const CANVAS_SCROLL_MAX = 18;
 /** A chart smaller than this has no room to mean anything. */
+/**
+ * The floor when the caller offers none. Every real board passes `minOf`, which
+ * answers PER CHART — a line needs five rows before its axis frame has any
+ * height at all, and one global floor squashed it to nothing.
+ */
 const MIN_TILE_W = 2;
 const MIN_TILE_H = 3;
 
@@ -110,6 +115,8 @@ export function useCanvasDrag(
    * swap them back.
    */
   onCommit: (next: GridBox[], movedId: string) => void,
+  /** The smallest box this particular tile may be dragged to. */
+  minOf?: (id: string) => { w: number; h: number },
 ) {
   const [gesture, setGesture] = useState<CanvasGesture | null>(null);
   /** The layout as it looks RIGHT NOW, gesture included. Null when nothing is held. */
@@ -130,7 +137,11 @@ export function useCanvasDrag(
       const next: GridBox =
         s.mode === "move"
           ? { ...b, x: b.x + dCols, y: Math.max(0, b.y + dRows) }
-          : { ...b, w: Math.max(MIN_TILE_W, b.w + dCols), h: Math.max(MIN_TILE_H, b.h + dRows) };
+          : {
+              ...b,
+              w: Math.max(minOf?.(b.id)?.w ?? MIN_TILE_W, b.w + dCols),
+              h: Math.max(minOf?.(b.id)?.h ?? MIN_TILE_H, b.h + dRows),
+            };
       // The SAME compact the commit writes and every render draws. `first` is
       // the held tile, so it wins its row and pushes rather than being pushed.
       return compact(

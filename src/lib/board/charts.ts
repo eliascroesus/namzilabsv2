@@ -36,8 +36,15 @@ export const CHARTS = [
     blurb: "The headline figure, with its change since the period before.",
     w: 3,
     h: 4,
-    minW: 2,
-    minH: 3,
+    /**
+     * A CHART NEVER SHRINKS BELOW A STANDARD METRIC CARD. 3x4 is what a tile on
+     * the groups board is, and it is the smallest box in which a headline, its
+     * delta and a freshness marker all fit — below it the number wraps against
+     * the timestamp and a chart becomes a smear. The grid let this one go to
+     * 2x3, which is where the squashed cards came from.
+     */
+    minW: 3,
+    minH: 4,
   },
   {
     id: "line",
@@ -46,7 +53,7 @@ export const CHARTS = [
     w: 6,
     h: 6,
     minW: 3,
-    minH: 4,
+    minH: 5,
   },
   {
     id: "area",
@@ -55,7 +62,7 @@ export const CHARTS = [
     w: 6,
     h: 6,
     minW: 3,
-    minH: 4,
+    minH: 5,
   },
   {
     id: "bar",
@@ -64,7 +71,7 @@ export const CHARTS = [
     w: 6,
     h: 6,
     minW: 3,
-    minH: 4,
+    minH: 5,
   },
   {
     id: "category",
@@ -73,7 +80,7 @@ export const CHARTS = [
     w: 4,
     h: 6,
     minW: 3,
-    minH: 4,
+    minH: 5,
   },
   {
     id: "pie",
@@ -90,8 +97,8 @@ export const CHARTS = [
     blurb: "How far the number has come toward the goal set on it.",
     w: 3,
     h: 4,
-    minW: 2,
-    minH: 3,
+    minW: 3,
+    minH: 4,
   },
   {
     id: "funnel",
@@ -118,7 +125,7 @@ export const CHARTS = [
     w: 4,
     h: 6,
     minW: 3,
-    minH: 4,
+    minH: 5,
   },
   /**
    * ── BLOCKS ─────────────────────────────────────────────────────────────
@@ -337,6 +344,25 @@ export function chartsFor(shape: MetricShape): ChartId[] {
 export function defaultSize(chart: ChartId): { w: number; h: number } {
   const c = CHARTS.find((k) => k.id === chart) ?? CHARTS[0];
   return { w: c.w, h: c.h };
+}
+
+/**
+ * THE SMALLEST BOX THIS CHART IS STILL ITSELF IN.
+ *
+ * `minW`/`minH` sat in the table for months with NOTHING READING THEM — the
+ * drag hardcoded one global 2×3 floor for every chart and the menu's size
+ * presets applied no floor at all. So a line chart could be squeezed to 104px,
+ * where the axis frame gets zero height and `overflow-hidden` silently eats
+ * the entire plot: the tile kept its border and its number and lost its chart.
+ *
+ * Measured rather than guessed. At `ROW_UNIT_PX` 40 and `p-4`, a cartesian
+ * tile needs h=5 before five ticks and the x-labels both fit; a scorecard needs
+ * 4, which is also what a tile on the groups board is, and nothing that calls
+ * itself a metric card should be smaller than one.
+ */
+export function minSize(chart: ChartId): { w: number; h: number } {
+  const c = CHARTS.find((k) => k.id === chart) ?? CHARTS[0];
+  return { w: c.minW, h: c.minH };
 }
 
 /**

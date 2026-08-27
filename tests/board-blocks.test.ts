@@ -9,6 +9,7 @@ import {
   blockTileKey,
   chartsFor,
   defaultSize,
+  minSize,
   type MetricShape,
 } from "@/lib/board/charts";
 import { fieldsFor, parseTileConfig } from "@/lib/board/tile-config";
@@ -186,5 +187,55 @@ describe("how a block renders", () => {
     // a block has no `rangeKey`, and this is the renderer half of that.
     const html = render("heading", { text: "Acquisition", rangeKey: "7d" });
     expect(html).not.toContain("Last 7 days");
+  });
+});
+
+/**
+ * THE SMALLEST BOX A CHART IS STILL ITSELF IN.
+ *
+ * `minW`/`minH` sat in the CHARTS table with nothing reading them: the drag
+ * hardcoded one global 2×3 floor and the menu's size presets applied none at
+ * all. A line chart squeezed to three rows has zero height left for its axis
+ * frame, and `overflow-hidden` ate the whole plot — the tile kept its border
+ * and its number and silently lost its chart.
+ */
+describe("how small a chart may be made", () => {
+  it("gives every chart a floor no bigger than its default", () => {
+    for (const id of CHART_IDS) {
+      const min = minSize(id);
+      const def = defaultSize(id);
+      expect(min.w, `${id} cannot be shrunk to its minimum`).toBeLessThanOrEqual(def.w);
+      expect(min.h, `${id} cannot be shrunk to its minimum`).toBeLessThanOrEqual(def.h);
+    }
+  });
+
+  it("never lets a metric card shrink below a standard one", () => {
+    // 3x4 is what a tile on the groups board is, and nothing calling itself a
+    // metric card should be smaller than one.
+    for (const id of ["number", "progress"] as const) {
+      expect(minSize(id)).toEqual({ w: 3, h: 4 });
+    }
+  });
+
+  it("gives the cartesian family the extra row its axis frame needs", () => {
+    // Measured, not guessed: at ROW_UNIT_PX 40 and p-4, four rows leaves 38px
+    // for an axis frame that needs 49 with five ticks — the x-labels clip.
+    for (const id of ["line", "area", "bar", "category", "table"] as const) {
+      expect(minSize(id).h, `${id} needs five rows`).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  it("is actually READ by both paths that resize a tile", async () => {
+    /**
+     * The pin that matters. A table of minimums nothing consults is decoration;
+     * these two call sites are the only ways a tile changes size.
+     */
+    const { readFileSync } = await import("node:fs");
+    expect(readFileSync("src/app/dashboard/canvas-drag.ts", "utf8"), "the drag ignores the per-chart floor").toContain(
+      "minOf?.(b.id)",
+    );
+    const board = readFileSync("src/app/dashboard/custom-board.tsx", "utf8");
+    expect(board, "the board never tells the drag what the floor is").toContain("minOf");
+    expect(board, "the menu's size presets apply no floor").toContain("Math.max(min.w, w)");
   });
 });
