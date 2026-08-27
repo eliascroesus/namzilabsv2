@@ -14,14 +14,14 @@ import { cn } from "@/lib/utils";
 const cardVariants = cva("border border-border bg-card", {
   variants: {
     variant: {
-      card: "rounded-card shadow-card",
-      surface: "rounded-surface shadow-card",
+      card: "rounded-card shadow-xs",
+      surface: "rounded-surface shadow-xs",
     },
     padding: {
       none: "",
-      dense: "p-3",
-      compact: "p-4",
-      default: "p-5",
+      dense: "p-2.5",
+      compact: "p-3.5",
+      default: "p-4",
     },
   },
   defaultVariants: { variant: "card", padding: "default" },

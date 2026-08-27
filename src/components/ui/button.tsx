@@ -51,8 +51,8 @@ const buttonVariants = cva(
         // a 7.19:1 ultramarine lightens it toward the white behind it, so the
         // label's contrast FELL at the one moment the button is under a
         // pointer. Down the ramp is also the direction a real button moves.
-        default: "bg-primary text-primary-foreground hover:bg-brand-700 active:bg-brand-800",
-        secondary: "border border-border bg-card text-foreground hover:bg-muted active:bg-neutral-200",
+        default: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-700 active:bg-brand-800",
+        secondary: "border border-border bg-card text-foreground shadow-xs hover:bg-muted active:bg-neutral-200",
         ghost: "text-muted-foreground hover:bg-muted hover:text-foreground active:bg-neutral-200",
         destructive: "bg-destructive text-destructive-foreground hover:bg-danger-ink active:brightness-95",
         // Running something is a different KIND of act from publishing it, and
@@ -72,9 +72,9 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        sm: "h-8 px-2.5 text-small [&_svg]:size-3.5",
-        default: "h-9 px-4 text-base [&_svg]:size-4",
-        lg: "h-10 px-5 text-lead [&_svg]:size-4",
+        sm: "h-7 px-2 text-xs [&_svg]:size-3.5",
+        default: "h-8 px-3 text-sm [&_svg]:size-4",
+        lg: "h-9 px-3.5 text-sm [&_svg]:size-4",
         icon: "size-8 [&_svg]:size-4",
         iconSm: "size-7 [&_svg]:size-3.5",
       },

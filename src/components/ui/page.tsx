@@ -24,7 +24,7 @@ export function PageContainer({
         // page sat 24px off a phone's edge, which is fine, and 24px off a 27"
         // display's rail, which is not — a 1440px window and a 390px one were
         // asking for the same margin.
-        "rise-in mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8",
+        "rise-in mx-auto w-full px-5 py-6 sm:px-8 sm:py-8 lg:px-10",
         // `full` keeps the step but adds Notion's own outer margin at the sizes
         // where a bare `lg:px-8` leaves a board hanging off the rail.
         width === "full" && "xl:px-14 2xl:px-24",
@@ -104,7 +104,7 @@ export type PageHeaderProps = {
 
 export function PageHeader({ title, lede, actions, back, className }: PageHeaderProps) {
   return (
-    <header className={cn(className)}>
+    <header className={cn("border-b border-border pb-4", className)}>
       {back && (
         <Link
           href={back.href}
@@ -119,11 +119,11 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
           {/* The display face's one in-app appearance besides the metric
               numeral. `.font-display` carries its own tracking, so no
               `tracking-tight` here — the two would compound. */}
-          <h1 className="font-display text-display font-semibold text-foreground">{title}</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
           {/* `max-w-2xl`: a lede is a sentence, and a sentence that runs the
               full 1024px of the container is 140 characters a line — roughly
               twice the measure anything is comfortably read at. */}
-          {lede && <p className="mt-1.5 max-w-2xl text-base text-muted-foreground">{lede}</p>}
+          {lede && <p className="mt-1 max-w-2xl text-base text-muted-foreground">{lede}</p>}
         </div>
         {/* `items-center` on a wrapping row put the buttons half a line below
             the title whenever the lede pushed the left column taller. They

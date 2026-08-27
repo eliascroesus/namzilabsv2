@@ -61,7 +61,7 @@ describe("the page container and the skeleton that stands in for it", () => {
   it("share one gutter, rung for rung", () => {
     // 16px on a phone, 24 from `sm`, 32 from `lg`. A flat value asked a 390px
     // window and a 27" display for the same margin.
-    const gutter = "px-4 py-8 sm:px-6 sm:py-10 lg:px-8";
+    const gutter = "px-5 py-6 sm:px-8 sm:py-8 lg:px-10";
     expect(page).toContain(gutter);
     expect(skeleton).toContain(gutter);
   });

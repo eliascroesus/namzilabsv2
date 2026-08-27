@@ -1,4 +1,40 @@
 @import "tailwindcss";
+/**
+ * THE MOTION THE PRIMITIVES ALREADY ASKED FOR.
+ *
+ * Every vendored Radix component ships `data-[state=open]:animate-in`,
+ * `fade-in-0`, `zoom-in-95`, `slide-in-from-top-2` and their exits — 52 classes
+ * across 16 files. None of them are Tailwind utilities: they come from this
+ * package, and without it they compile to NOTHING. Every menu, dialog, popover,
+ * tooltip, select and sheet in the app was appearing and vanishing on the same
+ * frame, which is exactly the "it feels cheap" that no single component looks
+ * responsible for.
+ *
+ * Imported after Tailwind so its keyframes land in the same cascade.
+ */
+@import "tw-animate-css";
+
+/**
+ * ...RETIMED TO THE KIT'S OWN CURVES.
+ *
+ * tw-animate-css ships a 150ms linear default. This file has owned three
+ * durations and three curves since long before Radix arrived, and a menu that
+ * opens on a timing nothing else in the product uses is precisely the kind of
+ * near-miss that reads as "unfinished" without anyone being able to name it.
+ *
+ * Entrances get `spring` (they are things appearing, or things you just did);
+ * exits get `exit` and run FASTER, because a slow dismissal reads as lag while
+ * a slow entrance reads as grace.
+ */
+:where([data-state="open"]).animate-in,
+:where([data-state="delayed-open"]).animate-in {
+  animation-duration: var(--duration-base);
+  animation-timing-function: var(--ease-spring);
+}
+:where([data-state="closed"]).animate-out {
+  animation-duration: var(--duration-fast);
+  animation-timing-function: var(--ease-exit);
+}
 
 /**
  * `dark:` FOLLOWS THE CLASS, NOT THE OPERATING SYSTEM.

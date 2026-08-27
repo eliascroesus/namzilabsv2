@@ -56,7 +56,7 @@ export function ShellSkeleton({
       <div className="flex-1 overflow-y-auto bg-canvas-bg">
         {/* Not <main>: PageContainer renders the page's one main landmark. */}
         <div
-          className={`mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 lg:px-8 ${
+          className={`mx-auto w-full px-5 py-6 sm:px-8 sm:py-8 lg:px-10 ${
             width === "narrow" ? "max-w-3xl" : "max-w-6xl"
           }`}
         >
