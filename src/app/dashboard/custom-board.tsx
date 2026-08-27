@@ -10,6 +10,7 @@ import {
   ArrowUp,
   BarChart3,
   Check,
+  Copy as CopyIcon,
   Filter,
   FilterX,
   Hash,
@@ -47,6 +48,7 @@ import { TileConfigPanel } from "./tile-config-panel";
 import {
   addCustomTileAction,
   deleteCustomTileAction,
+  duplicateCustomTileAction,
   setCustomTileAction,
   setCustomTileLayoutAction,
 } from "./board-actions";
@@ -65,6 +67,7 @@ export type CanvasActions = {
   addTile: typeof addCustomTileAction;
   deleteTile: typeof deleteCustomTileAction;
   editTile: typeof setCustomTileAction;
+  duplicateTile: typeof duplicateCustomTileAction;
   writeLayout: typeof setCustomTileLayoutAction;
 };
 
@@ -159,6 +162,7 @@ export function CustomBoard({
     addTile: addCustomTileAction,
     deleteTile: deleteCustomTileAction,
     editTile: setCustomTileAction,
+    duplicateTile: duplicateCustomTileAction,
     writeLayout: setCustomTileLayoutAction,
     ...actionOverrides,
   };
@@ -464,6 +468,36 @@ export function CustomBoard({
     [router, settle],
   );
 
+  /**
+   * NOT OPTIMISTIC, for the reason `addTile` gives: the id is the server's to
+   * mint, and a box under a placeholder id cannot be dragged, resized or
+   * deleted until the real one replaces it. What IS immediate is the box —
+   * the copy's geometry comes back with the answer, so it lands the moment the
+   * write returns rather than waiting for the refresh that fetches its card.
+   */
+  const duplicateTile = useCallback(
+    async (id: string) => {
+      setBusy(true);
+      const r = await act.duplicateTile(id).catch(() => null);
+      setBusy(false);
+      if (!r) return setToast("Couldn't copy that chart — the page may be out of date. Reload and try again.");
+      if (!r.ok) return setToast(r.error);
+      const t = r.tile;
+      pending.current.adds.add(t.id);
+      /**
+       * The server compacted the WHOLE view to make room, so the neighbours may
+       * have moved too. Re-seeding positions is normally forbidden — it is what
+       * snaps a tile back mid-drag — but this is the one moment the server knows
+       * better than the client, and no gesture can be live during an await the
+       * menu is holding open.
+       */
+      setLayout((prev) => compact([...prev, { id: t.id, x: t.x, y: t.y, w: t.w, h: t.h }], GRID_COLS, t.id));
+      router.refresh();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `act` is rebuilt every render by design.
+    [router],
+  );
+
   const removeTile = useCallback(
     (id: string) => {
       let undo: GridBox | undefined;
@@ -629,6 +663,7 @@ export function CustomBoard({
                   onRename={(t) => editTile(tile.id, { title: t })}
                   onConfigure={() => setConfiguring(tile.id)}
                   onChangeMetric={() => setRepointing(tile.id)}
+                  onDuplicate={() => duplicateTile(tile.id)}
                   canArrange={canArrange}
                   onNudge={(dx, dy) => nudge(tile.id, dx, dy)}
                   onResize={(w, h) => resize(tile.id, w, h)}
@@ -864,6 +899,7 @@ function TileMenu({
   onRename,
   onConfigure,
   onChangeMetric,
+  onDuplicate,
   canArrange,
   onNudge,
   onResize,
@@ -879,6 +915,7 @@ function TileMenu({
   onConfigure: () => void;
   onRename: (title: string) => void;
   onChangeMetric: () => void;
+  onDuplicate: () => void;
   /** False when a row on this view is hidden from the viewer — see `layoutFrozen`. */
   canArrange: boolean;
   onNudge: (dx: number, dy: number) => void;
@@ -1023,6 +1060,15 @@ function TileMenu({
           <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => act(onChangeMetric)}>
             <Repeat />
             Change metric
+          </Button>
+
+          {/* Two drawings of one metric side by side is what a custom view is
+              FOR, and getting there used to mean adding a chart and repointing
+              it. The copy lands beside this one, or below it if the row is
+              full — the server's packer decides, the same one every drag uses. */}
+          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => act(onDuplicate)}>
+            <CopyIcon />
+            Duplicate
           </Button>
 
           {/* WIDTH, HEIGHT AND MOVE ARE ARRANGEMENT — the three menu paths

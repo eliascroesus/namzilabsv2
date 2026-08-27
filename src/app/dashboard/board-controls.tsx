@@ -2,12 +2,12 @@
 
 import { createContext, useContext, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, PenLine, Trash2 } from "lucide-react";
+import { Copy as CopyIcon, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover } from "@/components/flow/controls/Popover";
-import { deleteViewAction, renameViewAction } from "./board-actions";
+import { deleteViewAction, duplicateViewAction, renameViewAction } from "./board-actions";
 import { BOARD_GRID } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
@@ -195,6 +195,8 @@ export function ViewTab({
   const [busy, setBusy] = useState(false);
   /** Shown instead of the server's name until the refresh carrying it lands. */
   const [renamed, setRenamed] = useState<string | null>(null);
+  /** The one place a view write can refuse: a cap. Said in the menu, where the press was. */
+  const [error, setError] = useState<string | null>(null);
 
   const key = viewId ?? "";
   // The optimistic answer is trusted only WHILE the transition is in flight,
@@ -217,6 +219,36 @@ export function ViewTab({
         router.refresh();
       })
       .catch(() => setRenamed(null));
+  };
+
+  /**
+   * A COPY TO EXPERIMENT ON — and YOU LAND ON THE COPY.
+   *
+   * That last part is the whole point rather than a nicety: duplicating exists
+   * so a shared board can be rearranged without anybody watching, and leaving
+   * the customer standing on the original means their next drag lands on the
+   * one thing they were trying not to touch. The push carries the optimistic
+   * pick so the new tab reads as selected before the refresh arrives.
+   */
+  const duplicate = () => {
+    if (!viewId) return;
+    setBusy(true);
+    setError(null);
+    void duplicateViewAction(viewId)
+      .then((r) => {
+        setBusy(false);
+        if (!r.ok) return setError(r.error);
+        setMenuOpen(false);
+        // Built from THIS tab's own href so every other search param — the
+        // range pill, the source filter — survives the move.
+        const url = new URL(href, "http://local");
+        url.searchParams.set("view", r.viewId);
+        go(`${url.pathname}${url.search}`, { dim: "view", key: r.viewId });
+      })
+      .catch(() => {
+        setBusy(false);
+        setError("Couldn't copy that view — the page may be out of date. Reload and try again.");
+      });
   };
 
   const remove = () => {
@@ -320,6 +352,23 @@ export function ViewTab({
               <PenLine />
               Rename
             </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
+              disabled={busy}
+              onClick={duplicate}
+            >
+              <CopyIcon />
+              Duplicate
+            </Button>
+
+            {error && (
+              <p role="alert" className="px-1.5 py-1 text-tiny text-danger-ink">
+                {error}
+              </p>
+            )}
 
             <div className="my-1.5 h-px bg-border" />
 

@@ -216,6 +216,36 @@ console.log("\nclicking a tile opens its settings — and nothing else does");
   check(errors.length === 0, "no uncaught page errors around the panel", errors.join(" · "));
 }
 
+// ── duplicating a chart ─────────────────────────────────────────────────────
+console.log("\nduplicating a chart lands a second one beside it");
+{
+  await load();
+  const before = await cellCount();
+  const cell = page.locator(`${LIVE} [data-canvas] [data-canvas-cell='t3']`);
+  const box = await cell.boundingBox();
+
+  await page.locator(`${LIVE} button[aria-label^='Options for']`).nth(2).click();
+  await page.waitForTimeout(250);
+  await page.locator(LIVE).getByRole("button", { name: "Duplicate", exact: true }).click();
+  await page.waitForTimeout(500);
+
+  check((await cellCount()) === before + 1, "a copy appears", `${before} -> ${await cellCount()}`);
+  const copy = page.locator(`${LIVE} [data-canvas-cell^='sim-copy-']`);
+  check((await copy.count()) === 1, "and it is the new box, not a re-render of the old one");
+
+  // BESIDE, not on top: the board compacts the copy in the way it compacts a
+  // drop, so the two must not share a cell.
+  const copyBox = await copy.boundingBox();
+  const apart =
+    copyBox.x + copyBox.width <= box.x + 1 ||
+    box.x + box.width <= copyBox.x + 1 ||
+    copyBox.y + copyBox.height <= box.y + 1 ||
+    box.y + box.height <= copyBox.y + 1;
+  check(apart, "and it does not overlap the original", `${JSON.stringify(box)} vs ${JSON.stringify(copyBox)}`);
+
+  check(errors.length === 0, "no uncaught page errors after duplicating", errors.join(" · "));
+}
+
 // ── blocks ──────────────────────────────────────────────────────────────────
 console.log("\na block is furniture: it lands with no metric and wears no card");
 {

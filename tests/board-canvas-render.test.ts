@@ -19,6 +19,7 @@ vi.mock("@/app/dashboard/board-actions", () => ({
   addCustomTileAction: async () => ({ ok: true, tile: { id: "new", tileKey: "metric:m1", chart: "number", config: {}, x: 0, y: 0, w: 3, h: 4 } }),
   deleteCustomTileAction: async () => ({ ok: true }),
   setCustomTileAction: async () => ({ ok: true }),
+  duplicateCustomTileAction: async () => ({ ok: true, tile: { id: "copy", tileKey: "flow:f1:o1", chart: "number", config: {}, x: 3, y: 0, w: 3, h: 4 } }),
   setCustomTileLayoutAction: async () => ({ ok: true }),
 }));
 

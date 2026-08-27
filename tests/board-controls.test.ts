@@ -26,6 +26,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => {}, refresh:
 // mock-then-dynamic-import shape `board-render.test.ts` uses for the board.
 vi.mock("@/app/dashboard/board-actions", () => ({
   renameViewAction: async () => ({ ok: true }),
+  duplicateViewAction: async () => ({ ok: true, viewId: "copy" }),
   deleteViewAction: async () => ({ ok: true }),
 }));
 

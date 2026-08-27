@@ -11,6 +11,7 @@ import { requireOrg, type OrgContext } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { boardGroupCap, boardPlacementCap, boardTileCap, boardViewCap } from "@/lib/limits";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
+import { compact, GRID_COLS } from "@/lib/board/grid";
 import { BLOCK_IDS, CHART_IDS, blockKindOf, defaultSize } from "@/lib/board/charts";
 import { parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
 import type { BoardTileRow } from "@/lib/board/types";
@@ -481,6 +482,165 @@ export async function renameViewAction(id: string, name: string): Promise<Result
 }
 
 /**
+ * THE SAME BOARD AGAIN, TO EDIT WITHOUT RISKING THE ONE PEOPLE READ.
+ *
+ * A view is an arrangement, and an arrangement is the thing customers are most
+ * reluctant to experiment with — it is shared, and a bad afternoon of dragging
+ * is visible to everyone. Duplicating is the answer: try it on the copy.
+ *
+ * ONE TRANSACTION, AND THAT IS THE WHOLE DESIGN OF THIS FUNCTION. A partial
+ * copy is worse than a failure, and worse in a specific way: a failed
+ * duplicate announces itself, while a view holding two of its eleven charts
+ * looks like a finished view that somebody made badly. The customer cannot
+ * tell it is half, so they fix it by hand — or worse, trust it.
+ *
+ * The two kinds store their arrangements in different tables and only one of
+ * them needs an id remap:
+ *
+ *   custom — `dashboard_tiles` rows carry their own geometry and point at
+ *            nothing inside the view, so they copy with new ids and the same
+ *            boxes.
+ *   groups — `dashboard_groups` rows are POINTED AT by placements, so the
+ *            groups are copied first, an old id → new id map is built from
+ *            that, and every placement is rewritten through it. Copying the
+ *            placements with their original `group_id` would cross-link the
+ *            new view's tiles into the ORIGINAL's columns: recolour a group on
+ *            the copy and it moves on the original, and delete the original
+ *            and the copy's placements go with it.
+ */
+export async function duplicateViewAction(id: string): Promise<Result<{ viewId: string }>> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  if (!idSchema.safeParse(id).success) return fail("Unknown view.");
+
+  try {
+    const db = getDb();
+    const [source] = await db
+      .select()
+      .from(dashboardViews)
+      .where(and(eq(dashboardViews.id, id), eq(dashboardViews.orgId, ctx.orgId)));
+    if (!source) return fail("That view isn't on this board any more.");
+
+    const views = await db
+      .select({ pos: dashboardViews.pos })
+      .from(dashboardViews)
+      .where(eq(dashboardViews.orgId, ctx.orgId));
+    const viewCap = boardViewCap();
+    // The default view has no row, so it is not in `views` — hence the `+ 1`,
+    // the same arithmetic `addViewAction` does for the same reason.
+    if (views.length + 1 >= viewCap) {
+      return fail(`This workspace has reached its limit of ${viewCap} views. Delete one to add another.`);
+    }
+
+    const newViewId = crypto.randomUUID();
+    const last = views.map((v) => v.pos).sort(compareKeys).at(-1) ?? null;
+    // Trimmed to the same 60 the schema allows, so copying a long name cannot
+    // fail on a limit the customer never typed.
+    const name = `${source.name} (copy)`.slice(0, 60);
+
+    if (source.kind === "custom") {
+      const tiles = await db
+        .select()
+        .from(dashboardTiles)
+        .where(and(eq(dashboardTiles.orgId, ctx.orgId), eq(dashboardTiles.viewId, id)));
+      const tileCap = boardTileCap();
+      if (tiles.length > tileCap) {
+        return fail(`This view has more than the limit of ${tileCap} charts, so it can't be copied.`);
+      }
+
+      await db.transaction(async (tx) => {
+        await tx.insert(dashboardViews).values({
+          id: newViewId,
+          orgId: ctx.orgId,
+          name,
+          pos: keyBetween(last, null),
+          kind: "custom",
+        });
+        if (tiles.length > 0) {
+          await tx.insert(dashboardTiles).values(
+            tiles.map((t) => ({
+              id: crypto.randomUUID(),
+              orgId: ctx.orgId,
+              viewId: newViewId,
+              tileKey: t.tileKey,
+              chart: t.chart,
+              config: t.config,
+              x: t.x,
+              y: t.y,
+              w: t.w,
+              h: t.h,
+            })),
+          );
+        }
+      });
+      return { ok: true, viewId: newViewId };
+    }
+
+    const groups = await db
+      .select()
+      .from(dashboardGroups)
+      .where(and(eq(dashboardGroups.orgId, ctx.orgId), inView(dashboardGroups.viewId, id)));
+    const placements = await db
+      .select()
+      .from(dashboardTilePlacements)
+      .where(and(eq(dashboardTilePlacements.orgId, ctx.orgId), inView(dashboardTilePlacements.viewId, id)));
+
+    const groupCap = boardGroupCap();
+    if (groups.length > groupCap) {
+      return fail(`This view has more than the limit of ${groupCap} groups, so it can't be copied.`);
+    }
+    const placementCap = boardPlacementCap();
+    if (placements.length > placementCap) {
+      return fail(`This view has more than the limit of ${placementCap} tiles, so it can't be copied.`);
+    }
+
+    /** old group id → new group id. Built BEFORE the write, used inside it. */
+    const remap = new Map(groups.map((g) => [g.id, crypto.randomUUID()]));
+
+    await db.transaction(async (tx) => {
+      await tx.insert(dashboardViews).values({
+        id: newViewId,
+        orgId: ctx.orgId,
+        name,
+        pos: keyBetween(last, null),
+        kind: "groups",
+      });
+      if (groups.length > 0) {
+        await tx.insert(dashboardGroups).values(
+          groups.map((g) => ({
+            id: remap.get(g.id)!,
+            orgId: ctx.orgId,
+            viewId: newViewId,
+            name: g.name,
+            color: g.color,
+            pos: g.pos,
+            sortKey: g.sortKey,
+          })),
+        );
+      }
+      if (placements.length > 0) {
+        await tx.insert(dashboardTilePlacements).values(
+          placements.map((p) => ({
+            orgId: ctx.orgId,
+            viewId: newViewId,
+            tileKey: p.tileKey,
+            // THE REMAP. `?? null` rather than `?? p.groupId`: an ungrouped
+            // placement has a null group and stays ungrouped, and a placement
+            // whose group somehow is not in this view must NOT keep pointing at
+            // it — that is the cross-link this whole branch exists to avoid.
+            groupId: p.groupId ? (remap.get(p.groupId) ?? null) : null,
+            pos: p.pos,
+          })),
+        );
+      }
+    });
+    return { ok: true, viewId: newViewId };
+  } catch (e) {
+    return oops(e);
+  }
+}
+
+/**
  * DELETE A VIEW, AND WITH IT THE ARRANGEMENT THAT ONLY EXISTED INSIDE IT.
  *
  * The groups and placements go too, and that is the FOREIGN KEY's doing rather
@@ -672,6 +832,94 @@ export async function deleteCustomTileAction(id: string): Promise<Result> {
       .delete(dashboardTiles)
       .where(and(eq(dashboardTiles.id, id), eq(dashboardTiles.orgId, ctx.orgId)));
     return { ok: true };
+  } catch (e) {
+    return oops(e);
+  }
+}
+
+/**
+ * THE SAME CHART AGAIN, BESIDE THE ONE IT CAME FROM.
+ *
+ * Two drawings of one metric is the whole reason a custom view exists — the
+ * same number as a headline and as a trend, side by side — and getting there
+ * meant adding a chart and repointing it. This is that in one press.
+ *
+ * WHERE IT LANDS: to the right if the row has room, directly below if it does
+ * not, and then the WHOLE VIEW goes through `compact` — the same function every
+ * render and every drag already uses. Placing it by hand and trusting the
+ * arithmetic would be a second definition of "where do tiles go", and the two
+ * would disagree the first time a neighbour was in the way. Here the copy is
+ * placed approximately and the packer decides for real, so a duplicate lands
+ * exactly where dropping one there would have.
+ *
+ * The layout write is part of the same statement batch as the insert: a copy
+ * that exists at an overlapping position, because the compaction failed after
+ * the insert succeeded, is a board the customer has to repair by hand.
+ */
+export async function duplicateCustomTileAction(id: string): Promise<Result<{ tile: BoardTileRow }>> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  if (!idSchema.safeParse(id).success) return fail("Unknown chart.");
+
+  try {
+    const db = getDb();
+    // Id AND org, like every other read behind a mutation here.
+    const [source] = await db
+      .select()
+      .from(dashboardTiles)
+      .where(and(eq(dashboardTiles.id, id), eq(dashboardTiles.orgId, ctx.orgId)));
+    if (!source) return fail("That chart isn't on this board any more.");
+
+    const siblings = await db
+      .select()
+      .from(dashboardTiles)
+      .where(and(eq(dashboardTiles.orgId, ctx.orgId), eq(dashboardTiles.viewId, source.viewId)));
+
+    const cap = boardTileCap();
+    if (siblings.length >= cap) {
+      return fail(`This view has reached its limit of ${cap} charts. Remove one to add another.`);
+    }
+
+    /**
+     * BESIDE, THEN BELOW. `x + w` is where a second copy visually belongs; it
+     * is only wrong when the original already reaches the right edge, and then
+     * the honest fallback is the next row rather than a squeeze.
+     */
+    const fits = source.x + source.w * 2 <= GRID_COLS;
+    const copy: BoardTileRow = {
+      id: crypto.randomUUID(),
+      tileKey: source.tileKey,
+      chart: source.chart,
+      config: parseTileConfig(source.config),
+      x: fits ? source.x + source.w : source.x,
+      y: fits ? source.y : source.y + source.h,
+      w: source.w,
+      h: source.h,
+    };
+
+    /**
+     * NO `first` ARGUMENT, deliberately. It exists so a DRAGGED tile wins ties
+     * against the neighbours it is being dropped among; handing it to the copy
+     * here does the opposite of what a duplicate should do — `orderOf` sorts by
+     * `y`, then the flag, then `x`, so a copy that collides with its original
+     * would take the higher slot and push the ORIGINAL down. Nothing about
+     * copying a chart should move the chart it was copied from. Plain reading
+     * order already puts the original first and packs the copy after it.
+     */
+    const packed = compact([...siblings.map(({ id: i, x, y, w, h }) => ({ id: i, x, y, w, h })), { ...copy }], GRID_COLS);
+
+    await db.transaction(async (tx) => {
+      await tx.insert(dashboardTiles).values({ ...copy, orgId: ctx.orgId, viewId: source.viewId });
+      for (const box of packed) {
+        await tx
+          .update(dashboardTiles)
+          .set({ x: box.x, y: box.y, w: box.w, h: box.h, updatedAt: new Date() })
+          .where(and(eq(dashboardTiles.id, box.id), eq(dashboardTiles.orgId, ctx.orgId)));
+      }
+    });
+
+    const placed = packed.find((b) => b.id === copy.id) ?? copy;
+    return { ok: true, tile: { ...copy, x: placed.x, y: placed.y, w: placed.w, h: placed.h } };
   } catch (e) {
     return oops(e);
   }

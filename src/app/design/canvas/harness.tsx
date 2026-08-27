@@ -48,10 +48,31 @@ export function CanvasHarness({
         tile: { id: `sim-added-${++minted.current}`, tileKey, chart, config: {}, x: 0, y: 99, w: 3, h: 4 },
       }),
       deleteTile: async () => ({ ok: true as const }),
+      // Answers with the copy's real geometry, as the server does — the board
+      // lands the box from that answer rather than waiting for a refresh.
+      duplicateTile: async (id) => {
+        const from = tiles.find((t) => t.id === id);
+        return {
+          ok: true as const,
+          tile: {
+            id: `sim-copy-${++minted.current}`,
+            tileKey: from?.tileKey ?? "flow:demo:x",
+            chart: from?.chart ?? "number",
+            config: from?.config ?? {},
+            // The server's own rule, mirrored: beside if the row has room,
+            // directly below if it does not. A fake that places the copy
+            // somewhere the real one never would tests nothing.
+            x: from && from.x + from.w * 2 <= 12 ? from.x + from.w : (from?.x ?? 0),
+            y: from && from.x + from.w * 2 <= 12 ? from.y : (from?.y ?? 0) + (from?.h ?? 4),
+            w: from?.w ?? 3,
+            h: from?.h ?? 4,
+          },
+        };
+      },
       editTile: async () => ({ ok: true as const }),
       writeLayout: async () => ({ ok: true as const }),
     }),
-    [],
+    [tiles],
   );
 
   const remoteAdd = () => {
