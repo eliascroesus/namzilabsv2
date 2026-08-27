@@ -375,6 +375,9 @@ export function CustomTile({
   return (
     <ChartFrame
       title={title}
+      /* A scorecard is just the number, so naming it adds nothing; every mark
+         that DRAWS something says which drawing it is. */
+      chartLabel={chart === "number" ? undefined : (CHARTS.find((c) => c.id === chart) ?? CHARTS[0]).label}
       rangeLabel={rangeLabel}
       /* A funnel, a pipeline and a table have no single figure to head. */
       headline={

@@ -1625,29 +1625,27 @@ export type RangeSlot = NonNullable<TileSpec["byRange"]>[string];
  * block, and the axis carried a lone "Aug '26" under a pill that said seven
  * days. The chart was answering a different question from the one on screen.
  *
- * The window decides instead, capped by the metric's own unit so a
- * quarterly metric is never forced into days. Roughly a dozen to forty points:
- * enough to read a shape, few enough to stay legible in a tile and small
- * enough that the stored jsonb — read on every dashboard render, and billed by
- * the byte — does not grow a row per hour.
+ * THE WINDOW DECIDES, AND THE METRIC GETS NO VOTE. The first version of this
+ * capped the fitted unit by the metric's declared one — "never finer than it
+ * asked for", which sounds careful and made the whole thing a no-op:
+ * `MetricSpecSchema` DEFAULTS `timeUnit` to "month", so nearly every metric
+ * carries "month" without anyone having chosen it, and seven days floored to
+ * month is the single bucket this exists to abolish. Ninety days floored to
+ * month is one too — which is why the tile's "pick a longer range" was advice
+ * that could not work. `timeUnit` is a display preference for the all-time
+ * view, not a claim about the data's grain.
+ *
+ * Roughly a dozen to forty points: enough to read a shape, few enough to stay
+ * legible in a tile, and small enough that the stored jsonb — read on every
+ * dashboard render and billed by the byte — does not grow a row per hour.
  *
  * "all" keeps the metric's unit: it is the one window whose length is unknown
  * here, and the publisher's choice is the only sensible answer for it.
  */
-const UNIT_ORDER = ["day", "week", "month", "quarter", "year"] as const;
-
-export function bucketUnitForWindow(
-  spanMs: number,
-  declared: TilePresentation["timeUnit"],
-): NonNullable<TilePresentation["timeUnit"]> {
+export function bucketUnitForWindow(spanMs: number): NonNullable<TilePresentation["timeUnit"]> {
   const DAY = 86_400_000;
   const days = spanMs / DAY;
-  const fitted = days <= 45 ? "day" : days <= 180 ? "week" : days <= 1200 ? "month" : "year";
-  // Never finer than the metric asked for. A metric declared quarterly has no
-  // meaningful daily shape, and pretending otherwise invents precision.
-  const floor = declared ?? "month";
-  const order = UNIT_ORDER as readonly string[];
-  return order.indexOf(fitted) < order.indexOf(floor) && declared != null ? floor : fitted;
+  return days <= 45 ? "day" : days <= 180 ? "week" : days <= 1200 ? "month" : "year";
 }
 
 export function tileByRange(
@@ -1945,7 +1943,7 @@ export function tileByRange(
        * one range whose length this function does not know, so it keeps the
        * metric's declared unit.
        */
-      const unit = range.all ? spec.timeUnit : bucketUnitForWindow(range.end - range.start, spec.timeUnit);
+      const unit = range.all ? spec.timeUnit : bucketUnitForWindow(range.end - range.start);
       const tile = ex.tile ?? buildTile({ ...spec, timeUnit: unit }, ex.shape, ex.sample);
       const records = recordsBehind(ex, memo);
       out[range.key] = {

@@ -36,6 +36,7 @@ import type { ImportCoverage } from "@/connectors/types";
  */
 export function ChartFrame({
   title,
+  chartLabel,
   rangeLabel,
   headline,
   delta,
@@ -51,6 +52,14 @@ export function ChartFrame({
   children,
 }: {
   title: string;
+  /**
+   * WHAT THIS TILE IS DRAWN AS, beside the metric's name.
+   *
+   * Two tiles of one metric drawn two ways carry the same title and the same
+   * number, and were indistinguishable at a glance — the whole point of a
+   * custom view is putting exactly that pair side by side.
+   */
+  chartLabel?: string;
   /** Set only when this tile overrides the board's period. See the header. */
   rangeLabel?: string;
   /**
@@ -96,6 +105,9 @@ export function ChartFrame({
               to say. Inside the truncating line on purpose: the metric's name
               yields first, since the period is the shorter and the surprising
               half. */}
+          {chartLabel && (
+            <span className="ml-1.5 shrink-0 whitespace-nowrap font-medium text-muted-foreground">· {chartLabel}</span>
+          )}
           {rangeLabel && (
             <span className="ml-1.5 shrink-0 whitespace-nowrap font-medium text-muted-foreground">· {rangeLabel}</span>
           )}
