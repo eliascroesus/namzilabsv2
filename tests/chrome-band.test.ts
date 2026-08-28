@@ -43,20 +43,29 @@ function one(source: string, re: RegExp, what: string): string {
 
 describe("the chrome band", () => {
   const band = Number(one(css, /--spacing-chrome-band:\s*(\d+)px\s*;/, "--spacing-chrome-band"));
-  // Island(): `p-[7px]` around a 42px control, plus 1px of border on each side.
-  // `bg-\S+` rather than a named colour: this file pins GEOMETRY, and it has
-  // already failed once for a re-skin that moved no edge (bg-white → bg-card).
-  const pad = Number(one(toolbar, /rounded-surface border border-border bg-\S+ p-\[(\d+)px\]/, "the island's padding"));
-  const control = Number(one(toolbar, /flex h-\[(\d+)px\] w-\[\d+px\] shrink-0 items-center justify-center rounded-control text-foreground/, "the island's control height"));
-  // The bar's own distance from the viewport edge. It is full-width now, so
-  // `inset-x-6` carries the horizontal one and `top-6` the vertical; the band
-  // is built from the vertical.
-  const inset = Number(one(toolbar, /absolute inset-x-6 top-(\d+) z-10/, "the bar's inset")) * SPACING_STEP;
 
-  it("equals inset + island + inset", () => {
-    const island = 1 + pad + control + pad + 1;
-    expect(island).toBe(58);
-    expect(band).toBe(inset + island + inset);
+  /**
+   * THE BAND IS THE INSET NOW, AND NOTHING ELSE.
+   *
+   * It used to be 24 + 58 + 24: the canvas's inset, the toolbar island floating
+   * over it, and the gap below. That toolbar moved into the app's top bar —
+   * the builder had two stacked bars and the upper one covered the flow being
+   * edited — so there is no island left to clear.
+   *
+   * The remaining floating chrome is the zoom column at the bottom-left, which
+   * measures from the foot and never from this.
+   */
+  const inset = Number(one(toolbar, /absolute bottom-(\d+) left-\d+ z-10/, "the zoom column's inset")) * SPACING_STEP;
+
+  it("equals the canvas's own inset, because no bar floats over it any more", () => {
+    expect(band).toBe(inset);
+  });
+
+  it("keeps no floating bar across the top of the canvas", () => {
+    // The regression this replaces: re-float the toolbar and the panel, the
+    // banners and the canvas all measure against a bar that is covering them.
+    expect(toolbar).not.toMatch(/absolute inset-x-6 top-\d+/);
+    expect(toolbar).toMatch(/TopBarPortal/);
   });
 
   it("is referenced by the panel, which is the only thing that emits it", () => {

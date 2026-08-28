@@ -367,17 +367,18 @@
   --radius-frame: 0rem;
 
   /* --- Chrome band --------------------------------------------------------
-   * How far the builder's floating panels must stay clear of the chrome
-   * islands: 24px viewport inset + 58px island + 24px gap = 106px, measured
-   * from the top edge and mirrored at the foot.
+   * How far the builder's floating panels stay clear of the canvas's top edge.
    *
-   * It is a token because it is ONE measurement written in two files — the
-   * island's height lives in FlowToolbar, the panel's top and bottom live in
-   * ConfigPanel — and nothing but this variable keeps them agreeing. Change the
-   * island's padding or control size and this is the number that follows.
-   * Spacing namespace, so it reaches the `top-`/`bottom-` utilities that use it.
+   * It was 106px — a 24px viewport inset plus a 58px toolbar island plus a
+   * 24px gap — because the builder floated its whole toolbar over the canvas.
+   * That toolbar is in the app's top bar now, so there is no island to clear
+   * and the band is the inset alone.
+   *
+   * Kept as a token rather than inlined because the config panel, the publish
+   * error banner and the warning banner all measure from it, and nothing but
+   * this variable keeps the four of them agreeing.
    */
-  --spacing-chrome-band: 106px;
+  --spacing-chrome-band: 24px;
 
   /* --- Motion -------------------------------------------------------------
    * THE TIMINGS WERE ALL ONE-OFFS. 0.12s, 0.16s, 0.19s, 200ms and four

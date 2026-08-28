@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -80,6 +81,29 @@ export type SaveState = "saved" | "saving" | "unsaved" | "error";
  * draws a real border, and a ringed shadow under one is two hairlines of
  * different hue, a 2px dirty rim instead of a crisp edge.
  */
+/**
+ * THE BUILDER'S TOOLBAR, RENDERED INTO THE APP'S TOP BAR.
+ *
+ * It floated over the canvas in a rounded island — which meant the editor had
+ * two top bars stacked, and the upper one covered the thing being edited. The
+ * controls belong to the flow, so they belong in the bar that already carries
+ * the workspace and the create actions.
+ *
+ * A portal, not a prop, because these controls sit deep inside the canvas's own
+ * client tree and read its undo stack, its save state and its publish
+ * fingerprint. Lifting them into the frame would mean lifting all of that with
+ * them; portalling moves the DOM and leaves the state where it belongs.
+ *
+ * `mounted` gates the first render: the slot is created by the frame, so on the
+ * server (and on the very first client pass) `getElementById` is null. Render
+ * nothing rather than crash, then fill it in on mount.
+ */
+function TopBarPortal({ children }: { children: React.ReactNode }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => setSlot(document.getElementById("topbar-slot")), []);
+  return slot ? createPortal(children, slot) : null;
+}
+
 function Island({ className = "", children }: { className?: string; children: React.ReactNode }) {
   return (
     <div className={`pointer-events-auto flex items-center gap-1 rounded-surface border border-border bg-card p-[7px] shadow-surface ${className}`}>
@@ -204,9 +228,8 @@ export function FlowToolbar({
 
           The config panel opens in the band BELOW it, so nothing ever has to
           move out of anything's way. */}
-      <div className="pointer-events-none absolute inset-x-6 top-6 z-10">
-        <Island className="w-full">
-          <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+      <TopBarPortal>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {/* WHERE YOU CAME FROM, THEN WHAT YOU DO WITH THE FLOW.
                 Ship, run, on/off — the three acts, together at the reading
                 edge; the name stays centred by the grid regardless. */}
@@ -378,8 +401,7 @@ export function FlowToolbar({
                   control away, and 16 beside it read as two different icon sets. */}
             </span>
           </div>
-        </Island>
-      </div>
+        </TopBarPortal>
 
       {/* ── THE VIEW, ITS OWN LITTLE BAR ───────────────────────────────
           Zoom and fit are the only controls here that are about looking rather

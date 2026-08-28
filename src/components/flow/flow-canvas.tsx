@@ -1948,7 +1948,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
 
   return (
     // NO BAR, NO RAIL. The canvas is the page; the chrome floats on it.
-    <div className="relative flex h-screen flex-col">
+    // `h-full`, not `h-screen`: this sits inside the frame's content column,
+    // which is already the viewport MINUS the top bar. At `h-screen` the canvas
+    // was exactly one bar too tall, so the zoom island fell off the page.
+    <div className="relative flex h-full flex-col">
       <FlowToolbar
         name={name}
         onRename={onRename}

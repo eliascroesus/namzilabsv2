@@ -37,7 +37,17 @@ export function TopBar() {
         <span className="text-md font-semibold tracking-tight text-foreground">Namzilabs</span>
       </Link>
 
-      <span className="flex-1" />
+      {/* WHERE A PAGE PUTS ITS OWN CHROME.
+          The flow builder used to float its entire toolbar over the canvas in
+          a rounded island — Review & publish, run, on/off, the flow's name,
+          save state, undo/redo — which meant the app had two top bars stacked,
+          one of them covering the thing being edited. It portals into here
+          instead, so there is one bar and the canvas gets its space back.
+
+          A portal target rather than a prop because the controls are deep
+          inside the canvas's own client tree, holding its undo stack and save
+          state; lifting them would mean lifting all of that with them. */}
+      <div id="topbar-slot" className="flex min-w-0 flex-1 items-center gap-2 pl-2" />
 
       <Link
         href="/dashboard/settings"
