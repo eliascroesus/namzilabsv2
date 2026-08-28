@@ -53,8 +53,16 @@ export function ShellSkeleton({
           Its head band is a mirror too — the workspace control's 64px, with the
           hairline under it — so the seam that runs across the whole chrome is
           already drawn when the shimmer appears rather than arriving with the
-          route. */}
-      <div className="w-[248px] shrink-0 border-r border-border bg-sidebar">
+          route.
+
+          264 because the column went to 264 (40px rows with a 28px chip needed
+          the room). ONLY the two measurements the test pins are mirrored: the
+          search field, the ruled groups and the plan card below them are not
+          drawn here, on this file's own argument — the real column is about to
+          occupy this space, and a shimmering ghost of furniture that never
+          moves is noise. Nothing in them changes the column's WIDTH, which is
+          the only thing the page beside it can feel. */}
+      <div className="w-[264px] shrink-0 border-r border-border bg-sidebar">
         <div className="h-16 border-b border-border" />
       </div>
       <div className="flex min-w-0 flex-1 flex-col">

@@ -34,6 +34,18 @@ import { cn } from "@/lib/utils";
  * violet on the screen apart from whichever sidebar row you are standing on.
  * A violet mark AND a violet button would have been two of them competing, with
  * the one you cannot press drawn first.
+ *
+ * AND ONE CHIP, WHICH EVERY REFERENCE HAS AND THIS BAR DID NOT.
+ *
+ * NO PLAN CHIP. Miro carries "Free plan" beside its mark and Figma carries
+ * "Free", and one was added here — then removed, for two reasons. It said the
+ * same thing as the sidebar's own plan card 700px away, and it switched on at
+ * `lg`, which is exactly where the builder portals its toolbar into this row:
+ * measured, the slot fell to 158px for a flow name, save state, run, undo,
+ * redo and publish. The old note read:
+ * how a workspace tells you what KIND of workspace it is without anyone having
+ * to go looking — and the left end of the bar, where identity already lives, is
+ * the only place it can sit without reading as an action.
  */
 export function TopBar({ account }: { account?: { initials: string; panel: ReactNode } }) {
   return (
@@ -59,15 +71,41 @@ export function TopBar({ account }: { account?: { initials: string; panel: React
       >
         {/* DEEP BLACK, reached through the `foreground` ROLE rather than a
             near-black fill: it inverts with the theme, and it sidesteps the kit
-            gate that bans `bg-neutral-900` as a brand fill. An 8px square, not a
-            disc: the sheet pills BUTTONS and CHIPS, and a round mark beside a
-            round avatar in the rail would be two circles claiming to be the
-            same kind of object. */}
-        <span className="flex size-8 items-center justify-center rounded-control bg-foreground text-sm font-semibold text-background">
+            gate that bans `bg-neutral-900` as a brand fill. A square at the 8px
+            control radius, not a disc: the sheet pills BUTTONS and CHIPS, and a
+            round mark beside a round avatar in the rail would be two circles
+            claiming to be the same kind of object.
+
+            36px, up from 32. The bar is unchanged at 64 and it is the CONTENTS
+            that were undersized: a 32px mark beside a 36px button and a 36px
+            avatar was the smallest object in a row of controls, which is the
+            wrong rank for the one thing on the bar that is the product itself.
+            36 is also the sidebar's 28px chip plus its row's air, so the two
+            columns' first objects are the same weight. */}
+        <span className="flex size-9 items-center justify-center rounded-control bg-foreground text-md font-semibold text-background">
           N
         </span>
         <span className="text-md font-semibold tracking-tight text-foreground">Namzilabs</span>
       </Link>
+
+      {/* THE STATUS CHIP. `tone="brand"` is a violet TINT with the sheet's link
+          violet as its ink (the 500 is 4.42:1 on off-white and never carries
+          text) — and it is the ratio rule applied rather than bent: violet
+          marks SELECTION and IDENTITY, and which plan this workspace is on is
+          identity. The one violet FILL on the screen is still the sidebar row
+          you are standing in, so the two never compete.
+
+          Static text for one commit. When billing lands this takes a prop; it
+          deliberately shows no chevron, because a chevron on something that
+          does not open is a promise the bar cannot keep.
+
+          Hidden below `lg`, and `lg` rather than `sm` because of the ROUTE
+          BELOW IT. The slot beside this chip is where the builder portals its
+          whole toolbar — the flow's name, save state, run, undo/redo, publish —
+          and that row is the first thing to suffer when the bar takes on
+          another fixed object. Above 1024 there is room for both; below it the
+          chip is the one that can leave, because it is a label and the other is
+          the controls for the thing on screen. */}
 
       {/* WHERE A PAGE PUTS ITS OWN CHROME.
           The flow builder used to float its entire toolbar over the canvas in

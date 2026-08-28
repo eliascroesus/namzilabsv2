@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, ChevronsUpDown, LayoutDashboard, Plug, Radio, Settings, Workflow } from "lucide-react";
+import { CalendarDays, ChevronRight, ChevronsUpDown, LayoutDashboard, Plug, Radio, Search, Settings, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { GROUP_ACCENT, GROUP_COLOR_KEYS } from "@/components/flow/node-accent";
@@ -37,10 +37,31 @@ function workspaceAccent(name: string): string {
  * the chrome the loudest thing in a product whose whole thesis is that the
  * NUMBER should be.
  *
- * WHAT IT IS: Notion's shape, wearing the brand sheet. A 248px column on its
- * own surface, flush with the page (no notch), holding compact rows that read
- * as text with an icon rather than icons with a caption. Sections are separated
- * by an ALL-CAPS label, not by a gap.
+ * WHAT IT IS: the shape Miro, Figma and Make.com all converge on, wearing the
+ * brand sheet. A 264px column on its own surface, flush with the page (no
+ * notch), which opens with the workspace, then a search field, then two ruled
+ * groups of 40px rows that read as text with an icon rather than icons with a
+ * caption, then a foot with something in it.
+ *
+ * FOUR THINGS ALL THREE REFERENCES DO THAT THIS COLUMN DID NOT.
+ *
+ * · A SEARCH CONTROL, NOT A SEARCH ICON. All three put a bordered, full-width
+ *   field directly under the workspace switcher, because it is the fastest way
+ *   into a product that holds far more objects than it has nav items — and
+ *   because a column that OPENS with a field reads as somewhere you can act
+ *   rather than as a table of contents. Ours is inert for one commit; see the
+ *   control itself for why it is a button and not an <input>.
+ * · HAIRLINES BETWEEN THE GROUPS. A caps label on its own is a whisper: six
+ *   items under two of them read as one long list with occasional small text,
+ *   which is exactly the "all over the place" complaint. A rule across the full
+ *   264px is what turns them into SECTIONS.
+ * · 40px ROWS. Miro and Figma both sit there. These were 32 — the kit's `sm`
+ *   CONTROL height, which is a size for a toolbar rather than for the six
+ *   places this product goes.
+ * · A FOOT WITH SOMETHING IN IT. Figma keeps "what's included / your plan and
+ *   usage" in a bordered card down there; Miro keeps Spaces. This kept a sun
+ *   icon and the word THEME — the least consequential control in the product,
+ *   alone in the most protected space in the column.
  *
  * THE SHEET SHOWS UP IN THREE PLACES HERE, AND ONLY THREE.
  *
@@ -59,24 +80,24 @@ function workspaceAccent(name: string): string {
  *   colour the chip and never the row. That is the whole difference between
  *   this column and the grey list of links every dashboard ships with.
  *
- * THE ROWS ARE 32px, on the 8px baseline and the same height as the kit's `sm`
- * control. They were 30 — a number from no scale — and before that 40 with a
- * 12px caption, at which the six items occupied more vertical space than most
- * of the pages they lead to.
+ * THE ROWS ARE 40px, WHICH IS WHERE THE REFERENCES SIT. Every vertical measure
+ * in the column is a multiple of 8 from here: a 28px chip inside the row (6px
+ * of air either side), 16px of padding at the head and foot of each ruled
+ * group, 8px in the foot's own band.
  */
 const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; section: string; soft: string }> = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Workspace", soft: "bg-brand-100 text-brand-700" },
-  { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays, section: "Workspace", soft: "bg-accent-orange/20 text-accent-orange" },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Workspace", soft: "bg-primary/15 text-accent-foreground" },
+  { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays, section: "Workspace", soft: "bg-accent-orange/15 text-accent-orange" },
   // The two pale accents cannot ink their own glyph — pink on pink and yellow
   // on yellow are both under 2:1 — so they take the page's own text colour.
   // `foreground`, not the near-black literal it used to be: the accents are
   // fixed hexes that do not move with the theme, so in dark mode a near-black
   // icon sat on a dark plum wash and vanished. The role inverts; the hue does
   // not need to.
-  { label: "Activity", href: "/dashboard/activity", icon: Radio, section: "Workspace", soft: "bg-accent-pink/30 text-foreground" },
-  { label: "Flows", href: "/dashboard/flows", icon: Workflow, section: "Build", soft: "bg-accent-peri/25 text-accent-peri" },
-  { label: "Apps", href: "/integrations", icon: Plug, section: "Build", soft: "bg-accent-yellow/40 text-foreground" },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, section: "Build", soft: "bg-foreground/10 text-foreground" },
+  { label: "Activity", href: "/dashboard/activity", icon: Radio, section: "Workspace", soft: "bg-accent-pink/15 text-danger-ink" },
+  { label: "Flows", href: "/dashboard/flows", icon: Workflow, section: "Build", soft: "bg-accent-peri/15 text-accent-peri" },
+  { label: "Apps", href: "/integrations", icon: Plug, section: "Build", soft: "bg-accent-yellow/15 text-warn-ink" },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, section: "Build", soft: "bg-foreground/15 text-foreground" },
 ];
 
 /**
@@ -122,7 +143,12 @@ export function Sidebar({
     // — the skeleton reserves this exact column while a route streams, and the
     // two drifting is content jumping sideways at the moment the page lands.
     // It reads the FIRST `w-[…px]` in each file, which is this one.
-    <aside className="flex h-full w-[248px] shrink-0 flex-col border-r border-border bg-sidebar">
+    //
+    // 264, up from 248: Miro runs ~260 and Figma ~240, and the extra 16px is
+    // what a 40px row with a 28px chip needs before its label starts truncating
+    // — a column that clips "Dashboard" is a column that reads as cramped no
+    // matter how well the rest of it is set.
+    <aside className="flex h-full w-[264px] shrink-0 flex-col border-r border-border bg-sidebar">
       {/* THE HEAD BAND IS THE TOP BAR'S OWN HEIGHT, AND THAT IS THE POINT.
           h-16 with a hairline under it means the sidebar's rule and the top
           bar's rule are one continuous line across the application, the way
@@ -159,7 +185,7 @@ export function Sidebar({
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{name}</span>
                 {/* The account moved to the TOP BAR, where Miro, Notion and
                     Figma all keep it. This control answers "which workspace";
-                    putting "and who am I" on the same row made a 248px header
+                    putting "and who am I" on the same row made a 264px header
                     carry two different identities and read as clutter. */}
                 <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
               </button>
@@ -167,7 +193,8 @@ export function Sidebar({
             {/* The trigger's own width, read from Radix rather than typed: the
                 panel is the control opening, not a card landing beside it, and
                 a literal `232px` here was 248 minus this band's padding — two
-                numbers in two files that only agreed by hand. */}
+                numbers in two files that only agreed by hand, and the column is
+                264 now. */}
             <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width) p-0">
               {account.panel}
             </DropdownMenuContent>
@@ -182,16 +209,65 @@ export function Sidebar({
         )}
       </div>
 
+      {/* THE SEARCH FIELD, WHICH THIS COLUMN USED TO HAVE AND LOST.
+          It sits directly under the workspace switcher because that is where
+          all three references put it, and because the two answer consecutive
+          questions: WHICH workspace, then WHAT in it.
+
+          IT IS A BUTTON WEARING A FIELD'S CLOTHES, and that is the honest
+          spelling rather than a shortcut. Search here will open the command
+          palette (`ui/command.tsx` is already vendored) — you do not type into
+          this box, you press it and type into that — so a real <input> would be
+          a control that takes focus, accepts characters and does nothing with
+          them, which is worse than an obvious button. It carries no handler for
+          one commit; wiring it is an `onClick`, not a redesign.
+
+          `h-10 border-input bg-card rounded-control` is the kit's own field
+          recipe from ui/input.tsx, so this reads as the same object as every
+          real field in the product — but at `px-3`, not the recipe's `px-4`.
+          That 4px was written when `--radius-control` was 9999px and a pill's
+          corner curve pushed text off its own left edge; the control radius is
+          8px again, and here the only thing px-4 buys is a magnifier standing
+          4px right of every icon below it. One text margin down the column.
+
+          The hover is a WASH rather than the field's border-darkening:
+          `hover:border-neutral-300` is a raw palette class and only
+          `components/ui` may spell those. */}
+      <div className="shrink-0 px-2 py-4">
+        <button
+          type="button"
+          className="flex h-10 w-full items-center gap-2.5 rounded-control border border-input bg-card px-3 text-left text-sm text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted"
+        >
+          <Search className="size-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">Search</span>
+          {/* A KEYCAP, NOT A PILL. The sheet's pills are buttons and chips;
+              this is neither — it is a picture of a key, and every product that
+              draws one draws a rounded rectangle. Mono, because a shortcut is a
+              literal string and the proportional face renders ⌘K a hair narrow
+              beside the word next to it. */}
+          <kbd className="shrink-0 rounded-sm border border-border bg-background px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+            ⌘K
+          </kbd>
+        </button>
+      </div>
+
       {/* `aria-label` because a column of links is only "the navigation" to
           somebody who can see where it sits on the page. */}
-      <nav aria-label="Primary" className="quiet-scroll min-h-0 flex-1 overflow-y-auto px-2 py-4">
+      <nav aria-label="Primary" className="quiet-scroll min-h-0 flex-1 overflow-y-auto">
         {sections.map((section) => (
-          <div key={section} className="mb-5 last:mb-0">
+          // THE GROUPS ARE RULED, NOT MERELY LABELLED. The hairline is on the
+          // section rather than between sections so the first one also draws
+          // the line under the search field — the two are the same seam, and a
+          // `first:border-t-0` would leave the field floating against the group
+          // below it. The rule spans the full 264px (the padding is INSIDE
+          // this div) so it reads as the chrome's own line, like the head
+          // band's, rather than as an inset divider between two lists.
+          <div key={section} className="border-t border-border px-2 py-4">
             {/* The kit's micro-label voice, verbatim from ui/badge.tsx: 12px,
                 ALL CAPS, tracking-wide. `px-3` puts it on the same left edge as
                 the rows' icons rather than on the pill's outer edge, so the
                 column has one text margin instead of two. */}
-            <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{section}</p>
+            <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{section}</p>
             <div className="space-y-0.5">
               {items
                 .filter((i) => i.section === section)
@@ -203,10 +279,19 @@ export function Sidebar({
                       href={href}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "flex h-8 items-center gap-2.5 rounded-control px-3 text-sm transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+                        // THE RESTING LABEL IS FULL-CONTRAST NOW, not muted.
+                        // Six grey labels with one violet row is a list of
+                        // captions with a selection on it; Miro and Figma both
+                        // set every destination in the column at full weight
+                        // and let the FILL say which one you are standing in.
+                        // The chrome stays quiet where quiet is free — the
+                        // surface, the rules, the chips — and spends its
+                        // contrast on the six words that are the column's
+                        // actual content.
+                        "flex h-10 items-center gap-2.5 rounded-control px-3 text-sm font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)",
                         active
                           ? "bg-primary font-semibold text-primary-foreground shadow-xs"
-                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
+                          : "text-foreground hover:bg-sidebar-accent",
                       )}
                     >
                       {/* THE ICON SITS IN ITS OWN COLOURED CHIP, which is most
@@ -222,7 +307,12 @@ export function Sidebar({
                           keep in step with it. */}
                       <span
                         className={cn(
-                          "flex size-6 shrink-0 items-center justify-center rounded-control transition-colors",
+                          // 28px in a 40px row, holding a 16px glyph. The chip
+                          // was 24 on a 32px row and grew with it: at 24 inside
+                          // 40 the colour turns into a dot floating in a lot of
+                          // air, which is the shape of a list that was resized
+                          // without being redrawn.
+                          "flex size-7 shrink-0 items-center justify-center rounded-control transition-colors",
                           // ON THE VIOLET ROW THE CHIP BECOMES A VEIL, and it
                           // has to. It carried its destination's colour at full
                           // strength there, which put a violet chip on a violet
@@ -235,7 +325,7 @@ export function Sidebar({
                           active ? "bg-primary-foreground/20" : soft,
                         )}
                       >
-                        <Icon className="size-3.5" />
+                        <Icon className="size-4" />
                       </span>
                       <span className="truncate">{label}</span>
                     </Link>
@@ -246,17 +336,45 @@ export function Sidebar({
         ))}
       </nav>
 
-      {/* THE FOOT OF THE COLUMN, ON THE COLUMN'S OWN RHYTHM.
-          `size="icon"` is 44px — a control sized for a form, sitting alone
-          under a list of 32px rows and making the footer taller than two of
-          them. `size-9` puts it at the rows' scale and the band at 52px, and
-          the label names what the icon does: an unlabelled sun in a corner is
-          the one control in the chrome nobody can identify without pressing
-          it. The caption takes the kit's micro voice, the same one the section
-          headings above it use. */}
-      <div className="flex items-center justify-between border-t border-border py-2 pl-5 pr-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Theme</span>
-        <ThemeToggle className="size-9" />
+      {/* THE FOOT OF THE COLUMN — A BLOCK, NOT A STRAY TOGGLE.
+          It was a hairline, the word THEME and a sun: the least consequential
+          control in the product, alone at the bottom of the navigation, which
+          is the space every reference spends on the thing you would actually
+          go and look at. Figma puts "See what's included / your plan and usage"
+          in a bordered card there; Miro puts Spaces.
+
+          THE CARD IS A ROUNDED RECTANGLE AT THE CARD RADIUS (10px), not a pill
+          — the sheet pills buttons and chips and nothing else — and it is
+          inset `p-2` so its own `p-3` lands its text on the same 20px left edge
+          as the rows' chips above it. One text margin down the whole column.
+
+          IT SAYS NO NUMBER, and that is deliberate rather than lazy. Billing is
+          not wired, and a usage card is the one place in a product where
+          invented figures are indistinguishable from real ones — "3 of 5 flows"
+          would be a lie rendered as data. It names the plan (static until there
+          is a plan to read) and points at where the detail will live, so
+          arriving at the truth is a prop, not a redesign.
+
+          The theme toggle keeps its row underneath at the rows' own scale —
+          `size="icon"` is 44px, a control sized for a form — with its label in
+          the kit's micro voice, because an unlabelled sun in a corner is the
+          one control in the chrome nobody can identify without pressing it. */}
+      <div className="shrink-0 space-y-2 border-t border-border p-2">
+        <Link
+          href="/dashboard/settings"
+          className="flex items-center gap-2 rounded-card border border-border bg-card p-3 shadow-xs transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Your plan</span>
+            <span className="mt-1 block truncate text-sm font-semibold text-foreground">Free workspace</span>
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">Seats, usage and billing</span>
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+        </Link>
+        <div className="flex items-center justify-between pl-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Theme</span>
+          <ThemeToggle className="size-9" />
+        </div>
       </div>
     </aside>
   );
