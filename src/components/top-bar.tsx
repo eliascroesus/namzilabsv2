@@ -1,32 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, Plus, UserPlus } from "lucide-react";
+import { Plus, UserPlus } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { GROUP_ACCENT, GROUP_COLOR_KEYS } from "@/components/flow/node-accent";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-/**
- * A WORKSPACE'S OWN COLOUR, derived rather than stored.
- *
- * Miro's header is a grey utility bar with exactly one colourful thing in it —
- * the workspace avatar — and that single chip is most of why it does not read
- * as chrome. Ours had no equivalent, so the whole bar was greyscale.
- *
- * The hue comes from the name, through the palette the boards already use, so
- * two workspaces are reliably different colours and the same workspace is the
- * same colour on every device without a column to store it in.
- */
-function workspaceAccent(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  // `grey` is the palette's "no colour" entry — skip it, or a third of
-  // workspaces get a chip that looks like a disabled control.
-  const keys = GROUP_COLOR_KEYS.filter((k) => k !== "grey");
-  return GROUP_ACCENT[keys[h % keys.length]];
-}
 
 /**
  * THE TOP BAR — identity and the two things you start from.
@@ -42,18 +20,12 @@ function workspaceAccent(name: string): string {
  * "which workspace am I in" and "how do I add something" never depends on which
  * page you happen to be standing on.
  *
- * A 52px bar, not 64: this sits ABOVE a second bar on the board, and two tall
- * bars stacked eat a fifth of a laptop viewport before any content is drawn.
+ * The workspace switcher is NOT here — it lives at the top of the sidebar,
+ * where the column it governs starts.
  */
-export function TopBar({
-  workspace,
-  account,
-}: {
-  workspace: string;
-  account?: { initials: string; panel: ReactNode };
-}) {
+export function TopBar() {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
       <Link
         href="/dashboard"
         className="flex shrink-0 items-center gap-2 rounded-control px-1 py-1 transition-opacity hover:opacity-80"
@@ -65,44 +37,17 @@ export function TopBar({
         <span className="text-md font-semibold tracking-tight text-foreground">Namzilabs</span>
       </Link>
 
-      {/* The workspace, beside the mark rather than under an avatar. It reads
-          as "Namzilabs / this workspace", which is what it is. */}
-      {account && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-1 min-w-0 gap-1.5 rounded-full border border-border bg-muted/60 pl-1 pr-2 font-medium text-foreground hover:bg-muted"
-            >
-              <span
-                className="flex size-6 shrink-0 items-center justify-center rounded-full text-micro font-semibold text-white"
-                style={{ background: workspaceAccent(workspace) }}
-                aria-hidden
-              >
-                {workspace.slice(0, 2).toUpperCase()}
-              </span>
-              <span className="truncate">{workspace}</span>
-              <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
-            {account.panel}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-
       <span className="flex-1" />
 
       <Link
         href="/dashboard/settings"
-        className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
+        className={cn(buttonVariants({ variant: "secondary" }))}
         title="Invite someone to this workspace"
       >
         <UserPlus />
         <span className="hidden sm:inline">Invite members</span>
       </Link>
-      <Link href="/dashboard/flows" className={cn(buttonVariants({ size: "sm" }))}>
+      <Link href="/dashboard/flows" className={cn(buttonVariants())}>
         <Plus />
         <span className="hidden sm:inline">New flow</span>
       </Link>

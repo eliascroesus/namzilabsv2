@@ -15,6 +15,30 @@
 @import "tw-animate-css";
 
 /**
+ * THE DEFAULT BORDER COLOUR — the step that made every vendored panel look
+ * hand-drawn.
+ *
+ * Tailwind v3's bare `border` painted `gray-200`. v4 changed it to
+ * `currentColor`, and every shadcn component uses bare `border` because it was
+ * written against v3. So a dropdown, a dialog and a popover all drew a 1px rim
+ * in whatever their TEXT colour was — near-black #101828 against a #eaecf0
+ * hairline everywhere else in the product. It read as a heavy hand-drawn box
+ * and no component looked responsible, because none of them names a colour.
+ *
+ * shadcn's own v4 install includes this rule; it was missed here because
+ * components.json was hand-written to stop the CLI rewriting this file.
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border);
+  }
+}
+
+/**
  * ...RETIMED TO THE KIT'S OWN CURVES.
  *
  * tw-animate-css ships a 150ms linear default. This file has owned three
@@ -543,13 +567,13 @@
   --danger-ink: #b42318; /* 5.49:1 on its soft */
 
   /* ---- The working surface and the rail ---------------------------------- */
-  --canvas-bg: #f2f4f7;
-  --canvas-dot: #d0d5dd; /* Δ 34, 31, 26 */
+  --canvas-bg: #ffffff;
+  --canvas-dot: #e0e4ea; /* Δ 31, 27, 21 from white */
   --canvas-edge: #98a2b3;
-  --rail: var(--color-neutral-50);
+  --rail: #ffffff;
   /* The sidebar is a RECESSED surface now, not a dark wall: one step off the
      page, separated by a hairline rather than by 40 points of luminance. */
-  --sidebar: var(--color-neutral-50);
+  --sidebar: #ffffff;
   --sidebar-accent: var(--color-neutral-200);
 
   /* The far end a group's name is mixed toward — see `groupInk` in
@@ -708,6 +732,20 @@ html {
 html.dark {
   color-scheme: dark;
 }
+
+/**
+ * `tabindex="-1"` IS NOT A CONTROL, AND MUST NOT RING.
+ *
+ * The selector above deliberately catches anything focusable, which was right
+ * while every focusable thing in the app was a control. Radix changed that: it
+ * puts `tabindex="-1"` on menu, dialog and popover CONTENT and focuses it
+ * programmatically on open, so the shared outline drew a hard 2px box around
+ * every dropdown the moment it appeared.
+ *
+ * `-1` means "reachable by script, never by Tab" — which is exactly the set
+ * that should not show a keyboard-focus ring. The items INSIDE these panels are
+ * real controls and still ring.
+ */
 
 /**
  * THE STACKING ORDER, WRITTEN DOWN — because it stopped being local.
@@ -978,7 +1016,7 @@ select:-webkit-autofill {
  * surface the same ring is invisible, so the rail and the toast opt into the
  * white twin instead.
  */
-:where(a, button, summary, [role="button"], [role="switch"], [tabindex]):focus-visible {
+:where(a, button, summary, [role="button"], [role="switch"], [tabindex]:not([tabindex="-1"])):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }

@@ -94,13 +94,13 @@ export function AppFrame({
         paddingRight: "env(safe-area-inset-right)",
       }}
     >
-      <Sidebar hide={hide} />
+      <Sidebar hide={hide} workspace={workspace ?? "Workspace"} account={account} />
       {/* The top bar belongs to the CONTENT column, not the viewport: the
           sidebar runs full height beside it, exactly as it does in Miro and
           Notion. A bar spanning both would put the workspace switcher above
           the navigation that switching it changes. */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar workspace={workspace ?? "Workspace"} account={account} />
+        <TopBar />
         {ownsMain ? (
           <main id="main" className={className}>
             {children}

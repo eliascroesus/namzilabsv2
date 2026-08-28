@@ -128,15 +128,27 @@ export async function AppShell({
         // Rendered on the server, opened by the client rail: the light
         // panel beside the avatar. Workspace first, then identity, then
         // the way out.
+        /**
+         * THE PANEL, BUILT FOR A MENU RATHER THAN FOR A CARD.
+         *
+         * It was a `space-y-3` block with its own internal border, dropped into
+         * a Radix menu that brings its own padding and its own separators — so
+         * the email sat under a rule that did not line up with the panel's
+         * edges, and a full-width secondary button read as a form inside a
+         * dropdown. Three bands, each with the menu's own inset, divided by
+         * hairlines that run the full width.
+         */
         panel: (
-          <div className="space-y-3">
-            <div>
-              <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Workspace</p>
+          <div className="text-base">
+            <div className="px-3 pb-2 pt-2.5">
+              <p className="mb-1.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Workspace</p>
               <OrgSwitcher orgs={orgs} currentId={orgId} />
             </div>
-            {userEmail && <p className="truncate border-t border-border pt-2 text-tiny text-muted-foreground">{userEmail}</p>}
-            <form action={signOutAction}>
-              <Button type="submit" variant="secondary" size="sm" className="w-full">
+            {userEmail && (
+              <p className="truncate border-t border-border px-3 py-2 text-tiny text-muted-foreground">{userEmail}</p>
+            )}
+            <form action={signOutAction} className="border-t border-border p-1">
+              <Button type="submit" variant="ghost" size="sm" className="w-full justify-start font-normal">
                 Sign out
               </Button>
             </form>

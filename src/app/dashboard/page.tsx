@@ -745,7 +745,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             `justify-between` so the range (what period) reads from the left
             edge and the source (whose data) sits at the right, with the gap
             between them saying they are two separate answers. */}
-        <SubBar className="-mx-5 -mt-6 mb-5 justify-between sm:-mx-8 sm:-mt-8 lg:-mx-10">
+        <SubBar className="-mx-5 -mt-6 mb-5 sm:-mx-8 sm:-mt-8 lg:-mx-10">
           {/* THE RANGE TRACK SCROLLS RATHER THAN BREAKING THE PAGE.
               Seven pills at ~70px each is a ~500px track that cannot wrap
               (the pills are `shrink-0`, correctly — without it "Last 30 days"
@@ -758,7 +758,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               last pill lose their outline exactly when a keyboard user reaches
               them. The negative margin lets the ring breathe inside the
               scrollport without indenting the track. */}
-          <div className="-mx-1 max-w-full overflow-x-auto px-1 lg:mx-0 lg:overflow-visible lg:px-0">
+          <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1">
             {/* IT HAS ITS GROOVE BACK. Loose on a flush bar the seven periods
                 read as seven separate buttons that happened to be adjacent; the
                 selected one is now a raised chip sitting IN a track, which is
@@ -790,8 +790,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               sources behind their own current value is also what stops the row
               growing every time a workspace connects another app. */}
           {sources.length > 0 && (
-            <details className="group/src relative">
-              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-control border border-border bg-card px-3 py-1.5 text-small font-medium text-foreground transition-colors duration-(--duration-fast) hover:bg-muted [&::-webkit-details-marker]:hidden">
+            <details className="group/src relative shrink-0">
+              <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 whitespace-nowrap rounded-control border border-border bg-card px-3 text-sm font-medium text-foreground shadow-xs transition-colors duration-(--duration-fast) hover:bg-muted [&::-webkit-details-marker]:hidden">
                 {boardSource && <SourceMark source={boardSource} />}
                 {activeSourceLabel}
                 <ChevronDown size={14} className="text-muted-foreground transition-transform group-open/src:rotate-180" />
@@ -831,8 +831,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               because it answers the same question they do — what the board is
               showing — and because a page action floating above a board is a
               button with nothing to belong to. */}
-          <form action={refreshAllFlowsAction}>
-            <SubmitButton variant="secondary" size="sm" pendingLabel="Refreshing…" title="Recompute every published metric now">
+          {/* `shrink-0` on both, and the range track above takes the slack:
+              without it a narrow viewport squeezed these until "All sources"
+              broke onto two lines inside a 48px bar and this button clipped
+              off the right edge. */}
+          <form action={refreshAllFlowsAction} className="shrink-0">
+            <SubmitButton variant="secondary" pendingLabel="Refreshing…" title="Recompute every published metric now">
               Refresh all
             </SubmitButton>
           </form>
