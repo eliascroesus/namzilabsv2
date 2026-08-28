@@ -322,8 +322,22 @@ describe("the kit's shape", () => {
      * The kit was built BESIDE it, not into it, so the four marks the legacy
      * dashboard renders cannot move under it. A change here is a deliberate
      * act: update this hash and say why in the message.
+     *
+     * MOVED FOR THE BRAND SHEET'S COLOUR PASS. The marks were the last neutral
+     * surface in the product — a grey delta pill, grey gutters and one flat
+     * violet — and they are what people actually look at. They now spend the
+     * sheet's ratio on data: violet fills the series, ink emphasises (the
+     * bucket a series ends on, a delta that moved), and the accent four
+     * decorate a breakdown's rows, where every row is named in its own label
+     * so no hue encodes identity. Yellow stays out: it is the hero, once per
+     * screen, and a dashboard is a wall of these.
+     *
+     * NONE OF THE HONESTY RULES MOVED WITH IT, which is the thing this freeze
+     * is really guarding — bars are still zero-anchored, every value still
+     * goes through `formatMetricValue`, and the delta still paints up and down
+     * identically so it cannot invent a direction.
      */
     const hash = createHash("sha256").update(readFileSync(join(process.cwd(), "src/components/charts.tsx"))).digest("hex");
-    expect(hash).toBe("add06e49e5e1b3f9bd2b86e68d126191d45561c0962f82509cc8dec9e72721f5");
+    expect(hash).toBe("e56ec2d45cea896ed2b3d286c523dc5870e61ec53b27d65c6fb9a1e60a0c7ec2");
   });
 });

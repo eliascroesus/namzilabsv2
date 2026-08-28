@@ -12,7 +12,9 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { SourceMark } from "@/components/source-mark";
+import { sourceStyle } from "@/components/flow/controls/source-style";
 import { formatDate, formatTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { deleteFlowAction, duplicateFlowAction, setFlowEnabledAction } from "./actions";
 import type { FlowState } from "@/lib/flow/store";
 
@@ -40,6 +42,19 @@ const FILTERS: Array<{ key: "all" | FlowState; label: string }> = [
   { key: "paused", label: "Paused" },
 ];
 
+/**
+ * STATE KEEPS THE TRIOS, AND THE ACCENT SET STAYS OFF IT.
+ *
+ * The board wants colour and it gets plenty of it below — but not here. The
+ * sheet's four accents are the DECORATIVE range ("which one is this"), and
+ * success/warn/danger are the only vocabulary allowed to say how something is
+ * GOING. A peri or a yellow pill in this column would be a fifth status colour
+ * that means nothing, in the one spot on the card where a colour is read as a
+ * verdict.
+ *
+ * `pending` is grey on purpose, and a draft's colour arrives as SHAPE instead —
+ * see the dashed edge on the card.
+ */
 const STATE_META: Record<FlowState, { label: string; tone: StatusPillProps["tone"]; dot?: boolean }> = {
   active: { label: "Active", tone: "success", dot: true },
   paused: { label: "Paused", tone: "warn" },
@@ -61,6 +76,20 @@ const STATE_META: Record<FlowState, { label: string; tone: StatusPillProps["tone
  * card is clickable as a whole (the title's `after:` overlay stretches over it)
  * with the controls floated above that overlay, which is what lets a big soft
  * target and small precise ones live on one surface.
+ *
+ * WHERE THE COLOUR IS, now that there is some. The board was a grid of white
+ * rectangles with one 38px stamp on each and grey everywhere else, which is the
+ * definition of scannable-but-forgettable. Three changes, each with a job:
+ *
+ *   · THE CONNECTOR IS THE CARD'S IDENTITY, and it is the only thing on a flow
+ *     that legitimately varies card to card, so it gets a real colour block —
+ *     the mark, sat on a soft wash of its own hue. A board of Close / Calendly /
+ *     Sheets cards now reads by colour before it reads by word.
+ *   · THE TITLE ANSWERS THE POINTER IN VIOLET, because the whole card is one
+ *     link and the accent's job on this sheet is exactly that: selection.
+ *   · THE FOOTER IS A TRAY, not more card. Two materials in one object is what
+ *     gives a card a front and a back, and it is why the switch stops looking
+ *     like it was dropped onto the bottom of a paragraph.
  *
  * What was already right and is kept: the per-row switch (a paused flow
  * silently removes tiles from the dashboard, and this list is the only place
@@ -88,7 +117,11 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
           change what a filter row looks like. */}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-surface border border-border bg-card p-2 shadow-card">
         {/* Counts live on the tabs, so "how many are actually running" is
-            answered without clicking anything. */}
+            answered without clicking anything. `Chip` is already the sheet's
+            pill — `rounded-full`, 12px, ALL CAPS, `tracking-wide` — and the
+            selected one takes the vibrant violet as a FILL, which is the one
+            job that colour has. Nothing to re-spell here; the row only ever
+            looked generic because everything AROUND it was grey. */}
         <div className="flex flex-wrap items-center gap-1">
           {FILTERS.map((f) => (
             <Chip key={f.key} active={filter === f.key} count={counts[f.key]} onClick={() => setFilter(f.key)}>
@@ -106,13 +139,13 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search flows…"
-            className="h-8 w-56 text-small"
+            className="h-8 w-56 text-sm"
           />
         )}
       </div>
 
       {visible.length === 0 ? (
-        <p className="mt-4 rounded-surface border border-dashed border-border bg-card px-4 py-12 text-center text-small text-muted-foreground">
+        <p className="mt-4 rounded-surface border border-dashed border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">
           {query ? `No flows match “${q.trim()}”.` : `No ${filter === "all" ? "" : filter} flows.`}
         </p>
       ) : (
@@ -128,7 +161,7 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
         </div>
       )}
 
-      <p className="mt-4 text-center text-tiny text-muted-foreground">
+      <p className="mt-4 text-center text-xs text-muted-foreground">
         {visible.length} of {flows.length} flow{flows.length === 1 ? "" : "s"}
       </p>
     </div>
@@ -145,6 +178,11 @@ function Row({ flow }: { flow: FlowListItem }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const meta = STATE_META[state];
+  // The connector's own brand colour, from the same pure lookup `SourceMark`
+  // reads. Taken here so the WASH behind the mark can be mixed from it — a
+  // hex in this file would fail the kit gate, and rightly: the value belongs
+  // to the vendor's map, not to a card.
+  const brand = sourceStyle(flow.source).color;
 
   const toggle = () => {
     const next = state === "active" ? "paused" : "active";
@@ -178,12 +216,24 @@ function Row({ flow }: { flow: FlowListItem }) {
     state === "draft" ? "Publish this flow before turning it on" : state === "active" ? "Turn off" : "Turn on";
 
   return (
-    // `lift` is the app's shared hover, and `relative` is what lets the title's
+    // `lift` is the app's shared hover, `group` is what lets the title answer a
+    // pointer anywhere on the card, and `relative` is what lets the title's
     // overlay claim the whole card without swallowing the controls below it.
-    <div className="lift relative flex flex-col rounded-surface border border-border bg-card shadow-card transition-shadow hover:shadow-card-hover">
+    <div
+      className={cn(
+        "lift group relative flex flex-col rounded-surface border border-border bg-card shadow-card transition-shadow hover:shadow-card-hover",
+        // A DRAFT IS DRAWN AS UNFINISHED, which is the kit's existing dashed
+        // language (EmptyState: "this is where something will BE"). It is the
+        // one state with no colour of its own — nothing transient gets one —
+        // and a board where every third card was a grey pill on a white
+        // rectangle is exactly the flatness being complained about. Shape says
+        // it instead, at a glance and from across the room.
+        state === "draft" && "border-dashed",
+      )}
+    >
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-center gap-3">
-          {/* THE APP'S OWN MARK, not the step's.
+          {/* THE APP'S OWN MARK, not the step's — and now with room around it.
               This was `NodeIcon type="app"`, which paints every Get-data step
               in the step type's green ON PURPOSE — on a canvas the question is
               "what kind of step is this", and a row of differently-coloured
@@ -191,16 +241,40 @@ function Row({ flow }: { flow: FlowListItem }) {
               FLOWS is the opposite case: the only thing the mark can usefully
               say is which app the flow reads, and it was saying it in green
               while the dashboard's activity feed said it in Close's blue two
-              clicks away. Same component as that feed now. */}
-          <SourceMark source={flow.source} size={38} />
+              clicks away. Same component as that feed now.
+
+              THE WASH IS THE MARK'S OWN COLOUR AT 14%, mixed rather than
+              hard-coded, so a connector added tomorrow brings its chip with it
+              and nothing here needs editing. A 40px block of colour is what
+              gives the card a corner to be recognised by; the 26px stamp alone
+              was a stamp on a white sheet. `color-mix` against `transparent`
+              (not against white) so the tint composites onto whatever surface
+              is behind it — which is a dark card in the dark theme. */}
+          <span
+            aria-hidden
+            className="flex size-10 shrink-0 items-center justify-center rounded-card"
+            style={{ backgroundColor: `color-mix(in srgb, ${brand} 14%, transparent)` }}
+          >
+            <SourceMark source={flow.source} size={26} />
+          </span>
           {/* THE WHOLE CARD IS THE LINK. `after:inset-0` stretches this anchor
               over the card, so the soft target is the whole tile while the
               focus ring stays on the words — which is the only part a keyboard
               user can see. Everything that must stay separately clickable sits
-              in the footer with `relative z-10`, above the overlay. */}
+              in the footer with `relative z-10`, above the overlay.
+
+              18px, up from 16: the name is the thing the whole card exists to
+              let you find, and it was set at body size beside a 12px caption —
+              one step of hierarchy across an entire tile.
+
+              THE VIOLET ARRIVES ON HOVER, and it lives on this element rather
+              than on the card because the card carries `.lift`, whose own
+              transition (unlayered CSS) outranks any `transition-*` utility put
+              beside it. A child has no such argument, so the colour actually
+              eases instead of snapping. */}
           <Link
             href={`/dashboard/flows/${flow.id}`}
-            className="min-w-0 flex-1 truncate rounded-control text-base font-semibold text-foreground after:absolute after:inset-0 after:content-['']"
+            className="min-w-0 flex-1 truncate rounded-control text-lg font-semibold text-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) after:absolute after:inset-0 after:content-[''] group-hover:text-accent-foreground"
           >
             {flow.name}
           </Link>
@@ -213,11 +287,28 @@ function Row({ flow }: { flow: FlowListItem }) {
             under the name it shared a column with the status pill, so
             "6 steps · Close CRM" truncated to "6 steps · Close …" with 90px of
             empty card beside it — the one line that says what the flow IS,
-            cut short to make room for a word that was already legible. */}
-        <p className="mt-2 truncate text-tiny text-muted-foreground">{flow.summary}</p>
+            cut short to make room for a word that was already legible.
+
+            14px, not 12: this is the card's only sentence, and at 12px it read
+            as a footnote to a title it is actually the subtitle of. */}
+        <p className="mt-3 truncate text-sm text-muted-foreground">{flow.summary}</p>
       </div>
 
-      <div className="relative z-10 flex items-center gap-2 border-t border-border px-3 py-2">
+      {/* THE FOOTER IS A TRAY, not the bottom of the card.
+          A hairline alone gave the card one material with a line drawn across
+          it; the controls sat in the same white as the title and read as an
+          afterthought. A recessed band gives the object a front and a back,
+          which is the hierarchy that was missing.
+
+          `bg-foreground/5` rather than `bg-muted`: `--muted` and the page are
+          both #f5f5f5, so a muted tray on a white card is the page colour
+          leaking through the card — and in the dark theme muted and card are
+          the SAME token, i.e. no tray at all. An alpha of the foreground reads
+          as one step recessed on both surfaces and needs no dark variant.
+
+          `rounded-b-surface` so the fill takes the card's own corner instead of
+          squaring it off. */}
+      <div className="relative z-10 flex items-center gap-2 rounded-b-surface border-t border-border bg-foreground/5 px-3 py-2">
         {/* A never-published flow has nothing to switch on, so the control says
             so rather than failing on click. */}
         <Switch
@@ -238,7 +329,7 @@ function Row({ flow }: { flow: FlowListItem }) {
             rest, and a grid of cards whose footers do not line up reads as a
             pile. The full timestamp stays in the title either way. */}
         <span
-          className="min-w-0 flex-1 truncate text-tiny text-muted-foreground"
+          className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
           title={`Edited ${formatDate(new Date(flow.updatedAt))} ${formatTime(new Date(flow.updatedAt))}`}
         >
           {error ? (
@@ -266,11 +357,18 @@ function Row({ flow }: { flow: FlowListItem }) {
             </Button>
           </span>
         ) : (
+          // `iconSm`, not `icon`, and the reason is the branch above it: the
+          // confirm state is built from `sm` (36px) controls, so a 44px pair
+          // here meant the footer SHRANK by 8px the moment you pressed Delete —
+          // the card resizing under the cursor at the one moment you are being
+          // asked to aim. Matched, the tray holds one height through the whole
+          // interaction. 36px is also past the pointer minimum and is what the
+          // tray's 8px rhythm asks for beside a 20px switch.
           <span className="flex shrink-0 items-center gap-0.5">
-            <Button variant="ghost" size="icon" onClick={duplicate} disabled={pending} title="Duplicate" aria-label="Duplicate">
+            <Button variant="ghost" size="iconSm" onClick={duplicate} disabled={pending} title="Duplicate" aria-label="Duplicate">
               <Copy />
             </Button>
-            <Button variant="destructiveGhost" size="icon" onClick={() => setConfirming(true)} disabled={pending} title="Delete" aria-label="Delete">
+            <Button variant="destructiveGhost" size="iconSm" onClick={() => setConfirming(true)} disabled={pending} title="Delete" aria-label="Delete">
               <Trash2 />
             </Button>
           </span>
@@ -279,4 +377,3 @@ function Row({ flow }: { flow: FlowListItem }) {
     </div>
   );
 }
-

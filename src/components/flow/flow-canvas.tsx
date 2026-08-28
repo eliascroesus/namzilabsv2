@@ -1981,12 +1981,15 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       />
 
       {publishError && !reviewOpen && (
-        <div className="absolute left-1/2 top-chrome-band z-10 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-surface border border-danger-soft bg-danger-soft/50 px-4 py-3 text-small text-danger-ink shadow-surface">
-          <p>{publishError}</p>
+        <div className="absolute left-1/2 top-chrome-band z-10 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-surface border border-danger-soft bg-danger-soft/50 px-4 py-3 text-sm text-danger-ink shadow-surface">
+          {/* The headline and the issues under it were the same 14px regular,
+              so a banner with four issues in it read as a five-line paragraph.
+              The first line is the claim; the list is the evidence. */}
+          <p className="font-semibold">{publishError}</p>
           {/* One line per issue, each pointing at the step that caused it. The
               whole list used to be joined into a single string with no step
               named, prefixed twice: "Can't publish: Cannot publish: A; B; C". */}
-          <ul className="mt-1 space-y-0.5">
+          <ul className="mt-1.5 space-y-1 text-xs">
             {publishIssues.map((iss, i) => (
               <li key={i}>
                 {iss.nodeId ? (
@@ -2006,7 +2009,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
         </div>
       )}
       {publishWarning && (
-        <div className="absolute left-1/2 top-chrome-band z-10 flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 items-center justify-between gap-3 rounded-surface border border-warn-soft bg-warn-soft/50 px-4 py-3 text-small text-warn-ink shadow-surface">
+        <div className="absolute left-1/2 top-chrome-band z-10 flex w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 items-center justify-between gap-3 rounded-surface border border-warn-soft bg-warn-soft/50 px-4 py-3 text-sm text-warn-ink shadow-surface">
           <span>{publishWarning}</span>
           <Button
             variant="ghost"
@@ -2233,7 +2236,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       {pendingDelete && (
         <Modal onClose={() => setPendingDelete(null)}>
           <ModalTitle>Delete this step?</ModalTitle>
-          <p className="mt-1.5 text-base text-muted-foreground">{pendingDelete.message}</p>
+          <p className="mt-2 text-md text-muted-foreground">{pendingDelete.message}</p>
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setPendingDelete(null)}>
               Cancel
@@ -2270,42 +2273,96 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
  * instead, which is the actual next thing to do.
  */
 export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boolean; onStart: () => void }) {
+  /**
+   * THE THREE MOVES, EACH IN ITS OWN COLOUR.
+   *
+   * The numerals were three identical grey discs, which is the shape of a
+   * disabled list — and this is the most optimistic screen in the product. They
+   * take three of the sheet's four decorative accents instead, in the order the
+   * sheet prints them, so the card reads as a set of steps rather than as a
+   * paragraph with bullets.
+   *
+   * NOT the state trios, and not the step palette: an orange numeral here does
+   * not mean "warning" and does not mean "this move is a Time-between step". It
+   * is decoration, which is exactly what the accent four are for.
+   *
+   * The fourth accent — the neon yellow — is spent on the BUTTON below and
+   * nowhere else on this screen, because the sheet ties it to the single ACT a
+   * screen exists for rather than to decoration. A yellow rule across the top
+   * of this card AND a yellow button under it would be two heroes, which is
+   * none.
+   *
+   * The ink on each is `ui/badge.tsx`'s, not a fresh judgement: the sheet sets
+   * black on its two light fills and white on its two saturated ones, and a
+   * numeral chip that disagreed with the StatusPill sitting in the panel next
+   * door would be the same colour wearing two inks.
+   */
   const steps = [
-    { n: 1, title: "Get the records", detail: "from an app you've connected" },
-    { n: 2, title: "Narrow them down", detail: "keep only the ones that count" },
-    { n: 3, title: "Turn them into a number", detail: "count, total, average, compare" },
+    { n: 1, title: "Get the records", detail: "from an app you've connected", tint: "bg-accent-orange", ink: "text-white" },
+    { n: 2, title: "Narrow them down", detail: "keep only the ones that count", tint: "bg-accent-pink", ink: "text-neutral-900" },
+    { n: 3, title: "Turn them into a number", detail: "count, total, average, compare", tint: "bg-accent-peri", ink: "text-white" },
   ];
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
-      <div className="pointer-events-auto w-full max-w-md rounded-surface border border-border bg-card p-7 shadow-panel">
-        <h2 className="text-center text-title font-semibold tracking-tight text-foreground">Build a metric in three moves</h2>
-        <ol className="mt-5 space-y-3">
+      {/*
+        THE ONE CARD ON AN EMPTY CANVAS, AND IT SHOULD LOOK LIKE AN INVITATION.
+
+        `shadow-panel` was wrong by the token's own note — that rung is sized
+        for a modal over a dimmed backdrop, and this is a surface floating on
+        the canvas exactly like the config panel and the toolbar islands, all of
+        which take `shadow-surface`. Same reasoning as the panel: one height for
+        everything that floats.
+
+        The cap is the three moves themselves, in the same three colours the
+        numerals below wear and read off the SAME array — so it is a picture of
+        the list rather than a stripe someone liked, and the two cannot drift.
+        The shell clips it, so it takes the card's own top corners.
+      */}
+      <div className="pointer-events-auto w-full max-w-md overflow-hidden rounded-surface border border-border bg-card shadow-surface">
+        <div aria-hidden className="flex h-1.5">
           {steps.map((s) => (
-            <li key={s.n} className="flex items-start gap-3">
-              <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-micro font-semibold text-muted-foreground">
-                {s.n}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-base font-medium text-foreground">{s.title}</span>
-                <span className="block text-small leading-snug text-muted-foreground">{s.detail}</span>
-              </span>
-            </li>
+            <span key={s.n} className={cn("flex-1", s.tint)} />
           ))}
-        </ol>
-        {hasConnections ? (
-          <Button onClick={onStart} size="lg" className="mt-6 w-full">
-            <Database />
-            Start with Get data
-          </Button>
-        ) : (
-          <>
-            <Link href="/integrations" className={cn(buttonVariants({ size: "lg" }), "mt-6 w-full")}>
-              <Plug size={16} />
-              Connect an app first
-            </Link>
-            <p className="mt-2 text-center text-tiny text-muted-foreground">A flow reads records from a connected account — there aren&rsquo;t any yet.</p>
-          </>
-        )}
+        </div>
+        <div className="p-8">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">New flow</p>
+          {/* 24px, up from 18. It is the only heading on the screen and it was
+              set at the size a field label uses two panels away. */}
+          <h2 className="mt-1 text-display-xs font-semibold tracking-tight text-foreground">Build a metric in three moves</h2>
+          <ol className="mt-6 space-y-4">
+            {steps.map((s) => (
+              <li key={s.n} className="flex items-start gap-3">
+                <span className={cn("mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums", s.tint, s.ink)}>
+                  {s.n}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-md font-semibold text-foreground">{s.title}</span>
+                  <span className="block text-sm leading-snug text-muted-foreground">{s.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+          {hasConnections ? (
+            /* THE HERO ACT. This screen exists to get one step onto the canvas;
+               there is no second thing to do on it, which is the precise
+               condition the sheet reserves the neon yellow for. */
+            <Button onClick={onStart} variant="yellow" size="lg" className="mt-8 w-full">
+              <Database />
+              Start with Get data
+            </Button>
+          ) : (
+            <>
+              {/* With no account connected, THIS is the one act the screen
+                  exists for instead — so the yellow moves with it rather than
+                  appearing twice or not at all. */}
+              <Link href="/integrations" className={cn(buttonVariants({ variant: "yellow", size: "lg" }), "mt-8 w-full")}>
+                <Plug size={16} />
+                Connect an app first
+              </Link>
+              <p className="mt-3 text-center text-xs text-muted-foreground">A flow reads records from a connected account — there aren&rsquo;t any yet.</p>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -580,7 +580,7 @@ export default function DesignPage() {
 
         <Section
           title="Marks"
-          note="What a dashboard tile is made of. Bars are brand-600, a met goal turns success, tracks are bg-muted, and every value a mark prints goes through formatMetricValue — the tooltip and the headline must say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile says which."
+          note="What a dashboard tile is made of. The series is violet, the last bucket takes the ink (a positional fact, not a verdict), a met goal turns success, and a breakdown walks the accent four. Yellow is deliberately absent — a board is a wall of these, and a hero that appears twenty times is not a hero. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
         >
           <div className="grid gap-4 rounded-card bg-canvas-bg p-4 sm:grid-cols-2">
             <div className="rounded-surface border border-border bg-card p-5 shadow-card">

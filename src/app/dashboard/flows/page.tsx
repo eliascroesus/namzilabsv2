@@ -103,14 +103,25 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
   // same rule the editor's toolbar applies, so no two surfaces can disagree.
   const unpublished = await unpublishedFlowIds(getReadDb(), orgId).catch(() => new Set<string>());
 
-  const createForm = canCreate ? (
-    <form action={createFlowAction}>
-      <Button>
-        <Plus size={16} strokeWidth={2} />
-        Create flow
-      </Button>
-    </form>
-  ) : null;
+  /**
+   * ONE ACT, TWO PLACES, AND ONLY ONE OF THEM IS THE HERO.
+   *
+   * "Create flow" is the single thing this screen exists to let you do, which
+   * on this sheet is the definition of the YELLOW button — and the sheet's rule
+   * is at most one per screen, because the scarcity IS the meaning. The empty
+   * state repeats the same action a few hundred pixels below the header, so it
+   * takes the workhorse black: two neon buttons on one page would halve the
+   * value of the first without adding an affordance that is not already there.
+   */
+  const createButton = (variant: "yellow" | "default") =>
+    canCreate ? (
+      <form action={createFlowAction}>
+        <Button variant={variant}>
+          <Plus size={16} strokeWidth={2} />
+          Create flow
+        </Button>
+      </form>
+    ) : null;
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
@@ -149,7 +160,28 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
             which is the one audience that cannot use the description — and the
             empty state below already says the only thing a first-timer needs
             ("Press Create flow to build one step by step"), where they need it. */}
-        <PageHeader title="Flows" actions={createForm} />
+        {/* THE SECTION WEARS ITS OWN COLOUR, and it is not a new one: the rail
+            paints the Flows row periwinkle (`bg-accent-peri text-white`, see
+            NAV in sidebar.tsx), so the page it leads to now carries the same
+            mark beside its title. That is the whole trick — the chip is not
+            decoration for its own sake, it is the rail's item arriving at its
+            destination, which is what makes a product feel like one place
+            rather than a set of routes. `aria-hidden`, so the h1's accessible
+            name is still the word "Flows". */}
+        <PageHeader
+          title={
+            <span className="inline-flex items-center gap-2.5">
+              <span
+                aria-hidden
+                className="flex size-8 shrink-0 items-center justify-center rounded-card bg-accent-peri text-white [&_svg]:size-[18px]"
+              >
+                <Workflow strokeWidth={2.25} />
+              </span>
+              Flows
+            </span>
+          }
+          actions={createButton("yellow")}
+        />
 
         {flowsUnavailable ? (
           <EmptyState
@@ -168,7 +200,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
                 Press <span className="font-semibold text-foreground">Create flow</span> to build one step by step.
               </>
             }
-            action={createForm}
+            action={createButton("default")}
           />
         ) : (
           <FlowList flows={flows.map((f) => summarize(f, unpublished))} />

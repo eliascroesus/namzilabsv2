@@ -34,7 +34,7 @@ import { RecordSamplePicker, recordWhen } from "./RecordSamplePicker";
 import { NodeIcon } from "./icons";
 import { nodeAccent } from "./node-accent";
 import { PANEL_SHELL, PanelTabs } from "./panel-chrome";
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Database, Plus, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Database, Play, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/badge";
 import { FieldLabel } from "@/components/ui/field";
@@ -56,10 +56,66 @@ export type BranchCtx = { mode: string; siblingHasFallback: boolean; siblingHasA
 const INPUT = cn(fieldClasses, "h-9 px-3");
 const W = 412;
 
+/**
+ * THE PANEL'S GUTTER, IN ONE PLACE.
+ *
+ * 20px, and it is a 20 for a reason rather than the 24 an 8px grid would ask
+ * for: the tab row comes from `panel-chrome.tsx`, which the dashboard's tile
+ * panel and /design also render, and it sets `px-5`. Header, body and footer
+ * take the SAME number so the step icon, the active tab and the footer button
+ * all start on one vertical line. A 24px header over a 20px tab strip is a 4px
+ * stagger — the kind of near-miss that reads as sloppiness rather than as
+ * rhythm. The 8px grid is kept where this file actually owns it: the vertical
+ * spacing between sections.
+ */
+const GUTTER = "px-5";
+
 /** The panel's THREE note boxes — every callout is exactly one of these. */
-const NOTE_WARN = "rounded-card border border-warn-soft bg-warn-soft/50 p-3 text-tiny text-warn-ink";
-const NOTE_BRAND = "rounded-card border border-brand-100 bg-accent p-3 text-tiny text-accent-foreground";
-const NOTE_NEUTRAL = "rounded-card border border-border bg-muted/50 p-3 text-tiny text-muted-foreground";
+const NOTE_WARN = "rounded-card border border-warn-soft bg-warn-soft/50 p-3 text-xs text-warn-ink";
+const NOTE_BRAND = "rounded-card border border-brand-100 bg-accent p-3 text-xs text-accent-foreground";
+const NOTE_NEUTRAL = "rounded-card border border-border bg-muted/50 p-3 text-xs text-muted-foreground";
+
+/**
+ * A SECTION THAT IS A BOX GETS A NAME, AND THE NAME IS SHOUTED.
+ *
+ * The panel's boxed sections (dedupe, a category, a resolved date window) were
+ * bordered rectangles with no heading — a container whose contents had to be
+ * read to find out what it was. Every other label in the kit is caps at 12px
+ * (`FieldLabel`, `SectionHeading`, every chip in `ui/badge.tsx`); these are the
+ * same voice one rung quieter, for a heading INSIDE a panel rather than over
+ * one.
+ */
+const BOX_LABEL = "text-xs font-semibold uppercase tracking-wide text-muted-foreground";
+
+/**
+ * A BOXED SECTION. Card radius, hairline, and the 12px inner padding the notes
+ * already use — one spelling instead of the four `rounded-card border
+ * border-border p-3` copies that were drifting a padding step at a time.
+ */
+const BOX = "rounded-card border border-border bg-card p-3";
+
+/**
+ * "ADD ANOTHER…" — A PILL, AND VIOLET.
+ *
+ * Three of these existed as dashed GREY rectangles with grey text, which the
+ * sheet gets wrong twice over: pills are for buttons and chips, and these are
+ * buttons; and grey-on-grey is the spelling for something disabled, which is
+ * the opposite of an invitation. Violet is the sheet's colour for the branded
+ * action, and the dash survives because it still says "this row does not exist
+ * yet" — the one thing the shape was genuinely carrying.
+ *
+ * `accent-foreground` (brand-700) rather than `primary` (brand-500): the 500 is
+ * 4.42:1 on the off-white page, which is under AA, and the sheet reserves it
+ * for FILLS. Text and links take the link violet.
+ */
+const ADD_PILL =
+  "inline-flex items-center gap-1.5 rounded-full border border-dashed border-brand-300 bg-accent/60 px-3 py-1.5 text-xs font-semibold text-accent-foreground transition-colors duration-(--duration-fast) hover:border-brand-400 hover:bg-accent";
+
+/**
+ * A LINK INSIDE THE PANEL — "Add another field", "Change", "Remove category".
+ * Same reasoning as above: the link violet, never the fill violet.
+ */
+const INLINE_LINK = "rounded-control font-semibold text-accent-foreground transition-colors duration-(--duration-fast) hover:underline";
 
 /** The pill tone each step status wears — labels come from STATUS_META. */
 const STATUS_TONE: Record<NodeStatus, "success" | "warn" | "danger" | "pending"> = {
@@ -209,6 +265,29 @@ export function ConfigPanel({
     [stepNo, type, JSON.stringify(selfFields)],
   );
 
+  /**
+   * THE STEP'S OWN COLOUR, WORN BY THE PANEL EDITING IT.
+   *
+   * The kit's colour rule gives everything right of the rail exactly two
+   * licences: IDENTITY (which kind of thing this is) and STATE. A settings
+   * panel that opens in the same white as the last one spends neither, and the
+   * result was six visually identical drawers whose only difference was a 38px
+   * icon in the corner — which is the "flat and generic" complaint in one
+   * sentence.
+   *
+   * So the panel wears the step's identity the way the card on the canvas
+   * already does: a cap of the accent across the top, and the header washed in
+   * a few percent of it. Imported from `node-accent.ts`, never re-picked, so a
+   * Filter is the same indigo in the picker, on the canvas and here.
+   *
+   * The mixes resolve toward `var(--card)` rather than toward `white`: the
+   * branch rows below mix toward white because they predate the dark theme,
+   * and a 94%-white wash on a #2b2b2b panel is a light slab, not a tint.
+   */
+  const accent = nodeAccent(type, nodeVariant(type, cfg));
+  const accentWash = `color-mix(in srgb, ${accent} 7%, var(--card))`;
+  const accentEdge = `color-mix(in srgb, ${accent} 22%, var(--border))`;
+
   return (
     // Fixed at 452px, which on a 13" laptop is 35% of the screen before the
     // field browser opens beside it. It now yields on a narrow viewport
@@ -225,11 +304,21 @@ export function ConfigPanel({
       data-config-panel
       className={`absolute right-6 top-chrome-band bottom-6 z-20 w-[min(452px,calc(100vw-3rem))] ${PANEL_SHELL} ${animClass}`}
     >
-      {/* Header — no longer a darker band. The panel is ONE white surface cut by
-          hairlines, the way every other island in the builder is; three stacked
-          greys was the last place still separating regions by tint. What marks
-          this strip as "what am I editing" is the step's own colourful icon and
-          the rule under it, neither of which needed a second grey to work.
+      {/* THE CAP — the step's colour, full bleed, 4px.
+          The shell clips it (`overflow-hidden rounded-surface`), so it takes
+          the panel's own top corners and reads as the surface being MADE of
+          that colour rather than as a stripe laid on it. It is the one part of
+          the panel legible from across the canvas, which is the job: "the thing
+          I have open is the pink one". */}
+      <div aria-hidden className="h-1 shrink-0" style={{ background: accent }} />
+
+      {/* Header — no longer a darker band, and no longer an undifferentiated
+          white one either. The panel is ONE surface cut by hairlines, the way
+          every other island in the builder is; three stacked GREYS was the last
+          place separating regions by tint, and the fix for that was never "no
+          tint" — it was a tint that MEANS something. This one is the step's own
+          identity at 7%, so the header says which kind of step this is before a
+          word of it is read.
 
           TWO LINES, NOT ONE. The name and the status pill used to share a row
           with the icon, so a long step name was squeezed between a 38px mark
@@ -241,21 +330,36 @@ export function ConfigPanel({
           The close button is the other half: the panel could only be dismissed
           by clicking empty canvas, which is a gesture you have to already know
           — and on a full canvas there may be no empty pixel to click. */}
-      <div className="flex items-center gap-3 border-b border-border bg-card px-5 py-4">
+      <div
+        className={`flex items-center gap-3 border-b py-4 ${GUTTER}`}
+        style={{ backgroundColor: accentWash, borderBottomColor: accentEdge }}
+      >
         <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} variant={nodeVariant(type, cfg)} size={38} />
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
+            {/* The step NUMBER is a chip in the step's colour, not grey text.
+                It is the one fact in the header that never changes while the
+                panel is open, and a chip is what the sheet uses for exactly
+                that — a small identifying label, pill-shaped, caps. */}
             {stepNo != null && (
-              <span className="shrink-0 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Step {stepNo}</span>
+              <span
+                className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide"
+                style={{ backgroundColor: `color-mix(in srgb, ${accent} 16%, var(--card))`, color: `color-mix(in srgb, ${accent} 72%, black)` }}
+              >
+                Step {stepNo}
+              </span>
             )}
             <StatusPill tone={STATUS_TONE[status]} className="shrink-0">{sm.label}</StatusPill>
           </div>
+          {/* The name reads as the heading it is. `hover:bg-card` over a tinted
+              header is now a real affordance rather than white-on-white: the
+              box lifts OUT of the wash the moment it is hoverable. */}
           <input
             value={node.data.label ?? ""}
             onChange={(e) => onRename(e.target.value)}
             placeholder={defaultTitle(type, node.data)}
             aria-label="Step name"
-            className="-ml-1.5 mt-0.5 w-[calc(100%+0.375rem)] min-w-0 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-title font-semibold text-foreground transition-colors hover:border-border hover:bg-card focus-visible:border-ring focus-visible:bg-card"
+            className="-ml-1.5 mt-1 w-[calc(100%+0.375rem)] min-w-0 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-lg font-semibold tracking-tight text-foreground transition-colors hover:border-border hover:bg-card focus-visible:border-ring focus-visible:bg-card"
           />
         </div>
         {onClose && (
@@ -273,10 +377,16 @@ export function ConfigPanel({
 
       <PanelTabs tabs={supportsTest ? ["configure", "test"] : ["configure"]} active={activeTab} onSelect={setTab} />
 
+      {/* 24px of air top and bottom, 20px at the sides — the vertical rhythm is
+          this file's own (8px grid), the horizontal one belongs to the tab row
+          above (see GUTTER). */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex min-h-full flex-col p-5">
+        <div className={`flex min-h-full flex-col py-6 ${GUTTER}`}>
           {activeTab === "configure" ? (
-            <div className="space-y-5">
+            // 24px between sections, up from 20. The panel asks a stack of
+            // unrelated questions and the gap between them is the only thing
+            // grouping their labels with their controls.
+            <div className="space-y-6">
               {/* Every picker in this panel is fed by the step above's last
                   test, so before that test they are all empty and the panel
                   is unanswerable. This says so ONCE, at the top, with the fix
@@ -308,13 +418,24 @@ export function ConfigPanel({
             </div>
           ) : (
             <div className="space-y-4">
-              {err && <div className="rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-base text-danger-ink">{err}</div>}
+              {err && <div className="rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-md text-danger-ink">{err}</div>}
               {node.data.lastTest?.status === "ok" ? (
                 <TestResults node={node} superseded={node.data.dirty === true || superseded} onChange={onChange} />
               ) : (
                 !err && (
-                  <div className="rounded-card border border-dashed border-border bg-muted/50 p-6 text-center">
-                    <p className="text-base font-medium text-muted-foreground">{status === "setup" ? "Finish the Configure tab first." : "Test to see this step’s data."}</p>
+                  /* THE WAITING ROOM, NOT A HOLE IN THE PAGE.
+                     A dashed grey rectangle is the universal spelling for "a
+                     thing failed to load" — and this state is the opposite: the
+                     step is fine, it simply has not been run yet, and the button
+                     that runs it is six inches below. So it is a solid tinted
+                     card with a chip on it, in the accent that means "the
+                     branded action" everywhere else in the app. */
+                  <div className="rounded-card border border-brand-100 bg-accent px-4 py-8 text-center">
+                    <span aria-hidden className="mx-auto flex size-11 items-center justify-center rounded-full bg-card text-accent-foreground shadow-xs">
+                      <Play size={18} strokeWidth={2.25} />
+                    </span>
+                    <p className="mt-3 text-md font-semibold text-accent-foreground">{status === "setup" ? "Not ready yet" : "Nothing measured yet"}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{status === "setup" ? "Finish the Configure tab first." : "Run the test to see this step’s data."}</p>
                   </div>
                 )
               )}
@@ -326,8 +447,14 @@ export function ConfigPanel({
       {/* The same hairline-over-tint trade as the header: this band was grey
           when the whole panel was, and left alone it would be the one slab of
           neutral in an otherwise white surface. The rule above it is what
-          holds the action apart from the fields. */}
-      <div className="border-t border-border bg-card p-4">
+          holds the action apart from the fields.
+
+          It was `p-4` under a `px-5` header, so the footer button started 4px
+          inboard of the step icon and the active tab — three left edges, no two
+          the same. It takes the panel's GUTTER now and keeps 16px of its own
+          vertically, which is what stops the one full-width button reading as a
+          slab wedged into the bottom. */}
+      <div className={`border-t border-border bg-card py-4 ${GUTTER}`}>
         <Footer
           tab={activeTab}
           status={status}
@@ -468,7 +595,7 @@ function TestingFooter({ onCancelTest }: { onCancelTest?: () => void }) {
         </Button>
       </div>
       {secs >= 30 && (
-        <p className="text-center text-tiny text-muted-foreground">Large date ranges take longer. You can narrow this step and try again.</p>
+        <p className="text-center text-xs text-muted-foreground">Large date ranges take longer. You can narrow this step and try again.</p>
       )}
     </div>
   );
@@ -488,7 +615,7 @@ function UpstreamPrompt({ onTestUpstream }: { onTestUpstream: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
     <div className={NOTE_WARN}>
-      <p className="text-small font-medium">No fields to choose from yet</p>
+      <p className="text-sm font-medium">No fields to choose from yet</p>
       <p className="mt-1 leading-snug">
         The step above hasn&rsquo;t been tested, so we don&rsquo;t know what its records look like.
       </p>
@@ -676,7 +803,7 @@ function NodeConfig({
             </div>
           </div>
         ) : (
-          <p className={cn(NOTE_NEUTRAL, "text-small")}>
+          <p className={cn(NOTE_NEUTRAL, "text-sm")}>
             {bmode === "always" ? "Every record continues." : "Gets what no other path matched."}
           </p>
         )}
@@ -719,7 +846,7 @@ function NodeConfig({
             <Field label="To (optional)"><input type="date" value={(cfg.to as string) ?? ""} onChange={(e) => onChange({ to: e.target.value })} className={INPUT} /></Field>
           </div>
         )}
-        <p className="text-tiny text-muted-foreground">{describeWindow(mode, cfg as { preset?: string; days?: number; from?: string; to?: string })}</p>
+        <p className="text-xs text-muted-foreground">{describeWindow(mode, cfg as { preset?: string; days?: number; from?: string; to?: string })}</p>
       </div>
     );
   }
@@ -892,12 +1019,12 @@ function NodeConfig({
                   const avail = datasetCandidates.find((c) => !laneIds.includes(c.id));
                   if (avail) setLanes([...laneIds, avail.id]);
                 }}
-                className="inline-flex items-center gap-1 rounded-control border border-dashed border-border px-2.5 py-1.5 text-tiny text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className={ADD_PILL}
               >
                 <Plus size={14} strokeWidth={2.25} /> Add another step
               </button>
             )}
-            {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-tiny text-muted-foreground">Add a Get data step first, then combine it here.</p>}
+            {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-xs text-muted-foreground">Add a Get data step first, then combine it here.</p>}
           </div>
         </div>
 
@@ -923,6 +1050,11 @@ function NodeConfig({
     const setLabel = (i: number, label: string) => onChange({ paths: paths.map((p, j) => (j === i ? { ...p, label } : p)) });
     // The branch rows wear the Split step's own identity colour — imported,
     // never copied, so the panel and the canvas can only ever agree.
+    //
+    // The mixes resolve toward `var(--card)`, not toward `white`. They were
+    // literal white because they predate the dark theme, which made a branch
+    // row a pale slab on a #2b2b2b panel; the card role is white in one theme
+    // and the panel's own surface in the other, so one expression covers both.
     const accent = nodeAccent("paths");
     const accentInk = `color-mix(in srgb, ${accent} 72%, black)`;
     return (
@@ -930,15 +1062,18 @@ function NodeConfig({
         {paths.map((p, i) => (
           <div
             key={p.id}
-            className="flex items-center gap-2 rounded-card border px-2 py-1.5"
-            style={{ borderColor: `color-mix(in srgb, ${accent} 30%, white)`, backgroundColor: `color-mix(in srgb, ${accent} 5%, white)` }}
+            className="flex items-center gap-2 rounded-card border px-2.5 py-2"
+            style={{ borderColor: `color-mix(in srgb, ${accent} 30%, var(--card))`, backgroundColor: `color-mix(in srgb, ${accent} 7%, var(--card))` }}
           >
-            <span className="shrink-0 text-micro font-semibold uppercase tracking-wide" style={{ color: accentInk }}>Branch {i + 1}</span>
-            <input value={p.label} onChange={(e) => setLabel(i, e.target.value)} className={cn(fieldClasses, "min-w-0 flex-1 px-2 py-1 text-tiny font-medium")} />
+            <span className="shrink-0 text-xs font-semibold uppercase tracking-wide" style={{ color: accentInk }}>Branch {i + 1}</span>
+            <input value={p.label} onChange={(e) => setLabel(i, e.target.value)} className={cn(fieldClasses, "min-w-0 flex-1 px-2 py-1 text-xs font-medium")} />
             {(p.mode ?? "custom") !== "custom" && (
+              /* A chip, so `rounded-full` and the caps voice every other chip
+                 in the kit wears — it was a lower-case pill reading as a stray
+                 fragment of the label beside it. */
               <span
-                className="shrink-0 rounded-full px-1.5 py-0.5 text-micro font-medium"
-                style={{ backgroundColor: `color-mix(in srgb, ${accent} 14%, white)`, color: accentInk }}
+                className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide"
+                style={{ backgroundColor: `color-mix(in srgb, ${accent} 16%, var(--card))`, color: accentInk }}
               >
                 {p.mode === "always" ? "always runs" : "fallback"}
               </span>
@@ -947,7 +1082,10 @@ function NodeConfig({
               <button
                 type="button"
                 onClick={() => onRemoveBranch(p.id)}
-                className="shrink-0 rounded-control text-micro text-destructive hover:underline"
+                /* `danger-ink`, not `destructive`: the fill red is a BUTTON
+                   colour and measures 4.5:1 as text — the kit's red for words
+                   is the ink. Same swap as `Remove category` below. */
+                className="shrink-0 rounded-control text-xs font-medium text-danger-ink hover:underline"
                 title="Remove this branch and its steps"
               >
                 Remove
@@ -958,7 +1096,7 @@ function NodeConfig({
         <button
           type="button"
           onClick={onAddBranch}
-          className="inline-flex w-full items-center justify-center gap-1 rounded-control border border-dashed border-border px-3 py-1.5 text-base text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className={cn(ADD_PILL, "w-full justify-center py-2 text-sm")}
         >
           <Plus size={16} /> Add branch
         </button>
@@ -1086,7 +1224,7 @@ function NumberFieldList({
         <button
           type="button"
           onClick={() => setExtra([...extra, ""])}
-          className="inline-flex items-center gap-1 rounded-control text-tiny font-medium text-primary hover:underline"
+          className={cn(INLINE_LINK, "inline-flex items-center gap-1 text-xs")}
         >
           <Plus size={14} strokeWidth={2.25} /> Add another field
         </button>
@@ -1094,7 +1232,7 @@ function NumberFieldList({
             cannot say is the ORDER — per record first, then across records —
             which is the difference between an average of totals and a total
             of averages. Six words instead of a paragraph. */}
-        {extra.length > 0 && <p className="text-tiny text-muted-foreground">Added up per record, then across records.</p>}
+        {extra.length > 0 && <p className="text-xs text-muted-foreground">Added up per record, then across records.</p>}
       </div>
     </Field>
   );
@@ -1222,7 +1360,7 @@ function NumberPicker({
         trigger={({ toggle }) => (
           <div className="relative">
             {desc ? (
-              <div className="flex w-full items-center justify-between gap-2 rounded-control border border-input bg-muted/50 py-1.5 pl-2 pr-14 text-base">
+              <div className="flex w-full items-center justify-between gap-2 rounded-control border border-input bg-muted/50 py-1.5 pl-2 pr-14 text-md">
                 <span className="min-w-0 truncate text-foreground">{chosenLabel}</span>
                 <button
                   type="button"
@@ -1247,14 +1385,20 @@ function NumberPicker({
               onClick={toggle}
               title="Use a number from an earlier step"
               aria-label="Pick a number from an earlier step"
-              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-100 bg-accent p-1 text-primary transition-colors hover:bg-brand-100"
+              /* The data-picker's own affordance, wearing the violet wash the
+                 field browser opens in. The glyph took `primary` — the FILL
+                 violet — which measures 4.2:1 on that wash; `accent-foreground`
+                 is the ink the sheet pairs with `accent` and measures 6.0:1,
+                 and it is what every other clickable thing in this panel is now
+                 set in. */
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-100 bg-accent p-1 text-accent-foreground transition-colors duration-(--duration-fast) hover:border-brand-300 hover:bg-brand-100"
             >
               <Database size={14} strokeWidth={2} />
             </button>
           </div>
         )}
       />
-      {desc && preview != null && <p className="mt-1 text-tiny text-muted-foreground">= {String(preview)}</p>}
+      {desc && preview != null && <p className="mt-1 text-xs text-muted-foreground">= {String(preview)}</p>}
     </Field>
   );
 }
@@ -1266,13 +1410,16 @@ function CategoryEditor({ cfg, groups, onChange }: { cfg: Record<string, unknown
   return (
     <div className="space-y-2">
       {cats.map((c, i) => (
-        <div key={i} className="space-y-2 rounded-card border border-border p-3">
-          <input value={c.label} placeholder="Category name" onChange={(e) => setCat(i, { label: e.target.value })} className={cn(fieldClasses, "px-2 py-1 text-tiny font-medium")} />
+        // A numbered box, so a stack of four of them is countable at a glance
+        // instead of being four identical rectangles.
+        <div key={i} className={cn(BOX, "space-y-2")}>
+          <p className={BOX_LABEL}>Category {i + 1}</p>
+          <input value={c.label} placeholder="Category name" onChange={(e) => setCat(i, { label: e.target.value })} className={cn(fieldClasses, "px-2 py-1 text-xs font-medium")} />
           <ConditionEditor value={asFilterConfig((c.filters as unknown as Record<string, unknown>) ?? {})} groups={groups} onChange={(v) => setCat(i, { filters: { combinator: v.combinator, rules: v.rules } })} />
           <button
             type="button"
             onClick={() => onChange({ categories: cats.filter((_, j) => j !== i) })}
-            className="rounded-control text-tiny text-destructive hover:underline"
+            className="rounded-control text-xs font-medium text-danger-ink hover:underline"
           >
             Remove category
           </button>
@@ -1466,12 +1613,12 @@ function DateColumnField({ conn, cfg }: { conn: ConnMeta; cfg: Record<string, un
     // the panel had not yet loaded.
     if (!note) return null;
     return (
-      <p className="flex items-center gap-2 text-tiny text-muted-foreground">
+      <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="min-w-0 truncate">{note}</span>
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="shrink-0 rounded-control font-medium text-primary hover:underline"
+          className={cn(INLINE_LINK, "shrink-0")}
         >
           Change
         </button>
@@ -1527,8 +1674,8 @@ function ImportStatusLine({ connectionId, historyNote }: { connectionId: string;
     // the same thing one line above a sentence that says it precisely.
     return (
       <div className="mt-1.5 space-y-1">
-        <p className="text-tiny text-success-ink">History imported.</p>
-        {historyNote && <p className="text-tiny text-muted-foreground">{historyNote}</p>}
+        <p className="text-xs text-success-ink">History imported.</p>
+        {historyNote && <p className="text-xs text-muted-foreground">{historyNote}</p>}
       </div>
     );
   }
@@ -1907,7 +2054,7 @@ function SourceConfigField({ field, conn, cfg, onChange }: { field: FlowConfigFi
     return (
       <Field label={field.label}>
         <input value={value} placeholder={field.placeholder} onChange={(e) => set(e.target.value)} className={INPUT} />
-        <p className="mt-1 text-tiny text-warn-ink">Couldn’t list options ({state.error}). Paste the {field.label.toLowerCase()} manually.</p>
+        <p className="mt-1 text-xs text-warn-ink">Couldn’t list options ({state.error}). Paste the {field.label.toLowerCase()} manually.</p>
       </Field>
     );
   }
@@ -2001,14 +2148,24 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
       : fallbackGroups;
 
   return (
-    <div className="space-y-2 rounded-card border border-border p-3">
+    /* AN OPTIONAL SECTION THAT LOOKS SWITCHED ON WHEN IT IS.
+       This was a grey-bordered box with a 14px checkbox in it, identical
+       whether the feature was running or not — the whole state of it was a
+       4px tick. Selection is the one job the sheet gives violet, so a section
+       that is ON wears the violet wash and its edge, and a section that is off
+       stays a plain hairline box. Nothing moves; only the colour changes,
+       which is what keeps the panel from jumping as it is toggled. */
+    <div className={cn("space-y-2.5 rounded-card border p-3 transition-colors duration-(--duration-base)", on ? "border-brand-200 bg-accent/50" : "border-border bg-card")}>
       <button
         type="button"
         onClick={() => onChange({ dedupe: !on })}
-        className="flex items-center gap-2 rounded-control text-tiny font-medium text-foreground"
+        aria-pressed={on}
+        className={cn("flex w-full items-center gap-2 rounded-control text-xs font-semibold uppercase tracking-wide", on ? "text-accent-foreground" : "text-foreground")}
       >
-        <span className={`flex h-4 w-4 items-center justify-center rounded-control border transition-colors ${on ? "border-primary bg-primary text-primary-foreground" : "border-input"}`}>
-          {on && <Check size={12} strokeWidth={2.25} />}
+        {/* `rounded-xs`, not `rounded-control`: an 8px radius on a 16px square
+            is a squircle, and every checkbox in the product is a crisp box. */}
+        <span className={cn("flex size-4 items-center justify-center rounded-xs border transition-colors duration-(--duration-fast)", on ? "border-primary bg-primary text-primary-foreground" : "border-input bg-card")}>
+          {on && <Check size={12} strokeWidth={2.75} />}
         </span>
         Remove duplicates
       </button>
@@ -2041,9 +2198,9 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
               </div>
             </div>
           </Field>
-          {state.status === "loading" && <p className="text-tiny text-muted-foreground">Loading your fields…</p>}
+          {state.status === "loading" && <p className="text-xs text-muted-foreground">Loading your fields…</p>}
           {state.status === "ok" && loaded.length === 0 && (
-            <p className="text-tiny text-warn-ink">No synced records yet — sync or test this step to see its fields.</p>
+            <p className="text-xs text-warn-ink">No synced records yet — sync or test this step to see its fields.</p>
           )}
         </>
       )}
@@ -2126,7 +2283,7 @@ function TimePeriodSection({ cfg, groups, onChange }: { cfg: Record<string, unkn
         onChange={pick}
       />
       {enabled && (
-        <div className="space-y-2.5 rounded-card border border-border bg-card p-3">
+        <div className={cn(BOX, "space-y-2.5")}>
           {mode === "rolling" && (
             <Field label="Number of days">
               <NumberField value={dr.days ?? 30} min={1} onChange={(n) => set({ days: n ?? 1 })} />
@@ -2148,7 +2305,7 @@ function TimePeriodSection({ cfg, groups, onChange }: { cfg: Record<string, unkn
               a-day, and it silently meant the first. Printing the resolved
               window is a permanent answer to "did this change?" that no
               one-off announcement can be. */}
-          <p className="text-tiny text-muted-foreground">{describeWindow(mode, dr)}</p>
+          <p className="text-xs text-muted-foreground">{describeWindow(mode, dr)}</p>
         </div>
       )}
     </div>
@@ -2198,7 +2355,7 @@ function TestResults({ node, superseded, onChange }: { node: FNode; superseded: 
   const measuredAt = typeof t.testedAt === "string" ? new Date(t.testedAt) : null;
   const measured = measuredAt && !Number.isNaN(measuredAt.getTime()) ? measuredAt : null;
   return (
-    <div className="space-y-3 text-base">
+    <div className="space-y-3 text-md">
       <SectionHeading className="mb-0">Result</SectionHeading>
       {superseded && (
         <p className={NOTE_WARN}>
@@ -2216,15 +2373,34 @@ function TestResults({ node, superseded, onChange }: { node: FNode; superseded: 
           Only the newest 500,000 records were read, so this number is a floor, not a total. Narrow the step with a date range to measure a complete period.
         </p>
       )}
-      <p className={cn("tnum rounded-card border border-border bg-muted/50 p-3 text-center text-title font-semibold text-foreground", superseded && "text-muted-foreground line-through")}>
+      {/* QUIET CHROME, LOUD NUMBERS — and this is the number.
+          It is the answer the whole step exists to produce, and it was 18px
+          semibold on a grey wash: the same typographic object as the sentence
+          above it, one shade apart. The sheet's rule is that BLACK does the
+          work and dark surfaces are where it does it, so the figure sits on
+          the deep black at display size with tabular figures. Nothing else in
+          the panel is dark, which is what makes it the thing you see first.
+
+          Superseded goes back to the grey box on purpose: a struck-through
+          number on a confident black card still reads as a headline, and this
+          one is being disowned. */}
+      <p
+        className={cn(
+          "tnum rounded-card p-4 text-center text-display-xs font-semibold",
+          superseded ? "border border-border bg-muted/50 text-muted-foreground line-through" : "bg-foreground text-background shadow-xs",
+        )}
+      >
         {resultLabel(type, t, node.data.config as Record<string, unknown>)}
       </p>
-      {measured && <p className="text-center text-tiny text-muted-foreground">Measured {relativeTime(measured)}.</p>}
+      {measured && <p className="text-center text-xs text-muted-foreground">Measured {relativeTime(measured)}.</p>}
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
       ) : (
         <details>
-          <summary className="cursor-pointer rounded-control text-tiny text-muted-foreground">View sample data</summary>
+          {/* A disclosure is a control, so it reads as one — the panel's own
+              caps voice rather than a grey sentence you have to guess is
+              clickable. */}
+          <summary className={cn(BOX_LABEL, "cursor-pointer rounded-control transition-colors duration-(--duration-fast) hover:text-foreground")}>View sample data</summary>
           <div className="mt-2"><BeforeAfter before={t.inputSample ?? []} after={t.sample} /></div>
         </details>
       )}
@@ -2235,10 +2411,10 @@ function TestResults({ node, superseded, onChange }: { node: FNode; superseded: 
 function BeforeAfter({ before, after }: { before: unknown[]; after: unknown[] }) {
   const col = (recs: unknown[], label: string, tone: string) => (
     <div>
-      <p className="mb-1 text-tiny font-medium uppercase tracking-wide text-muted-foreground">{label} ({recs.length})</p>
+      <p className={cn(BOX_LABEL, "mb-1")}>{label} ({recs.length})</p>
       <div className="space-y-1">
-        {recs.length === 0 && <p className="text-tiny text-muted-foreground">—</p>}
-        {recs.slice(0, 3).map((r, i) => <div key={i} className={`truncate rounded-control border p-1.5 text-micro ${tone}`}>{sampleLine(r)}</div>)}
+        {recs.length === 0 && <p className="text-xs text-muted-foreground">—</p>}
+        {recs.slice(0, 3).map((r, i) => <div key={i} className={`truncate rounded-control border p-1.5 text-xs ${tone}`}>{sampleLine(r)}</div>)}
       </div>
     </div>
   );
