@@ -49,11 +49,11 @@ import { cn } from "@/lib/utils";
  */
 export function TopBar({ account }: { account?: { initials: string; panel: ReactNode } }) {
   return (
-    // `bg-background` — the sheet's OFF-WHITE — rather than the sidebar's own
+    // ONE CHROME SURFACE. This was the sheet's OFF-WHITE while the sidebar was
     // surface, and deliberately: the flow builder portals white, bordered
     // islands into the slot below, and those only read as floating surfaces
     // over a wash one step off white.
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-sidebar px-4">
       {/* THE MARK SITS ON THE SAME LEFT EDGE AS THE RAIL'S ICONS — the bar's
           16px plus this `p-1` puts the black square 20px in, which is exactly
           where the sidebar's chips land (its `px-2` column plus a row's
@@ -219,7 +219,7 @@ export function SubBar({ children, className }: { children: ReactNode; className
          * page actually has. Matching `PageContainer`'s ladder means the range
          * pills start exactly where the title does.
          */
-        "quiet-scroll flex h-14 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-background px-5 sm:px-8 lg:px-10",
+        "quiet-scroll flex h-14 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-sidebar px-5 sm:px-8 lg:px-10",
         className,
       )}
     >

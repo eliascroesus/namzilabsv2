@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, PencilLine, RefreshCw } from "lucide-react";
+import { PencilLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
 import { isForwardRange } from "@/lib/metrics/range";
@@ -326,7 +326,6 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
               className="h-7 gap-1.5 px-2.5 text-micro [&_svg]:size-3.5"
               title="Recompute this tile now"
             >
-              <RefreshCw aria-hidden />
               Refresh
             </Button>
           </form>
@@ -338,7 +337,6 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           >
             <Link href={`/dashboard/flows/${row.flowId}`}>
               Open
-              <ArrowUpRight aria-hidden />
             </Link>
           </Button>
         </span>
