@@ -200,22 +200,27 @@ export function Delta({
         // and the ARROW alone says which way. No polarity is invented, because
         // both directions are painted the same.
         //
-        // And grey now means something. "No change" keeps the muted chip, so
-        // the quiet state is quiet on purpose rather than for want of a
-        // decision, and a board where nothing moved reads as a board where
-        // nothing moved.
-        flat ? "bg-muted text-muted-foreground" : "bg-foreground text-background/70",
+        // IT IS A CAPTION, NOT A BADGE. A solid ink chip on every tile put a
+        // heavy black lozenge beside every number on the board — twelve of them
+        // on a full dashboard, each shouting about a secondary fact. The delta
+        // qualifies the figure above it; it does not compete with it.
+        //
+        // So both states take the same quiet wash and the difference is the
+        // INK: full-strength foreground when something moved, muted when it
+        // did not. Grey still means "nothing moved" — it just no longer costs
+        // the tile its composure to say so.
+        flat ? "bg-muted text-muted-foreground" : "bg-muted text-foreground",
       )}
       title={`${formatMetricValue(previous, format)} ${since}`}
     >
       <Icon size={12} aria-hidden />
-      {/* The two-tone is built by raising the NUMBER, not by sinking the
+      {/* THE TWO-TONE IS BUILT BY RAISING THE NUMBER, never by sinking the
           label. `since` carries "vs yesterday" — the half that says what the
-          comparison is against — and at /70 it once measured 2.84:1, so the
-          pill read as a naked "+12%" with an unreadable qualifier. On ink the
-          same /70 is 8.0:1, because it is dimming toward the chip rather than
-          toward the page. */}
-      <span className={cn("tnum font-semibold", flat ? "text-foreground" : "text-background")}>{magnitude}</span>
+          comparison is against — and it has twice been dimmed into
+          unreadability (2.84:1 at one point) by someone reaching for hierarchy
+          with opacity. It inherits the chip's own ink; only the magnitude is
+          lifted, by WEIGHT. */}
+      <span className="tnum font-semibold text-foreground">{magnitude}</span>
       <span>{since}</span>
     </span>
   );

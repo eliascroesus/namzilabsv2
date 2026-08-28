@@ -338,6 +338,6 @@ describe("the kit's shape", () => {
      * identically so it cannot invent a direction.
      */
     const hash = createHash("sha256").update(readFileSync(join(process.cwd(), "src/components/charts.tsx"))).digest("hex");
-    expect(hash).toBe("7bf77230e38316078f20d5800035912472321aba76ac916ae74db696d068a417");
+    expect(hash).toBe("3c7b2ee8f7537842fa8b27122fa42dca250a5b1c2c2f86f66da9f0cc24d36711");
   });
 });

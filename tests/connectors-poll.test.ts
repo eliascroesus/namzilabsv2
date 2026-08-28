@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { calendlyConnector } from "@/connectors/calendly";
 import { googleSheetsConnector } from "@/connectors/google-sheets";
 import { isStreamScoped, catalogEntry } from "@/connectors/catalog";
@@ -123,6 +123,29 @@ const window = (over: Record<string, unknown>) =>
  * repurposed `restarts` alarm below.
  */
 describe("Calendly: the scan resumes by narrowing the bound, and the union is complete", () => {
+  /**
+   * THE CLOCK IS PINNED, because these fixtures are absolute dates.
+   *
+   * Every meeting below sits on 2026-07-29, and the connector scans a window
+   * measured from NOW. So the suite passed on the day it was written and has
+   * been rotting ever since: it went from 0 failures to 3 to 4 over a few days
+   * as the fixtures aged out of the window, and each new failure looked like a
+   * regression in whatever had just been touched.
+   *
+   * A test about pagination and watermarks has no business depending on what
+   * day it is run. The clock sits a few hours after the LATEST meeting
+   * (2026-07-30T10:00Z) — not merely near the fixtures — because the past-side
+   * scan walks backward from now, so a clock set mid-fixture puts half of them
+   * in the future and the first page banks the wrong watermark.
+   */
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-30T18:00:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const T = (iso: string) => Date.parse(iso);
   const EV = (id: string, start: string) => ({
     uri: `https://api.calendly.com/scheduled_events/${id}`,
