@@ -94,8 +94,8 @@ const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample:
   { token: "text-xl", cls: "text-xl font-semibold tracking-tight", px: "20px", use: "The step above a card title, where a section needs one", sample: "Speed to lead" },
   { token: "text-lg", cls: "text-lg font-semibold tracking-tight", px: "18px", use: "Card and modal titles", sample: "Speed to lead" },
   { token: "text-md", cls: "text-md font-semibold", px: "16px", use: "Panel titles, hero list rows", sample: "Speed to lead" },
-  { token: "text-sm", cls: "text-sm", px: "14px", use: "Body, field labels, menu items — the default", sample: "Speed to lead" },
-  { token: "text-xs", cls: "text-xs", px: "12px", use: "Helper text, captions, rail labels, badges", sample: "Speed to lead" },
+  { token: "text-sm", cls: "text-sm", px: "14px", use: "Body, menu items, table cells — the default", sample: "Speed to lead" },
+  { token: "text-xs", cls: "text-xs", px: "12px", use: "Helper text, captions, badges, and field labels — which are ALL CAPS with tracking", sample: "Speed to lead" },
 ];
 const RADII: Array<{ cls: string; label: string; body: string }> = [
   { cls: "rounded-control", label: "control · pill", body: "Buttons, inputs, menu rows" },
@@ -354,7 +354,7 @@ export default function DesignPage() {
 
         <Section
           title="Controls"
-          note="One field recipe: 36px tall, hairline border, and the same 4px ring on focus — fields show it whenever they hold focus, buttons only for keyboard users. The label is the question and never reads lighter than its answer. Autofill and spellcheck are OFF by default, because twenty-two of the app's twenty-three fields ask for something no browser has ever stored; a masked field goes further and opts out in four password managers' own dialects (NO_AUTOFILL), since `autocomplete=off` is the one value browsers ignore on one."
+          note="One field recipe: 40px tall — the same height as the Button beneath it, which the two had drifted apart on (36 vs 40) — hairline border, and the same 4px ring on focus — fields show it whenever they hold focus, buttons only for keyboard users. The label is the question and never reads lighter than its answer. Autofill and spellcheck are OFF by default, because twenty-two of the app's twenty-three fields ask for something no browser has ever stored; a masked field goes further and opts out in four password managers' own dialects (NO_AUTOFILL), since `autocomplete=off` is the one value browsers ignore on one."
         >
           <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
             <div>

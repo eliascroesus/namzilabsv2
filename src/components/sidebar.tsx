@@ -60,13 +60,13 @@ function workspaceAccent(name: string): string {
  * 12px caption, at which the six items occupied more vertical space than most
  * of the pages they lead to.
  */
-const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; section: string }> = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Workspace" },
-  { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays, section: "Workspace" },
-  { label: "Activity", href: "/dashboard/activity", icon: Radio, section: "Workspace" },
-  { label: "Flows", href: "/dashboard/flows", icon: Workflow, section: "Build" },
-  { label: "Apps", href: "/integrations", icon: Plug, section: "Build" },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, section: "Build" },
+const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; section: string; tint: string; soft: string }> = [
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Workspace", tint: "bg-primary text-primary-foreground", soft: "bg-brand-100 text-brand-700" },
+  { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays, section: "Workspace", tint: "bg-accent-orange text-white", soft: "bg-accent-orange/20 text-accent-orange" },
+  { label: "Activity", href: "/dashboard/activity", icon: Radio, section: "Workspace", tint: "bg-accent-pink text-neutral-900", soft: "bg-accent-pink/30 text-neutral-900" },
+  { label: "Flows", href: "/dashboard/flows", icon: Workflow, section: "Build", tint: "bg-accent-peri text-white", soft: "bg-accent-peri/25 text-accent-peri" },
+  { label: "Apps", href: "/integrations", icon: Plug, section: "Build", tint: "bg-accent-yellow text-neutral-900", soft: "bg-accent-yellow/40 text-neutral-900" },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, section: "Build", tint: "bg-foreground text-background", soft: "bg-foreground/10 text-foreground" },
 ];
 
 /**
@@ -162,13 +162,15 @@ export function Sidebar({
             <div className="space-y-0.5">
               {items
                 .filter((i) => i.section === section)
-                .map(({ label, href, icon: Icon }) => {
+                .map(({ label, href, icon: Icon, tint, soft }) => {
                   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
                   return (
                     <Link
                       key={href}
                       href={href}
                       aria-current={active ? "page" : undefined}
+                    // `group/nav` so the chip can answer the ROW's hover.
+                    data-nav
                       className={cn(
                         "flex h-8 items-center gap-2.5 rounded-control px-3 text-sm transition-colors duration-(--duration-fast) ease-(--ease-standard)",
                         active
@@ -182,7 +184,25 @@ export function Sidebar({
                           values to keep in step with a fill that already
                           decides both — and on the violet pill a named colour
                           would have been the one thing not inverting with it. */}
-                      <Icon className="size-4 shrink-0" />
+                    {/* THE ICON SITS IN ITS OWN COLOURED CHIP, which is most of
+                        why Miro, Notion and Figma's rails read as playful rather
+                        than as a list of grey text. Full strength when you are
+                        here; a neutral wash otherwise — so the colour identifies
+                        the destination at rest instead of only announcing the
+                        one you already picked. */}
+                    <span
+                      className={cn(
+                        "flex size-6 shrink-0 items-center justify-center rounded-control transition-colors",
+                        // AT REST IT KEEPS ITS HUE, softened. Colouring only the
+                        // ACTIVE row leaves five of six chips grey, which is the
+                        // greyscale rail again with one exception — the colour is
+                        // supposed to identify the destination, not announce the
+                        // one you already chose.
+                        active ? tint : soft,
+                      )}
+                    >
+                      <Icon className="size-3.5" />
+                    </span>
                       <span className="truncate">{label}</span>
                     </Link>
                   );

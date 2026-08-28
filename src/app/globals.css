@@ -209,7 +209,7 @@
    * — they are the kit's decorative range, for the places a surface needs to
    * be identifiable rather than to mean something.
    */
-  --color-accent-yellow: #f0ee7a;
+  --color-accent-yellow: #faf63c;
   --color-accent-orange: #ff6b35;
   --color-accent-pink: #ffa5a5;
   --color-accent-peri: #9b9be8;
@@ -347,8 +347,8 @@
   --text-tiny--line-height: var(--text-xs--line-height);
   --text-small: var(--text-sm);
   --text-small--line-height: var(--text-sm--line-height);
-  --text-base: var(--text-sm);
-  --text-base--line-height: var(--text-sm--line-height);
+  --text-base: var(--text-md);
+  --text-base--line-height: var(--text-md--line-height);
   --text-lead: var(--text-md);
   --text-lead--line-height: var(--text-md--line-height);
   --text-title: var(--text-lg);
@@ -802,13 +802,21 @@ html.dark {
  *   20  docked panels — the builder's config rail, the tile settings panel
  *   30  anchored surfaces — popovers, dropdown menus, the field browser
  *   40  the drag layer — the ghost under the cursor and its drop slot, which
- *       must ride ABOVE the menus a drag can start from
- *   50  modal surfaces — dialogs, sheets, their scrims, and toasts
+ *       must ride ABOVE the menus a drag can start from — and toasts
+ *   50  modal surfaces — dialogs, sheets and their scrims
  *
  * Radix ships its overlays at 50, which is the rung they belong on. The one
  * thing to watch: a drag that starts inside an open dropdown is at 40 while
  * the menu is at 30, which is the order that makes the ghost visible — the
  * reverse looked like the card had been swallowed.
+ *
+ * TOASTS SIT AT 40, BELOW MODAL SURFACES, and this note was wrong about that
+ * before it was written — it listed them at 50 to match Radix while the
+ * shipped `ui/toast.tsx` had been at 40 all along. The code is the fact and it
+ * is also the better rule: a dialog is a focused task with its own scrim, and
+ * a toast from the page behind it punching through that scrim reads as a bug.
+ * Moving them to 50 is a stacking-BEHAVIOUR change, not a restyle, and wants
+ * its own commit and its own look on screen.
  */
 
 /**
