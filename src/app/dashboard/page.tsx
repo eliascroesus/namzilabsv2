@@ -759,9 +759,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               them. The negative margin lets the ring breathe inside the
               scrollport without indenting the track. */}
           <div className="-mx-1 max-w-full overflow-x-auto px-1 lg:mx-0 lg:overflow-visible lg:px-0">
-            {/* No groove of its own — the island IS the container now, and a
-                `bg-muted` track inside a white bar is a box drawn inside a box. */}
-            <div className="inline-flex items-center gap-0.5">
+            {/* IT HAS ITS GROOVE BACK. Loose on a flush bar the seven periods
+                read as seven separate buttons that happened to be adjacent; the
+                selected one is now a raised chip sitting IN a track, which is
+                what says "pick exactly one of these". */}
+            <div className="inline-flex items-center gap-0.5 rounded-full bg-muted p-0.5">
               {RANGE_OPTIONS.map((r) => (
                 // Still an anchor with a real href — see RangeLink. What it
                 // adds is that the press lands NOW: the pill lights and the
@@ -772,9 +774,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   href={qs({ range: r.key })}
                   rangeKey={r.key}
                   activeRange={rangeKey}
-                  className="inline-flex shrink-0 items-center rounded-control px-2.5 py-1.5 text-small font-medium transition-colors duration-(--duration-fast)"
-                  activeClassName="bg-accent text-accent-foreground"
-                  idleClassName="text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="inline-flex h-7 shrink-0 items-center rounded-full px-3 text-xs font-medium transition-colors duration-(--duration-fast)"
+                  activeClassName="bg-card text-foreground shadow-xs"
+                  idleClassName="text-muted-foreground hover:text-foreground"
                 >
                   {r.label}
                 </RangeLink>

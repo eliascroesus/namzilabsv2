@@ -5,7 +5,28 @@ import { ChevronDown, Plus, UserPlus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { GROUP_ACCENT, GROUP_COLOR_KEYS } from "@/components/flow/node-accent";
 import { cn } from "@/lib/utils";
+
+/**
+ * A WORKSPACE'S OWN COLOUR, derived rather than stored.
+ *
+ * Miro's header is a grey utility bar with exactly one colourful thing in it —
+ * the workspace avatar — and that single chip is most of why it does not read
+ * as chrome. Ours had no equivalent, so the whole bar was greyscale.
+ *
+ * The hue comes from the name, through the palette the boards already use, so
+ * two workspaces are reliably different colours and the same workspace is the
+ * same colour on every device without a column to store it in.
+ */
+function workspaceAccent(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  // `grey` is the palette's "no colour" entry — skip it, or a third of
+  // workspaces get a chip that looks like a disabled control.
+  const keys = GROUP_COLOR_KEYS.filter((k) => k !== "grey");
+  return GROUP_ACCENT[keys[h % keys.length]];
+}
 
 /**
  * THE TOP BAR — identity and the two things you start from.
@@ -32,16 +53,16 @@ export function TopBar({
   account?: { initials: string; panel: ReactNode };
 }) {
   return (
-    <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border bg-background px-3">
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
       <Link
         href="/dashboard"
         className="flex shrink-0 items-center gap-2 rounded-control px-1 py-1 transition-opacity hover:opacity-80"
         title="Namzilabs — dashboard"
       >
-        <span className="flex size-6 items-center justify-center rounded-control bg-primary text-micro font-semibold text-primary-foreground">
+        <span className="flex size-7 items-center justify-center rounded-control bg-primary text-xs font-semibold text-primary-foreground">
           N
         </span>
-        <span className="text-base font-semibold tracking-tight text-foreground">Namzilabs</span>
+        <span className="text-md font-semibold tracking-tight text-foreground">Namzilabs</span>
       </Link>
 
       {/* The workspace, beside the mark rather than under an avatar. It reads
@@ -49,9 +70,20 @@ export function TopBar({
       {account && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="min-w-0 gap-1 font-medium text-muted-foreground">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-1 min-w-0 gap-1.5 rounded-full border border-border bg-muted/60 pl-1 pr-2 font-medium text-foreground hover:bg-muted"
+            >
+              <span
+                className="flex size-6 shrink-0 items-center justify-center rounded-full text-micro font-semibold text-white"
+                style={{ background: workspaceAccent(workspace) }}
+                aria-hidden
+              >
+                {workspace.slice(0, 2).toUpperCase()}
+              </span>
               <span className="truncate">{workspace}</span>
-              <ChevronDown className="size-3.5 shrink-0" />
+              <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64">
@@ -96,7 +128,13 @@ export function SubBar({ children, className }: { children: ReactNode; className
   return (
     <div
       className={cn(
-        "flex h-11 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-3",
+        /**
+         * ONE ROW, ALWAYS. This wrapped, and the second line landed on top of
+         * the view tabs below it — the bar is pulled flush by negative margins,
+         * so anything that wraps escapes its own height and overlaps whatever
+         * the page drew next. A horizontal scroller cannot do that.
+         */
+        "flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-background px-4",
         className,
       )}
     >

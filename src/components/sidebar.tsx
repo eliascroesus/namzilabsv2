@@ -68,11 +68,11 @@ export function Sidebar({
                     className={cn(
                       "flex h-[30px] items-center gap-2 rounded-control px-2 text-base transition-colors",
                       active
-                        ? "bg-sidebar-accent font-semibold text-foreground"
+                        ? "bg-accent font-semibold text-accent-foreground"
                         : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
                     )}
                   >
-                    <Icon className="size-4 shrink-0" />
+                    <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "text-neutral-400")} />
                     <span className="truncate">{label}</span>
                   </Link>
                 );
