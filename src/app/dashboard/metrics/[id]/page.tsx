@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Inbox } from "lucide-react";
-import { requireOrg } from "@/lib/auth";
-import { effectiveAccess } from "@/lib/permissions";
+import { requireOrg, requestAccess } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { FunnelView } from "@/components/funnel-view";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -41,7 +40,7 @@ export default async function MetricDrillPage({
   // A hidden metric's drill-in is its name, headline and 100 raw rows — the
   // exact data the hidden tile hides. Same 404 as a missing metric: a 403
   // would confirm existence, and URL secrecy is not a control.
-  const access = await effectiveAccess(getDb(), { orgId, userId, role });
+  const access = await requestAccess(orgId, userId, role);
   if (!access.canSeeMetric(`metric:${id}`)) notFound();
 
   const { key: rangeKey, range } = resolveRange(one(sp.range) || "30d");

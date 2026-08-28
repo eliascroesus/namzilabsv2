@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireOrg } from "@/lib/auth";
-import { effectiveAccess } from "@/lib/permissions";
+import { requireOrg, requestAccess } from "@/lib/auth";
 import { getDb } from "@/db/client";
 import { getFlow, publishedGraphFingerprint } from "@/lib/flow/store";
 import { listConnections } from "@/lib/connections";
@@ -32,7 +31,7 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
   // member a hidden flow DOES NOT EXIST, and a 403 would confirm it does.
   // The editor renders every step's last computed value, so this page is
   // where "hidden on the dashboard" would otherwise quietly leak.
-  const access = await effectiveAccess(getDb(), { orgId, userId, role });
+  const access = await requestAccess(orgId, userId, role);
   if (!access.canSeeMetric(`flow:${id}`)) notFound();
 
   /**

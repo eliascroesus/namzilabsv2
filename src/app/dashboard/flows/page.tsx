@@ -1,7 +1,6 @@
 import { Plus, Workflow, X } from "lucide-react";
 import Link from "next/link";
-import { requireOrg } from "@/lib/auth";
-import { effectiveAccess } from "@/lib/permissions";
+import { requireOrg, requestAccess } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -88,7 +87,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
   // corridor to it; for a rank-restricted member a hidden flow does not exist
   // here, in the editor, or in any action. Create follows create_flows; the
   // action itself is gated server-side, the button is the courtesy.
-  const access = await effectiveAccess(getReadDb(), { orgId, userId, role });
+  const access = await requestAccess(orgId, userId, role);
   const canCreate = access.can("create_flows");
   // `null` means the read FAILED; `[]` means the workspace is genuinely empty.
   // Collapsing both to `[]` is what made a database outage render as "No flows

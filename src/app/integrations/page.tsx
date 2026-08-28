@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Lock, Plug, X } from "lucide-react";
-import { requireOrg } from "@/lib/auth";
-import { effectiveAccess } from "@/lib/permissions";
+import { requireOrg, requestAccess } from "@/lib/auth";
 import { getReadDb } from "@/db/client";
 import { connectionImportStatuses, type ImportStatus } from "@/lib/sync/import-status";
 import { AppShell } from "@/components/app-shell";
@@ -45,7 +44,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   // rank lacks "view_integrations" gets the page shell and one quiet card —
   // not a stripped list that hints at what exists. Mutations are gated again
   // in actions.ts ("connect_integrations"); this is the read wall.
-  const access = await effectiveAccess(getReadDb(), { orgId, userId, role });
+  const access = await requestAccess(orgId, userId, role);
   if (!access.can("view_integrations")) {
     return (
       <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>

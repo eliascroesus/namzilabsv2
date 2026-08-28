@@ -1,7 +1,6 @@
 import { CalendarDays } from "lucide-react";
-import { requireOrg } from "@/lib/auth";
+import { requireOrg, requestAccess } from "@/lib/auth";
 import { getReadDb } from "@/db/client";
-import { effectiveAccess } from "@/lib/permissions";
 import { calendarFlowTiles } from "@/lib/flow/materialize";
 import { listFlowNames } from "@/lib/flow/store";
 import { AppShell } from "@/components/app-shell";
@@ -40,7 +39,7 @@ export const maxDuration = 60;
 export default async function CalendarPage() {
   const { orgId, userId, role, auth } = await requireOrg();
   const db = getReadDb(); // read-only surface: rides the DB_DRIVER_READ soak seam (B.3)
-  const access = await effectiveAccess(db, { orgId, userId, role });
+  const access = await requestAccess(orgId, userId, role);
 
   // `null` means the read FAILED; `[]` means there genuinely are no published
   // metrics. Collapsing the two renders a database outage as "you have not
