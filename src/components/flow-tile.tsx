@@ -291,11 +291,16 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           recessed in one theme and invisible in the other is not a tray. */}
       <div className="flex items-center justify-between gap-2 border-t border-border bg-foreground/3 px-6 py-2.5">
         {row.computedAt ? (
+          // NO "Updated " PREFIX. It was added with the tray and it does not
+          // fit: at three columns the tray has room for a relative time and two
+          // pills, and the prefix pushed every tile on the board to
+          // "Updated 2…". The tray IS the context — a timestamp sitting under a
+          // number, beside Refresh, is not ambiguous about what it timestamps.
           <span
-            className="truncate text-micro text-muted-foreground"
+            className="min-w-0 truncate text-micro text-muted-foreground"
             title={formatDateTime(new Date(row.computedAt))}
           >
-            {`Updated ${relativeTime(new Date(row.computedAt))}`}
+            {relativeTime(new Date(row.computedAt))}
           </span>
         ) : (
           <span />

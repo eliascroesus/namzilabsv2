@@ -157,23 +157,10 @@ export function Sidebar({
               >
                 <WorkspaceChip name={name} />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{name}</span>
-                {/* WHO YOU ARE, ON THE CONTROL THAT HOLDS IT. The panel behind
-                    this trigger has carried the account — the email, the way
-                    out — since the rail lost its avatar, and nothing on the
-                    trigger said so: `initials` was handed to this component and
-                    dropped. A small violet disc beside the chevron is the whole
-                    difference between "switch workspace" and "workspace and
-                    you", which is what the menu actually is.
-
-                    Violet because the sheet gives identity and selection to the
-                    accent; the tint carries the 700 ink rather than the 500,
-                    which is not a text colour. */}
-                <span
-                  aria-hidden
-                  className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
-                >
-                  {account.initials}
-                </span>
+                {/* The account moved to the TOP BAR, where Miro, Notion and
+                    Figma all keep it. This control answers "which workspace";
+                    putting "and who am I" on the same row made a 248px header
+                    carry two different identities and read as clutter. */}
                 <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>

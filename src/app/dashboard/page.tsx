@@ -836,7 +836,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                      BLACK is the answer, per the ratio: this is the workhorse
                      selection on the page, and the violet is spent one row down
                      on which VIEW you are in. */
-                  className="inline-flex h-7 shrink-0 items-center rounded-full px-3 text-xs font-semibold uppercase tracking-wide transition-colors duration-(--duration-fast)"
+                  className="inline-flex h-8 shrink-0 items-center rounded-full px-3.5 text-sm font-medium transition-colors duration-(--duration-fast)"
                   activeClassName="bg-foreground text-background shadow-xs"
                   idleClassName="text-muted-foreground hover:bg-muted hover:text-foreground"
                 >

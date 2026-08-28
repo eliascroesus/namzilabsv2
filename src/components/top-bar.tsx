@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { Plus, UserPlus } from "lucide-react";
 import type { ReactNode } from "react";
-import { buttonVariants } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -34,7 +35,7 @@ import { cn } from "@/lib/utils";
  * A violet mark AND a violet button would have been two of them competing, with
  * the one you cannot press drawn first.
  */
-export function TopBar() {
+export function TopBar({ account }: { account?: { initials: string; panel: ReactNode } }) {
   return (
     // `bg-background` — the sheet's OFF-WHITE — rather than the sidebar's own
     // surface, and deliberately: the flow builder portals white, bordered
@@ -114,6 +115,32 @@ export function TopBar() {
         <Plus />
         <span className="hidden sm:inline">New flow</span>
       </Link>
+      {/* THE ACCOUNT, TOP-RIGHT, where Miro, Notion and Figma all keep it —
+          and where it stops the sidebar's workspace row from having to answer
+          two questions at once. It sits LAST on the bar — after the hero — because
+          that is where every reference puts it and because it is the control
+          you reach for least. */}
+      {account && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            {/* The kit's Button, not a raw one — the gate is right to insist:
+                a hand-rolled control here would re-spell the disabled and
+                transition rules the other four in this bar get for free. */}
+            <Button
+              variant="soft"
+              size="iconSm"
+              aria-label="Account"
+              className="text-xs font-semibold data-[state=open]:bg-brand-100"
+            >
+              {account.initials}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64 p-0">
+            {account.panel}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
     </header>
   );
 }

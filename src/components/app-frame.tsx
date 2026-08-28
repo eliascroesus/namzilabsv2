@@ -86,7 +86,7 @@ export function AppFrame({
           Notion. A bar spanning both would put the workspace switcher above
           the navigation that switching it changes. */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar />
+        <TopBar account={account} />
         {ownsMain ? (
           <main id="main" className={className}>
             {children}
