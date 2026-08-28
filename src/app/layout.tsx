@@ -55,8 +55,8 @@ export const viewport: Viewport = {
    * Both are pinned to `--background` by tests/design-swatches.test.ts.
    */
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#101828" },
+    { media: "(prefers-color-scheme: light)", color: "#f5f5f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#1a1a1a" },
   ],
   colorScheme: "light dark",
   viewportFit: "cover",

@@ -10,7 +10,13 @@ import { cn } from "@/lib/utils";
  * neutral — transient states used to be blue, which competed with the accent
  * for meaning. Nothing transient deserves a colour.
  */
-const pillVariants = cva("inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-micro font-semibold", {
+const pillVariants = cva(/**
+   * THE SHEET'S CHIP: a full pill, ALL CAPS, tight tracking, 8px rhythm.
+   * Caps is the kit's own voice for a micro label — every chip and tab on the
+   * brand sheet is set that way, and at 12px it reads as a LABEL rather than
+   * as a very small sentence.
+   */
+  "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-micro font-semibold uppercase tracking-wide", {
   variants: {
     tone: {
       success: "bg-success-soft text-success-ink",

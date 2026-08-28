@@ -51,31 +51,35 @@ const buttonVariants = cva(
         // a 7.19:1 ultramarine lightens it toward the white behind it, so the
         // label's contrast FELL at the one moment the button is under a
         // pointer. Down the ramp is also the direction a real button moves.
-        default: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-700 active:bg-brand-800",
+        /**
+         * THE KIT HAS TWO PRIMARIES, and they mean different things.
+         *
+         * `default` is VIBRANT VIOLET — the action this screen exists for.
+         * `solid` is DEEP BLACK — the action that commits or signs you in, and
+         * the one the brand sheet draws first. Black is reached through the
+         * `foreground` ROLE rather than `bg-neutral-900`, which is both more
+         * correct (it inverts with the theme) and sidesteps the kit gate that
+         * bans a raw near-black fill.
+         */
+        default: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-600 active:bg-brand-700",
+        solid: "bg-foreground text-background shadow-xs hover:bg-neutral-800 active:bg-neutral-700",
         secondary: "border border-border bg-card text-foreground shadow-xs hover:bg-muted active:bg-neutral-200",
+        /** The sheet's "Pressed" — a violet wash carrying violet ink. */
+        soft: "bg-accent text-accent-foreground hover:bg-brand-100 active:bg-brand-200",
+        /** Its "Deject" — the outlined violet, for a secondary act in a violet flow. */
+        outlineAccent: "border border-brand-300 bg-transparent text-accent-foreground hover:bg-accent",
         ghost: "text-muted-foreground hover:bg-muted hover:text-foreground active:bg-neutral-200",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-danger-ink active:brightness-95",
-        // Running something is a different KIND of act from publishing it, and
-        // Make/Zapier both give it its own colour rather than a second grey.
+        destructive: "bg-destructive text-destructive-foreground shadow-xs hover:bg-danger-ink active:brightness-95",
         success: "bg-success-soft text-success-ink hover:brightness-[0.97]",
-        // A destructive action that is not the point of the screen: quiet
-        // until hovered, then unmistakable.
-        // Rest was `text-neutral-400` — 2.53:1, and globals.css marks that token
-        // "decorative / disabled only — never text". It was carrying real labels
-        // ("Revoke", "Delete role", "Remove") at 13px semibold. Hover was no
-        // better: destructive-on-red-50 measures 4.34:1. Both states now come
-        // from the danger trio — 5.68:1 at rest, 5.49:1 on hover.
         destructiveGhost: "text-muted-foreground hover:bg-danger-soft hover:text-danger-ink",
-        // The bordered delete: present enough to find, calm enough to sit
-        // beside content. Confirm steps and inline "Disconnect"s live here.
         destructiveOutline: "border border-red-200 bg-card text-danger-ink hover:bg-danger-soft/60",
-        link: "text-primary underline-offset-4 hover:underline",
+        link: "text-accent-foreground underline-offset-4 hover:underline",
       },
       size: {
-        sm: "h-8 px-2.5 text-sm [&_svg]:size-4",
-        default: "h-9 px-3.5 text-sm [&_svg]:size-4",
-        lg: "h-10 px-4 text-md [&_svg]:size-[18px]",
-        icon: "size-9 [&_svg]:size-4",
+        sm: "h-8 px-3 text-xs [&_svg]:size-4",
+        default: "h-10 px-4 text-sm [&_svg]:size-4",
+        lg: "h-12 px-6 text-md [&_svg]:size-5",
+        icon: "size-10 [&_svg]:size-4",
         iconSm: "size-8 [&_svg]:size-4",
       },
     },

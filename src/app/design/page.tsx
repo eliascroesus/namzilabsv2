@@ -17,7 +17,6 @@ import { formatDate } from "@/lib/format";
 import { CanvasPreview, FlowNodeCard } from "@/components/flow/flow-canvas-preview";
 import { EmptyCanvasPreview } from "@/components/flow/empty-canvas-preview";
 import { NodeIcon } from "@/components/flow/icons";
-import { ToolbarPreview } from "@/components/flow/toolbar-preview";
 import { PanelTabsPreview } from "@/components/flow/panel-preview";
 import { PANEL_SHELL } from "@/components/flow/panel-chrome";
 import { FlowList } from "@/app/dashboard/flows/FlowRow";
@@ -61,23 +60,23 @@ export const metadata = { title: "Namzilabs — UI kit" };
  * indigo hexes — a kit page confidently lying about the kit.
  */
 const BRAND: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "50", cls: "bg-brand-50", hex: "#eff8ff" },
-  { step: "100", cls: "bg-brand-100", hex: "#d1e9ff" },
-  { step: "200", cls: "bg-brand-200", hex: "#b2ddff" },
-  { step: "300", cls: "bg-brand-300", hex: "#84caff" },
-  { step: "400", cls: "bg-brand-400", hex: "#53b1fd" },
-  { step: "500", cls: "bg-brand-500", hex: "#2e90fa" },
-  { step: "600", cls: "bg-brand-600", hex: "#175cd3" },
-  { step: "700", cls: "bg-brand-700", hex: "#1849a9" },
+  { step: "50", cls: "bg-brand-50", hex: "#f3eeff" },
+  { step: "100", cls: "bg-brand-100", hex: "#e7dcff" },
+  { step: "200", cls: "bg-brand-200", hex: "#d0bcff" },
+  { step: "300", cls: "bg-brand-300", hex: "#b494ff" },
+  { step: "400", cls: "bg-brand-400", hex: "#9670ff" },
+  { step: "500", cls: "bg-brand-500", hex: "#7c4dff" },
+  { step: "600", cls: "bg-brand-600", hex: "#6d3aff" },
+  { step: "700", cls: "bg-brand-700", hex: "#6229f0" },
 ];
 const INK: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "950", cls: "bg-ink-950", hex: "#0c111d" },
-  { step: "900", cls: "bg-ink-900", hex: "#101828" },
-  { step: "800", cls: "bg-ink-800", hex: "#182230" },
-  { step: "700", cls: "bg-ink-700", hex: "#344054" },
-  { step: "400", cls: "bg-ink-400", hex: "#98a2b3" },
-  { step: "100", cls: "bg-ink-100", hex: "#eaecf0" },
-  { step: "50", cls: "bg-ink-50", hex: "#f9fafb" },
+  { step: "950", cls: "bg-ink-950", hex: "#0f0f0f" },
+  { step: "900", cls: "bg-ink-900", hex: "#1a1a1a" },
+  { step: "800", cls: "bg-ink-800", hex: "#2b2b2b" },
+  { step: "700", cls: "bg-ink-700", hex: "#3d3d3d" },
+  { step: "400", cls: "bg-ink-400", hex: "#a3a3a3" },
+  { step: "100", cls: "bg-ink-100", hex: "#e8e8e8" },
+  { step: "50", cls: "bg-ink-50", hex: "#fafafa" },
 ];
 /**
  * UNTITLED UI'S SCALE. The legacy names still compile as aliases onto these
@@ -98,9 +97,9 @@ const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample:
   { token: "text-xs", cls: "text-xs", px: "12px", use: "Helper text, captions, rail labels, badges", sample: "Speed to lead" },
 ];
 const RADII: Array<{ cls: string; label: string; body: string }> = [
-  { cls: "rounded-control", label: "control · 6px", body: "Buttons, inputs, menu rows" },
-  { cls: "rounded-card", label: "card · 8px", body: "Tiles, list rows, rail tiles" },
-  { cls: "rounded-surface", label: "surface · 12px", body: "Panels, modals, tables, step cards" },
+  { cls: "rounded-control", label: "control · pill", body: "Buttons, inputs, menu rows" },
+  { cls: "rounded-card", label: "card · 10px", body: "Tiles, list rows, rail tiles" },
+  { cls: "rounded-surface", label: "surface · 16px", body: "Panels, modals, tables, step cards" },
   { cls: "rounded-frame", label: "frame · 0", body: "Retired — the sidebar is flush with the page now" },
 ];
 /**
@@ -634,27 +633,16 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Builder chrome" note="Two surfaces. The bar spans the top: back and the step menu on the left, the flow's NAME dead-centre — the one thing here that is about the flow rather than about what you can do to it — then saved, on/off, undo, redo, run and ship on the right. Zoom and fit are the only controls about LOOKING rather than about the flow, so they sit apart in their own column at the foot.">
-          {/* THE INNER CANVAS IS 1292px BECAUSE A REAL ONE IS — a 1440 viewport
-              minus the 100px rail minus the two 24px insets. The bar fills it:
-              1244px, with the centre group measured dead-centre (470px of bar
-              on each side of it).
+        {/* THE BUILDER'S TOOLBAR HAS NO SPECIMEN ANY MORE, because it is no
+            longer a thing of its own to specimen: it portals into the app's
+            top bar, which is already at the top of THIS page. Rendering it here
+            put a second copy of Review & publish into that bar, on top of New
+            flow — a kit page actively lying about the kit.
 
-              Rendered at this page's own column it was a lie: the bar hit
-              its max-width, squeezed, and showed a flow name clipped in a way
-              the product does not do at any width a laptop has. So the box
-              scrolls sideways rather than compressing the specimen. */}
-          <div className="-mx-24 overflow-x-auto overflow-y-hidden rounded-card">
-            <div className="relative h-[380px] w-[1292px] bg-canvas-bg">
-              <div
-                className="absolute inset-0"
-                style={{ backgroundImage: "radial-gradient(var(--color-canvas-dot) 0.8px, transparent 0.8px)", backgroundSize: "26px 26px" }}
-              />
-              <ToolbarPreview />
-            </div>
-          </div>
-        </Section>
-
+            What is left of the builder's own chrome — the zoom column, the
+            config panel, the step cards — is specimened in the sections below.
+            The bar itself is visible on every screen in the product, which is
+            the best documentation it could have. */}
         <Section title="Flow list" note="A board of cards, not a spreadsheet of rows — the same grid, radius and elevation the dashboard's tiles use, because the two screens people move between most should be built out of the same object. Zapier's per-row switch is kept: off is paused, not deleted, and the tiles come back with it. The whole card is the link (a stretched overlay), with the switch and the two actions floating above it.">
           {/* Rendered on the warm canvas, which is where it actually lives.
               On this page's white sheet a white card on white is the one thing

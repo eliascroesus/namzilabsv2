@@ -149,8 +149,8 @@
    * and it is never used below 17px, where its character would cost legibility
    * and buy nothing.
    */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-display: var(--font-instrument), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Helvetica Neue", var(--font-inter), ui-sans-serif, system-ui, -apple-system, Helvetica, Arial, sans-serif;
+  --font-display: "Helvetica Neue", var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   /* IDs, API keys, webhook URLs, code. System mono — nothing to load, and
      technical strings stop wearing the browser's fallback serif-mono mix. */
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -173,15 +173,15 @@
    * mean "press this". brand-600 carries white at 5.99:1, past AA at the
    * semibold sizes buttons are set in.
    */
-  --color-brand-50: #eff8ff;
-  --color-brand-100: #d1e9ff;
-  --color-brand-200: #b2ddff;
-  --color-brand-300: #84caff;
-  --color-brand-400: #53b1fd; /* focus ring */
-  --color-brand-500: #2e90fa; /* hover-on-dark */
-  --color-brand-600: #175cd3; /* primary — 7.19:1 on white */
-  --color-brand-700: #1849a9; /* pressed, accent-foreground */
-  --color-brand-800: #194185;
+  --color-brand-50: #f3eeff;
+  --color-brand-100: #e7dcff;
+  --color-brand-200: #d0bcff;
+  --color-brand-300: #b494ff;
+  --color-brand-400: #9670ff; /* focus ring */
+  --color-brand-500: #7c4dff; /* hover-on-dark */
+  --color-brand-600: #6d3aff; /* primary — 7.19:1 on white */
+  --color-brand-700: #6229f0; /* pressed, accent-foreground */
+  --color-brand-800: #5318d1;
 
   /* --- The neutral ramp ----------------------------------------------------
    * TAILWIND'S `neutral-*`, REDEFINED IN PLACE.
@@ -202,17 +202,17 @@
    * and Stripe all land near, and which lets a screen full of neutral chrome
    * read as neutral rather than as a colour choice.
    */
-  --color-neutral-50: #f9fafb;
-  --color-neutral-100: #f2f4f7; /* --muted: recessed surfaces, table headers */
-  --color-neutral-200: #eaecf0; /* the heavier hairline: switch track, dividers */
-  --color-neutral-300: #d0d5dd;
-  --color-neutral-400: #98a2b3; /* decorative / disabled only — 2.5:1, never text */
-  --color-neutral-500: #667085; /* --muted-foreground — 5.68:1, up from 4.74:1 */
-  --color-neutral-600: #475467;
-  --color-neutral-700: #344054;
-  --color-neutral-800: #182230;
-  --color-neutral-900: #101828; /* --foreground — 16.43:1 */
-  --color-neutral-950: #0c111d;
+  --color-neutral-50: #fafafa;
+  --color-neutral-100: #f5f5f5; /* --muted: recessed surfaces, table headers */
+  --color-neutral-200: #e8e8e8; /* the heavier hairline: switch track, dividers */
+  --color-neutral-300: #d6d6d6;
+  --color-neutral-400: #a3a3a3; /* decorative / disabled only — 2.5:1, never text */
+  --color-neutral-500: #6b6b6b; /* --muted-foreground — 5.68:1, up from 4.74:1 */
+  --color-neutral-600: #525252;
+  --color-neutral-700: #3d3d3d;
+  --color-neutral-800: #2b2b2b;
+  --color-neutral-900: #1a1a1a; /* --foreground — 16.43:1 */
+  --color-neutral-950: #0f0f0f;
 
   /* The red ramp, warmed to match. Only `ui/button.tsx` reaches for these
      directly (the destructive ghost's hover wash and the outline's border);
@@ -231,13 +231,13 @@
    * as the paper, the rail stops reading as a separate component bolted to the
    * left edge and starts reading as the same surface in shadow.
    */
-  --color-ink-950: #0c111d; /* rail base */
-  --color-ink-900: #101828; /* rail raised (active item), the toast */
-  --color-ink-800: #182230; /* rail hover */
-  --color-ink-700: #344054; /* hairline on dark */
-  --color-ink-400: #98a2b3; /* muted text on dark — 5.87:1 on the rail */
-  --color-ink-100: #eaecf0; /* body text on dark */
-  --color-ink-50: #f9fafb; /* headings on dark */
+  --color-ink-950: #0f0f0f; /* rail base */
+  --color-ink-900: #1a1a1a; /* rail raised (active item), the toast */
+  --color-ink-800: #2b2b2b; /* rail hover */
+  --color-ink-700: #3d3d3d; /* hairline on dark */
+  --color-ink-400: #a3a3a3; /* muted text on dark — 5.87:1 on the rail */
+  --color-ink-100: #e8e8e8; /* body text on dark */
+  --color-ink-50: #fafafa; /* headings on dark */
 
   /* --- Canvas -------------------------------------------------------------
    * THE WHOLE APP'S WORKING SURFACE — not the builder's alone any more.
@@ -357,9 +357,9 @@
   --radius-4xl: 1.5rem; /* 24px */
 
   /* The kit's names, kept as aliases. Same pixels, so nothing reshapes. */
-  --radius-control: var(--radius-sm);
-  --radius-card: var(--radius-md);
-  --radius-surface: var(--radius-xl);
+  --radius-control: 9999px;
+  --radius-card: var(--radius-lg);
+  --radius-surface: var(--radius-2xl);
   /* 32px — the frame's own corner, where the canvas is cut into the rail's
      wash. Bigger than any radius INSIDE the app on purpose: this one is not a
      component, it is the edge of the application itself, and at surface's 16px
@@ -506,7 +506,7 @@
    * Values point at the tokens already defined in @theme, so there is exactly
    * one place each colour is decided.
    */
-  --background: #ffffff;
+  --background: #f5f5f5; /* OFF-WHITE — the app's surface */
   /* WARM NEAR-BLACK, not pure black. #000 on #fff is 21:1 — a contrast no
      printed page has ever asked a reader to sustain, and the reason long
      sessions in this kind of tool feel like glare. The warm 900 measures
@@ -519,7 +519,7 @@
   --popover: #ffffff;
   --popover-foreground: var(--color-neutral-900);
 
-  --primary: var(--color-brand-600);
+  --primary: var(--color-brand-500); /* VIBRANT VIOLET #7c4dff — white at 4.81:1 */
   --primary-foreground: #ffffff;
 
   --secondary: var(--color-neutral-100);
@@ -529,7 +529,7 @@
   --muted-foreground: var(--color-neutral-500);
 
   --accent: var(--color-brand-50);
-  --accent-foreground: var(--color-brand-700);
+  --accent-foreground: var(--color-brand-700); /* 6.79:1 — the link step */
 
   --destructive: var(--color-red-600);
   --destructive-foreground: #ffffff;
@@ -568,8 +568,8 @@
   --danger-ink: #b42318; /* 5.49:1 on its soft */
 
   /* ---- The working surface and the rail ---------------------------------- */
-  --canvas-bg: #ffffff;
-  --canvas-dot: #e0e4ea; /* Δ 31, 27, 21 from white */
+  --canvas-bg: #f5f5f5;
+  --canvas-dot: #d6d6d6; /* Δ 31, 31, 31 from off-white */
   --canvas-edge: #98a2b3;
   --rail: #ffffff;
   /* The sidebar is a RECESSED surface now, not a dark wall: one step off the

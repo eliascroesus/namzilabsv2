@@ -19,9 +19,9 @@ const cardVariants = cva("border border-border bg-card", {
     },
     padding: {
       none: "",
-      dense: "p-2.5",
-      compact: "p-3.5",
-      default: "p-4",
+      dense: "p-3",
+      compact: "p-4",
+      default: "p-6",
     },
   },
   defaultVariants: { variant: "card", padding: "default" },

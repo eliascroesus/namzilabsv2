@@ -308,11 +308,14 @@ export function BoardColumn({
                       {/* A ROUNDED SQUARE, not a disc. Twelve circles in a grid
                           read as a bag of dots; squares tile, and the larger
                           filled area shows the hue better at this size. The
-                          radius is derived from the control's own rather than
-                          typed, so it stays in proportion if that moves. */}
+                          radius WAS derived from the control's — which broke
+                          the moment controls became pills: calc(9999px - 3px)
+                          is still a disc, and twelve of them in a grid read as
+                          a bag of dots. It takes the kit's own 4px step now,
+                          which is a fixed proportion of a 20px swatch. */}
                       <span
                         data-swatch
-                        className="flex size-5 items-center justify-center rounded-[calc(var(--radius-control)-3px)]"
+                        className="flex size-5 items-center justify-center rounded-xs"
                         style={{ background: groupAccent(key) }}
                       >
                         {/* White reads on every hue in this palette — each one is
