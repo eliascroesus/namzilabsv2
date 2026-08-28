@@ -19,6 +19,17 @@ const pillVariants = cva(/**
   "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-micro font-semibold uppercase tracking-wide", {
   variants: {
     tone: {
+      /**
+       * THE SHEET'S FOUR DECORATIVE TONES. They say WHICH, never HOW IT IS
+       * GOING — success, warn and danger keep the job of meaning, so a yellow
+       * chip can never be mistaken for a warning. Ink is black on the two light
+       * fills and white on the two saturated ones, which is how the sheet sets
+       * every one of them.
+       */
+      yellow: "bg-accent-yellow text-neutral-900",
+      orange: "bg-accent-orange text-white",
+      pink: "bg-accent-pink text-neutral-900",
+      peri: "bg-accent-peri text-white",
       success: "bg-success-soft text-success-ink",
       warn: "bg-warn-soft text-warn-ink",
       danger: "bg-danger-soft text-danger-ink",

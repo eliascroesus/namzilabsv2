@@ -183,6 +183,18 @@
   --color-brand-700: #6229f0; /* pressed, accent-foreground */
   --color-brand-800: #5318d1;
 
+  /* --- The sheet's accent set --------------------------------------------
+   * The first brand sheet draws its chips, tabs and pins in a fixed four
+   * beside the black: a highlighter yellow, a signal orange, a soft pink and a
+   * periwinkle. They are NOT states — success/warn/danger own that vocabulary
+   * — they are the kit's decorative range, for the places a surface needs to
+   * be identifiable rather than to mean something.
+   */
+  --color-accent-yellow: #f0ee7a;
+  --color-accent-orange: #ff6b35;
+  --color-accent-pink: #ffa5a5;
+  --color-accent-peri: #9b9be8;
+
   /* --- The neutral ramp ----------------------------------------------------
    * TAILWIND'S `neutral-*`, REDEFINED IN PLACE.
    *

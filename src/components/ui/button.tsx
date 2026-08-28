@@ -52,21 +52,30 @@ const buttonVariants = cva(
         // label's contrast FELL at the one moment the button is under a
         // pointer. Down the ramp is also the direction a real button moves.
         /**
-         * THE KIT HAS TWO PRIMARIES, and they mean different things.
+         * BLACK IS THE DEFAULT, and both sheets say so.
          *
-         * `default` is VIBRANT VIOLET — the action this screen exists for.
-         * `solid` is DEEP BLACK — the action that commits or signs you in, and
-         * the one the brand sheet draws first. Black is reached through the
-         * `foreground` ROLE rather than `bg-neutral-900`, which is both more
-         * correct (it inverts with the theme) and sidesteps the kit gate that
-         * bans a raw near-black fill.
+         * The first draws every workhorse button in DEEP BLACK — sign in,
+         * reserve, the error bar — with yellow reserved for the one hero act on
+         * a screen. The second labels its black button "Default" and its violet
+         * one "Button". Treating violet as the default read as violet-and-grey
+         * and lost the sheet's whole character, which is black carrying the
+         * work and colour arriving only where it means something.
+         *
+         * Black comes through the `foreground` ROLE, not a raw near-black fill:
+         * it inverts with the theme, and the kit gate bans that literal.
          */
-        default: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-600 active:bg-brand-700",
-        solid: "bg-foreground text-background shadow-xs hover:bg-neutral-800 active:bg-neutral-700",
+        default: "bg-foreground text-background shadow-xs hover:bg-neutral-800 active:bg-neutral-700",
+        /** NEON YELLOW — the hero act, one per screen. Black ink, because the
+         *  yellow is far too bright to carry white and the sheet sets it in
+         *  black every time it appears. */
+        yellow: "bg-accent-yellow text-neutral-900 shadow-xs hover:brightness-95 active:brightness-90",
+        /** VIBRANT VIOLET — the sheet's "Button": the branded action, where a
+         *  screen wants the accent rather than the workhorse. */
+        accent: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-600 active:bg-brand-700",
         secondary: "border border-border bg-card text-foreground shadow-xs hover:bg-muted active:bg-neutral-200",
         /** The sheet's "Pressed" — a violet wash carrying violet ink. */
         soft: "bg-accent text-accent-foreground hover:bg-brand-100 active:bg-brand-200",
-        /** Its "Deject" — the outlined violet, for a secondary act in a violet flow. */
+        /** Its "Deject" — outlined violet, for a secondary act in a violet flow. */
         outlineAccent: "border border-brand-300 bg-transparent text-accent-foreground hover:bg-accent",
         ghost: "text-muted-foreground hover:bg-muted hover:text-foreground active:bg-neutral-200",
         destructive: "bg-destructive text-destructive-foreground shadow-xs hover:bg-danger-ink active:brightness-95",

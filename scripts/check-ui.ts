@@ -171,6 +171,7 @@ const RULES: Rule[] = [
       "src/components/flow/node-accent.ts": "the step-identity palette — the one sanctioned hex map",
       "src/components/flow/controls/source-style.ts": "connector brand colours are the vendors', not ours",
       "src/app/design/page.tsx": "the kit page prints hex VALUES as documentation labels",
+      "src/app/design/brand-sheet.tsx": "the same kit page, split out — it prints the brand sheet's own hex values as labels",
       // Next emits <meta name="theme-color"> from a build-time literal, so it
       // cannot read a CSS custom property — the browser chrome's colour has to
       // be written out. Pinned to --background by tests/design-swatches.test.ts

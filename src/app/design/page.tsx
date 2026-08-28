@@ -25,6 +25,7 @@ import { calendarMonths, dayKey, daysInMonth } from "@/lib/metrics/calendar";
 import { Delta, GroupBars, Sparkbars, TargetBar } from "@/components/charts";
 import { SourceMark } from "@/components/source-mark";
 import { PrimitiveSpecimens } from "./primitives";
+import { BrandSheet } from "./brand-sheet";
 
 /**
  * THE BRAND KIT, RENDERED.
@@ -206,8 +207,15 @@ export default function DesignPage() {
         />
 
         <Section
+          title="Brand sheet"
+          note="The supplied sheets, rendered from the shipping components rather than drawn — deep black doing the work, a neon yellow hero, vibrant violet as the branded action, and a four-colour accent set for chips and tabs. Everything is a full pill and every micro label is ALL CAPS, which is the sheet's own voice. Where the two sheets disagreed, the first won on hierarchy: black is the workhorse and colour arrives only where it means something."
+        >
+          <BrandSheet />
+        </Section>
+
+        <Section
           title="Colour"
-          note="One accent, used sparingly: brand-600 is the primary action and the link (5.99:1 on white), brand-400 the focus ring, 50/100 the selection washes. The chrome itself is monochrome — the sidebar is a recessed neutral surface, not a coloured wall — so the accent only ever marks what you pressed or what is selected. Ink is the dark end of the same cool ramp, and carries the dark theme. Everything else is a role (bg-card, border-border, text-muted-foreground) or a state trio."
+          note="Three colours carry the brand: DEEP BLACK #1A1A1A, OFF-WHITE #F5F5F5 and VIBRANT VIOLET #7C4DFF. Fills take brand-500, the violet the sheet names; text and links take brand-700, because the 500 measures 4.42:1 on off-white and that is under AA — the colour survives, the reading of it is legal. Beside them sits a four-colour accent set (yellow, orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning."
         >
           <p className="mb-2 text-tiny font-medium text-muted-foreground">Accent — brand-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
@@ -263,7 +271,7 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Type" note="Untitled UI's scale, and nothing between the steps. The kit's old names (micro/tiny/small/base/lead/title/display/stat) still compile as aliases while the app migrates, but new work reaches for these. Weights stop at font-semibold — font-bold does not exist here.">
+        <Section title="Type" note="An 8px baseline and 16px spacing, set in Helvetica Neue — native on macOS, with Inter carrying every other platform rather than dropping to Arial. The kit's old names (micro/tiny/small/base/lead/title/display/stat) still compile as aliases while the app migrates, but new work reaches for these.">
           <Card padding="none" className="divide-y divide-border">
             {TYPE.map((t) => (
               <div key={t.token} className="flex items-baseline gap-4 px-4 py-3">
@@ -281,7 +289,7 @@ export default function DesignPage() {
 
         <Section
           title="Radius and elevation"
-          note="Four radius tokens plus rounded-full for pills, avatars and switches — stock rounded/-md/-lg/-xl are banned and do not compile. One elevation ladder: hairline borders carry structure, shadows only say how far a surface floats."
+          note="Pill-first, the way the sheet draws it: every button, input and menu row is fully round, cards take 10px and panels 16px. One elevation ladder — hairline borders carry structure, shadows only say how far a surface floats."
         >
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {RADII.map((r) => (
@@ -311,6 +319,10 @@ export default function DesignPage() {
         <Section title="Buttons" note="One component, eight variants, five sizes — every clickable thing in the product comes from it. Links dressed as buttons compose buttonVariants() rather than re-typing the string.">
           <div className="flex flex-wrap items-center gap-3">
             <Button>Publish flow</Button>
+            <Button variant="yellow">Sign in with Apple</Button>
+            <Button variant="accent">Review &amp; publish</Button>
+            <Button variant="soft">Pressed</Button>
+            <Button variant="outlineAccent">Deject</Button>
             <Button variant="secondary">Secondary</Button>
             <Button variant="ghost">Quiet</Button>
             <Button variant="destructive">Delete</Button>
