@@ -112,10 +112,15 @@ type Windowed = {
  */
 function DeadTile({ title }: { title: string }) {
   return (
-    <Card data-tile-card variant="surface" className="flex h-full flex-col p-4">
-      <p className="truncate text-small font-semibold text-muted-foreground">{title}</p>
-      <div className="mt-3 flex flex-1 flex-col items-start justify-center gap-1.5">
-        <span className="inline-flex items-center gap-1.5 text-tiny font-semibold text-warn-ink">
+    // The same shell and the same label voice as a living tile — it is one of
+    // this board's cards in a state, not a different object. What changes is
+    // that the number's slot carries a warn CHIP instead of a figure: the
+    // sheet pills chips, the trio owns the colour, and a tinted badge is
+    // legible at a glance across a board in a way a grey sentence is not.
+    <Card data-tile-card variant="tile" padding="compact" className="flex h-full flex-col">
+      <p className="truncate text-micro font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      <div className="mt-3 flex flex-1 flex-col items-start justify-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-warn-soft px-2.5 py-1 text-micro font-semibold uppercase tracking-wide text-warn-ink">
           <AlertTriangle size={13} />
           Metric unavailable
         </span>

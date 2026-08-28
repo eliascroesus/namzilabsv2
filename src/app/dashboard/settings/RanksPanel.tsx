@@ -21,6 +21,7 @@ import { Input, NativeSelect } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Toast } from "@/components/ui/toast";
 import { PERMISSIONS, type RankRow } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 import { assignRankAction, createRankAction, deleteRankAction, updateRankAction } from "./actions";
 
 /**
@@ -195,12 +196,12 @@ export function RanksPanel({
       {toast && <Toast>{toast}</Toast>}
 
       {/* Each role is a CARD — the builder's step-card anatomy (coloured mark,
-          text-lead title, text-tiny meta), stacked with air between them like
+          18px title, 12px meta), stacked with air between them like
           steps on the canvas. Expanding one grows it into a panel-chrome-style
           surface: hairline-divided groups on the one white plane. */}
       <div className="flex flex-col gap-3">
         {ranks.length === 0 && (
-          <p className="py-2 text-center text-small text-muted-foreground">
+          <p className="py-2 text-center text-sm text-muted-foreground">
             No roles yet — everyone has full access. Create one to start limiting what members see.
           </p>
         )}
@@ -220,18 +221,18 @@ export function RanksPanel({
                   setExpandedId(open ? null : r.id);
                   setConfirmingDelete(null);
                 }}
-                className="flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-muted"
+                className="flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-foreground/5"
               >
                 <span
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-control"
                   style={{ backgroundColor: RANK_ACCENTS[i % RANK_ACCENTS.length] }}
                   aria-hidden
                 >
                   <Shield size={18} strokeWidth={2} className="text-white" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-lead font-semibold text-foreground">{r.name}</span>
-                  <span className="block text-tiny text-muted-foreground">
+                  <span className="block truncate text-lg font-semibold text-foreground">{r.name}</span>
+                  <span className="block text-xs text-muted-foreground">
                     {count(holders, "member")} · {summary(r)}
                   </span>
                 </span>
@@ -289,7 +290,7 @@ export function RanksPanel({
                       />
                     </div>
                     {catalogue.length === 0 ? (
-                      <p className="py-1.5 text-tiny text-muted-foreground">
+                      <p className="py-1.5 text-xs text-muted-foreground">
                         Publish a flow and its metrics appear here.
                       </p>
                     ) : (
@@ -312,7 +313,7 @@ export function RanksPanel({
                       by way of another one. */}
                   <Group label="Inherit from" hint="Stack another role's grants on top of this one.">
                     {others.length === 0 ? (
-                      <p className="py-1.5 text-tiny text-muted-foreground">
+                      <p className="py-1.5 text-xs text-muted-foreground">
                         Create a second role and it appears here.
                       </p>
                     ) : (
@@ -333,10 +334,10 @@ export function RanksPanel({
                       "Danger" names a stake without naming the consequence, and
                       the consequence here is counter-intuitive — deleting a
                       role WIDENS access rather than removing it. */}
-                  <Group label="Danger" hint="Deleting a role returns its members to full access.">
+                  <Group label="Danger" tone="danger" hint="Deleting a role returns its members to full access.">
                     {confirmingDelete === r.id ? (
                       <div className="flex flex-wrap items-center justify-between gap-3 py-1.5">
-                        <p className="text-small text-muted-foreground">{deleteLine(holders)}</p>
+                        <p className="text-sm text-muted-foreground">{deleteLine(holders)}</p>
                         <span className="flex shrink-0 gap-2">
                           <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmingDelete(null)}>
                             Cancel
@@ -403,7 +404,7 @@ export function RanksPanel({
                     {o.label}
                   </Chip>
                 ))}
-                <span className="text-tiny text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {preset === "admin" ? "All permissions and all metrics, on — editable after." : "Grants nothing until you flip switches."}
                 </span>
               </div>
@@ -413,9 +414,9 @@ export function RanksPanel({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="flex w-full items-center gap-2.5 rounded-surface border-2 border-dashed border-border p-3 text-left text-base font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-primary hover:text-primary"
+            className="flex w-full items-center gap-2.5 rounded-surface border-2 border-dashed border-border p-3 text-left text-md font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-primary hover:text-accent-foreground"
           >
-            <span className="flex h-7 w-7 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
+            <span className="flex size-7 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
               <Plus size={14} strokeWidth={2.25} />
             </span>
             New role
@@ -491,11 +492,35 @@ export function MemberRankSelect({
  * absent the label sits directly on the rows rather than leaving a gap where a
  * sentence used to be.
  */
-function Group({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Group({
+  label,
+  hint,
+  tone,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  /** `danger` tints the label alone — the group's rows keep their own voices. */
+  tone?: "danger";
+  children: React.ReactNode;
+}) {
   return (
     <div className="px-4 py-4">
-      <p className="text-base font-semibold text-foreground">{label}</p>
-      {hint && <p className="mt-0.5 text-tiny text-muted-foreground">{hint}</p>}
+      {/* THE SHEET'S MICRO VOICE: 12px, semibold, ALL CAPS, `tracking-wide` —
+          the same spelling `SectionHeading`, `FieldLabel` and the table head
+          are set in. It was 16px sentence case, i.e. the same typographic
+          object as the row labels underneath it, so an expanded role read as
+          one long column of medium-weight lines with no structure in it. Caps
+          is what makes a label a LABEL without spending a size or a colour. */}
+      <p
+        className={cn(
+          "text-xs font-semibold uppercase tracking-wide",
+          tone === "danger" ? "text-danger-ink" : "text-foreground",
+        )}
+      >
+        {label}
+      </p>
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
       <div className="mt-2">{children}</div>
     </div>
   );
@@ -523,20 +548,27 @@ function ToggleRow({
   return (
     <div className="flex items-center gap-3 py-2">
       {Icon && (
+        // THE CHIP IS TINTED, not grey. A grey glyph on a grey wash beside grey
+        // body text is three neutrals in 28px, which is the flatness this pass
+        // is for; `accent` / `accent-foreground` is the kit's own tint pair —
+        // the violet wash carrying the violet ink — and the same chip the empty
+        // state and the sync tiles wear. The 500 fills, the 700 speaks, and a
+        // stroked glyph is speaking.
         <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-muted text-muted-foreground ${
-            implied ? "opacity-45" : ""
-          }`}
+          className={cn(
+            "flex size-7 shrink-0 items-center justify-center rounded-control bg-accent text-accent-foreground",
+            implied && "opacity-45",
+          )}
           aria-hidden
         >
           <Icon size={14} strokeWidth={2} />
         </span>
       )}
-      <span className={`min-w-0 flex-1 ${implied ? "opacity-45" : ""}`}>
-        <span className={`block truncate text-base ${bold ? "font-semibold" : "font-medium"} text-foreground`}>
+      <span className={cn("min-w-0 flex-1", implied && "opacity-45")}>
+        <span className={cn("block truncate text-sm text-foreground", bold ? "font-semibold" : "font-medium")}>
           {label}
         </span>
-        {blurb && <span className="block text-tiny text-muted-foreground">{blurb}</span>}
+        {blurb && <span className="block text-xs text-muted-foreground">{blurb}</span>}
       </span>
       <Switch checked={implied || on} disabled={implied} onClick={onChange} aria-label={label} />
     </div>

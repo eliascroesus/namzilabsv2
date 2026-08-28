@@ -9,9 +9,11 @@ import { CopyField } from "@/components/copy-field";
 import { renameConnectionAction, disconnectAction, reconnectAction, deleteConnectionAction } from "./actions";
 import { catalogEntry } from "@/connectors/catalog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field";
+import { SourceMark } from "@/components/source-mark";
+import { sourceStyle } from "@/components/flow/controls/source-style";
 import { formatMetricValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -215,12 +217,22 @@ export function ConnectionRow({
   if (status === "disabled") {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <span className="min-w-0 text-base text-muted-foreground">
-          <span className="text-base font-semibold text-foreground">{name}</span>
-          <Badge className="ml-2">Disconnected</Badge>
-          <span className="ml-2">Not syncing. Its records are hidden from dashboards and flows.</span>
+        {/* Same anatomy as a live row — mark, name, one muted line — at half
+            strength on the mark. A disconnected integration that loses its
+            colour block entirely stops looking like the same object, and this
+            row's whole job is to say "it is still here, and you can have it
+            back". */}
+        <span className="flex min-w-0 items-center gap-3">
+          <ConnectorChip source={source} className="opacity-50" />
+          <span className="min-w-0">
+            <span className="block truncate text-md font-semibold text-foreground">{name}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              Not syncing — its records are hidden from dashboards and flows.
+            </span>
+          </span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
+          <StatusPill tone="pending">Disconnected</StatusPill>
           <form action={reconnectAction}>
             <input type="hidden" name="id" value={id} />
             <Button type="submit" variant="secondary" size="sm">
@@ -238,7 +250,10 @@ export function ConnectionRow({
 
   if (confirming) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-danger-soft/40 px-4 py-3">
+      // The same left rule the delete panel carries, so the two confirmations
+      // read as one kind of object interrupting the list rather than as two
+      // different treatments of the same moment.
+      <div className="flex flex-wrap items-center justify-between gap-3 border-l-2 border-danger bg-danger-soft/40 px-4 py-3">
         <p className="min-w-0 text-base text-muted-foreground">
           Disconnect <span className="font-semibold text-foreground">{name}</span>? Its synced records stop appearing in
           dashboards and flows, and it stops syncing. Any flow reading from it will have no data.
@@ -265,7 +280,14 @@ export function ConnectionRow({
 
   return (
     <div className="group">
-      <div className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-muted">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-foreground/5">
+        {/* THE CONNECTOR IS THE ROW'S IDENTITY, and it is the only thing that
+            legitimately varies row to row — so it leads, in a block of its own
+            colour, exactly as it does on the flows board and in the catalogue
+            below. The app's name moves out of the right-hand cluster (where it
+            sat as grey text between a button and a dot) and becomes the row's
+            meta line, which is where every other list in this product puts it. */}
+        <ConnectorChip source={source} />
         {editing ? (
           <Input
             autoFocus
@@ -279,16 +301,24 @@ export function ConnectionRow({
                 setEditing(false);
               }
             }}
-            className="h-8 min-w-0 flex-1 text-base font-semibold"
+            className="h-9 min-w-0 flex-1 text-md font-semibold"
           />
         ) : (
-          <span className="flex min-w-0 items-center gap-2">
-            <Link
-              href={`/connections/${id}`}
-              className="truncate rounded-control text-base font-semibold text-foreground hover:underline"
-            >
-              {saving ? draft : name}
-            </Link>
+          <span className="flex min-w-0 flex-1 items-center gap-1">
+            <span className="min-w-0">
+              {/* The violet arrives on HOVER, which is the accent's own job on
+                  this sheet (selection), and it replaces an underline that made
+                  a row of connection names read as a page of links. */}
+              <Link
+                href={`/connections/${id}`}
+                className="block truncate rounded-control text-md font-semibold text-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:text-accent-foreground"
+              >
+                {saving ? draft : name}
+              </Link>
+              <span className="block truncate text-xs text-muted-foreground">
+                {catalogEntry(source)?.name ?? source}
+              </span>
+            </span>
             <Button
               type="button"
               variant="ghost"
@@ -304,7 +334,7 @@ export function ConnectionRow({
             </Button>
           </span>
         )}
-        <span className="ml-3 flex shrink-0 items-center gap-3 text-base text-muted-foreground">
+        <span className="flex shrink-0 items-center gap-2 text-base text-muted-foreground">
           {webhookUrl && (
             <Button
               type="button"
@@ -316,8 +346,10 @@ export function ConnectionRow({
               {showHook ? "Hide webhook URL" : "Webhook URL"}
             </Button>
           )}
-          <span>{catalogEntry(source)?.name ?? source}</span>
-          <StatusDot status={status} />
+          {/* A 8px dot with an aria-label was the whole of this row's status:
+              legible to a screen reader and to nobody else. The pill is the
+              kit's one state vocabulary, and it says the word. */}
+          <RowStatusPill status={status} />
           {/* TWO destructive actions, and the icons have to carry the difference.
               Disconnect is a POWER symbol — stop it, reversibly. Delete is the
               trash, which is what people already read as "gone for good"; leaving
@@ -340,20 +372,34 @@ export function ConnectionRow({
         </span>
       </div>
       {/* Same promise as the connection page's amber banner (F.3/F.6): a pause
-          is never a dead end, so the list says when it resolves itself. An
-          `error` row keeps its red dot; this line adds the WHY beside it. */}
+          is never a dead end, so the list says when it resolves itself.
+
+          A BAND, NOT A DANGLING LINE. These were 12px sentences hung off the
+          bottom of the row on a negative margin, in a colour and nothing else —
+          which on a white list reads as text that fell out of its container.
+          The state's own soft wash, edge to edge under the row it belongs to,
+          says the same thing as a piece of the row rather than as debris. */}
       {importNote && !pausedNote && !lastError && (
-        <p className="-mt-1 px-4 pb-2.5 text-tiny text-warn-ink">{importNote}</p>
+        <p className="border-t border-border bg-warn-soft/40 px-4 py-2 text-xs text-warn-ink">{importNote}</p>
       )}
       {(pausedNote || lastError) && (
-        <p className={cn("-mt-1 px-4 pb-2.5 text-tiny", pausedNote ? "text-warn-ink" : "text-danger-ink")}>
+        <p
+          className={cn(
+            "border-t border-border px-4 py-2 text-xs",
+            pausedNote ? "bg-warn-soft/40 text-warn-ink" : "bg-danger-soft/40 text-danger-ink",
+          )}
+        >
           {pausedNote ? <>Paused, retrying automatically. {pausedNote}</> : lastError}
         </p>
       )}
       {showHook && webhookUrl && (
-        <div className="border-t border-border bg-muted/40 px-4 py-3">
-          {webhookSetup && <p className="mb-2 text-tiny text-muted-foreground">{webhookSetup}</p>}
-          {eventTimeNote && <p className="mb-2 text-tiny text-muted-foreground">{eventTimeNote}</p>}
+        // The disclosure is a TRAY — an alpha of the foreground, which reads as
+        // one step recessed on a white card and on a dark one alike, where
+        // `bg-muted/40` composited to #fbfbfb and gave the panel no surface of
+        // its own at all.
+        <div className="border-t border-border bg-foreground/5 px-4 py-4">
+          {webhookSetup && <p className="mb-2 text-xs text-muted-foreground">{webhookSetup}</p>}
+          {eventTimeNote && <p className="mb-2 text-xs text-muted-foreground">{eventTimeNote}</p>}
           <CopyField
             label="POST events to this URL"
             value={webhookUrl}
@@ -362,7 +408,7 @@ export function ConnectionRow({
           />
           <Link
             href={`/connections/${id}`}
-            className="rounded-control text-tiny text-primary hover:underline"
+            className="rounded-control text-xs font-medium text-accent-foreground hover:underline"
           >
             Signing secret and delivery status
           </Link>
@@ -372,10 +418,44 @@ export function ConnectionRow({
   );
 }
 
-function StatusDot({ status }: { status: string }) {
-  const color = status === "active" ? "bg-success" : status === "error" ? "bg-danger" : "bg-neutral-300";
-  const label = status === "active" ? "Connected" : status === "error" ? "Needs attention" : "Not syncing";
-  return <span className={cn("inline-block size-2 rounded-full", color)} aria-label={label} />;
+/**
+ * THE CONNECTOR'S MARK ON A CHIP OF ITS OWN COLOUR — the flows board's pattern
+ * (FlowRow), so a Close row looks like the same object on every screen that
+ * lists one.
+ *
+ * The wash is `color-mix`ed from the vendor's own hex at 14% against
+ * TRANSPARENT rather than white, so it composites onto whatever surface is
+ * behind it — a dark card in the dark theme, the danger wash on a row being
+ * deleted. A hex here would fail the kit gate, and rightly: the value belongs
+ * to the vendor's map.
+ */
+function ConnectorChip({ source, className }: { source: string; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn("flex size-10 shrink-0 items-center justify-center rounded-card", className)}
+      style={{ backgroundColor: `color-mix(in srgb, ${sourceStyle(source).color} 14%, transparent)` }}
+    >
+      <SourceMark source={source} size={24} />
+    </span>
+  );
+}
+
+/**
+ * The row's state, in the kit's one state vocabulary. The words are the ones
+ * the old dot carried in its `aria-label`, promoted to something a sighted
+ * user can also read.
+ */
+function RowStatusPill({ status }: { status: string }) {
+  if (status === "active") {
+    return (
+      <StatusPill tone="success" dot>
+        Connected
+      </StatusPill>
+    );
+  }
+  if (status === "error") return <StatusPill tone="danger">Needs attention</StatusPill>;
+  return <StatusPill tone="pending">Not syncing</StatusPill>;
 }
 
 /**

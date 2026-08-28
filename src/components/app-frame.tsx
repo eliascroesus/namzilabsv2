@@ -3,39 +3,25 @@ import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
 
 /**
- * THE FRAME: one wash, painted once, with the canvas sitting inside it.
+ * THE FRAME: three surfaces and two hairlines, and nothing else.
  *
- * The canvas is cut 32px at its left corners, and something has to show
- * through the notches — the rail's colour. The obvious way to get that is to
- * put the rail's background on a second element behind the canvas, and it is
- * the wrong way: the rail's wash is a GRADIENT, so two elements carrying the
- * same declaration resolve it over two different widths and land on two
- * different colours at the seam. They would also be two values a future edit
- * has to remember to change together, which is a promise no file can keep.
+ * WHAT IT WAS: one dark gradient painted here, with a transparent rail sitting
+ * on it and the canvas cut 32px into it at the left corners so the wash showed
+ * through the notch. That whole apparatus is gone with the dark rail — the
+ * navigation is a white column now, `--radius-frame` is 0, and this div paints
+ * nothing but `background` behind two children that are opaque anyway. The
+ * prose is kept short on purpose: what is left is a flex row, and a page of
+ * argument about a gradient nobody can see is how a file starts lying.
  *
- * So: this outer div is the ONLY thing that paints the wash. The rail is
- * transparent and sits on top of it, and the canvas sits on top of it too,
- * opaque, covering all of it but the two notches. The colour behind the canvas
- * and the colour of the rail are therefore not two values in sync — they are
- * one gradient, and cannot drift.
- *
- * THE CUT IS THE APP'S EDGE, SO EVERY PAGE GETS IT.
- *
- * It used to be the builder's alone, on the theory that a canvas is a workspace
- * you look into while a list is a document that reads better running flush off
- * the rail. That theory cost more than it bought: moving between the builder
- * and any other page changed the SHAPE of the application — the left edge grew
- * a 32px radius on one route and lost it on the next — which is the kind of
- * inconsistency nobody reports and everybody feels.
- *
- * So the notch is unconditional now. The right, top and bottom edges stay flush
- * to the viewport, because a card inset on all four sides is a different (and
- * much smaller-feeling) app; only the seam between the navigation and the page
- * is rounded, and it is rounded everywhere.
+ * THE SHAPE, AND WHY IT IS THIS ONE. The column runs the full height; the top
+ * bar belongs to the CONTENT beside it rather than spanning the viewport,
+ * exactly as it does in Miro, Notion and Figma. A bar spanning both would put
+ * the workspace switcher above the navigation that switching it changes, and
+ * the two hairlines — the column's right edge and the bar's bottom edge — would
+ * stop meeting to make the single seam the chrome reads as.
  *
  * `surface` is still the caller's, because the pages genuinely disagree about
- * SCROLLING: list pages scroll, the builder does not. It must carry an overflow
- * value — rounded corners only cut the content if the box clips.
+ * SCROLLING: list pages scroll, the builder does not.
  */
 export function AppFrame({
   account,

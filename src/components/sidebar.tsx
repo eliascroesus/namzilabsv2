@@ -42,43 +42,59 @@ function workspaceAccent(name: string): string {
  * as text with an icon rather than icons with a caption. Sections are separated
  * by an ALL-CAPS label, not by a gap.
  *
- * THE SHEET SHOWS UP IN TWO PLACES HERE, AND ONLY TWO.
+ * THE SHEET SHOWS UP IN THREE PLACES HERE, AND ONLY THREE.
  *
- * · SHAPE. Every row is a PILL (`rounded-control` is 9999px), which is the
- *   sheet's one structural instruction. A stadium row is also what makes a
- *   filled active state legible at this size — a filled rectangle in a column
- *   of text reads as a banner.
+ * · SHAPE. Every row is a rounded RECTANGLE at the control radius — 8px, the
+ *   same corner as an input and a menu row. The sheet pills BUTTONS and CHIPS
+ *   and nothing else, and this file said "pill" for as long as
+ *   `--radius-control` was briefly 9999px.
  * · THE VIOLET. Exactly one row is filled with it at a time. `--primary` is the
  *   sheet's VIBRANT VIOLET and the sheet's rule is that FILLS take it, so the
- *   current page is a solid violet pill and everything else is neutral. The
+ *   current page is a solid violet row and everything else is neutral. The
  *   tint-and-violet-ink treatment this had before (`bg-accent`
  *   `text-accent-foreground`) is the sheet's "pressed" state, not its selected
  *   one, and at a glance it read as a row merely being hovered.
+ * · THE ACCENT FOUR, behind the icons. Orange, pink, periwinkle and the neon
+ *   are DECORATION — which of six places this is — and never state, so they
+ *   colour the chip and never the row. That is the whole difference between
+ *   this column and the grey list of links every dashboard ships with.
  *
  * THE ROWS ARE 32px, on the 8px baseline and the same height as the kit's `sm`
  * control. They were 30 — a number from no scale — and before that 40 with a
  * 12px caption, at which the six items occupied more vertical space than most
  * of the pages they lead to.
  */
-const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; section: string; tint: string; soft: string }> = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Workspace", tint: "bg-primary text-primary-foreground", soft: "bg-brand-100 text-brand-700" },
-  { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays, section: "Workspace", tint: "bg-accent-orange text-white", soft: "bg-accent-orange/20 text-accent-orange" },
-  { label: "Activity", href: "/dashboard/activity", icon: Radio, section: "Workspace", tint: "bg-accent-pink text-neutral-900", soft: "bg-accent-pink/30 text-neutral-900" },
-  { label: "Flows", href: "/dashboard/flows", icon: Workflow, section: "Build", tint: "bg-accent-peri text-white", soft: "bg-accent-peri/25 text-accent-peri" },
-  { label: "Apps", href: "/integrations", icon: Plug, section: "Build", tint: "bg-accent-yellow text-neutral-900", soft: "bg-accent-yellow/40 text-neutral-900" },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, section: "Build", tint: "bg-foreground text-background", soft: "bg-foreground/10 text-foreground" },
+const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; section: string; soft: string }> = [
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Workspace", soft: "bg-brand-100 text-brand-700" },
+  { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays, section: "Workspace", soft: "bg-accent-orange/20 text-accent-orange" },
+  // The two pale accents cannot ink their own glyph — pink on pink and yellow
+  // on yellow are both under 2:1 — so they take the page's own text colour.
+  // `foreground`, not the near-black literal it used to be: the accents are
+  // fixed hexes that do not move with the theme, so in dark mode a near-black
+  // icon sat on a dark plum wash and vanished. The role inverts; the hue does
+  // not need to.
+  { label: "Activity", href: "/dashboard/activity", icon: Radio, section: "Workspace", soft: "bg-accent-pink/30 text-foreground" },
+  { label: "Flows", href: "/dashboard/flows", icon: Workflow, section: "Build", soft: "bg-accent-peri/25 text-accent-peri" },
+  { label: "Apps", href: "/integrations", icon: Plug, section: "Build", soft: "bg-accent-yellow/40 text-foreground" },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, section: "Build", soft: "bg-foreground/10 text-foreground" },
 ];
 
 /**
- * The workspace's initials, on its derived colour. A circle rather than a
- * rounded square: the sheet is pill-first, and this is the one place in the
- * chrome that carries a colour of its own, so it should read as a token rather
- * than as an app icon.
+ * The workspace's initials, on its derived colour.
+ *
+ * EXPORTED because the account menu lists the OTHER workspaces, and a switcher
+ * whose rows are bare text beside a chipped trigger is two spellings of one
+ * object. The colour is derived from the name (above), so a second call site
+ * cannot draw the same workspace in a different hue — but only while both call
+ * sites go through this component rather than re-deriving it.
  */
-function WorkspaceChip({ name }: { name: string }) {
+export function WorkspaceChip({ name, className }: { name: string; className?: string }) {
   return (
     <span
-      className="flex size-8 shrink-0 items-center justify-center rounded-control text-xs font-semibold text-white"
+      className={cn(
+        "flex size-8 shrink-0 items-center justify-center rounded-control text-xs font-semibold text-white",
+        className,
+      )}
       style={{ background: workspaceAccent(name) }}
       aria-hidden
     >
@@ -123,26 +139,56 @@ export function Sidebar({
         {account ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
+              {/* `px-3`, so the chip lands on the same 20px left edge as the
+                  rows below it (this column's `px-2` plus a row's `px-3`) while
+                  the hover wash still starts where theirs does. It was `px-2`,
+                  which stood the head of the list 4px to the left of the list —
+                  a miss too small to name and big enough to see.
+
+                  `data-[state=open]` keeps the trigger lit for as long as its
+                  panel is open. Without it the control returns to rest the
+                  moment the pointer moves into the menu, so the menu appears to
+                  belong to nothing — the one state a trigger has that a link
+                  does not, and it is free from Radix. */}
               <button
                 type="button"
-                className="flex h-11 w-full items-center gap-2.5 rounded-control px-2 text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted"
+                title={name}
+                className="flex h-11 w-full items-center gap-2.5 rounded-control px-3 text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted data-[state=open]:bg-muted"
               >
                 <WorkspaceChip name={name} />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{name}</span>
+                {/* WHO YOU ARE, ON THE CONTROL THAT HOLDS IT. The panel behind
+                    this trigger has carried the account — the email, the way
+                    out — since the rail lost its avatar, and nothing on the
+                    trigger said so: `initials` was handed to this component and
+                    dropped. A small violet disc beside the chevron is the whole
+                    difference between "switch workspace" and "workspace and
+                    you", which is what the menu actually is.
+
+                    Violet because the sheet gives identity and selection to the
+                    accent; the tint carries the 700 ink rather than the 500,
+                    which is not a text colour. */}
+                <span
+                  aria-hidden
+                  className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
+                >
+                  {account.initials}
+                </span>
                 <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
-            {/* Matched to the trigger's own width (248 less the band's 8px
-                either side) so the panel reads as the control opening rather
-                than as a card landing beside it. */}
-            <DropdownMenuContent align="start" className="w-[232px] p-0">
+            {/* The trigger's own width, read from Radix rather than typed: the
+                panel is the control opening, not a card landing beside it, and
+                a literal `232px` here was 248 minus this band's padding — two
+                numbers in two files that only agreed by hand. */}
+            <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width) p-0">
               {account.panel}
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
           // No account means no menu to open — but the band still renders, so
           // the seam with the top bar does not appear and disappear with it.
-          <div className="flex h-11 w-full items-center gap-2.5 px-2">
+          <div className="flex h-11 w-full items-center gap-2.5 px-3">
             <WorkspaceChip name={name} />
             <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{name}</span>
           </div>
@@ -162,15 +208,13 @@ export function Sidebar({
             <div className="space-y-0.5">
               {items
                 .filter((i) => i.section === section)
-                .map(({ label, href, icon: Icon, tint, soft }) => {
+                .map(({ label, href, icon: Icon, soft }) => {
                   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
                   return (
                     <Link
                       key={href}
                       href={href}
                       aria-current={active ? "page" : undefined}
-                    // `group/nav` so the chip can answer the ROW's hover.
-                    data-nav
                       className={cn(
                         "flex h-8 items-center gap-2.5 rounded-control px-3 text-sm transition-colors duration-(--duration-fast) ease-(--ease-standard)",
                         active
@@ -178,31 +222,34 @@ export function Sidebar({
                           : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
                       )}
                     >
-                      {/* The icon takes the ROW's colour rather than naming one.
-                          It used to hard-code a neutral for the rest state and
-                          the accent for the active one, which is two more
-                          values to keep in step with a fill that already
-                          decides both — and on the violet pill a named colour
-                          would have been the one thing not inverting with it. */}
-                    {/* THE ICON SITS IN ITS OWN COLOURED CHIP, which is most of
-                        why Miro, Notion and Figma's rails read as playful rather
-                        than as a list of grey text. Full strength when you are
-                        here; a neutral wash otherwise — so the colour identifies
-                        the destination at rest instead of only announcing the
-                        one you already picked. */}
-                    <span
-                      className={cn(
-                        "flex size-6 shrink-0 items-center justify-center rounded-control transition-colors",
-                        // AT REST IT KEEPS ITS HUE, softened. Colouring only the
-                        // ACTIVE row leaves five of six chips grey, which is the
-                        // greyscale rail again with one exception — the colour is
-                        // supposed to identify the destination, not announce the
-                        // one you already chose.
-                        active ? tint : soft,
-                      )}
-                    >
-                      <Icon className="size-3.5" />
-                    </span>
+                      {/* THE ICON SITS IN ITS OWN COLOURED CHIP, which is most
+                          of why Miro's, Notion's and Figma's rails read as
+                          playful rather than as a list of grey text. The chip
+                          keeps its hue AT REST — colouring only the active row
+                          leaves five of six chips grey, which is the greyscale
+                          rail again with one exception, and the colour is here
+                          to identify a destination rather than to announce the
+                          one you already chose.
+                          The GLYPH names no colour at all: it takes the row's,
+                          so the fill decides both and there is nothing left to
+                          keep in step with it. */}
+                      <span
+                        className={cn(
+                          "flex size-6 shrink-0 items-center justify-center rounded-control transition-colors",
+                          // ON THE VIOLET ROW THE CHIP BECOMES A VEIL, and it
+                          // has to. It carried its destination's colour at full
+                          // strength there, which put a violet chip on a violet
+                          // fill — Dashboard's vanished outright — and an orange
+                          // one on it next door: six chips that agree at rest
+                          // and disagree at the one moment the row is loud. A
+                          // wash of the row's own ink is one treatment for all
+                          // six, and it is the fill, not the chip, that says
+                          // where you are.
+                          active ? "bg-primary-foreground/20" : soft,
+                        )}
+                      >
+                        <Icon className="size-3.5" />
+                      </span>
                       <span className="truncate">{label}</span>
                     </Link>
                   );
@@ -212,8 +259,17 @@ export function Sidebar({
         ))}
       </nav>
 
-      <div className="flex items-center justify-end border-t border-border p-2">
-        <ThemeToggle />
+      {/* THE FOOT OF THE COLUMN, ON THE COLUMN'S OWN RHYTHM.
+          `size="icon"` is 44px — a control sized for a form, sitting alone
+          under a list of 32px rows and making the footer taller than two of
+          them. `size-9` puts it at the rows' scale and the band at 52px, and
+          the label names what the icon does: an unlabelled sun in a corner is
+          the one control in the chrome nobody can identify without pressing
+          it. The caption takes the kit's micro voice, the same one the section
+          headings above it use. */}
+      <div className="flex items-center justify-between border-t border-border py-2 pl-5 pr-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Theme</span>
+        <ThemeToggle className="size-9" />
       </div>
     </aside>
   );

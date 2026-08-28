@@ -115,6 +115,38 @@ describe("the page container and the skeleton that stands in for it", () => {
     };
     expect(railWidth(skeleton)).toEqual(railWidth(sidebar));
   });
+
+  it("reserve the SAME band for the chrome across the top", () => {
+    /**
+     * THE MIRROR THAT WAS SIMPLY ABSENT — the same failure as the rail's, in
+     * the other axis.
+     *
+     * The skeleton held the column, the wash and the gutter, and no top bar at
+     * all, in front of a shell whose content column opens with a 64px bar. So
+     * the shimmer stood at the very top of the canvas and the real page landed
+     * 64px below it, on every first load of every route: content jumping at the
+     * moment the page arrives, which is the one thing a skeleton exists to
+     * prevent and the reason this file exists.
+     *
+     * All three bands are read out of their own files rather than typed here,
+     * so they cannot agree with this test while disagreeing with each other.
+     * The sidebar's head band is in the set because the seam only reads as ONE
+     * line across the application while the workspace control and the top bar
+     * are the same height.
+     */
+    const band = (src: string, where: RegExp, what: string) => {
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+      const m = code.match(where);
+      if (!m) throw new Error(`could not find ${what}`);
+      return m[1];
+    };
+    const topBar = read("src/components/top-bar.tsx");
+
+    const bar = band(topBar, /<header className="flex h-(\d+) shrink-0/, "the top bar's height");
+    expect(band(skeleton, /className="h-(\d+) shrink-0 border-b border-border bg-background"/, "the skeleton's top bar band")).toEqual(bar);
+    expect(band(sidebar, /className="flex h-(\d+) shrink-0 items-center border-b/, "the sidebar's head band")).toEqual(bar);
+    expect(band(skeleton, /className="h-(\d+) border-b border-border"/, "the skeleton's head band")).toEqual(bar);
+  });
 });
 
 describe("the board grid", () => {

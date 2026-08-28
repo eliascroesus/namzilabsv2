@@ -8,8 +8,9 @@ import { getDb, getReadDb } from "@/db/client";
 import { flows, metrics, rankAssignments, workspaceRanks } from "@/db/schema";
 import { formatDate } from "@/lib/format";
 import { AppShell } from "@/components/app-shell";
-import { StatusPill } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge, StatusPill } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -153,12 +154,19 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <p>
               Invitation sent to <b>{invited}</b>.
             </p>
+            {/* ONE DISMISS CONTROL IN THE PRODUCT. The Apps page's banner
+                already spells this as a ghost icon button tinted to its own
+                trio; this was a bare glyph on an opacity fade, which is the
+                same affordance drawn two ways in two files. */}
             <Link
               href="/dashboard/settings"
               aria-label="Dismiss"
-              className="shrink-0 rounded-control opacity-70 transition-opacity hover:opacity-100"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "iconSm" }),
+                "text-success-ink/70 hover:bg-success-soft hover:text-success-ink",
+              )}
             >
-              <X size={16} strokeWidth={2} />
+              <X />
             </Link>
           </div>
         )}
@@ -168,15 +176,25 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Link
               href="/dashboard/settings"
               aria-label="Dismiss"
-              className="shrink-0 rounded-control opacity-70 transition-opacity hover:opacity-100"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "iconSm" }),
+                "text-danger-ink/70 hover:bg-danger-soft hover:text-danger-ink",
+              )}
             >
-              <X size={16} strokeWidth={2} />
+              <X />
             </Link>
           </div>
         )}
 
+        {/* EVERY SECTION LABEL CARRIES ITS OWN COUNT. "Members" over a list of
+            members is a caption; "MEMBERS · 4" is the one fact the heading can
+            add that the rows underneath do not already say, and it is what an
+            admin opening this page is counting anyway. */}
         <section className="mt-8">
-          <SectionHeading>Members</SectionHeading>
+          <div className="mb-3 flex items-center gap-2">
+            <SectionHeading className="mb-0">Members</SectionHeading>
+            <Badge className="tnum">{members.length}</Badge>
+          </div>
           <Card variant="surface" padding="none" className="divide-y divide-border overflow-hidden">
             {members.map((m) => {
               const rankName = rankNameById.get(rankIdByUser.get(m.userId) ?? "");
@@ -184,10 +202,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 /* The builder-card anatomy: a round mark, a semibold title, one
                    muted meta line. The OWNER's avatar is the list's single
                    solid-violet accent — like the rail's N. */
-                <div key={m.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40">
+                <div key={m.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-foreground/5">
+                  {/* THE TINT PAIR, not an alpha of the fill. `bg-primary/10`
+                      carrying `text-primary` is brand-500 at 10% under
+                      brand-500 ink — 4.42:1 at best, and the sheet's rule is
+                      that the 500 FILLS while the 700 SPEAKS. `accent` /
+                      `accent-foreground` is exactly that pair, and it is the
+                      one the empty state and the chips already use. The owner
+                      keeps the solid fill: one violet block per list, marking
+                      identity, like the rail's own mark. */}
                   <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-tiny font-semibold ${
-                      m.role === "owner" ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+                    className={`flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                      m.role === "owner" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
                     }`}
                     aria-hidden
                   >
@@ -195,10 +221,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-1.5">
-                      <span className="truncate text-base font-semibold text-foreground">{m.email}</span>
-                      {m.userId === userId && <span className="shrink-0 text-tiny text-muted-foreground">(you)</span>}
+                      <span className="truncate text-md font-semibold text-foreground">{m.email}</span>
+                      {m.userId === userId && <span className="shrink-0 text-xs text-muted-foreground">(you)</span>}
                     </span>
-                    <span className="block text-tiny text-muted-foreground">{rankName ?? "Full access"}</span>
+                    <span className="block text-xs text-muted-foreground">{rankName ?? "Full access"}</span>
                   </span>
                   <span className="flex shrink-0 items-center gap-3">
                     {/* Admins assign ranks in place; everyone else just sees
@@ -237,7 +263,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 every identifier under it stay `rank` — see RanksPanel's own
                 note. Renaming those is a migration across the permission model
                 for nothing anyone can see. */}
-            <SectionHeading>Roles</SectionHeading>
+            <div className="mb-3 flex items-center gap-2">
+              <SectionHeading className="mb-0">Roles</SectionHeading>
+              <Badge className="tnum">{rankRows.length}</Badge>
+            </div>
             <RanksPanel ranks={rankRows} memberCounts={memberCounts} catalogue={catalogue} />
           </section>
         )}
@@ -251,7 +280,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 heading was saying it a third time. */}
             <SectionHeading>Invite</SectionHeading>
             <Card variant="surface" padding="compact">
-              <form action={inviteMemberAction} className="flex gap-2">
+              <form action={inviteMemberAction} className="flex flex-wrap gap-2">
                 <Input
                   type="email"
                   name="email"
@@ -263,7 +292,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   placeholder="teammate@company.com"
                   className="max-w-sm"
                 />
-                <SubmitButton pendingLabel="Sending…">Send invite</SubmitButton>
+                {/* THE PAGE'S ONE YELLOW. Workspace settings is a page of lists
+                    you read and switches you flip; the single ACT it exists for
+                    is putting another person in the workspace, and on this sheet
+                    that is precisely what the neon is for. Nothing else here
+                    takes it — a second yellow would halve the value of this one,
+                    and the two destructive controls below are deliberately the
+                    quietest things on the page. */}
+                <SubmitButton variant="yellow" pendingLabel="Sending…">
+                  Send invite
+                </SubmitButton>
               </form>
               {/* No note. It said an email goes out, that the link is also
                   copyable from Pending invitations, and that invites expire —
@@ -276,22 +314,27 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
         {pending.length > 0 && (
           <section className="mt-8">
-            <SectionHeading>Pending invitations</SectionHeading>
+            <div className="mb-3 flex items-center gap-2">
+              <SectionHeading className="mb-0">Pending invitations</SectionHeading>
+              <Badge className="tnum">{pending.length}</Badge>
+            </div>
             <Card variant="surface" padding="none" className="divide-y divide-border">
               {pending.map((inv) => (
                 <div key={inv.id} className="px-4 py-3">
                   {/* Same recipe as the Members card: avatar mark, semibold
-                      title, one muted meta line, quiet action at the edge. */}
+                      title, one muted meta line, quiet action at the edge —
+                      including the tint pair, so a pending row and a member row
+                      are the same object at two stages rather than two designs. */}
                   <div className="flex items-center gap-3">
                     <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-tiny font-semibold text-primary"
+                      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
                       aria-hidden
                     >
                       {initials(inv.email)}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-base font-semibold text-foreground">{inv.email}</span>
-                      <span className="block text-tiny text-muted-foreground">
+                      <span className="block truncate text-md font-semibold text-foreground">{inv.email}</span>
+                      <span className="block text-xs text-muted-foreground">
                         {inv.expiresAt ? `Invited · expires ${formatDate(new Date(inv.expiresAt))}` : "Invited"}
                       </span>
                     </span>

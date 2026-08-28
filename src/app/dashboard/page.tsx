@@ -1,4 +1,4 @@
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Columns3, LayoutGrid, Plus } from "lucide-react";
 import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
@@ -455,16 +455,39 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                      all. Two plain form posts keep it that way. */
                   <details className="group/add relative">
                     <summary
-                      className="inline-flex size-7 cursor-pointer list-none items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-muted hover:text-foreground [&::-webkit-details-marker]:hidden"
+                      /* The tabs beside it hover into the violet tint; a `+`
+                         that hovered into a grey wash — one that is the page's
+                         own colour, so into nothing — would be the only control
+                         on the row answering the pointer differently. */
+                      className="inline-flex size-7 cursor-pointer list-none items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-accent hover:text-accent-foreground [&::-webkit-details-marker]:hidden"
                       title="Add a view"
                     >
                       <Plus size={15} />
                       <span className="sr-only">Add a view</span>
                     </summary>
-                    <div className="absolute left-0 top-full z-20 mt-1.5 w-64 rounded-surface border border-border bg-card p-1 shadow-surface">
+                    <div className="absolute left-0 top-full z-20 mt-1.5 w-64 rounded-surface border border-border bg-card p-1.5 shadow-surface">
                       {[
-                        { kind: "groups", label: "Columns", blurb: "Group your metrics into named, coloured columns." },
-                        { kind: "custom", label: "Custom", blurb: "Place and size charts on a grid. One metric, several charts." },
+                        {
+                          kind: "groups",
+                          label: "Columns",
+                          blurb: "Group your metrics into named, coloured columns.",
+                          Icon: Columns3,
+                          /* IDENTITY, NEVER STATE — which is the whole licence
+                             the accent four have. The two kinds of view are the
+                             one place on this screen where two things need
+                             telling apart at a glance rather than ranking, so
+                             they get a chip each out of the sheet's decorative
+                             range. success/warn/danger keep their monopoly on
+                             meaning something. */
+                          tint: "bg-accent-peri/30",
+                        },
+                        {
+                          kind: "custom",
+                          label: "Custom",
+                          blurb: "Place and size charts on a grid. One metric, several charts.",
+                          Icon: LayoutGrid,
+                          tint: "bg-accent-pink/35",
+                        },
                       ].map((o) => (
                         <form key={o.kind} action={addViewAction}>
                           <input type="hidden" name="range" value={rangeKey} />
@@ -478,9 +501,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                base is `whitespace-nowrap`: the blurb refused to
                                wrap and ran straight out of the panel. The same
                                inherited nowrap overflowed the chart picker when
-                               it was a modal. */
-                            className="h-auto w-full justify-start whitespace-normal px-2 py-1.5 text-left"
+                               it was a modal.
+                               `rounded-[var(--radius-control)]` and not
+                               `rounded-control`: a row inside a panel is a
+                               rounded rectangle, and the arbitrary spelling is
+                               the one that can take `Button`'s pill off — see
+                               MENU_SHAPE in board-tile-menu.tsx for why. It is
+                               spelled out rather than imported because that
+                               module is a client one, and a server component
+                               importing a value from a client module gets a
+                               throwing stub, not the string. */
+                            className="h-auto w-full items-start justify-start whitespace-normal rounded-[var(--radius-control)] px-2 py-2 text-left"
                           >
+                            <span
+                              className={`flex size-7 shrink-0 items-center justify-center rounded-control text-foreground ${o.tint}`}
+                              aria-hidden
+                            >
+                              <o.Icon size={15} />
+                            </span>
                             <span className="flex min-w-0 flex-col gap-0.5">
                               <span className="text-small font-semibold text-foreground">{o.label}</span>
                               <span className="text-tiny font-normal text-muted-foreground">{o.blurb}</span>
@@ -744,7 +782,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
             `justify-between` so the range (what period) reads from the left
             edge and the source (whose data) sits at the right, with the gap
-            between them saying they are two separate answers. */}
+            between them saying they are two separate answers.
+
+            THE YELLOW IS DELIBERATELY UNSPENT ON THIS SCREEN, and that is a
+            decision rather than an omission. The kit allows the neon at most
+            once per page, on the single act the page exists for — and this page
+            does not exist for an act. It exists to be READ: six tools disagree
+            about how many calls were booked, and the whole product is the one
+            number you can defend. "Refresh all" is the only candidate up here,
+            and making a maintenance button the loudest thing on a board of
+            numbers inverts the thesis this kit opens with. Scarcity is what the
+            colour means; a screen with nothing to shout keeps quiet. */}
         <SubBar className="-mx-5 -mt-6 mb-5 sm:-mx-8 sm:-mt-8 lg:-mx-10">
           {/* THE RANGE TRACK SCROLLS RATHER THAN BREAKING THE PAGE.
               Seven pills at ~70px each is a ~500px track that cannot wrap
@@ -759,11 +807,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               them. The negative margin lets the ring breathe inside the
               scrollport without indenting the track. */}
           <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1">
-            {/* IT HAS ITS GROOVE BACK. Loose on a flush bar the seven periods
-                read as seven separate buttons that happened to be adjacent; the
-                selected one is now a raised chip sitting IN a track, which is
-                what says "pick exactly one of these". */}
-            <div className="inline-flex items-center gap-0.5 rounded-full bg-muted p-0.5">
+            {/* IT HAS ITS GROOVE BACK — AND THE GROOVE IS A WHITE ISLAND, not
+                a `bg-muted` one.
+                Loose on a flush bar the seven periods read as seven separate
+                buttons that happened to be adjacent, so they sit in a track.
+                But `--muted` and `--background` are BOTH #f5f5f5 now, and this
+                bar is `bg-background`: the track was painting the bar onto
+                itself, which is a groove nobody can see and a black chip
+                apparently floating on nothing. A white island with the kit's
+                hairline is the same material as the source picker at the other
+                end of the bar, so the two controls read as one set. */}
+            <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-card p-0.5 shadow-xs">
               {RANGE_OPTIONS.map((r) => (
                 // Still an anchor with a real href — see RangeLink. What it
                 // adds is that the press lands NOW: the pill lights and the
@@ -774,9 +828,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   href={qs({ range: r.key })}
                   rangeKey={r.key}
                   activeRange={rangeKey}
-                  className="inline-flex h-7 shrink-0 items-center rounded-full px-3 text-xs font-medium transition-colors duration-(--duration-fast)"
+                  /* THE CHIP VOICE: all caps, tracked out, semibold — the same
+                     one `Chip`, `StatusPill` and every micro label in the kit
+                     are set in. In sentence case a row of periods reads as body
+                     copy that happens to be clickable; capitalised it reads as
+                     a control with one answer showing, which is what it is.
+                     BLACK is the answer, per the ratio: this is the workhorse
+                     selection on the page, and the violet is spent one row down
+                     on which VIEW you are in. */
+                  className="inline-flex h-7 shrink-0 items-center rounded-full px-3 text-xs font-semibold uppercase tracking-wide transition-colors duration-(--duration-fast)"
                   activeClassName="bg-foreground text-background shadow-xs"
-                  idleClassName="text-muted-foreground hover:text-foreground"
+                  idleClassName="text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   {r.label}
                 </RangeLink>
@@ -797,13 +859,25 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <ChevronDown size={14} className="text-muted-foreground transition-transform group-open/src:rotate-180" />
               </summary>
               {/* Right-aligned: the control sits at the island's right edge, so
-                  a left-anchored menu opened off the end of the bar. */}
-              <div className="absolute right-0 top-full z-20 mt-1.5 min-w-52 rounded-surface border border-border bg-card p-1 shadow-surface">
+                  a left-anchored menu opened off the end of the bar.
+                  PANEL then ROW, and nothing in between: `rounded-surface` +
+                  `shadow-surface` for the floating surface, `p-1.5` so a row's
+                  corner clears the panel's own, `rounded-control` on the rows.
+                  It is the shape the vendored menu, the Select and the Command
+                  palette all take — see `ui/dropdown-menu.tsx`, where the menu
+                  language is written down. */}
+              <div className="absolute right-0 top-full z-20 mt-1.5 min-w-52 rounded-surface border border-border bg-card p-1.5 shadow-surface">
                 <SourceLink
                   href={qs({ source: "" })}
                   className={cn(
-                    "block rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-muted",
-                    !boardSource ? "font-semibold text-primary" : "text-foreground",
+                    "block rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-accent hover:text-accent-foreground",
+                    /* THE ROW IN FORCE WEARS THE WASH, not violet words on
+                       nothing. `text-primary` is brand-500, which is 4.42:1 on
+                       this page and fails AA at the size these are set in — the
+                       sheet's own rule is that the 500 FILLS and the 700
+                       SPEAKS, and `accent`/`accent-foreground` is that pair
+                       spelled as roles. */
+                    !boardSource ? "bg-accent font-semibold text-accent-foreground" : "text-foreground",
                   )}
                 >
                   All sources
@@ -816,8 +890,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     key={srcName}
                     href={qs({ source: srcName })}
                     className={cn(
-                      "flex items-center gap-2 rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-muted",
-                      boardSource === srcName ? "font-semibold text-primary" : "text-foreground",
+                      "flex items-center gap-2 rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-accent hover:text-accent-foreground",
+                      boardSource === srcName ? "bg-accent font-semibold text-accent-foreground" : "text-foreground",
                     )}
                   >
                     <SourceMark source={srcName} />
@@ -1018,7 +1092,12 @@ function MetricTile({ tile }: { tile: Tile }) {
         <div className="mt-3 flex items-center justify-end text-tiny text-muted-foreground">
           <Link
             href={`/dashboard/metrics/${metric.id}`}
-            className="rounded-control font-medium transition-colors hover:text-primary"
+            /* LINK VIOLET, not the fill violet. brand-500 is 4.42:1 on this
+               page — under AA — and a link is the one place the sheet is
+               explicit that words take the 700. `accent-foreground` is that
+               step, and it inverts with the theme where a raw ramp pick would
+               not. */
+            className="rounded-control font-medium transition-colors hover:text-accent-foreground"
           >
             Drill in
           </Link>

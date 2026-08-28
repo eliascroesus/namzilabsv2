@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover } from "@/components/flow/controls/Popover";
 import { deleteViewAction, duplicateViewAction, renameViewAction } from "./board-actions";
+import { MENU_ROW } from "./board-tile-menu";
 import { BOARD_GRID } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
@@ -283,9 +284,28 @@ export function ViewTab({
       // New group. It found this by scanning `span, a` for the exact text
       // "Dashboard" — so both the element type and the copy were load-bearing.
       data-view-tab
+      /**
+       * SELECTED IS VIOLET, AND THE PERIOD ABOVE IT STAYS BLACK.
+       *
+       * Two filter rows sit one above the other and they answer two different
+       * questions — the pills narrow WHICH NUMBERS, the tabs choose WHICH
+       * ARRANGEMENT — so marking both of them the same way would be one control
+       * printed twice. The sheet already divides the work: black is the
+       * workhorse and does the period, violet marks SELECTION and identity and
+       * does the active nav row, which is exactly what a view tab is.
+       *
+       * It was `bg-accent` — brand-50, #f3eeff — on a page that is #f5f5f5.
+       * Two levels apart, and the ONLY thing separating the tab you are on from
+       * the four you are not was a hue nobody can see at that distance. The
+       * fill is the 500 (fills take the 500, words take the 700) so selection
+       * is legible from across the room, and the tint it used to wear becomes
+       * the HOVER — hovering an idle tab now previews what selecting it does.
+       */
       className={cn(
-        "inline-flex shrink-0 items-center rounded-control text-small font-semibold transition-colors duration-(--duration-fast)",
-        active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        "inline-flex shrink-0 items-center rounded-control text-sm font-semibold transition-colors duration-(--duration-fast)",
+        active
+          ? "bg-primary text-primary-foreground shadow-xs"
+          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
       )}
     >
       {editing ? (
@@ -332,7 +352,13 @@ export function ViewTab({
             <Button
               variant="ghost"
               size="iconSm"
-              className="mr-0.5 size-6"
+              /* `editable` is gated on `active`, so this trigger only ever
+                 exists on the tab that is filled violet — hence no conditional
+                 here. The ghost's own grey ink and grey hover wash would both
+                 disappear into that fill, so it takes the fill's foreground and
+                 hovers by lightening the violet rather than by painting a
+                 neutral square on top of it. */
+              className="mr-0.5 size-6 text-primary-foreground/75 hover:bg-primary-foreground/20 hover:text-primary-foreground active:bg-primary-foreground/30"
               onClick={() => setMenuOpen((o) => !o)}
               aria-label={`Options for ${name}`}
               aria-haspopup="menu"
@@ -346,7 +372,7 @@ export function ViewTab({
             <Button
               variant="ghost"
               size="sm"
-              className="w-full justify-start"
+              className={MENU_ROW}
               onClick={() => {
                 setDraft(name);
                 setEditing(true);
@@ -360,7 +386,7 @@ export function ViewTab({
             <Button
               variant="ghost"
               size="sm"
-              className="w-full justify-start"
+              className={MENU_ROW}
               disabled={busy}
               onClick={duplicate}
             >
@@ -398,7 +424,7 @@ export function ViewTab({
               <Button
                 variant="destructiveGhost"
                 size="sm"
-                className="w-full justify-start"
+                className={MENU_ROW}
                 onClick={() => setConfirming(true)}
               >
                 <Trash2 />
@@ -498,15 +524,25 @@ export function TileArea({
         <span className="sr-only">Loading metrics…</span>
         {Array.from({ length: columns }, (_, c) => (
           <div key={c} className={`${COLUMN_W} shrink-0`}>
-            {/* The header the real column wears: a dot, a name, a count. */}
-            <div className="mb-3 flex h-8 items-center gap-2 px-0.5">
-              <Skeleton className="size-2 rounded-full" />
-              <Skeleton className="h-4 w-24" />
-            </div>
-            <div className={`flex flex-col ${LANE_GAP}`}>
-              {Array.from({ length: Math.max(1, Math.round(count / columns)) }, (_, i) => (
-                <TileSkeleton key={i} />
-              ))}
+            {/* THE COLUMN'S OWN SHAPE, not a bare stack of cards.
+                A column is a tinted panel capped by an accent bar with its
+                header INSIDE it, so a skeleton that drew loose cards under a
+                floating label swapped the board's whole geometry for half a
+                second and swapped it back — the reshaping this component exists
+                to prevent, arriving one layer down. Untinted, because the
+                skeleton cannot know which group is which and inventing a colour
+                per placeholder would be a guess the real board then contradicts. */}
+            <div className="overflow-hidden rounded-card bg-foreground/[0.04]">
+              <div className="h-1 w-full bg-foreground/10" />
+              <div className="flex h-11 items-center gap-2 px-2.5">
+                <Skeleton className="size-2 rounded-full" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+              <div className={`flex flex-col px-2.5 pb-2.5 ${LANE_GAP}`}>
+                {Array.from({ length: Math.max(1, Math.round(count / columns)) }, (_, i) => (
+                  <TileSkeleton key={i} />
+                ))}
+              </div>
             </div>
           </div>
         ))}

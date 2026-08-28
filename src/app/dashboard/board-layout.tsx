@@ -338,11 +338,21 @@ export function BoardLayout({
                   the plain neutral one: ungrouped is not a group, and giving it
                   a colour would make it look like the eleventh. */}
               <div className="mb-3 flex h-8 items-center gap-2 px-0.5">
-                <span className="flex items-center gap-1.5 rounded-full bg-muted py-1 pl-2 pr-2.5">
+                {/* `bg-foreground/5`, NOT `bg-muted`. Both `--muted` and the
+                    page are #f5f5f5 now, so the badge was painting the
+                    background onto itself: a neutral pill that was, on this
+                    surface, no pill at all. An alpha of the near-black reads on
+                    the off-white page and inverts with the theme for free,
+                    which no fixed step of the grey ramp does — the same
+                    correction `Chip`'s own count pill carries.
+                    The count sits INSIDE it, like the columns' do. */}
+                <span className="flex items-center gap-1.5 rounded-full bg-foreground/5 py-1 pl-2 pr-2">
                   <span className="size-2 shrink-0 rounded-full bg-neutral-400" aria-hidden />
                   <span className="text-small font-semibold text-muted-foreground">Ungrouped</span>
+                  <span className="tnum shrink-0 pl-0.5 text-tiny font-semibold text-muted-foreground opacity-70">
+                    {board.ungrouped.tiles.length}
+                  </span>
                 </span>
-                <span className="tnum shrink-0 text-tiny text-muted-foreground">{board.ungrouped.tiles.length}</span>
               </div>
               <div {...{ [SCROLLER_ATTR]: "row" }} className={`${SCROLLER_BLEED} quiet-scroll overflow-x-auto pb-3`}>
                 <div {...{ [LANE_ATTR]: UNGROUPED, [AXIS_ATTR]: "x", [ACCEPTS_ATTR]: "tile" }} className={`flex items-start ${LANE_GAP}`}>

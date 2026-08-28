@@ -90,9 +90,19 @@ export function ChartFrame({
     // `tests/board-blocks.test.ts` both used to look for the literal classes
     // `rounded-surface` / `shadow-card` / `bg-card`, which made "a heading wears
     // no card" a statement about Tailwind rather than about the tile.
-    <Card data-tile-card variant="surface" className="flex h-full flex-col overflow-hidden p-4">
+    //
+    // `tile` is the kit's own rung (ui/card.tsx) — the same shell the groups
+    // board's `FlowTile` wears, so the two boards' cards cannot drift apart.
+    // `padding="compact"` is the 16px this always had as a className override;
+    // it is load-bearing arithmetic, not taste (see `tests/board-blocks.test.ts`
+    // — at ROW_UNIT_PX 40 the cartesian floor is measured against it).
+    <Card data-tile-card variant="tile" padding="compact" className="flex h-full flex-col overflow-hidden">
       <div className="flex items-start justify-between gap-2">
-        <p className="flex min-w-0 items-baseline text-small font-semibold text-foreground">
+        {/* THE KIT'S MICRO-LABEL VOICE, matching `FlowTile`: a metric's name
+            LABELS the figure under it, and setting it at 14px in the
+            foreground colour put a heading and a 36px numeral in the same
+            breath. Caps and muted is what makes the number the loud thing. */}
+        <p className="flex min-w-0 items-baseline text-micro font-semibold uppercase tracking-wide text-muted-foreground">
           {/* The TITLE truncates; the period marker does not. It sits at the
               end of the line, and `truncate` ellipsises the END — so with one
               truncating span the marker was the first thing to disappear, on
@@ -116,18 +126,23 @@ export function ChartFrame({
             <span className="ml-1.5 shrink-0 whitespace-nowrap font-medium text-muted-foreground">· {rangeLabel}</span>
           )}
         </p>
+        {/* The marker and the as-of, in that order: one says whether the number
+            can be trusted, the other says as of when. `gap-1.5` and the dot's
+            own 16px wash keep them on one baseline whichever state is showing. */}
         <span className="flex shrink-0 items-center gap-1.5">
           {status && <Freshness status={status} />}
           {computedAt && (
-            <span className="text-tiny text-muted-foreground" title={formatDateTime(new Date(computedAt))}>
+            <span className="text-micro text-muted-foreground" title={formatDateTime(new Date(computedAt))}>
               {relativeTime(new Date(computedAt))}
             </span>
           )}
         </span>
       </div>
 
+      {/* THE PAYOFF. `mt-2` is one baseline step off the label — close enough
+          to belong to it, far enough that the numeral is not sitting on it. */}
       {headline !== undefined && (
-        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <p className={cn("stat-numeral text-stat leading-none", headline == null && "text-muted-foreground")}>
             {headline ?? "—"}
           </p>

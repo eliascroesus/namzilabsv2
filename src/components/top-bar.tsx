@@ -41,16 +41,27 @@ export function TopBar() {
     // islands into the slot below, and those only read as floating surfaces
     // over a wash one step off white.
     <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
+      {/* THE MARK SITS ON THE SAME LEFT EDGE AS THE RAIL'S ICONS — the bar's
+          16px plus this `p-1` puts the black square 20px in, which is exactly
+          where the sidebar's chips land (its `px-2` column plus a row's
+          `px-3`). The padding is symmetric now (`p-1`, not `py-1 pl-1`), so the
+          hover wash is a shape centred on its contents rather than a box with
+          the mark pressed into one corner.
+
+          Hover is that WASH rather than `opacity-80`. Fading a black square
+          toward the page is the one hover in the product that changes a colour
+          instead of lighting a surface, and it reads as the mark going out. */}
       <Link
         href="/dashboard"
-        className="flex shrink-0 items-center gap-2.5 rounded-control py-1 pl-1 pr-2 transition-opacity duration-(--duration-fast) ease-(--ease-standard) hover:opacity-80"
+        className="flex shrink-0 items-center gap-2.5 rounded-control p-1 pr-2.5 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted"
         title="Namzilabs — dashboard"
       >
         {/* DEEP BLACK, reached through the `foreground` ROLE rather than a
             near-black fill: it inverts with the theme, and it sidesteps the kit
-            gate that bans `bg-neutral-900` as a brand fill. Round, because the
-            sheet is pill-first and a squircle mark beside pill controls is the
-            one shape in the chrome that would belong to nothing. */}
+            gate that bans `bg-neutral-900` as a brand fill. An 8px square, not a
+            disc: the sheet pills BUTTONS and CHIPS, and a round mark beside a
+            round avatar in the rail would be two circles claiming to be the
+            same kind of object. */}
         <span className="flex size-8 items-center justify-center rounded-control bg-foreground text-sm font-semibold text-background">
           N
         </span>
@@ -66,12 +77,31 @@ export function TopBar() {
 
           A portal target rather than a prop because the controls are deep
           inside the canvas's own client tree, holding its undo stack and save
-          state; lifting them would mean lifting all of that with them. */}
-      <div id="topbar-slot" className="flex min-w-0 flex-1 items-center gap-2 pl-2" />
+          state; lifting them would mean lifting all of that with them.
 
+          THE HAIRLINE BEFORE IT IS DRAWN BY THE SLOT ITSELF, and only when the
+          slot has something in it. A page's own chrome butted straight against
+          the wordmark read as one long row of unrelated controls; a 24px rule
+          is what Miro and Figma put between "the product" and "this document".
+          `empty:` is the only thing that can know — a portal APPENDS DOM
+          children, so the slot is `:empty` on every route that never fills it
+          and is not on the builder, with no state to pass down and nothing for
+          a future page to remember to set. (A `::before` does not count against
+          `:empty`, which is what makes the pair work.) */}
+      <div
+        id="topbar-slot"
+        className="flex min-w-0 flex-1 items-center gap-2 pl-1 before:mr-2 before:h-6 before:w-px before:shrink-0 before:bg-border before:content-[''] empty:before:hidden"
+      />
+
+      {/* THE BAR'S CONTROLS ARE `sm`, AND THE BAR IS THE REASON.
+          A default Button is 44px in a 64px band — 10px of air top and bottom,
+          so the pills crowd the hairlines and the bar reads as a toolbar that
+          barely fits. At 36px there is 14px either side, the two buttons sit on
+          the 8px baseline, and they stop competing with the page heading
+          directly beneath them. Chrome is furniture; the page is the content. */}
       <Link
         href="/dashboard/settings"
-        className={cn(buttonVariants({ variant: "secondary" }))}
+        className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
         title="Invite someone to this workspace"
       >
         <UserPlus />
@@ -80,7 +110,7 @@ export function TopBar() {
       {/* THE ONE YELLOW ON THE SCREEN. Creating a flow is the act this
           product exists for, so it takes the hero; everything else in this bar
           is black or a hairline. See the ratio note in globals.css. */}
-      <Link href="/dashboard/flows" className={cn(buttonVariants({ variant: "yellow" }))}>
+      <Link href="/dashboard/flows" className={cn(buttonVariants({ variant: "yellow", size: "sm" }))}>
         <Plus />
         <span className="hidden sm:inline">New flow</span>
       </Link>
@@ -116,8 +146,15 @@ export function SubBar({ children, className }: { children: ReactNode; className
          * are 32 and 40px tall, which leaves 4px of air above and below a
          * default-size button in a 48px bar. It is also the 8px rhythm the rest
          * of the chrome is set on.
+         *
+         * ITS PADDING IS THE PAGE'S GUTTER, RUNG FOR RUNG. The bar is pulled
+         * flush by the caller's negative margins, so a flat `px-4` stood its
+         * first pill 4px left of the heading under it on a phone and 24px left
+         * of it on a desktop — near-misses against the one vertical line the
+         * page actually has. Matching `PageContainer`'s ladder means the range
+         * pills start exactly where the title does.
          */
-        "quiet-scroll flex h-14 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-background px-4",
+        "quiet-scroll flex h-14 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-background px-5 sm:px-8 lg:px-10",
         className,
       )}
     >

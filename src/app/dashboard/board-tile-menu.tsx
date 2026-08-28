@@ -4,8 +4,39 @@ import { useState } from "react";
 import { ArrowDown, ArrowUp, Check, MoreHorizontal, Plus } from "lucide-react";
 import type { BoardTile } from "@/lib/board/types";
 import { Button } from "@/components/ui/button";
+import { SectionHeading } from "@/components/ui/page";
 import { Popover } from "@/components/flow/controls/Popover";
+import { cn } from "@/lib/utils";
 import { MENU_ATTR, TILE_ATTR } from "./board-drag";
+
+/**
+ * A MENU ROW'S SHAPE, SPELLED ONCE — and spelled as an arbitrary value on
+ * purpose.
+ *
+ * The kit gives a menu exactly two shapes and no third: a floating PANEL is
+ * `rounded-surface` with the surface shadow, and a ROW inside it is
+ * `rounded-control`. A row that is a PILL is the third option — pills belong to
+ * buttons and chips, not to the inside of a panel — and every row in the
+ * board's three menus was one, because every row here is a `Button` (a raw
+ * `<button>` under `src/app/` fails `check:ui`'s ninth rule) and `Button`'s
+ * base is `rounded-full`.
+ *
+ * `rounded-control` cannot take that off, which is the part worth writing down:
+ * `cn()`'s tailwind-merge only recognises radii it can read as sizes, so it
+ * keeps BOTH classes, and Tailwind emits them alphabetically — `.rounded-full`
+ * lands after `.rounded-control` and quietly wins. The arbitrary form IS
+ * recognised, so the pill is dropped, and it still names the kit's token rather
+ * than freezing an 8px literal into twenty call sites.
+ *
+ * Exported because the column's menu and the view tab's menu are the same
+ * surface wearing different contents, and three spellings of one shape is
+ * exactly the drift `check:ui` exists to stop everywhere else.
+ */
+export const MENU_SHAPE = "rounded-[var(--radius-control)]";
+/** The shape, plus the geometry every full-width row in those menus shares. */
+export const MENU_ROW = `${MENU_SHAPE} w-full justify-start`;
+/** The eyebrow over a group of rows — the app's one small-caps label recipe. */
+export const MENU_LABEL = "mb-0.5 px-2 pt-1";
 
 /**
  * THE GAP THAT OPENS WHERE A HELD TILE WOULD LAND.
@@ -225,7 +256,11 @@ export function TileSlot({
               aria-haspopup="menu"
               aria-expanded={open}
               title="Move this metric"
-              className="bg-card/90 shadow-card backdrop-blur-sm"
+              /* A CONTROL FLOATING OVER SOMEONE ELSE'S CARD, so it draws its
+                 own edge. `bg-card/90` alone over a white tile is a shadow with
+                 nothing inside it; the hairline is what makes the trigger a
+                 separate object from the number it is sitting on. */
+              className="border border-border bg-card/90 shadow-card backdrop-blur-sm"
             >
               <MoreHorizontal />
             </Button>
@@ -236,7 +271,11 @@ export function TileSlot({
               inherits it — so the whole dropdown claimed to be draggable while
               you were reading it. A menu is pointed at, not picked up. */}
           <div {...{ [MENU_ATTR]: "" }} className="cursor-default overflow-y-auto p-1.5">
-            <p className="px-2 py-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Move to</p>
+            {/* The same eyebrow the column's menu wears over its own sections —
+                `SectionHeading` is the app's one small-caps label, and two
+                menus on one board spelling it two ways is how a product ends up
+                with four heading styles. */}
+            <SectionHeading className={MENU_LABEL}>Move to</SectionHeading>
 
             {/* A tile lands at the END of the lane it is sent to. That is the
                 predictable answer and the one Notion's own "Move to" gives —
@@ -261,7 +300,7 @@ export function TileSlot({
               disabled={index === 0 || sortedBy != null}
               title={sortedBy ? `Sorted by ${sortedBy}` : undefined}
               onClick={() => move(laneId, index - 1)}
-              className="w-full justify-start"
+              className={MENU_ROW}
             >
               <ArrowUp />
               Move up
@@ -281,7 +320,7 @@ export function TileSlot({
               // `move up` was `index - 1` and correct, which is why only this
               // one was reported.
               onClick={() => move(laneId, index + 1)}
-              className="w-full justify-start"
+              className={MENU_ROW}
             >
               <ArrowDown />
               Move down
@@ -302,7 +341,16 @@ function LaneOption({ label, current, onSelect }: { label: string; current: bool
       onClick={onSelect}
       disabled={current}
       aria-current={current ? "true" : undefined}
-      className="w-full justify-start"
+      className={cn(
+        MENU_ROW,
+        /* THE LANE IT IS ALREADY IN IS SELECTED, NOT UNAVAILABLE.
+           It stays `disabled` — pressing it would write the arrangement already
+           on screen — but the disabled half-opacity said "you may not" about a
+           row whose real answer is "you are here", and it dimmed the one row in
+           the list carrying the tick. The menu language's own active row
+           instead: the violet wash carrying the violet ink. */
+        current && "bg-accent text-accent-foreground disabled:opacity-100",
+      )}
     >
       <span className="flex size-3.5 items-center justify-center">{current && <Check size={13} strokeWidth={3} />}</span>
       <span className="min-w-0 truncate">{label}</span>

@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
+import { LogOut } from "lucide-react";
 import { inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { requestAccess } from "@/lib/auth";
@@ -137,18 +138,63 @@ export async function AppShell({
          * edges, and a full-width secondary button read as a form inside a
          * dropdown. Three bands, each with the menu's own inset, divided by
          * hairlines that run the full width.
+         *
+         * THE ORDER IS WHO, THEN WHERE, THEN OUT — because the three answer
+         * different questions and only the middle one is a list. Identity leads:
+         * the email under the trigger's avatar is what tells you WHICH account
+         * this browser is signed into, and it used to be a 12px grey line
+         * between the switcher and the sign-out button, i.e. the least visible
+         * thing in a menu that exists to carry it.
+         *
+         * Every band speaks the kit's menu grammar — a micro ALL-CAPS label,
+         * rows at the control radius, hairlines edge to edge — so this reads as
+         * the same object as the flow builder's menus rather than as a card
+         * that happens to be floating.
          */
         panel: (
-          <div className="text-base">
-            <div className="px-3 pb-2 pt-2.5">
-              <p className="mb-1.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Workspace</p>
+          <div className="text-sm">
+            <div className="flex items-center gap-2.5 px-3 py-2.5">
+              {/* The trigger's avatar again, at the same size and in the same
+                  violet tint, so the panel visibly belongs to the control that
+                  opened it. Violet is the sheet's identity colour, and the ink
+                  is the 700: the 500 is a fill, and 4.42:1 as text. */}
+              <span
+                aria-hidden
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
+              >
+                {initials}
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Signed in</p>
+                <p className="truncate text-sm font-medium text-foreground">{userEmail ?? "Your account"}</p>
+              </div>
+            </div>
+            {/* `p-1.5` matches the padding DropdownMenuContent would have given
+                this band if the panel were not `p-0` — the rows have to clear
+                the panel's own 16px corner, and 6px is the number the menu
+                language already picked for that. */}
+            <div className="border-t border-border p-1.5">
+              <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {orgs.length > 1 ? "Workspaces" : "Workspace"}
+              </p>
               <OrgSwitcher orgs={orgs} currentId={orgId} />
             </div>
-            {userEmail && (
-              <p className="truncate border-t border-border px-3 py-2 text-tiny text-muted-foreground">{userEmail}</p>
-            )}
-            <form action={signOutAction} className="border-t border-border p-1">
-              <Button type="submit" variant="ghost" size="sm" className="w-full justify-start font-normal">
+            <form action={signOutAction} className="border-t border-border p-1.5">
+              {/* Same override as the switcher's rows, for the same reason: the
+                  panel's rows are 8px rectangles, and `rounded-control` cannot
+                  displace `buttonVariants`' pill through `cn()`.
+                  The INK is the menu's, not the ghost button's: a row here is
+                  near-black text with a muted glyph, exactly as
+                  `DropdownMenuItem` draws one. Left at the ghost's rest colour,
+                  the way out of the product was the palest thing in the panel
+                  that contains it. */}
+              <Button
+                type="submit"
+                variant="ghost"
+                size="sm"
+                className="h-9 w-full justify-start gap-2.5 rounded-[var(--radius-control)] px-2 font-normal text-foreground [&_svg]:text-muted-foreground"
+              >
+                <LogOut />
                 Sign out
               </Button>
             </form>

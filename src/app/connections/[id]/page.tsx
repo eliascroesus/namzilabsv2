@@ -25,7 +25,10 @@ import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/badge";
 import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SourceMark } from "@/components/source-mark";
+import { sourceStyle } from "@/components/flow/controls/source-style";
 import { formatDate, formatDateTime, formatTime } from "@/lib/format";
+import { History, RefreshCw, RotateCcw, Wand2, type LucideIcon } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -82,15 +85,38 @@ export default async function ConnectionPage({
             land. */}
         <PageHeader
           back={{ href: "/integrations", label: "Apps" }}
-          title={conn.name}
+          /* THE CONNECTOR'S MARK LEADS THE TITLE, on a chip of its own colour —
+             the same object the Apps list and the flows board put in front of a
+             connection's name, mixed from the vendor's hex rather than picked
+             (see ConnectorChip in ConnectionRow). A page whose h1 is one
+             customer-chosen string ("Sales sheet") says nothing about WHICH
+             tool it belongs to until you read the lede under it. */
+          title={
+            <span className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className="flex size-11 shrink-0 items-center justify-center rounded-card"
+                style={{ backgroundColor: `color-mix(in srgb, ${sourceStyle(conn.source).color} 14%, transparent)` }}
+              >
+                <SourceMark source={conn.source} size={26} />
+              </span>
+              <span className="min-w-0 truncate">{conn.name}</span>
+            </span>
+          }
           lede={entry?.name ?? conn.source}
           actions={
             <>
               <ConnectionStatusPill status={conn.status} />
               {conn.status === "disabled" ? (
+                /* THE ONE YELLOW ON THIS PAGE, and only on this branch. A
+                   disconnected connection is a page with exactly one act on it
+                   — turn it back on — which is the sheet's definition of the
+                   hero. An active connection has no single act (sync, preview,
+                   replay, disconnect all sit at the same level), so it gets no
+                   yellow at all: the scarcity is the meaning. */
                 <form action={reconnectAction}>
                   <input type="hidden" name="id" value={conn.id} />
-                  <Button type="submit" variant="secondary">
+                  <Button type="submit" variant="yellow">
                     Reconnect
                   </Button>
                 </form>
@@ -122,11 +148,16 @@ export default async function ConnectionPage({
           )
         )}
 
+        {/* THE FACT SHEET. Two columns of caps-label-over-value, on the sheet's
+            micro voice — it was 16px grey label directly above 16px black
+            value, seven times, which is a page of prose pretending to be a
+            table. Caps at 12px is what makes the label read as the QUESTION and
+            leaves the answer as the only thing with weight on the card. */}
         <Card variant="surface" className="mt-6">
-          <dl className="grid gap-4 text-base sm:grid-cols-2">
+          <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
             <div>
-              <dt className="text-muted-foreground">Data status</dt>
-              <dd className="mt-0.5">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Data status</dt>
+              <dd className="mt-1.5">
                 <SyncStatusPill status={conn.syncStatus} />
               </dd>
             </div>
@@ -174,10 +205,13 @@ export default async function ConnectionPage({
         {entry?.flowFields && entry.flowFields.length > 0 && (
           <section className="mt-8">
             <SectionHeading>Configuration</SectionHeading>
-            <p className="rounded-card border border-border bg-card p-4 text-base text-muted-foreground">
+            {/* `Card`, not a hand-rolled `rounded-card border bg-card p-4`: it
+                is the same recipe, and the one spelled in a place a future
+                elevation change can reach. */}
+            <Card variant="card" padding="compact" className="text-sm text-muted-foreground">
               This account is connected. Choose {entry.flowFields.map((f) => f.label.toLowerCase()).join(" and ")} inside each
               flow&rsquo;s <b>Get data</b> step — every flow can pull from a different one.
-            </p>
+            </Card>
           </section>
         )}
 
@@ -185,21 +219,27 @@ export default async function ConnectionPage({
         {entry?.instant && (
           <section className="mt-8">
             <SectionHeading>Inbound webhook</SectionHeading>
-            {entry.webhookSetup && <p className="mb-2 text-base text-muted-foreground">{entry.webhookSetup}</p>}
-            <CopyField label="URL" value={webhookUrl} isUrl />
-            {signingSecret && <CopyField label="Signing secret" value={signingSecret} />}
-            {/* Only the catch-hook has this question. Every other source reads a
-                documented timestamp field of its own, so there is nothing to
-                choose and nothing to be wrong about. */}
-            {conn.source === "webhook" && (
-              <EventTimePicker
-                connectionId={conn.id}
-                choice={eventTimeChoice(eventTime)}
-                note={eventTimeNote(eventTime)}
-                options={eventTime.state?.options ?? []}
-                pending={eventTime.restampRequestedAt != null}
-              />
-            )}
+            {/* AN ISLAND, like everything else with content in it. The URL, the
+                secret and the timestamp picker sat directly on the canvas — the
+                one section of this page painted on the page itself, which on
+                the off-white surface reads as a hole rather than as a panel. */}
+            <Card variant="surface" padding="compact">
+              {entry.webhookSetup && <p className="mb-3 text-sm text-muted-foreground">{entry.webhookSetup}</p>}
+              <CopyField label="URL" value={webhookUrl} isUrl />
+              {signingSecret && <CopyField label="Signing secret" value={signingSecret} />}
+              {/* Only the catch-hook has this question. Every other source reads a
+                  documented timestamp field of its own, so there is nothing to
+                  choose and nothing to be wrong about. */}
+              {conn.source === "webhook" && (
+                <EventTimePicker
+                  connectionId={conn.id}
+                  choice={eventTimeChoice(eventTime)}
+                  note={eventTimeNote(eventTime)}
+                  options={eventTime.state?.options ?? []}
+                  pending={eventTime.restampRequestedAt != null}
+                />
+              )}
+            </Card>
           </section>
         )}
 
@@ -213,17 +253,21 @@ export default async function ConnectionPage({
           <section className="mt-8">
             <div className="mb-3 flex items-center justify-between">
               <SectionHeading className="mb-0">Latest records</SectionHeading>
+              {/* THE LINK VIOLET, NOT THE FILL VIOLET. `--primary` is brand-500,
+                  which measures 4.42:1 on the off-white page — under AA, and
+                  the sheet is explicit that the 500 fills while the 700 speaks.
+                  `accent-foreground` IS that 700. */}
               <Link
                 href={`/connections/${conn.id}?preview=1`}
-                className="rounded-control text-base font-medium text-primary transition-colors hover:underline"
+                className="rounded-control text-sm font-semibold text-accent-foreground transition-colors hover:underline"
               >
                 Preview latest
               </Link>
             </div>
             {preview !== "1" && (
-              <p className="rounded-card border border-border bg-card p-4 text-base text-muted-foreground">
+              <Card variant="card" padding="compact" className="text-sm text-muted-foreground">
                 Click &ldquo;Preview latest&rdquo; to pull the most recent records from this source.
-              </p>
+              </Card>
             )}
             {previewError && (
               <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
@@ -311,45 +355,54 @@ export default async function ConnectionPage({
         {/* Data & sync controls */}
         <section className="mt-10">
           <SectionHeading>Data &amp; sync</SectionHeading>
-          <Card variant="card" padding="compact">
-            <div className="grid gap-4 sm:grid-cols-3">
-              {entry?.poll && (
-                <SyncControl
-                  action={syncNewAction}
-                  id={conn.id}
-                  label="Sync new"
-                  hint="Pull records added since the last sync. Additive — nothing is removed."
-                />
-              )}
-              {entry?.poll && (
-                <SyncControl
-                  action={fullResyncAction}
-                  id={conn.id}
-                  label="Full re-sync"
-                  hint="Safely rebuild the full dataset and drop records deleted upstream. Your data stays live during the sync."
-                />
-              )}
+          {/* EACH CONTROL IS ITS OWN TILE, not a column in one panel. Three
+              grey buttons under three paragraphs inside a single card is a
+              wall of text with submit buttons in it; four cards with a glyph
+              each is a set of THINGS you can do, which is what this section
+              is. Two per row rather than three — the page is the narrow
+              measure, and a 240px column cannot hold "Import more history"
+              on one line. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {entry?.poll && (
               <SyncControl
-                action={reprocessAction}
+                action={syncNewAction}
                 id={conn.id}
-                label="Reprocess"
-                hint="Re-run normalization from stored raw events. No provider calls."
+                icon={RefreshCw}
+                label="Sync new"
+                hint="Pull records added since the last sync. Additive — nothing is removed."
               />
-              {/* Backfill walks STREAMS (importHistoryAction iterates
-                  activeStreams), so the button belongs to stream-scoped
-                  sources only — on Close it would render and silently do
-                  nothing, since a connection-scoped source has no stream
-                  rows to deepen. */}
-              {entry?.poll && isStreamScoped(conn.source) && (
-                <SyncControl
-                  action={importHistoryAction}
-                  id={conn.id}
-                  label="Import more history"
-                  hint="Reach further back, a slice at a time, in the background. Runs below normal syncing so nothing else slows down; asking twice does nothing."
-                />
-              )}
-            </div>
-          </Card>
+            )}
+            {entry?.poll && (
+              <SyncControl
+                action={fullResyncAction}
+                id={conn.id}
+                icon={RotateCcw}
+                label="Full re-sync"
+                hint="Safely rebuild the full dataset and drop records deleted upstream. Your data stays live during the sync."
+              />
+            )}
+            <SyncControl
+              action={reprocessAction}
+              id={conn.id}
+              icon={Wand2}
+              label="Reprocess"
+              hint="Re-run normalization from stored raw events. No provider calls."
+            />
+            {/* Backfill walks STREAMS (importHistoryAction iterates
+                activeStreams), so the button belongs to stream-scoped
+                sources only — on Close it would render and silently do
+                nothing, since a connection-scoped source has no stream
+                rows to deepen. */}
+            {entry?.poll && isStreamScoped(conn.source) && (
+              <SyncControl
+                action={importHistoryAction}
+                id={conn.id}
+                icon={History}
+                label="Import more history"
+                hint="Reach further back, a slice at a time, in the background. Runs below normal syncing so nothing else slows down; asking twice does nothing."
+              />
+            )}
+          </div>
         </section>
 
         <p className="mt-8 text-tiny text-muted-foreground">
@@ -414,8 +467,12 @@ const GUARANTEE_LABEL: Record<ReturnType<typeof syncGuarantee>, string> = {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 font-medium text-foreground">{value}</dd>
+      {/* The kit's micro voice, spelled exactly as `FieldLabel` and
+          `SectionHeading` spell it — 12px, semibold, ALL CAPS, tracking opened
+          up, because caps set at the app's negative body tracking close into a
+          block. */}
+      <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="mt-1.5 text-md font-semibold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -453,21 +510,41 @@ function SyncStatusPill({ status }: { status: string }) {
 function SyncControl({
   action,
   id,
+  icon: Icon,
   label,
   hint,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   id: string;
+  /** The tile's glyph, on the kit's violet tint — the same chip EmptyState uses. */
+  icon: LucideIcon;
   label: string;
   hint: string;
 }) {
   return (
-    <form action={action} className="flex flex-col gap-2">
-      <input type="hidden" name="id" value={id} />
-      <Button type="submit" variant="secondary">
-        {label}
-      </Button>
-      <p className="text-tiny leading-relaxed text-muted-foreground">{hint}</p>
-    </form>
+    <Card variant="card" padding="compact" className="flex flex-col">
+      <form action={action} className="flex h-full flex-col">
+        <input type="hidden" name="id" value={id} />
+        <div className="flex items-center gap-2.5">
+          {/* `accent` / `accent-foreground` — the violet WASH carrying the
+              violet INK, which is the one tinted chip the kit already draws
+              (EmptyState's icon disc). The 500 fills and the 700 speaks: a
+              stroked glyph is speaking, so it takes the 700. */}
+          <span
+            aria-hidden
+            className="flex size-9 shrink-0 items-center justify-center rounded-control bg-accent text-accent-foreground"
+          >
+            <Icon size={16} strokeWidth={2} />
+          </span>
+          <p className="text-md font-semibold text-foreground">{label}</p>
+        </div>
+        {/* `flex-1` so the button sits on the floor of the tallest tile in the
+            row — a grid of cards whose buttons do not line up reads as a pile. */}
+        <p className="mt-2 flex-1 text-xs leading-relaxed text-muted-foreground">{hint}</p>
+        <Button type="submit" variant="secondary" size="sm" className="mt-4 w-full">
+          {label}
+        </Button>
+      </form>
+    </Card>
   );
 }

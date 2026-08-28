@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ChevronDown, Radio } from "lucide-react";
+import { Radio } from "lucide-react";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
 import { connections, events } from "@/db/schema";
 import { unresolvedDeadLetterCountsByConnection } from "@/lib/dead-letter";
 import { requireOrg } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
+import { Badge, StatusPill } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer, PageHeader } from "@/components/ui/page";
@@ -145,49 +146,28 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
       <PageContainer>
         <PageHeader title="Activity" />
 
-        {/* The filter island, the same object the dashboard puts its own
-            controls in — one question here rather than two, so the picker sits
-            at the left edge instead of being pushed to the right by a range
-            track that does not exist on this page. */}
+        {/* The filter island, the same object the dashboard and the flows board
+            put their own controls in — and now with the same THING inside it.
+            It was a <details> popover: one grey summary button hiding six
+            options, on a page whose entire chrome is that one control. A
+            workspace has at most a handful of connected apps, so every answer
+            fits on the bar, and a row of chips says what the filter can do
+            without being opened. Same recipe as `ui/chip.tsx` — see FilterChip
+            for why this cannot BE that component. */}
         {sources.length > 0 && (
-          <div className="mt-6 flex flex-wrap items-center gap-2 rounded-surface border border-border bg-card p-2 shadow-card">
-            {/* A <details> popover rather than a select: the source lives in the
-                URL so each option has to be a real link, and this page renders
-                on the server with no client JS to submit a form. */}
-            <details className="group/src relative">
-              <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-control border border-border bg-card px-3 py-1.5 text-small font-medium text-foreground transition-colors duration-(--duration-fast) hover:bg-muted [&::-webkit-details-marker]:hidden">
-                {source && <SourceMark source={source} />}
-                {activeSourceLabel}
-                <ChevronDown size={14} className="text-muted-foreground transition-transform group-open/src:rotate-180" />
-              </summary>
-              <div className="absolute left-0 top-full z-20 mt-1.5 min-w-52 rounded-surface border border-border bg-card p-1 shadow-surface">
-                <Link
-                  href={qs("")}
-                  className={cn(
-                    "block rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-muted",
-                    !source ? "font-semibold text-primary" : "text-foreground",
-                  )}
-                >
-                  All sources
-                </Link>
-                {/* The connector's own name, not its storage key — this row used
-                    to read "gsheets" while every other screen says "Google
-                    Sheets". */}
-                {sources.map((srcName) => (
-                  <Link
-                    key={srcName}
-                    href={qs(srcName)}
-                    className={cn(
-                      "flex items-center gap-2 rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-muted",
-                      source === srcName ? "font-semibold text-primary" : "text-foreground",
-                    )}
-                  >
-                    <SourceMark source={srcName} />
-                    {catalogEntry(srcName)?.name ?? srcName}
-                  </Link>
-                ))}
-              </div>
-            </details>
+          <div className="mt-6 flex flex-wrap items-center gap-1.5 rounded-surface border border-border bg-card p-2 shadow-card">
+            <FilterChip href={qs("")} active={!source} label="All sources" />
+            {/* The connector's own name, not its storage key — this row used to
+                read "gsheets" while every other screen says "Google Sheets". */}
+            {sources.map((srcName) => (
+              <FilterChip
+                key={srcName}
+                href={qs(srcName)}
+                active={source === srcName}
+                label={catalogEntry(srcName)?.name ?? srcName}
+                source={srcName}
+              />
+            ))}
           </div>
         )}
 
@@ -204,32 +184,42 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
              a heading sitting on the page beside a white table reads as a
              caption that lost its card. */
           <Card variant="surface" padding="none" className="mt-4 overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border px-4 py-3">
-              <span className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border bg-foreground/5 px-4 py-3">
+              {/* `text-xs` rather than the `text-micro` alias — same 12px, and
+                  the alias is the legacy spelling each surface drops as it is
+                  rebuilt. */}
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {source ? `${activeSourceLabel} · last ${FEED_ROWS}` : `Last ${FEED_ROWS} records`}
               </span>
-              <span className="text-tiny text-muted-foreground">
-                {connCount} connection{connCount === 1 ? "" : "s"} ·{" "}
-                {dlqByConnection.length > 0 ? (
-                  dlqByConnection.map((d, i) => (
-                    <span key={d.connectionId}>
-                      {i > 0 && ", "}
-                      <Link href={`/connections/${d.connectionId}`} className="text-danger-ink hover:underline">
-                        {d.count} in dead-letter on {d.name}
+              <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>
+                  {connCount} connection{connCount === 1 ? "" : "s"}
+                </span>
+                {/* A FAILURE COUNT IS A STATE, so it wears the danger trio as a
+                    pill rather than as red words inside a grey sentence — this
+                    is the one thing in this head that can need the user, and it
+                    was set at the same weight as "3 connections". Still a link,
+                    to the page that hosts the Replay button. */}
+                {dlqByConnection.length > 0
+                  ? dlqByConnection.map((d) => (
+                      <Link key={d.connectionId} href={`/connections/${d.connectionId}`} className="rounded-full">
+                        <StatusPill tone="danger" className="tnum">
+                          {d.count} in dead-letter · {d.name}
+                        </StatusPill>
                       </Link>
-                    </span>
-                  ))
-                ) : (
-                  "no failures"
-                )}
+                    ))
+                  : "· no failures"}
               </span>
             </div>
             {rows.length === 0 ? (
-              <p className="px-4 py-12 text-center text-base text-muted-foreground">
+              // THE LINK VIOLET, not the fill violet: `--primary` is brand-500,
+              // 4.42:1 on the page and under AA, and the sheet is explicit that
+              // the 500 fills while the 700 (`accent-foreground`) speaks.
+              <p className="px-4 py-12 text-center text-sm text-muted-foreground">
                 {source ? (
                   <>
                     Nothing from {activeSourceLabel} yet.{" "}
-                    <Link href={qs("")} className="font-medium text-primary hover:underline">
+                    <Link href={qs("")} className="font-semibold text-accent-foreground hover:underline">
                       Show all sources
                     </Link>
                     .
@@ -237,7 +227,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
                 ) : (
                   <>
                     No events ingested yet.{" "}
-                    <Link href="/integrations" className="font-medium text-primary hover:underline">
+                    <Link href="/integrations" className="font-semibold text-accent-foreground hover:underline">
                       Connect a source
                     </Link>
                     .
@@ -266,13 +256,26 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
                     {rows.map((e) => (
                       <TR key={e.id} static>
                         <TD>
-                          <span className="flex items-center gap-2">
-                            <SourceMark source={e.source} />
-                            <span className="truncate">{catalogEntry(e.source)?.name ?? e.source}</span>
+                          {/* The mark is the column's information — the word
+                              beside it is the caption. So the name carries the
+                              weight and the row reads by colour first, which is
+                              the only way a fifty-row feed is scannable at all. */}
+                          <span className="flex items-center gap-2.5">
+                            <SourceMark source={e.source} size={22} />
+                            <span className="truncate font-medium text-foreground">
+                              {catalogEntry(e.source)?.name ?? e.source}
+                            </span>
                           </span>
                         </TD>
-                        <TD title={e.eventType} className="text-muted-foreground">
-                          {eventTypeLabel(e.source, e.eventType)}
+                        {/* The event type is a CATEGORY, not prose, and it is
+                            drawn from a closed set — so it wears the quiet pill
+                            the kit keeps for facts, the way a select column
+                            reads in any database view. Grey text in a grey
+                            column made it indistinguishable from the subject
+                            beside it. The raw type stays in the title, because
+                            it IS what a Filter step matches on. */}
+                        <TD title={e.eventType}>
+                          <Badge>{eventTypeLabel(e.source, e.eventType)}</Badge>
                         </TD>
                         {hasSubjects && <TD className="text-muted-foreground">{e.subject ?? "—"}</TD>}
                         <TD className="whitespace-nowrap text-right text-muted-foreground">
@@ -288,5 +291,49 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
         )}
       </PageContainer>
     </AppShell>
+  );
+}
+
+/**
+ * ONE OPTION OF THE SOURCE FILTER, WORN AS A CHIP.
+ *
+ * It is `ui/chip.tsx`'s recipe — h-8, `rounded-full`, 12px semibold ALL CAPS
+ * with `tracking-wide`, violet FILL when selected — and it deliberately is not
+ * that component: `Chip` is a `<button>` in a client component, and this filter
+ * lives in the URL. Every option here has to be a real `<a>` so the page stays
+ * server-rendered, shareable and back-button-correct, which is also why the
+ * control it replaced was a hand-rolled `<details>` rather than a `<select>`.
+ *
+ * The FILL is the vibrant violet doing its one job on this sheet — marking
+ * SELECTION — and the off state hovers to the violet TINT rather than to
+ * `bg-muted`, because `--muted` and the page are the same colour and a hover
+ * you cannot see is the same as not having one.
+ */
+function FilterChip({
+  href,
+  active,
+  label,
+  source,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+  /** Present on every chip but "All sources" — the connector's own mark. */
+  source?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "true" : undefined}
+      className={cn(
+        "inline-flex h-8 shrink-0 items-center gap-2 rounded-full px-3.5 text-xs font-semibold uppercase tracking-wide transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+        active
+          ? "bg-primary text-primary-foreground hover:bg-brand-600"
+          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+      )}
+    >
+      {source && <SourceMark source={source} size={16} />}
+      {label}
+    </Link>
   );
 }

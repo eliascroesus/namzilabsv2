@@ -4,16 +4,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 /**
  * THE SHELL, HELD OPEN WHILE A PAGE STREAMS.
  *
- * Every authenticated route renders inside AppShell — dark rail on the left,
- * white canvas to its right. The root `loading.tsx` cannot know that, so a
- * navigation into one of those routes used to blank the whole viewport to
- * white and then paint the rail back: the chrome appeared to leave and return
- * for a frame, which reads as a broken page rather than a loading one.
+ * Every authenticated route renders inside AppShell — the navigation column on
+ * the left, the top bar across the rest, the canvas under it. The root
+ * `loading.tsx` cannot know that, so a navigation into one of those routes used
+ * to blank the whole viewport and then paint the chrome back: it appeared to
+ * leave and return for a frame, which reads as a broken page rather than a
+ * loading one.
  *
- * This holds the frame's shape — same wash, same 100px gutter — so only the
- * CONTENT shimmers. The rail column is deliberately empty rather than a
- * skeleton of itself: the real rail is about to occupy it, and shimmering
- * placeholders under icons that never move is noise.
+ * This holds the frame's shape — the same column, the same 64px bar, the same
+ * wash and gutter — so only the CONTENT shimmers. Both chrome bands are
+ * deliberately empty rather than skeletons of themselves: the real chrome is
+ * about to occupy them, and shimmering placeholders under a wordmark and six
+ * icons that never move is noise.
  */
 export function ShellSkeleton({
   width = "default",
@@ -46,22 +48,43 @@ export function ShellSkeleton({
     <div className="flex h-dvh bg-background">
       {/* The sidebar's own width, and it has to be EXACTLY the sidebar's width.
           Pinned against `sidebar.tsx` by tests/page-width.test.ts, which caught
-          this the moment the rail became a column. */}
-      <div className="w-[248px] shrink-0 border-r border-border bg-sidebar" />
-      {/* `overflow-y-auto`, matching AppShell's own surface — with
-          `overflow-hidden` a classic scrollbar appeared only after the swap and
-          stole width from the canvas column at the same moment. The wash and
-          the 32px notch are mirrors too: without them the skeleton is a square
-          white sheet that squares off the app's own corner for a frame. */}
-      <div className="flex-1 overflow-y-auto bg-canvas-bg">
-        {/* Not <main>: PageContainer renders the page's one main landmark. */}
-        <div
-          className={`mx-auto w-full px-5 py-6 sm:px-8 sm:py-8 lg:px-10 ${
-            width === "narrow" ? "max-w-3xl" : "max-w-6xl"
-          }`}
-        >
-          <Skeleton className="h-8 w-48" />
-          {children}
+          this the moment the rail became a column.
+
+          Its head band is a mirror too — the workspace control's 64px, with the
+          hairline under it — so the seam that runs across the whole chrome is
+          already drawn when the shimmer appears rather than arriving with the
+          route. */}
+      <div className="w-[248px] shrink-0 border-r border-border bg-sidebar">
+        <div className="h-16 border-b border-border" />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* THE TOP BAR WAS MISSING ENTIRELY, AND IT IS 64px TALL.
+            This file's whole argument is that a skeleton whose geometry
+            disagrees with the page behind it does the one thing a skeleton
+            exists to prevent — and it reserved the rail, the wash and the
+            gutter while leaving out the bar above all of them. Content
+            shimmered at the top of the canvas and then dropped 64px the moment
+            the real chrome landed, on every first load of every route.
+
+            Empty, like the rail column, for the same reason: the real bar is
+            about to occupy it, and a shimmering placeholder under a wordmark
+            that never moves is noise. */}
+        <div className="h-16 shrink-0 border-b border-border bg-background" />
+        {/* `overflow-y-auto`, matching AppShell's own surface — with
+            `overflow-hidden` a classic scrollbar appeared only after the swap
+            and stole width from the canvas column at the same moment. The wash
+            is a mirror too: without it the skeleton is a white sheet where the
+            app's working surface will be. */}
+        <div className="flex-1 overflow-y-auto bg-canvas-bg">
+          {/* Not <main>: PageContainer renders the page's one main landmark. */}
+          <div
+            className={`mx-auto w-full px-5 py-6 sm:px-8 sm:py-8 lg:px-10 ${
+              width === "narrow" ? "max-w-3xl" : "max-w-6xl"
+            }`}
+          >
+            <Skeleton className="h-8 w-48" />
+            {children}
+          </div>
         </div>
       </div>
     </div>

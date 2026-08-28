@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
 import { Popover } from "@/components/flow/controls/Popover";
-import { DropGap, TileSlot } from "./board-tile-menu";
+import { cn } from "@/lib/utils";
+import { DropGap, MENU_LABEL, MENU_ROW, MENU_SHAPE, TileSlot } from "./board-tile-menu";
 import { ACCEPTS_ATTR, AXIS_ATTR, LANE_ATTR, MENU_ATTR, SORTED_ATTR, TILE_ATTR } from "./board-drag";
 import { withGap } from "./board-layout";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
@@ -158,7 +159,19 @@ export function BoardColumn({
           reaches the header and that a coloured bar caps the column. It found
           them by `.rounded-card` and `firstElementChild` — a class shared with
           half the product, and a DOM position that any wrapper would break. */}
-      <div data-lane-tint className="overflow-hidden rounded-card" style={{ background: groupWash(g.color) }}>
+      {/* THE COLUMN DRAWS ITS OWN EDGE, IN ITS OWN COLOUR.
+          The wash is 6% over the canvas — deliberately, so a white tile on it
+          still carries the page — and 6% has no boundary: three columns in a
+          row read as one field with slightly different weather in each part of
+          it. A 1px inset ring at 14% of the same accent is what turns each one
+          into a panel, and it has to be the ACCENT rather than `--border`,
+          because a grey hairline under a coloured bar is the one line on the
+          column that belongs to nothing. */}
+      <div
+        data-lane-tint
+        className="overflow-hidden rounded-card"
+        style={{ background: groupWash(g.color), boxShadow: `inset 0 0 0 1px ${groupAccent(g.color)}24` }}
+      >
         <div data-lane-accent className="h-1 w-full" style={{ background: groupAccent(g.color) }} aria-hidden />
         {/* A ROW, NOT A CARD. A header inside a card inside a column is three
             boxes drawn for one label, and the column's tiles are already cards.
@@ -204,7 +217,7 @@ export function BoardColumn({
                on white, which is the rule for a 4px mark and nowhere near enough
                for 13px text. See groupInk. */
             <span
-              className="flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-2 pr-2.5"
+              className="flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-2 pr-2"
               style={{ background: groupBadge(g.color) }}
             >
               <span className="size-2 shrink-0 rounded-full" style={{ background: groupAccent(g.color) }} aria-hidden />
@@ -226,23 +239,37 @@ export function BoardColumn({
                   {g.name}
                 </h3>
               )}
+              {/* THE COUNT RIDES INSIDE THE BADGE, which is where the `Chip`
+                  primitive already puts its own. It used to sit outside as a
+                  loose grey numeral, so the header was a coloured pill, then a
+                  number belonging to nothing, then the kebab — three objects for
+                  one label. Tinted from the group's ink at 60% so it reads as
+                  the name's quieter half rather than as a second fact.
+                  Computed in JS from rows already in hand — never a count(*)
+                  per group, which would multiply the board's cost by its column
+                  count on every twelve-second poll. */}
+              <span
+                className="tnum shrink-0 pl-0.5 text-tiny font-semibold opacity-60"
+                style={{ color: groupInk(g.color) }}
+              >
+                {lane.tiles.length}
+              </span>
             </span>
           )}
 
-          {/* Computed in JS from rows already in hand — never a count(*) per
-              group, which would multiply the board's cost by its column count on
-              every twelve-second poll. */}
-          <span className="tnum shrink-0 text-tiny text-muted-foreground">{lane.tiles.length}</span>
           <span className="flex-1" />
 
           {/* A SORTED COLUMN SAYS SO.
               Without this, one column takes a dropped metric wherever you aim it
               and its neighbour always files it somewhere else, with nothing on
               screen to say why — which reads as a bug in the board rather than as
-              a setting on the group. It was reported as exactly that. */}
+              a setting on the group. It was reported as exactly that.
+              It is set in the kit's micro VOICE — all caps, tracked out. In
+              sentence case it read as a word somebody had shrunk; capitalised
+              it reads as a setting, which is what it is. */}
           {sort && (
             <span
-              className="flex shrink-0 items-center gap-1 text-micro font-medium text-muted-foreground"
+              className="flex shrink-0 items-center gap-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground"
               title={`Sorted by ${sort.label} — ${sort.blurb}. A metric dropped here is placed by the sort; switch to Manual to place it by hand.`}
             >
               <ArrowUpDown size={11} />
@@ -292,7 +319,11 @@ export function BoardColumn({
                 {/* THE COLOURS, as a grid of the thing being chosen. A list of
                     names would be twelve rows to say what twelve swatches say
                     at a glance, and two rows of six reads as a spectrum rather
-                    than as a list that happens to be coloured. */}
+                    than as a list that happens to be coloured.
+                    It gets the same eyebrow "Sort" has: an unlabelled grid over
+                    a labelled list reads as one section with a decoration on
+                    top of it rather than as two choices. */}
+                <SectionHeading className={MENU_LABEL}>Colour</SectionHeading>
                 <div className="grid grid-cols-6 gap-1 p-1">
                   {Object.keys(GROUP_ACCENT).map((key) => (
                     <Button
@@ -303,7 +334,7 @@ export function BoardColumn({
                       aria-label={key}
                       aria-pressed={g.color === key}
                       title={key}
-                      className="flex items-center justify-center"
+                      className={`${MENU_SHAPE} flex items-center justify-center`}
                     >
                       {/* A ROUNDED SQUARE, not a disc. Twelve circles in a grid
                           read as a bag of dots; squares tile, and the larger
@@ -331,7 +362,7 @@ export function BoardColumn({
 
                 {/* SectionHeading is the app's one eyebrow recipe — the same
                     small-caps label Settings uses above a group of controls. */}
-                <SectionHeading className="mb-0.5 px-2 pt-1">Sort</SectionHeading>
+                <SectionHeading className={MENU_LABEL}>Sort</SectionHeading>
                 {SORTS.map((s) => (
                   <Button
                     key={s.key}
@@ -340,7 +371,10 @@ export function BoardColumn({
                     onClick={() => act(() => onSort(g.id, s.key))}
                     aria-current={g.sortKey === s.key ? "true" : undefined}
                     title={s.blurb}
-                    className="w-full justify-start"
+                    /* The sort in force wears the menu language's active row —
+                       the violet wash carrying the violet ink — rather than
+                       relying on a 13px tick to be spotted. */
+                    className={cn(MENU_ROW, g.sortKey === s.key && "bg-accent text-accent-foreground")}
                   >
                     <span className="flex size-3.5 shrink-0 items-center justify-center">
                       {g.sortKey === s.key && <Check size={13} strokeWidth={3} />}
@@ -359,7 +393,7 @@ export function BoardColumn({
                   size="sm"
                   disabled={columnIndex === 0}
                   onClick={() => act(() => onMoveColumn(g.id, columnIndex - 1), true)}
-                  className="w-full justify-start"
+                  className={MENU_ROW}
                 >
                   <ArrowLeft />
                   Move left
@@ -373,7 +407,7 @@ export function BoardColumn({
                   // "before the neighbour to the right", so +1 steps past it and
                   // +2 skipped it to the end of the row.
                   onClick={() => act(() => onMoveColumn(g.id, columnIndex + 1), true)}
-                  className="w-full justify-start"
+                  className={MENU_ROW}
                 >
                   <ArrowRight />
                   Move right
@@ -410,7 +444,7 @@ export function BoardColumn({
                     variant="destructiveGhost"
                     size="sm"
                     onClick={() => setConfirming(true)}
-                    className="w-full justify-start"
+                    className={MENU_ROW}
                   >
                     <Trash2 />
                     Delete group
@@ -449,7 +483,8 @@ export function BoardColumn({
               sort places it. */}
           {dropping && sortedBy && (
             <p
-              className="rounded-control px-2 py-1 text-center text-micro font-semibold"
+              /* Micro voice, like every other small label on this board. */
+              className="rounded-control px-2 py-1 text-center text-micro font-semibold uppercase tracking-wide"
               style={{ background: groupBadge(g.color), color: groupInk(g.color) }}
             >
               Placed by {sortedBy}
