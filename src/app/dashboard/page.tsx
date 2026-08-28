@@ -8,7 +8,6 @@ import { AppShell } from "@/components/app-shell";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { PageContainer } from "@/components/ui/page";
-import { SubBar } from "@/components/top-bar";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { SourceMark } from "@/components/source-mark";
@@ -793,7 +792,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             and making a maintenance button the loudest thing on a board of
             numbers inverts the thesis this kit opens with. Scarcity is what the
             colour means; a screen with nothing to shout keeps quiet. */}
-        <SubBar className="-mx-5 -mt-6 mb-5 sm:-mx-8 sm:-mt-8 lg:-mx-10">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
           {/* THE RANGE TRACK SCROLLS RATHER THAN BREAKING THE PAGE.
               Seven pills at ~70px each is a ~500px track that cannot wrap
               (the pills are `shrink-0`, correctly — without it "Last 30 days"
@@ -914,7 +913,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               Refresh all
             </SubmitButton>
           </form>
-        </SubBar>
+        </div>
 
         {loadError && (
           <div className="mt-6 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">

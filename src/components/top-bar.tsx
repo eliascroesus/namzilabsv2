@@ -184,46 +184,16 @@ export function TopBar({ account }: { account?: { initials: string; panel: React
 }
 
 /**
- * THE SECOND BAR — what the page below is currently showing.
+ * THERE IS NO SECOND BAR ANY MORE.
  *
- * Split from the first on purpose. The top bar answers "where am I and what can
- * I make", which is true on every route; this one answers "which period, whose
- * data", which is true only where there is data to filter. Putting them in one
- * row made a board's range pills look like application chrome, and made the
- * workspace switcher look like a filter.
+ * `SubBar` lived here and carried the dashboard's period pills, source filter
+ * and Refresh all as a third full-bleed band — app bar, then filter bar, then
+ * the view-tab row, all before a single number. Miro has ONE chrome bar and
+ * puts its filters IN the content beside the view controls; three stacked
+ * bands is most of what "the navs look messy" was.
  *
- * It replaces the floating card the filters used to sit in. A bar that spans
- * the page and is separated by a hairline reads as part of the frame; the same
- * controls inside a rounded, shadowed island read as content — a widget on the
- * board rather than the thing governing it.
+ * Those controls are the BOARD's, not the app's, so they went back to the
+ * board: an ordinary toolbar row on the page, above the tabs. Deleted rather
+ * than left exported, because a bar nothing renders is a bar someone
+ * reintroduces.
  */
-export function SubBar({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <div
-      className={cn(
-        /**
-         * ONE ROW, ALWAYS. This wrapped, and the second line landed on top of
-         * the view tabs below it — the bar is pulled flush by negative margins,
-         * so anything that wraps escapes its own height and overlaps whatever
-         * the page drew next. A horizontal scroller cannot do that.
-         *
-         * h-14 rather than h-12: it carries pill controls, and the kit's pills
-         * are 32 and 40px tall, which leaves 4px of air above and below a
-         * default-size button in a 48px bar. It is also the 8px rhythm the rest
-         * of the chrome is set on.
-         *
-         * ITS PADDING IS THE PAGE'S GUTTER, RUNG FOR RUNG. The bar is pulled
-         * flush by the caller's negative margins, so a flat `px-4` stood its
-         * first pill 4px left of the heading under it on a phone and 24px left
-         * of it on a desktop — near-misses against the one vertical line the
-         * page actually has. Matching `PageContainer`'s ladder means the range
-         * pills start exactly where the title does.
-         */
-        "quiet-scroll flex h-14 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-sidebar px-5 sm:px-8 lg:px-10",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}

@@ -290,7 +290,7 @@ export function Sidebar({
                         // actual content.
                         "flex h-10 items-center gap-2.5 rounded-control px-3 text-sm font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)",
                         active
-                          ? "bg-primary font-semibold text-primary-foreground shadow-xs"
+                          ? "bg-accent font-semibold text-accent-foreground"
                           : "text-foreground hover:bg-sidebar-accent",
                       )}
                     >
