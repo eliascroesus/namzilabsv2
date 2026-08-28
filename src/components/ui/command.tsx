@@ -21,7 +21,13 @@ function Command({
     <CommandPrimitive
       data-slot="command"
       className={cn(
-        "flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground",
+        // The palette is the menu's PANEL grown to a whole surface (see
+        // dropdown-menu.tsx). It draws no border and no shadow of its own —
+        // standalone it sits inside a Popover that has both, and as
+        // `CommandDialog` it sits inside a DialogContent that has both. Two
+        // rims nested 1px apart is the "hand-drawn box" this kit already fixed
+        // once.
+        "flex h-full w-full flex-col overflow-hidden rounded-surface bg-popover text-popover-foreground",
         className
       )}
       {...props}
@@ -52,7 +58,14 @@ function CommandDialog({
         className={cn("overflow-hidden p-0", className)}
         showCloseButton={showCloseButton}
       >
-        <Command className="**:data-[slot=command-input-wrapper]:h-12 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
+        {/* THE PALETTE AT DIALOG SIZE — taller input, taller rows, bigger
+            glyphs. Only the GEOMETRY is re-stated here; the heading's caps and
+            the row's colours belong to `CommandGroup` and `CommandItem` and are
+            deliberately not repeated, because a second spelling of the same
+            rule at a different specificity is how the palette in a dialog
+            drifts from the palette in a popover. `px-3` matches the pill's
+            inset — at a 9999px radius, 8px puts the first glyph in the curve. */}
+        <Command className="**:data-[slot=command-input-wrapper]:h-12 [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-3 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
           {children}
         </Command>
       </DialogContent>
@@ -67,13 +80,20 @@ function CommandInput({
   return (
     <div
       data-slot="command-input-wrapper"
-      className="flex h-9 items-center gap-2 border-b px-3"
+      className="flex h-11 items-center gap-2 border-b border-border px-4"
     >
-      <SearchIcon className="size-4 shrink-0 opacity-50" />
+      {/* `text-muted-foreground` rather than `opacity-50`: half-strength
+          near-black is a grey nothing else in the kit uses, and it dims with
+          whatever it inherits. The token is the same glyph colour every other
+          leading icon in the product has. */}
+      <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
       <CommandPrimitive.Input
         data-slot="command-input"
+        // No radius: this input is the top edge of the panel, clipped by the
+        // panel's own `rounded-surface`. A radius here would draw a second,
+        // smaller corner inside the first.
         className={cn(
-          "flex h-10 w-full rounded-md bg-transparent py-3 text-sm placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-10 w-full bg-transparent py-3 text-sm placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
           className
         )}
         {...props}
@@ -90,7 +110,7 @@ function CommandList({
     <CommandPrimitive.List
       data-slot="command-list"
       className={cn(
-        "max-h-[300px] scroll-py-1 overflow-x-hidden overflow-y-auto",
+        "max-h-[300px] scroll-py-1.5 overflow-x-hidden overflow-y-auto",
         className
       )}
       {...props}
@@ -104,7 +124,7 @@ function CommandEmpty({
   return (
     <CommandPrimitive.Empty
       data-slot="command-empty"
-      className="py-6 text-center text-sm"
+      className="py-6 text-center text-sm text-muted-foreground"
       {...props}
     />
   )
@@ -118,7 +138,9 @@ function CommandGroup({
     <CommandPrimitive.Group
       data-slot="command-group"
       className={cn(
-        "overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground",
+        // The menu's LABEL voice, reached through cmdk's own attribute because
+        // the heading is rendered by the primitive rather than by us.
+        "overflow-hidden p-1.5 text-foreground [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-micro [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-muted-foreground",
         className
       )}
       {...props}
@@ -133,7 +155,7 @@ function CommandSeparator({
   return (
     <CommandPrimitive.Separator
       data-slot="command-separator"
-      className={cn("-mx-1 h-px bg-border", className)}
+      className={cn("-mx-1.5 h-px bg-border", className)}
       {...props}
     />
   )
@@ -147,7 +169,10 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
+        // The menu's ROW. cmdk spells the active state `data-[selected=true]`
+        // where Radix spells it `focus:` — different attribute, same violet
+        // wash, because to the user it is the same highlighted line.
+        "relative flex cursor-default items-center gap-2 rounded-control px-3 py-1.5 text-sm select-none transition-colors duration-(--duration-fast) data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
         className
       )}
       {...props}
@@ -163,7 +188,7 @@ function CommandShortcut({
     <span
       data-slot="command-shortcut"
       className={cn(
-        "ml-auto text-xs tracking-widest text-muted-foreground",
+        "ml-auto text-micro tracking-widest text-muted-foreground",
         className
       )}
       {...props}

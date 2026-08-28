@@ -61,7 +61,22 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
+          // THE SAME CARD AS `ui/modal.tsx`, down to the padding.
+          //
+          // The app has two dialogs — this one and the hand-rolled Modal that
+          // predates it — and for as long as both exist they have to be
+          // indistinguishable, or opening "Delete step" from the builder looks
+          // like a different product from opening it on the board. Modal is
+          // `rounded-surface border border-border bg-card p-5 shadow-panel`;
+          // this was `rounded-lg bg-background p-6 shadow-lg`, which is a
+          // different corner, a different fill (the PAGE colour, so the card
+          // had no edge against its own scrim) and a lighter shadow.
+          //
+          // `duration-200` is gone: globals.css retimes every `[data-state]`
+          // entrance and exit to the kit's own curves, and a hard-coded
+          // duration on the element overrides it — this dialog was the one
+          // surface in the app still opening on tw-animate-css's timing.
+          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-surface border border-border bg-card p-5 shadow-panel data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className
         )}
         {...props}
@@ -70,7 +85,13 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            // A round icon button, matching `Button variant="ghost"
+            // size="iconSm"` — which is what every other dismiss in the
+            // product is. It arrived as a bare 16px glyph at 70% opacity with
+            // no hit area of its own: a 16px target where the kit's minimum is
+            // 32, and a hover that brightened the icon rather than lighting a
+            // control.
+            className="absolute top-4 right-4 flex size-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-muted hover:text-foreground disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
             <span className="sr-only">Close</span>
@@ -125,7 +146,14 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
+      // The kit's card/modal title, spelled exactly as `ModalTitle` spells it
+      // — same size, same tracking, same colour. `leading-none` is dropped
+      // with it: a title that wraps to two lines had its descenders touching
+      // the line below.
+      className={cn(
+        "text-title font-semibold tracking-tight text-foreground",
+        className
+      )}
       {...props}
     />
   )

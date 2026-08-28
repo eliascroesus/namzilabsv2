@@ -775,7 +775,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   rangeKey={r.key}
                   activeRange={rangeKey}
                   className="inline-flex h-7 shrink-0 items-center rounded-full px-3 text-xs font-medium transition-colors duration-(--duration-fast)"
-                  activeClassName="bg-card text-foreground shadow-xs"
+                  activeClassName="bg-foreground text-background shadow-xs"
                   idleClassName="text-muted-foreground hover:text-foreground"
                 >
                   {r.label}

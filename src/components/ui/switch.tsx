@@ -50,6 +50,12 @@ export function Switch({ className, checked, size = "default", disabled, ...prop
         // the probe found `transform: none` and the hit area was still 20px.
         // Insets need no transform at all, so there is nothing to compose.
         size === "sm" && "before:absolute before:inset-x-0 before:-inset-y-0.5 before:content-['']",
+        // ON IS THE SHEET'S VIBRANT VIOLET, and it is reached through the
+        // `primary` ROLE rather than `bg-brand-500`. Two reasons: the role is
+        // what inverts with the theme, and it is the very same fill the primary
+        // Button takes — so "this is on" and "this is the action" are ONE
+        // colour in the product rather than two violets that nearly match.
+        //
         // `neutral-300`, not 200: the off track and the card border beneath it
         // were the same value, so an unchecked switch on a bordered row read as
         // a hairline with a dot on it rather than as a control in its off

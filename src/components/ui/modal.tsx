@@ -130,7 +130,18 @@ export function Modal({ onClose, size = "sm", className, children }: ModalProps)
           // which then scrolls under a modal that is supposed to have stopped
           // it. (The body is locked while open, so the visible symptom is the
           // rubber-band bounce on iOS rather than a full scroll — still wrong.)
-          "flow-pop-in max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain rounded-surface border border-border bg-card p-5 shadow-panel outline-none",
+          //
+          // `p-6`: the sheet's own inset, and one step off the 20px this had —
+          // a dialog is the most generous surface in the product because it is
+          // the only one that gets the whole screen's attention.
+          //
+          // `outline-none` is NOT a focus-ring opt-out and must stay. The card
+          // is focused programmatically on open (see the effect above) while
+          // carrying `tabindex="-1"`, which the shared rule in globals.css
+          // deliberately excludes — so the only thing this suppresses is the
+          // BROWSER's default outline drawn around a whole dialog that the user
+          // never tabbed to. Every real control inside it still rings.
+          "flow-pop-in max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain rounded-surface border border-border bg-card p-6 shadow-panel outline-none",
           SIZES[size],
           className,
         )}
@@ -141,13 +152,15 @@ export function Modal({ onClose, size = "sm", className, children }: ModalProps)
   );
 }
 
+/**
+ * The dialog's heading. Set in the INTERFACE face, not the display one: the
+ * kit gives the display face exactly three jobs (page titles, the landing
+ * hero, the tile's number), and a modal title borrowing it would make a
+ * confirm box look like the page it is covering.
+ */
 export function ModalTitle({ className, id, ...props }: React.ComponentProps<"h2">) {
   const ctx = React.useContext(TitleId);
   return (
-    <h2
-      id={id ?? ctx}
-      className={cn("text-title font-semibold tracking-tight text-foreground", className)}
-      {...props}
-    />
+    <h2 id={id ?? ctx} className={cn("text-lg font-semibold tracking-tight text-foreground", className)} {...props} />
   );
 }

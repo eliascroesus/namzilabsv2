@@ -13,13 +13,34 @@ import { cn } from "@/lib/utils";
  */
 // A TEXT FIELD KEEPS ITS OWN TREATMENT, and is the one control excluded from
 // the shared outline rule in globals.css. The reason is that a field is a place
-// you are IN rather than a thing you pressed: the border itself going
-// ultramarine plus a soft halo says "typing lands here", where a detached
-// outline ring says "this is selected". Buttons want the second, fields the
-// first. `hover:border-neutral-300` gives a field the pointer feedback every
-// other control in the kit already had.
-const FIELD =
-  "w-full rounded-control border border-input bg-card text-base text-foreground transition-colors duration-(--duration-fast) placeholder:text-muted-foreground hover:border-neutral-300 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/25 disabled:pointer-events-none disabled:opacity-50 disabled:bg-muted";
+// you are IN rather than a thing you pressed: the border itself going violet
+// plus a soft halo says "typing lands here", where a detached outline ring says
+// "this is selected". Buttons want the second, fields the first.
+// `hover:border-neutral-300` gives a field the pointer feedback every other
+// control in the kit already had.
+//
+// `aria-invalid:border-destructive` because the message under a bad field was
+// carrying the whole state on its own: the box it refers to looked exactly like
+// the four correct ones above it. The border is the second signal, not the only
+// one — FieldError is still the thing that says what is wrong.
+//
+// EVERYTHING EXCEPT THE RADIUS lives here, because the radius is the one part
+// of the recipe a multi-line box disagrees with (see Textarea). Composing off a
+// base is not the same as overriding it: `cn()` cannot resolve `rounded-card`
+// against `rounded-control` — tailwind-merge knows Tailwind's radius names, not
+// the kit's, so an override emits BOTH classes and lets stylesheet order pick
+// the winner. Verified, not assumed.
+const FIELD_BASE =
+  "w-full border border-input bg-card text-sm text-foreground transition-colors duration-(--duration-fast) placeholder:text-muted-foreground hover:border-neutral-300 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/25 aria-invalid:border-destructive disabled:pointer-events-none disabled:opacity-50 disabled:bg-muted";
+
+/**
+ * THE SHEET IS PILL-FIRST, so a single-line field is fully round — the same
+ * `rounded-control` (9999px) the button beside it takes. That is also why the
+ * padding below is px-4 where a rounded rectangle wanted px-3: a pill's corner
+ * curve reaches much further into the box, and text set tight against it reads
+ * as though it is sliding out of one end.
+ */
+const FIELD = `${FIELD_BASE} rounded-control`;
 
 /**
  * AUTOFILL IS OFF BY DEFAULT, AND SO IS SPELLCHECK.
@@ -85,11 +106,14 @@ export function Input({ className, autoComplete, spellCheck, type, ...props }: R
    * attributes above cover the extensions, which honour nothing else.
    */
   const secret = type === "password";
-  // h-9, same as the default Button — a field and its submit sit level.
+  // h-10 px-4 — the default Button's geometry exactly, because the two are
+  // almost always stacked (a field, then the submit under it) and two pills at
+  // 36 and 40 read as a mistake rather than a hierarchy. It was h-9 back when
+  // the default button was h-9 too; the button moved and this is it catching up.
   return (
     <input
       type={type}
-      className={cn(FIELD, "h-9 px-3", className)}
+      className={cn(FIELD, "h-10 px-4", className)}
       autoComplete={autoComplete ?? (secret ? "new-password" : "off")}
       spellCheck={spellCheck ?? false}
       {...(secret ? NO_AUTOFILL : {})}
@@ -98,8 +122,24 @@ export function Input({ className, autoComplete, spellCheck, type, ...props }: R
   );
 }
 
+/**
+ * THE MULTI-LINE FIELD, AND THE ONE PLACE THE PILL STOPS.
+ *
+ * `rounded-control` is 9999px, which on an 80px-tall box is not a pill but a
+ * stadium — the corner curve arcs across the first and last line of whatever
+ * was typed. The sheet draws BUTTONS, INPUTS AND MENU ROWS round, and a
+ * paragraph box is none of the three, so it takes the card radius instead.
+ * It keeps the field's px-4 so that a form of stacked fields still has one
+ * left edge down the whole column.
+ */
 export function Textarea({ className, autoComplete, ...props }: React.ComponentProps<"textarea">) {
-  return <textarea className={cn(FIELD, "min-h-20 px-3 py-2", className)} autoComplete={autoComplete ?? "off"} {...props} />;
+  return (
+    <textarea
+      className={cn(FIELD_BASE, "min-h-20 rounded-card px-4 py-2.5", className)}
+      autoComplete={autoComplete ?? "off"}
+      {...props}
+    />
+  );
 }
 
 /**
@@ -110,12 +150,16 @@ export function Textarea({ className, autoComplete, ...props }: React.ComponentP
 export function NativeSelect({ className, children, ...props }: React.ComponentProps<"select">) {
   return (
     <span className={cn("relative inline-flex w-full", className)}>
-      <select className={cn(FIELD, "h-9 appearance-none pl-3 pr-8")} {...props}>
+      {/* The chevron sits at `right-4`, mirroring the `pl-4` on the other end,
+          so the pill is inset by the same 16px on both sides. `pr-10` is that
+          inset plus the icon: without it the longest option runs underneath
+          the chevron instead of stopping short of it. */}
+      <select className={cn(FIELD, "h-10 appearance-none pl-4 pr-10")} {...props}>
         {children}
       </select>
       <ChevronDown
         size={16}
-        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+        className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground"
       />
     </span>
   );

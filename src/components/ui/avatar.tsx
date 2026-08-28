@@ -46,7 +46,13 @@ function AvatarFallback({
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"
       className={cn(
-        "flex size-full items-center justify-center rounded-full bg-muted text-sm text-muted-foreground group-data-[size=sm]/avatar:text-xs",
+        // Initials on the brand's own wash, not on grey. The fallback is what
+        // most avatars in this product actually render — almost nobody uploads
+        // a picture to an internal analytics tool — so treating it as the
+        // degraded case left the app's people looking like missing images.
+        // `accent` over `accent-foreground` is the violet pair that is safe for
+        // TEXT (6.79:1), which initials are.
+        "flex size-full items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground group-data-[size=sm]/avatar:text-xs",
         className
       )}
       {...props}

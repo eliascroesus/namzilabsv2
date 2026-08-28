@@ -43,7 +43,14 @@ function BreadcrumbLink({
   return (
     <Comp
       data-slot="breadcrumb-link"
-      className={cn("transition-colors hover:text-foreground", className)}
+      // A breadcrumb crumb is a LINK, so it hovers to the link colour — the
+      // readable violet, `accent-foreground`, which is what every other anchor
+      // in the product resolves to. It hovered to `foreground`, i.e. it went
+      // from grey to black and gave no sign it was clickable.
+      className={cn(
+        "transition-colors duration-(--duration-fast) hover:text-accent-foreground",
+        className
+      )}
       {...props}
     />
   )
@@ -56,7 +63,11 @@ function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
       role="link"
       aria-disabled="true"
       aria-current="page"
-      className={cn("font-normal text-foreground", className)}
+      // WHERE YOU ARE is the one crumb that is not a link, and the only thing
+      // distinguishing it was a colour — at `font-normal` it read as the
+      // lightest item in a row of links. Weight carries it instead, which also
+      // survives the trail being rendered in a muted container.
+      className={cn("font-semibold text-foreground", className)}
       {...props}
     />
   )

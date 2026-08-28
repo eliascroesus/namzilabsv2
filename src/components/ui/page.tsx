@@ -106,9 +106,17 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
   return (
     <header className={cn("border-b border-border pb-4", className)}>
       {back && (
+        /**
+         * A PILL, NOT A LINE OF TEXT. The sheet's shape rule is pill-first, and
+         * this was the one navigation control in the app with no box at all: a
+         * 14px string with a 14px glyph beside it, ~90px wide and 17px tall,
+         * which is under every pointer-target minimum there is. Same colour,
+         * same words, now with a hit area and a hover state — pulled left by
+         * its own padding so the words still line up with the title beneath.
+         */
         <Link
           href={back.href}
-          className="inline-flex items-center gap-1 rounded-control text-base text-muted-foreground transition-colors hover:text-foreground"
+          className="-ml-2 inline-flex h-8 items-center gap-1.5 rounded-control pl-2 pr-3 text-sm text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted hover:text-foreground"
         >
           <ArrowLeft size={14} />
           {back.label}
@@ -116,14 +124,25 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
       )}
       <div className={cn("flex flex-wrap items-start justify-between gap-x-4 gap-y-3", back && "mt-3")}>
         <div className="min-w-0">
-          {/* The display face's one in-app appearance besides the metric
-              numeral. `.font-display` carries its own tracking, so no
-              `tracking-tight` here — the two would compound. */}
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
-          {/* `max-w-2xl`: a lede is a sentence, and a sentence that runs the
-              full 1024px of the container is 140 characters a line — roughly
-              twice the measure anything is comfortably read at. */}
-          {lede && <p className="mt-1 max-w-2xl text-base text-muted-foreground">{lede}</p>}
+          {/* THE TITLE IS 24px, WHICH IS THE STEP THE KIT ALREADY NAMES FOR IT.
+              It was set at `text-xl` — 20px — while `/design` printed
+              `display-xs` beside the words "Page titles (PageHeader)", so the
+              product's one h1 and the page documenting it had drifted by a
+              step. 24 is also the size the brand sheet's own headings are cut
+              at, and it is what gives a page a head rather than a first line.
+
+              The display face's one in-app appearance besides the metric
+              numeral. `.font-display` carries its own tracking (-0.022em), so
+              no `tracking-tight` here — the two would compound. */}
+          <h1 className="font-display text-display-xs font-semibold text-foreground">{title}</h1>
+          {/* 16px under a 24px title, which is the sheet's own step down and
+              the size a lede has to be to read as a sentence rather than as a
+              caption of the heading.
+
+              `max-w-2xl`: a lede IS a sentence, and one that runs the full
+              1152px of the container is ~150 characters a line — roughly twice
+              the measure anything is comfortably read at. */}
+          {lede && <p className="mt-1.5 max-w-2xl text-md text-muted-foreground">{lede}</p>}
         </div>
         {/* `items-center` on a wrapping row put the buttons half a line below
             the title whenever the lede pushed the left column taller. They
@@ -138,11 +157,19 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
  * The section eyebrow — the app's ONE h2. It was 14px uppercase in five
  * files, 11px uppercase in two, 17px sentence case on the kit page and
  * stock 18px on the legal pages. This is the survivor.
+ *
+ * It is also the sheet's micro-label voice, spelled the same way ui/badge.tsx
+ * and the sidebar's section labels spell it: 12px, ALL CAPS, `tracking-wide`.
+ * Caps is what makes a 12px string read as a LABEL rather than as a very small
+ * sentence, and the tracking is what stops caps setting solid.
+ *
+ * `text-xs` rather than the `text-micro` alias — same 12px, and the alias is
+ * the legacy name each surface drops as it is rebuilt.
  */
 export function SectionHeading({ className, ...props }: React.ComponentProps<"h2">) {
   return (
     <h2
-      className={cn("mb-3 text-micro font-semibold uppercase tracking-wide text-muted-foreground", className)}
+      className={cn("mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground", className)}
       {...props}
     />
   );

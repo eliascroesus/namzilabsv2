@@ -183,6 +183,25 @@
   --color-brand-700: #6229f0; /* pressed, accent-foreground */
   --color-brand-800: #5318d1;
 
+  /* --- THE RATIO: WHERE EACH OF THE THREE GOES ----------------------------
+   * The sheets are black, yellow and violet, and the reason they read as a
+   * brand rather than as three colours is that each has ONE job. Written down
+   * because "use the brand colours" is not a rule anybody can apply twice the
+   * same way:
+   *
+   *   BLACK   does the work. Default buttons, the active tab, the toast, any
+   *           dark surface. It is the most common colour in the product after
+   *           the off-white it sits on.
+   *   VIOLET  marks SELECTION and identity. The active nav row, links, the
+   *           focus ring, the branded action. Never a workhorse — a screen
+   *           where three things are violet has told you nothing.
+   *   YELLOW  is the HERO, at most once per screen: the single act the screen
+   *           exists for. Its scarcity IS its meaning; a second yellow on a
+   *           page halves the value of the first.
+   *
+   * The accent four below are decoration on top of that, never state.
+   */
+
   /* --- The sheet's accent set --------------------------------------------
    * The first brand sheet draws its chips, tabs and pins in a fixed four
    * beside the black: a highlighter yellow, a signal orange, a soft pink and a
@@ -369,7 +388,14 @@
   --radius-4xl: 1.5rem; /* 24px */
 
   /* The kit's names, kept as aliases. Same pixels, so nothing reshapes. */
-  --radius-control: 9999px;
+  /* PILLS ARE FOR BUTTONS AND CHIPS, NOT FOR EVERYTHING.
+     This was `9999px` for one commit and 51 files inherited it — every text
+     field, every menu row, every small panel went capsule-shaped, which is not
+     what either sheet draws. The sheets pill BUTTONS and CHIPS; their inputs,
+     textareas, dropdown panels and cards are all rounded rectangles. Those two
+     components ask for `rounded-full` by name now, and this token goes back to
+     being the small radius everything else shares. */
+  --radius-control: var(--radius-md);
   --radius-card: var(--radius-lg);
   --radius-surface: var(--radius-2xl);
   /* 32px — the frame's own corner, where the canvas is cut into the rail's

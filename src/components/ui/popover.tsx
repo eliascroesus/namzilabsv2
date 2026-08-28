@@ -30,7 +30,14 @@ function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-md border bg-popover p-4 text-popover-foreground shadow-md data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          // The menu's PANEL (see dropdown-menu.tsx), at prose padding rather
+          // than row padding: a popover holds a paragraph, not a list, so the
+          // 6px that lets a pill row breathe would leave text against the
+          // corner. Everything else — the 16px surface radius, the real
+          // border, the one floating-surface shadow — is shared, because a
+          // popover and a menu opening from adjacent buttons must not look
+          // like two different kinds of thing.
+          "z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-surface border border-border bg-popover p-4 text-popover-foreground shadow-surface data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
           className
         )}
         {...props}
@@ -59,7 +66,10 @@ function PopoverTitle({ className, ...props }: React.ComponentProps<"h2">) {
   return (
     <div
       data-slot="popover-title"
-      className={cn("font-medium", className)}
+      // A popover's heading is a card title one step down, so it takes the
+      // kit's list-item title rather than a bare `font-medium` that inherits
+      // whatever size it lands in.
+      className={cn("text-base font-semibold text-foreground", className)}
       {...props}
     />
   )

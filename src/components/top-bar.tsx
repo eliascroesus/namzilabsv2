@@ -21,17 +21,37 @@ import { cn } from "@/lib/utils";
  * page you happen to be standing on.
  *
  * The workspace switcher is NOT here — it lives at the top of the sidebar,
- * where the column it governs starts.
+ * where the column it governs starts, and the two share this bar's height so
+ * their hairlines meet.
+ *
+ * THE BAR HOLDS ONE VIOLET, AND IT IS THE VERB.
+ *
+ * The brand sheet's three colours are DEEP BLACK, OFF-WHITE and VIBRANT VIOLET,
+ * and the violet is the one that means "press this". So the row reads black →
+ * neutral → violet from left to right: the mark is the black, "Invite members"
+ * is the secondary in card-on-hairline, and "New flow" is the only filled
+ * violet on the screen apart from whichever sidebar row you are standing on.
+ * A violet mark AND a violet button would have been two of them competing, with
+ * the one you cannot press drawn first.
  */
 export function TopBar() {
   return (
+    // `bg-background` — the sheet's OFF-WHITE — rather than the sidebar's own
+    // surface, and deliberately: the flow builder portals white, bordered
+    // islands into the slot below, and those only read as floating surfaces
+    // over a wash one step off white.
     <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
       <Link
         href="/dashboard"
-        className="flex shrink-0 items-center gap-2 rounded-control px-1 py-1 transition-opacity hover:opacity-80"
+        className="flex shrink-0 items-center gap-2.5 rounded-control py-1 pl-1 pr-2 transition-opacity duration-(--duration-fast) ease-(--ease-standard) hover:opacity-80"
         title="Namzilabs — dashboard"
       >
-        <span className="flex size-7 items-center justify-center rounded-control bg-primary text-xs font-semibold text-primary-foreground">
+        {/* DEEP BLACK, reached through the `foreground` ROLE rather than a
+            near-black fill: it inverts with the theme, and it sidesteps the kit
+            gate that bans `bg-neutral-900` as a brand fill. Round, because the
+            sheet is pill-first and a squircle mark beside pill controls is the
+            one shape in the chrome that would belong to nothing. */}
+        <span className="flex size-8 items-center justify-center rounded-control bg-foreground text-sm font-semibold text-background">
           N
         </span>
         <span className="text-md font-semibold tracking-tight text-foreground">Namzilabs</span>
@@ -57,7 +77,10 @@ export function TopBar() {
         <UserPlus />
         <span className="hidden sm:inline">Invite members</span>
       </Link>
-      <Link href="/dashboard/flows" className={cn(buttonVariants())}>
+      {/* THE ONE YELLOW ON THE SCREEN. Creating a flow is the act this
+          product exists for, so it takes the hero; everything else in this bar
+          is black or a hairline. See the ratio note in globals.css. */}
+      <Link href="/dashboard/flows" className={cn(buttonVariants({ variant: "yellow" }))}>
         <Plus />
         <span className="hidden sm:inline">New flow</span>
       </Link>
@@ -88,8 +111,13 @@ export function SubBar({ children, className }: { children: ReactNode; className
          * the view tabs below it — the bar is pulled flush by negative margins,
          * so anything that wraps escapes its own height and overlaps whatever
          * the page drew next. A horizontal scroller cannot do that.
+         *
+         * h-14 rather than h-12: it carries pill controls, and the kit's pills
+         * are 32 and 40px tall, which leaves 4px of air above and below a
+         * default-size button in a 48px bar. It is also the 8px rhythm the rest
+         * of the chrome is set on.
          */
-        "flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-background px-4",
+        "quiet-scroll flex h-14 shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-background px-4",
         className,
       )}
     >

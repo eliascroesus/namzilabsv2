@@ -43,7 +43,7 @@ const buttonVariants = cva(
   //
   // `transition-colors`, not `transition-all`: `all` animates the outline too,
   // so the focus ring grew into place a beat after the key was pressed.
-  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-control font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {

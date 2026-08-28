@@ -26,13 +26,26 @@ describe("cn keeps a colour when a custom type token follows it", () => {
     });
   }
 
-  it("the real primary button keeps its foreground when the caller sets a size", () => {
-    // Exactly what FlowToolbar does for Test flow / Review & publish.
-    const out = cn(buttonVariants({ variant: "default" }), "h-[42px] gap-2 px-[18px] text-lead");
-    expect(out).toContain("text-primary-foreground");
-    expect(out).toContain("text-lead");
-    expect(out).toContain("bg-primary");
-  });
+  /**
+   * BOTH PRIMARIES, because the kit has two and they carry different inks.
+   * `default` is the brand sheet's DEEP BLACK (`text-background`); `accent` is
+   * its VIBRANT VIOLET (`text-primary-foreground`). This test only ever named
+   * the violet one, so when black became the default it failed for a reason
+   * that had nothing to do with what it guards — which is that `cn()` must not
+   * eat a button's text COLOUR when a caller appends a text SIZE.
+   */
+  for (const [variant, fill, ink] of [
+    ["default", "bg-foreground", "text-background"],
+    ["accent", "bg-primary", "text-primary-foreground"],
+  ] as const) {
+    it(`the ${variant} button keeps its foreground when the caller sets a size`, () => {
+      // Exactly what FlowToolbar does for Test flow / Review & publish.
+      const out = cn(buttonVariants({ variant }), "h-[42px] gap-2 px-[18px] text-lead");
+      expect(out).toContain(ink);
+      expect(out).toContain("text-lead");
+      expect(out).toContain(fill);
+    });
+  }
 
   it("still lets one size win over another", () => {
     // The scale must be a conflict GROUP, not merely allow-listed: two sizes
