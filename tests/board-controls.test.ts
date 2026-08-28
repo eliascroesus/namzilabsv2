@@ -30,7 +30,7 @@ vi.mock("@/app/dashboard/board-actions", () => ({
   deleteViewAction: async () => ({ ok: true }),
 }));
 
-const { BoardControls, MetaLine, RangeLink, TileArea, ViewTab } = await import("@/app/dashboard/board-controls");
+const { BoardControls, RangeLink, TileArea, ViewTab } = await import("@/app/dashboard/board-controls");
 
 // Children go in the props bag rather than as a third argument: these
 // components declare `children` as required, and `createElement`'s overloads
@@ -75,11 +75,6 @@ describe("the tile area", () => {
     expect(html).not.toContain("aria-busy");
   });
 
-  it("keeps the board's caption visible until something is pressed", () => {
-    const html = board(createElement(MetaLine, { className: "meta", children: "6 metrics" }));
-    expect(html).toContain("6 metrics");
-    expect(html).not.toContain("opacity-0");
-  });
 });
 
 describe("a control outside the provider", () => {
@@ -148,7 +143,7 @@ describe("the view tabs", () => {
  * `picked` was one bare string shared by every control. Pressing a view tab put
  * a view id in it, the range pills compared that id against "7d" and
  * "yesterday", nothing matched, and every pill went dark until the navigation
- * settled. Meanwhile `TileArea` and `MetaLine` skeletoned and blanked for a
+ * settled. Meanwhile `TileArea` skeletoned for a
  * navigation that changes NO number — a view is the same metrics arranged
  * differently — so the board collapsed into placeholder cards and back.
  *
@@ -174,14 +169,16 @@ describe("a view switch is a re-arrangement, not a re-answer", () => {
     expect(src).toContain("setPicked(pick ?? null)");
   });
 
-  it("holds the real tiles and the caption still while only the arrangement changes", () => {
-    // Sabotage: gate these on `pending` alone — the shipped behaviour — and the
-    // board skeletons and the caption blanks for a switch that cannot change a
-    // single number on screen.
-    // The gate itself is unchanged: a view switch never reaches the skeleton
+  it("holds the real tiles still while only the arrangement changes", () => {
+    // Sabotage: gate this on `pending` alone — the shipped behaviour — and the
+    // board skeletons for a switch that cannot change a single number on
+    // screen. The gate is unchanged: a view switch never reaches the skeleton
     // branch, so the real tiles stay mounted at their real sizes.
+    //
+    // The caption this used to check with it is gone. It stated a count and a
+    // "newest number N ago" above a board where every tile already carries its
+    // own as-of line, and it was removed rather than restyled.
     expect(src).toContain("if (!pending || !answering(picked)) {");
-    expect(src).toMatch(/pending && answering\(picked\) && "opacity-0"/);
     /**
      * ...but "hold them still" was implemented as "change nothing at all", so a
      * tab press moved the pill and then sat there for a whole round trip with

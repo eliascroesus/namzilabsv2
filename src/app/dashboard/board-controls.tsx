@@ -546,23 +546,6 @@ function TileSkeleton() {
 }
 
 /**
- * The board's quiet caption — hidden while the numbers behind it are moving.
- *
- * It states how many metrics are on the board and when the newest was true;
- * both are answers to the range being replaced, so it fades out with the tiles
- * rather than sitting there being subtly wrong. `opacity-0` and not `hidden`:
- * the line keeps its height, so nothing below it moves for the half-second.
- *
- * It renders the `<p>` ITSELF rather than wrapping one — the caption is a flex
- * row of spans, and an extra element between the row and its children would
- * collapse that layout into one item.
- */
-export function MetaLine({ className, children }: { className?: string; children: ReactNode }) {
-  const { pending, picked } = useBoard();
-  return <p className={cn(className, "transition-opacity", pending && answering(picked) && "opacity-0")}>{children}</p>;
-}
-
-/**
  * IS THE NAVIGATION IN FLIGHT GOING TO CHANGE ANY NUMBER?
  *
  * The range and the source do: every tile is about to answer a different

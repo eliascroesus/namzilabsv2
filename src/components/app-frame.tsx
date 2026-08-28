@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "./sidebar";
+import { TopBar } from "./top-bar";
 
 /**
  * THE FRAME: one wash, painted once, with the canvas sitting inside it.
@@ -38,12 +39,15 @@ import { Sidebar } from "./sidebar";
  */
 export function AppFrame({
   account,
+  workspace,
   surface,
   hide,
   ownsMain = false,
   children,
 }: {
   account?: { initials: string; panel: ReactNode };
+  /** The workspace's own name — shown beside the mark in the top bar. */
+  workspace?: string;
   surface: string;
   /** Rail items (by label) this viewer shouldn't see; AppShell decides. */
   hide?: string[];
@@ -90,14 +94,21 @@ export function AppFrame({
         paddingRight: "env(safe-area-inset-right)",
       }}
     >
-      <Sidebar account={account} hide={hide} />
-      {ownsMain ? (
-        <main id="main" className={className}>
-          {children}
-        </main>
-      ) : (
-        <div className={className}>{children}</div>
-      )}
+      <Sidebar hide={hide} />
+      {/* The top bar belongs to the CONTENT column, not the viewport: the
+          sidebar runs full height beside it, exactly as it does in Miro and
+          Notion. A bar spanning both would put the workspace switcher above
+          the navigation that switching it changes. */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TopBar workspace={workspace ?? "Workspace"} account={account} />
+        {ownsMain ? (
+          <main id="main" className={className}>
+            {children}
+          </main>
+        ) : (
+          <div className={className}>{children}</div>
+        )}
+      </div>
     </div>
   );
 }

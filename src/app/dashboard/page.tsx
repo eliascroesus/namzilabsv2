@@ -5,17 +5,17 @@ import { getReadDb } from "@/db/client";
 import { connections, flows } from "@/db/schema";
 import { requireOrg, requestAccess } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
-import { buttonVariants } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
-import { PageContainer, PageHeader } from "@/components/ui/page";
+import { PageContainer } from "@/components/ui/page";
+import { SubBar } from "@/components/top-bar";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { SourceMark } from "@/components/source-mark";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
-import { BoardControls, MetaLine, RangeLink, SourceLink, TileArea, ViewTab } from "./board-controls";
+import { BoardControls, RangeLink, SourceLink, TileArea, ViewTab } from "./board-controls";
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import type { CustomTileSource } from "@/components/custom-tile";
@@ -50,7 +50,7 @@ import {
 } from "@/lib/metrics/compute";
 import { resolveRange, RANGE_OPTIONS } from "@/lib/metrics/range";
 import { catalogEntry } from "@/connectors/catalog";
-import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
+import { formatMetricValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ImportCoverage } from "@/connectors/types";
 
@@ -526,17 +526,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
 
   const activeSourceLabel = boardSource ? (catalogEntry(boardSource)?.name ?? boardSource) : "All sources";
-  /**
-   * WHEN THE BOARD ITSELF WAS LAST TRUE — the newest `computedAt` across every
-   * tile on it. Each tile already carries its own as-of line; what none of them
-   * could answer is the question a person actually asks on arrival ("is any of
-   * this from today?"), which is a fact about the BOARD and therefore has to be
-   * derived once, here, from the rows that are already in hand.
-   */
-  const boardComputedAt = flowTiles.reduce<Date | null>(
-    (newest, r) => (r.computedAt && (!newest || r.computedAt > newest) ? r.computedAt : newest),
-    null,
-  );
 
   /**
    * EVERY TILE, PLUS THE FOUR FACTS AN ARRANGEMENT IS COMPUTED FROM.
@@ -734,34 +723,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             its own as-of line, and the caption below states when the board as a
             whole was last true. A sentence that narrates the page under it is
             furniture. Same rule on every board in the product now. */}
-        <PageHeader
-          title="Dashboard"
-          actions={
-            <>
-              {/* Every tile at once. The per-tile Refresh recomputes one flow,
-                  which is the wrong unit when you have just changed something
-                  upstream and want the whole board to agree with reality. */}
-              <form action={refreshAllFlowsAction}>
-                <SubmitButton variant="secondary" pendingLabel="Refreshing…" title="Recompute every published metric now">
-                  Refresh all
-                </SubmitButton>
-              </form>
-              {/* ONE way to build a metric. The retired form builder was still
-                  advertised here as "Classic metric", and "classic" reads as
-                  "the stable one" — so a first-time user took it, produced a
-                  `metrics` row instead of a flow, and never saw the canvas.
-                  The routes stay alive so existing metrics still open and edit
-                  (their tiles link to them); they are simply no longer a door
-                  anyone walks through by accident. */}
-              {/* A Link wearing the Button's clothes: navigation, not a submit,
-                  so it stays an <a> and takes the shared classes instead. */}
-              <Link href="/dashboard/flows" className={cn(buttonVariants())}>
-                <Plus size={16} />
-                New flow
-              </Link>
-            </>
-          }
-        />
+        {/* No PageHeader here any more. The title said "Dashboard" above a
+            sidebar item that already said Dashboard, and its two actions moved
+            to the chrome that owns them: New flow to the top bar (it is true on
+            every route), Refresh all into the bar beside the range it applies
+            to. What is left is the board. */}
 
         {/* The filters and the tiles are ONE control: pressing a pill has to
             change both, and the second one has to say it is thinking. They
@@ -779,7 +745,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             `justify-between` so the range (what period) reads from the left
             edge and the source (whose data) sits at the right, with the gap
             between them saying they are two separate answers. */}
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-2 rounded-surface border border-border bg-card p-2 shadow-card">
+        <SubBar className="-mx-5 -mt-6 mb-5 justify-between sm:-mx-8 sm:-mt-8 lg:-mx-10">
           {/* THE RANGE TRACK SCROLLS RATHER THAN BREAKING THE PAGE.
               Seven pills at ~70px each is a ~500px track that cannot wrap
               (the pills are `shrink-0`, correctly — without it "Last 30 days"
@@ -859,7 +825,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               </div>
             </details>
           )}
-        </div>
+          {/* Recompute every published metric. It sits with the filters
+              because it answers the same question they do — what the board is
+              showing — and because a page action floating above a board is a
+              button with nothing to belong to. */}
+          <form action={refreshAllFlowsAction}>
+            <SubmitButton variant="secondary" size="sm" pendingLabel="Refreshing…" title="Recompute every published metric now">
+              Refresh all
+            </SubmitButton>
+          </form>
+        </SubBar>
 
         {loadError && (
           <div className="mt-6 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
@@ -868,29 +843,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </div>
         )}
 
-        {/* WHAT THE BOARD IS, IN ONE LINE. Every tile says when IT was last
-            computed; none of them could say when the board was, which is the
-            question you ask on arrival. Deliberately unboxed and quiet — it is
-            a caption for the grid below, not another card competing with it. */}
-        {hasTiles && (
-          <MetaLine className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-tiny text-muted-foreground">
-            <span className="tnum">
-              {activeKind === "custom"
-                ? `${canvasRows.length} chart${canvasRows.length === 1 ? "" : "s"}`
-                : `${tiles.length + flowTiles.length} metric${tiles.length + flowTiles.length === 1 ? "" : "s"}`}
-            </span>
-            {boardComputedAt && (
-              <>
-                <span aria-hidden>·</span>
-                <span title={formatDateTime(boardComputedAt)}>newest number {relativeTime(boardComputedAt)}</span>
-              </>
-            )}
-            {/* Still no dead-letter count here, and now for a second reason:
-                it lives on Activity, whole and per connection, as a LINK to the
-                page with the Replay button on it. A red number on a board with
-                no door is how a dashboard teaches people to stop reading it. */}
-          </MetaLine>
-        )}
 
         {/* Metric tiles: materialized flow outputs + legacy metrics. The
             checklist renders only when the empty state is REAL — behind a

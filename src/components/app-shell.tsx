@@ -113,17 +113,16 @@ export async function AppShell({
   }
 
   const initials = (userEmail ?? "?").slice(0, 2).toUpperCase();
+  // The active workspace's own name, for the top bar. Falls back rather than
+  // rendering an empty slot: a membership list can come back short.
+  const workspace = orgs.find((o) => o.id === orgId)?.name ?? "Workspace";
 
   return (
-    // The rail is fixed; only the canvas column scrolls, and it clips so its
-    // rounded left corners cut the content rather than let it run past them.
-    //
-    // `bg-canvas-bg`, not white: the app's pages are the same warm surface the
-    // builder's canvas is, and every block of content on them is a white island
-    // floating over it. See the token's own note in globals.css.
+    // The sidebar and the top bar are fixed; only the page column scrolls.
     <AppFrame
       surface="overflow-y-auto bg-canvas-bg"
       hide={hide}
+      workspace={workspace}
       account={{
         initials,
         // Rendered on the server, opened by the client rail: the light
