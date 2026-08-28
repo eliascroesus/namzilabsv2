@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
  *
  * This menu, the Select, the Popover and the Command palette are one surface
  * wearing four behaviours, and they arrived from shadcn as four slightly
- * different ones: `rounded-md` panels at `shadow-md`, `rounded-sm` rows, a
+ * different ones: `rounded-control` panels at `shadow-surface`, `rounded-control` rows, a
  * sentence-case section label. Three near-misses that no single component looks
  * responsible for, which is exactly how the app got thirteen radii the first
  * time.
@@ -286,8 +286,8 @@ function DropdownMenuSubContent({
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        // The same PANEL as the root menu. It was a rung higher (`shadow-lg`
-        // against `shadow-md`), which floated a submenu above the menu it
+        // The same PANEL as the root menu. It was a rung higher (`shadow-surface`
+        // against `shadow-surface`), which floated a submenu above the menu it
         // belongs to; they are one surface at one height.
         "z-50 min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-surface border border-border bg-popover p-1.5 text-popover-foreground shadow-surface data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
         className

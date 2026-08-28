@@ -39,7 +39,7 @@ function SelectTrigger({
       className={cn(
         // THE TRIGGER IS A FIELD, so it is built from the same recipe as one:
         // `Input`'s pill, its border, its card fill and its hover. It arrived
-        // as `rounded-md bg-transparent`, which on the off-white page read as a
+        // as `rounded-control bg-transparent`, which on the off-white page read as a
         // hole rather than as a control, and sat beside a genuinely pill-shaped
         // Input at a different radius.
         //

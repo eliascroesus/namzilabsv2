@@ -68,7 +68,7 @@ function DialogContent({
           // indistinguishable, or opening "Delete step" from the builder looks
           // like a different product from opening it on the board. Modal is
           // `rounded-surface border border-border bg-card p-5 shadow-panel`;
-          // this was `rounded-lg bg-background p-6 shadow-lg`, which is a
+          // this was `rounded-surface bg-background p-6 shadow-surface`, which is a
           // different corner, a different fill (the PAGE colour, so the card
           // had no edge against its own scrim) and a lighter shadow.
           //

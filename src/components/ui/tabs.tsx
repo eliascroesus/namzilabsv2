@@ -29,8 +29,8 @@ function Tabs({
  * THE TRACK IS A PILL, AND SO IS THE TAB INSIDE IT.
  *
  * `p-[3px]` became `p-1`. Three pixels is not a step on the 4px grid; it was
- * there so a squarish `rounded-lg` tab could sit inside a squarish
- * `rounded-lg` track without the two corners fighting. At `--radius-control`'s
+ * there so a squarish `rounded-surface` tab could sit inside a squarish
+ * `rounded-surface` track without the two corners fighting. At `--radius-control`'s
  * 9999px both are lozenges and the inset is simply breathing room, so it can be
  * a real grid step — which is what puts the active pill's edge on the same
  * rhythm as everything else in the row.

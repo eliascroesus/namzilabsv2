@@ -99,7 +99,6 @@ export function Sparkbars({
   className?: string;
 }) {
   const max = Math.max(1, ...series.map((s) => s.value));
-  const last = series.length - 1;
   return (
     // A PLOT AREA WITH A FLOOR, rather than bars growing out of nothing.
     // "Zero-anchored" is a claim this mark makes on every render and had no way
@@ -118,7 +117,7 @@ export function Sparkbars({
       className={cn("mt-3 flex items-end gap-1 rounded-t-sm border-b border-primary/25 bg-primary/5", className)}
       aria-hidden
     >
-      {series.map((s, i) => (
+      {series.map((s) => (
         <div
           key={s.bucket}
           // The bar's own value, in the metric's own format. A raw number here
@@ -137,7 +136,7 @@ export function Sparkbars({
             //
             // A one-bucket series keeps the series colour: there is no "latest"
             // to distinguish it from, and a lone black bar would imply one.
-            i === last && series.length > 1 ? "bg-foreground" : "bg-primary",
+            "bg-primary",
           )}
           style={{ height: `${Math.max((s.value / max) * 100, 6)}%` }}
         />

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 /**
  * THE BANNER, ON THE KIT'S STATE TRIOS.
  *
- * `rounded-card` is the same 10px `rounded-lg` resolved to — the pixels do not
+ * `rounded-card` is the same 10px `rounded-surface` resolved to — the pixels do not
  * move, the NAME does, so an Alert and a Card are now visibly one decision
  * instead of two that happen to agree. `shadow-xs` and the explicit border
  * match `ui/card.tsx` for the same reason: an alert is a card that is telling

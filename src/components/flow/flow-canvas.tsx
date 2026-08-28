@@ -2298,9 +2298,9 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
    * door would be the same colour wearing two inks.
    */
   const steps = [
-    { n: 1, title: "Get the records", detail: "from an app you've connected", tint: "bg-accent-orange", ink: "text-white" },
-    { n: 2, title: "Narrow them down", detail: "keep only the ones that count", tint: "bg-accent-pink", ink: "text-neutral-900" },
-    { n: 3, title: "Turn them into a number", detail: "count, total, average, compare", tint: "bg-accent-peri", ink: "text-white" },
+    { n: 1, title: "Get the records", detail: "from an app you've connected" },
+    { n: 2, title: "Narrow them down", detail: "keep only the ones that count" },
+    { n: 3, title: "Turn them into a number", detail: "count, total, average, compare" },
   ];
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
@@ -2319,11 +2319,7 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
         The shell clips it, so it takes the card's own top corners.
       */}
       <div className="pointer-events-auto w-full max-w-md overflow-hidden rounded-surface border border-border bg-card shadow-surface">
-        <div aria-hidden className="flex h-1.5">
-          {steps.map((s) => (
-            <span key={s.n} className={cn("flex-1", s.tint)} />
-          ))}
-        </div>
+        <div aria-hidden className="h-1.5 bg-primary" />
         <div className="p-8">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">New flow</p>
           {/* 24px, up from 18. It is the only heading on the screen and it was
@@ -2332,7 +2328,7 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
           <ol className="mt-6 space-y-4">
             {steps.map((s) => (
               <li key={s.n} className="flex items-start gap-3">
-                <span className={cn("mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums", s.tint, s.ink)}>
+                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold tabular-nums text-primary-foreground">
                   {s.n}
                 </span>
                 <span className="min-w-0">

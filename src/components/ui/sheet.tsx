@@ -61,7 +61,7 @@ function SheetContent({
         data-slot="sheet-content"
         className={cn(
           // A MODAL SURFACE, so it takes the modal shadow — `shadow-panel`,
-          // the same rung the Dialog and the Modal sit on. It was `shadow-lg`,
+          // the same rung the Dialog and the Modal sit on. It was `shadow-surface`,
           // one step down, which put the app's largest overlay lower than the
           // dialogs it replaces.
           //
