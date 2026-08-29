@@ -1,125 +1,56 @@
 /**
- * THE FLOW BUILDER, IN THE PROPOSED LANGUAGE.
+ * THE FLOW BUILDER, IN THE BOARD LANGUAGE.
  *
- * This screen exists to prove one claim from DESIGN.md that no dashboard can
- * make: DEPTH RUNS DOWNWARD. The canvas is not a dark panel floating on the
- * page — it is a near-black well MILLED INTO the bone paper, and the config
- * panel beside it is an ordinary white plate. Put a light plate and a dark
- * well on the same row and the elevation ladder stops being a table of tokens
- * and becomes something you can see: the page is level 0, the plate steps up
- * by getting lighter, the canvas steps down by getting darker. No shadow is
- * doing any of that work, because the system only owns one shadow and it is
- * spent on overlays.
+ * The dashboard proves the note wall. This screen proves the other half of the
+ * system: that the SAME classifying colour survives being carried onto a dark
+ * canvas, and that the chrome does not change shape when the work does.
  *
- * Three further laws are on display:
+ * Three things are on show, and nothing else:
  *
- *   · The spine is the rule. A node's 3px leading spine and a provenance
- *     segment are the same physical object in the same taxonomy hue, which is
- *     why the panel's ruled figure and the canvas read as one machine seen
- *     from two ends. Those five hues appear nowhere else on the screen —
- *     notably NOT on the edges, which are all one grey so the canvas can
- *     never become coloured spaghetti.
+ *   · THE GROUND. A dotted near-black well milled into white paper at the big
+ *     36px radius. It is the only dark surface on the screen, and the config
+ *     panel sitting beside it is an ordinary white card — light plate, dark
+ *     well, one row, no shadow doing the work.
  *
- *   · The face split holds. Every port name, row count, record id, timestamp
- *     and figure is Geist Mono; every sentence is Inter. Nothing on this
- *     screen is both.
+ *   · THE MARKS. Every step wears a filled rounded square in its family's
+ *     saturated hue — sky for a source, peach for a transform, rose for a
+ *     delivery. Those same six hues fill the note cards in the strip below at
+ *     their pastel weight, so the legend and the canvas are literally the same
+ *     palette seen at two saturations. Colour classifies; black acts, which is
+ *     why Publish and Apply are both plain near-black pills.
  *
- *   · A decline and a disagreement are different facts. The panel shows the
- *     match's variance as (−14) in the variance ochre with a hatched rule and
- *     its conflict count — never in the red reserved for a genuine decrease.
+ *   · THE CHROME. Identical to the dashboard: 260px rail, 64px bar, Flows
+ *     active in the violet wash. Violet is identity and selection and nothing
+ *     else on this page — the active nav row, and the ring around the selected
+ *     node. Yellow appears exactly once, on the brand mark.
  *
- * NODE CARD DESIGN IS OUT OF SCOPE HERE. The cards are the minimum that lets
- * the ground, the chrome and the spine be judged.
+ * NODE CARD DESIGN IS OUT OF SCOPE. The cards on the canvas are the minimum
+ * that lets the ground, the marks and the chrome be judged.
  */
+import type { CSSProperties } from "react";
 import {
-  ArrowRight,
+  ArrowLeft,
+  Bell,
+  CalendarDays,
+  GitMerge,
   LayoutDashboard,
+  Play,
   Plug,
+  Plus,
   Settings,
+  Sheet,
+  Sigma,
   Table2,
   Workflow,
 } from "lucide-react";
 
 import "../design-next.css";
 
-export const metadata = { title: "Namzilabs — Flow builder (proposed)" };
+export const metadata = { title: "Namzilabs — Flow builder" };
 
-/** The canvas is laid out on a fixed grid so the edges can be drawn exactly. */
-const NODE_W = 236;
-const NODE_H = 76;
-const CANVAS_W = 568;
-const CANVAS_H = 568;
-
-type FlowNode = {
-  id: string;
-  title: string;
-  ports: string;
-  spine: string;
-  status: string;
-  x: number;
-  y: number;
-  selected?: boolean;
-};
-
-const NODES: FlowNode[] = [
-  {
-    id: "n_calendly",
-    title: "Get data — Calendly",
-    ports: "out:events · 1,284 · 14:22",
-    spine: "var(--dn-source-calendly)",
-    status: "var(--dn-well-up)",
-    x: 32,
-    y: 40,
-  },
-  {
-    id: "n_sheets",
-    title: "Get data — Sheets",
-    ports: "out:rows · 3,006 · 14:22",
-    spine: "var(--dn-source-sheets)",
-    status: "var(--dn-well-up)",
-    x: 300,
-    y: 40,
-  },
-  {
-    id: "n_match",
-    title: "Match records",
-    ports: "in:2 · out:matched · 1,190",
-    spine: "var(--dn-source-crm)",
-    status: "var(--dn-variance)",
-    x: 166,
-    y: 176,
-    selected: true,
-  },
-  {
-    id: "n_calc",
-    title: "Calculate",
-    ports: "in:matched · out:metrics · 6",
-    spine: "var(--dn-source-webhook)",
-    status: "var(--dn-well-up)",
-    x: 166,
-    y: 312,
-  },
-  {
-    id: "n_output",
-    title: "Output",
-    ports: "in:metrics · 09:00 daily",
-    spine: "var(--dn-source-telegram)",
-    status: "var(--dn-stale)",
-    x: 166,
-    y: 448,
-  },
-];
-
-/**
- * Orthogonal connectors with an 8px knee. 1.5px, one grey, no marker, no
- * hover state and no selected state — an edge is drawn, not operated.
- */
-const EDGES = [
-  "M150 116 V138 Q150 146 158 146 H276 Q284 146 284 154 V176",
-  "M418 116 V138 Q418 146 410 146 H292 Q284 146 284 154 V176",
-  "M284 252 V312",
-  "M284 388 V448",
-];
+/* ── THE DATA ─────────────────────────────────────────────────────────────
+   Static and inline. This route is a design specimen, not a product surface,
+   and it must render identically forever. */
 
 const NAV: { label: string; icon: typeof Workflow; active?: boolean }[] = [
   { label: "Overview", icon: LayoutDashboard },
@@ -129,18 +60,114 @@ const NAV: { label: string; icon: typeof Workflow; active?: boolean }[] = [
   { label: "Settings", icon: Settings },
 ];
 
+/** The canvas is laid out on a fixed grid so the edges can be drawn exactly. */
+const NODE_W = 230;
+const NODE_H = 78;
+const CANVAS_W = 560;
+const CANVAS_H = 568;
+
+type FlowNode = {
+  id: string;
+  title: string;
+  ports: string;
+  /** A saturated mark hue. One per step family — this is the classification. */
+  mark: string;
+  icon: typeof Workflow;
+  x: number;
+  y: number;
+  selected?: boolean;
+};
+
+const NODES: FlowNode[] = [
+  {
+    id: "n_calendly",
+    title: "Calendly",
+    ports: "out: events · 1,284",
+    mark: "var(--dn-mark-sky)",
+    icon: CalendarDays,
+    x: 20,
+    y: 32,
+  },
+  {
+    id: "n_sheets",
+    title: "Google Sheets",
+    ports: "out: rows · 3,006",
+    mark: "var(--dn-mark-mint)",
+    icon: Sheet,
+    x: 310,
+    y: 32,
+  },
+  {
+    id: "n_match",
+    title: "Match records",
+    ports: "in: 2 · out: matched · 1,190",
+    mark: "var(--dn-mark-lilac)",
+    icon: GitMerge,
+    x: 165,
+    y: 190,
+    selected: true,
+  },
+  {
+    id: "n_calc",
+    title: "Calculate",
+    ports: "in: matched · out: metrics · 6",
+    mark: "var(--dn-mark-peach)",
+    icon: Sigma,
+    x: 165,
+    y: 330,
+  },
+  {
+    id: "n_digest",
+    title: "Send digest",
+    ports: "in: metrics · 09:00 daily",
+    mark: "var(--dn-mark-rose)",
+    icon: Bell,
+    x: 165,
+    y: 470,
+  },
+];
+
+/** Orthogonal connectors with an 8px knee, drawn under the cards. */
+const EDGES = [
+  "M135 110 V142 Q135 150 143 150 H272 Q280 150 280 158 V190",
+  "M425 110 V142 Q425 150 417 150 H288 Q280 150 280 158 V190",
+  "M280 268 V330",
+  "M280 408 V470",
+];
+
+const STEP_KINDS = [
+  {
+    kind: "note note-sky",
+    mark: "var(--dn-mark-sky)",
+    icon: Plug,
+    title: "Get data",
+    body: "Pulls rows out of a connected tool on a schedule and hands them on untouched. Never writes anywhere.",
+    meta: "4 in this flow",
+  },
+  {
+    kind: "note note-peach",
+    mark: "var(--dn-mark-peach)",
+    icon: Sigma,
+    title: "Transform",
+    body: "Matches, filters, joins and calculates. Every transform is pure — same rows in, same numbers out, every run.",
+    meta: "2 in this flow",
+  },
+  {
+    kind: "note note-rose",
+    mark: "var(--dn-mark-rose)",
+    icon: Bell,
+    title: "Deliver",
+    body: "Posts the finished figures to Slack, Telegram or a sheet. The only step kind allowed to leave the workspace.",
+    meta: "1 in this flow",
+  },
+];
+
+const labelStyle: CSSProperties = { display: "block", marginBottom: "var(--dn-xs)" };
+
 export default function BuilderPage() {
   return (
-    <div
-      className="dn"
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* ── TOP BAR — the mark, the workspace, two actions. Chrome is the
-          page: canvas ground, one hairline, no shadow. ─────────────────── */}
+    <div className="dn" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      {/* ── TOP BAR ─────────────────────────────────────────────────────── */}
       <header
         className="topbar"
         style={{
@@ -151,46 +178,50 @@ export default function BuilderPage() {
           padding: "0 var(--dn-lg)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--dn-xs)" }}>
-          {/* The brand mark is one of the accent's four licensed uses. */}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+          {/* The one yellow on the screen. */}
           <span
             aria-hidden="true"
             style={{
-              width: "20px",
-              height: "20px",
-              borderRadius: "var(--dn-r-sm)",
-              background: "var(--dn-accent)",
-              display: "inline-block",
+              width: "28px",
+              height: "28px",
+              borderRadius: "9px",
+              background: "var(--dn-yellow)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
-          />
-          <span className="t-subheading">Namzilabs</span>
-        </div>
+          >
+            <Workflow size={16} strokeWidth={2.25} color="var(--dn-ink)" />
+          </span>
+          <span className="t-sub">Namzilabs</span>
+        </span>
 
         <span
           aria-hidden="true"
-          style={{
-            width: "1px",
-            height: "20px",
-            background: "var(--dn-hairline-strong)",
-          }}
+          style={{ width: "1px", height: "22px", background: "var(--dn-hairline)" }}
         />
 
         <span className="t-body-sm muted">Ridgeline Partners</span>
 
         <span style={{ flex: 1 }} />
 
-        <span className="t-mono-sm subtle">saved 14:22 · v18</span>
-        <a className="btn btn-secondary" href="/design/next/builder">
+        <span className="chip chip-violet">
+          <span className="dot" style={{ background: "var(--dn-violet)" }} />
+          Draft · v18
+        </span>
+        <span className="t-mono">saved 14:22</span>
+        <a className="btn btn-secondary btn-sm" href="/design/next/builder">
+          <Play size={14} strokeWidth={2} aria-hidden="true" />
           Test run
         </a>
-        <a className="btn btn-primary" href="/design/next/builder">
+        <a className="btn btn-primary btn-sm" href="/design/next/builder">
           Publish
         </a>
       </header>
 
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        {/* ── SIDEBAR — active row is a white PLATE, the same object as a
-            card, so "where I am" reuses the vocabulary. ────────────────── */}
+        {/* ── SIDEBAR ───────────────────────────────────────────────────── */}
         <nav
           className="sidebar"
           style={{
@@ -201,54 +232,70 @@ export default function BuilderPage() {
             gap: "var(--dn-lg)",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--dn-xxs)" }}>
-            <span className="t-eyebrow" style={{ padding: "0 10px var(--dn-xxs)" }}>
+          <a
+            className="btn btn-primary"
+            href="/design/next/builder"
+            style={{ justifyContent: "center" }}
+          >
+            <Plus size={16} strokeWidth={2.25} aria-hidden="true" />
+            New flow
+          </a>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            <span className="t-label" style={{ padding: "0 12px var(--dn-xs)" }}>
               Workspace
             </span>
-            {NAV.map(({ label, icon: Icon, active }) => (
-              <span
-                key={label}
-                className={active ? "nav-row nav-row-active" : "nav-row"}
-              >
-                <Icon size={15} strokeWidth={1.5} aria-hidden="true" />
-                {label}
-              </span>
-            ))}
+            {NAV.map(({ label, icon: Icon, active }) => {
+              return (
+                <span key={label} className={active ? "nav-row nav-row-active" : "nav-row"}>
+                  <span
+                    className="nav-icon"
+                    aria-hidden="true"
+                    style={{
+                      background: active ? "var(--dn-violet)" : "var(--dn-sunken)",
+                      color: active ? "var(--dn-on-dark)" : "var(--dn-muted)",
+                    }}
+                  >
+                    <Icon size={15} strokeWidth={2} />
+                  </span>
+                  {label}
+                </span>
+              );
+            })}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--dn-xxs)" }}>
-            <span className="t-eyebrow" style={{ padding: "0 10px var(--dn-xxs)" }}>
-              Connected
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            <span className="t-label" style={{ padding: "0 12px var(--dn-xs)" }}>
+              This flow
             </span>
-            {/* No taxonomy hue on this list. The five source hues are licensed to
-                provenance segments and node spines; a dot in the rail would be a
-                third home for them, and the rail is chrome. */}
-            {[
-              { label: "Calendly", meta: "14:22" },
-              { label: "Google Sheets", meta: "14:22" },
-              { label: "CRM", meta: "14:19" },
-              { label: "Telegram", meta: "09:00" },
-            ].map((s) => (
-              <span key={s.label} className="nav-row">
-                <span style={{ flex: 1 }}>{s.label}</span>
-                <span className="t-mono-sm subtle">{s.meta}</span>
+            {NODES.map((n) => (
+              <span
+                key={n.id}
+                className={n.selected ? "nav-row nav-row-active" : "nav-row"}
+                style={{ fontSize: "14px" }}
+              >
+                <span className="dot" style={{ background: n.mark }} />
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {n.title}
+                </span>
               </span>
             ))}
           </div>
         </nav>
 
-        <main
-          style={{
-            flex: 1,
-            minWidth: 0,
-            padding: "var(--dn-lg)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--dn-md)",
-          }}
-        >
+        <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+          {/* ── TITLE ROW ───────────────────────────────────────────────── */}
           <div
             style={{
+              padding: "var(--dn-xl) var(--dn-xl) 0",
               display: "flex",
               alignItems: "flex-end",
               gap: "var(--dn-md)",
@@ -256,48 +303,49 @@ export default function BuilderPage() {
             }}
           >
             <div>
-              <span className="t-eyebrow">Flow</span>
-              <h1 className="t-title" style={{ marginTop: "var(--dn-xxs)" }}>
+              <span className="t-label">Flow</span>
+              <h1 className="t-title" style={{ marginTop: "6px" }}>
                 Speed to lead
               </h1>
             </div>
             <span style={{ flex: 1 }} />
-            <span className="badge">
+            <span className="chip">
               <span className="dot" style={{ background: "var(--dn-up)" }} />
-              running
+              Running
             </span>
-            <span className="badge">flw_8ac31d</span>
+            <span className="chip chip-outline t-mono" style={{ letterSpacing: 0 }}>
+              flw_8ac31d
+            </span>
           </div>
 
+          {/* ── THE WELL + THE PANEL ────────────────────────────────────── */}
           <div
             style={{
+              padding: "var(--dn-lg) var(--dn-xl) var(--dn-xxl)",
               display: "flex",
               gap: "var(--dn-lg)",
-              flex: 1,
-              minHeight: 0,
               alignItems: "stretch",
+              flexWrap: "wrap",
             }}
           >
-            {/* ── THE WELL — the product's only dark surface, and the whole
-                point of this screen. Recessed, radius lg, no shadow. ───── */}
             <section
               className="well"
               style={{
-                flex: 1,
+                flex: "1 1 640px",
                 minWidth: 0,
-                minHeight: "628px",
+                minHeight: "672px",
                 position: "relative",
                 overflow: "auto",
-                padding: "var(--dn-lg)",
+                padding: "var(--dn-xl) var(--dn-lg)",
               }}
             >
               <span
-                className="t-eyebrow"
+                className="t-label"
                 style={{
                   position: "absolute",
-                  top: "var(--dn-md)",
+                  top: "var(--dn-lg)",
                   left: "var(--dn-lg)",
-                  color: "var(--dn-well-ink-muted)",
+                  color: "var(--dn-dark-mono)",
                 }}
               >
                 Canvas
@@ -311,7 +359,8 @@ export default function BuilderPage() {
                   margin: "0 auto",
                 }}
               >
-                {/* Edges sit UNDER the cards, one grey, never a taxonomy hue. */}
+                {/* Edges sit UNDER the cards, in one grey — never a mark hue,
+                    or the canvas becomes coloured spaghetti. */}
                 <svg
                   aria-hidden="true"
                   width={CANVAS_W}
@@ -324,7 +373,7 @@ export default function BuilderPage() {
                       key={d}
                       d={d}
                       fill="none"
-                      stroke="var(--dn-well-edge)"
+                      stroke="var(--dn-dark-edge)"
                       strokeWidth={1.5}
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -332,67 +381,62 @@ export default function BuilderPage() {
                   ))}
                 </svg>
 
-                {NODES.map((n) => (
+                {NODES.map(({ id, title, ports, mark, icon: Icon, x, y, selected }) => (
                   <div
-                    key={n.id}
-                    className={n.selected ? "node node-selected" : "node"}
-                    style={
-                      {
-                        "--dn-spine": n.spine,
-                        position: "absolute",
-                        left: `${n.x}px`,
-                        top: `${n.y}px`,
-                        width: `${NODE_W}px`,
-                        height: `${NODE_H}px`,
-                      } as React.CSSProperties
-                    }
+                    key={id}
+                    className={selected ? "node node-selected" : "node"}
+                    style={{
+                      position: "absolute",
+                      left: `${x}px`,
+                      top: `${y}px`,
+                      width: `${NODE_W}px`,
+                      height: `${NODE_H}px`,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--dn-sm)",
+                    }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "var(--dn-xs)",
-                      }}
-                    >
+                    <span className="node-mark" aria-hidden="true" style={{ background: mark }}>
+                      <Icon size={17} strokeWidth={2.25} color="var(--dn-on-dark)" />
+                    </span>
+                    <span style={{ minWidth: 0 }}>
                       <span
-                        className="t-subheading"
+                        className="t-sub"
                         style={{
-                          flex: 1,
-                          minWidth: 0,
+                          display: "block",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {n.title}
+                        {title}
                       </span>
-                      <span className="dot" style={{ background: n.status }} />
-                    </div>
-                    <div className="t-mono-sm" style={{ marginTop: "var(--dn-xxs)" }}>
-                      {n.ports}
-                    </div>
+                      <span className="t-mono" style={{ display: "block", marginTop: "3px" }}>
+                        {ports}
+                      </span>
+                    </span>
                   </div>
                 ))}
               </div>
 
               <span
-                className="t-mono-sm"
+                className="t-mono"
                 style={{
                   position: "absolute",
-                  bottom: "var(--dn-md)",
+                  bottom: "var(--dn-lg)",
                   left: "var(--dn-lg)",
-                  color: "var(--dn-well-ink-muted)",
+                  color: "var(--dn-dark-mono)",
                 }}
               >
-                5 nodes · 4 edges · 100%
+                5 steps · 4 links · 100%
               </span>
             </section>
 
-            {/* ── CONFIG PANEL — 360px, a LIGHT plate beside a DARK well. ── */}
+            {/* ── CONFIG PANEL — a light plate against the dark well. ────── */}
             <aside
-              className="plate"
+              className="card"
               style={{
-                width: "360px",
+                width: "380px",
                 flex: "none",
                 display: "flex",
                 flexDirection: "column",
@@ -401,61 +445,58 @@ export default function BuilderPage() {
             >
               <div
                 style={{
-                  padding: "20px",
+                  padding: "var(--dn-lg)",
                   borderBottom: "1px solid var(--dn-hairline)",
                   display: "flex",
-                  alignItems: "flex-start",
-                  gap: "var(--dn-xs)",
+                  alignItems: "center",
+                  gap: "var(--dn-sm)",
                 }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span className="t-eyebrow">Step 3 of 5</span>
-                  <div className="t-heading" style={{ marginTop: "var(--dn-xxs)" }}>
-                    Match records
-                  </div>
-                  <div className="t-mono-sm subtle" style={{ marginTop: "var(--dn-xxs)" }}>
-                    n_match · crm
-                  </div>
-                </div>
-                {/* The spine hue, restated as the panel's only chroma. */}
                 <span
+                  className="node-mark"
                   aria-hidden="true"
                   style={{
-                    width: "3px",
-                    height: "44px",
-                    background: "var(--dn-source-crm)",
-                    flex: "none",
+                    background: "var(--dn-mark-lilac)",
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "12px",
                   }}
-                />
+                >
+                  <GitMerge size={20} strokeWidth={2.25} color="var(--dn-on-dark)" />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className="t-heading" style={{ display: "block" }}>
+                    Match records
+                  </span>
+                  <span className="t-mono" style={{ display: "block", marginTop: "3px" }}>
+                    n_match · step 3 of 5
+                  </span>
+                </span>
               </div>
 
               <div
                 style={{
-                  padding: "20px",
+                  padding: "var(--dn-lg)",
                   display: "flex",
                   flexDirection: "column",
-                  gap: "var(--dn-md)",
+                  gap: "var(--dn-lg)",
                   borderBottom: "1px solid var(--dn-hairline)",
                 }}
               >
-                <label style={{ display: "block" }}>
-                  <span className="t-eyebrow">Match key</span>
-                  <input
-                    className="input"
-                    style={{ marginTop: "var(--dn-xs)" }}
-                    defaultValue="attendee.email"
-                  />
+                <label>
+                  <span className="t-label" style={labelStyle}>
+                    Match key
+                  </span>
+                  <input className="input" defaultValue="attendee.email" />
                 </label>
 
-                <label style={{ display: "block" }}>
-                  <span className="t-eyebrow">Tolerance window</span>
-                  <input
-                    className="input"
-                    style={{ marginTop: "var(--dn-xs)" }}
-                    defaultValue="30 minutes"
-                  />
+                <label>
+                  <span className="t-label" style={labelStyle}>
+                    Tolerance window
+                  </span>
+                  <input className="input" defaultValue="30 minutes" />
                   <span
-                    className="t-body-sm subtle"
+                    className="t-body-sm muted"
                     style={{ display: "block", marginTop: "var(--dn-xs)" }}
                   >
                     Two records inside this window are the same booking.
@@ -463,97 +504,59 @@ export default function BuilderPage() {
                 </label>
 
                 <div>
-                  <span className="t-eyebrow">Field path</span>
-                  <div
-                    style={{
-                      marginTop: "var(--dn-xs)",
-                      background: "var(--dn-surface-sunken)",
-                      border: "1px solid var(--dn-hairline)",
-                      borderRadius: "var(--dn-r-sm)",
-                      padding: "var(--dn-xs) var(--dn-sm)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "var(--dn-xs)",
-                    }}
-                  >
-                    <span className="t-mono" style={{ color: "var(--dn-ink)" }}>
-                      events[].invitee.email
-                    </span>
-                    <ArrowRight
-                      size={13}
-                      strokeWidth={1.5}
-                      aria-hidden="true"
-                      style={{ flex: "none", color: "var(--dn-ink-subtle)" }}
-                    />
-                    <span className="t-mono" style={{ color: "var(--dn-ink)" }}>
-                      rows[].email
-                    </span>
+                  <span className="t-label" style={labelStyle}>
+                    When two rows disagree
+                  </span>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--dn-xs)" }}>
+                    <span className="chip chip-active">Keep newest</span>
+                    <span className="chip">Keep source of truth</span>
+                    <span className="chip chip-outline">Flag for review</span>
+                    <span className="chip chip-outline">Skip</span>
                   </div>
                 </div>
               </div>
 
-              {/* The rule, drawn twice: settled provenance on the left, the
-                  disagreement on the right. Same object, two states. */}
               <div
                 style={{
-                  padding: "20px",
+                  padding: "var(--dn-lg)",
                   display: "flex",
-                  gap: "var(--dn-lg)",
+                  gap: "var(--dn-xl)",
                   borderBottom: "1px solid var(--dn-hairline)",
                 }}
               >
                 <div>
-                  <span className="t-eyebrow">Matched</span>
-                  <div style={{ width: "max-content", marginTop: "var(--dn-xs)" }}>
-                    <div className="t-figure-md">1,190</div>
-                    <div className="rule">
-                      <span
-                        className="rule-seg"
-                        style={{ width: "52%", background: "var(--dn-source-calendly)" }}
-                      />
-                      <span
-                        className="rule-seg"
-                        style={{ width: "34%", background: "var(--dn-source-sheets)" }}
-                      />
-                      <span
-                        className="rule-seg"
-                        style={{ width: "14%", background: "var(--dn-source-crm)" }}
-                      />
-                    </div>
-                  </div>
+                  <span className="t-label" style={labelStyle}>
+                    Matched
+                  </span>
+                  <span className="t-figure-sm" style={{ display: "block" }}>
+                    1,190
+                  </span>
                 </div>
-
                 <div>
-                  <span className="t-eyebrow">Unmatched</span>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-end",
-                      gap: "var(--dn-xs)",
-                      marginTop: "var(--dn-xs)",
-                    }}
+                  <span className="t-label" style={labelStyle}>
+                    Unmatched
+                  </span>
+                  <span
+                    className="t-figure-sm"
+                    style={{ display: "block", color: "var(--dn-warn)" }}
                   >
-                    <div style={{ width: "max-content" }}>
-                      <div className="t-figure-md" style={{ color: "var(--dn-variance)" }}>
-                        (−14)
-                      </div>
-                      <div className="rule">
-                        <span className="rule-seg rule-variance" style={{ width: "100%" }} />
-                      </div>
-                    </div>
-                    <span
-                      className="t-mono-sm"
-                      style={{ color: "var(--dn-variance)", paddingBottom: "3px" }}
-                    >
-                      3 conflicts
-                    </span>
-                  </div>
+                    14
+                  </span>
                 </div>
+                <span style={{ flex: 1 }} />
+                <span className="spark" style={{ height: "48px" }}>
+                  <i style={{ height: "40%" }} />
+                  <i style={{ height: "55%" }} />
+                  <i style={{ height: "48%" }} />
+                  <i style={{ height: "70%" }} />
+                  <i style={{ height: "62%" }} />
+                  <i style={{ height: "88%" }} />
+                </span>
               </div>
 
               <div
                 style={{
-                  padding: "20px",
+                  padding: "var(--dn-lg)",
                   display: "flex",
                   alignItems: "center",
                   gap: "var(--dn-xs)",
@@ -566,31 +569,79 @@ export default function BuilderPage() {
                   Revert
                 </a>
                 <span style={{ flex: 1 }} />
-                <span className="t-mono-sm subtle">edited 14:20</span>
+                <span className="t-mono">14:20</span>
               </div>
             </aside>
           </div>
 
-          <p className="t-body-sm subtle" style={{ maxWidth: "72ch" }}>
-            Node card design is out of scope on this screen — the cards here are
-            the minimum that lets the ground and the chrome be judged. What is
-            being shown is the recessed well against the light plate, the 3px
-            spine carrying the source taxonomy into the canvas, and the one grey
-            every edge is drawn in.
-          </p>
+          {/* ── THE STRIP — band, three notes, one per step kind. ───────── */}
+          <section
+            className="band"
+            style={{
+              padding: "var(--dn-xxl) var(--dn-xl)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--dn-lg)",
+            }}
+          >
+            <div>
+              <span className="t-label">The vocabulary</span>
+              <h2 className="t-heading" style={{ marginTop: "6px" }}>
+                Every flow is built from three kinds of step
+              </h2>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: "var(--dn-md)",
+              }}
+            >
+              {STEP_KINDS.map(({ kind, mark, icon: Icon, title, body, meta }) => (
+                <div
+                  key={title}
+                  className={kind}
+                  style={{ display: "flex", flexDirection: "column", gap: "var(--dn-sm)" }}
+                >
+                  <span className="node-mark" aria-hidden="true" style={{ background: mark }}>
+                    <Icon size={17} strokeWidth={2.25} color="var(--dn-on-dark)" />
+                  </span>
+                  <span className="t-heading">{title}</span>
+                  <span className="t-body-sm" style={{ flex: 1 }}>
+                    {body}
+                  </span>
+                  {/* --dn-body, not ink-at-0.6: the composite measured 4.26:1
+                      on peach, sky and rose. This is 8.86:1 at worst. */}
+                  <span className="t-mono" style={{ color: "var(--dn-body)" }}>
+                    {meta}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <p className="t-body-sm muted" style={{ maxWidth: "76ch" }}>
+              Node card design is out of scope on this screen — the cards on the canvas are the
+              minimum that lets the rest be judged. What is being shown is the dotted well against
+              the white plate, the step marks carrying one hue per family from the canvas into the
+              notes above, and the chrome, which is the dashboard&rsquo;s chrome unchanged.
+            </p>
+          </section>
         </main>
       </div>
 
       <a
-        className="btn btn-secondary"
+        className="btn btn-secondary btn-sm"
         href="/design/next"
         style={{
           position: "fixed",
           left: "var(--dn-lg)",
           bottom: "var(--dn-lg)",
           zIndex: 20,
+          boxShadow: "var(--dn-lift)",
         }}
       >
+        <ArrowLeft size={14} strokeWidth={2} aria-hidden="true" />
         Back to the language
       </a>
     </div>

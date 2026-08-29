@@ -1,154 +1,163 @@
 ---
 version: alpha
-name: Namzilabs-design-system
-description: "A reconciliation instrument typeset like a printed statement: warm bone paper #f7f6f3 carrying pure-white plates, cool near-black ink #14161a, and a single scarce ledger blue #1e3f9c that is licensed to four uses and forbidden from every fill in the product. Every figure the product emits is set in Geist Mono at weight 450 — a different species from the Inter that carries every sentence — so a machine's answer and a human's prose are never confusable, and the reconciliation table aligns to its decimal column without a layout doing the work. Beneath every figure runs THE RULE: a 1px line, the width of the number, that is continuous when the sources agree, segmented by source when you need to know where the number came from, and hatched when they disagree. Depth runs downward — the flow builder is a near-black well #0d0f12 milled into the page rather than a panel floating above it — and the entire system ships exactly one shadow definition. No weight above 500 exists anywhere; the numbers are loud because they are large, tabular and alone, never because they are bold."
+name: Namzilabs-the-board
+description: Namzilabs presents itself as the place six arguing tools finally agree, through a loud, board-shaped language borrowed from the playful camp — Miro, Figma, Notion, Clay — and organised around a single object: a whole-card pastel sticky note at 28px with no border, carrying one tabular sans figure big enough to read across a room. The chromatic budget goes entirely into those fills; every primary button on every surface is near-black ({colors.primary}), which is precisely what frees six note pastels to classify metric families and their six saturated twins to mark dots, spines and sparkbars. Violet ({colors.violet}) is identity and selection only — wordmark, active nav row, focus ring, selected node — and canary yellow ({colors.yellow}) is the hero, spent at most once per screen. Sections alternate white → warm band → white → dark and never repeat a white, because two whites in a row collapse the page into a typography blog. Inter carries every human word up to weight 700; the mono is reserved for strings a machine produced. The system covers a marketing/specimen page, a metrics dashboard, a dark-canvas flow builder and a dense activity table.
 
 colors:
-  primary: "#14161a"
-  primary-pressed: "#0a0c0f"
-  primary-disabled: "#d5d1c9"
-  on-primary: "#ffffff"
-  ink: "#14161a"
-  body: "#2b2f36"
-  ink-muted: "#4d525b"
-  ink-subtle: "#686d77"
-  canvas: "#f7f6f3"
-  surface-1: "#ffffff"
-  surface-2: "#fbfaf8"
-  surface-sunken: "#f2f0ec"
-  hairline: "#e6e3dd"
-  hairline-strong: "#d5d1c9"
-  accent: "#1e3f9c"
-  accent-pressed: "#16307a"
-  accent-wash: "#eef1fa"
-  semantic-up: "#1a6b4c"
-  semantic-down: "#a02a1e"
-  semantic-variance: "#8a6414"
-  semantic-stale: "#a8a49c"
-  source-calendly: "#0d6e73"
-  source-sheets: "#31693c"
-  source-crm: "#6b3fae"
-  source-webhook: "#8f5d06"
-  source-telegram: "#ab2f63"
-  source-empty: "#d5d1c9"
-  well: "#0d0f12"
-  well-surface-1: "#15181d"
-  well-surface-2: "#1c2027"
-  well-hairline: "#23272f"
-  well-hairline-strong: "#30353e"
-  well-grid-dot: "#22262e"
-  well-edge: "#3a4049"
-  well-ink: "#f2f3f4"
-  well-ink-muted: "#9aa0a9"
-  well-accent: "#8aa0f0"
-  well-up: "#3fb98a"
-  well-down: "#f0736a"
-  chart-1: "#14161a"
-  chart-2: "#5b7a8c"
-  chart-3: "#9a6f3c"
-  chart-4: "#4f6b4a"
-  chart-5: "#8a5a6b"
-  scrim: "rgba(20,22,26,0.44)"
-  focus: "#1e3f9c"
-  selection: "rgba(30,63,156,0.10)"
+  canvas: "#ffffff"
+  band: "#f6f5f3"
+  surface: "#ffffff"
+  sunken: "#efedea"
+  hairline: "#e7e4e0"
+  hairline-strong: "#d6d2cc"
+  ink: "#1a1a1a"
+  body: "#3d3d3d"
+  muted: "#6b6b6b"
+  subtle: "#6f6f6f"
+  on-dark: "#fafafa"
+  primary: "#1a1a1a"
+  primary-hover: "#333333"
+  violet: "#7c4dff"
+  violet-ink: "#5b21e0"
+  violet-wash: "#f1ebff"
+  yellow: "#ffd94a"
+  yellow-wash: "#fff7d6"
+  yellow-chip-ink: "#7a5c00"
+  note-lilac: "#ece7ff"
+  note-mint: "#d6f2e3"
+  note-peach: "#ffe4d1"
+  note-rose: "#ffe0ec"
+  note-sky: "#ddebff"
+  note-butter: "#fff2c2"
+  mark-lilac: "#7c4dff"
+  mark-mint: "#12a06a"
+  mark-peach: "#f2761f"
+  mark-rose: "#e0417c"
+  mark-sky: "#2563eb"
+  mark-butter: "#d19c00"
+  up: "#0f7c45"
+  up-on-note: "#0d6f3e"
+  up-wash: "#dff5e9"
+  down: "#c0342a"
+  down-wash: "#ffe4e0"
+  warn: "#8a6414"
+  warn-wash: "#fdf0cf"
+  dark: "#17161c"
+  dark-2: "#211f28"
+  dark-3: "#2b2833"
+  dark-hairline: "#322e3c"
+  dark-dot: "#302c3a"
+  dark-edge: "#4a4458"
+  dark-mono: "#9b95a8"
 
 typography:
-  display-xl:
+  hero:
     fontFamily: Inter
-    fontSize: 76px
-    fontWeight: 450
+    fontSize: 68px
+    fontWeight: 700
     lineHeight: 1.02
-    letterSpacing: -2.28px
-  display-lg:
+    letterSpacing: -0.035em
+  display:
     fontFamily: Inter
-    fontSize: 56px
-    fontWeight: 450
+    fontSize: 46px
+    fontWeight: 700
     lineHeight: 1.06
-    letterSpacing: -1.68px
-  display-md:
-    fontFamily: Inter
-    fontSize: 40px
-    fontWeight: 450
-    lineHeight: 1.10
-    letterSpacing: -1.20px
+    letterSpacing: -0.032em
   title:
     fontFamily: Inter
-    fontSize: 28px
-    fontWeight: 500
-    lineHeight: 1.20
-    letterSpacing: -0.84px
+    fontSize: 30px
+    fontWeight: 650
+    lineHeight: 1.15
+    letterSpacing: -0.028em
   heading:
     fontFamily: Inter
-    fontSize: 20px
-    fontWeight: 500
-    lineHeight: 1.30
-    letterSpacing: -0.40px
-  subheading:
+    fontSize: 21px
+    fontWeight: 600
+    lineHeight: 1.28
+    letterSpacing: -0.022em
+  sub:
     fontFamily: Inter
     fontSize: 16px
-    fontWeight: 500
-    lineHeight: 1.40
-    letterSpacing: -0.16px
+    fontWeight: 600
+    lineHeight: 1.4
+    letterSpacing: -0.014em
   body:
+    fontFamily: Inter
+    fontSize: 16px
+    fontWeight: 400
+    lineHeight: 1.6
+  body-sm:
+    fontFamily: Inter
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 1.55
+  label:
+    fontFamily: Inter
+    fontSize: 12px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.02em
+    textTransform: uppercase
+  mono:
+    fontFamily: ui-monospace
+    fontSize: 12px
+    fontWeight: 500
+    lineHeight: 1.45
+    letterSpacing: 0
+  figure:
+    fontFamily: Inter
+    fontSize: 52px
+    fontWeight: 680
+    lineHeight: 1.0
+    letterSpacing: -0.04em
+    fontVariantNumeric: tabular-nums
+  figure-sm:
+    fontFamily: Inter
+    fontSize: 32px
+    fontWeight: 680
+    lineHeight: 1.05
+    letterSpacing: -0.032em
+    fontVariantNumeric: tabular-nums
+  button:
+    fontFamily: Inter
+    fontSize: 15px
+    fontWeight: 600
+    lineHeight: 1
+    letterSpacing: -0.014em
+  button-lg:
+    fontFamily: Inter
+    fontSize: 16px
+    fontWeight: 600
+    lineHeight: 1
+    letterSpacing: -0.014em
+  button-sm:
+    fontFamily: Inter
+    fontSize: 14px
+    fontWeight: 600
+    lineHeight: 1
+    letterSpacing: -0.014em
+  chip:
+    fontFamily: Inter
+    fontSize: 13px
+    fontWeight: 600
+    lineHeight: 1
+    letterSpacing: -0.006em
+  input:
     fontFamily: Inter
     fontSize: 15px
     fontWeight: 400
-    lineHeight: 1.55
-    letterSpacing: -0.09px
-  body-sm:
+    lineHeight: 1.4
+  nav-row:
     fontFamily: Inter
-    fontSize: 13px
+    fontSize: 15px
+    fontWeight: 500
+    lineHeight: 1.4
+    letterSpacing: -0.011em
+  table-cell:
+    fontFamily: Inter
+    fontSize: 15px
     fontWeight: 400
-    lineHeight: 1.50
-    letterSpacing: 0px
-  button:
-    fontFamily: Inter
-    fontSize: 14px
-    fontWeight: 500
-    lineHeight: 1.00
-    letterSpacing: -0.07px
-  eyebrow:
-    fontFamily: Geist Mono
-    fontSize: 11px
-    fontWeight: 500
-    lineHeight: 1.20
-    letterSpacing: 0.88px
-  figure-hero:
-    fontFamily: Geist Mono
-    fontSize: 56px
-    fontWeight: 450
-    lineHeight: 1.00
-    letterSpacing: -1.68px
-  figure-lg:
-    fontFamily: Geist Mono
-    fontSize: 40px
-    fontWeight: 450
-    lineHeight: 1.00
-    letterSpacing: -1.20px
-  figure-md:
-    fontFamily: Geist Mono
-    fontSize: 28px
-    fontWeight: 450
-    lineHeight: 1.05
-    letterSpacing: -0.84px
-  figure-sm:
-    fontFamily: Geist Mono
-    fontSize: 18px
-    fontWeight: 450
-    lineHeight: 1.20
-    letterSpacing: -0.36px
-  mono:
-    fontFamily: Geist Mono
-    fontSize: 13px
-    fontWeight: 450
-    lineHeight: 1.45
-    letterSpacing: 0px
-  mono-sm:
-    fontFamily: Geist Mono
-    fontSize: 11px
-    fontWeight: 450
-    lineHeight: 1.40
-    letterSpacing: 0.11px
+    lineHeight: 1.5
 
 spacing:
   xxs: 4px
@@ -158,443 +167,759 @@ spacing:
   lg: 24px
   xl: 32px
   xxl: 48px
-  section: 80px
+  section: 96px
 
 rounded:
-  none: 0px
-  sm: 4px
-  md: 12px
-  lg: 20px
+  sm: 10px
+  md: 16px
+  lg: 28px
+  xl: 36px
   full: 9999px
 
 components:
   button-primary:
     backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
+    textColor: "{colors.on-dark}"
     typography: "{typography.button}"
-    rounded: "{rounded.sm}"
-    padding: 10px 16px
-  button-primary-pressed:
-    backgroundColor: "{colors.primary-pressed}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.button}"
-    rounded: "{rounded.sm}"
+    rounded: "{rounded.full}"
+    padding: "11px 20px"
+    border: "1.5px solid transparent"
+  button-primary-hover:
+    backgroundColor: "{colors.primary-hover}"
+    textColor: "{colors.on-dark}"
   button-secondary:
-    backgroundColor: "{colors.surface-1}"
+    backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
-    border: "1px solid {colors.hairline-strong}"
     typography: "{typography.button}"
-    rounded: "{rounded.sm}"
-    padding: 10px 16px
+    rounded: "{rounded.full}"
+    padding: "11px 20px"
+    border: "1.5px solid {colors.hairline-strong}"
+  button-violet:
+    backgroundColor: "{colors.violet}"
+    textColor: "#ffffff"
+    typography: "{typography.button}"
+    rounded: "{rounded.full}"
+    padding: "11px 20px"
+  button-yellow:
+    backgroundColor: "{colors.yellow}"
+    textColor: "{colors.ink}"
+    typography: "{typography.button}"
+    rounded: "{rounded.full}"
+    padding: "11px 20px"
   button-ghost:
     backgroundColor: "transparent"
-    textColor: "{colors.ink-muted}"
+    textColor: "{colors.muted}"
     typography: "{typography.button}"
-    rounded: "{rounded.sm}"
-    padding: 10px 12px
-  button-destructive:
-    backgroundColor: "{colors.surface-1}"
-    textColor: "{colors.semantic-down}"
-    border: "1px solid {colors.hairline-strong}"
-    typography: "{typography.button}"
-    rounded: "{rounded.sm}"
-  metric-tile:
-    backgroundColor: "{colors.surface-1}"
-    border: "1px solid {colors.hairline}"
-    rounded: "{rounded.md}"
-    padding: 20px
-    gap: "{spacing.sm}"
-  metric-label:
-    textColor: "{colors.ink-subtle}"
-    typography: "{typography.eyebrow}"
-    textTransform: uppercase
-  metric-figure:
+    rounded: "{rounded.full}"
+    padding: "11px 20px"
+  button-lg:
+    typography: "{typography.button-lg}"
+    rounded: "{rounded.full}"
+    padding: "15px 26px"
+  button-sm:
+    typography: "{typography.button-sm}"
+    rounded: "{rounded.full}"
+    padding: "8px 15px"
+  button-disabled:
+    opacity: 0.4
+  note-card:
+    backgroundColor: "{colors.note-lilac}"
     textColor: "{colors.ink}"
-    typography: "{typography.figure-lg}"
-    fontVariantNumeric: tabular-nums
-  provenance-rule:
-    height: 2px
-    rounded: "{rounded.none}"
-    marginTop: "{spacing.xs}"
-    settledColor: "{colors.hairline-strong}"
-    varianceHatch: "{colors.ink-subtle}"
-  delta-chip:
-    backgroundColor: "transparent"
-    textColor: "{colors.ink-muted}"
-    typography: "{typography.mono-sm}"
-    rounded: "{rounded.none}"
-  card:
-    backgroundColor: "{colors.surface-1}"
-    border: "1px solid {colors.hairline}"
-    rounded: "{rounded.md}"
-    padding: "{spacing.lg}"
-  panel:
-    backgroundColor: "{colors.surface-1}"
-    border: "1px solid {colors.hairline}"
-    rounded: "{rounded.md}"
-    padding: 0px
-  input:
-    backgroundColor: "{colors.surface-1}"
-    textColor: "{colors.ink}"
-    border: "1px solid {colors.hairline-strong}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.sm}"
-    padding: 9px 12px
-  input-focus:
-    border: "1px solid {colors.focus}"
-    outline: "2px solid {colors.selection}"
-  table-header:
-    backgroundColor: "{colors.surface-2}"
-    textColor: "{colors.ink-subtle}"
-    typography: "{typography.eyebrow}"
-    rounded: "{rounded.none}"
-    borderBottom: "1px solid {colors.hairline-strong}"
-  table-cell:
-    backgroundColor: "{colors.surface-1}"
-    textColor: "{colors.body}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.none}"
-    borderBottom: "1px solid {colors.hairline}"
-    padding: 10px 16px
-  table-cell-numeric:
-    textColor: "{colors.ink}"
-    typography: "{typography.mono}"
-    textAlign: right
-    fontVariantNumeric: tabular-nums
-  badge:
-    backgroundColor: "{colors.surface-sunken}"
-    textColor: "{colors.ink-muted}"
-    typography: "{typography.mono-sm}"
-    rounded: "{rounded.sm}"
-    padding: 3px 7px
-  canvas-well:
-    backgroundColor: "{colors.well}"
-    dotColor: "{colors.well-grid-dot}"
+    typography: "{typography.figure}"
     rounded: "{rounded.lg}"
-    inset: true
+    padding: "{spacing.lg}"
+    border: "0"
+  note-card-mint:
+    backgroundColor: "{colors.note-mint}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.lg}"
+    border: "0"
+  note-card-peach:
+    backgroundColor: "{colors.note-peach}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.lg}"
+    border: "0"
+  note-card-rose:
+    backgroundColor: "{colors.note-rose}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.lg}"
+    border: "0"
+  note-card-sky:
+    backgroundColor: "{colors.note-sky}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.lg}"
+    border: "0"
+  note-card-butter:
+    backgroundColor: "{colors.note-butter}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.lg}"
+    border: "0"
+  card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.body}"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    border: "1px solid {colors.hairline}"
+    shadow: "0 1px 2px rgba(26, 26, 26, 0.04), 0 6px 16px -6px rgba(26, 26, 26, 0.10)"
+  band:
+    backgroundColor: "{colors.band}"
+    textColor: "{colors.body}"
+    padding: "{spacing.section} {spacing.xl}"
+  band-dark:
+    backgroundColor: "{colors.dark}"
+    textColor: "{colors.on-dark}"
+    padding: "{spacing.section} {spacing.xl}"
+  empty-state:
+    backgroundColor: "{colors.band}"
+    textColor: "{colors.body}"
+    rounded: "{rounded.lg}"
+    padding: "{spacing.xxl}"
+  chip:
+    backgroundColor: "{colors.sunken}"
+    textColor: "{colors.body}"
+    typography: "{typography.chip}"
+    rounded: "{rounded.full}"
+    padding: "6px 13px"
+    border: "1.5px solid transparent"
+  chip-active:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.chip}"
+    rounded: "{rounded.full}"
+    padding: "6px 13px"
+  chip-violet:
+    backgroundColor: "{colors.violet-wash}"
+    textColor: "{colors.violet-ink}"
+    typography: "{typography.chip}"
+    rounded: "{rounded.full}"
+    padding: "6px 13px"
+  chip-yellow:
+    backgroundColor: "{colors.yellow-wash}"
+    textColor: "{colors.yellow-chip-ink}"
+    typography: "{typography.chip}"
+    rounded: "{rounded.full}"
+    padding: "6px 13px"
+  chip-outline:
+    backgroundColor: "transparent"
+    textColor: "{colors.body}"
+    typography: "{typography.chip}"
+    rounded: "{rounded.full}"
+    padding: "6px 13px"
+    border: "1.5px solid {colors.hairline-strong}"
+  chip-up:
+    backgroundColor: "{colors.up-wash}"
+    textColor: "{colors.up}"
+    typography: "{typography.chip}"
+    rounded: "{rounded.full}"
+    padding: "6px 13px"
+  chip-warn:
+    backgroundColor: "{colors.warn-wash}"
+    textColor: "{colors.warn}"
+    typography: "{typography.chip}"
+    rounded: "{rounded.full}"
+    padding: "6px 13px"
+  chip-down:
+    backgroundColor: "{colors.down-wash}"
+    textColor: "{colors.down}"
+    typography: "{typography.chip}"
+    rounded: "{rounded.full}"
+    padding: "6px 13px"
+  dot:
+    backgroundColor: "{colors.mark-sky}"
+    rounded: "{rounded.full}"
+    size: 9px
+  text-input:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.input}"
+    rounded: "{rounded.sm}"
+    padding: "11px 14px"
+    border: "1.5px solid {colors.hairline-strong}"
+  text-input-focused:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    border: "1.5px solid {colors.violet}"
+    outline: "3px solid {colors.violet-wash}"
+  focus-ring:
+    outline: "3px solid {colors.violet}"
+    outlineOffset: "2px"
+  data-table:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.body}"
+    typography: "{typography.table-cell}"
+    rounded: "{rounded.md}"
+    border: "1px solid {colors.hairline}"
+  data-table-header:
+    backgroundColor: "{colors.band}"
+    textColor: "{colors.muted}"
+    typography: "{typography.label}"
+    padding: "12px 18px"
+  data-table-cell:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.body}"
+    typography: "{typography.table-cell}"
+    padding: "14px 18px"
+    border: "0 0 1px {colors.hairline} solid"
+  data-table-cell-numeric:
+    textColor: "{colors.ink}"
+    typography: "{typography.table-cell}"
+    fontWeight: 600
+    fontVariantNumeric: tabular-nums
+    textAlign: right
+  sparkbars:
+    backgroundColor: "transparent"
+    height: 40px
+    gap: 3px
+  sparkbar:
+    backgroundColor: "{colors.ink}"
+    rounded: "3px"
+    width: 7px
+    opacity: 0.18
+  sparkbar-latest:
+    backgroundColor: "{colors.ink}"
+    rounded: "3px"
+    width: 7px
+    opacity: 1
+  canvas-well:
+    backgroundColor: "{colors.dark}"
+    textColor: "{colors.on-dark}"
+    rounded: "{rounded.xl}"
+    backgroundImage: "radial-gradient({colors.dark-dot} 1.5px, transparent 1.5px)"
+    backgroundSize: "22px 22px"
   node-card:
-    backgroundColor: "{colors.well-surface-1}"
-    textColor: "{colors.well-ink}"
-    border: "1px solid {colors.well-hairline}"
+    backgroundColor: "{colors.dark-2}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.sub}"
     rounded: "{rounded.md}"
     padding: "{spacing.md}"
-    leadingSpine: 3px
-  node-edge:
-    stroke: "{colors.well-edge}"
-    strokeWidth: 1.5px
-  config-panel:
-    backgroundColor: "{colors.surface-1}"
-    border: "1px solid {colors.hairline}"
+    border: "1px solid {colors.dark-hairline}"
+  node-card-selected:
+    backgroundColor: "{colors.dark-3}"
+    textColor: "{colors.on-dark}"
     rounded: "{rounded.md}"
-    width: 360px
+    border: "1px solid {colors.violet}"
+    shadow: "0 0 0 4px rgba(124, 77, 255, 0.22)"
+  node-mark:
+    backgroundColor: "{colors.mark-sky}"
+    textColor: "{colors.on-dark}"
+    rounded: "9px"
+    size: 32px
+  node-edge:
+    strokeColor: "{colors.dark-edge}"
+    strokeWidth: "1.5px"
   sidebar:
     backgroundColor: "{colors.canvas}"
-    borderRight: "1px solid {colors.hairline}"
-    width: 248px
-    rounded: "{rounded.none}"
-  sidebar-item-active:
-    backgroundColor: "{colors.surface-1}"
-    textColor: "{colors.ink}"
-    border: "1px solid {colors.hairline}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.sm}"
-  top-bar:
+    width: 260px
+    border: "0 1px 0 0 {colors.hairline} solid"
+    padding: "{spacing.md}"
+  topbar:
     backgroundColor: "{colors.canvas}"
-    borderBottom: "1px solid {colors.hairline}"
-    height: 56px
-    rounded: "{rounded.none}"
-  dialog:
-    backgroundColor: "{colors.surface-1}"
-    rounded: "{rounded.lg}"
-    padding: "{spacing.lg}"
-    shadow: "0 24px 48px -12px rgba(20,22,26,0.18)"
-  menu:
-    backgroundColor: "{colors.surface-1}"
-    border: "1px solid {colors.hairline}"
-    rounded: "{rounded.md}"
-    padding: "{spacing.xxs}"
-    shadow: "0 24px 48px -12px rgba(20,22,26,0.18)"
-  menu-item:
+    height: 64px
+    border: "0 0 1px 0 {colors.hairline} solid"
+    padding: "0 {spacing.lg}"
+  nav-row:
+    backgroundColor: "transparent"
     textColor: "{colors.body}"
-    typography: "{typography.body-sm}"
+    typography: "{typography.nav-row}"
     rounded: "{rounded.sm}"
-    padding: 7px 10px
-  empty-state:
-    backgroundColor: "{colors.surface-2}"
-    border: "1px dashed {colors.hairline-strong}"
+    padding: "10px 12px"
+  nav-row-active:
+    backgroundColor: "{colors.violet-wash}"
+    textColor: "{colors.violet-ink}"
+    typography: "{typography.nav-row}"
+    fontWeight: 600
+    rounded: "{rounded.sm}"
+    padding: "10px 12px"
+  nav-icon:
+    backgroundColor: "{colors.note-sky}"
+    textColor: "{colors.mark-sky}"
+    rounded: "8px"
+    size: 28px
+  swatch:
+    backgroundColor: "{colors.note-lilac}"
     rounded: "{rounded.md}"
-    padding: "{spacing.xxl}"
-  toast:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.sm}"
-    padding: 12px 16px
+    height: 72px
 ---
 
 ## Overview
 
-Namzilabs answers a question six other tools disagree about: how many calls were booked, how fast leads were called, what closed. The design language exists to make that answer look like a **document rather than an opinion** — which is why the register is a printed financial statement and not a dashboard.
+Namzilabs reconciles six systems that each count the same month differently and puts the settled number on a card. The design language is built around that card. It belongs to the playful camp — Miro, Figma, Notion, Clay, Webflow — which is loud in one specific, disciplined way, and the whole system reduces to four moves.
 
-The canvas is warm bone `{colors.canvas}` #f7f6f3 and every card is pure white `{colors.surface-1}` #ffffff, so surfaces lift by going *lighter* than the page and the card-shadow question never arises. Ink is a cool near-black `{colors.ink}` #14161a at 18.11:1 on white. The primary action colour is that same near-black — not a brand hue — which keeps the entire chromatic budget available for data. One scarce blue, `{colors.accent}` #1e3f9c, is licensed to exactly four uses and appears in no fill anywhere in the product.
+**1. Colour classifies; black acts.** Every primary button on every surface is `{colors.primary}` — a near-black pill. Nothing else fills a default CTA. That single restriction is what frees the entire chromatic budget to go into *card fills*, where colour stops being decoration and starts being the mechanism by which you tell one metric family from another on a wall of thirty numbers.
 
-Two faces, both open-licensed, with no overlap in their jobs. **Inter** carries every sentence a human wrote, capped at weight 500 — there is no bold in this system. **Geist Mono** carries every string a machine produced: metric figures, deltas, targets, timestamps, record IDs, node port names and section eyebrows. The consequence is that on any screen the largest element is a monospaced figure, and a figure is never confusable with a heading.
+**2. The note card at `{rounded.lg}` (28px) is the signature.** A whole-card pastel fill, no border, one tabular sans figure. Six of them side by side are a dashboard. The radius is doing work: the gap between a 10px control and a 28px note tells you instantly whether you are looking at something you operate or something you read.
 
-Beneath every figure runs **the rule** — the system's one signature. Depth runs downward: the flow builder is a near-black well `{colors.well}` #0d0f12 milled into the page, not a panel floating above it.
+**3. Section rhythm — never two whites in a row.** Pages alternate `{colors.canvas}` → `{colors.band}` → `{colors.canvas}` → `{colors.dark}`. Two white sections touching collapses a product page into a typography blog, and that is the failure mode this rule exists to prevent.
 
-**Key Characteristics:**
-- Bone canvas #f7f6f3 with pure-white plates; elevation by brightness, not by shadow
-- Achromatic primary #14161a; ledger blue #1e3f9c forbidden from every fill
-- Every figure in Geist Mono 450, tabular by construction, right-aligned on a decimal spine
-- The rule: a 2px line under every figure that encodes settlement and provenance
-- No weight above 500 anywhere in the system
-- The flow canvas is a recessed dark well, the only dark surface in the product
-- Exactly one shadow definition, reserved for overlays
+**4. The product is its own illustration.** No stock art, no abstract gradient blobs, no icon-in-a-circle filler. Where a page needs a picture it shows a note wall, a dotted flow canvas or a real data table. The specimen page's hero is four note cards rotated a degree or two on a `{colors.band}` plate — the product, in miniature.
+
+### The three-way ratio
+
+The brand is three colours with three jobs and no overlap:
+
+| Colour | Job | Budget |
+|---|---|---|
+| **BLACK** `{colors.primary}` | Does the work. Every primary CTA, every active chip, every sparkbar at rest. | Unlimited — it is the default. |
+| **VIOLET** `{colors.violet}` | Marks identity and selection. The wordmark, the active nav row, the focus ring, the ring on a selected node, the "you are here" chip. | Two to four appearances per screen. Never a workhorse, never "primary", never "good". |
+| **YELLOW** `{colors.yellow}` | The hero. The one thing on the screen that is allowed to shout. | **At most once per screen.** Spend it twice and the system reads as a toy. |
+
+Everything else — the six note pastels and their six saturated twins — is *taxonomy*, not brand. It says which family a number belongs to, and it never says whether the number is good.
+
+**Key characteristics:**
+- Whole-card pastel note fills at 28px, no border, `{typography.figure}` inside
+- Near-black pills for every primary action; `{rounded.full}` on every button, chip, avatar and dot
+- Six note/mark pairs where the pastel is always a fill and the saturate is always a mark
+- Inter to weight 700 for anything a human wrote; mono only for strings a machine produced
+- Warm neutral ground (`{colors.band}` is a warm off-white, not a grey) with one dark surface
+- A single dotted near-black well for the flow canvas, milled into white paper at `{rounded.xl}`
+
+---
 
 ## Colors
 
-### The rule of scarcity
+> Source of truth: `src/app/design/next/design-next.css`, scoped under `.dn`. Every value below is copied from it verbatim. The scope is deliberate — `globals.css` already owns `--background` and `--primary` at `:root`, and a second system declaring those names would silently re-theme the shipping product the moment this route was opened.
 
-`{colors.accent}` #1e3f9c is permitted on exactly four things: the focus ring, an inline text link, the active-source segment of a provenance rule, and the brand mark. It is **forbidden** as a button fill, a card background, a chart series, a badge, a nav highlight, a chip, or a hover state. If a screen has more than two blue elements on it, the screen is wrong.
+### Ground
 
-### Surface ladder
+Warm, not neutral-grey. The band is a paper tint, which is what keeps a page of pastels from looking like a children's toy.
 
-| Token | Hex | Use |
+- **Canvas** ({colors.canvas}) — the page, the cards, the chrome
+- **Band** ({colors.band}) — every other section, table headers, the empty state
+- **Surface** ({colors.surface}) — card fill; identical to canvas, named separately so cards can be re-grounded without touching the page
+- **Sunken** ({colors.sunken}) — chips at rest, trays, recessed rows
+- **Hairline** ({colors.hairline}) — card and table borders, 1px
+- **Hairline Strong** ({colors.hairline-strong}) — inputs and secondary buttons, 1.5px
+
+### Ink
+
+- **Ink** ({colors.ink}) — headlines, figures, anything on a note card
+- **Body** ({colors.body}) — prose, table cells, nav rows, chip labels
+- **Muted** ({colors.muted}) — secondary prose, labels, column heads, mono strings
+- **Subtle** ({colors.subtle}) — placeholders and the quietest captions. Solved rather than picked: `#8f8f8f` measures **3.23:1** on canvas and fails AA outright; this value clears **5.02:1** on canvas and **4.61:1** on the band, so the quietest text in the system is legible on *both* grounds it ever sits on.
+- **On Dark** ({colors.on-dark}) — text on the dark band, the well, the node cards and every filled black control
+- **Dark Mono** ({colors.dark-mono}) — the mono line inside a node card, on `{colors.dark-2}`
+
+### The three that carry the brand
+
+- **Primary** ({colors.primary}) — black acts. Every primary button in the product.
+- **Primary Hover** ({colors.primary-hover}) — the only hover shift documented in the system.
+- **Violet** ({colors.violet}) — violet marks. Identity and selection.
+- **Violet Ink** ({colors.violet-ink}) — violet *as text*, which raw violet cannot be at body size. Used on `{colors.violet-wash}`.
+- **Violet Wash** ({colors.violet-wash}) — the active nav row, the identity chip.
+- **Yellow** ({colors.yellow}) — the hero, once. Chosen at this lightness specifically so it can carry ink; the neon it replaced could not.
+- **Yellow Wash** ({colors.yellow-wash}) — the tag chip ground.
+- **Yellow Chip Ink** ({colors.yellow-chip-ink}) — the only foreground allowed on `{colors.yellow-wash}`.
+
+### The sticky-note family
+
+Six pastels. **These are fills.** They fill a whole card, a nav icon tile, a connection avatar, an empty-state glyph plate. They are never a stroke, never a text colour, never a button.
+
+| Family | Note (fill) | Mark (dot / spine / series) |
 |---|---|---|
-| `{colors.canvas}` | #f7f6f3 | The page. Also the sidebar and top bar — chrome is the page, not an object on it. |
-| `{colors.surface-1}` | #ffffff | Every card, tile, panel, menu, dialog, table body. |
-| `{colors.surface-2}` | #fbfaf8 | Table headers, empty-state grounds, the one-step-back surface. |
-| `{colors.surface-sunken}` | #f2f0ec | Badges, recessed trays, code wells on light. |
-| `{colors.hairline}` | #e6e3dd | Every card and table border. |
-| `{colors.hairline-strong}` | #d5d1c9 | Input borders, the settled rule, header underlines. |
+| Lilac | {colors.note-lilac} | {colors.mark-lilac} |
+| Mint | {colors.note-mint} | {colors.mark-mint} |
+| Peach | {colors.note-peach} | {colors.mark-peach} |
+| Rose | {colors.note-rose} | {colors.mark-rose} |
+| Sky | {colors.note-sky} | {colors.mark-sky} |
+| Butter | {colors.note-butter} | {colors.mark-butter} |
 
-Hairlines are set one step from the surface ladder deliberately, so a border reads as an elevation step rather than as drawn ink.
+**The marks are the saturated twins, and they are dots, spines and series — never fills, never buttons, never body text.** A mark is a 9px dot next to a source name, a 7px rounded sparkbar, a 32px `node-mark` square on the dark canvas, a chart series, the icon glyph inside a pastel tile. The moment a mark colour fills a card, the card stops being a note and starts being an alert; the moment a note pastel fills a button, the button stops looking pressable. The two roles do not swap.
 
-### Text
+One hue belongs to one family for the life of the account. On the dashboard, calls-booked is lilac in the tile, lilac in its sparkbars and lilac on its source dot. On the activity screen, Calendly is sky in the row dot, the connection tile and the nav icon. That consistency is what lets a person read the shape of a day without reading a word of it — and it is the reason hue must never encode severity.
 
-| Token | Hex | On white | Use |
-|---|---|---|---|
-| `{colors.ink}` | #14161a | 18.11:1 | Figures, headings, primary text. |
-| `{colors.body}` | #2b2f36 | 13.44:1 | Body prose, table cells. |
-| `{colors.ink-muted}` | #4d525b | 7.85:1 | Secondary text, ghost buttons, deltas. |
-| `{colors.ink-subtle}` | #686d77 | 5.19:1 | Eyebrows, captions, placeholders. 4.81:1 on canvas. |
+### State
 
-Nothing carrying text falls below 4.5:1 in either theme.
+State colours sit outside the taxonomy entirely and are used **only on words and their own washes** — never to repaint a note card.
 
-### Semantic
+- **Up** ({colors.up}) / **Up Wash** ({colors.up-wash}) — the rejected value measured 4.35:1 on its own wash, just under AA; darkened to clear it at **4.61:1**
+- **Up On Note** ({colors.up-on-note}) — the same green solved against a *second* ground. `{colors.up}` was only ever checked against its wash and measures 4.29–4.43:1 on five of the six note pastels, which is where the dashboard delta actually sits. This clears all six at **≥5.10:1** (rose is the worst) and 6.25:1 on canvas. Use it for an up-delta on a pastel; use `{colors.up}` everywhere else. `{colors.down}` needs no twin — 4.55:1 at worst, on rose.
+- **Down** ({colors.down}) / **Down Wash** ({colors.down-wash}) — **4.63:1** on its wash, deliberately matched to the up pair so the two states read at the same weight
+- **Warn** ({colors.warn}) / **Warn Wash** ({colors.warn-wash}) — **4.74:1** on its wash
 
-| Token | Hex | On white | Use |
-|---|---|---|---|
-| `{colors.semantic-up}` | #1a6b4c | 6.46:1 | A genuine directional increase. |
-| `{colors.semantic-down}` | #a02a1e | 7.38:1 | A genuine directional decrease. |
-| `{colors.semantic-variance}` | #8a6414 | 5.37:1 | Sources disagree. |
-| `{colors.semantic-stale}` | #a8a49c | — | Freshness dot only, never text. |
+### Dark
 
-**A decline and a disagreement are different facts and never share a colour.** A number going down is news; a number nobody agrees on is a bug. Variance is additionally rendered in parentheses — `(−14)` — following accounting convention, and is never coloured red.
+One dark surface family, for the flow canvas and the single inverse band.
 
-### Source taxonomy
+- **Dark** ({colors.dark}) — the well, the closing band
+- **Dark 2** ({colors.dark-2}) — node card at rest
+- **Dark 3** ({colors.dark-3}) — node card selected
+- **Dark Hairline** ({colors.dark-hairline}) — node border
+- **Dark Dot** ({colors.dark-dot}) — the 1.5px dot in the well's 22px grid
+- **Dark Edge** ({colors.dark-edge}) — connector strokes, and the border on a secondary button standing on the dark band
 
-Five hues, one per connected tool, used in exactly one place: the segments of a provenance rule and the 3px leading spine of a flow node.
+### Contrast — measured, not asserted
 
-| Token | Hex | Source |
+Every pair below carries real body copy somewhere in the four shipping surfaces. Ink is {colors.ink}. Nothing listed is below **4.5:1**.
+
+**On `{colors.canvas}` (#ffffff)**
+
+| Foreground | Ratio |
+|---|---|
+| ink {colors.ink} | 17.40:1 |
+| body {colors.body} | 10.86:1 |
+| muted {colors.muted} | 5.33:1 |
+| subtle {colors.subtle} | 5.02:1 |
+| violet-ink {colors.violet-ink} | 7.67:1 |
+| up {colors.up} | 5.26:1 |
+| down {colors.down} | 5.58:1 |
+| warn {colors.warn} | 5.37:1 |
+
+**On `{colors.band}` (#f6f5f3)**
+
+| Foreground | Ratio |
+|---|---|
+| ink {colors.ink} | 15.97:1 |
+| body {colors.body} | 9.97:1 |
+| muted {colors.muted} | 4.89:1 |
+| subtle {colors.subtle} | 4.61:1 |
+| violet-ink {colors.violet-ink} | 7.04:1 |
+| up {colors.up} | 4.83:1 |
+| down {colors.down} | 5.12:1 |
+
+**On `{colors.sunken}` (#efedea — the chip at rest)**
+
+| Foreground | Ratio |
+|---|---|
+| ink {colors.ink} | 14.89:1 |
+| body {colors.body} | 9.30:1 |
+| muted {colors.muted} | 4.56:1 |
+
+`{colors.subtle}` measures **4.30:1** on sunken and is therefore **not permitted on a chip**. Chip labels are `{colors.body}`.
+
+**On the six note pastels** — every note carries `{colors.ink}` for headings and figures and `{colors.body}` for its caption. Worst case is rose, the darkest of the six:
+
+| Ground | ink {colors.ink} | body {colors.body} |
 |---|---|---|
-| `{colors.source-calendly}` | #0d6e73 | Calendly |
-| `{colors.source-sheets}` | #31693c | Google Sheets |
-| `{colors.source-crm}` | #6b3fae | CRM |
-| `{colors.source-webhook}` | #8f5d06 | Webhook |
-| `{colors.source-telegram}` | #ab2f63 | Telegram |
-| `{colors.source-empty}` | #d5d1c9 | Contributed nothing |
+| lilac {colors.note-lilac} | 14.45:1 | 9.02:1 |
+| mint {colors.note-mint} | 14.64:1 | 9.14:1 |
+| peach {colors.note-peach} | 14.31:1 | 8.93:1 |
+| rose {colors.note-rose} | 14.19:1 | 8.86:1 |
+| sky {colors.note-sky} | 14.42:1 | 9.00:1 |
+| butter {colors.note-butter} | 15.52:1 | 9.69:1 |
 
-These hues appear nowhere else. Not on a button, not as a card fill, not as text, not as a chart series, not on a flow edge. In a resting dashboard the only chroma on screen is a handful of rule segments and the focus ring.
+`{colors.muted}` measures **4.35–4.75:1** across the six and **fails AA on five of them**. Body copy on a note card is `{colors.body}`, never `{colors.muted}`. This is the single easiest mistake to make in the system, so the CSS now makes it unmakeable: `.note .muted` and `.note .subtle` both resolve to `{colors.body}`, and the habitual class no longer ships a 4.4:1 caption.
 
-### The well (flow builder)
+The up-delta is the other half of the same trap. `{colors.up}` on a pastel is 4.29–4.43:1 on five of six; the delta line on a note card takes `{colors.up-on-note}` (≥5.10:1 on all six).
 
-The canvas is the product's only dark surface, and it is dark because it is *recessed*, not because it is a theme.
+**On washes and filled controls**
 
-| Token | Hex | Use |
-|---|---|---|
-| `{colors.well}` | #0d0f12 | The canvas ground. |
-| `{colors.well-surface-1}` | #15181d | Node cards. |
-| `{colors.well-surface-2}` | #1c2027 | Node hover / selected fill. |
-| `{colors.well-hairline}` | #23272f | Node borders. |
-| `{colors.well-grid-dot}` | #22262e | The dot grid. |
-| `{colors.well-edge}` | #3a4049 | Connector strokes. |
-| `{colors.well-ink}` | #f2f3f4 | Node text — 16.01:1 on #15181d. |
-| `{colors.well-ink-muted}` | #9aa0a9 | Node secondary — 6.76:1. |
+| Pair | Ratio |
+|---|---|
+| violet-ink on violet-wash | 6.60:1 |
+| yellow-chip-ink on yellow-wash | 5.81:1 |
+| up on up-wash | 4.61:1 |
+| down on down-wash | 4.63:1 |
+| warn on warn-wash | 4.74:1 |
+| on-dark on primary (black pill) | 16.67:1 |
+| on-dark on chip-active | 16.67:1 |
+| #ffffff on violet (violet pill) | 4.81:1 |
+| ink on yellow (the hero pill) | 12.66:1 |
+
+**On the dark family**
+
+| Pair | Ratio |
+|---|---|
+| on-dark on dark | 17.23:1 |
+| on-dark on dark-2 (node) | 15.58:1 |
+| on-dark on dark-3 (node selected) | 13.84:1 |
+| dark-mono on dark-2 | 5.62:1 |
+| dark-mono on dark-3 | 4.99:1 |
+
+---
 
 ## Typography
 
 ### Font Family
 
-**Inter** (variable, OFL) — every word a human wrote. Permitted weights: **400, 450, 500**. Weights 600 and 700 do not exist in this system. Enable `cv05` globally: an untailed `l` collides with `1` and `I` in field-mapping paths, which is the one place a misread costs a wrong metric.
+**Inter** (`--dn-sans`) carries everything a human wrote, with `font-feature-settings: "cv05", "ss03"` and a root tracking of `-0.011em`. Fallbacks: `ui-sans-serif, system-ui, sans-serif`.
 
-**Geist Mono** (OFL) — every string a machine produced: figures, deltas, targets, timestamps, record IDs, port names, eyebrows, JSON. Inherently tabular. The face must render a slashed or dotted zero — an unslashed `0` beside an `O` in a record ID is a support ticket.
+**`ui-monospace` / SF Mono / Geist Mono** (`--dn-mono`) is reserved for strings a *machine* produced: event ids, run ids, durations, timestamps, node ids, `flw_8ac31d`. It is never used for a figure, a heading or prose.
 
-No third face. No serif, no condensed, no italic display.
+Weights go to **700**, deliberately. Capping the previous system at 500 is a large part of why it read as furniture — nothing on the page had any punch.
 
 ### Hierarchy
 
-Tracking is computed as **−3% of font size** on every step above 28px, easing to 0 by 14px, and flipping **positive** on the eyebrow.
-
-| Token | Face | Size | Weight | Leading | Tracking |
+| Token | Size | Weight | Line Height | Tracking | Use |
 |---|---|---|---|---|---|
-| `display-xl` | Inter | 76px | 450 | 1.02 | −2.28px |
-| `display-lg` | Inter | 56px | 450 | 1.06 | −1.68px |
-| `display-md` | Inter | 40px | 450 | 1.10 | −1.20px |
-| `title` | Inter | 28px | 500 | 1.20 | −0.84px |
-| `heading` | Inter | 20px | 500 | 1.30 | −0.40px |
-| `subheading` | Inter | 16px | 500 | 1.40 | −0.16px |
-| `body` | Inter | 15px | 400 | 1.55 | −0.09px |
-| `body-sm` | Inter | 13px | 400 | 1.50 | 0px |
-| `button` | Inter | 14px | 500 | 1.00 | −0.07px |
-| `eyebrow` | Geist Mono | 11px | 500 | 1.20 | **+0.88px** |
-| `figure-hero` | Geist Mono | 56px | 450 | 1.00 | −1.68px |
-| `figure-lg` | Geist Mono | 40px | 450 | 1.00 | −1.20px |
-| `figure-md` | Geist Mono | 28px | 450 | 1.05 | −0.84px |
-| `figure-sm` | Geist Mono | 18px | 450 | 1.20 | −0.36px |
-| `mono` | Geist Mono | 13px | 450 | 1.45 | 0px |
-| `mono-sm` | Geist Mono | 11px | 450 | 1.40 | +0.11px |
+| `{typography.hero}` | 68px | 700 | 1.02 | -0.035em | The hero line, once per page |
+| `{typography.display}` | 46px | 700 | 1.06 | -0.032em | Section openers, screen titles |
+| `{typography.title}` | 30px | 650 | 1.15 | -0.028em | Panel and sub-screen titles |
+| `{typography.heading}` | 21px | 600 | 1.28 | -0.022em | Card headings |
+| `{typography.sub}` | 16px | 600 | 1.4 | -0.014em | Node titles, list rows, delta text |
+| `{typography.body}` | 16px | 400 | 1.6 | root | Prose and ledes |
+| `{typography.body-sm}` | 14px | 400 | 1.55 | root | Captions under a figure |
+| `{typography.label}` | 12px | 600 | 1.3 | +0.02em, uppercase | Eyebrows, column heads |
+| `{typography.mono}` | 12px | 500 | 1.45 | 0 | Machine strings only |
+| `{typography.figure}` | 52px | 680 | 1.0 | -0.04em | The number on a note card |
+| `{typography.figure-sm}` | 32px | 680 | 1.05 | -0.032em | The number in a dense tile |
+| `{typography.button}` | 15px | 600 | 1 | -0.014em | Default pill label |
+| `{typography.button-lg}` | 16px | 600 | 1 | -0.014em | Large pill label |
+| `{typography.button-sm}` | 14px | 600 | 1 | -0.014em | Small pill label |
+| `{typography.chip}` | 13px | 600 | 1 | -0.006em | Chip and pill labels |
+| `{typography.input}` | 15px | 400 | 1.4 | root | Field values and placeholders |
+| `{typography.nav-row}` | 15px | 500 | 1.4 | -0.011em | Sidebar rows (600 when active) |
+| `{typography.table-cell}` | 15px | 400 | 1.5 | root | Table body cells |
+
+### The figure
+
+`{typography.figure}` is the most important token in the system and it is **sans, not mono**. 52px at weight 680, `font-variant-numeric: tabular-nums` so it does not twitch when the value refreshes. Mono figures were the previous system's tell and they made a product look like a log viewer. A figure is the *answer*, not a readout on an instrument.
 
 ### Principles
 
-- **There is no bold.** Emphasis comes from a face switch, a size step, uppercase, or a surface change — never from `font-weight`. A totals row earns its emphasis with a hairline above it and a switch to `figure-sm`.
-- **A figure is never set in Inter, and prose is never set in Geist Mono.** The split is the system's clearest signal and it must not leak.
-- **The leading gap is deliberate:** 1.00–1.20 on display and figures against 1.50–1.55 on body. Display is carved; prose breathes.
-- In-product text caps at `title` 28px. `display-*` belongs to marketing and empty states only, so nothing in the product can out-shout a figure.
+- **Tracking tightens as size grows** — from -0.04em on the figure through -0.035em at the hero, easing to the root -0.011em and reaching exactly 0 at the mono.
+- **`{typography.label}` is the only token that tracks positive** (+0.02em), because uppercase at 12px needs it.
+- **Weight 650 and 680 are real values**, not typos — Inter is variable, and the half-steps are what let the title sit between a heading and a display without jumping.
+- **Numeric table cells** take `font-weight: 600`, `{colors.ink}`, tabular figures and right alignment.
 
-### Note on Font Substitutes
-
-Inter and Geist Mono are both open-licensed and self-hosted; there is no fallback plan that changes the design. If Geist Mono is unavailable, substitute **JetBrains Mono 500** and step figure sizes down 2px — its lowercase is wider and a 40px figure will otherwise overrun a tile.
+---
 
 ## Layout
 
 ### Spacing System
 
-A strict 4px base. `xxs` 4 · `xs` 8 · `sm` 12 · `md` 16 · `lg` 24 · `xl` 32 · `xxl` 48 · `section` 80.
+Base unit 4px. Tokens: `{spacing.xxs}` (4px) · `{spacing.xs}` (8px) · `{spacing.sm}` (12px) · `{spacing.md}` (16px) · `{spacing.lg}` (24px) · `{spacing.xl}` (32px) · `{spacing.xxl}` (48px) · `{spacing.section}` (96px).
 
-Card padding is `20px` — a deliberate off-scale value, and the only one. A 16px card reads cramped under a 40px figure and a 24px card wastes a row of tiles at 1280px.
+- **Marketing section rhythm**: `{spacing.section}` (96px) top and bottom
+- **App section rhythm**: `{spacing.section} {spacing.xl}` on band and dark sections; `{spacing.xxl} {spacing.xl}` where the surfaces stack tightly
+- **Note card padding**: `{spacing.lg}` (24px) default, `{spacing.xl}` (32px) when the card carries a figure plus a sparkline plus a caption
+- **Empty state padding**: `{spacing.xxl}` (48px)
+- **Grid gaps**: `{spacing.md}` (16px) inside a note wall, `{spacing.lg}` (24px) between panels
 
 ### Grid & Container
 
-- Product container: **1280px** max, `lg` 24px gutters.
-- Marketing container: **1120px** max, centred.
-- Dashboard grid: 12 columns, 16px gap, 24px row unit.
-- Sidebar: **248px**, fixed. Top bar: **56px**, fixed.
-- Config panel: **360px**, docked right.
+- Specimen/marketing page: **1180px** max-width, `{spacing.lg}` gutters
+- Dashboard content: **1240px** max-width inside the rail
+- Activity content: **1320px** max-width inside the rail
+- App chrome: **260px** sidebar, **64px** topbar, both `{colors.canvas}` with a `{colors.hairline}` edge
+- Note walls: `repeat(3, minmax(0, 1fr))` on the dashboard; `repeat(auto-fit, minmax(280px, 1fr))` everywhere the count is not fixed
+- Flow builder: a `flex: 1 1 640px` canvas well beside a fixed **380px** config panel
 
 ### Whitespace Philosophy
 
-Chrome is the page. The sidebar and top bar are both `{colors.canvas}` with a single hairline separating them from the white plates — there is no third chrome colour and no chrome shadow. Vertical rhythm between page sections is `xl` 32px in-product and `section` 80px on marketing. A dashboard is allowed to be dense; the marketing page is not.
+Generous between sections, tight inside a note. The 96px section gap is what makes the colour changes read as *rhythm* rather than as stripes. Inside a card the figure gets `margin-top: auto` so the number always sits on the same baseline across a row of tiles regardless of caption length.
+
+---
 
 ## Elevation & Depth
 
-Depth is a **brightness ladder**, and the product's most important surface goes **down**.
+Soft and low-contrast, because things on a board float rather than stack. Three levels, all tinted with the ink colour rather than pure black.
 
-| Level | Treatment | Use |
-|---|---|---|
-| −1 · Recessed | `{colors.well}` #0d0f12, `{rounded.lg}`, no shadow, no border | The flow canvas; JSON wells |
-| 0 · Page | `{colors.canvas}` #f7f6f3 | The page, sidebar, top bar |
-| 1 · Plate | `{colors.surface-1}` #ffffff + 1px `{colors.hairline}` | Every card, tile, panel, table |
-| 2 · Overlay | `{colors.surface-1}` + the one shadow | Menus, dialogs, popovers only |
+| Level | Token | Value | Use |
+|---|---|---|---|
+| 0 (flat) | — | no shadow | Note cards inside a wall, chips, inputs, table rows |
+| 1 (lift) | `--dn-lift` | `0 1px 2px rgba(26,26,26,0.04), 0 6px 16px -6px rgba(26,26,26,0.10)` | Cards, the fixed back-link, notes that need to float off a band |
+| 2 (lift-hover) | `--dn-lift-hover` | `0 2px 4px rgba(26,26,26,0.05), 0 14px 32px -10px rgba(26,26,26,0.16)` | Raised/hovered card, the signature radius specimen |
+| 3 (pop) | `--dn-pop` | `0 24px 56px -16px rgba(26,26,26,0.24)` | Menus, popovers, modals |
 
-**There is exactly one shadow in this system:** `0 24px 48px -12px rgba(20,22,26,0.18)`. It is permitted on menus, dialogs and popovers. It is forbidden on cards, tiles, buttons, inputs, the sidebar, the top bar and anything on the canvas.
+### Selection depth
 
-### Decorative Depth
+A selected node uses a **ring**, not a shadow: `box-shadow: 0 0 0 4px rgba(124, 77, 255, 0.22)` plus a `{colors.violet}` border and a lift from `{colors.dark-2}` to `{colors.dark-3}`. Focus-visible is `outline: 3px solid {colors.violet}` at `outlineOffset: 2px` — the same violet, doing the same identity-and-selection job.
 
-None. There are no gradients, no glows, no inner highlights, no blurred backdrops. A surface is a brightness and a hairline. **Remove the recessed well and the mono figures and this system is gone** — those two moves, plus the rule, are the entire identity.
+### Decorative depth
+
+Depth on this system comes from **colour and rotation**, not from shadow. The specimen hero rotates its four note cards between `-1.2deg` and `+1deg` on a `{colors.band}` plate at `{rounded.xl}`; the flow canvas is a dotted well *milled into* the white page rather than a panel floating on it. Do not reach for `--dn-pop` to make something feel important — reach for a bigger radius and a fill.
+
+---
 
 ## Shapes
 
 ### Border Radius Scale
 
-A gapped scale. **8px is deliberately absent**, and its absence is what stops every element converging on one soft blur.
+Four steps plus the pill, and **the big one is the point**. A single small radius everywhere is what makes an interface read as a form.
 
 | Token | Value | Use |
 |---|---|---|
-| `{rounded.none}` | 0px | The rule, table cells, sparkline plots, calendar heat cells, the dot grid |
-| `{rounded.sm}` | 4px | Everything clickable: buttons, inputs, selects, tabs, chips, badges, menu items, sidebar rows |
-| `{rounded.md}` | 12px | Cards, tiles, panels, node cards, menus |
-| `{rounded.lg}` | 20px | Dialogs and the canvas well |
-| `{rounded.full}` | 9999px | Avatars and status dots **only** |
+| `{rounded.sm}` | 10px | Inputs, chips with square corners, menu rows, nav rows |
+| `{rounded.md}` | 16px | Ordinary cards, panels, node cards, table containers, swatches |
+| `{rounded.lg}` | 28px | **The note cards and feature blocks — the signature** |
+| `{rounded.xl}` | 36px | Hero panels, full-bleed bands, the canvas well |
+| `{rounded.full}` | 9999px | Buttons, pills, chips, avatars, dots |
 
-**Nothing is a pill.** A pill button reads consumer, and this product's claim is that its numbers are auditable.
+### Sub-radii
 
-### Data Geometry
+A handful of small square tiles carry their own radius because they are glyph plates, not cards:
 
-Sparklines are 2px strokes with no fill and no dots. Bar charts are `{rounded.none}`. Chart series use `{colors.chart-1}` through `{colors.chart-5}` in order, never the source taxonomy and never the accent.
+- `nav-icon` — 28×28px at **8px**
+- `node-mark` — 32×32px at **9px** (40×40px at **12px** in the config panel header)
+- Connection avatar — 44×44px at **14px**
+- Empty-state glyph plate — 56×56px at **18px**
+- Sparkbar — 7px wide at **3px**
+- Brand mark tile — 26–28px at **9px**
+
+### Geometry rules
+
+- **Buttons, chips, avatars and dots are fully round. Nothing else is.** A pill-shaped container would compete with the controls, and the controls have to win.
+- **Note cards have no border, ever.** A sticky note does not have one. The fill separates the card from the band; adding a hairline on top of a pastel fill is the exact move that turns a board back into a spreadsheet.
+- **Cards do have a border** — 1px `{colors.hairline}` — because a white card on white paper has nothing else to separate it.
+
+---
 
 ## Components
 
-**`metric-tile`** — The product. A white plate on bone.
-- `{colors.surface-1}` + 1px `{colors.hairline}`, `{rounded.md}`, 20px padding
-- Eyebrow label in `{typography.eyebrow}` uppercase `{colors.ink-subtle}`
-- Figure in `{typography.figure-lg}` `{colors.ink}`, tabular
-- The rule directly beneath the figure, 8px gap
-- Delta in `{typography.mono-sm}` `{colors.ink-muted}` — never green, never red, unless it is a genuine direction
+> Hover states are not documented except `button-primary-hover`, which is the one shift the system commits to. All transitions are `140ms ease` on background-color, box-shadow and transform; `:active` on a button is `translateY(1px)`. `prefers-reduced-motion: reduce` clamps every duration to 0.01ms.
 
-**`provenance-rule`** — The signature. A 2px line, `{rounded.none}`, the exact width of the figure above it, 8px below its baseline.
-- **Settled** — every connected source agrees: one continuous `{colors.hairline-strong}` line.
-- **Provenance** — segmented, one segment per contributing source, width proportional to contribution, filled in that source's taxonomy hue. A source that contributed nothing is `{colors.source-empty}`.
-- **Variance** — sources disagree: the segment becomes `{colors.surface-sunken}` under a 1px 45° `{colors.ink-subtle}` hatch at 3px pitch, with the conflict count in `{typography.mono-sm}` at the rule's right end.
-- The rule never appears under a heading, a button, or a figure whose freshness has expired. It never animates in.
+### Buttons
 
-**`data-table`** — The densest surface, and the one that must be provably right.
-- Header `{colors.surface-2}`, `{typography.eyebrow}`, 1px `{colors.hairline-strong}` beneath
-- Cells `{typography.body-sm}` `{colors.body}`, 10px/16px padding, `{rounded.none}`
-- **Every numeric cell is `{typography.mono}`, right-aligned, tabular.** Text cells are Inter, left-aligned. There is no third alignment.
-- Row separator 1px `{colors.hairline}`. No zebra striping — the hairline does that job.
+Every button is a pill at `{rounded.full}` with a `1.5px solid transparent` border, so the outlined variant does not shift layout.
 
-**`node-card`** — Inside the well.
-- `{colors.well-surface-1}` + 1px `{colors.well-hairline}`, `{rounded.md}`, 16px padding
-- A 3px leading spine in the step's source hue — the same physical object as a provenance segment, so the dashboard and the canvas are visibly the same machine from two ends
-- Title `{typography.subheading}` `{colors.well-ink}`; port names `{typography.mono-sm}` `{colors.well-ink-muted}`
-- Selected: fill lifts to `{colors.well-surface-2}`, border to `{colors.well-hairline-strong}`. No glow.
+**`button-primary`** — the action on the screen. Background `{colors.primary}`, text `{colors.on-dark}`, `{typography.button}`, padding `11px 20px`. Hover moves to `{colors.primary-hover}`.
 
-**`node-edge`** — 1.5px `{colors.well-edge}`, always. Edges are drawn, not operated: no hover state, no selected state, and never a taxonomy hue, so the canvas never becomes coloured spaghetti.
+**`button-secondary`** — Background `{colors.surface}`, text `{colors.ink}`, border `1.5px solid {colors.hairline-strong}`. On the dark band, the border is overridden to `{colors.dark-edge}`.
 
-**`button-primary`** — `{colors.primary}` fill, white text, `{rounded.sm}`, 10px/16px. The only filled button in the product.
+**`button-violet`** — Background `{colors.violet}`, text `#ffffff` (4.81:1). Only for actions genuinely about identity: "Invite teammate".
 
-**`button-secondary`** — White fill, `{colors.ink}` text, 1px `{colors.hairline-strong}`.
+**`button-yellow`** — the hero. Background `{colors.yellow}`, text `{colors.ink}` (12.66:1). **One per screen.** On the dashboard it is "New flow" in the topbar and nothing else.
 
-**`button-ghost`** — Transparent, `{colors.ink-muted}`. For tertiary actions and icon buttons.
+**`button-ghost`** — Background transparent, text `{colors.muted}`. On the dark band it takes `{colors.on-dark}`.
 
-**`input`** — White, 1px `{colors.hairline-strong}`, `{rounded.sm}`, 9px/12px, `{typography.body-sm}`. Focus adds a 1px `{colors.focus}` border and a 2px `{colors.selection}` outline. Invalid swaps the border to `{colors.semantic-down}`.
+**Sizes** — `button-lg` `15px 26px` at 16px; default `11px 20px` at 15px; `button-sm` `8px 15px` at 14px. Disabled is `opacity: 0.4` with `cursor: not-allowed`.
 
-**`menu`** — White, 1px `{colors.hairline}`, `{rounded.md}`, 4px padding, the one shadow. Rows are `{rounded.sm}` — a 12px panel holding 4px rows, and no third shape.
+### The note card — the signature component
 
-**`dialog`** — White, `{rounded.lg}`, 24px padding, the one shadow, over `{colors.scrim}`.
+**`note-card`** — Background one of the six note pastels, text `{colors.ink}`, rounded `{rounded.lg}` (28px), padding `{spacing.lg}`, **`border: 0`**.
 
-**`badge`** — `{colors.surface-sunken}`, `{typography.mono-sm}`, `{rounded.sm}`, 3px/7px. Status badges carry a `{rounded.full}` 6px dot in the semantic colour; the badge itself never takes the hue.
+Anatomy, top to bottom:
+1. A `{typography.label}` in `{colors.ink}` (the default label colour `{colors.muted}` must be overridden here), with a 9–11px `dot` in the family's mark colour on the opposite end
+2. `{typography.figure}` — the settled number, pushed down with `margin-top: auto` so a row of tiles shares a baseline
+3. A delta in `{typography.sub}` tinted `{colors.up-on-note}` or `{colors.down}`, with an arrow glyph
+4. A `{typography.body-sm}` caption in `{colors.body}`
+5. Optionally a `sparkbars` group in the family's mark colour, bottom-right
 
-**`sidebar`** — 248px, `{colors.canvas}`, 1px `{colors.hairline}` on the right. The active row is a **white plate with a hairline** — the same object as a card, so "where I am" uses the system's existing vocabulary rather than a new colour.
+Six of these in a grid are the dashboard. That wall of colour *is* the design — it is not a decoration applied on top of one.
 
-**`top-bar`** — 56px, `{colors.canvas}`, hairline beneath. Holds the mark, the workspace, and at most two actions.
+**Variants** — `note-card-mint`, `note-card-peach`, `note-card-rose`, `note-card-sky`, `note-card-butter`. Also used at smaller sizes for a sidebar summary tile, a conflict row and a step-kind explainer.
 
-**`empty-state`** — `{colors.surface-2}` ground, 1px dashed `{colors.hairline-strong}`, `{rounded.md}`, 48px padding. One `{typography.subheading}` line, one `{typography.body-sm}` line, one `button-primary`. No illustration.
+### Cards & containers
 
-**`toast`** — `{colors.primary}` fill, white text, `{rounded.sm}`. Bottom-centre. One at a time.
+**`card`** — Background `{colors.surface}`, border `1px solid {colors.hairline}`, rounded `{rounded.md}`, shadow `--dn-lift`. The neutral container: table wrappers, config panels, connection rows, colour-documentation tiles.
+
+**`band`** — Background `{colors.band}`. A full-bleed section.
+
+**`band-dark`** — Background `{colors.dark}`, text `{colors.on-dark}`; every heading token inside it is re-coloured to `{colors.on-dark}`. Exactly one per page, at the end.
+
+**`empty-state`** — Background `{colors.band}`, rounded `{rounded.lg}`, padding `{spacing.xxl}`, centred. Carries a pastel glyph plate, a `{typography.heading}`, a `{typography.body}` explanation and a `button-primary`. The copy states that nothing is wrong: *"The webhook was verified four minutes ago and is waiting on its first delivery."*
+
+### Chips & pills
+
+**`chip`** — Background `{colors.sunken}`, text `{colors.body}`, `{typography.chip}`, padding `6px 13px`, gap 7px, rounded `{rounded.full}`, `1.5px solid transparent`.
+
+**`chip-active`** — Background `{colors.ink}`, text `{colors.on-dark}`. The selected filter.
+
+**`chip-violet`** — Background `{colors.violet-wash}`, text `{colors.violet-ink}`. Identity and selection: the workspace switcher, the "Today" filter, the draft-version badge.
+
+**`chip-yellow`** — Background `{colors.yellow-wash}`, text `{colors.yellow-chip-ink}`. Tags and soft warnings ("Beta", "Stale · 34m"). Note this is the *wash*, not `{colors.yellow}` — it does not spend the once-per-screen hero.
+
+**`chip-outline`** — Transparent with a `{colors.hairline-strong}` 1.5px border. Additive actions and counts.
+
+**`chip-up` / `chip-warn` / `chip-down`** — state washes with their matching state ink, used for row status in the activity table and connection list.
+
+**`dot`** — 9px circle at `{rounded.full}`. The mark colour's primary job. Prefixes a source name in a table row, a nav entry, a chip.
+
+### Inputs & forms
+
+**`text-input`** — Background `{colors.surface}`, text `{colors.ink}`, border `1.5px solid {colors.hairline-strong}`, rounded `{rounded.sm}`, padding `11px 14px`, `{typography.input}`, full width. Placeholder is `{colors.subtle}`.
+
+**`text-input-focused`** — Border becomes `{colors.violet}` with `outline: 3px solid {colors.violet-wash}` at zero offset. This is the only place violet touches an ordinary control, and it is justified because focus *is* selection.
+
+**`focus-ring`** — Everywhere else: `outline: 3px solid {colors.violet}`, `outline-offset: 2px`, applied to every link, button and tabbable element on `:focus-visible`.
+
+Labels above a field are `{typography.label}` with `{spacing.xs}` beneath; helper text below is `{typography.body-sm}` in `{colors.muted}`.
+
+### Tables
+
+**`data-table`** — Full width, `border-collapse: collapse`, wrapped in a `card` with `overflow: hidden` (or `overflow-x: auto` when it must scroll).
+
+**`data-table-header`** — Background `{colors.band}`, text `{colors.muted}`, `{typography.label}`, padding `12px 18px`, left-aligned by default. First and last cells inherit `{rounded.md}` on their outer top corners so the header meets the card edge cleanly.
+
+**`data-table-cell`** — Padding `14px 18px`, `{typography.table-cell}`, `{colors.body}`, bottom border `1px solid {colors.hairline}`; the last row drops its border.
+
+**`data-table-cell-numeric`** — `font-variant-numeric: tabular-nums`, weight 600, `{colors.ink}`, right-aligned.
+
+A mono cell inside a table takes `{typography.mono}` in `{colors.muted}`.
+
+**No zebra striping.** The hairline already separates rows, and stripes plus source dots plus tabular figures is three systems fighting over the same row. The table is the one place the wall of colour would be noise, so the pastels retreat to a single 9px dot per row.
+
+### Sparkbars
+
+**`sparkbars`** — A flex row, `align-items: flex-end`, 40px tall (44–56px in practice), 3px gap.
+
+**`sparkbar`** — 7px wide, 3px radius, `{colors.ink}` at `opacity: 0.18`; **`sparkbar-latest`** is the same bar at `opacity: 1`. When a spark sits inside a note card the bars take the family's mark colour instead, with the trailing bar at full opacity and the rest around 0.42.
+
+Chunky and rounded, never hairline. A one-pixel line chart is an instrument readout; this is a board.
+
+### The canvas
+
+**`canvas-well`** — Background `{colors.dark}` with `radial-gradient({colors.dark-dot} 1.5px, transparent 1.5px)` at `22px 22px`, rounded `{rounded.xl}`, text `{colors.on-dark}`. The **only** dark surface in the product, because the flow builder is a workspace rather than a document. It is milled into the white page beside an ordinary white config panel — light plate, dark well, one row, no shadow doing the work.
+
+**`node-card`** — Background `{colors.dark-2}`, border `1px solid {colors.dark-hairline}`, rounded `{rounded.md}`, padding `{spacing.md}`. Title in `{typography.sub}` at `{colors.on-dark}`; the port/meta line in `{typography.mono}` at `{colors.dark-mono}`.
+
+**`node-card-selected`** — Background `{colors.dark-3}`, border `{colors.violet}`, ring `0 0 0 4px rgba(124, 77, 255, 0.22)`.
+
+**`node-mark`** — 32×32px at 9px radius, filled with the step family's mark colour, holding a white glyph. The same trick the note card plays, one size down and one saturation up: sky for a source, peach for a transform, rose for a delivery.
+
+**`node-edge`** — `{colors.dark-edge}` at 1.5px, orthogonal with an 8px knee, drawn under the cards in **one grey** — never a mark hue, or the canvas becomes coloured spaghetti.
+
+### Chrome
+
+**`sidebar`** — 260px, `{colors.canvas}`, right border `1px solid {colors.hairline}`, padding `{spacing.md}`. Sticky, full height. It ends with a note card so the colour does not stop at the content edge.
+
+**`topbar`** — 64px, `{colors.canvas}`, bottom border `1px solid {colors.hairline}`, padding `0 {spacing.lg}`. Sticky. Carries the brand mark on the left and at most one hero on the right.
+
+**`nav-row`** — `{typography.nav-row}`, `{colors.body}`, padding `10px 12px`, gap 11px, rounded `{rounded.sm}`.
+
+**`nav-row-active`** — Background `{colors.violet-wash}`, text `{colors.violet-ink}`, weight 600, `aria-current="page"`.
+
+**`nav-icon`** — 28×28px at 8px radius. Each row's tile wears its section's pastel with the matching mark as the glyph colour, so the chrome is part of the colour system rather than a grey frame around it. The active row's tile inverts to solid `{colors.violet}` with an `{colors.on-dark}` glyph.
+
+### Shipping surfaces
+
+| Route | What it proves |
+|---|---|
+| `/design/next` | The specimen. Seven numbered sections alternating band/white, hero note wall, full swatch, type and shape documentation. |
+| `/design/next/dashboard` | Six note tiles in a 3-up wall, a source table, three conflict notes, a dark closing band. Rhythm: notes → band → white → dark. |
+| `/design/next/builder` | The dotted well beside a white config panel, five node cards, three step-kind notes on a band. One yellow, on the wordmark. |
+| `/design/next/activity` | The dense test: a 12-row table with status chips, four connection cards, a three-note summary, a tinted empty state. Rhythm: band → white → band → white → tinted empty. |
+
+---
 
 ## Do's and Don'ts
 
 ### Do
-- Set every figure, delta, target, timestamp and ID in Geist Mono; set every sentence in Inter
-- Right-align every numeric column and left-align every text column, with no exceptions
-- Draw the rule under every figure, in all three of its states, from day one
-- Reserve `{colors.accent}` for the focus ring, inline links, the active provenance segment and the brand mark
-- Lift surfaces by making them lighter than the page, never by adding a shadow
-- Use the source taxonomy hues only on provenance segments and node spines
-- Render a source disagreement in parentheses and `{colors.semantic-variance}`, never in red
-- Cap every weight at 500 and reach for a face switch when you need emphasis
+
+- **Do** put `{colors.primary}` on every primary CTA. It is the default, and it is what buys the rest of the palette its meaning.
+- **Do** give each metric family one note pastel and keep it — tile fill, sparkbar tint, row dot, nav icon — for the life of the account.
+- **Do** use `{colors.body}` for body copy on a note card. `{colors.muted}` measures as low as 4.35:1 on the pastels and fails AA on five of six.
+- **Do** carry direction in the delta text with `{colors.up}` / `{colors.down}`, and in nothing else — swapping to `{colors.up-on-note}` when the text stands on a pastel.
+- **Do** alternate section grounds: `{colors.canvas}` → `{colors.band}` → `{colors.canvas}` → `{colors.dark}`.
+- **Do** apply `{rounded.full}` to every button, chip, avatar and dot, and `{rounded.lg}` to every note card.
+- **Do** override `{typography.label}`'s default `{colors.muted}` to `{colors.ink}` whenever the label sits on a pastel.
+- **Do** spend the one yellow on the highest-value thing on the screen — the wordmark, or the single hero CTA. Not both.
+- **Do** show the product as its own illustration: a note wall, a dotted canvas, a real table.
+- **Do** use `{typography.mono}` for machine strings and only machine strings.
 
 ### Don't
-- Don't use `{colors.accent}` as a fill — a blue button next to a ruled figure competes for the eye that is supposed to land on the number
-- Don't colour a numeral to show state; state lives in the rule, the parentheses and the dot
-- Don't pill-round anything but avatars and status dots — the pill reads consumer and this product is audited
-- Don't put a shadow on a card, tile, button or anything inside the well
-- Don't let a taxonomy hue become a button, a chart series, a badge fill or an edge stroke
-- Don't introduce an 8px radius; the gap between 4 and 12 is what keeps controls and containers distinguishable
-- Don't set a figure in Inter or a paragraph in Geist Mono
-- Don't document or design hover states — specify default and pressed only
+
+- **Don't put two white sections in a row.** The page collapses into a typography blog, and this is the single most common way to lose the language.
+- **Don't use a note pastel as a button.** A `{colors.note-mint}` fill on a pill reads as disabled, not as pressable. Buttons are black, white-outlined, violet or the one yellow.
+- **Don't use a mark colour as a card fill**, and don't use a note pastel as a stroke, a dot or a chart series. Fills and marks do not swap.
+- **Don't put a border on a note card.** No hairline, no ring, no outline. The fill is the separation.
+- **Don't let hue mean severity.** Rose is revenue whether revenue is up or down. Repainting a card to signal "bad" destroys the taxonomy for every other card on the wall.
+- **Don't spend `{colors.yellow}` twice on one screen**, and never as a large background surface.
+- **Don't use `{colors.violet}` to mean "primary" or "good."** It marks identity and selection: wordmark, active nav, focus ring, selected node.
+- **Don't use `{colors.subtle}` on `{colors.sunken}`** (4.30:1) or on any note pastel. It is cleared for `{colors.canvas}` and `{colors.band}` only.
+- **Don't colour the flow-canvas edges** with mark hues — one `{colors.dark-edge}` grey, always.
+- **Don't set a figure in mono.** `{typography.figure}` is sans at weight 680; mono figures made the previous system look like a log viewer.
+- **Don't cap weight at 500.** The previous system did, and that is most of why it read as furniture.
+- **Don't zebra-stripe a table.** Hairline plus dots plus tabular figures is already enough structure.
+- **Don't reach for `--dn-pop` to make something feel important.** Reach for a bigger radius and a fill.
+- **Don't declare these tokens at `:root`.** They live under `.dn`; `globals.css` already owns `--background` and `--primary` and would be silently re-themed.
+
+---
 
 ## Responsive Behavior
 
@@ -602,38 +927,59 @@ Sparklines are 2px strokes with no fill and no dots. Bar charts are `{rounded.no
 
 | Name | Width | Key changes |
 |---|---|---|
-| `sm` | < 640px | Sidebar becomes a sheet; dashboard grid collapses to 1 column; figures step to `figure-md` |
-| `md` | 640–1023px | 6-column grid; config panel becomes a bottom sheet |
-| `lg` | 1024–1279px | 12-column grid; sidebar collapses to icons at 64px |
-| `xl` | ≥ 1280px | Full 1280px container, 248px sidebar, docked config panel |
+| Mobile (small) | < 480px | Single column. Note walls stack 1-up. Sidebar becomes a sheet. Hero drops to ~36px. |
+| Mobile (large) | 480–767px | Note walls 1-up; chips wrap to two rows. Display drops to ~32px. |
+| Tablet | 768–1023px | Note walls 2-up via `minmax(280px, 1fr)`. The builder's canvas and config panel stack (`flex-wrap: wrap` at the 640px canvas basis). |
+| Desktop | 1024–1279px | Sidebar returns at 260px. Dashboard note wall goes 3-up. |
+| Wide | ≥ 1280px | Full presentation: 1180/1240/1320px shells, `{typography.hero}` at 68px. |
 
-### Touch Targets
+### Collapsing strategy
 
-Minimum 44×44px for every control. Buttons at 10px/16px reach 38px and must gain 3px vertical padding below `md`. Table rows go to 14px vertical padding on touch.
+- **Note walls** are `repeat(auto-fit, minmax(280px, 1fr))` almost everywhere and reflow without a media query. The dashboard's fixed `repeat(3, minmax(0, 1fr))` is the exception and needs one.
+- **Tables** scroll horizontally inside `overflow-x: auto` on the wrapping `card`; they never reflow into stacked key/value rows, because the tabular alignment is the point.
+- **The builder** wraps the 380px config panel below the well rather than shrinking it.
+- **Section padding** relaxes from `{spacing.section}` to `{spacing.xxl}` on mobile.
+- **Chip rows** wrap; they are never made horizontally scrollable.
 
-### Collapsing Strategy
+### Touch targets
 
-The rule never collapses — it is the last thing to go, and if a tile is too narrow to show segments it falls back to the settled/variance binary rather than disappearing. Tables scroll horizontally inside their own container with the first column pinned; the page body never scrolls sideways.
+- Default pill: 11px + 15px line + 11px + 3px border = **40px** — below the 44px floor, and bumped to `button-lg` on touch surfaces.
+- `button-lg`: **49px** — clears AAA. `button-sm`: **33px**, desktop-only.
+- `text-input`: 11px + 21px line + 11px + 3px border = **46px**.
+- `nav-row`: 10px + 21px line + 10px = **41px**.
+- `chip`: **28px** — a filter affordance, not a primary control; give it a padded hit area on touch.
 
-### Image Behavior
-
-There is no photography in this product. Marketing surfaces use product screenshots framed in a `{rounded.md}` white plate with a hairline — never a drop shadow, never a device mockup, never a gradient backdrop.
+---
 
 ## Iteration Guide
 
-1. Focus on ONE component at a time; resolve it fully against its tokens before moving on.
-2. Use `{token.refs}` everywhere — never an inline hex.
-3. Variants live as separate entries inside `components:`, not as prose notes.
-4. Hover state is never documented; specify default and pressed only.
-5. Run `npx @google/design.md lint DESIGN.md` after edits.
-6. Before adding a colour, try a surface step or a face switch first — the answer is almost always one of those two.
-7. The three non-negotiables: **figures are mono**, **the rule is always drawn**, **the accent never fills**.
+1. Focus on ONE component at a time.
+2. Reference component names and tokens directly — `note-card`, `{colors.mark-sky}`, `{rounded.lg}` — never raw hex in a prompt.
+3. Before changing a colour, run the contrast check against **both** grounds it can sit on (`{colors.canvas}` and `{colors.band}`, or all six note pastels). Nothing that carries body copy ships below 4.5:1.
+4. Add new variants as separate `components:` entries rather than widening an existing one.
+5. Default to `{typography.body}` for prose, `{typography.body-sm}` for captions, `{typography.figure}` for the number.
+6. Keep `{colors.yellow}` confined to the wordmark or the single hero CTA, and keep `{colors.violet}` confined to identity and selection.
+7. New taxonomy hue? Add it as a **pair** — a note pastel *and* its saturated mark — or don't add it. A pastel with no twin cannot draw a chart; a mark with no twin cannot fill a card.
+8. When a screen needs a picture, build the picture out of the product.
+9. `src/app/design/next/design-next.css` is the authority for values; the four pages under `src/app/design/next/` are the authority for composition. If a page and this document disagree, **the document wins and the page is the bug.**
+
+---
 
 ## Known Gaps
 
-- Form validation copy and multi-error field states are not specified.
-- Animation and transition timings are undefined; no motion system exists yet.
-- The provenance rule's behaviour above six contributing sources is undecided — segments below 4px are unreadable.
-- Chart types beyond sparkline, bar and the calendar heat grid are unspecified.
-- No print stylesheet, though a product that argues it produces documents should probably have one.
-- Onboarding, sign-in and marketing surfaces reuse product tokens but have no layout specification of their own.
+Honest list. These are real and unresolved, not hedges.
+
+- **White glyphs on mark tiles are low-contrast.** `{colors.on-dark}` on `{colors.mark-butter}` is 2.38:1, on `{colors.mark-peach}` 2.72:1, on `{colors.mark-mint}` 3.21:1 — under the 3:1 non-text floor. Every one of these is `aria-hidden` beside a text label, so nothing is lost, but the icons are decorative rather than informative and should not be relied on alone.
+- **Only two of the four pages end on `band-dark`.** `band-dark` is specified as "exactly one per page, at the end", and the specimen and dashboard have one. The builder ends on a `{colors.band}` strip and activity ends on a white section holding a tinted empty state, so neither page ever reaches the dark. The rhythm is still legal — no two whites touch — but the closing beat the language is built around is missing on half the surfaces.
+- **Activity's last two sections are both white.** The note wall and the empty state are separate `<section>`s with no ground between them. They read as one white region because the second has zero top padding and the empty state is itself `{colors.band}`-filled, but nothing in the markup enforces that, and adding padding to the second section would silently produce the two-whites failure.
+- **State colours are used as dot fills.** `{colors.up}`, `{colors.down}` and `{colors.warn}` fill 9px `dot`s in the activity filter row, the activity topbar and the builder's status chip. The rule says state lives "only on words and their own washes"; a dot is neither. Small, but it is the crack through which hue starts meaning severity.
+- **The dashboard's active nav icon does not invert.** `nav-icon` specifies that the active row's tile goes solid `{colors.violet}` with an `{colors.on-dark}` glyph. The builder and the specimen do this; the dashboard leaves its active tile on `{colors.note-lilac}`, so "you are here" is carried by the row wash alone.
+- **The activity note wall's sparkbars are ink, not mark.** `sparkbar` says a spark inside a note card takes the family's mark colour. The "Events" tile on `/design/next/activity` uses the default `{colors.ink}` at 0.18, so the one spark on that screen is grey on mint.
+- **No dark mode.** `{colors.dark}` and its family exist for the flow canvas and one inverse band, not as an inverted theme. A full dark scheme would need six dark-ground note equivalents and six re-tuned marks, and none of that has been derived.
+- **Hover states are undocumented** beyond `button-primary-hover` and the `translateY(1px)` press. Chips, nav rows, note cards and table rows have no specified hover.
+- **No motion system.** The only timing in the CSS is the button's `140ms ease`. Entrance, list reorder, number-ticker and canvas-pan behaviour are all unspecified.
+- **`{typography.hero}` at 68px has no responsive step in the CSS.** The breakpoint table above describes intent, not shipped media queries — the pages currently rely entirely on `auto-fit` grids and `flex-wrap`.
+- **The default pill computes to 40px tall**, under the 44px touch floor. Handled today by using `button-lg` where touch matters, but there is no `button-touch` token — and `button-sm` at 33px is used in the topbars of all three app screens.
+- **Chart tokens stop at the sparkbar.** Six mark hues exist and are ordered, but there is no axis colour, no gridline, no tooltip surface, no sequential or diverging ramp for a heatmap.
+- **Icon library is unstated as a token.** All four pages use `lucide-react` at `strokeWidth` 2–2.4 and sizes 13–26px, but stroke weight and size are not tokenised.
+- **`{colors.surface}` and `{colors.canvas}` are the same value** (`#ffffff`). They are named separately on purpose, but nothing today distinguishes them, so the distinction is untested.

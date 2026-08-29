@@ -1,64 +1,71 @@
 /**
- * ACTIVITY & CONNECTIONS — the proposed language under load.
+ * ACTIVITY — the playful language carrying a dense screen.
  *
- * This is the densest surface the product has, and it is here because density
- * is where a design language either holds or falls apart. Four things are on
- * trial:
+ * This is the surface where a colourful system usually collapses back into a
+ * spreadsheet, so it is the honest test. Four moves keep it on the board:
  *
- *  1. THE FACE SPLIT. Every machine-emitted string — timestamps, record
- *     counts, durations, sync stamps, conflict counts, status words — is Geist
- *     Mono at 450. Every human sentence is Inter. Scan the table: you can tell
- *     what the product measured from what a person wrote without reading a
- *     word of either.
- *  2. THE DECIMAL SPINE. Records runs 0 · 7 · 42 · 1,204 · 18,330 · 24,118 and
- *     the columns still stack, because the figures are tabular and
- *     right-aligned rather than because a layout is propping them up.
- *  3. THE RULE. Three states, one object: settled (a continuous hairline),
- *     provenance (a segment per contributing source, width proportional), and
- *     variance (a hatched segment with the conflict count at its right end).
- *  4. THE TWO KINDS OF BAD NEWS. A failed webhook is `--dn-down`; sources
- *     disagreeing is `--dn-variance` and is additionally set in parentheses,
- *     (−14), accounting-style. A decline and a disagreement never share ink.
- *
- * The whole screen carries exactly one accent element (the brand mark), no
- * shadow, no fill above `--dn-surface-1`, and no weight above 500.
+ *  1. COLOUR CLASSIFIES, BLACK ACTS. Every source owns one hue for the whole
+ *     screen — Calendly is sky, Sheets is mint, HubSpot is peach, Stripe is
+ *     lilac, Telegram is rose, Postgres is butter — and that hue appears on the
+ *     row dot, the connection tile and the nav icon, so a source is legible
+ *     before you read its name. Every primary action is black.
+ *  2. THE NOTE CARD IS THE SIGNATURE. The day's summary is three whole-card
+ *     pastel fills at 28px, not three white boxes with a border.
+ *  3. SECTION RHYTHM. topbar white → band header → white table → band
+ *     connections → the note wall → a tinted empty. Two whites never touch.
+ *  4. VIOLET MARKS IDENTITY. The active nav row and the "Today" filter, and
+ *     nothing else. Yellow appears exactly once, on the wordmark.
  */
-import Link from "next/link";
+import type { CSSProperties } from "react";
 import {
   Activity,
-  CalendarRange,
-  Cable,
+  ArrowLeft,
+  Building2,
+  CalendarDays,
+  ChevronDown,
+  Download,
+  Inbox,
   LayoutDashboard,
+  Plug,
+  Plus,
   RefreshCw,
   Search,
+  Send,
   Settings,
-  SlidersHorizontal,
+  Sheet,
   Users,
   Workflow,
+  Zap,
 } from "lucide-react";
 
 import "../design-next.css";
 
-export const metadata = { title: "Namzilabs — Activity & connections (proposed)" };
+export const metadata = { title: "Namzilabs — Activity" };
 
-type SourceName = "Calendly" | "Google Sheets" | "CRM" | "Webhook" | "Telegram";
+/* ── THE TAXONOMY ─────────────────────────────────────────────────────────
+   One hue per source, held for the whole screen. `mark` is the saturated twin
+   (dots, icons); `note` is the pastel it pairs with (tiles, fills). */
 
-/** The taxonomy. These five hues are the only chroma the screen is allowed. */
-const SOURCE_HUE: Record<SourceName, string> = {
-  Calendly: "var(--dn-source-calendly)",
-  "Google Sheets": "var(--dn-source-sheets)",
-  CRM: "var(--dn-source-crm)",
-  Webhook: "var(--dn-source-webhook)",
-  Telegram: "var(--dn-source-telegram)",
+type SourceName = "Calendly" | "Google Sheets" | "HubSpot" | "Stripe" | "Telegram" | "Postgres";
+
+const SOURCE: Record<SourceName, { mark: string; note: string }> = {
+  Calendly: { mark: "var(--dn-mark-sky)", note: "var(--dn-note-sky)" },
+  "Google Sheets": { mark: "var(--dn-mark-mint)", note: "var(--dn-note-mint)" },
+  HubSpot: { mark: "var(--dn-mark-peach)", note: "var(--dn-note-peach)" },
+  Stripe: { mark: "var(--dn-mark-lilac)", note: "var(--dn-note-lilac)" },
+  Telegram: { mark: "var(--dn-mark-rose)", note: "var(--dn-note-rose)" },
+  Postgres: { mark: "var(--dn-mark-butter)", note: "var(--dn-note-butter)" },
 };
 
-type Status = "settled" | "variance" | "failed" | "stale";
+/* Status is state, not taxonomy, so it uses the state washes rather than a
+   source hue. Queued is the only one that stays neutral. */
+type Status = "Synced" | "Conflict" | "Failed" | "Queued";
 
-const STATUS_HUE: Record<Status, string> = {
-  settled: "var(--dn-up)",
-  variance: "var(--dn-variance)",
-  failed: "var(--dn-down)",
-  stale: "var(--dn-stale)",
+const STATUS: Record<Status, { fill: string; ink: string }> = {
+  Synced: { fill: "var(--dn-up-wash)", ink: "var(--dn-up)" },
+  Conflict: { fill: "var(--dn-warn-wash)", ink: "var(--dn-warn)" },
+  Failed: { fill: "var(--dn-down-wash)", ink: "var(--dn-down)" },
+  Queued: { fill: "var(--dn-sunken)", ink: "var(--dn-muted)" },
 };
 
 type Row = {
@@ -68,64 +75,62 @@ type Row = {
   records: string;
   duration: string;
   status: Status;
-  /** Conflict count, already parenthesised. Only ever set on `variance`. */
-  conflicts?: string;
 };
 
+/* Ragged digit counts on purpose — 0, 7, 42, 316, 1,204, 18,330, 24,118 — so
+   the tabular alignment in `td.num` is visible rather than asserted. */
 const ROWS: Row[] = [
-  { time: "09:41:02", source: "Calendly", event: "Booking created", records: "7", duration: "0.42s", status: "settled" },
-  { time: "09:38:55", source: "Google Sheets", event: "Sheet rows imported", records: "1,204", duration: "12.40s", status: "settled" },
-  { time: "09:31:20", source: "CRM", event: "Contact records merged", records: "316", duration: "4.08s", status: "variance", conflicts: "(−14)" },
-  { time: "09:22:07", source: "Webhook", event: "Payment intent received", records: "1", duration: "0.19s", status: "settled" },
-  { time: "09:14:48", source: "Telegram", event: "Alert dispatched to ops channel", records: "42", duration: "0.86s", status: "settled" },
-  { time: "08:59:31", source: "Google Sheets", event: "Full workbook backfill", records: "18,330", duration: "231.55s", status: "settled" },
-  { time: "08:47:12", source: "Calendly", event: "Invitee cancelled", records: "9", duration: "0.37s", status: "settled" },
-  { time: "08:40:00", source: "CRM", event: "Deal stages reconciled", records: "2,940", duration: "64.02s", status: "variance", conflicts: "(−3)" },
-  { time: "08:26:44", source: "Webhook", event: "Signature check failed", records: "0", duration: "1.03s", status: "failed" },
-  { time: "08:12:19", source: "Google Sheets", event: "Column mapping updated", records: "88", duration: "0.94s", status: "settled" },
-  { time: "07:55:03", source: "Calendly", event: "Availability window synced", records: "512", duration: "7.61s", status: "stale" },
-  { time: "07:31:57", source: "CRM", event: "Owner assignments imported", records: "24,118", duration: "118.27s", status: "settled" },
+  { time: "09:41:02", source: "Calendly", event: "Booking created", records: "7", duration: "0.42s", status: "Synced" },
+  { time: "09:38:55", source: "Google Sheets", event: "Workbook rows imported", records: "1,204", duration: "12.40s", status: "Synced" },
+  { time: "09:31:20", source: "HubSpot", event: "Contact records merged", records: "316", duration: "4.08s", status: "Conflict" },
+  { time: "09:22:07", source: "Stripe", event: "Payment intent received", records: "1", duration: "0.19s", status: "Synced" },
+  { time: "09:14:48", source: "Telegram", event: "Alert sent to #ops-alerts", records: "42", duration: "0.86s", status: "Synced" },
+  { time: "08:59:31", source: "Google Sheets", event: "Full workbook backfill", records: "18,330", duration: "231.55s", status: "Synced" },
+  { time: "08:47:12", source: "Calendly", event: "Invitee cancelled", records: "9", duration: "0.37s", status: "Synced" },
+  { time: "08:40:00", source: "HubSpot", event: "Deal stages reconciled", records: "2,940", duration: "64.02s", status: "Conflict" },
+  { time: "08:26:44", source: "Stripe", event: "Signature check failed", records: "0", duration: "1.03s", status: "Failed" },
+  { time: "08:12:19", source: "Postgres", event: "Column mapping updated", records: "88", duration: "0.94s", status: "Synced" },
+  { time: "07:55:03", source: "Calendly", event: "Availability window synced", records: "512", duration: "7.61s", status: "Queued" },
+  { time: "07:31:57", source: "HubSpot", event: "Owner assignments imported", records: "24,118", duration: "118.27s", status: "Synced" },
 ];
 
 type Connection = {
   source: SourceName;
-  name: string;
+  icon: typeof Activity;
   account: string;
   synced: string;
-  action: string;
-  conflicts?: string;
+  state: Status;
 };
 
 const CONNECTIONS: Connection[] = [
-  { source: "Calendly", name: "Calendly", account: "namzilabs / discovery-call", synced: "2026-08-29 09:41", action: "Configure" },
-  { source: "Google Sheets", name: "Google Sheets", account: "Q3 pipeline workbook", synced: "2026-08-29 09:38", action: "Configure" },
-  { source: "CRM", name: "HubSpot", account: "production portal 4418822", synced: "2026-08-29 09:31", action: "Resolve", conflicts: "(−17)" },
-  { source: "Telegram", name: "Telegram", account: "#ops-alerts", synced: "2026-08-29 09:14", action: "Configure" },
+  { source: "Calendly", icon: CalendarDays, account: "namzilabs / discovery-call", synced: "2026-08-29 09:41", state: "Synced" },
+  { source: "Google Sheets", icon: Sheet, account: "Q3 pipeline workbook", synced: "2026-08-29 09:38", state: "Synced" },
+  { source: "HubSpot", icon: Building2, account: "portal 4418822", synced: "2026-08-29 09:31", state: "Conflict" },
+  { source: "Telegram", icon: Send, account: "#ops-alerts", synced: "2026-08-29 09:14", state: "Synced" },
 ];
 
-/** Nav rows for the rail. `Activity` is the one we are standing on. */
-const NAV: { label: string; icon: typeof Activity; active?: boolean }[] = [
-  { label: "Overview", icon: LayoutDashboard },
-  { label: "Flows", icon: Workflow },
-  { label: "Activity", icon: Activity, active: true },
-  { label: "People", icon: Users },
-  { label: "Connections", icon: Cable },
-  { label: "Settings", icon: Settings },
+/* The rail. Each icon tile wears its section's pastel, so the chrome is part of
+   the colour system rather than a grey frame around it. */
+const NAV: { label: string; icon: typeof Activity; note: string; mark: string; active?: boolean }[] = [
+  { label: "Overview", icon: LayoutDashboard, note: "var(--dn-note-sky)", mark: "var(--dn-mark-sky)" },
+  { label: "Flows", icon: Workflow, note: "var(--dn-note-mint)", mark: "var(--dn-mark-mint)" },
+  { label: "Activity", icon: Activity, note: "var(--dn-violet)", mark: "var(--dn-on-dark)", active: true },
+  { label: "People", icon: Users, note: "var(--dn-note-rose)", mark: "var(--dn-mark-rose)" },
+  { label: "Connections", icon: Plug, note: "var(--dn-note-peach)", mark: "var(--dn-mark-peach)" },
+  { label: "Settings", icon: Settings, note: "var(--dn-note-butter)", mark: "var(--dn-mark-butter)" },
 ];
 
-/** The provenance rule's segments for the "records synced" figure. */
-const PROVENANCE: { source: SourceName; share: number }[] = [
-  { source: "Google Sheets", share: 46 },
-  { source: "CRM", share: 26 },
-  { source: "Calendly", share: 16 },
-  { source: "Webhook", share: 8 },
-  { source: "Telegram", share: 4 },
-];
+/* Events per hour, 09:00 back to 21:00 — the last bar is "now" and the CSS
+   gives it full ink automatically. */
+const SPARK = [34, 52, 41, 68, 57, 74, 96, 83, 61, 45, 70, 88];
+
+const SHELL: CSSProperties = { maxWidth: "1320px", margin: "0 auto", width: "100%" };
+const PAD = "var(--dn-xxl) var(--dn-xl)";
 
 export default function ActivityPage() {
   return (
     <div className="dn" style={{ minHeight: "100vh", display: "flex", alignItems: "flex-start" }}>
-      {/* ── THE RAIL. Chrome is the page: same bone, one hairline. ───────── */}
+      {/* ── THE RAIL ──────────────────────────────────────────────────────── */}
       <aside
         className="sidebar"
         style={{
@@ -134,42 +139,52 @@ export default function ActivityPage() {
           position: "sticky",
           top: 0,
           minHeight: "100vh",
-          padding: "var(--dn-md)",
+          padding: "var(--dn-lg) var(--dn-md) 84px",
           display: "flex",
           flexDirection: "column",
           gap: "var(--dn-xl)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--dn-xs)", padding: "0 var(--dn-xxs)" }}>
-          {/* The brand mark — one of the four things allowed to be accent. */}
-          <span
-            aria-hidden
-            style={{ width: "10px", height: "10px", background: "var(--dn-accent)", borderRadius: "var(--dn-r-none)" }}
-          />
-          <span className="t-subheading">Namzilabs</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "0 var(--dn-xs)" }}>
+          {/* The one yellow on the screen — Miro's rule, kept to the wordmark. */}
+          <span className="nav-icon" style={{ background: "var(--dn-yellow)", color: "var(--dn-ink)" }} aria-hidden>
+            <Zap size={16} strokeWidth={2.4} fill="currentColor" />
+          </span>
+          <span className="t-sub">Namzilabs</span>
         </div>
 
-        <nav style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          {NAV.map(({ label, icon: Icon, active }) => (
-            <span key={label} className={active ? "nav-row nav-row-active" : "nav-row"}>
-              <Icon size={15} strokeWidth={1.6} aria-hidden />
+        <nav style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+          {NAV.map(({ label, icon: Icon, note, mark, active }) => (
+            <a
+              key={label}
+              href="#"
+              className={active ? "nav-row nav-row-active" : "nav-row"}
+              style={{ textDecoration: "none" }}
+              aria-current={active ? "page" : undefined}
+            >
+              <span className="nav-icon" style={{ background: note, color: mark }} aria-hidden>
+                <Icon size={15} strokeWidth={2.1} />
+              </span>
               {label}
-            </span>
+            </a>
           ))}
         </nav>
 
-        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "var(--dn-xs)" }}>
-          <span className="t-eyebrow">Next sync</span>
-          <div style={{ display: "inline-block" }}>
-            <span className="t-figure-sm">04:12</span>
-            <div className="rule rule-settled" />
+        <div className="note note-lilac" style={{ marginTop: "auto", padding: "var(--dn-md)" }}>
+          <div className="t-label" style={{ color: "var(--dn-violet-ink)" }}>
+            Next sync
           </div>
-          <span className="t-mono-sm subtle">every 15 min</span>
+          <div className="t-figure-sm" style={{ marginTop: "var(--dn-xs)" }}>
+            04:12
+          </div>
+          <div className="t-mono" style={{ marginTop: "var(--dn-xxs)", color: "var(--dn-violet-ink)" }}>
+            every 15 min
+          </div>
         </div>
       </aside>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* ── TOP BAR. The mark lives on the rail, so this holds place + 2. ── */}
+        {/* ── TOP BAR ─────────────────────────────────────────────────────── */}
         <header
           className="topbar"
           style={{
@@ -180,38 +195,38 @@ export default function ActivityPage() {
             alignItems: "center",
             justifyContent: "space-between",
             gap: "var(--dn-md)",
-            padding: "0 var(--dn-lg)",
+            padding: "0 var(--dn-xl)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--dn-sm)" }}>
-            <span className="t-body-sm" style={{ color: "var(--dn-ink)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span className="t-body-sm" style={{ color: "var(--dn-ink)", fontWeight: 600 }}>
               Acme Growth
             </span>
-            <span className="t-mono-sm subtle">/</span>
+            <span className="t-body-sm subtle">/</span>
             <span className="t-body-sm muted">Activity</span>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "var(--dn-sm)" }}>
-            <span className="badge">
+            <span className="chip">
               <span className="dot" style={{ background: "var(--dn-up)" }} aria-hidden />
-              live
+              Live
             </span>
-            <button type="button" className="btn btn-secondary">
-              <RefreshCw size={14} strokeWidth={1.6} aria-hidden />
+            <a href="#" className="btn btn-secondary btn-sm" style={{ textDecoration: "none" }}>
+              <RefreshCw size={14} strokeWidth={2.1} aria-hidden />
               Sync now
-            </button>
-            {/* An avatar is one of exactly two things allowed to be a pill. */}
+            </a>
             <span
-              className="t-mono-sm"
+              className="t-mono"
               style={{
-                width: "28px",
-                height: "28px",
+                width: "32px",
+                height: "32px",
                 borderRadius: "var(--dn-r-full)",
-                background: "var(--dn-surface-sunken)",
-                color: "var(--dn-ink-muted)",
+                background: "var(--dn-violet-wash)",
+                color: "var(--dn-violet-ink)",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
+                fontWeight: 600,
               }}
             >
               EC
@@ -219,243 +234,335 @@ export default function ActivityPage() {
           </div>
         </header>
 
-        <main
-          style={{
-            maxWidth: "1280px",
-            margin: "0 auto",
-            padding: "var(--dn-xl) var(--dn-lg) var(--dn-section)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--dn-xl)",
-          }}
-        >
-          {/* ── PAGE HEADER ────────────────────────────────────────────────── */}
-          <section style={{ display: "flex", flexDirection: "column", gap: "var(--dn-lg)" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--dn-xs)" }}>
-              <span className="t-eyebrow">Workspace</span>
-              <h1 className="t-title">Activity &amp; connections</h1>
-              <p className="t-body muted" style={{ maxWidth: "62ch" }}>
-                Every event the workspace ingested, in the order it arrived. Where two sources disagree the row is
-                marked as a variance rather than an error — a number nobody agrees on is a different fact from a number
-                that went down.
-              </p>
-            </div>
-
-            {/* THE RULE, all three states, sitting on top of real figures. */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "var(--dn-md)" }}>
-              <div className="plate" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "var(--dn-sm)" }}>
-                <span className="t-eyebrow">Events today</span>
-                <div style={{ display: "inline-block" }}>
-                  <div className="t-figure-lg">1,204</div>
-                  {/* Settled — every connected source agrees. */}
-                  <div className="rule rule-settled" />
+        <main style={{ display: "flex", flexDirection: "column" }}>
+          {/* ── HEADER + FILTERS, on the band ─────────────────────────────── */}
+          <section className="band" style={{ padding: PAD }}>
+            <div style={{ ...SHELL, display: "flex", flexDirection: "column", gap: "var(--dn-xl)" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-end",
+                  justifyContent: "space-between",
+                  gap: "var(--dn-xl)",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--dn-sm)", minWidth: 0 }}>
+                  <span className="t-label">Workspace</span>
+                  <h1 className="t-display">Activity</h1>
+                  <p className="t-body muted" style={{ maxWidth: "58ch" }}>
+                    Every event the workspace ingested today, newest first. Each source keeps one colour across the whole
+                    screen, so you can read the shape of a day without reading a word of it.
+                  </p>
                 </div>
-                <span className="t-mono-sm muted">+186 vs. yesterday</span>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--dn-sm)" }}>
+                  <a href="#" className="btn btn-secondary btn-lg" style={{ textDecoration: "none" }}>
+                    <Plus size={17} strokeWidth={2.1} aria-hidden />
+                    Add source
+                  </a>
+                  <a href="#" className="btn btn-primary btn-lg" style={{ textDecoration: "none" }}>
+                    <Download size={17} strokeWidth={2.1} aria-hidden />
+                    Export CSV
+                  </a>
+                </div>
               </div>
 
-              <div className="plate" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "var(--dn-sm)" }}>
-                <span className="t-eyebrow">Records synced</span>
-                <div style={{ display: "inline-block" }}>
-                  <div className="t-figure-lg">18,330</div>
-                  {/* Provenance — one segment per source, width ∝ contribution. */}
-                  <div className="rule">
-                    {PROVENANCE.map(({ source, share }) => (
-                      <span
-                        key={source}
-                        className="rule-seg"
-                        style={{ width: `${share}%`, background: SOURCE_HUE[source] }}
-                      />
+              {/* THE FILTER ROW */}
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--dn-sm)", flexWrap: "wrap" }}>
+                <div style={{ position: "relative", display: "flex", alignItems: "center", width: "340px", flex: "none" }}>
+                  <Search
+                    size={16}
+                    strokeWidth={2.1}
+                    aria-hidden
+                    style={{ position: "absolute", left: "13px", color: "var(--dn-subtle)", pointerEvents: "none" }}
+                  />
+                  <input
+                    className="input"
+                    type="search"
+                    placeholder="Search events, records, IDs"
+                    aria-label="Search activity"
+                    readOnly
+                    style={{ paddingLeft: "38px" }}
+                  />
+                </div>
+
+                <span className="chip chip-active">
+                  All events
+                  <ChevronDown size={14} strokeWidth={2.4} aria-hidden />
+                </span>
+                <span className="chip chip-violet">
+                  Today
+                  <ChevronDown size={14} strokeWidth={2.4} aria-hidden />
+                </span>
+                <span className="chip">
+                  <span className="dot" style={{ background: "var(--dn-warn)" }} aria-hidden />
+                  Conflicts
+                </span>
+                <span className="chip">
+                  <span className="dot" style={{ background: "var(--dn-down)" }} aria-hidden />
+                  Failures
+                </span>
+                <span className="chip chip-outline">6 sources</span>
+
+                <span className="t-mono" style={{ marginLeft: "auto" }}>
+                  12 of 1,204 events
+                </span>
+              </div>
+            </div>
+          </section>
+
+          {/* ── THE TABLE, on white ───────────────────────────────────────── */}
+          <section style={{ padding: PAD }}>
+            <div style={SHELL}>
+              <div className="card" style={{ overflowX: "auto" }}>
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th scope="col" style={{ width: "112px" }}>
+                        Time
+                      </th>
+                      <th scope="col" style={{ width: "200px" }}>
+                        Source
+                      </th>
+                      <th scope="col">Event</th>
+                      <th scope="col" style={{ width: "116px", textAlign: "right" }}>
+                        Records
+                      </th>
+                      <th scope="col" style={{ width: "116px", textAlign: "right" }}>
+                        Duration
+                      </th>
+                      <th scope="col" style={{ width: "152px" }}>
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ROWS.map((row) => (
+                      <tr key={`${row.time}-${row.event}`}>
+                        <td className="t-mono">{row.time}</td>
+                        <td>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                            <span className="dot" style={{ background: SOURCE[row.source].mark }} aria-hidden />
+                            {row.source}
+                          </span>
+                        </td>
+                        <td style={{ color: "var(--dn-ink)" }}>{row.event}</td>
+                        <td className="num">{row.records}</td>
+                        <td className="num">{row.duration}</td>
+                        <td>
+                          <span
+                            className="chip"
+                            style={{ background: STATUS[row.status].fill, color: STATUS[row.status].ink }}
+                          >
+                            <span className="dot" style={{ background: STATUS[row.status].ink }} aria-hidden />
+                            {row.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          {/* ── CONNECTIONS, on the band ──────────────────────────────────── */}
+          <section className="band" style={{ padding: PAD }}>
+            <div style={{ ...SHELL, display: "flex", flexDirection: "column", gap: "var(--dn-lg)" }}>
+              <div
+                style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--dn-md)" }}
+              >
+                <h2 className="t-title">Connections</h2>
+                <span className="t-mono">4 connected · 1 needs review</span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--dn-sm)" }}>
+                {CONNECTIONS.map(({ source, icon: Icon, account, synced, state }) => (
+                  <div
+                    key={source}
+                    className="card"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--dn-md)",
+                      padding: "var(--dn-md) var(--dn-lg)",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      style={{
+                        width: "44px",
+                        height: "44px",
+                        borderRadius: "14px",
+                        flex: "none",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        background: SOURCE[source].note,
+                        color: SOURCE[source].mark,
+                      }}
+                    >
+                      <Icon size={20} strokeWidth={2.1} />
+                    </span>
+
+                    <span style={{ display: "flex", flexDirection: "column", gap: "2px", flex: 1, minWidth: "180px" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--dn-xs)" }}>
+                        <span className="dot" style={{ background: SOURCE[source].mark }} aria-hidden />
+                        <span className="t-sub">{source}</span>
+                      </span>
+                      <span className="t-body-sm muted">{account}</span>
+                    </span>
+
+                    <span className="chip" style={{ background: STATUS[state].fill, color: STATUS[state].ink }}>
+                      <span className="dot" style={{ background: STATUS[state].ink }} aria-hidden />
+                      {state}
+                    </span>
+
+                    <span
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-end",
+                        gap: "3px",
+                        width: "168px",
+                      }}
+                    >
+                      <span className="t-label">Last synced</span>
+                      <span className="t-mono">{synced}</span>
+                    </span>
+
+                    <a href="#" className="btn btn-secondary btn-sm" style={{ textDecoration: "none" }}>
+                      Configure
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ── THE NOTE WALL — the day in three fills ────────────────────── */}
+          <section style={{ padding: PAD }}>
+            <div style={{ ...SHELL, display: "flex", flexDirection: "column", gap: "var(--dn-lg)" }}>
+              <h2 className="t-title">Today so far</h2>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: "var(--dn-md)",
+                }}
+              >
+                <div
+                  className="note note-mint"
+                  style={{ padding: "var(--dn-xl)", display: "flex", flexDirection: "column", gap: "var(--dn-md)" }}
+                >
+                  <span className="t-label" style={{ color: "var(--dn-ink)" }}>
+                    Events
+                  </span>
+                  <span className="t-figure">1,204</span>
+                  <span className="t-body-sm">+186 against the same hours yesterday</span>
+                  <div className="spark" style={{ height: "56px", marginTop: "auto" }} aria-hidden>
+                    {SPARK.map((h, i) => (
+                      <i key={i} style={{ height: `${h}%` }} />
                     ))}
                   </div>
                 </div>
-                <span className="t-mono-sm muted">5 sources contributing</span>
-              </div>
 
-              <div className="plate" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "var(--dn-sm)" }}>
-                <span className="t-eyebrow">Reconciled bookings</span>
-                <div style={{ display: "inline-block" }}>
-                  <div className="t-figure-lg">316</div>
-                  {/* Variance — hatched, with the conflict count at the right end. */}
-                  <div className="rule rule-variance" style={{ width: "100%" }} />
-                  <div
-                    className="t-mono-sm"
-                    style={{ marginTop: "var(--dn-xxs)", textAlign: "right", color: "var(--dn-variance)" }}
-                  >
-                    (−14)
-                  </div>
-                </div>
-                <span className="t-mono-sm muted">calendly vs. crm</span>
-              </div>
-            </div>
-          </section>
-
-          {/* ── FILTER ROW ─────────────────────────────────────────────────── */}
-          <section style={{ display: "flex", flexDirection: "column", gap: "var(--dn-md)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--dn-sm)" }}>
-              <div style={{ position: "relative", flex: 1, maxWidth: "360px", display: "flex", alignItems: "center" }}>
-                <Search
-                  size={14}
-                  strokeWidth={1.6}
-                  aria-hidden
-                  style={{ position: "absolute", left: "10px", color: "var(--dn-ink-subtle)" }}
-                />
-                <input
-                  className="input"
-                  type="search"
-                  placeholder="Search events, records, IDs"
-                  defaultValue=""
-                  readOnly
-                  style={{ paddingLeft: "30px" }}
-                  aria-label="Search activity"
-                />
-              </div>
-              <button type="button" className="btn btn-secondary">
-                <SlidersHorizontal size={14} strokeWidth={1.6} aria-hidden />
-                All sources
-              </button>
-              <button type="button" className="btn btn-secondary">
-                <CalendarRange size={14} strokeWidth={1.6} aria-hidden />
-                Today
-              </button>
-              <span className="t-mono-sm subtle" style={{ marginLeft: "auto" }}>
-                12 of 1,204
-              </span>
-            </div>
-
-            {/* ── THE TABLE ────────────────────────────────────────────────── */}
-            <div className="plate" style={{ overflowX: "auto" }}>
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th scope="col" style={{ width: "104px" }}>
-                      Time
-                    </th>
-                    <th scope="col" style={{ width: "168px" }}>
-                      Source
-                    </th>
-                    <th scope="col">Event</th>
-                    <th scope="col" style={{ textAlign: "right", width: "112px" }}>
-                      Records
-                    </th>
-                    <th scope="col" style={{ textAlign: "right", width: "112px" }}>
-                      Duration
-                    </th>
-                    <th scope="col" style={{ width: "168px" }}>
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ROWS.map((row) => (
-                    <tr key={`${row.time}-${row.event}`}>
-                      <td>
-                        <span className="t-mono muted">{row.time}</span>
-                      </td>
-                      {/* No taxonomy hue here. The five source hues are licensed to
-                          provenance segments and node spines only — a dot per row
-                          would put them on a third object. The name does the work. */}
-                      <td>{row.source}</td>
-                      <td style={{ color: "var(--dn-ink)" }}>{row.event}</td>
-                      <td className="num">{row.records}</td>
-                      <td className="num">{row.duration}</td>
-                      <td>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--dn-xs)" }}>
-                          <span className="badge">
-                            <span className="dot" style={{ background: STATUS_HUE[row.status] }} aria-hidden />
-                            {row.status}
-                          </span>
-                          {row.conflicts ? (
-                            <span className="t-mono-sm" style={{ color: "var(--dn-variance)" }}>
-                              {row.conflicts}
-                            </span>
-                          ) : null}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          {/* ── CONNECTIONS ────────────────────────────────────────────────── */}
-          <section style={{ display: "flex", flexDirection: "column", gap: "var(--dn-md)" }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--dn-md)" }}>
-              <h2 className="t-heading">Connections</h2>
-              <span className="t-mono-sm subtle">4 connected · 1 disagreeing</span>
-            </div>
-
-            <div className="plate">
-              {CONNECTIONS.map((connection, i) => (
                 <div
-                  key={connection.name}
+                  className="note note-peach"
+                  style={{ padding: "var(--dn-xl)", display: "flex", flexDirection: "column", gap: "var(--dn-md)" }}
+                >
+                  <span className="t-label" style={{ color: "var(--dn-ink)" }}>
+                    Conflicts
+                  </span>
+                  <span className="t-figure">17</span>
+                  <span className="t-body-sm">
+                    Calendly and HubSpot disagree on 17 booking owners. Nothing failed — two sources counted the same
+                    thing two ways.
+                  </span>
+                  <a
+                    href="#"
+                    className="btn btn-primary btn-sm"
+                    style={{ textDecoration: "none", alignSelf: "flex-start", marginTop: "auto" }}
+                  >
+                    Review conflicts
+                  </a>
+                </div>
+
+                <div
+                  className="note note-sky"
+                  style={{ padding: "var(--dn-xl)", display: "flex", flexDirection: "column", gap: "var(--dn-md)" }}
+                >
+                  <span className="t-label" style={{ color: "var(--dn-ink)" }}>
+                    Uptime
+                  </span>
+                  <span className="t-figure">99.97%</span>
+                  <span className="t-body-sm">One failed webhook signature at 08:26, retried and settled.</span>
+                  <span className="t-mono" style={{ color: "var(--dn-ink)", marginTop: "auto" }}>
+                    30-day rolling · 1,412 syncs
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── EMPTY — connected, waiting on its first delivery ──────────── */}
+          <section style={{ padding: "0 var(--dn-xl) var(--dn-section)" }}>
+            <div style={SHELL}>
+              <div
+                className="empty"
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--dn-md)" }}
+              >
+                <span
+                  aria-hidden
                   style={{
-                    display: "flex",
+                    width: "56px",
+                    height: "56px",
+                    borderRadius: "18px",
+                    display: "inline-flex",
                     alignItems: "center",
-                    gap: "var(--dn-md)",
-                    padding: "var(--dn-md) 20px",
-                    borderTop: i === 0 ? "0" : "1px solid var(--dn-hairline)",
+                    justifyContent: "center",
+                    background: "var(--dn-note-lilac)",
+                    color: "var(--dn-mark-lilac)",
                   }}
                 >
-                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, flex: 1 }}>
-                    <span className="t-subheading">{connection.name}</span>
-                    <span className="t-body-sm muted">{connection.account}</span>
-                  </div>
-
-                  {connection.conflicts ? (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--dn-xs)" }}>
-                      <span className="badge">
-                        <span className="dot" style={{ background: "var(--dn-variance)" }} aria-hidden />
-                        variance
-                      </span>
-                      <span className="t-mono-sm" style={{ color: "var(--dn-variance)" }}>
-                        {connection.conflicts}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="badge">
-                      <span className="dot" style={{ background: "var(--dn-up)" }} aria-hidden />
-                      settled
-                    </span>
-                  )}
-
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px", width: "156px" }}>
-                    <span className="t-eyebrow">Last synced</span>
-                    <span className="t-mono">{connection.synced}</span>
-                  </div>
-
-                  <button type="button" className="btn btn-ghost">
-                    {connection.action}
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* ── EMPTY STATE — connected, but nothing has arrived yet.
-                One subheading, one body-sm, one primary button. No illustration,
-                and no taxonomy hue: the webhook's hue belongs to the rule. ──── */}
-            <div className="empty" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--dn-sm)" }}>
-              <span className="t-subheading">No events from stripe-staging yet</span>
-              <p className="t-body-sm muted" style={{ maxWidth: "46ch" }}>
-                The webhook was verified 4 minutes ago and is waiting on its first delivery. Nothing is wrong — there is
-                simply nothing to reconcile until an event arrives.
-              </p>
-              <button type="button" className="btn btn-primary" style={{ marginTop: "var(--dn-xs)" }}>
-                Send a test event
-              </button>
+                  <Inbox size={26} strokeWidth={2.1} />
+                </span>
+                <h3 className="t-heading">No events from stripe-staging yet</h3>
+                <p className="t-body muted" style={{ maxWidth: "48ch" }}>
+                  The webhook was verified four minutes ago and is waiting on its first delivery. Nothing is wrong —
+                  there is simply nothing to reconcile until an event arrives.
+                </p>
+                <a
+                  href="#"
+                  className="btn btn-primary"
+                  style={{ textDecoration: "none", marginTop: "var(--dn-xs)" }}
+                >
+                  Send a test event
+                </a>
+              </div>
             </div>
           </section>
         </main>
       </div>
 
-      {/* Navigation between the proposal's pages. */}
-      <Link
+      <a
         href="/design/next"
-        className="btn btn-secondary"
-        style={{ position: "fixed", right: "var(--dn-lg)", bottom: "var(--dn-lg)", zIndex: 40, textDecoration: "none" }}
+        className="btn btn-secondary btn-sm"
+        style={{
+          position: "fixed",
+          left: "var(--dn-lg)",
+          bottom: "var(--dn-lg)",
+          zIndex: 40,
+          textDecoration: "none",
+          boxShadow: "var(--dn-lift)",
+        }}
       >
+        <ArrowLeft size={14} strokeWidth={2.1} aria-hidden />
         Back to the language
-      </Link>
+      </a>
     </div>
   );
 }

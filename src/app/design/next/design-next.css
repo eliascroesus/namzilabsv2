@@ -1,89 +1,124 @@
 /**
- * THE DESIGN.md SYSTEM, RENDERED — AND DELIBERATELY QUARANTINED.
+ * THE BOARD — the playful language.
  *
- * Every value below is copied from /DESIGN.md, which is the authority. This
- * file exists so the proposed language can be SEEN at full size without
- * touching `globals.css`, so the shipping product is unchanged and the two can
- * be compared in two browser tabs rather than from memory.
+ * The first attempt at this file was a ledger: bone paper, mono figures, 4px
+ * corners, no weight above 500, almost no colour at rest. It was internally
+ * consistent and it was lifeless, because "quiet" was the wrong target. This
+ * product is compared against Miro, Figma, Notion and Make — tools people sit
+ * inside for hours — and every one of those is loud in the same specific way.
  *
- * Everything is scoped under `.dn`. That is not tidiness — the app's own
- * tokens define `--background`, `--foreground`, `--primary` and thirty more
- * names, and a second system declaring the same names at `:root` would silently
- * re-theme the entire product the moment this route was visited.
+ * The corpus says how. Four moves, shared by the whole playful camp:
  *
- * It is also plain CSS rather than Tailwind utilities on purpose. The kit gate
- * (`scripts/check-ui.ts`) enforces a CLOSED set of sizes, radii and shadows —
- * correctly — and this language's scale is a different closed set. Expressing
- * it as utilities would either fail the gate or force the gate open for the
- * whole repo. A scoped stylesheet keeps both systems intact and honest.
+ *   1. COLOUR CLASSIFIES, BLACK ACTS. Miro, Webflow, Airtable and Figma all put
+ *      a near-black on every CTA and then spend the entire chromatic budget on
+ *      CARD FILLS. Colour stops being decoration and starts being how you tell
+ *      one thing from another — which is the whole job on a wall of metrics.
+ *   2. BIG RADII, AND MORE THAN ONE. Miro reserves 28px for its pastel feature
+ *      cards, Figma 24px for colour blocks and 32px for hero panels, MiniMax
+ *      calls the doubled radius its signature. A single small radius everywhere
+ *      is what makes an interface read as a form.
+ *   3. SECTION RHYTHM. Airtable: white → tinted band → white → signature card.
+ *      "Two whites in a row breaks it and the page collapses into a typography
+ *      blog." That is the off-white-section idea, and it is load-bearing.
+ *   4. THE PRODUCT IS THE ILLUSTRATION. Miro shows Miro boards; Notion floats
+ *      its own kanban out of the hero. No stock art, no abstract shapes.
+ *
+ * Scoped under `.dn` and nothing else, so it cannot touch the shipping app —
+ * `globals.css` already owns `--background`, `--primary` and thirty more names,
+ * and a second system declaring those at `:root` would silently re-theme the
+ * product the moment this route was opened.
  */
 
 .dn {
-  /* ── COLOUR ─────────────────────────────────────────────────────────── */
-  --dn-primary: #14161a;
-  --dn-primary-pressed: #0a0c0f;
-  --dn-primary-disabled: #d5d1c9;
-  --dn-on-primary: #ffffff;
+  /* ── GROUND ─────────────────────────────────────────────────────────── */
+  --dn-canvas: #ffffff;
+  --dn-band: #f6f5f3;
+  --dn-surface: #ffffff;
+  --dn-sunken: #efedea;
+  --dn-hairline: #e7e4e0;
+  --dn-hairline-strong: #d6d2cc;
 
-  --dn-ink: #14161a;
-  --dn-body: #2b2f36;
-  --dn-ink-muted: #4d525b;
-  --dn-ink-subtle: #686d77;
+  /* ── INK ────────────────────────────────────────────────────────────── */
+  --dn-ink: #1a1a1a;
+  --dn-body: #3d3d3d;
+  --dn-muted: #6b6b6b;
+  /* Solved, not picked: #8f8f8f measured 3.23:1 on white — under AA. This
+     clears 5.02:1 on the canvas and 4.61:1 on the band, so the quietest
+     caption in the system is legible on BOTH grounds it ever sits on. */
+  --dn-subtle: #6f6f6f;
+  --dn-on-dark: #fafafa;
 
-  --dn-canvas: #f7f6f3;
-  --dn-surface-1: #ffffff;
-  --dn-surface-2: #fbfaf8;
-  --dn-surface-sunken: #f2f0ec;
-  --dn-hairline: #e6e3dd;
-  --dn-hairline-strong: #d5d1c9;
+  /* ── THE THREE THAT CARRY THE BRAND ─────────────────────────────────── */
+  /* BLACK acts. Every primary button in the product is this, which is what
+     frees the entire palette below to mean something. */
+  --dn-primary: #1a1a1a;
+  --dn-primary-hover: #333333;
+  /* VIOLET marks identity and selection — the wordmark, the active nav, the
+     focus ring, a selected node. Never a workhorse. */
+  --dn-violet: #7c4dff;
+  --dn-violet-ink: #5b21e0;
+  --dn-violet-wash: #f1ebff;
+  /* YELLOW is the hero, at most once on a screen. Miro's rule exactly: the
+     mark, the promo band and the tag chip — and it is strong enough to carry
+     ink, which is why it is #ffd94a and not the neon. */
+  --dn-yellow: #ffd94a;
+  --dn-yellow-wash: #fff7d6;
 
-  --dn-accent: #1e3f9c;
-  --dn-accent-pressed: #16307a;
-  --dn-accent-wash: #eef1fa;
+  /* ── THE STICKY-NOTE FAMILY ─────────────────────────────────────────────
+     Whole-card fills, one per metric family. This is the working colour of the
+     system — the thing you actually see most of — and it is the move the first
+     attempt was missing entirely. Ink on every one of these is --dn-ink. */
+  --dn-note-lilac: #ece7ff;
+  --dn-note-mint: #d6f2e3;
+  --dn-note-peach: #ffe4d1;
+  --dn-note-rose: #ffe0ec;
+  --dn-note-sky: #ddebff;
+  --dn-note-butter: #fff2c2;
 
-  --dn-up: #1a6b4c;
-  --dn-down: #a02a1e;
-  --dn-variance: #8a6414;
-  --dn-stale: #a8a49c;
+  /* The saturated twins. Dots, spines, chart series, sparkline bars — never a
+     card fill, never a button. Each pairs with the note above it. */
+  --dn-mark-lilac: #7c4dff;
+  --dn-mark-mint: #12a06a;
+  --dn-mark-peach: #f2761f;
+  --dn-mark-rose: #e0417c;
+  --dn-mark-sky: #2563eb;
+  --dn-mark-butter: #d19c00;
 
-  /* The source taxonomy. These five appear in exactly two places in the whole
-     system: the segments of a provenance rule, and a node's leading spine. */
-  --dn-source-calendly: #0d6e73;
-  --dn-source-sheets: #31693c;
-  --dn-source-crm: #6b3fae;
-  --dn-source-webhook: #8f5d06;
-  --dn-source-telegram: #ab2f63;
-  --dn-source-empty: #d5d1c9;
+  /* ── STATE ──────────────────────────────────────────────────────────── */
+  /* #12804f measured 4.35:1 on its own wash — just under. Darkened to clear
+     it at 4.61:1, matching the danger trio's 4.63:1 so the two states read
+     at the same weight. */
+  --dn-up: #0f7c45;
+  --dn-up-wash: #dff5e9;
+  /* The delta on a note card sits on a PASTEL, not on the wash, and --dn-up
+     was only ever solved against the wash: it measures 4.29:1 on rose, 4.33
+     on peach, 4.36 on sky, 4.37 on lilac and 4.43 on mint — under AA on five
+     of the six grounds it actually ships on. This clears every pastel at
+     5.10:1 or better (rose is the worst) and 6.25:1 on the canvas. Down needs
+     no twin: it is 4.55:1 at worst, on rose. */
+  --dn-up-on-note: #0d6f3e;
+  --dn-down: #c0342a;
+  --dn-down-wash: #ffe4e0;
+  --dn-warn: #8a6414;
+  --dn-warn-wash: #fdf0cf;
 
-  /* The well — the product's only dark surface, dark because it is RECESSED. */
-  --dn-well: #0d0f12;
-  --dn-well-surface-1: #15181d;
-  --dn-well-surface-2: #1c2027;
-  --dn-well-hairline: #23272f;
-  --dn-well-hairline-strong: #30353e;
-  --dn-well-grid-dot: #22262e;
-  --dn-well-edge: #3a4049;
-  --dn-well-ink: #f2f3f4;
-  --dn-well-ink-muted: #9aa0a9;
-  --dn-well-accent: #8aa0f0;
-  --dn-well-up: #3fb98a;
-  --dn-well-down: #f0736a;
-
-  --dn-chart-1: #14161a;
-  --dn-chart-2: #5b7a8c;
-  --dn-chart-3: #9a6f3c;
-  --dn-chart-4: #4f6b4a;
-  --dn-chart-5: #8a5a6b;
-
-  --dn-scrim: rgba(20, 22, 26, 0.44);
-  --dn-focus: #1e3f9c;
-  --dn-selection: rgba(30, 63, 156, 0.1);
+  /* ── DARK, for the canvas and the one inverse band ──────────────────── */
+  --dn-dark: #17161c;
+  --dn-dark-2: #211f28;
+  --dn-dark-3: #2b2833;
+  --dn-dark-hairline: #322e3c;
+  --dn-dark-dot: #302c3a;
+  --dn-dark-edge: #4a4458;
+  /* The quiet text colour ON the dark family. --dn-subtle is NOT it: that was
+     solved against the canvas and the band and measures 3.58:1 on the well.
+     This is 6.19:1 on --dn-dark and 5.60:1 on --dn-dark-2. */
+  --dn-dark-mono: #9b95a8;
 
   /* ── TYPE ───────────────────────────────────────────────────────────── */
   --dn-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --dn-mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+  --dn-mono: ui-monospace, "SF Mono", "Geist Mono", monospace;
 
-  /* ── SPACE / SHAPE ──────────────────────────────────────────────────── */
+  /* ── SPACE ──────────────────────────────────────────────────────────── */
   --dn-xxs: 4px;
   --dn-xs: 8px;
   --dn-sm: 12px;
@@ -91,234 +126,229 @@
   --dn-lg: 24px;
   --dn-xl: 32px;
   --dn-xxl: 48px;
-  --dn-section: 80px;
+  --dn-section: 96px;
 
-  --dn-r-none: 0px;
-  --dn-r-sm: 4px;
-  --dn-r-md: 12px;
-  --dn-r-lg: 20px;
-  --dn-r-full: 9999px;
+  /* ── SHAPE — four steps, and the big one is the point ───────────────── */
+  --dn-r-sm: 10px;   /* inputs, chips, menu rows */
+  --dn-r-md: 16px;   /* ordinary cards, panels, node cards */
+  --dn-r-lg: 28px;   /* the note cards, feature blocks — the signature */
+  --dn-r-xl: 36px;   /* hero panels and full-bleed bands */
+  --dn-r-full: 9999px; /* buttons, pills, avatars, dots */
 
-  /* THE ONE SHADOW. Overlays only — never a card, tile, button or input. */
-  --dn-shadow: 0 24px 48px -12px rgba(20, 22, 26, 0.18);
+  /* ── DEPTH — soft, because things on a board float ──────────────────── */
+  --dn-lift: 0 1px 2px rgba(26, 26, 26, 0.04), 0 6px 16px -6px rgba(26, 26, 26, 0.10);
+  --dn-lift-hover: 0 2px 4px rgba(26, 26, 26, 0.05), 0 14px 32px -10px rgba(26, 26, 26, 0.16);
+  --dn-pop: 0 24px 56px -16px rgba(26, 26, 26, 0.24);
 
   background: var(--dn-canvas);
   color: var(--dn-body);
   font-family: var(--dn-sans);
-  font-feature-settings: "cv05";
+  font-feature-settings: "cv05", "ss03";
+  letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
 }
 
 /* ── TYPE SCALE ───────────────────────────────────────────────────────────
-   Tracking is −3% of size above 28px, easing to 0 by 14px, and flipping
-   POSITIVE on the eyebrow. There is no weight above 500 anywhere below. */
-.dn .t-display-lg { font: 450 56px/1.06 var(--dn-sans); letter-spacing: -1.68px; color: var(--dn-ink); }
-.dn .t-display-md { font: 450 40px/1.10 var(--dn-sans); letter-spacing: -1.2px; color: var(--dn-ink); }
-.dn .t-title      { font: 500 28px/1.20 var(--dn-sans); letter-spacing: -0.84px; color: var(--dn-ink); }
-.dn .t-heading    { font: 500 20px/1.30 var(--dn-sans); letter-spacing: -0.4px; color: var(--dn-ink); }
-.dn .t-subheading { font: 500 16px/1.40 var(--dn-sans); letter-spacing: -0.16px; color: var(--dn-ink); }
-.dn .t-body       { font: 400 15px/1.55 var(--dn-sans); letter-spacing: -0.09px; }
-.dn .t-body-sm    { font: 400 13px/1.50 var(--dn-sans); }
-.dn .t-eyebrow {
-  font: 500 11px/1.2 var(--dn-mono);
-  letter-spacing: 0.88px;
-  text-transform: uppercase;
-  color: var(--dn-ink-subtle);
-}
-.dn .t-figure-hero { font: 450 56px/1.0 var(--dn-mono); letter-spacing: -1.68px; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
-.dn .t-figure-lg   { font: 450 40px/1.0 var(--dn-mono); letter-spacing: -1.2px; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
-.dn .t-figure-md   { font: 450 28px/1.05 var(--dn-mono); letter-spacing: -0.84px; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
-.dn .t-figure-sm   { font: 450 18px/1.2 var(--dn-mono); letter-spacing: -0.36px; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
-.dn .t-mono        { font: 450 13px/1.45 var(--dn-mono); }
-.dn .t-mono-sm     { font: 450 11px/1.4 var(--dn-mono); letter-spacing: 0.11px; }
+   Weights go to 700 here, deliberately. Capping the last system at 500 is a
+   large part of why it read as lifeless — nothing on the page had any punch. */
+.dn .t-hero      { font: 700 68px/1.02 var(--dn-sans); letter-spacing: -0.035em; color: var(--dn-ink); }
+.dn .t-display   { font: 700 46px/1.06 var(--dn-sans); letter-spacing: -0.032em; color: var(--dn-ink); }
+.dn .t-title     { font: 650 30px/1.15 var(--dn-sans); letter-spacing: -0.028em; color: var(--dn-ink); }
+.dn .t-heading   { font: 600 21px/1.28 var(--dn-sans); letter-spacing: -0.022em; color: var(--dn-ink); }
+.dn .t-sub       { font: 600 16px/1.4 var(--dn-sans); letter-spacing: -0.014em; color: var(--dn-ink); }
+.dn .t-body      { font: 400 16px/1.6 var(--dn-sans); }
+.dn .t-body-sm   { font: 400 14px/1.55 var(--dn-sans); }
+.dn .t-label     { font: 600 12px/1.3 var(--dn-sans); letter-spacing: 0.02em; text-transform: uppercase; color: var(--dn-muted); }
+.dn .t-mono      { font: 500 12px/1.45 var(--dn-mono); letter-spacing: 0; color: var(--dn-muted); }
 
-.dn .muted { color: var(--dn-ink-muted); }
-.dn .subtle { color: var(--dn-ink-subtle); }
+/* THE FIGURE. Sans, heavy, tabular — a number you read across a room, not a
+   readout on an instrument. Tabular so it does not twitch when it updates. */
+.dn .t-figure    { font: 680 52px/1.0 var(--dn-sans); letter-spacing: -0.04em; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
+.dn .t-figure-sm { font: 680 32px/1.05 var(--dn-sans); letter-spacing: -0.032em; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
 
-/* ── FOCUS, DECLARED ONCE ─────────────────────────────────────────────── */
+.dn .muted { color: var(--dn-muted); }
+.dn .subtle { color: var(--dn-subtle); }
+
 .dn :where(a, button, [tabindex]:not([tabindex="-1"])):focus-visible {
-  outline: 2px solid var(--dn-focus);
+  outline: 3px solid var(--dn-violet);
   outline-offset: 2px;
 }
 
-/* ── SURFACES ─────────────────────────────────────────────────────────────
-   Elevation is a brightness ladder: plates lift by going LIGHTER than the
-   bone page, which removes the card-shadow question entirely. */
-.dn .plate {
-  background: var(--dn-surface-1);
-  border: 1px solid var(--dn-hairline);
-  border-radius: var(--dn-r-md);
-}
-.dn .overlay {
-  background: var(--dn-surface-1);
-  border: 1px solid var(--dn-hairline);
-  border-radius: var(--dn-r-md);
-  box-shadow: var(--dn-shadow);
-}
+/* ── SECTION RHYTHM — never two whites in a row ───────────────────────── */
+.dn .band { background: var(--dn-band); }
+.dn .band-dark { background: var(--dn-dark); color: var(--dn-on-dark); }
+.dn .band-dark .t-title,
+.dn .band-dark .t-display,
+.dn .band-dark .t-heading,
+.dn .band-dark .t-sub { color: var(--dn-on-dark); }
 
-/* ── BUTTONS — nothing is a pill ──────────────────────────────────────── */
+/* ── CARDS ────────────────────────────────────────────────────────────── */
+.dn .card {
+  background: var(--dn-surface);
+  border: 1px solid var(--dn-hairline);
+  border-radius: var(--dn-r-md);
+  box-shadow: var(--dn-lift);
+}
+/* THE NOTE CARD — the signature. A whole-card pastel fill at the big radius,
+   no border, because a sticky note does not have one. */
+.dn .note {
+  border-radius: var(--dn-r-lg);
+  padding: var(--dn-lg);
+  color: var(--dn-ink);
+  border: 0;
+}
+/* The single easiest mistake in the system, made unmakeable. --dn-muted is
+   4.35–4.75:1 across the six pastels and fails AA on five of them; --dn-subtle
+   is worse. A caption on a note is --dn-body (8.86:1 at worst, on rose), and
+   writing `.muted` on one now resolves to exactly that instead of shipping a
+   4.4:1 caption because someone reached for the habitual class. */
+.dn .note .muted,
+.dn .note .subtle { color: var(--dn-body); }
+.dn .note-lilac  { background: var(--dn-note-lilac); }
+.dn .note-mint   { background: var(--dn-note-mint); }
+.dn .note-peach  { background: var(--dn-note-peach); }
+.dn .note-rose   { background: var(--dn-note-rose); }
+.dn .note-sky    { background: var(--dn-note-sky); }
+.dn .note-butter { background: var(--dn-note-butter); }
+
+/* ── BUTTONS — pills, per the brand sheet ─────────────────────────────── */
 .dn .btn {
   display: inline-flex;
   align-items: center;
   gap: var(--dn-xs);
-  padding: 10px 16px;
-  border-radius: var(--dn-r-sm);
-  font: 500 14px/1 var(--dn-sans);
-  letter-spacing: -0.07px;
-  border: 1px solid transparent;
+  padding: 11px 20px;
+  border-radius: var(--dn-r-full);
+  font: 600 15px/1 var(--dn-sans);
+  letter-spacing: -0.014em;
+  border: 1.5px solid transparent;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  transition: background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
-.dn .btn:active:not(:disabled) { transform: translateY(0.5px); }
-.dn .btn-primary { background: var(--dn-primary); color: var(--dn-on-primary); }
-.dn .btn-primary:active:not(:disabled) { background: var(--dn-primary-pressed); }
-.dn .btn-secondary { background: var(--dn-surface-1); color: var(--dn-ink); border-color: var(--dn-hairline-strong); }
-.dn .btn-ghost { background: transparent; color: var(--dn-ink-muted); padding: 10px 12px; }
-.dn .btn-destructive { background: var(--dn-surface-1); color: var(--dn-down); border-color: var(--dn-hairline-strong); }
-.dn .btn:disabled { color: var(--dn-primary-disabled); cursor: not-allowed; }
+.dn .btn:active:not(:disabled) { transform: translateY(1px); }
+.dn .btn-primary { background: var(--dn-primary); color: var(--dn-on-dark); }
+.dn .btn-secondary { background: var(--dn-surface); color: var(--dn-ink); border-color: var(--dn-hairline-strong); }
+.dn .btn-violet { background: var(--dn-violet); color: #ffffff; }
+/* The hero. One per screen, and the sheet's own rule: ink on yellow. */
+.dn .btn-yellow { background: var(--dn-yellow); color: var(--dn-ink); }
+.dn .btn-ghost { background: transparent; color: var(--dn-muted); }
+.dn .btn-lg { padding: 15px 26px; font-size: 16px; }
+.dn .btn-sm { padding: 8px 15px; font-size: 14px; }
+.dn .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── CHIPS & PILLS ────────────────────────────────────────────────────── */
+.dn .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border-radius: var(--dn-r-full);
+  font: 600 13px/1 var(--dn-sans);
+  letter-spacing: -0.006em;
+  background: var(--dn-sunken);
+  color: var(--dn-body);
+  border: 1.5px solid transparent;
+}
+.dn .chip-active { background: var(--dn-ink); color: var(--dn-on-dark); }
+.dn .chip-violet { background: var(--dn-violet-wash); color: var(--dn-violet-ink); }
+.dn .chip-yellow { background: var(--dn-yellow-wash); color: #7a5c00; }
+.dn .chip-outline { background: transparent; border-color: var(--dn-hairline-strong); }
+.dn .dot { width: 9px; height: 9px; border-radius: var(--dn-r-full); flex: none; }
 
 /* ── INPUT ────────────────────────────────────────────────────────────── */
 .dn .input {
   width: 100%;
-  background: var(--dn-surface-1);
+  background: var(--dn-surface);
   color: var(--dn-ink);
-  border: 1px solid var(--dn-hairline-strong);
+  border: 1.5px solid var(--dn-hairline-strong);
   border-radius: var(--dn-r-sm);
-  padding: 9px 12px;
-  font: 400 13px/1.5 var(--dn-sans);
+  padding: 11px 14px;
+  font: 400 15px/1.4 var(--dn-sans);
 }
-.dn .input::placeholder { color: var(--dn-ink-subtle); }
-.dn .input:focus-visible { border-color: var(--dn-focus); outline: 2px solid var(--dn-selection); outline-offset: 0; }
+.dn .input::placeholder { color: var(--dn-subtle); }
+.dn .input:focus-visible { border-color: var(--dn-violet); outline: 3px solid var(--dn-violet-wash); outline-offset: 0; }
 
-/* ── BADGE — the badge never takes the hue; its dot does ──────────────── */
-.dn .badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--dn-surface-sunken);
-  color: var(--dn-ink-muted);
-  border-radius: var(--dn-r-sm);
-  padding: 3px 7px;
-  font: 450 11px/1.4 var(--dn-mono);
-  letter-spacing: 0.11px;
-}
-.dn .dot { width: 6px; height: 6px; border-radius: var(--dn-r-full); flex: none; }
+/* ── SPARKBARS — chunky, rounded, never hairline ──────────────────────── */
+.dn .spark { display: flex; align-items: flex-end; gap: 3px; height: 40px; }
+.dn .spark i { display: block; width: 7px; border-radius: 3px; background: var(--dn-ink); opacity: 0.18; }
+.dn .spark i:last-child { opacity: 1; }
 
-/* ── THE RULE ─────────────────────────────────────────────────────────────
-   The system's one signature. 2px, square, the exact width of the figure it
-   sits under, 8px below its baseline. Three states, one object:
-     settled    — one continuous hairline; every source agrees
-     provenance — segmented by contributing source, width ∝ contribution
-     variance   — a sunken segment under a 45° hatch, with the conflict count */
-.dn .rule { display: flex; height: 2px; margin-top: var(--dn-xs); border-radius: var(--dn-r-none); overflow: hidden; }
-.dn .rule-settled { background: var(--dn-hairline-strong); }
-.dn .rule-seg { height: 2px; }
-.dn .rule-variance {
-  background-color: var(--dn-surface-sunken);
-  background-image: repeating-linear-gradient(
-    45deg,
-    var(--dn-ink-subtle) 0 1px,
-    transparent 1px 3px
-  );
-}
-
-/* ── TABLE — every numeric cell is mono, right-aligned, tabular ───────── */
+/* ── TABLE ────────────────────────────────────────────────────────────── */
 .dn table.data { width: 100%; border-collapse: collapse; }
 .dn table.data th {
-  background: var(--dn-surface-2);
-  color: var(--dn-ink-subtle);
-  font: 500 11px/1.2 var(--dn-mono);
-  letter-spacing: 0.88px;
-  text-transform: uppercase;
   text-align: left;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--dn-hairline-strong);
+  padding: 12px 18px;
+  font: 600 12px/1.3 var(--dn-sans);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--dn-muted);
+  background: var(--dn-band);
 }
+.dn table.data th:first-child { border-top-left-radius: var(--dn-r-md); }
+.dn table.data th:last-child { border-top-right-radius: var(--dn-r-md); }
 .dn table.data td {
-  padding: 10px 16px;
+  padding: 14px 18px;
   border-bottom: 1px solid var(--dn-hairline);
-  font: 400 13px/1.5 var(--dn-sans);
+  font: 400 15px/1.5 var(--dn-sans);
   color: var(--dn-body);
 }
 .dn table.data tr:last-child td { border-bottom: 0; }
-.dn table.data .num {
-  font: 450 13px/1.45 var(--dn-mono);
-  color: var(--dn-ink);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
+.dn table.data td.num { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--dn-ink); text-align: right; }
+.dn table.data td.t-mono { font: 500 12px/1.45 var(--dn-mono); color: var(--dn-muted); }
 
-/**
- * A SPECIFICITY TRAP, CLOSED.
- *
- * `.dn table.data td` scores (0,2,2) and `.dn .t-mono` scores (0,2,0), so
- * putting a type class directly on a `<td>` loses to the cell rule and does
- * NOTHING — the cell silently stays Inter, with no error anywhere. The Time
- * column is exactly where a future author reaches for `t-mono` on the cell and
- * gets sans back. These re-declare the type classes at cell specificity so the
- * obvious spelling works.
- */
-.dn table.data td.t-mono,
-.dn table.data th.t-mono { font: 450 13px/1.45 var(--dn-mono); }
-.dn table.data td.t-mono-sm,
-.dn table.data th.t-mono-sm { font: 450 11px/1.4 var(--dn-mono); letter-spacing: 0.11px; }
-.dn table.data td.t-figure-sm { font: 450 18px/1.2 var(--dn-mono); letter-spacing: -0.36px; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
-.dn table.data td.muted { color: var(--dn-ink-muted); }
-.dn table.data td.subtle { color: var(--dn-ink-subtle); }
-
-/* ── THE WELL — depth runs downward ───────────────────────────────────── */
+/* ── THE CANVAS ───────────────────────────────────────────────────────── */
 .dn .well {
-  background-color: var(--dn-well);
-  background-image: radial-gradient(var(--dn-well-grid-dot) 1px, transparent 1px);
-  background-size: 20px 20px;
-  border-radius: var(--dn-r-lg);
-  color: var(--dn-well-ink);
+  background-color: var(--dn-dark);
+  background-image: radial-gradient(var(--dn-dark-dot) 1.5px, transparent 1.5px);
+  background-size: 22px 22px;
+  border-radius: var(--dn-r-xl);
+  color: var(--dn-on-dark);
 }
 .dn .node {
-  background: var(--dn-well-surface-1);
-  border: 1px solid var(--dn-well-hairline);
+  background: var(--dn-dark-2);
+  border: 1px solid var(--dn-dark-hairline);
   border-radius: var(--dn-r-md);
   padding: var(--dn-md);
-  padding-left: calc(var(--dn-md) + 3px);
   position: relative;
-  overflow: hidden;
 }
-/* The 3px leading spine is the SAME physical object as a provenance segment,
-   so the dashboard and the canvas are one machine seen from two ends. */
-.dn .node::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--dn-spine, var(--dn-well-edge)); }
-.dn .node-selected { background: var(--dn-well-surface-2); border-color: var(--dn-well-hairline-strong); }
-.dn .node .t-subheading { color: var(--dn-well-ink); }
-.dn .node .t-mono-sm { color: var(--dn-well-ink-muted); }
+.dn .node-selected { background: var(--dn-dark-3); border-color: var(--dn-violet); box-shadow: 0 0 0 4px rgba(124, 77, 255, 0.22); }
+.dn .node .t-sub { color: var(--dn-on-dark); }
+.dn .node .t-mono { color: var(--dn-dark-mono); }
+/* Any quiet text standing directly on the well takes the same token — the
+   canvas caption, the step/link counter. --dn-subtle would be 3.58:1 here. */
+.dn .well > .t-label,
+.dn .well > .t-mono { color: var(--dn-dark-mono); }
+/* The step mark — a filled rounded square in the step's own colour. Colour
+   classifies here exactly as it does on the note cards. */
+.dn .node-mark { width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex: none; }
 
-/* ── CHROME — the chrome IS the page, never an object on it ───────────── */
-.dn .sidebar { width: 248px; background: var(--dn-canvas); border-right: 1px solid var(--dn-hairline); }
-.dn .topbar { height: 56px; background: var(--dn-canvas); border-bottom: 1px solid var(--dn-hairline); }
+/* ── CHROME ───────────────────────────────────────────────────────────── */
+.dn .sidebar { width: 260px; background: var(--dn-canvas); border-right: 1px solid var(--dn-hairline); }
+.dn .topbar { height: 64px; background: var(--dn-canvas); border-bottom: 1px solid var(--dn-hairline); }
 .dn .nav-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: 11px;
+  padding: 10px 12px;
   border-radius: var(--dn-r-sm);
-  font: 400 13px/1.5 var(--dn-sans);
-  color: var(--dn-ink-muted);
-  border: 1px solid transparent;
+  font: 500 15px/1.4 var(--dn-sans);
+  letter-spacing: -0.011em;
+  color: var(--dn-body);
 }
-/* Active is a WHITE PLATE — the same object as a card, so "where I am" reuses
-   the system's existing vocabulary instead of inventing a colour. */
-.dn .nav-row-active { background: var(--dn-surface-1); border-color: var(--dn-hairline); color: var(--dn-ink); }
+/* Active is a violet wash with violet ink — identity and selection, which is
+   exactly the job the sheet gives violet. */
+.dn .nav-row-active { background: var(--dn-violet-wash); color: var(--dn-violet-ink); font-weight: 600; }
+.dn .nav-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: none; }
 
-/* ── EMPTY STATE ──────────────────────────────────────────────────────── */
+/* ── EMPTY ────────────────────────────────────────────────────────────── */
 .dn .empty {
-  background: var(--dn-surface-2);
-  border: 1px dashed var(--dn-hairline-strong);
-  border-radius: var(--dn-r-md);
+  background: var(--dn-band);
+  border-radius: var(--dn-r-lg);
   padding: var(--dn-xxl);
   text-align: center;
 }
 
-/* ── SWATCHES (documentation only) ────────────────────────────────────── */
-.dn .swatch { height: 56px; border-radius: var(--dn-r-sm); border: 1px solid var(--dn-hairline); }
+.dn .swatch { height: 72px; border-radius: var(--dn-r-md); }
 
 @media (prefers-reduced-motion: reduce) {
-  .dn * { transition-duration: 0.01ms !important; }
+  .dn *, .dn *::before, .dn *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
