@@ -1,0 +1,324 @@
+/**
+ * THE DESIGN.md SYSTEM, RENDERED — AND DELIBERATELY QUARANTINED.
+ *
+ * Every value below is copied from /DESIGN.md, which is the authority. This
+ * file exists so the proposed language can be SEEN at full size without
+ * touching `globals.css`, so the shipping product is unchanged and the two can
+ * be compared in two browser tabs rather than from memory.
+ *
+ * Everything is scoped under `.dn`. That is not tidiness — the app's own
+ * tokens define `--background`, `--foreground`, `--primary` and thirty more
+ * names, and a second system declaring the same names at `:root` would silently
+ * re-theme the entire product the moment this route was visited.
+ *
+ * It is also plain CSS rather than Tailwind utilities on purpose. The kit gate
+ * (`scripts/check-ui.ts`) enforces a CLOSED set of sizes, radii and shadows —
+ * correctly — and this language's scale is a different closed set. Expressing
+ * it as utilities would either fail the gate or force the gate open for the
+ * whole repo. A scoped stylesheet keeps both systems intact and honest.
+ */
+
+.dn {
+  /* ── COLOUR ─────────────────────────────────────────────────────────── */
+  --dn-primary: #14161a;
+  --dn-primary-pressed: #0a0c0f;
+  --dn-primary-disabled: #d5d1c9;
+  --dn-on-primary: #ffffff;
+
+  --dn-ink: #14161a;
+  --dn-body: #2b2f36;
+  --dn-ink-muted: #4d525b;
+  --dn-ink-subtle: #686d77;
+
+  --dn-canvas: #f7f6f3;
+  --dn-surface-1: #ffffff;
+  --dn-surface-2: #fbfaf8;
+  --dn-surface-sunken: #f2f0ec;
+  --dn-hairline: #e6e3dd;
+  --dn-hairline-strong: #d5d1c9;
+
+  --dn-accent: #1e3f9c;
+  --dn-accent-pressed: #16307a;
+  --dn-accent-wash: #eef1fa;
+
+  --dn-up: #1a6b4c;
+  --dn-down: #a02a1e;
+  --dn-variance: #8a6414;
+  --dn-stale: #a8a49c;
+
+  /* The source taxonomy. These five appear in exactly two places in the whole
+     system: the segments of a provenance rule, and a node's leading spine. */
+  --dn-source-calendly: #0d6e73;
+  --dn-source-sheets: #31693c;
+  --dn-source-crm: #6b3fae;
+  --dn-source-webhook: #8f5d06;
+  --dn-source-telegram: #ab2f63;
+  --dn-source-empty: #d5d1c9;
+
+  /* The well — the product's only dark surface, dark because it is RECESSED. */
+  --dn-well: #0d0f12;
+  --dn-well-surface-1: #15181d;
+  --dn-well-surface-2: #1c2027;
+  --dn-well-hairline: #23272f;
+  --dn-well-hairline-strong: #30353e;
+  --dn-well-grid-dot: #22262e;
+  --dn-well-edge: #3a4049;
+  --dn-well-ink: #f2f3f4;
+  --dn-well-ink-muted: #9aa0a9;
+  --dn-well-accent: #8aa0f0;
+  --dn-well-up: #3fb98a;
+  --dn-well-down: #f0736a;
+
+  --dn-chart-1: #14161a;
+  --dn-chart-2: #5b7a8c;
+  --dn-chart-3: #9a6f3c;
+  --dn-chart-4: #4f6b4a;
+  --dn-chart-5: #8a5a6b;
+
+  --dn-scrim: rgba(20, 22, 26, 0.44);
+  --dn-focus: #1e3f9c;
+  --dn-selection: rgba(30, 63, 156, 0.1);
+
+  /* ── TYPE ───────────────────────────────────────────────────────────── */
+  --dn-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --dn-mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+
+  /* ── SPACE / SHAPE ──────────────────────────────────────────────────── */
+  --dn-xxs: 4px;
+  --dn-xs: 8px;
+  --dn-sm: 12px;
+  --dn-md: 16px;
+  --dn-lg: 24px;
+  --dn-xl: 32px;
+  --dn-xxl: 48px;
+  --dn-section: 80px;
+
+  --dn-r-none: 0px;
+  --dn-r-sm: 4px;
+  --dn-r-md: 12px;
+  --dn-r-lg: 20px;
+  --dn-r-full: 9999px;
+
+  /* THE ONE SHADOW. Overlays only — never a card, tile, button or input. */
+  --dn-shadow: 0 24px 48px -12px rgba(20, 22, 26, 0.18);
+
+  background: var(--dn-canvas);
+  color: var(--dn-body);
+  font-family: var(--dn-sans);
+  font-feature-settings: "cv05";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── TYPE SCALE ───────────────────────────────────────────────────────────
+   Tracking is −3% of size above 28px, easing to 0 by 14px, and flipping
+   POSITIVE on the eyebrow. There is no weight above 500 anywhere below. */
+.dn .t-display-lg { font: 450 56px/1.06 var(--dn-sans); letter-spacing: -1.68px; color: var(--dn-ink); }
+.dn .t-display-md { font: 450 40px/1.10 var(--dn-sans); letter-spacing: -1.2px; color: var(--dn-ink); }
+.dn .t-title      { font: 500 28px/1.20 var(--dn-sans); letter-spacing: -0.84px; color: var(--dn-ink); }
+.dn .t-heading    { font: 500 20px/1.30 var(--dn-sans); letter-spacing: -0.4px; color: var(--dn-ink); }
+.dn .t-subheading { font: 500 16px/1.40 var(--dn-sans); letter-spacing: -0.16px; color: var(--dn-ink); }
+.dn .t-body       { font: 400 15px/1.55 var(--dn-sans); letter-spacing: -0.09px; }
+.dn .t-body-sm    { font: 400 13px/1.50 var(--dn-sans); }
+.dn .t-eyebrow {
+  font: 500 11px/1.2 var(--dn-mono);
+  letter-spacing: 0.88px;
+  text-transform: uppercase;
+  color: var(--dn-ink-subtle);
+}
+.dn .t-figure-hero { font: 450 56px/1.0 var(--dn-mono); letter-spacing: -1.68px; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
+.dn .t-figure-lg   { font: 450 40px/1.0 var(--dn-mono); letter-spacing: -1.2px; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
+.dn .t-figure-md   { font: 450 28px/1.05 var(--dn-mono); letter-spacing: -0.84px; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
+.dn .t-figure-sm   { font: 450 18px/1.2 var(--dn-mono); letter-spacing: -0.36px; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
+.dn .t-mono        { font: 450 13px/1.45 var(--dn-mono); }
+.dn .t-mono-sm     { font: 450 11px/1.4 var(--dn-mono); letter-spacing: 0.11px; }
+
+.dn .muted { color: var(--dn-ink-muted); }
+.dn .subtle { color: var(--dn-ink-subtle); }
+
+/* ── FOCUS, DECLARED ONCE ─────────────────────────────────────────────── */
+.dn :where(a, button, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--dn-focus);
+  outline-offset: 2px;
+}
+
+/* ── SURFACES ─────────────────────────────────────────────────────────────
+   Elevation is a brightness ladder: plates lift by going LIGHTER than the
+   bone page, which removes the card-shadow question entirely. */
+.dn .plate {
+  background: var(--dn-surface-1);
+  border: 1px solid var(--dn-hairline);
+  border-radius: var(--dn-r-md);
+}
+.dn .overlay {
+  background: var(--dn-surface-1);
+  border: 1px solid var(--dn-hairline);
+  border-radius: var(--dn-r-md);
+  box-shadow: var(--dn-shadow);
+}
+
+/* ── BUTTONS — nothing is a pill ──────────────────────────────────────── */
+.dn .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dn-xs);
+  padding: 10px 16px;
+  border-radius: var(--dn-r-sm);
+  font: 500 14px/1 var(--dn-sans);
+  letter-spacing: -0.07px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.dn .btn:active:not(:disabled) { transform: translateY(0.5px); }
+.dn .btn-primary { background: var(--dn-primary); color: var(--dn-on-primary); }
+.dn .btn-primary:active:not(:disabled) { background: var(--dn-primary-pressed); }
+.dn .btn-secondary { background: var(--dn-surface-1); color: var(--dn-ink); border-color: var(--dn-hairline-strong); }
+.dn .btn-ghost { background: transparent; color: var(--dn-ink-muted); padding: 10px 12px; }
+.dn .btn-destructive { background: var(--dn-surface-1); color: var(--dn-down); border-color: var(--dn-hairline-strong); }
+.dn .btn:disabled { color: var(--dn-primary-disabled); cursor: not-allowed; }
+
+/* ── INPUT ────────────────────────────────────────────────────────────── */
+.dn .input {
+  width: 100%;
+  background: var(--dn-surface-1);
+  color: var(--dn-ink);
+  border: 1px solid var(--dn-hairline-strong);
+  border-radius: var(--dn-r-sm);
+  padding: 9px 12px;
+  font: 400 13px/1.5 var(--dn-sans);
+}
+.dn .input::placeholder { color: var(--dn-ink-subtle); }
+.dn .input:focus-visible { border-color: var(--dn-focus); outline: 2px solid var(--dn-selection); outline-offset: 0; }
+
+/* ── BADGE — the badge never takes the hue; its dot does ──────────────── */
+.dn .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--dn-surface-sunken);
+  color: var(--dn-ink-muted);
+  border-radius: var(--dn-r-sm);
+  padding: 3px 7px;
+  font: 450 11px/1.4 var(--dn-mono);
+  letter-spacing: 0.11px;
+}
+.dn .dot { width: 6px; height: 6px; border-radius: var(--dn-r-full); flex: none; }
+
+/* ── THE RULE ─────────────────────────────────────────────────────────────
+   The system's one signature. 2px, square, the exact width of the figure it
+   sits under, 8px below its baseline. Three states, one object:
+     settled    — one continuous hairline; every source agrees
+     provenance — segmented by contributing source, width ∝ contribution
+     variance   — a sunken segment under a 45° hatch, with the conflict count */
+.dn .rule { display: flex; height: 2px; margin-top: var(--dn-xs); border-radius: var(--dn-r-none); overflow: hidden; }
+.dn .rule-settled { background: var(--dn-hairline-strong); }
+.dn .rule-seg { height: 2px; }
+.dn .rule-variance {
+  background-color: var(--dn-surface-sunken);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--dn-ink-subtle) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+/* ── TABLE — every numeric cell is mono, right-aligned, tabular ───────── */
+.dn table.data { width: 100%; border-collapse: collapse; }
+.dn table.data th {
+  background: var(--dn-surface-2);
+  color: var(--dn-ink-subtle);
+  font: 500 11px/1.2 var(--dn-mono);
+  letter-spacing: 0.88px;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--dn-hairline-strong);
+}
+.dn table.data td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--dn-hairline);
+  font: 400 13px/1.5 var(--dn-sans);
+  color: var(--dn-body);
+}
+.dn table.data tr:last-child td { border-bottom: 0; }
+.dn table.data .num {
+  font: 450 13px/1.45 var(--dn-mono);
+  color: var(--dn-ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/**
+ * A SPECIFICITY TRAP, CLOSED.
+ *
+ * `.dn table.data td` scores (0,2,2) and `.dn .t-mono` scores (0,2,0), so
+ * putting a type class directly on a `<td>` loses to the cell rule and does
+ * NOTHING — the cell silently stays Inter, with no error anywhere. The Time
+ * column is exactly where a future author reaches for `t-mono` on the cell and
+ * gets sans back. These re-declare the type classes at cell specificity so the
+ * obvious spelling works.
+ */
+.dn table.data td.t-mono,
+.dn table.data th.t-mono { font: 450 13px/1.45 var(--dn-mono); }
+.dn table.data td.t-mono-sm,
+.dn table.data th.t-mono-sm { font: 450 11px/1.4 var(--dn-mono); letter-spacing: 0.11px; }
+.dn table.data td.t-figure-sm { font: 450 18px/1.2 var(--dn-mono); letter-spacing: -0.36px; color: var(--dn-ink); font-variant-numeric: tabular-nums; }
+.dn table.data td.muted { color: var(--dn-ink-muted); }
+.dn table.data td.subtle { color: var(--dn-ink-subtle); }
+
+/* ── THE WELL — depth runs downward ───────────────────────────────────── */
+.dn .well {
+  background-color: var(--dn-well);
+  background-image: radial-gradient(var(--dn-well-grid-dot) 1px, transparent 1px);
+  background-size: 20px 20px;
+  border-radius: var(--dn-r-lg);
+  color: var(--dn-well-ink);
+}
+.dn .node {
+  background: var(--dn-well-surface-1);
+  border: 1px solid var(--dn-well-hairline);
+  border-radius: var(--dn-r-md);
+  padding: var(--dn-md);
+  padding-left: calc(var(--dn-md) + 3px);
+  position: relative;
+  overflow: hidden;
+}
+/* The 3px leading spine is the SAME physical object as a provenance segment,
+   so the dashboard and the canvas are one machine seen from two ends. */
+.dn .node::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--dn-spine, var(--dn-well-edge)); }
+.dn .node-selected { background: var(--dn-well-surface-2); border-color: var(--dn-well-hairline-strong); }
+.dn .node .t-subheading { color: var(--dn-well-ink); }
+.dn .node .t-mono-sm { color: var(--dn-well-ink-muted); }
+
+/* ── CHROME — the chrome IS the page, never an object on it ───────────── */
+.dn .sidebar { width: 248px; background: var(--dn-canvas); border-right: 1px solid var(--dn-hairline); }
+.dn .topbar { height: 56px; background: var(--dn-canvas); border-bottom: 1px solid var(--dn-hairline); }
+.dn .nav-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--dn-r-sm);
+  font: 400 13px/1.5 var(--dn-sans);
+  color: var(--dn-ink-muted);
+  border: 1px solid transparent;
+}
+/* Active is a WHITE PLATE — the same object as a card, so "where I am" reuses
+   the system's existing vocabulary instead of inventing a colour. */
+.dn .nav-row-active { background: var(--dn-surface-1); border-color: var(--dn-hairline); color: var(--dn-ink); }
+
+/* ── EMPTY STATE ──────────────────────────────────────────────────────── */
+.dn .empty {
+  background: var(--dn-surface-2);
+  border: 1px dashed var(--dn-hairline-strong);
+  border-radius: var(--dn-r-md);
+  padding: var(--dn-xxl);
+  text-align: center;
+}
+
+/* ── SWATCHES (documentation only) ────────────────────────────────────── */
+.dn .swatch { height: 56px; border-radius: var(--dn-r-sm); border: 1px solid var(--dn-hairline); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dn * { transition-duration: 0.01ms !important; }
+}
