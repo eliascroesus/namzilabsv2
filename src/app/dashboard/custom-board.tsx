@@ -591,8 +591,13 @@ export function CustomBoard({
           puts it: the view strip on the left, the board's own controls on the
           right. On a canvas the arrangement door reads "Add" rather than "New
           group", and it takes the same first position in the right-hand group
-          — arrangement, then filter, then the yellow act on the outside edge. */}
-      <div className="mt-4 flex items-start justify-between gap-4">
+          — arrangement, then filter, then the yellow act on the outside edge.
+
+          NO TOP MARGIN, for the reason the groups board states at length:
+          `PageHeader`'s own `pb-4` is the 16px between the title block and this
+          row, and the `mt-4` that used to be here made it 32. Both boards wear
+          the same row, so both had to stop paying for the gap twice. */}
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">{viewStrip}</div>
         <div className="flex flex-wrap items-center justify-end gap-4">
           {canEdit && (

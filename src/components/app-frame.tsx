@@ -28,6 +28,7 @@ export function AppFrame({
   account,
   workspace,
   firstName,
+  metricCount,
   surface,
   hide,
   ownsMain = false,
@@ -45,6 +46,19 @@ export function AppFrame({
    * resolved the session.
    */
   firstName?: string;
+  /**
+   * How many metrics this workspace has, for the top bar's ring.
+   *
+   * A PASS-THROUGH, and it stays one. This frame is handed the number because
+   * the only component that can produce it is the PAGE — the dashboard counts
+   * its published flow tiles and classic metrics as part of the work it already
+   * does, and every other route genuinely does not read the metrics table at
+   * all. Resolving it here instead would mean one more query on every render of
+   * every screen in the product to fill in a decoration, which is the trade the
+   * whole file is built to avoid (see `firstName` above: same seam, same
+   * reason). Left undefined, the ring stands down — see `TopBar`.
+   */
+  metricCount?: number;
   surface: string;
   /** Rail items (by label) this viewer shouldn't see; AppShell decides. */
   hide?: string[];
@@ -127,7 +141,7 @@ export function AppFrame({
             account panel used to go to the rail; at 70px the rail is icons and
             nothing else, so both come here — the workspace avatar and name at
             the reading edge, the account at the far one. */}
-        <TopBar account={account} workspace={workspace} firstName={firstName} />
+        <TopBar account={account} workspace={workspace} firstName={firstName} metricCount={metricCount} />
         {ownsMain ? (
           <main id="main" className={className}>
             {children}

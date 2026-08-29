@@ -330,9 +330,18 @@ export function BoardLayout({
 
           `items-start`, not centre: the tab strip can wrap to a second line and
           the buttons must stay on the first one, level with the tabs rather
-          than floating half-way down a two-line strip. */}
+          than floating half-way down a two-line strip.
+
+          NO TOP MARGIN — THE HEADER ALREADY OWNS THIS GAP. `PageHeader` ends in
+          `pb-4`, which is the 16px step this row is meant to sit at; the `mt-4`
+          that used to be here added a second one, so the title block and the
+          tabs stood 32px apart and the top of the page read as two unrelated
+          bands rather than one head. One owner for the distance, and it is the
+          header, because every page in the product gets that same 16px from it.
+          The board below keeps its own `mt-4` — that gap is this row's, not the
+          header's. */}
       {(viewStrip || boardActions || canEdit) && (
-        <div className="mt-4 flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           {/* WRAPS RATHER THAN SCROLLS. A scroller here put a grey bar under
               two tabs and capped the strip at a width nothing asked for; tabs
               are short and there is a whole row of space, so they simply fill
@@ -428,18 +437,26 @@ export function BoardLayout({
 
           <div {...{ [SCROLLER_ATTR]: "columns" }} className={`${SCROLLER_BLEED} quiet-scroll mt-6 overflow-x-auto pb-3`}>
             {/* The row of columns is a lane too, whose items are the columns —
-                see COLUMNS_LANE. `items-stretch` so a column being dragged past
-                a short one still hit-tests against a full-height band.
-                It said that and did the opposite: the class was `items-start`,
-                so every column sized to its own contents and a row of them
-                ended on three different baselines — a three-tile column running
-                780px beside two that stopped at 300. Bottoms that do not line up
-                are the first thing you see on a board, and the drag was quietly
-                worse for it too, because a short column offered a short target.
-                One word, and the comment is true again. */}
+                see COLUMNS_LANE.
+
+                `items-start`: A COLUMN IS AS TALL AS WHAT IT HOLDS. This was
+                briefly `items-stretch`, on the argument that ragged bottoms are
+                the first thing you see on a board and that a short column offers
+                the drag a short target. Both are true of a board whose columns
+                are within a card or two of each other, and neither survives real
+                data: one column of eight metrics beside one of two paints a
+                three-quarter-height wash of tinted nothing under the short one,
+                and a large empty panel reads as a column that failed to load —
+                which is a worse thing to say than "these two columns differ in
+                length", a fact the customer already knows because they filed
+                them. The drag's own floor is `min-h-[140px]` on the lane (see
+                BoardColumn), which is what keeps an empty column aimable.
+
+                It is the same rule the tile grid states one screen up: a tile is
+                as tall as what it has to say. */}
             <div
               {...{ [LANE_ATTR]: COLUMNS_LANE, [AXIS_ATTR]: "x", [ACCEPTS_ATTR]: "column" }}
-              className={`flex items-stretch ${LANE_GAP}`}
+              className={`flex items-start ${LANE_GAP}`}
             >
               {withGap(
                 board.columns.map((l) => ({ key: l.id! }) as BoardTile),

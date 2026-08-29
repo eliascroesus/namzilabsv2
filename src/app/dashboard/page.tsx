@@ -14,7 +14,7 @@ import { SourceMark } from "@/components/source-mark";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
-import { BoardControls, RangeLink, SourceLink, TileArea, ViewTab } from "./board-controls";
+import { BoardControls, RangeLink, SourceLink, TileArea, ViewTab, ViewTitle } from "./board-controls";
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import type { CustomTileSource } from "@/components/custom-tile";
@@ -883,8 +883,33 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     }];
   });
 
+  /**
+   * WHAT THE TOP BAR'S RING COUNTS, AND WHY IT COSTS NOTHING.
+   *
+   * Two arrays this page already holds: every published flow tile and every
+   * classic metric, both of them already narrowed by `access` above, so the
+   * ring can never count a metric its viewer is not allowed to see. No query is
+   * added — the shell renders after this body's awaits (see its own note), so
+   * anything counted THERE would be a fresh round trip on the critical path of
+   * every render and every twelve-second poll.
+   *
+   * `metrics`, NOT `tiles`. They are the same list on a groups board and they
+   * diverge on a custom view, where `classicsToCompute` narrows the compute to
+   * the classics the canvas actually references. That is a statement about what
+   * is expensive to draw, not about what the workspace HAS — reading `tiles`
+   * here would make the ring drop when you switched to a custom view, as though
+   * metrics had been deleted by opening a tab.
+   *
+   * UNDEFINED UNDER A LOAD ERROR. When either read above failed, these arrays
+   * are short or empty for a reason that has nothing to do with the customer's
+   * workspace, and "0/6" is then a false claim printed over the banner that
+   * says the data could not be loaded. No answer is the honest answer, and the
+   * bar knows how to draw that: no ring.
+   */
+  const metricCount = loadError ? undefined : metrics.length + flowTiles.length;
+
   return (
-    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email} metricCount={metricCount}>
       {/* G.4: refresh the server-rendered tiles when the org's results move. */}
       <FreshnessPoller />
       <PageContainer width="full">
@@ -903,14 +928,44 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             it — so this h1 is the only place on the screen that names where you
             are, and a page whose first line is a filter pill has no head.
 
+            AND IT IS THE VIEW'S OWN NAME NOW, not the word "Dashboard".
+            The h1 was a literal, sitting an inch above a tab strip that already
+            names every view — so renaming "View 2" to "Revenue" gave you a page
+            headed Dashboard with Revenue underlined beneath it. The name a view
+            already has is the page's title, and typing in the title renames the
+            view: one fact, one row it is stored in, two places it is shown. See
+            `ViewTitle`, which also explains why the DEFAULT view's title is
+            static — that board is the absence of a row, so it has no name to
+            write to.
+
             THE SUBTITLE NAMES THE SCOPE, it does not narrate the page. The
             lede this file deleted described the board's whole mechanism —
             published, recomputed on a schedule, stamped with when it was last
             true — three facts the tiles each say for themselves. A subtitle's
             job in this header is one phrase saying what the numbers below are
-            drawn FROM, which nothing else on the screen says. */}
+            drawn FROM, which nothing else on the screen says.
+
+            IT IS STILL A LITERAL, DELIBERATELY. Making it editable beside the
+            title would need somewhere to put it, and there is nowhere: the
+            title rides `dashboard_views.name`, which already exists, while a
+            per-view subtitle is a column that does not — so an editable field
+            here could only accept a sentence and forget it on the next load,
+            which is worse than a fixed one that is true. It becomes editable
+            the same day `dashboard_views` grows a nullable `subtitle` and
+            `renameViewAction` gains a sibling to write it. */}
         <PageHeader
-          title="Dashboard"
+          title={
+            /* KEYED BY THE ACTIVE VIEW, for the reason `BoardLayout` is: this
+               holds the optimistic name until the refresh carrying the server's
+               lands, and switching views without a remount would leave one
+               view's typed name over another's board. */
+            <ViewTitle
+              key={activeView ?? "default"}
+              viewId={activeView}
+              name={viewTabs.find((v) => v.id === activeView)?.name ?? "Untitled"}
+              canEdit={access.can("create_flows")}
+            />
+          }
           lede="Every published metric in this workspace."
           actions={
             /* ── THE PERIOD CONTROL ────────────────────────────────────────

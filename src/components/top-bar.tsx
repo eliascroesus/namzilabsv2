@@ -4,12 +4,13 @@ import Link from "next/link";
 import { Bell, ChevronDown, UserPlus } from "lucide-react";
 import type { ReactNode } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * THE TOP BAR — who you are, how far in you are, and the two things you start
- * from.
+ * THE TOP BAR — who you are, how much you are tracking, and the two things you
+ * start from.
  *
  * WHAT CHANGED, AND WHY IT IS NOT A RESKIN.
  *
@@ -17,10 +18,10 @@ import { cn } from "@/lib/utils";
  * near-black now, and the mark has gone to the rail's top block — because the
  * rail and this bar are one continuous band around the page, and a band that
  * says "Namzilabs" twice in its two corners is saying it once too often. What
- * this bar carries instead is the answer to WHICH WORKSPACE and HOW FAR IN:
- * the workspace avatar, its name, and the setup ring. Those are facts about
- * your account, and they were previously split between a rail footer and
- * nowhere at all.
+ * this bar carries instead is the answer to WHICH WORKSPACE and HOW MUCH OF IT
+ * IS MEASURED: the workspace avatar, its name, and the metrics ring. Those are
+ * facts about your account, and they were previously split between a rail
+ * footer and nowhere at all.
  *
  * THE CHROME DOES NOT INVERT — and that is the one design decision in this file
  * worth arguing for. `bg-ink-950` in BOTH themes, with only the PAGE below
@@ -54,15 +55,28 @@ import { cn } from "@/lib/utils";
  * one blue that means "identity".
  */
 
-/** The setup ring's geometry: r=10 in a 24px box, so a 2px stroke sits inside. */
+/** The metrics ring's geometry: r=10 in a 24px box, so a 2px stroke sits inside. */
 const RING_RADIUS = 10;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+/**
+ * WHERE THE RING STOPS ASKING — six metrics, and the cap is the whole design.
+ *
+ * The ring is not a percentage of anything: a workspace has no natural
+ * denominator, so "3 of the 47 metrics you could theoretically build" is a
+ * fraction that only ever shrinks as the product grows. Six is the number at
+ * which a workspace is measuring its business rather than trying the product,
+ * and past it the ring has nothing left to ask for — ten metrics reads 6/6 and
+ * the copy changes from a nudge to an acknowledgement. It is a FLOOR under the
+ * praise, not a ceiling on the work.
+ */
+const METRIC_GOAL = 6;
 
 export function TopBar({
   account,
   workspace,
   firstName,
-  progress = { done: 0, total: 6 },
+  metricCount,
   unread = 1,
 }: {
   account?: { initials: string; panel: ReactNode };
@@ -78,8 +92,21 @@ export function TopBar({
    * that guesses at your name is worse than one that does not use it.
    */
   firstName?: string;
-  /** Onboarding steps completed. Placeholder until the checklist has a store. */
-  progress?: { done: number; total: number };
+  /**
+   * How many metrics this workspace has — published flow tiles plus classic
+   * metrics, already narrowed to what this viewer's rank may see.
+   *
+   * `undefined` MEANS "NOBODY COUNTED", AND IT IS NOT THE SAME AS ZERO. Only
+   * the dashboard resolves this number as part of the work it was already
+   * doing; the other nine routes that render `AppShell` never read the metrics
+   * table, and a second query there would be a round trip on every page load to
+   * fill in a decoration. So the ring STANDS DOWN when the count is missing
+   * rather than drawing an empty 0/6 over a workspace with twenty metrics in
+   * it — the same rule the address group already follows when the builder
+   * supplies no workspace. A ring is a claim; it may only be drawn by someone
+   * who knows the answer.
+   */
+  metricCount?: number;
   /** Unread notifications. Placeholder until notifications have a store. */
   unread?: number;
 }) {
@@ -87,8 +114,28 @@ export function TopBar({
   // " Acme" would otherwise render a blank blue square.
   const initial = (workspace ?? "").trim().charAt(0).toUpperCase() || "W";
   const greeting = firstName ? `Welcome back, ${firstName}!` : "Welcome back!";
-  const done = Math.max(0, Math.min(progress.done, progress.total));
-  const arc = progress.total > 0 ? (RING_CIRCUMFERENCE * done) / progress.total : 0;
+  /**
+   * THE CAP IS APPLIED HERE, ONCE, so the arc, the numeral and the fraction
+   * cannot disagree. `Math.trunc` before the clamp because a count arriving as
+   * a float is a caller bug, and half an arc under a whole numeral is the shape
+   * that bug would take on screen. `null` is the "nobody counted" case above,
+   * and it is carried as a distinct value rather than collapsed into 0.
+   */
+  const tracked =
+    metricCount == null ? null : Math.max(0, Math.min(Math.trunc(metricCount), METRIC_GOAL));
+  const arc = tracked == null ? 0 : (RING_CIRCUMFERENCE * tracked) / METRIC_GOAL;
+  /**
+   * THE TWO MESSAGES, and the short one is the one at the top.
+   *
+   * Under the goal it is an IMPERATIVE — the ring is asking for something, and
+   * the shortest honest way to ask is to say what to do. At 6/6 there is
+   * nothing to ask for, so it stops instructing and simply acknowledges; kept
+   * to three words because praise that runs on reads as a product congratulating
+   * itself. The count itself is not repeated in here — the fraction is sitting
+   * right beside the bubble, and the trigger's `aria-label` carries it for
+   * anyone who cannot see it.
+   */
+  const ringMessage = tracked === METRIC_GOAL ? "You're tracking plenty" : "Track more data";
 
   // The identity group: avatar, name, chevron. Rendered once and placed either
   // inside a menu trigger or bare, because a CHEVRON IS A PROMISE — the old
@@ -130,16 +177,21 @@ export function TopBar({
     // this bar's own.
     <header className="dark flex h-[70px] shrink-0 items-center justify-between gap-4 border-b border-chrome-line bg-ink-950 py-2.5">
       {/* ── WHERE YOU ARE ───────────────────────────────────────────────────
-          Workspace, then a slash, then how far through setup you are. It reads
-          as a path because it IS one: the workspace is the root and the ring is
-          your position inside it. */}
+          Workspace, then a slash, then how much of it you are measuring. It
+          reads as a path because it IS one: the workspace is the root and the
+          ring is how far into it you have got. */}
       {/* THE ADDRESS, AND IT IS ALL OR NOTHING. Everything in this group —
-          the avatar, the name, the slash, the setup ring — answers "where am
+          the avatar, the name, the slash, the metrics ring — answers "where am
           I". The builder supplies none of it on purpose (no membership fetch
           per editor load), so on that one route the whole group stands down
-          rather than inventing a blue "W" and a 0/6 ring for a checklist it
-          never shows. The bar then opens with the portalled toolbar, which is
-          what that screen is actually about. */}
+          rather than inventing a blue "W" for a workspace it never looked up.
+          The bar then opens with the portalled toolbar, which is what that
+          screen is actually about.
+
+          The ring has its OWN guard inside this one, because the two facts
+          arrive from different places: the name comes from the shell's
+          membership list and the count from the page's own metric reads, so a
+          route can honestly have one and not the other. */}
       {workspace && (
       <div className="flex min-w-0 items-center gap-6 pl-6">
         {account ? (
@@ -170,60 +222,121 @@ export function TopBar({
           <span className="flex min-w-0 items-center gap-6">{identity}</span>
         )}
 
-        {/* The separator is a real slash rather than a hairline, because the two
-            things either side of it are levels of one address, not two unrelated
-            groups. `aria-hidden`: a screen reader announcing "slash" between a
-            workspace name and a progress figure is noise.
+        {/* ── HOW MUCH IS MEASURED ────────────────────────────────────────
+            THE SLASH AND THE RING ARE ONE OCCUPANT, which is why they share a
+            guard. The slash is a real slash rather than a hairline because the
+            two things either side of it are levels of one address, not two
+            unrelated groups — so with nothing on its right it is not a
+            separator, it is a dangling mark at the end of a workspace name.
+            `aria-hidden`: a screen reader announcing "slash" between a name and
+            a fraction is noise.
 
-            IT GOES WHEN THE ADDRESS DOES. The builder renders `AppFrame` with no
-            workspace — deliberately, to avoid a WorkOS membership fetch on every
-            editor load — and `workspace` used to default to the literal word
-            "Workspace". So the one screen whose bar is already fighting for
-            width spent ~250px on a blue "W", the word Workspace and a setup ring
-            that belongs to a checklist it never shows. No address, no slash. */}
-        {workspace && (
-          <span aria-hidden className="text-md text-white">
-            /
-          </span>
-        )}
+            IT GOES WHEN THE COUNT DOES, and the count is missing on every route
+            but the dashboard — see `metricCount` above for why nobody else pays
+            a query for it. The same rule already governed the group as a whole:
+            the builder renders `AppFrame` with no workspace, deliberately, to
+            avoid a WorkOS membership fetch on every editor load, and the bar
+            that was already fighting for width there stopped spending ~250px on
+            a blue "W" and a ring about a workspace it had not looked up. No
+            answer, no ring.
 
-        {/* ── HOW FAR IN ──────────────────────────────────────────────────
-            A ring and a fraction saying the same number twice, which is
-            deliberate: the ring is the thing you notice from across the room
-            and the fraction is the thing you read. The arc is drawn from the
-            VALUE rather than being a static shape, so the day the checklist has
-            a store this fills in by itself; at 0 it is a bare track, which is
-            what an untouched checklist should look like. */}
-        <span className="flex shrink-0 items-center gap-2" title="Setup steps completed">
-          <span className="relative flex size-6 items-center justify-center">
-            {/* `-rotate-90` starts the arc at twelve o'clock — an arc that
-                begins at three reads as a dial rather than as progress. */}
-            <svg aria-hidden viewBox="0 0 24 24" className="absolute inset-0 size-6 -rotate-90">
-              <circle cx="12" cy="12" r={RING_RADIUS} fill="none" strokeWidth="2" className="stroke-ink-700" />
-              {arc > 0 && (
-                <circle
-                  cx="12"
-                  cy="12"
-                  r={RING_RADIUS}
-                  fill="none"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeDasharray={RING_CIRCUMFERENCE}
-                  strokeDashoffset={RING_CIRCUMFERENCE - arc}
-                  className="stroke-neutral-600"
-                />
-              )}
-            </svg>
-            {/* Hidden from the reading order — the fraction beside it already
-                carries this number, and announcing "0, 0 of 6" is a stutter. */}
-            <span aria-hidden className="relative text-xs font-bold leading-none text-ink-400">
-              {done}
+            A RING AND A FRACTION SAYING THE SAME NUMBER TWICE, deliberately:
+            the ring is the thing you notice from across the room and the
+            fraction is the thing you read. The arc is drawn from the VALUE —
+            `strokeDashoffset` is the circumference minus the tracked share of
+            it — so three metrics is half a ring and six is a closed one, with
+            no static shape anywhere in the file to fall out of step. At 0 it is
+            a bare track, which is what an unmeasured workspace should look
+            like. */}
+        {tracked != null && (
+          <>
+            <span aria-hidden className="text-md text-white">
+              /
             </span>
-          </span>
-          <span className="text-md font-bold text-white">
-            {done}/{progress.total}
-          </span>
-        </span>
+
+            {/* THE KIT'S TOOLTIP, NOT A `title`. This carried
+                `title="Setup steps completed"`, which is the one hint mechanism
+                that reaches neither a touch user (no hover to trigger it) nor a
+                keyboard user (no focus to trigger it) — so the message existed
+                for exactly the audience least likely to need it. Radix opens on
+                hover AND on focus, and the trigger is a tab stop, so the ring
+                explains itself by pointer, by key and by screen reader.
+
+                `tabIndex`/`role="img"` because the ring DOES NOTHING when
+                pressed. This bar already argues that a chevron on something
+                that does not open is a promise it cannot keep; a Button here
+                would be the same broken promise with a hover wash on it. A
+                focusable image is the honest spelling: it has a name, it takes
+                focus so the bubble can be summoned, and it claims no action.
+                `role="img"` also collapses the subtree, so the numeral inside
+                the ring and the fraction beside it are announced once as the
+                label rather than as "0, 0 of 6".
+
+                `focus-ring-light` is the sanctioned white twin of the app's
+                focus ring — `--ring` is invisible on this near-black band — and
+                the global rule in globals.css already selects `[tabindex]`, so
+                the outline lands without this element spelling one. */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  tabIndex={0}
+                  role="img"
+                  aria-label={`${tracked} of ${METRIC_GOAL} metrics tracked`}
+                  className="flex shrink-0 items-center gap-2 rounded-[var(--radius-control)] focus-ring-light"
+                >
+                  <span className="relative flex size-6 items-center justify-center">
+                    {/* `-rotate-90` starts the arc at twelve o'clock — an arc
+                        that begins at three reads as a dial rather than as
+                        progress. */}
+                    <svg aria-hidden viewBox="0 0 24 24" className="absolute inset-0 size-6 -rotate-90">
+                      <circle cx="12" cy="12" r={RING_RADIUS} fill="none" strokeWidth="2" className="stroke-ink-700" />
+                      {arc > 0 && (
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r={RING_RADIUS}
+                          fill="none"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeDasharray={RING_CIRCUMFERENCE}
+                          strokeDashoffset={RING_CIRCUMFERENCE - arc}
+                          /* THE ARC IS A LIT VIOLET, and it is `brand-300`
+                             rather than the `primary` 500 for a measured
+                             reason. It was `stroke-neutral-600` #525252 on a
+                             `stroke-ink-700` #3d3d3d track — 1.39:1 — so where
+                             the arc STOPPED could not be seen and 3/6 and 6/6
+                             read identically. That defeats the only argument
+                             for drawing a ring ("the thing you notice from
+                             across the room"); the fraction beside it was
+                             carrying all of the information on its own.
+
+                             The 500 does not fix it: #7c4dff on that track is
+                             2.26:1, still under the 3:1 a non-text mark owes.
+                             Darkening the TRACK instead trades one invisible
+                             object for another — at ink-800 the track itself
+                             falls to 1.35:1 on the bar. So the arc gets
+                             brighter, not the track darker: brand-300 #b494ff
+                             sits at 4.46:1 on the track and 7.87:1 on the bar,
+                             and violet still reads as the brand doing the
+                             marking. */
+                          className="stroke-brand-300"
+                        />
+                      )}
+                    </svg>
+                    <span className="relative text-xs font-bold leading-none text-ink-400">{tracked}</span>
+                  </span>
+                  <span className="text-md font-bold text-white">
+                    {tracked}/{METRIC_GOAL}
+                  </span>
+                </span>
+              </TooltipTrigger>
+              {/* Below, not beside: the bar is 70px of chrome at the top of the
+                  viewport, so a bubble on any other side opens off-screen or
+                  over the workspace name it is explaining. */}
+              <TooltipContent side="bottom">{ringMessage}</TooltipContent>
+            </Tooltip>
+          </>
+        )}
       </div>
       )}
 

@@ -302,12 +302,22 @@ export function ViewTab({
        * on the light one — see the token's own note. If this row ever loses the
        * weight-and-ink change, the rule alone cannot carry the state.
        *
-       * `border-b-2` sits on the wrapper rather than on the anchor so the
+       * `border-b-3` sits on the wrapper rather than on the anchor so the
        * kebab, which is a sibling inside this span, rides the same rule instead
        * of hanging off the end of a shorter one.
+       *
+       * THREE PIXELS, AND CLOSER TO THE WORD. At 2px, eight below the label,
+       * the rule was thinner than the tint under the period pills sitting one
+       * row above it and read as a hairline the tab happened to be standing on
+       * rather than as the mark of where you are. A tab's underline is the only
+       * thing on this row carrying the state, so it has to be the heavier of the
+       * two lines, and it has to belong to the word: the anchor's bottom padding
+       * drops from 8px to 4px (`pb-1`, keeping `pt-2`), which pulls the rule up
+       * under the label without moving the label itself — the row's height is
+       * set by the 24px gap and the kebab beside it, not by this padding.
        */
       className={cn(
-        "inline-flex shrink-0 items-center border-b-2 text-sm transition-colors duration-(--duration-fast)",
+        "inline-flex shrink-0 items-center border-b-3 text-sm transition-colors duration-(--duration-fast)",
         active
           ? "border-tab-underline font-medium text-ground-ink"
           : "border-transparent font-semibold text-muted-foreground hover:text-ground-ink",
@@ -335,11 +345,17 @@ export function ViewTab({
             e.preventDefault();
             go(href, { dim: "view", key });
           }}
-          /* 8px above and below, 4px either side — the Figma's tab padding, and
-             narrow on purpose: a tab's hit area is its LABEL plus the rule
-             under it, so horizontal padding here only pushes the names apart
-             and the 24px row gap already does that. */
-          className={cn("inline-flex items-center gap-1.5 px-1 py-2", editable && "pr-0.5")}
+          /* 8px above, 4px below, 4px either side. Narrow horizontally on
+             purpose: a tab's hit area is its LABEL plus the rule under it, so
+             padding here only pushes the names apart and the 24px row gap
+             already does that.
+             The bottom half is 4px rather than the Figma's 8 so the underline
+             sits UNDER THE WORD instead of floating a line below it — see the
+             note on `border-b-3` above. It is spelled on the anchor, which every
+             tab renders, so the active and idle labels stay on one baseline;
+             putting it on the active branch alone would make the row twitch by
+             4px each time you changed views. */
+          className={cn("inline-flex items-center gap-1.5 px-1 pb-1 pt-2", editable && "pr-0.5")}
         >
           {renamed ?? children}
         </a>
@@ -367,7 +383,14 @@ export function ViewTab({
                  disappear into that fill, so it takes the fill's foreground and
                  hovers by lightening the violet rather than by painting a
                  neutral square on top of it. */
-              className="mr-0.5 size-6 text-primary-foreground/75 hover:bg-primary-foreground/20 hover:text-primary-foreground active:bg-primary-foreground/30"
+              /* NOT `primary-foreground`. That is white, and it belongs on a
+                     violet FILL — which this tab has not had since the active
+                     state became an underline on the page itself. White at 75%
+                     over `#f5f5f5` composites to ~`#fcfcfc`: 1.05:1, a kebab
+                     you cannot see in the light theme at all. It read fine in
+                     dark, which is exactly why it survived. The row's own ink
+                     is the right answer and it follows the theme. */
+                  className="mr-0.5 size-6 text-ground-ink-muted hover:bg-foreground/10 hover:text-ground-ink"
               onClick={() => setMenuOpen((o) => !o)}
               aria-label={`Options for ${name}`}
               aria-haspopup="menu"
@@ -444,6 +467,138 @@ export function ViewTab({
         </Popover>
       )}
     </span>
+  );
+}
+
+/**
+ * THE PAGE TITLE IS THE VIEW'S OWN NAME, AND YOU CAN TYPE IN IT.
+ *
+ * NO NEW STORE, AND THAT IS THE POINT. A view has had a `name` since the strip
+ * existed — it is the word on the tab — and `renameViewAction` has always
+ * written it. The h1 was a hard-coded "Dashboard" sitting an inch above a tab
+ * saying something else, so a workspace that renamed "View 2" to "Revenue" got
+ * a page headed Dashboard with Revenue underlined beneath it. One fact, one
+ * place it is stored, two places it is shown.
+ *
+ * THE DEFAULT VIEW IS NOT EDITABLE, and that is a property of the data rather
+ * than a policy: it has no row (see the schema note on `dashboard_views` — the
+ * default board is the ABSENCE of a view), so there is nothing to write a name
+ * to. Shipping a field here that accepted a name and dropped it on reload is
+ * precisely the thing not to do, so the default view's title stays static text.
+ * It is the same rule the tab kebab already follows one row down.
+ *
+ * The commit behaviour is `BoardColumn`'s rename, copied deliberately: blur or
+ * Enter commits, Escape abandons, and an EMPTY name snaps back rather than
+ * raising an error about a field the customer has already walked away from.
+ * "Untitled" is the fallback for a name that is somehow blank — it is never
+ * what a rename can store, because `nameSchema` refuses it.
+ *
+ * `renamed` is the optimistic value, held only until the `router.refresh()`
+ * carrying the server's own name lands; a refusal clears it and the real name
+ * comes back. The page keys this component by the active view, so the value
+ * cannot outlive the view it was typed into.
+ */
+export function ViewTitle({
+  viewId,
+  name,
+  canEdit,
+}: {
+  /** `null` is the default view — no row, so no rename. */
+  viewId: string | null;
+  name: string;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const [renamed, setRenamed] = useState<string | null>(null);
+
+  const shown = (renamed ?? name).trim() || "Untitled";
+
+  const commit = () => {
+    setEditing(false);
+    const next = draft.trim();
+    if (!viewId || !next || next === shown) return setDraft(shown);
+    setRenamed(next);
+    void renameViewAction(viewId, next)
+      .then((r) => {
+        if (!r.ok) setRenamed(null);
+        // The tab strip renders the same name from the server's copy, so this
+        // is what stops the header and the tab disagreeing until the next poll.
+        router.refresh();
+      })
+      .catch(() => setRenamed(null));
+  };
+
+  if (!canEdit || viewId == null) return <>{shown}</>;
+
+  /**
+   * THE TITLE'S TYPE, SPELLED THE ARBITRARY WAY, and it has to be.
+   *
+   * `Button`'s size variant carries `text-sm` and `Input`'s recipe carries it
+   * too, so both halves of this control have to override a 14px inherited from
+   * a primitive. `text-display-xs` CANNOT: `cn()` does not resolve it against
+   * `text-sm` — tailwind-merge reads the kit's own type names as colours, so
+   * both classes survive, and Tailwind emits utilities alphabetically, which
+   * puts `.text-sm` after `.text-display-xs` and hands it the win. The title
+   * would silently render at 14px. Measured in the compiled stylesheet, not
+   * assumed.
+   *
+   * `text-[length:var(--text-display-xs)]` is the same token said in a form
+   * tailwind-merge understands as a font size, so the conflicting class is
+   * dropped outright and no ordering is relied on. It is the trick
+   * `rounded-[var(--radius-control)]` plays against `Button`'s pill in
+   * dashboard/page.tsx, for the same reason: the arbitrary spelling is the one
+   * that can beat a primitive's own base.
+   *
+   * `leading-8` comes with it because the arbitrary form carries the size only,
+   * where the named step carries the token's 32px line-height too — and a 24px
+   * title on its inherited leading is what makes a wrapped one overlap.
+   */
+  const TITLE_TYPE = "font-display text-[length:var(--text-display-xs)] font-semibold leading-8";
+
+  if (editing) {
+    return (
+      <Input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") {
+            setDraft(shown);
+            setEditing(false);
+          }
+        }}
+        aria-label={`Rename ${shown}`}
+        className={`h-auto max-w-md px-2 py-0.5 ${TITLE_TYPE}`}
+      />
+    );
+  }
+
+  return (
+    /* IT IS A BUTTON, because the affordance is that the title is the thing you
+       press to change it — `BoardColumn`'s group name, one level down, is the
+       same control for the same reason. Pulled left by its own padding so the
+       words still line up with the subtitle under them, the way `PageHeader`'s
+       back link is.
+       The hover wash is an alpha of `--ground-ink` rather than the ghost
+       variant's `bg-muted`: `--muted` and the light page are the same off-white,
+       so the stock ghost would answer the pointer with nothing on exactly the
+       surface this title lives on. An alpha of the page's own ink reads in both
+       themes and needs no second token. */
+    <Button
+      variant="ghost"
+      onClick={() => {
+        setDraft(shown);
+        setEditing(true);
+      }}
+      title="Rename this view"
+      className={`-mx-2 h-auto min-w-0 max-w-full justify-start px-2 py-0.5 ${TITLE_TYPE} text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
+    >
+      <span className="truncate">{shown}</span>
+    </Button>
   );
 }
 

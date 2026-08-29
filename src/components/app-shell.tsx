@@ -60,11 +60,31 @@ export async function AppShell({
   userId,
   orgId,
   userEmail,
+  metricCount,
   children,
 }: {
   userId: string;
   orgId: string;
   userEmail?: string | null;
+  /**
+   * HOW MANY METRICS THIS WORKSPACE HAS — supplied by the PAGE, never counted
+   * here, and that is the one interesting decision in this prop.
+   *
+   * The shell is the wrong place to resolve it. It renders on ten routes and
+   * only one of them — the dashboard — reads the metrics table at all, so a
+   * count taken here would be a query the other nine pay on every render, and
+   * on the dashboard it would be a SECOND read of rows that page has already
+   * got in hand. Worse, the note at the top of this file explains that
+   * `AppShell` runs strictly AFTER the page's own awaits: a query added here
+   * overlaps nothing and lands whole on the critical path, twelve seconds
+   * apart, forever, in every open tab.
+   *
+   * So the dashboard hands down `metrics.length + flowTiles.length` — both
+   * already resolved, both already narrowed by rank — and every other route
+   * leaves this undefined, which the bar reads as "nobody counted" and answers
+   * by not drawing a ring. Undefined is deliberately NOT zero: see `TopBar`.
+   */
+  metricCount?: number;
   children: React.ReactNode;
 }) {
   const memberships = await listMemberships(userId);
@@ -128,6 +148,7 @@ export async function AppShell({
       surface="overflow-y-auto"
       hide={hide}
       workspace={workspace}
+      metricCount={metricCount}
       account={{
         initials,
         // Rendered on the server, opened by the client rail: the light

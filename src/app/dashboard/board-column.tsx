@@ -145,7 +145,7 @@ export function BoardColumn({
   return (
     <section
       {...{ [TILE_ATTR]: g.id }}
-      className={`${COLUMN_W} flex shrink-0 flex-col transition-opacity duration-(--duration-fast) ${heldKey === g.id ? "opacity-40" : ""}`}
+      className={`${COLUMN_W} shrink-0 transition-opacity duration-(--duration-fast) ${heldKey === g.id ? "opacity-40" : ""}`}
       aria-label={g.name}
     >
       {/* ONE TINTED SURFACE FOR THE WHOLE COLUMN, header included.
@@ -169,7 +169,7 @@ export function BoardColumn({
           column that belongs to nothing. */}
       <div
         data-lane-tint
-        className="flex flex-1 flex-col overflow-hidden rounded-card"
+        className="overflow-hidden rounded-card"
         style={{ background: groupWash(g.color), boxShadow: `inset 0 0 0 1px ${groupAccent(g.color)}24` }}
       >
         <div data-lane-accent className="h-1 w-full" style={{ background: groupAccent(g.color) }} aria-hidden />
@@ -468,7 +468,7 @@ export function BoardColumn({
             enough to aim at. */}
         <div
           {...{ [LANE_ATTR]: g.id, [AXIS_ATTR]: "y", [ACCEPTS_ATTR]: "tile", [SORTED_ATTR]: sortedBy ? "1" : undefined }}
-          className={`flex min-h-[140px] flex-1 flex-col px-2.5 pb-2.5 transition-shadow duration-(--duration-fast) ${LANE_GAP}`}
+          className={`flex min-h-[140px] flex-col px-2.5 pb-2.5 transition-shadow duration-(--duration-fast) ${LANE_GAP}`}
           style={
             // A SORTED LANE LIGHTS UP WHOLE, because it has no position to offer.
             // See the banner below.
