@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { CalendarDays, ChevronRight, ChevronsUpDown, LayoutDashboard, Plug, Radio, Search, Settings, Workflow } from "lucide-react";
 import type { ReactNode } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { GROUP_ACCENT, GROUP_COLOR_KEYS } from "@/components/flow/node-accent";
 import { ThemeToggle } from "@/components/theme";
 import { cn } from "@/lib/utils";
 
@@ -17,14 +16,6 @@ import { cn } from "@/lib/utils";
  * use, so two workspaces are reliably different and the same workspace is the
  * same colour on every device without a column to store it in.
  */
-function workspaceAccent(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  // `grey` is the palette's "no colour" entry — skip it, or a third of
-  // workspaces get a chip that looks like a disabled control.
-  const keys = GROUP_COLOR_KEYS.filter((k) => k !== "grey");
-  return GROUP_ACCENT[keys[h % keys.length]];
-}
 
 /**
  * THE SIDEBAR — rebuilt from an icon rail into a named column.
@@ -85,19 +76,19 @@ function workspaceAccent(name: string): string {
  * of air either side), 16px of padding at the head and foot of each ruled
  * group, 8px in the foot's own band.
  */
-const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; section: string; soft: string }> = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Workspace", soft: "bg-primary/15 text-accent-foreground" },
-  { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays, section: "Workspace", soft: "bg-accent-orange/15 text-accent-orange" },
+const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; section: string }> = [
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Workspace" },
+  { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays, section: "Workspace" },
   // The two pale accents cannot ink their own glyph — pink on pink and yellow
   // on yellow are both under 2:1 — so they take the page's own text colour.
   // `foreground`, not the near-black literal it used to be: the accents are
   // fixed hexes that do not move with the theme, so in dark mode a near-black
   // icon sat on a dark plum wash and vanished. The role inverts; the hue does
   // not need to.
-  { label: "Activity", href: "/dashboard/activity", icon: Radio, section: "Workspace", soft: "bg-accent-pink/15 text-danger-ink" },
-  { label: "Flows", href: "/dashboard/flows", icon: Workflow, section: "Build", soft: "bg-accent-peri/15 text-accent-peri" },
-  { label: "Apps", href: "/integrations", icon: Plug, section: "Build", soft: "bg-accent-yellow/15 text-warn-ink" },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, section: "Build", soft: "bg-foreground/15 text-foreground" },
+  { label: "Activity", href: "/dashboard/activity", icon: Radio, section: "Workspace" },
+  { label: "Flows", href: "/dashboard/flows", icon: Workflow, section: "Build" },
+  { label: "Apps", href: "/integrations", icon: Plug, section: "Build" },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, section: "Build" },
 ];
 
 /**
@@ -116,7 +107,6 @@ export function WorkspaceChip({ name, className }: { name: string; className?: s
         "flex size-8 shrink-0 items-center justify-center rounded-control text-xs font-semibold text-white",
         className,
       )}
-      style={{ background: workspaceAccent(name) }}
       aria-hidden
     >
       {name.slice(0, 2).toUpperCase()}
@@ -271,7 +261,7 @@ export function Sidebar({
             <div className="space-y-0.5">
               {items
                 .filter((i) => i.section === section)
-                .map(({ label, href, icon: Icon, soft }) => {
+                .map(({ label, href, icon: Icon }) => {
                   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
                   return (
                     <Link
@@ -290,7 +280,7 @@ export function Sidebar({
                         // actual content.
                         "flex h-10 items-center gap-2.5 rounded-control px-3 text-sm font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)",
                         active
-                          ? "bg-accent font-semibold text-accent-foreground"
+                          ? "bg-muted font-semibold text-foreground"
                           : "text-foreground hover:bg-sidebar-accent",
                       )}
                     >
@@ -322,7 +312,7 @@ export function Sidebar({
                           // wash of the row's own ink is one treatment for all
                           // six, and it is the fill, not the chip, that says
                           // where you are.
-                          active ? "bg-primary-foreground/20" : soft,
+                          active ? "bg-background/15 text-background" : "bg-muted text-muted-foreground",
                         )}
                       >
                         <Icon className="size-4" />

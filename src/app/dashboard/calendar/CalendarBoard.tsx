@@ -525,12 +525,15 @@ function DayCell({
             Black ink, because the sheet sets this yellow in black every time it
             appears and nothing else is readable on it. */}
         {best && (
-          // The kit's own chip, one size down — `yellow` is one of its four
-          // DECORATIVE tones, which say which rather than how it is going, so
-          // this cannot be misread as a state the way a green or an amber pill
-          // would be. Only the padding is overridden: a 92px square has no room
-          // for the standard px-3.
-          <StatusPill tone="yellow" className="px-1.5 py-px">
+          // NOT THE NEON. `yellow` is one of the kit's decorative tones and it
+          // cannot be misread as a state — but it is also the HERO colour, and
+          // the hero is at most one per screen, spent on the act the screen
+          // exists for. A month grid put it on a calendar square: the loudest
+          // colour in the product, on a day that is merely the highest of
+          // eleven. Ink on the page's own surface says the same thing without
+          // shouting it. Only the padding is overridden: a 92px square has no
+          // room for the standard px-3.
+          <StatusPill className="bg-foreground px-1.5 py-px text-background">
             Best
           </StatusPill>
         )}
