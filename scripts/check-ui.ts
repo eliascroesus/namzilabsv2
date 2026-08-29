@@ -172,11 +172,6 @@ const RULES: Rule[] = [
       "src/components/flow/controls/source-style.ts": "connector brand colours are the vendors', not ours",
       "src/app/design/page.tsx": "the kit page prints hex VALUES as documentation labels",
       "src/app/design/brand-sheet.tsx": "the same kit page, split out — it prints the brand sheet's own hex values as labels",
-      // Same reason, one system along: the DESIGN.md proposal's swatch board
-      // has to print the value it is documenting. The tiles themselves render
-      // from the scoped custom properties in design-next.css; only the caption
-      // beside each one is a literal.
-      "src/app/design/next": "the proposed language's swatch board prints its own hex values as captions",
       // Next emits <meta name="theme-color"> from a build-time literal, so it
       // cannot read a CSS custom property — the browser chrome's colour has to
       // be written out. Pinned to --background by tests/design-swatches.test.ts
@@ -210,13 +205,6 @@ const RULES: Rule[] = [
     allow: {
       "src/components/ui": "the primitives themselves — this is where <button> is supposed to live",
       "src/components/flow": "the builder's canvas chrome: islands, kebabs, menu rows, combobox triggers, tab strips",
-      // The DESIGN.md proposal, rendered. It is a SECOND design system shown
-      // beside the shipping one for comparison, so it deliberately does not
-      // compose this kit's Button — using it would mean rendering the current
-      // brand inside a mock-up of the replacement, which is the one thing the
-      // page exists to let you tell apart. Quarantined under one route and one
-      // scoped stylesheet; nothing here reaches production surfaces.
-      "src/app/design/next": "the proposed design language, deliberately built from its own scoped CSS rather than this kit",
       "src/components/sidebar.tsx": "the rail's avatar — a round control on a dark surface with its own alpha ladder",
       "src/app/dashboard/settings/RanksPanel.tsx": "a full-width card-header disclosure and the dashed New-rank ghost",
     },

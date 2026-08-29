@@ -389,10 +389,17 @@ export function BoardLayout({
           <div {...{ [SCROLLER_ATTR]: "columns" }} className={`${SCROLLER_BLEED} quiet-scroll mt-6 overflow-x-auto pb-3`}>
             {/* The row of columns is a lane too, whose items are the columns —
                 see COLUMNS_LANE. `items-stretch` so a column being dragged past
-                a short one still hit-tests against a full-height band. */}
+                a short one still hit-tests against a full-height band.
+                It said that and did the opposite: the class was `items-start`,
+                so every column sized to its own contents and a row of them
+                ended on three different baselines — a three-tile column running
+                780px beside two that stopped at 300. Bottoms that do not line up
+                are the first thing you see on a board, and the drag was quietly
+                worse for it too, because a short column offered a short target.
+                One word, and the comment is true again. */}
             <div
               {...{ [LANE_ATTR]: COLUMNS_LANE, [AXIS_ATTR]: "x", [ACCEPTS_ATTR]: "column" }}
-              className={`flex items-start ${LANE_GAP}`}
+              className={`flex items-stretch ${LANE_GAP}`}
             >
               {withGap(
                 board.columns.map((l) => ({ key: l.id! }) as BoardTile),
