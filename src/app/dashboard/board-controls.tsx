@@ -349,13 +349,24 @@ export function ViewTab({
              purpose: a tab's hit area is its LABEL plus the rule under it, so
              padding here only pushes the names apart and the 24px row gap
              already does that.
-             The bottom half is 4px rather than the Figma's 8 so the underline
-             sits UNDER THE WORD instead of floating a line below it — see the
-             note on `border-b-3` above. It is spelled on the anchor, which every
-             tab renders, so the active and idle labels stay on one baseline;
-             putting it on the active branch alone would make the row twitch by
-             4px each time you changed views. */
-          className={cn("inline-flex items-center gap-1.5 px-1 pb-1 pt-2", editable && "pr-0.5")}
+             4px top AND bottom, and the symmetry is the point. The underline
+             sits UNDER THE WORD at 4px rather than floating a line below it —
+             see the note on `border-b-3` above — but the padding also has to be
+             EQUAL, because the row this tab lives on centres its two halves
+             against each other. With 8px above and 4px below, the box centre
+             and the text centre were 2px apart, so centring the boxes left the
+             labels visibly off from the action pills beside them. Equal padding
+             makes the two centres the same point.
+             The transparent 3px TOP border is the other half of that: the
+             underline is a bottom border, so it lengthens the box downward
+             only, and equal padding inside an unequal box still leaves the text
+             1.5px high. A matching invisible border on top restores the
+             symmetry without drawing anything.
+             It is spelled on the anchor, which every tab renders, so active and
+             idle labels stay on one baseline; putting it on the active branch
+             alone would make the row twitch by 4px each time you changed
+             views. */
+          className={cn("inline-flex items-center gap-1.5 border-t-3 border-t-transparent px-1 py-1", editable && "pr-0.5")}
         >
           {renamed ?? children}
         </a>

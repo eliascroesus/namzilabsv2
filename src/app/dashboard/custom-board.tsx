@@ -597,7 +597,15 @@ export function CustomBoard({
           `PageHeader`'s own `pb-4` is the 16px between the title block and this
           row, and the `mt-4` that used to be here made it 32. Both boards wear
           the same row, so both had to stop paying for the gap twice. */}
-      <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center justify-between gap-4">
+          {/* CENTRED, NOT TOP-ALIGNED. `items-start` put the two halves of this
+              row on a shared TOP edge, and they are not the same height — the
+              tab strip measures 32px against the 36px action pills, so the tab
+              labels sat exactly 2px below the button labels. Two rows of text
+              that nearly share a baseline read as a mistake rather than as a
+              hierarchy. `items-center` gives them a shared MIDDLE, which is the
+              line the eye actually uses. Wrapping is unaffected: a folded block
+              of actions centres against the tabs the same way one row does. */}
         <div className="min-w-0 flex-1">{viewStrip}</div>
         <div className="flex flex-wrap items-center justify-end gap-4">
           {canEdit && (

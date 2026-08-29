@@ -505,17 +505,42 @@ export function Sidebar({ hide }: { hide?: string[] }) {
               much presence for a control sitting under seven quieter rows;
               `--chrome-add-ink` is 6.30:1 on it — comfortably past AA — and lets
               the colour do the pointing instead of the ink. */}
-          <Link href="/dashboard/flows" className={SLOT}>
+          {/* IT BECOMES A BUTTON WHEN THERE IS ROOM TO BE ONE.
+              Collapsed, the yellow is a 28px chip inside the 40px icon column,
+              because a 70px rail has space for a mark and nothing else.
+              Expanded, the fill moves OUT of the chip and onto the row itself,
+              so "New flow" reads as the same full-width primary the top bar
+              carries rather than as a coloured square with a caption beside it
+              — which is what it looked like, and it is the one control in the
+              foot that is a verb.
+              The fill swaps rather than stacks: the chip goes transparent at
+              the same moment the row fills, so there is never a yellow square
+              sitting on a yellow bar. `-mx-1 px-1` lets the filled row breathe
+              to the gutter's edge without moving the chip, which is the whole
+              point of the icon column — every glyph in the rail stays on one
+              vertical line in both states. */}
+          <Link
+            href="/dashboard/flows"
+            className={cn(
+              SLOT,
+              "transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:bg-accent-yellow group-hover/rail:px-1",
+              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:bg-accent-yellow group-focus-within/rail:px-1",
+              "hover:brightness-95",
+            )}
+          >
             <span
               aria-hidden
               className={cn(
                 ICON_COL,
-                "rounded-control border border-chrome-line bg-accent-yellow text-chrome-add-ink transition-[filter] duration-(--duration-fast) ease-(--ease-standard) group-hover:brightness-95",
+                "rounded-control border border-chrome-line bg-accent-yellow text-chrome-add-ink transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+                "group-hover/rail:border-transparent group-hover/rail:bg-transparent",
+                "group-focus-within/rail:border-transparent group-focus-within/rail:bg-transparent",
               )}
             >
               <Plus className="size-4" />
             </span>
-            <RailLabel>New flow</RailLabel>
+            <RailLabel className="text-chrome-add-ink">New flow</RailLabel>
           </Link>
 
           {/* THE BELL, AND ITS DOT IS A PROMISE THIS COMMIT CANNOT KEEP.

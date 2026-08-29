@@ -55,8 +55,8 @@ import { cn } from "@/lib/utils";
  * one blue that means "identity".
  */
 
-/** The metrics ring's geometry: r=10 in a 24px box, so a 2px stroke sits inside. */
-const RING_RADIUS = 10;
+/** The ring: r=9 in a 24px box, so a 4px stroke sits inside with a pixel spare. */
+const RING_RADIUS = 9;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 /**
@@ -289,41 +289,33 @@ export function TopBar({
                         that begins at three reads as a dial rather than as
                         progress. */}
                     <svg aria-hidden viewBox="0 0 24 24" className="absolute inset-0 size-6 -rotate-90">
-                      <circle cx="12" cy="12" r={RING_RADIUS} fill="none" strokeWidth="2" className="stroke-ink-700" />
+                      <circle cx="12" cy="12" r={RING_RADIUS} fill="none" strokeWidth="4" className="stroke-ink-700" />
                       {arc > 0 && (
                         <circle
                           cx="12"
                           cy="12"
                           r={RING_RADIUS}
                           fill="none"
-                          strokeWidth="2"
+                          strokeWidth="4"
                           strokeLinecap="round"
                           strokeDasharray={RING_CIRCUMFERENCE}
                           strokeDashoffset={RING_CIRCUMFERENCE - arc}
-                          /* THE ARC IS A LIT VIOLET, and it is `brand-300`
-                             rather than the `primary` 500 for a measured
-                             reason. It was `stroke-neutral-600` #525252 on a
-                             `stroke-ink-700` #3d3d3d track — 1.39:1 — so where
-                             the arc STOPPED could not be seen and 3/6 and 6/6
-                             read identically. That defeats the only argument
-                             for drawing a ring ("the thing you notice from
-                             across the room"); the fraction beside it was
-                             carrying all of the information on its own.
-
-                             The 500 does not fix it: #7c4dff on that track is
-                             2.26:1, still under the 3:1 a non-text mark owes.
-                             Darkening the TRACK instead trades one invisible
-                             object for another — at ink-800 the track itself
-                             falls to 1.35:1 on the bar. So the arc gets
-                             brighter, not the track darker: brand-300 #b494ff
-                             sits at 4.46:1 on the track and 7.87:1 on the bar,
-                             and violet still reads as the brand doing the
-                             marking. */
-                          className="stroke-brand-300"
+                          /* GREEN, AND THICK ENOUGH TO BE THE THING YOU READ.
+                             The numeral that used to sit inside this ring is
+                             gone, so the arc is no longer a decoration beside a
+                             figure — it IS the figure, and it has to carry the
+                             reading on its own. A 2px hairline could not: at
+                             `neutral-600` on an `ink-700` track it measured
+                             1.39:1 and 3/6 read the same as 6/6.
+                             4px of `--chrome-presence` fixes both halves at
+                             once. It is the same green already used for "this
+                             is live and healthy" on the bell, which is exactly
+                             what a filling ring means here, and it sits far
+                             clear of the 3:1 a non-text mark owes. */
+                          className="stroke-chrome-presence"
                         />
                       )}
                     </svg>
-                    <span className="relative text-xs font-bold leading-none text-ink-400">{tracked}</span>
                   </span>
                   <span className="text-md font-bold text-white">
                     {tracked}/{METRIC_GOAL}
