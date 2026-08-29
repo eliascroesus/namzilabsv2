@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
+import { cn } from "@/lib/utils";
 
 /**
  * THE FRAME: three surfaces and two hairlines, and nothing else.
@@ -26,14 +27,24 @@ import { TopBar } from "./top-bar";
 export function AppFrame({
   account,
   workspace,
+  firstName,
   surface,
   hide,
   ownsMain = false,
   children,
 }: {
   account?: { initials: string; panel: ReactNode };
-  /** The workspace's own name — shown beside the mark in the top bar. */
+  /** The workspace's own name — shown beside its avatar in the top bar. */
   workspace?: string;
+  /**
+   * The signed-in person's first name, for the top bar's greeting.
+   *
+   * A SEAM, not a decoration: the greeting falls back to a nameless "Welcome
+   * back!" until something upstream can supply this, and the shell is the only
+   * place that can — it is the one component in the frame that has already
+   * resolved the session.
+   */
+  firstName?: string;
   surface: string;
   /** Rail items (by label) this viewer shouldn't see; AppShell decides. */
   hide?: string[];
@@ -59,7 +70,26 @@ export function AppFrame({
   // the canvas, not the viewport. It belongs here rather than in a wrapper each
   // page remembers to add — the builder had exactly such a wrapper, and it was
   // one nesting level doing nothing else.
-  const className = `relative min-w-0 flex-1 ${surface}`;
+  //
+  /**
+   * THE GROUND IS DECIDED HERE, ONCE, AND NOT ON A PAGE.
+   *
+   * `bg-canvas-bg` used to be re-typed by every caller of this frame, which
+   * meant the answer to "what colour is the page under the board" lived in as
+   * many places as there were routes — and the one that mattered most, the
+   * dashboard's, lived in `app-shell.tsx` beside a WorkOS membership fetch.
+   * The frame owns the surface it paints; `surface` is about SCROLLING, which
+   * is the one thing the pages genuinely disagree about.
+   *
+   * `cn` rather than interpolation is what makes the override honest. Two
+   * `bg-*` classes in one attribute are settled by their order in the
+   * generated stylesheet, not by the call site — so a caller that named its
+   * own ground was relying on luck. tailwind-merge resolves them last-wins,
+   * so the kit page keeps its white sheet (`bg-card`) and the builder keeps
+   * the canvas grey it pans over (`bg-canvas-bg`) by SAYING so, and every
+   * other route gets the ground without mentioning it.
+   */
+  const className = cn("relative min-w-0 flex-1 bg-ground", surface);
 
   return (
     // `h-dvh`, not `h-screen`: on mobile Safari `100vh` is the height the
@@ -80,13 +110,24 @@ export function AppFrame({
         paddingRight: "env(safe-area-inset-right)",
       }}
     >
-      <Sidebar hide={hide} workspace={workspace ?? "Workspace"} account={account} />
+      {/* THE RAIL TAKES ONLY `hide` NOW. It used to be handed the workspace
+          name and the account panel because it opened with a switcher and
+          closed with an avatar; at 70px it carries neither — the workspace
+          identity and the account menu are both in the top bar, which is where
+          every reference puts them. Passing them anyway would be two props a
+          component ignores, which is how a signature stops describing what a
+          thing actually needs. */}
+      <Sidebar hide={hide} />
       {/* The top bar belongs to the CONTENT column, not the viewport: the
           sidebar runs full height beside it, exactly as it does in Miro and
           Notion. A bar spanning both would put the workspace switcher above
           the navigation that switching it changes. */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar account={account} />
+        {/* THE BAR IS WHERE IDENTITY LANDS. The workspace's name and the
+            account panel used to go to the rail; at 70px the rail is icons and
+            nothing else, so both come here — the workspace avatar and name at
+            the reading edge, the account at the far one. */}
+        <TopBar account={account} workspace={workspace} firstName={firstName} />
         {ownsMain ? (
           <main id="main" className={className}>
             {children}

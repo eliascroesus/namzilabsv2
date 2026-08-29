@@ -619,6 +619,153 @@
      node-accent.ts. Warm near-black here so the label sits on its own pale
      badge; near-white in the dark theme, where the badge is the dark thing. */
   --group-ink-end: #0c111d;
+
+  /* ---- The chrome: the icon rail and the top bar -------------------------
+   * ONE DARK BAND, WRAPPING A DARK PAGE.
+   *
+   * The 264px sidebar is a 70px icon rail now, and it and the 70px top bar are
+   * a single near-black band around a board that itself sits on a dark ground.
+   *
+   * THAT BAND'S COLOUR IS NOT NEW. The Figma measures #0F1011, which is 0, 1
+   * and 2 counts off `--color-ink-950` — a difference no screen and no eye can
+   * resolve, and precisely the near-miss this file's opening argument is about:
+   * two near-blacks under two names, indistinguishable today and drifting apart
+   * at the first edit. The chrome is `ink-950`. The nine tokens below are only
+   * what the ramps genuinely do not already hold.
+   *
+   * They are declared HERE, beside the other roles, rather than in `@theme`,
+   * because they are roles — a component should ask for `border-chrome-line`,
+   * not for a grey. They are deliberately ABSENT from `.dark`: this band is the
+   * one part of the app that does not invert. It is the same material at both
+   * exposures by construction, so a `.dark` twin would be nine values to keep
+   * in step for no visible change — and nine chances to fall out of step.
+   */
+
+  /* The hairline that closes the band — the rail's right edge, the top bar's
+     bottom, and the period control's rim. Neither existing hairline could do
+     this job: `--border` is a light-surface value that vanishes on near-black,
+     and `ink-700` was drawn to divide the rail from ITSELF, where it only has
+     to beat one surface. This one has to read against the page ground beside it
+     too. 2.11:1 on the chrome — under the 3:1 non-text bar, and correctly so:
+     it is the seam between two surfaces, not the edge of a control, and nothing
+     becomes unusable for a reader who cannot resolve it. */
+  --chrome-line: #48494b;
+  /* The 36px circle under the top bar's bell and avatar. A LIGHT chip on the
+     dark band, so those two read as objects sitting ON the chrome rather than
+     as loose glyphs floating in it. 12.72:1 against the chrome, and it carries
+     the avatar's `brand-700` initials at 4.53:1 — past AA with almost nothing
+     spare, which is why those initials stay at 600 and never go lighter than
+     the 700 step. */
+  --chrome-chip: #d3d3d3;
+  /* The unread-count badge on that bell. BLUE, and neither of the two colours
+     it might have been: `--danger` would make an unread message a failure, and
+     `brand-500` would give a number nobody asked for the same colour as
+     selection. This is the third thing — a count — and it gets its own. 3.67:1
+     on the chrome, past the 3:1 bar for a graphical object, and it carries its
+     own numeral at 4.90:1. */
+  --chrome-badge: #3859ff;
+  /* The presence dot on the RAIL's bell — 8px, no number, so it says "there is
+     something" rather than "there are three". Green because it reports
+     PRESENCE, not urgency, and pointedly not `--success`: that trio means a row
+     succeeded, and a dot that borrows it turns a notification into a result.
+     7.70:1 on the chrome. */
+  --chrome-presence: #00bc7d;
+  /* The workspace avatar in the top bar — the one place the chrome carries a
+     colour that is neither brand nor state, because this is IDENTITY: which
+     workspace you are in. It has to be able to differ per workspace without
+     ever colliding with selection violet or the yellow hero, which is the whole
+     reason it is not drawn from either. White on it measures 4.14:1, under AA
+     at the 16px/600 the initial is set in — see the note in the report. */
+  --chrome-avatar: #437dcf;
+  /* The "+" on the rail's yellow chip. NOT `--foreground`: near-black on the
+     yellow is 15.18:1 and reads as a filled primary button demanding a press,
+     which is too much presence for a control sitting under seven quieter nav
+     rows. Grey is 6.30:1 on that yellow — comfortably past AA — and lets the
+     chip's colour do the pointing instead of its ink. */
+  --chrome-add-ink: #575757;
+
+  /* ---- The ground: the page the board sits on ----------------------------
+   * WHITE TILES ON A DARK PAGE — the builder's grammar (see the canvas note
+   * above) taken one exposure further. On the old off-white page a white card
+   * was announced only by its hairline; on the dark ground its own edge does
+   * the work, and the tile's number is the loudest thing on screen again,
+   * which is the whole thesis at the top of this file.
+   *
+   * AND THE GROUND IS THE ONLY THING IN THE CHROME REDESIGN THAT SWITCHES.
+   *
+   * The band never inverts — that is the argument in the chrome note above,
+   * and it is what Miro, Notion and Linear all do: a rail that changes colour
+   * with the theme is a rail with no identity. The PAGE inside it has to,
+   * because a light theme whose only light surfaces are the cards is not a
+   * light theme — it is the dark one with white boxes on it.
+   *
+   * So the ground is one role with two answers, and the two inks that sit on
+   * it come with it. The light three are here, the dark three are in `.dark`,
+   * and there are no others: the metric tiles, the group columns, the white
+   * "New group" / "All sources" pills and the yellow "Refresh all" are the same
+   * objects at both exposures.
+   *
+   * LIGHT — the canvas the app already ships. Deliberately NOT a new grey:
+   * `--background` and `--canvas-bg` are both this value, and a page ground a
+   * half-step off either of them is precisely the near-miss this file opens by
+   * arguing against.
+   */
+  --ground: var(--color-neutral-100);
+  /* The page title. 15.96:1 on the light ground — the same ink everything else
+     in the light theme reads in, because a title that is a DIFFERENT near-black
+     from the body text around it is a second foreground nobody asked for. */
+  --ground-ink: var(--color-neutral-900);
+  /* The subtitle under it. 4.89:1 on the light ground — past AA at the 14px/400
+     it is set in, and a clear rung below the title's 15.96:1 so the pair reads
+     as a hierarchy rather than as two greys arguing.
+     Written as the RAMP step rather than as `--muted-foreground`, even though
+     the two are the same colour here: that role inverts to `neutral-400` in
+     dark and this ink does not follow it there. Two tokens that happen to agree
+     in one theme are not one token. */
+  --ground-ink-muted: var(--color-neutral-500);
+  /* The 2px rule under the active tab. GREEN, and deliberately not the
+     selection violet that the rail's active row and the period control's active
+     pill both wear. Those answer "where are you in the app"; a tab answers
+     "which slice of THIS page". Two questions, and one colour answering both is
+     how a screen stops pointing at anything.
+     ONE VALUE FOR BOTH THEMES, per the spec, and it is not free: 9.02:1 on the
+     dark ground, but 1.78:1 on the light one, where a 2px rule is well under
+     the 3:1 an indicator that carries state is meant to hold. It survives only
+     because the underline is never the ONLY thing marking the active tab — that
+     tab is also the one set in `--ground-ink` while its neighbours sit at
+     `neutral-500`. If the tab row ever loses that weight change, this token
+     needs a light answer of its own. */
+  --tab-underline: #00d492;
+
+  /* ---- The period control: the one control that follows the page ---------
+   * Today · Yesterday · Last 7 days · … — a pill group at the right of the
+   * page header. It sits on the GROUND, not on the band, and that is the whole
+   * reason it is the one control here that inverts: a near-black pill group on
+   * a #f5f5f5 page is a second dark object competing with the chrome for the
+   * eye, and the chrome has to win that fight, because it is the thing that
+   * says where you are.
+   *
+   * THREE TOKENS, NOT FIVE. The active pill is `bg-primary` +
+   * `text-primary-foreground`, which already answer brand-500 and white in BOTH
+   * themes — the Figma's #7C4DFF *is* `--primary`, and giving it a second name
+   * here is how a product ends up with two primaries that drift apart at the
+   * first edit. (The Figma sets that label in #F5F5F5, which measures 4.42:1 on
+   * the violet against white's 4.81:1 — so the role is also the accessible
+   * choice, not merely the tidy one.)
+   *
+   * LIGHT — a white group with the app's own hairline, so it reads as the same
+   * material as the white pills beside it in the action row.
+   */
+  --period-bg: #ffffff;
+  --period-line: var(--color-neutral-200); /* 1.23:1 — a seam, not an edge */
+  /* The inactive label, and the one value the spec holds fixed across both
+     themes. It is comfortable in light (5.33:1 on the white group) and it is
+     NOT in dark: 3.60:1 on the near-black group, under AA for the 14px/500
+     these pills are set in. Kept because it is what the export measures and
+     because these labels are a segmented control whose active member is
+     unmistakable — but it is the weakest text in the redesign, and the fix if
+     it is ever taken is `neutral-400` in `.dark`, which lands at 7.6:1. */
+  --period-ink: var(--color-neutral-500);
 }
 
 /**
@@ -702,6 +849,35 @@
   --sidebar: var(--color-neutral-950);
   --sidebar-accent: var(--color-neutral-800);
   --group-ink-end: #f9fafb;
+
+  /* ---- The ground, and the two inks on it -------------------------------
+   * THE HALF OF THE CHROME REDESIGN THAT INVERTS. The band around this page
+   * does not — the six `--chrome-*` roles are absent from this block on
+   * purpose, and the note beside them in `:root` is why.
+   *
+   * A hair warmer and a step lighter than that band: 1.09:1 apart, which is
+   * deliberately below the threshold at which two surfaces read as two
+   * MATERIALS. The chrome and the page are one dark substance with the rail
+   * very slightly recessed, rather than two panels that failed to match.
+   */
+  --ground: #1b191a;
+  /* The page title — 17.49:1. Pure white, not `--foreground`'s ink-50: this is
+     the one surface in the app where a heading has nothing above it to defer
+     to, and #fafafa here measures 16.76:1 to white's 17.49:1 — the same
+     decision, one step short of it. */
+  --ground-ink: #ffffff;
+  /* The subtitle. 6.89:1, a clear rung below the title so the pair still reads
+     as a hierarchy. `--muted-foreground` cannot serve: at 1.9:1 on this ground
+     it is not dim, it is gone. */
+  --ground-ink-muted: #9ca3af;
+
+  /* The period control, which lives on the ground and therefore moves with it.
+     Near-black on near-black, held apart by the chrome hairline — which is what
+     makes the group read as a recessed track with one lit pill in it rather
+     than as six loose labels. `--period-ink` is deliberately NOT restated here;
+     see its note in `:root` for the ratio that costs. */
+  --period-bg: var(--color-ink-950);
+  --period-line: var(--chrome-line);
 }
 
 /* Roles become utilities: `bg-primary`, `text-muted-foreground`,
@@ -746,6 +922,35 @@
   --color-rail: var(--rail);
   --color-sidebar: var(--sidebar);
   --color-sidebar-accent: var(--sidebar-accent);
+
+  /* The chrome band, the ground the board sits on, and the period control,
+     bridged the same way, so `border-chrome-line`, `bg-chrome-chip`,
+     `bg-chrome-badge`, `bg-chrome-presence`, `bg-chrome-avatar`,
+     `text-chrome-add-ink`, `bg-ground`, `text-ground-ink`,
+     `text-ground-ink-muted`, `border-tab-underline`, `bg-period-bg`,
+     `border-period-line` and `text-period-ink` all COMPILE. Without this half
+     nothing above is a utility — it is twelve custom properties that only an
+     inline style could reach, which is how a rail ends up with a hex in its
+     class list.
+
+     The `--chrome-*` six resolve to one value in both themes because they are
+     declared only in `:root`; the ground three and the period two answer
+     differently under `.dark` because they are declared in both. That
+     difference is the entire theme story of this redesign, and it is legible
+     right here in which block each name appears in. */
+  --color-chrome-line: var(--chrome-line);
+  --color-chrome-chip: var(--chrome-chip);
+  --color-chrome-badge: var(--chrome-badge);
+  --color-chrome-presence: var(--chrome-presence);
+  --color-chrome-avatar: var(--chrome-avatar);
+  --color-chrome-add-ink: var(--chrome-add-ink);
+  --color-ground: var(--ground);
+  --color-ground-ink: var(--ground-ink);
+  --color-ground-ink-muted: var(--ground-ink-muted);
+  --color-tab-underline: var(--tab-underline);
+  --color-period-bg: var(--period-bg);
+  --color-period-line: var(--period-line);
+  --color-period-ink: var(--period-ink);
 }
 
 /**

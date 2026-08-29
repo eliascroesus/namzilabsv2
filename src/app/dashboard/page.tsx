@@ -7,7 +7,7 @@ import { requireOrg, requestAccess } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
-import { PageContainer } from "@/components/ui/page";
+import { PageContainer, PageHeader } from "@/components/ui/page";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { SourceMark } from "@/components/source-mark";
@@ -430,10 +430,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                  doing Notion's job. Rendered here, on the server, because the
                  tabs are real anchors and the `+` is a plain form post; handed
                  to the board because that is what knows where its own controls
-                 go. It shares a line with "New group": both are about how the
-                 board is laid out, while the filter island above narrows which
-                 numbers are on it. */
-              <div className="-mx-1 flex flex-wrap items-center gap-1 px-1 py-1">
+                 go. It shares a line with "New group", "All sources" and
+                 "Refresh all": everything on that row is about THIS BOARD,
+                 while the period control in the page header narrows which
+                 numbers are on it.
+
+                 24px BETWEEN TABS, not 4px, and the change is what the
+                 underline costs. A filled pill carries its own edges, so tabs
+                 set tight beside each other still read as separate objects; an
+                 underlined tab is a WORD with a rule under it, and at 4px apart
+                 four of those are one long rule broken by gaps nobody reads as
+                 boundaries. 24px is the distance at which each label owns its
+                 own rule. The `+` rides the same gap — it is the last item in
+                 the row, not a control appended to it.
+
+                 `p-1` (4px) all round, pulled back by `-mx-1`, so the focus
+                 ring on the first tab has room without the row indenting. */
+              <div className="-mx-1 flex flex-wrap items-center gap-6 px-1 py-1">
                 {viewTabs.map((v) => (
                   <ViewTab
                     key={v.id ?? "default"}
@@ -563,6 +576,128 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
 
   const activeSourceLabel = boardSource ? (catalogEntry(boardSource)?.name ?? boardSource) : "All sources";
+
+  /**
+   * THE ACTION HALF OF THE TAB ROW — and the filter island is gone.
+   *
+   * There used to be a white bar above the board holding all three of these:
+   * the period pills, the source picker and Refresh all. It was a sound object
+   * on a white page and it is the wrong one now, for two reasons that arrived
+   * together.
+   *
+   * ONE: the page has a HEADER again. The old bar existed partly because there
+   * was nothing else at the top of this screen — the title had been deleted as
+   * a duplicate of a sidebar row that said "Dashboard" beside it. That sidebar
+   * is a 70px icon rail with no words on it, so the duplication it was deleted
+   * for no longer exists, and the period control has somewhere better to be:
+   * the header's right slot, where it reads as "this page, over this window".
+   *
+   * TWO: an island on a dark ground is a THIRD surface. The board is already
+   * white cards on a dark page inside a dark band; a white bar between them is
+   * one more panel for the eye to account for before it reaches a number.
+   *
+   * So the two controls that are not the period join the row that was already
+   * there — the view tabs and New group — and the bar dissolves. The row's own
+   * question is unchanged by the arrivals: the tabs and New group say how the
+   * board is ARRANGED, and these two say what is ON it. Both are about this
+   * board; the period is about the numbers inside it, and it stays upstairs.
+   *
+   * Rendered here, on the server, and handed to whichever board is mounted —
+   * the same trick `viewStrip` uses, and for the same reason: the source rows
+   * are real anchors and Refresh all is a plain form post, so neither needs the
+   * client boundary the board itself is behind.
+   */
+  const boardActions = (
+    <>
+      {/* A <details> popover rather than a select: the source lives in the URL,
+          so each option has to be a real link, and this page renders on the
+          server with no client JS to submit a form. Collapsing the sources
+          behind their own current value is also what stops the row growing
+          every time a workspace connects another app. */}
+      {sources.length > 0 && (
+        <details className="group/src relative shrink-0">
+          {/* PILL, not `rounded-control`. It sits between New group and Refresh
+              all, both of which are `Button`s and therefore `rounded-full` from
+              the kit's own base — a single rounded rectangle in a row of three
+              pills reads as a control from a different set. h-9 is 36px, which
+              is `size="sm"`: the same height as the buttons either side of it,
+              stated here because a <summary> cannot be a Button. */}
+          <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-3.5 text-sm font-medium text-foreground shadow-xs transition-colors duration-(--duration-fast) hover:bg-muted [&::-webkit-details-marker]:hidden">
+            {boardSource && <SourceMark source={boardSource} />}
+            {activeSourceLabel}
+            <ChevronDown size={14} className="text-muted-foreground transition-transform group-open/src:rotate-180" />
+          </summary>
+          {/* Right-aligned: the control sits near the row's right edge, so a
+              left-anchored menu opened off the end of the page.
+              PANEL then ROW, and nothing in between: `rounded-surface` +
+              `shadow-surface` for the floating surface, `p-1.5` so a row's
+              corner clears the panel's own, `rounded-control` on the rows.
+              It is the shape the vendored menu, the Select and the Command
+              palette all take — see `ui/dropdown-menu.tsx`, where the menu
+              language is written down. */}
+          <div className="absolute right-0 top-full z-20 mt-1.5 min-w-52 rounded-surface border border-border bg-card p-1.5 shadow-surface">
+            <SourceLink
+              href={qs({ source: "" })}
+              className={cn(
+                "block rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-accent hover:text-accent-foreground",
+                /* THE ROW IN FORCE WEARS THE WASH, not violet words on nothing.
+                   `text-primary` is brand-500, which is 4.42:1 on this surface
+                   and fails AA at the size these are set in — the sheet's own
+                   rule is that the 500 FILLS and the 700 SPEAKS, and
+                   `accent`/`accent-foreground` is that pair spelled as roles. */
+                !boardSource ? "bg-accent font-semibold text-accent-foreground" : "text-foreground",
+              )}
+            >
+              All sources
+            </SourceLink>
+            {/* The connector's own name, not its storage key: this row read
+                "gsheets · close · webhook" while every other screen in the
+                product says "Google Sheets", "Close CRM". */}
+            {sources.map((srcName) => (
+              <SourceLink
+                key={srcName}
+                href={qs({ source: srcName })}
+                className={cn(
+                  "flex items-center gap-2 rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-accent hover:text-accent-foreground",
+                  boardSource === srcName ? "bg-accent font-semibold text-accent-foreground" : "text-foreground",
+                )}
+              >
+                <SourceMark source={srcName} />
+                {catalogEntry(srcName)?.name ?? srcName}
+              </SourceLink>
+            ))}
+          </div>
+        </details>
+      )}
+      {/* Recompute every published metric.
+          THE YELLOW IS SPENT HERE, and that reverses an argument this file used
+          to make at length. It said the neon belongs to "the single act the page
+          exists for", that a dashboard exists to be READ rather than acted on,
+          and that making a maintenance button the loudest thing on a board of
+          numbers inverts the kit's own thesis. That reasoning was sound about a
+          WHITE page, where the yellow was the only saturated thing on screen.
+          The ground is near-black now, and on it the neon is no longer the
+          loudest object — the white tiles are, at 17.49:1 against the page,
+          where the yellow sits at 15.25:1 behind them. The rule the kit actually
+          states is one hero per screen, and this is the one: it is the only
+          control on the board that CHANGES anything rather than narrowing what
+          is shown. The scarcity survives; the surface it was measured against
+          did not.
+          `px-5` is 20px, wider than `size="sm"`'s own 14px, because the hero
+          pill is the one that is meant to be reached for. */}
+      <form action={refreshAllFlowsAction} className="shrink-0">
+        <SubmitButton
+          variant="yellow"
+          size="sm"
+          className="px-5"
+          pendingLabel="Refreshing…"
+          title="Recompute every published metric now"
+        >
+          Refresh all
+        </SubmitButton>
+      </form>
+    </>
+  );
 
   /**
    * EVERY TILE, PLUS THE FOUR FACTS AN ARRANGEMENT IS COMPUTED FROM.
@@ -753,167 +888,97 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {/* G.4: refresh the server-rendered tiles when the org's results move. */}
       <FreshnessPoller />
       <PageContainer width="full">
-        {/* NO LEDE. It said the board holds every published flow's number,
-            recomputed on a schedule and stamped with when it was last true —
-            and every one of those three facts is already on the screen, said
-            by the thing it is about: the tiles ARE the numbers, each carries
-            its own as-of line, and the caption below states when the board as a
-            whole was last true. A sentence that narrates the page under it is
-            furniture. Same rule on every board in the product now. */}
-        {/* No PageHeader here any more. The title said "Dashboard" above a
-            sidebar item that already said Dashboard, and its two actions moved
-            to the chrome that owns them: New flow to the top bar (it is true on
-            every route), Refresh all into the bar beside the range it applies
-            to. What is left is the board. */}
-
         {/* The filters and the tiles are ONE control: pressing a pill has to
             change both, and the second one has to say it is thinking. They
             share a client boundary so the press can land before the server
-            answers — see board-controls.tsx. */}
+            answers — see board-controls.tsx. `PageHeader` is INSIDE it because
+            the period pills are `RangeLink`s and read that context. */}
         <BoardControls>
-        {/* ── THE FILTER BAR, AS AN ISLAND ──────────────────────────────
-            Two questions, two controls, one surface. They used to sit loose on
-            the page: on white that was merely plain, and on the warm canvas it
-            would be two orphaned controls with nothing holding them. A white
-            bar with a hairline and the card shadow is the same object the
-            builder floats its toolbar in — which is the point, since this bar
-            does the same job at the top of this screen.
+        {/* ── THE PAGE HEADER ───────────────────────────────────────────────
+            THE TITLE IS BACK, and the argument that removed it is what returns
+            it. That argument was: "Dashboard" as an h1 sat directly beside a
+            sidebar row that already said Dashboard, so the page opened by
+            saying the same word twice. True of a 264px sidebar with labels on
+            it. The navigation is a 70px ICON RAIL now — no words anywhere in
+            it — so this h1 is the only place on the screen that names where you
+            are, and a page whose first line is a filter pill has no head.
 
-            `justify-between` so the range (what period) reads from the left
-            edge and the source (whose data) sits at the right, with the gap
-            between them saying they are two separate answers.
+            THE SUBTITLE NAMES THE SCOPE, it does not narrate the page. The
+            lede this file deleted described the board's whole mechanism —
+            published, recomputed on a schedule, stamped with when it was last
+            true — three facts the tiles each say for themselves. A subtitle's
+            job in this header is one phrase saying what the numbers below are
+            drawn FROM, which nothing else on the screen says. */}
+        <PageHeader
+          title="Dashboard"
+          lede="Every published metric in this workspace."
+          actions={
+            /* ── THE PERIOD CONTROL ────────────────────────────────────────
+               THE SAME SIX LINKS, ON THE OTHER SIDE OF THE PAGE. This is the
+               range track that used to open the filter island — moved, not
+               rebuilt, and still `RangeLink`s carrying real `href`s so
+               middle-click, copy-link and a JavaScript-less viewer all keep
+               working. What changed is where it sits and what it is made of.
 
-            THE YELLOW IS DELIBERATELY UNSPENT ON THIS SCREEN, and that is a
-            decision rather than an omission. The kit allows the neon at most
-            once per page, on the single act the page exists for — and this page
-            does not exist for an act. It exists to be READ: six tools disagree
-            about how many calls were booked, and the whole product is the one
-            number you can defend. "Refresh all" is the only candidate up here,
-            and making a maintenance button the loudest thing on a board of
-            numbers inverts the thesis this kit opens with. Scarcity is what the
-            colour means; a screen with nothing to shout keeps quiet. */}
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          {/* THE RANGE TRACK SCROLLS RATHER THAN BREAKING THE PAGE.
-              Seven pills at ~70px each is a ~500px track that cannot wrap
-              (the pills are `shrink-0`, correctly — without it "Last 30 days"
-              wraps to two lines inside its own pill and the track grows a
-              second ragged row). At 390px that pushed the WHOLE page into
-              horizontal scroll. A local scroller contains it.
+               IT IS THE ONE CONTROL IN THE REDESIGN THAT FOLLOWS THE PAGE
+               RATHER THAN THE CHROME. The rail and the top bar are near-black
+               in both themes on purpose — that is the product's identity and it
+               does not flip. This group sits on the GROUND, and a near-black
+               pill group on a #f5f5f5 page would be a second dark object
+               competing with the chrome for the eye. So `--period-bg` and
+               `--period-line` answer differently under `.dark`, and the tokens'
+               own notes in globals.css carry the ratios.
 
-              The `-mx-*`/`px-*` pair is deliberate: a bare `overflow-x-auto`
-              clips its children's focus ring at both ends, so the first and
-              last pill lose their outline exactly when a keyboard user reaches
-              them. The negative margin lets the ring breathe inside the
-              scrollport without indenting the track. */}
-          <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1">
-            {/* IT HAS ITS GROOVE BACK — AND THE GROOVE IS A WHITE ISLAND, not
-                a `bg-muted` one.
-                Loose on a flush bar the seven periods read as seven separate
-                buttons that happened to be adjacent, so they sit in a track.
-                But `--muted` and `--background` are BOTH #f5f5f5 now, and this
-                bar is `bg-background`: the track was painting the bar onto
-                itself, which is a groove nobody can see and a black chip
-                apparently floating on nothing. A white island with the kit's
-                hairline is the same material as the source picker at the other
-                end of the bar, so the two controls read as one set. */}
-            <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-card p-0.5 shadow-xs">
-              {RANGE_OPTIONS.map((r) => (
-                // Still an anchor with a real href — see RangeLink. What it
-                // adds is that the press lands NOW: the pill lights and the
-                // tiles become skeletons while this page re-renders, instead of
-                // a second of nothing over numbers that answer the old range.
-                <RangeLink
-                  key={r.key}
-                  href={qs({ range: r.key })}
-                  rangeKey={r.key}
-                  activeRange={rangeKey}
-                  /* THE CHIP VOICE: all caps, tracked out, semibold — the same
-                     one `Chip`, `StatusPill` and every micro label in the kit
-                     are set in. In sentence case a row of periods reads as body
-                     copy that happens to be clickable; capitalised it reads as
-                     a control with one answer showing, which is what it is.
-                     BLACK is the answer, per the ratio: this is the workhorse
-                     selection on the page, and the violet is spent one row down
-                     on which VIEW you are in. */
-                  className="inline-flex h-8 shrink-0 items-center rounded-full px-3.5 text-sm font-medium transition-colors duration-(--duration-fast)"
-                  activeClassName="bg-foreground text-background shadow-xs"
-                  idleClassName="text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  {r.label}
-                </RangeLink>
-              ))}
-            </div>
-          </div>
+               THE SELECTED PILL IS VIOLET, where it used to be the near-black
+               `--foreground`. Black was right when this track was one of two
+               marks on a white bar and the violet was spent on the view tabs a
+               row below. The tabs are an underline now, which frees the app's
+               selection colour for the thing that is genuinely a SELECTION —
+               one of six mutually exclusive periods — and a near-black chip
+               inside a near-black group in dark theme would have been invisible
+               anyway. `bg-primary`/`text-primary-foreground` rather than a new
+               pair of tokens: the Figma's #7c4dff IS `--primary`, and a second
+               name for it is how a product ends up with two primaries.
 
-          {/* A <details> popover rather than a select: the source lives in the
-              URL, so each option has to be a real link, and this page renders
-              on the server with no client JS to submit a form. Collapsing the
-              sources behind their own current value is also what stops the row
-              growing every time a workspace connects another app. */}
-          {sources.length > 0 && (
-            <details className="group/src relative shrink-0">
-              <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 whitespace-nowrap rounded-control border border-border bg-card px-3 text-sm font-medium text-foreground shadow-xs transition-colors duration-(--duration-fast) hover:bg-muted [&::-webkit-details-marker]:hidden">
-                {boardSource && <SourceMark source={boardSource} />}
-                {activeSourceLabel}
-                <ChevronDown size={14} className="text-muted-foreground transition-transform group-open/src:rotate-180" />
-              </summary>
-              {/* Right-aligned: the control sits at the island's right edge, so
-                  a left-anchored menu opened off the end of the bar.
-                  PANEL then ROW, and nothing in between: `rounded-surface` +
-                  `shadow-surface` for the floating surface, `p-1.5` so a row's
-                  corner clears the panel's own, `rounded-control` on the rows.
-                  It is the shape the vendored menu, the Select and the Command
-                  palette all take — see `ui/dropdown-menu.tsx`, where the menu
-                  language is written down. */}
-              <div className="absolute right-0 top-full z-20 mt-1.5 min-w-52 rounded-surface border border-border bg-card p-1.5 shadow-surface">
-                <SourceLink
-                  href={qs({ source: "" })}
-                  className={cn(
-                    "block rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-accent hover:text-accent-foreground",
-                    /* THE ROW IN FORCE WEARS THE WASH, not violet words on
-                       nothing. `text-primary` is brand-500, which is 4.42:1 on
-                       this page and fails AA at the size these are set in — the
-                       sheet's own rule is that the 500 FILLS and the 700
-                       SPEAKS, and `accent`/`accent-foreground` is that pair
-                       spelled as roles. */
-                    !boardSource ? "bg-accent font-semibold text-accent-foreground" : "text-foreground",
-                  )}
-                >
-                  All sources
-                </SourceLink>
-                {/* The connector's own name, not its storage key: this row read
-                    "gsheets · close · webhook" while every other screen in the
-                    product says "Google Sheets", "Close CRM". */}
-                {sources.map((srcName) => (
-                  <SourceLink
-                    key={srcName}
-                    href={qs({ source: srcName })}
-                    className={cn(
-                      "flex items-center gap-2 rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-accent hover:text-accent-foreground",
-                      boardSource === srcName ? "bg-accent font-semibold text-accent-foreground" : "text-foreground",
-                    )}
+               THE SCROLLER SURVIVES THE MOVE, and it has to. Six pills is a
+               ~520px track that cannot wrap — they are `shrink-0`, correctly,
+               or "Last 30 days" folds onto two lines inside its own pill — so
+               at 390px it would push the whole page into horizontal scroll.
+               The `-mx-1`/`px-1` pair is deliberate too: a bare
+               `overflow-x-auto` clips its children's focus ring at both ends,
+               so the first and last pill lose their outline exactly when a
+               keyboard user reaches them. See `PageHeader`'s own note for why
+               its right slot had to stop being `shrink-0` for this to work. */
+            <div className="-mx-1 min-w-0 overflow-x-auto px-1">
+              {/* 40px tall around 32px pills: the 2px padding is the groove the
+                  selected pill sits IN, and the remaining 4px is what stops a
+                  lit pill touching the rim. */}
+              <div className="inline-flex h-10 items-center gap-0.5 rounded-full border border-period-line bg-period-bg p-0.5">
+                {RANGE_OPTIONS.map((r) => (
+                  // The press lands NOW: the pill lights and the tiles become
+                  // skeletons while this page re-renders, instead of a second
+                  // of nothing over numbers that answer the old range.
+                  <RangeLink
+                    key={r.key}
+                    href={qs({ range: r.key })}
+                    rangeKey={r.key}
+                    activeRange={rangeKey}
+                    className="inline-flex h-8 shrink-0 items-center rounded-full px-3.5 text-sm font-medium transition-colors duration-(--duration-fast)"
+                    activeClassName="bg-primary text-primary-foreground"
+                    /* Hover reaches for `--ground-ink`, which is the page's own
+                       ink at both exposures — white on the dark group, near-
+                       black on the white one. `--foreground` would have been
+                       wrong in exactly one theme, which is the kind of bug that
+                       ships. */
+                    idleClassName="text-period-ink hover:text-ground-ink"
                   >
-                    <SourceMark source={srcName} />
-                    {catalogEntry(srcName)?.name ?? srcName}
-                  </SourceLink>
+                    {r.label}
+                  </RangeLink>
                 ))}
               </div>
-            </details>
-          )}
-          {/* Recompute every published metric. It sits with the filters
-              because it answers the same question they do — what the board is
-              showing — and because a page action floating above a board is a
-              button with nothing to belong to. */}
-          {/* `shrink-0` on both, and the range track above takes the slack:
-              without it a narrow viewport squeezed these until "All sources"
-              broke onto two lines inside a 48px bar and this button clipped
-              off the right edge. */}
-          <form action={refreshAllFlowsAction} className="shrink-0">
-            <SubmitButton variant="secondary" pendingLabel="Refreshing…" title="Recompute every published metric now">
-              Refresh all
-            </SubmitButton>
-          </form>
-        </div>
+            </div>
+          }
+        />
 
         {loadError && (
           <div className="mt-6 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
@@ -974,6 +1039,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                  */
                 layoutFrozen={hiddenOnThisView > 0}
                 viewStrip={viewStrip}
+                boardActions={boardActions}
               />
             ) : (
             /* The ARRANGEMENT is the client's; the CARDS are still rendered
@@ -987,6 +1053,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               key={activeView ?? "default"}
               viewId={activeView}
               viewStrip={viewStrip}
+              boardActions={boardActions}
               tiles={boardTiles}
               groups={groups}
               placements={placements}

@@ -126,6 +126,7 @@ export function CustomBoard({
   canEdit,
   layoutFrozen = false,
   viewStrip,
+  boardActions,
   actions: actionOverrides,
 }: {
   /** Always a real id: the default view has no row and is always a groups view. */
@@ -153,6 +154,13 @@ export function CustomBoard({
    * rendered by the page and worn by whichever board is on screen.
    */
   viewStrip?: ReactNode;
+  /**
+   * The source picker and Refresh all — the same pair the groups board wears,
+   * for the same reason the strip above is shared: a view's promise is that
+   * moving between kinds does not move the furniture. Server markup, passed
+   * through; see the note on `boardActions` in board-layout.tsx.
+   */
+  boardActions?: ReactNode;
   /** Test seam only — see `CanvasActions`. The dashboard leaves it unset. */
   actions?: Partial<CanvasActions>;
 }) {
@@ -579,20 +587,25 @@ export function CustomBoard({
        * them. A panel is an overlay; overlays overlap.
        */
     >
-      {/* The controls row, in the same place and shape the groups board puts it:
-          the view strip on the left, the one door on the right. On a canvas
-          that door reads "Add" rather than "New group". */}
-      <div className="mt-4 flex items-start justify-between gap-3">
+      {/* The tab / action row, in the same place and shape the groups board
+          puts it: the view strip on the left, the board's own controls on the
+          right. On a canvas the arrangement door reads "Add" rather than "New
+          group", and it takes the same first position in the right-hand group
+          — arrangement, then filter, then the yellow act on the outside edge. */}
+      <div className="mt-4 flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">{viewStrip}</div>
-        {canEdit && (
-          <AddChartMenu
-            open={picking}
-            setOpen={setPicking}
-            busy={busy}
-            options={options}
-            onPick={(chart, tileKey) => addTile(tileKey, chart)}
-          />
-        )}
+        <div className="flex flex-wrap items-center justify-end gap-4">
+          {canEdit && (
+            <AddChartMenu
+              open={picking}
+              setOpen={setPicking}
+              busy={busy}
+              options={options}
+              onPick={(chart, tileKey) => addTile(tileKey, chart)}
+            />
+          )}
+          {boardActions}
+        </div>
       </div>
 
       {/* ONE LINE, ONCE, UNDER THE CONTROLS. Enough to explain why nothing

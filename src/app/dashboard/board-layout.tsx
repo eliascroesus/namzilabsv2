@@ -62,6 +62,7 @@ export function BoardLayout({
   canEdit,
   viewId,
   viewStrip,
+  boardActions,
 }: {
   tiles: BoardTile[];
   groups: BoardGroup[];
@@ -82,12 +83,30 @@ export function BoardLayout({
    * JavaScript, and this component is the only thing that knows where the
    * board's own controls sit.
    *
-   * They live on this row rather than above the filter island because both
-   * halves answer the same question — how the board is laid out — while the
-   * island narrows which numbers are on it. Two answers on one line, one
-   * question per line.
+   * They live on this row rather than up in the page header because the header
+   * asks a different question: it narrows WHICH NUMBERS (the period), while
+   * everything on this row is about the board those numbers land on.
    */
   viewStrip?: ReactNode;
+  /**
+   * The source picker and Refresh all — the right half of the same row.
+   *
+   * They arrive as a node for exactly the reason `viewStrip` does: the source
+   * rows are real anchors and Refresh all is a plain form post, so both are
+   * rendered on the SERVER, and this component is the only thing that knows
+   * where the board's own control row sits. They used to live in a white filter
+   * island above the board, alongside the period pills; the island is gone (see
+   * the note on `boardActions` in page.tsx) and the period went upstairs, so
+   * what is left of it is these two, on the row that was already here.
+   *
+   * "New group" stays a child of this file rather than joining them, because it
+   * is the one control on the row that is CLIENT state: it calls `addGroup`
+   * below, which writes optimistically into the same `groups` this component
+   * owns. It renders FIRST of the three, so the row runs
+   * arrangement → filter → action from left to right and the yellow lands on
+   * the outside edge where a hero belongs.
+   */
+  boardActions?: ReactNode;
 }) {
   // The `useState` initialisers are what "seeded once" means: the arguments are
   // read on the first render and ignored on every one after it.
@@ -297,23 +316,44 @@ export function BoardLayout({
     // card's own name. Permanent `select-none` would be the lazy fix and would
     // cost the ability to copy a number off the board.
     <div ref={rootRef} className={drag ? "select-none" : undefined}>
-      {/* THE BOARD'S OWN CONTROL ROW: which view on the left, and the one door
-          to a new column on the right. Both are about ARRANGEMENT, which is why
-          they share a line and why that line sits directly above the columns
-          rather than up beside the range pills — those narrow which numbers are
-          shown, which is a different question. */}
-      {(viewStrip || canEdit) && (
-        <div className="mt-4 flex items-start justify-between gap-3">
+      {/* ── THE TAB / ACTION ROW ────────────────────────────────────────────
+          WHICH VIEW on the left, WHAT IS ON IT on the right, and everything
+          here is about THIS BOARD. The one question that is not — over what
+          period — moved up to the page header, where it sits beside the title
+          as the pill group. One question per row, which is what lets a reader
+          stop looking for the third control.
+
+          The right half arrives in two pieces from two places, and the seam is
+          real rather than incidental: `boardActions` is server markup (real
+          anchors, a real form post), "New group" is client state. They are
+          spelled as one 16px group because from the outside they are one.
+
+          `items-start`, not centre: the tab strip can wrap to a second line and
+          the buttons must stay on the first one, level with the tabs rather
+          than floating half-way down a two-line strip. */}
+      {(viewStrip || boardActions || canEdit) && (
+        <div className="mt-4 flex items-start justify-between gap-4">
           {/* WRAPS RATHER THAN SCROLLS. A scroller here put a grey bar under
               two tabs and capped the strip at a width nothing asked for; tabs
               are short and there is a whole row of space, so they simply fill
               it and fold onto a second line when there are enough of them. */}
           <div className="min-w-0 flex-1">{viewStrip}</div>
-          {canEdit && (
-            <Button variant="secondary" size="sm" onClick={addGroup} disabled={busy} className="shrink-0">
-              <Plus size={15} />
-              New group
-            </Button>
+          {(boardActions || canEdit) && (
+            /* 16px, and it wraps: three pills at ~110px each is a third of a
+               narrow viewport, and a row that cannot fold would push the page
+               into horizontal scroll — the failure the period track upstairs
+               carries its own scroller to avoid. `justify-end` so a folded
+               second line stays against the right edge rather than drifting
+               back under the tabs. */
+            <div className="flex flex-wrap items-center justify-end gap-4">
+              {canEdit && (
+                <Button variant="secondary" size="sm" onClick={addGroup} disabled={busy} className="shrink-0">
+                  <Plus size={15} />
+                  New group
+                </Button>
+              )}
+              {boardActions}
+            </div>
           )}
         </div>
       )}

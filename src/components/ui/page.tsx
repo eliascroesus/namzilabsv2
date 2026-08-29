@@ -104,7 +104,19 @@ export type PageHeaderProps = {
 
 export function PageHeader({ title, lede, actions, back, className }: PageHeaderProps) {
   return (
-    <header className={cn("border-b border-border pb-4", className)}>
+    /**
+     * NO RULE UNDER THE HEADER ANY MORE — the spacing survives, the hairline
+     * does not.
+     *
+     * It was `border-b border-border`, drawn when the header was the only
+     * thing between the page title and the content. On the board that rule now
+     * lands one line above the tab strip's own 2px underline, so the top of the
+     * page reads as two horizontal rules eight pixels apart, and the one that
+     * MEANS something — which tab you are on — is the fainter of the two. The
+     * `pb-4` stays: it is what stops a title touching the thing beneath it, and
+     * dropping both would have been a different change.
+     */
+    <header className={cn("pb-4", className)}>
       {back && (
         /**
          * A PILL, NOT A LINE OF TEXT. The sheet's shape rule is pill-first, and
@@ -122,8 +134,14 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
           {back.label}
         </Link>
       )}
-      <div className={cn("flex flex-wrap items-start justify-between gap-x-4 gap-y-3", back && "mt-3")}>
-        <div className="min-w-0">
+      {/* `items-center`, and this time it is right — see the note on `actions`
+          below for why it was `items-start` and what changed. */}
+      <div className={cn("flex flex-wrap items-center justify-between gap-x-4 gap-y-3", back && "mt-3")}>
+        {/* THE TITLE BLOCK IS A COLUMN WITH A GAP, not a paragraph with a
+            top margin. 8px, stated once, so the pair sets as one object and
+            a page with no lede is not a title carrying an invisible `mt-1.5`
+            underneath it. */}
+        <div className="flex min-w-0 flex-col gap-2">
           {/* THE TITLE IS 24px, WHICH IS THE STEP THE KIT ALREADY NAMES FOR IT.
               It was set at `text-xl` — 20px — while `/design` printed
               `display-xs` beside the words "Page titles (PageHeader)", so the
@@ -134,20 +152,57 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
               The display face's one in-app appearance besides the metric
               numeral. `.font-display` carries its own tracking (-0.022em), so
               no `tracking-tight` here — the two would compound. */}
-          <h1 className="font-display text-display-xs font-semibold text-foreground">{title}</h1>
-          {/* 16px under a 24px title, which is the sheet's own step down and
-              the size a lede has to be to read as a sentence rather than as a
-              caption of the heading.
+          {/* `text-ground-ink`, NOT `text-foreground`, and the difference is
+              only visible in dark: the ground's ink is pure white where the
+              app's foreground is ink-50. This is the one heading in the product
+              with nothing above it to defer to — see the token's own note in
+              globals.css — and it is the role that follows the PAGE rather than
+              the card, which is what a page title sits on. */}
+          {/* NO `leading-5`. The Figma reports a 20px line-height on a 24px title,
+              which is a Figma artefact — it measures the single line it drew.
+              Applied literally it sets 20px leading on 24px type, so the moment
+              a title wraps the two lines overlap by 12px. Every PageHeader in
+              the product uses this, and a long metric name inside `width="narrow"`
+              wraps at ordinary widths. The token's own 32px is the right answer
+              and the comp cannot tell the difference on one line. */}
+          <h1 className="font-display text-display-xs font-semibold text-ground-ink">{title}</h1>
+          {/* 14px, DOWN FROM 16, and the old argument for 16 is retired rather
+              than overruled by taste. It said a lede has to be 16px "to read
+              as a sentence rather than as a caption of the heading" — true when
+              the header was a title and a paragraph, and no longer what this
+              slot is. Paired at 8px under a 24px title it is a SUBTITLE: it
+              names the page's scope in a phrase, and at 16px a phrase that
+              short reads as a second heading competing with the first.
 
-              `max-w-2xl`: a lede IS a sentence, and one that runs the full
-              1152px of the container is ~150 characters a line — roughly twice
-              the measure anything is comfortably read at. */}
-          {lede && <p className="mt-1.5 max-w-2xl text-md text-muted-foreground">{lede}</p>}
+              `max-w-2xl` survives for the pages that still put a whole sentence
+              here: one running the full 1152px of the container is ~150
+              characters a line, roughly twice a comfortable measure. */}
+          {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-ground-ink-muted">{lede}</p>}
         </div>
-        {/* `items-center` on a wrapping row put the buttons half a line below
-            the title whenever the lede pushed the left column taller. They
-            align to the TOP of the header and hold the title's own line. */}
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+        {/* THE RIGHT SLOT, AND IT CENTRES NOW.
+            It was `items-start` because a wrapping row put buttons half a line
+            below a title whenever the lede made the left column taller — the
+            right fix when the right slot held page ACTIONS, which read as
+            hanging off the title's own line. What sits here on the board is a
+            40px segmented track, and a control that tall pinned to the top of a
+            52px title block sits visibly high of the block it belongs to. The
+            row centres; `flex-wrap` still drops the slot onto its own line
+            before anything can be squeezed.
+
+            AND IT CAN SHRINK NOW — `min-w-0`, where it was `shrink-0`.
+            `shrink-0` was free while this slot held only buttons, because
+            `buttonVariants`' own base is already `shrink-0`: the buttons were
+            never going to compress whatever the wrapper said, so removing it
+            changes nothing for the five pages that put buttons here.
+
+            It is NOT free for the board, whose period control is a ~520px
+            track of six pills. `shrink-0` pins a flex item at its max-content
+            width even after `flex-wrap` has dropped it onto a line of its own,
+            so on a 390px viewport that track pushed the WHOLE PAGE into
+            horizontal scroll — the one failure the track's own internal
+            scroller (`min-w-0 overflow-x-auto`) exists to prevent, and which
+            it cannot prevent from inside a parent that refuses to narrow. */}
+        {actions && <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
       </div>
     </header>
   );

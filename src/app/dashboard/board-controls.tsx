@@ -285,27 +285,32 @@ export function ViewTab({
       // "Dashboard" — so both the element type and the copy were load-bearing.
       data-view-tab
       /**
-       * SELECTED IS VIOLET, AND THE PERIOD ABOVE IT STAYS BLACK.
+       * A TAB IS UNDERLINED NOW, AND THE PERIOD KEEPS THE VIOLET.
        *
-       * Two filter rows sit one above the other and they answer two different
-       * questions — the pills narrow WHICH NUMBERS, the tabs choose WHICH
-       * ARRANGEMENT — so marking both of them the same way would be one control
-       * printed twice. The sheet already divides the work: black is the
-       * workhorse and does the period, violet marks SELECTION and identity and
-       * does the active nav row, which is exactly what a view tab is.
+       * The two rows still answer two different questions — the period narrows
+       * WHICH NUMBERS, the tabs choose WHICH ARRANGEMENT — so they still have
+       * to be marked differently. What swapped is which one gets the fill.
+       * Violet moved UP to the period pills, where it is the app's selection
+       * colour sitting in a segmented track; the tab takes the green rule,
+       * because a tab is not a selected object, it is a place in a document,
+       * and every product that has this row draws it as a rule.
        *
-       * It was `bg-accent` — brand-50, #f3eeff — on a page that is #f5f5f5.
-       * Two levels apart, and the ONLY thing separating the tab you are on from
-       * the four you are not was a hue nobody can see at that distance. The
-       * fill is the 500 (fills take the 500, words take the 700) so selection
-       * is legible from across the room, and the tint it used to wear becomes
-       * the HOVER — hovering an idle tab now previews what selecting it does.
+       * The colour is `--tab-underline`, one value in both themes on purpose.
+       * That is affordable ONLY because the underline is never the sole mark:
+       * the active tab is also the one set in `--ground-ink` while its
+       * neighbours sit muted. It measures 9.02:1 on the dark ground and 1.78:1
+       * on the light one — see the token's own note. If this row ever loses the
+       * weight-and-ink change, the rule alone cannot carry the state.
+       *
+       * `border-b-2` sits on the wrapper rather than on the anchor so the
+       * kebab, which is a sibling inside this span, rides the same rule instead
+       * of hanging off the end of a shorter one.
        */
       className={cn(
-        "inline-flex shrink-0 items-center rounded-control text-sm font-semibold transition-colors duration-(--duration-fast)",
+        "inline-flex shrink-0 items-center border-b-2 text-sm transition-colors duration-(--duration-fast)",
         active
-          ? "bg-primary text-primary-foreground shadow-xs"
-          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+          ? "border-tab-underline font-medium text-ground-ink"
+          : "border-transparent font-semibold text-muted-foreground hover:text-ground-ink",
       )}
     >
       {editing ? (
@@ -330,7 +335,11 @@ export function ViewTab({
             e.preventDefault();
             go(href, { dim: "view", key });
           }}
-          className={cn("inline-flex items-center gap-1.5 py-1.5 pl-2.5", editable ? "pr-1" : "pr-2.5")}
+          /* 8px above and below, 4px either side — the Figma's tab padding, and
+             narrow on purpose: a tab's hit area is its LABEL plus the rule
+             under it, so horizontal padding here only pushes the names apart
+             and the 24px row gap already does that. */
+          className={cn("inline-flex items-center gap-1.5 px-1 py-2", editable && "pr-0.5")}
         >
           {renamed ?? children}
         </a>

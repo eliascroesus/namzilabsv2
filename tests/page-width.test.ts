@@ -130,9 +130,24 @@ describe("the page container and the skeleton that stands in for it", () => {
      *
      * All three bands are read out of their own files rather than typed here,
      * so they cannot agree with this test while disagreeing with each other.
-     * The sidebar's head band is in the set because the seam only reads as ONE
-     * line across the application while the workspace control and the top bar
-     * are the same height.
+     * The rail's top block is in the set because the corner where its right
+     * edge meets the bar's bottom edge only reads as ONE seam while the block
+     * carrying the mark and the bar beside it are the same height.
+     *
+     * THE HEIGHT IS READ AS A TOKEN, NOT AS A NUMBER — `h-(\S+)` rather than
+     * `h-(\d+)`. The band left the spacing scale when the chrome went to 70px:
+     * `h-16` is a step and `h-[70px]` is a length, and a reader that only
+     * understands steps throws "could not find the top bar's height" the moment
+     * one of the three moves — which is a parse failure wearing the costume of
+     * a design failure. Reading the token keeps the assertion the honest one:
+     * all three say the SAME thing, whatever that thing is spelled like.
+     *
+     * THERE IS NO FOURTH BAND ANY MORE. The skeleton used to mirror a hairline
+     * under the sidebar's head, because the 264px column drew one there. The
+     * 70px rail does not — its top block is the same near-black as the rest of
+     * the column, and the only line in it is the bar's own, which the skeleton
+     * already draws beside it. A test asserting the height of a rule that no
+     * longer exists is a test that fails for being right.
      */
     const band = (src: string, where: RegExp, what: string) => {
       const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -142,10 +157,15 @@ describe("the page container and the skeleton that stands in for it", () => {
     };
     const topBar = read("src/components/top-bar.tsx");
 
-    const bar = band(topBar, /<header className="flex h-(\d+) shrink-0/, "the top bar's height");
-    expect(band(skeleton, /className="h-(\d+) shrink-0 border-b border-border bg-background"/, "the skeleton's top bar band")).toEqual(bar);
-    expect(band(sidebar, /className="flex h-(\d+) shrink-0 items-center border-b/, "the sidebar's head band")).toEqual(bar);
-    expect(band(skeleton, /className="h-(\d+) border-b border-border"/, "the skeleton's head band")).toEqual(bar);
+    // `[^"]*?` before the height: the bar's class list no longer opens with
+    // `flex` — it opens with the scoped `dark` that re-inks whatever the flow
+    // builder portals into it.
+    const bar = band(topBar, /<header className="[^"]*?\bh-(\S+) shrink-0/, "the top bar's height");
+    expect(band(skeleton, /className="h-(\S+) shrink-0 border-b border-chrome-line bg-ink-950"/, "the skeleton's top bar band")).toEqual(bar);
+    // The rail's top block: the first `flex h-… shrink-0 items-center` in the
+    // file. The `<aside>` above it cannot match — its own height is `h-full`
+    // and `w-[70px]` sits between that and its `shrink-0`.
+    expect(band(sidebar, /className="flex h-(\S+) shrink-0 items-center/, "the rail's top block")).toEqual(bar);
   });
 });
 

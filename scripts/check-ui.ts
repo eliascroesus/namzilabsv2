@@ -205,7 +205,12 @@ const RULES: Rule[] = [
     allow: {
       "src/components/ui": "the primitives themselves — this is where <button> is supposed to live",
       "src/components/flow": "the builder's canvas chrome: islands, kebabs, menu rows, combobox triggers, tab strips",
-      "src/components/sidebar.tsx": "the rail's avatar — a round control on a dark surface with its own alpha ladder",
+      // `src/components/sidebar.tsx` WAS here, for "the rail's avatar — a round
+      // control on a dark surface with its own alpha ladder". That avatar left
+      // with the 264px column, and the 70px rail's two buttons (search, the
+      // bell) are `Button variant="ghost" size="iconSm"` with the chip drawn
+      // inside them. An allowlist entry that no longer suppresses anything is
+      // an invitation to put something back under it.
       "src/app/dashboard/settings/RanksPanel.tsx": "a full-width card-header disclosure and the dashed New-rank ghost",
     },
   },
