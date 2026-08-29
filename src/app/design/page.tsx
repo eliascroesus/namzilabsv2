@@ -24,8 +24,11 @@ import { CalendarBoard, type CalendarMetric } from "@/app/dashboard/calendar/Cal
 import { calendarMonths, dayKey, daysInMonth } from "@/lib/metrics/calendar";
 import { Delta, GroupBars, Sparkbars, TargetBar } from "@/components/charts";
 import { SourceMark } from "@/components/source-mark";
+import { ThemeToggle } from "@/components/theme";
 import { PrimitiveSpecimens } from "./primitives";
 import { BrandSheet } from "./brand-sheet";
+import { Gallery } from "./gallery";
+import { CoverageAudit, PatternAudit } from "./audit";
 
 /**
  * THE BRAND KIT, RENDERED.
@@ -190,8 +193,25 @@ export default function DesignPage() {
         ),
       }}
     >
-      <div className="mx-auto max-w-4xl px-6 py-12">
-        <p className="text-micro font-semibold uppercase tracking-widest text-primary">Brand kit</p>
+      {/* TWO COLUMNS, AND THE LEFT ONE IS THE REASON THE PAGE IS USABLE.
+          Nineteen sections was already a long scroll; with every primitive on
+          it as well this is a document, and a document needs a table of
+          contents. The index is sticky, hidden below `xl` (where it would eat
+          the specimens' width), and derives its hrefs from the same
+          `sectionId` the sections do — so a section cannot be renamed without
+          its link moving with it. */}
+      <div className="mx-auto flex max-w-[1400px] items-start gap-10 px-6 py-12">
+        <KitIndex />
+
+        <div className="min-w-0 max-w-4xl flex-1">
+        <div className="flex items-start justify-between gap-4">
+          <p className="text-micro font-semibold uppercase tracking-widest text-primary">Brand kit</p>
+          {/* THE TOGGLE BELONGS ON THIS PAGE MORE THAN ANYWHERE ELSE. Half the
+              kit is a set of role tokens that resolve differently under
+              `.dark`, and a swatch board that can only be seen at one exposure
+              is documenting half of itself. */}
+          <ThemeToggle />
+        </div>
         {/* The h1 comes from PageHeader like every other page's — a kit page
             that re-typed the title recipe would be the first thing on it that
             had drifted. */}
@@ -795,15 +815,96 @@ export default function DesignPage() {
           </div>
         </Section>
 
+        <Section
+          title="Every component"
+          note="All 138 exports from the 31 files in src/components/ui, with every variant axis enumerated to its last value. The nine primitives this page used to show were the nine that happened to be interesting; the twenty-odd that arrive through a trailing export block — alert, avatar, breadcrumb, command, progress, scroll-area, sheet, tabs — were not on the page at all, which is most of how they came to ship unused. Anything that portals (dialog, sheet, select, menu, popover, tooltip) renders nothing until you open it, so those are working triggers rather than pictures."
+        >
+          <Gallery />
+        </Section>
+
+        <Section
+          title="Coverage"
+          note="What the kit can do, against what the product actually reaches for. Counted by import-path grep across src/, excluding the primitives themselves and this page. This is the section to read first if the app feels inconsistent: fourteen of the thirty-one primitives are imported by nothing, and every one of them has a hand-written stand-in somewhere that was designed once, for one screen."
+        >
+          <CoverageAudit />
+        </Section>
+
+        <Section
+          title="Patterns, and what is wrong with each"
+          note="A reviewer sees composed screens, not loose primitives, so this is where 'does it look finished' is actually decided. Each entry names the file to start from. The flow builder's canvas and nodes are deliberately absent — they are out of scope."
+        >
+          <PatternAudit />
+        </Section>
+
         <div className="h-16" />
+        </div>
       </div>
     </AppFrame>
   );
 }
 
+/**
+ * THE INDEX. Titles are listed once here and hashed through the same
+ * `sectionId` the sections use, so the two cannot drift apart silently.
+ */
+const SECTIONS = [
+  "Brand sheet",
+  "Colour",
+  "State",
+  "Type",
+  "Radius and elevation",
+  "Buttons",
+  "Primitives",
+  "Controls",
+  "Surfaces",
+  "Rail",
+  "Frame",
+  "Marks",
+  "Step icons",
+  "Flow list",
+  "Calendar",
+  "Empty flow",
+  "The canvas",
+  "Step cards",
+  "Config panel",
+  "Every component",
+  "Coverage",
+  "Patterns, and what is wrong with each",
+];
+
+function KitIndex() {
+  return (
+    <aside className="sticky top-6 hidden w-56 shrink-0 xl:block">
+      <p className="mb-3 text-micro font-semibold uppercase tracking-wide text-muted-foreground">On this page</p>
+      <nav>
+        <ul className="space-y-0.5">
+          {SECTIONS.map((s) => (
+            <li key={s}>
+              <a
+                href={`#${sectionId(s)}`}
+                className="block rounded-control px-2 py-1 text-tiny text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted hover:text-foreground"
+              >
+                {s}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </aside>
+  );
+}
+
+/**
+ * `id` is derived from the title rather than passed, so a section cannot be
+ * added to the page and left out of the index — the two read the same list.
+ */
+export function sectionId(title: string): string {
+  return "s-" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
 function Section({ title, note, children }: { title: string; note: string; children: ReactNode }) {
   return (
-    <section className="mt-12">
+    <section id={sectionId(title)} className="mt-12 scroll-mt-20">
       <SectionHeading className="mb-0">{title}</SectionHeading>
       <p className="mb-4 mt-1 text-tiny text-muted-foreground">{note}</p>
       {children}
