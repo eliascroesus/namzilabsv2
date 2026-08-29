@@ -1,17 +1,21 @@
 "use client";
 
-import { Pencil, Power, Trash2 } from "lucide-react";
+import { Pencil, Plug, Power, Search, Trash2, X } from "lucide-react";
 
-import { useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CopyField } from "@/components/copy-field";
 import { renameConnectionAction, disconnectAction, reconnectAction, deleteConnectionAction } from "./actions";
 import { catalogEntry } from "@/connectors/catalog";
-import { Button } from "@/components/ui/button";
-import { StatusPill } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Badge, StatusPill } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Modal, ModalTitle } from "@/components/ui/modal";
+import { Input, NativeSelect } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field";
+import { BOARD_GRID, SectionHeading } from "@/components/ui/page";
 import { SourceMark } from "@/components/source-mark";
 import { sourceStyle } from "@/components/flow/controls/source-style";
 import { formatMetricValue } from "@/lib/format";
@@ -429,14 +433,23 @@ export function ConnectionRow({
  * deleted. A hex here would fail the kit gate, and rightly: the value belongs
  * to the vendor's map.
  */
-function ConnectorChip({ source, className }: { source: string; className?: string }) {
+function ConnectorChip({ source, size = 40, className }: { source: string; size?: number; className?: string }) {
   return (
     <span
       aria-hidden
-      className={cn("flex size-10 shrink-0 items-center justify-center rounded-card", className)}
-      style={{ backgroundColor: `color-mix(in srgb, ${sourceStyle(source).color} 14%, transparent)` }}
+      className={cn("flex shrink-0 items-center justify-center rounded-card", className)}
+      // Sized by style rather than by a `size-10` class because the chip now
+      // appears at three scales — 40 in a row, 44 on a catalogue card, 44 in the
+      // connect dialog — and the mark inside has to step WITH the block. One
+      // ratio (0.6) keeps the stamp centred in the same amount of colour at every
+      // size; two hand-picked pairs would drift the first time one of them moved.
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: `color-mix(in srgb, ${sourceStyle(source).color} 14%, transparent)`,
+      }}
     >
-      <SourceMark source={source} size={24} />
+      <SourceMark source={source} size={Math.round(size * 0.6)} />
     </span>
   );
 }
@@ -479,5 +492,392 @@ function DeleteButton({ name, onClick }: { name: string; onClick: () => void }) 
     >
       <Trash2 size={14} strokeWidth={2.25} />
     </Button>
+  );
+}
+
+/* ===========================================================================
+ * THE DIRECTORY — the client half of the Apps page.
+ *
+ * It lives beside the row rather than in a file of its own because the two are
+ * the same screen: the row IS what Manage renders, and the directory is what
+ * decides whether Manage is on screen at all. Splitting them would put one
+ * component's state in one file and the list it governs in another.
+ *
+ * WHAT IS SERVER AND WHAT IS CLIENT, and why it is drawn here. Everything with
+ * a secret in it — the connect form, the server action it posts to — is
+ * authored on the page (a server component) and arrives here as a `ReactNode`
+ * slot. This side owns only the three things that have to answer a keystroke:
+ * the search, the filter, and which dialog is open. That division is what lets
+ * the search filter INSTANTLY (no round trip per character) without the
+ * credential form ever being written in a client file.
+ *
+ * It is also what fixed the old form's worst property: the seven connect forms
+ * used to be `<details>` elements, so all seven were in the DOM the moment the
+ * tab loaded and every password manager in the world had seven masked fields to
+ * fill. A dialog renders its fields when it opens and removes them when it
+ * closes, so there is nothing there to fill until somebody asks for it.
+ * ========================================================================= */
+
+/** One entry in the catalogue, flattened for the grid. */
+export type DirectoryApp = {
+  source: string;
+  name: string;
+  description: string;
+  /** Capability, not state — what this connector CAN do (see the card's chips). */
+  instant: boolean;
+  poll: boolean;
+  /** Live connections on this source in this workspace; 0 means "not connected". */
+  connectedCount: number;
+  /** OAuth sources leave the app to connect, so they have no dialog and no form. */
+  oauthHref?: string;
+  /**
+   * The credential form, rendered on the server and shown inside the dialog.
+   *
+   * A node rather than a field description, because the fields are the one part
+   * of this page that is pinned by a test (tests/no-autofill.test.ts reads
+   * page.tsx) and the one part that must not drift into a client file.
+   */
+  form?: ReactNode;
+};
+
+/** One live connection, with its server-rendered row. */
+export type ManagedConnection = { id: string; name: string; source: string; row: ReactNode };
+
+/** The filter's five answers. `available` is "everything I have not connected". */
+type AppFilter = "all" | "connected" | "available" | "instant" | "scheduled";
+
+const FILTER_LABELS: Array<[AppFilter, string]> = [
+  ["all", "All apps"],
+  ["connected", "Connected"],
+  ["available", "Not connected"],
+  ["instant", "Instant sync"],
+  ["scheduled", "Scheduled sync"],
+];
+
+export function AppDirectory({
+  apps,
+  connected,
+  connectionsUnavailable,
+  tally,
+}: {
+  apps: DirectoryApp[];
+  connected: ManagedConnection[];
+  /** The connection read FAILED — distinct from "there are none". */
+  connectionsUnavailable: boolean;
+  /** "3 syncing · 1 disconnected", preformatted by the server. */
+  tally: string;
+}) {
+  const [view, setView] = useState<"discover" | "manage">("discover");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<AppFilter>("all");
+  // The dialog is identified by SOURCE, not by the object: the apps array is a
+  // fresh set of props on every server render, and holding the entry itself
+  // would pin a stale form node open across one.
+  const [connecting, setConnecting] = useState<string | null>(null);
+
+  const needle = query.trim().toLowerCase();
+  const matches = (...fields: string[]) => !needle || fields.some((f) => f.toLowerCase().includes(needle));
+
+  const visibleApps = apps.filter(
+    (a) =>
+      matches(a.name, a.description, a.source) &&
+      (filter === "all" ||
+        (filter === "connected" && a.connectedCount > 0) ||
+        (filter === "available" && a.connectedCount === 0) ||
+        (filter === "instant" && a.instant) ||
+        (filter === "scheduled" && a.poll)),
+  );
+  // Connections are searched by the name the USER gave them and by the app they
+  // belong to — "sheets" has to find "Sales sheet" and "Ops rollup" alike.
+  const visibleConnections = connected.filter((c) => matches(c.name, catalogEntry(c.source)?.name ?? c.source));
+  const openApp = apps.find((a) => a.source === connecting) ?? null;
+  const narrowed = needle.length > 0 || filter !== "all";
+
+  return (
+    <>
+      {/* THE TOOLBAR: which list, then how to cut it down. One row, wrapping —
+          the segment and the search are the same decision at two grains and a
+          user reads them left to right. */}
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        {/* The track is `bg-foreground/5`, NOT `bg-muted`: `--muted` and `--card`
+            are the same token in the dark theme, and the page is a card, so a
+            muted track would be no track at all there. An alpha of the
+            foreground reads as one step recessed on both surfaces — the same
+            argument the flows board's footer tray makes. */}
+        <div
+          role="group"
+          aria-label="Apps view"
+          className="flex shrink-0 items-center gap-1 rounded-full bg-foreground/5 p-1"
+        >
+          {/* BLACK MARKS THE ACTIVE ONE, which is the sheet's own ratio rule:
+              black does the work (default buttons, the active tab), violet is
+              reserved for selection and identity elsewhere. */}
+          <ViewTab active={view === "discover"} onClick={() => setView("discover")}>
+            Discover
+          </ViewTab>
+          <ViewTab active={view === "manage"} onClick={() => setView("manage")} count={connected.length}>
+            Manage
+          </ViewTab>
+        </div>
+        <div className="relative min-w-56 flex-1">
+          {/* `left-4` mirrors the field's own px-4, and `pl-10` is that inset
+              plus the glyph — so the placeholder starts where the icon ends
+              rather than under it. */}
+          <Search
+            size={16}
+            aria-hidden
+            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Find apps and integrations"
+            aria-label="Find apps and integrations"
+            className="pl-10"
+          />
+        </div>
+        {/* The filter narrows the CATALOGUE, so it is only offered while the
+            catalogue is on screen. A control that stays visible and stops
+            applying is worse than one that leaves: it goes on claiming to
+            govern a list it no longer touches. The search applies to both. */}
+        {view === "discover" && (
+          <NativeSelect
+            className="w-full shrink-0 sm:w-52"
+            aria-label="Filter apps"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as AppFilter)}
+          >
+            {FILTER_LABELS.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </NativeSelect>
+        )}
+      </div>
+
+      {/* THE SHELF — the page's one off-white section.
+          The page itself is white now (see page.tsx), so this band is the only
+          recessed surface on the screen and it is what gives the white cards
+          something to sit ON: a grid of white cards on a white page is a page
+          of hairlines. `bg-background` by name, so the off-white here is the
+          same token the rest of the app's canvas is cut from and the dark theme
+          gets the same one-step-recessed relationship for free.
+          Both views share it, so switching Discover for Manage changes what is
+          on the shelf rather than swapping one kind of surface for another. */}
+      <section className="mt-5 rounded-surface border border-border bg-background p-4 sm:p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <SectionHeading className="mb-0">{view === "discover" ? "All apps" : "Connected apps"}</SectionHeading>
+          <span className="text-xs text-muted-foreground">
+            {view === "discover"
+              ? narrowed
+                ? `${visibleApps.length} of ${apps.length} apps`
+                : `${apps.length} apps`
+              : tally}
+          </span>
+        </div>
+
+        {view === "discover" ? (
+          visibleApps.length === 0 ? (
+            <EmptyState
+              icon={<Search />}
+              // Both controls can be the reason a catalogue is empty, and an
+              // empty state that names only one of them sends someone hunting
+              // for a search term while a filter is what is hiding everything.
+              title="Nothing in the catalogue matches"
+              description="No app answers to that search and that filter together. Clearing both shows everything we connect to."
+              action={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setQuery("");
+                    setFilter("all");
+                  }}
+                >
+                  Clear search and filter
+                </Button>
+              }
+            />
+          ) : (
+            // The shared board grid, so this catalogue steps its columns exactly
+            // as the dashboard's tiles and the flows board do — one rhythm for
+            // the whole product, spelled in one place.
+            //
+            // NO `items-start`: the cards stretch, which is what puts every
+            // Connect button in a row on the same line. A grid of cards whose
+            // actions sit at four different heights is the single thing that
+            // made this catalogue read as unfinished.
+            <div className={BOARD_GRID}>
+              {visibleApps.map((app) => (
+                <AppCard key={app.source} app={app} onConnect={() => setConnecting(app.source)} />
+              ))}
+            </div>
+          )
+        ) : connectionsUnavailable ? (
+          <EmptyState
+            icon={<Plug />}
+            title="Your connections couldn’t be loaded"
+            description="This is a problem on our side — nothing has been disconnected and no data has been lost. Refresh to try again."
+          />
+        ) : connected.length === 0 ? (
+          <EmptyState
+            icon={<Plug />}
+            title="No connections yet"
+            description="Connect an app and its records start arriving here."
+            action={
+              <Button type="button" onClick={() => setView("discover")}>
+                Browse apps
+              </Button>
+            }
+          />
+        ) : visibleConnections.length === 0 ? (
+          <EmptyState
+            icon={<Search />}
+            title="No connections match that search"
+            description="Connections are searched by the name you gave them and by the app they belong to."
+            action={
+              <Button type="button" variant="secondary" onClick={() => setQuery("")}>
+                Clear search
+              </Button>
+            }
+          />
+        ) : (
+          // The hairlines live on this wrapper rather than on the Card, so the
+          // first row does not draw one against the card's own edge.
+          <Card variant="surface" padding="none" className="overflow-hidden">
+            <div className="divide-y divide-border">
+              {visibleConnections.map((c) => (
+                <Fragment key={c.id}>{c.row}</Fragment>
+              ))}
+            </div>
+          </Card>
+        )}
+      </section>
+
+      {/* THE CONNECT DIALOG. A form that asks for a token is not a disclosure on
+          a card: it is one thing to do, and it deserves the whole screen's
+          attention while it is being done. `Modal` traps focus and locks the
+          page behind it, which is exactly what the old inline `<details>` could
+          not do — you could tab straight out of a half-typed API key. */}
+      {openApp && (
+        <Modal onClose={() => setConnecting(null)} size="md">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <ConnectorChip source={openApp.source} size={44} />
+              <div className="min-w-0">
+                <ModalTitle>Connect {openApp.name}</ModalTitle>
+                <p className="mt-1 text-sm text-muted-foreground">{openApp.description}</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="iconSm"
+              onClick={() => setConnecting(null)}
+              aria-label="Close"
+              className="-mr-2 -mt-2"
+            >
+              <X size={16} />
+            </Button>
+          </div>
+          {openApp.form}
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/**
+ * One segment of the view switch. `aria-pressed` rather than `role="tab"`: a
+ * real tab list owes a keyboard user arrow-key navigation, and a half-built one
+ * is a promise to a screen reader that the widget does not keep. Two toggle
+ * buttons are what these actually are.
+ */
+function ViewTab({
+  active,
+  count,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  count?: number;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant={active ? "default" : "ghost"}
+      size="sm"
+      aria-pressed={active}
+      onClick={onClick}
+      // The inactive segment hovers to the CARD colour rather than to the
+      // ghost's own `bg-muted`: it is sitting on a recessed track, so the
+      // hover has to come FORWARD to the page's own surface. Hovering to
+      // muted on this track is a hover with nothing to say — and in the dark
+      // theme it is the same colour twice.
+      className={cn(!active && "hover:bg-card")}
+    >
+      {children}
+      {count != null && count > 0 && <span className="tnum opacity-70">{count}</span>}
+    </Button>
+  );
+}
+
+/**
+ * ONE APP IN THE CATALOGUE: mark, name, one line, what it can do, and the one
+ * thing you can do to it.
+ *
+ * The card is not itself a button. Everything on it that does something is a
+ * real control, because a clickable card with a button inside it is either two
+ * nested interactive elements or a card that swallows its own action.
+ */
+function AppCard({ app, onConnect }: { app: DirectoryApp; onConnect: () => void }) {
+  const connected = app.connectedCount > 0;
+  return (
+    <Card variant="surface" padding="compact" className="flex h-full flex-col">
+      <div className="flex items-start justify-between gap-3">
+        {/* The connector's own colour is the only thing that legitimately varies
+            card to card, so it leads — a 44px block of it is what gives a card
+            in a grid of seven a corner to be recognised by, and it is where all
+            the colour on this page comes from. */}
+        <ConnectorChip source={app.source} size={44} />
+        {/* A connected count is STATE — this app is live in this workspace — so
+            it speaks in the success trio with the live dot, the same pill the
+            connection rows use. */}
+        {connected && (
+          <StatusPill tone="success" dot className="tnum">
+            {app.connectedCount > 1 ? `${app.connectedCount} connected` : "Connected"}
+          </StatusPill>
+        )}
+      </div>
+      <h3 className="mt-3 text-md font-semibold text-foreground">{app.name}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{app.description}</p>
+      {/* Capabilities, not states: what this connector CAN do, which is the
+          quiet Badge's whole job. Colouring these would put a decorative chip
+          and a status pill on the same card wearing the same shape. */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {app.instant && <Badge>Instant</Badge>}
+        {app.poll && <Badge>Scheduled</Badge>}
+      </div>
+      {/* `mt-auto` is what the stretched card is for: the action sits on the
+          card's floor, so a row of cards has one line of buttons. Full width in
+          both branches — a 96px pill at the left edge of a 370px card is the
+          shape that read as unfinished. Black, not violet: seven of these are
+          on screen at once, and seven violets would spend the accent on a
+          catalogue. */}
+      <div className="mt-auto pt-4">
+        {app.oauthHref ? (
+          <a href={app.oauthHref} className={cn(buttonVariants(), "w-full")}>
+            Connect with Google
+          </a>
+        ) : (
+          <Button type="button" className="w-full" onClick={onConnect}>
+            {connected ? "Connect another" : "Connect"}
+          </Button>
+        )}
+      </div>
+    </Card>
   );
 }

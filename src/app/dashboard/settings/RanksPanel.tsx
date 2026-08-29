@@ -13,7 +13,6 @@ import {
   Wrench,
   type LucideIcon,
 } from "lucide-react";
-import { NODE_ACCENT } from "@/components/flow/node-accent";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
@@ -61,10 +60,23 @@ const toggled = (list: string[], key: string) =>
 
 const count = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-// The rank marks wear the flow step accents (app green, unite blue, Summarize
-// violet, time-between orange), cycled by index, so the list reads like a
-// column of step cards rather than a form.
-const RANK_ACCENTS = [NODE_ACCENT.app, NODE_ACCENT.unite, NODE_ACCENT.formula, NODE_ACCENT.time_between];
+/**
+ * THE ROLE MARKS, MOVED OFF THE FLOW PALETTE AND ONTO THE SHEET'S OWN.
+ *
+ * They used to be `NODE_ACCENT` — the builder's step colours (app green, unite
+ * blue, Summarize violet) — carried in through an inline `style`. Two problems,
+ * one of them the whole reason this pass exists: a role has nothing to do with
+ * a flow step, so a green one implied a relationship that does not exist; and
+ * this page now spends the sheet's decorative three on the member avatars, so
+ * a second, unrelated palette on the same screen read as noise rather than as
+ * identity.
+ *
+ * Same three colours as the avatars, in the OTHER shape: a circle is a person,
+ * a rounded square is a thing. Black ink, for the reason spelled out beside
+ * AVATAR_TONES in page.tsx. Cycled by index — a role's colour is a place in a
+ * list, not a fact about it.
+ */
+const RANK_ACCENTS = ["bg-accent-peri", "bg-accent-pink", "bg-accent-orange"];
 
 // One glyph per permission, so each row reads like a library row (icon +
 // title + blurb) instead of a line of prose.
@@ -189,19 +201,19 @@ export function RanksPanel({
     <div>
       {/* NO PREAMBLE. It explained that a role limits what its members can do
           and which metrics they see, and that members without one have full
-          access — and the empty state below says the second half where it
-          matters (to a workspace with no roles at all), while the first half is
-          restated by the two groups inside every card, which are literally
-          headed "Permissions" and "Metrics". */}
+          access — the section header this panel now sits under says exactly
+          that, once, in the one line every section on the page gets. */}
       {toast && <Toast>{toast}</Toast>}
 
-      {/* Each role is a CARD — the builder's step-card anatomy (coloured mark,
-          18px title, 12px meta), stacked with air between them like
-          steps on the canvas. Expanding one grows it into a panel-chrome-style
-          surface: hairline-divided groups on the one white plane. */}
+      {/* THE PANEL IS THE CONTENTS OF A TRAY, NOT A PAGE SECTION. Its call site
+          fills the card body with the off-white and hands it the padding, so
+          everything here is a white card sitting IN the recess — which is the
+          arrangement that makes a role read as an item in a container rather
+          than as another band of the page. Nothing in this file paints a
+          background; that decision belongs to the one place it is made. */}
       <div className="flex flex-col gap-3">
         {ranks.length === 0 && (
-          <p className="py-2 text-center text-sm text-muted-foreground">
+          <p className="px-1 py-2 text-center text-sm text-muted-foreground">
             No roles yet — everyone has full access. Create one to start limiting what members see.
           </p>
         )}
@@ -211,28 +223,38 @@ export function RanksPanel({
           const holders = memberCounts[r.id] ?? 0;
           const others = ranks.filter((o) => o.id !== r.id);
           return (
-            /* overflow-hidden is safe here (nothing inside pops over the edge —
+            /* `card` (10px), not `surface` (16px): on the tray these are ITEMS,
+               and the 16px corner is the radius the tray's own card is drawn
+               at — two nested surfaces at the same radius read as one thing
+               that has gone wrong rather than as two.
+               overflow-hidden is safe here (nothing inside pops over the edge —
                the delete confirm is inline) and keeps the header's hover tint
-               within the 16px corners. */
-            <Card key={r.id} variant="surface" padding="none" className="overflow-hidden">
+               within those corners. */
+            <Card key={r.id} variant="card" padding="none" className="overflow-hidden">
               <button
                 type="button"
                 onClick={() => {
                   setExpandedId(open ? null : r.id);
                   setConfirmingDelete(null);
                 }}
-                className="flex w-full items-center gap-3 p-3.5 text-left transition-colors hover:bg-foreground/5"
+                className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-(--duration-fast) hover:bg-foreground/5"
               >
                 <span
-                  className="flex size-9 shrink-0 items-center justify-center rounded-control"
-                  style={{ backgroundColor: RANK_ACCENTS[i % RANK_ACCENTS.length] }}
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-control text-neutral-900",
+                    RANK_ACCENTS[i % RANK_ACCENTS.length],
+                  )}
                   aria-hidden
                 >
-                  <Shield size={18} strokeWidth={2} className="text-white" />
+                  <Shield size={18} strokeWidth={2} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-lg font-semibold text-foreground">{r.name}</span>
-                  <span className="block text-xs text-muted-foreground">
+                  {/* 16px, down from 18. The role's name is the biggest string
+                      in the tray either way, and at 18 it was a step ABOVE the
+                      page's own section headings — an item inside a section
+                      shouting louder than the section. */}
+                  <span className="block truncate text-md font-semibold text-foreground">{r.name}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
                     {count(holders, "member")} · {summary(r)}
                   </span>
                 </span>
@@ -363,9 +385,11 @@ export function RanksPanel({
         })}
 
         {/* The list's foot: the builder's "Add next step" ghost, until it is
-            clicked — then the same spot holds the name input and Create. */}
+            clicked — then the same spot holds the name input and Create. Both
+            states are the same shape as a role card, because that is what the
+            slot is going to become. */}
         {adding ? (
-          <Card variant="surface" padding="dense">
+          <Card variant="card" padding="dense">
             <form onSubmit={create} className="space-y-3">
               <div className="flex items-center gap-2">
                 <Input
@@ -414,7 +438,10 @@ export function RanksPanel({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="flex w-full items-center gap-2.5 rounded-surface border-2 border-dashed border-border p-3 text-left text-md font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-primary hover:text-accent-foreground"
+            /* `rounded-card` to match the role cards it sits under, and no fill:
+               a dashed outline over the tray is what says "a card goes here",
+               where a white one would say a card already does. */
+            className="flex w-full items-center gap-2.5 rounded-card border-2 border-dashed border-border p-3 text-left text-md font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-primary hover:text-accent-foreground"
           >
             <span className="flex size-7 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
               <Plus size={14} strokeWidth={2.25} />
@@ -434,6 +461,11 @@ export function RanksPanel({
  * exactly where it applies. It is now the ONLY thing on the row that speaks
  * about access, since the WorkOS "Member" badge that used to sit beside it has
  * gone; see the note at its old call site in page.tsx.
+ *
+ * `w-full`, not `w-auto`. The member list is a grid now and this control has a
+ * track of its own; sized to its content it drew a different width per row —
+ * "Full access" and "Setter & Closer" are 60px apart — which is the exact
+ * ragged edge the grid was introduced to remove. The track decides the width.
  */
 export function MemberRankSelect({
   memberUserId,
@@ -467,7 +499,7 @@ export function MemberRankSelect({
   return (
     <>
       {error && <Toast>{error}</Toast>}
-      <NativeSelect value={value} onChange={(e) => change(e.target.value)} aria-label="Role" className="w-auto">
+      <NativeSelect value={value} onChange={(e) => change(e.target.value)} aria-label="Role" className="w-full">
         <option value="">Full access</option>
         {ranks.map((r) => (
           <option key={r.id} value={r.id}>

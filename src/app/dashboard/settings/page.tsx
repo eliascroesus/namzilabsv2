@@ -1,3 +1,4 @@
+import type * as React from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
@@ -32,6 +33,85 @@ const initials = (email: string) => {
 };
 
 /**
+ * WHOSE ROW IS WHOSE, IN COLOUR — and the one place this page spends the
+ * sheet's decorative set.
+ *
+ * Every avatar used to be the same violet tint, which is a column of identical
+ * discs: it marked nothing, because a mark that is the same on every row is
+ * furniture. These are the sheet's three DECORATIVE accents (peri, pink,
+ * orange), which say WHICH and never HOW IT IS GOING — exactly what an avatar
+ * is for. Yellow is deliberately not in the set: it is the page's hero (Send
+ * invite), and a second yellow halves the value of the first.
+ *
+ * Keyed by the email rather than by list position, so a person's colour does
+ * not change when somebody above them is removed.
+ *
+ * ALL THREE CARRY BLACK INK, which is where this parts company with
+ * `StatusPill`'s tones. That component sets white on orange and on peri, and it
+ * can: its labels are short caps over a wide pill. These are two letters at
+ * 12px, and white measures 2.9:1 on the orange and 2.6:1 on the peri. The
+ * sheet sets black on its bright fills everywhere it draws them.
+ */
+const AVATAR_TONES = ["bg-accent-peri", "bg-accent-pink", "bg-accent-orange"];
+const avatarTone = (email: string) => {
+  let n = 0;
+  for (const ch of email) n = (n + ch.charCodeAt(0)) % 9973;
+  return `${AVATAR_TONES[n % AVATAR_TONES.length]} text-neutral-900`;
+};
+
+/**
+ * ONE SECTION, ONE CARD, ONE HEADER RECIPE.
+ *
+ * This page was three bare stacks: an eyebrow, then a box, then 32px of air,
+ * then the next one — so nothing on it said what any section was FOR, and the
+ * only structure was the gap between them. Every section is now a white island
+ * with a head: the sheet's micro voice (12px, ALL CAPS, tracking) set in
+ * `foreground` rather than the eyebrow's muted grey, because inside a card this
+ * label is the card's TITLE and not a caption floating above it; the count
+ * beside it; and exactly one line of description underneath.
+ *
+ * The description has one job — say the thing the rows below cannot. "Everyone
+ * with an active seat" over a list of seats would be a caption; the rule that
+ * an unranked member sees everything is a fact the list has no way to state.
+ */
+function SettingsSection({
+  label,
+  count,
+  description,
+  bodyClassName,
+  children,
+}: {
+  label: string;
+  count?: number;
+  description: string;
+  /** The body's own fill — see the Roles call site for the page's one recess. */
+  bodyClassName?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      {/* `overflow-hidden` keeps the row hover tint and the recessed tray
+          inside the card's 16px corners. Nothing here pops over an edge: the
+          delete confirm is inline and the role picker is a native select. */}
+      <Card variant="surface" padding="none" className="overflow-hidden">
+        <header className="px-5 py-4">
+          <div className="flex items-center gap-2">
+            <SectionHeading className="mb-0 text-foreground">{label}</SectionHeading>
+            {count !== undefined && <Badge className="tnum">{count}</Badge>}
+          </div>
+          {/* `max-w-2xl` is what PageHeader caps its lede at, for the same
+              reason and with the same number: a sentence run the full width of
+              the container is roughly twice a readable measure. One spelling
+              for one job. */}
+          <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">{description}</p>
+        </header>
+        <div className={cn("border-t border-border", bodyClassName)}>{children}</div>
+      </Card>
+    </section>
+  );
+}
+
+/**
  * Workspace settings — today that means MEMBERS. Tenancy in this product IS
  * the organization, and until this page existed the product could create a
  * workspace and put exactly one person in it: the second person at a customer
@@ -53,6 +133,12 @@ const initials = (email: string) => {
  * and the owner would otherwise be locked out of the feature's own editor.
  * That render gate is UX, not security: every rank action re-checks
  * canManageRanks on the server before touching a row.
+ *
+ * THE ORDER IS THE STORY A WORKSPACE ADMIN IS ACTUALLY TELLING: who is here,
+ * how another person gets here, who is on the way, and what any of them are
+ * allowed to see. Roles used to sit second — between the member list and the
+ * invite box — which put the page's densest control in the middle of a
+ * two-sentence errand.
  */
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const { orgId, userId, role, auth } = await requireOrg();
@@ -138,10 +224,36 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     ...metricRows.map((m) => ({ key: `metric:${m.id}`, name: m.name })),
   ];
 
+  /**
+   * THE MEMBER ROW IS A GRID, and that is the whole point of it.
+   *
+   * It was a flex row: avatar, then a growing name block, then whatever
+   * controls the row happened to have, packed to the right. So the role
+   * pickers stepped in and out by however long each email was, and a list of
+   * six members had six left edges on its one interactive column.
+   *
+   * Three tracks — the 36px mark, the identity, and a fixed 176px for the
+   * control — so every picker starts on the same line down the card. Below
+   * `sm` the third track is gone and the picker drops to a second row under
+   * the identity (`col-start-2`), which is the only way 176px of select and a
+   * truncating email both fit on a phone.
+   */
+  const memberRow = cn(
+    "grid items-center gap-x-3.5 gap-y-2 px-5 py-3 transition-colors duration-(--duration-fast) hover:bg-foreground/5",
+    isAdmin ? "grid-cols-[2.25rem_minmax(0,1fr)] sm:grid-cols-[2.25rem_minmax(0,1fr)_11rem]" : "grid-cols-[2.25rem_minmax(0,1fr)]",
+  );
+
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
+      {/* NARROW STAYS. This is a page of lists you read and switches you flip,
+          and at the 1152px default the role picker on a member row would sit
+          the better part of a metre from the name it belongs to. `narrow` is
+          what PageContainer calls the form measure, and the sections use their
+          full width rather than the page borrowing more of it. */}
       <PageContainer width="narrow">
-        {/* NO LEDE. It listed the three section headings that follow it. */}
+        {/* NO LEDE. It listed the three section headings that follow it — and
+            now every one of those headings carries its own line of description,
+            so a lede could only say all of it a third time. */}
         <PageHeader title="Workspace settings" />
 
         {invited && (
@@ -186,101 +298,87 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </div>
         )}
 
-        {/* EVERY SECTION LABEL CARRIES ITS OWN COUNT. "Members" over a list of
-            members is a caption; "MEMBERS · 4" is the one fact the heading can
-            add that the rows underneath do not already say, and it is what an
-            admin opening this page is counting anyway. */}
-        <section className="mt-8">
-          <div className="mb-3 flex items-center gap-2">
-            <SectionHeading className="mb-0">Members</SectionHeading>
-            <Badge className="tnum">{members.length}</Badge>
-          </div>
-          <Card variant="surface" padding="none" className="divide-y divide-border overflow-hidden">
-            {members.map((m) => {
-              const rankName = rankNameById.get(rankIdByUser.get(m.userId) ?? "");
-              return (
-                /* The builder-card anatomy: a round mark, a semibold title, one
-                   muted meta line. The OWNER's avatar is the list's single
-                   solid-violet accent — like the rail's N. */
-                <div key={m.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-foreground/5">
-                  {/* THE TINT PAIR, not an alpha of the fill. `bg-primary/10`
-                      carrying `text-primary` is brand-500 at 10% under
-                      brand-500 ink — 4.42:1 at best, and the sheet's rule is
-                      that the 500 FILLS while the 700 SPEAKS. `accent` /
-                      `accent-foreground` is exactly that pair, and it is the
-                      one the empty state and the chips already use. The owner
-                      keeps the solid fill: one violet block per list, marking
-                      identity, like the rail's own mark. */}
-                  <span
-                    className={`flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                      m.role === "owner" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
-                    }`}
-                    aria-hidden
-                  >
-                    {initials(m.email)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline gap-1.5">
-                      <span className="truncate text-md font-semibold text-foreground">{m.email}</span>
-                      {m.userId === userId && <span className="shrink-0 text-xs text-muted-foreground">(you)</span>}
+        <div className="mt-6 flex flex-col gap-4">
+          <SettingsSection
+            label="Members"
+            count={members.length}
+            description="Everyone with an active seat. A role limits what its holder sees; without one, they see everything."
+          >
+            <div className="divide-y divide-border">
+              {members.map((m) => {
+                const rankName = rankNameById.get(rankIdByUser.get(m.userId) ?? "");
+                return (
+                  <div key={m.id} className={memberRow}>
+                    {/* THE OWNER KEEPS THE SOLID VIOLET — one violet block per
+                        list, marking identity, like the rail's own mark. The
+                        rest wear the decorative set (see AVATAR_TONES): round,
+                        because on this page a CIRCLE is a person and a rounded
+                        SQUARE is a thing (the role marks in the panel below use
+                        the same three colours in the other shape). */}
+                    <span
+                      className={cn(
+                        "flex size-9 items-center justify-center rounded-full text-xs font-semibold",
+                        m.role === "owner" ? "bg-primary text-primary-foreground" : avatarTone(m.email),
+                      )}
+                      aria-hidden
+                    >
+                      {initials(m.email)}
                     </span>
-                    <span className="block text-xs text-muted-foreground">{rankName ?? "Full access"}</span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-3">
-                    {/* Admins assign ranks in place; everyone else just sees
-                        them (the meta line above). An admin picking a rank for
+                    <span className="min-w-0">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm font-semibold text-foreground">{m.email}</span>
+                        {m.userId === userId && <span className="shrink-0 text-xs text-muted-foreground">(you)</span>}
+                        {/* THE "MEMBER" BADGE IS GONE, and only that one.
+                            The workspace's own access model is called Roles now
+                            (the section below, and the picker on this row), so a
+                            WorkOS role slug rendered as a badge put two different
+                            things called a role on one row — the picker said
+                            "Setter & Closer" and the badge beside it said
+                            "Member", about the same person, meaning unrelated
+                            things. Owner survives because it is a distinct fact
+                            that nothing else on the row carries. */}
+                        {m.role === "owner" && <StatusPill tone="brand">Owner</StatusPill>}
+                      </span>
+                      {/* THE META LINE IS FOR THE PEOPLE WHO HAVE NO PICKER.
+                          An admin gets the select one track over, which already
+                          reads "Full access" or the role's name — so printing
+                          the same words under the email was the row saying one
+                          fact twice, in two type sizes. */}
+                      {!isAdmin && (
+                        <span className="mt-0.5 block text-xs text-muted-foreground">{rankName ?? "Full access"}</span>
+                      )}
+                    </span>
+                    {/* Admins assign roles in place; everyone else just sees
+                        them (the meta line above). An admin picking a role for
                         another admin is allowed and harmless — admins are
-                        never restricted, even with a rank assigned. */}
+                        never restricted, even with a role assigned. */}
                     {isAdmin && (
-                      <MemberRankSelect
-                        memberUserId={m.userId}
-                        rankId={rankIdByUser.get(m.userId) ?? null}
-                        ranks={rankOptions}
-                      />
+                      <span className="col-start-2 sm:col-start-3">
+                        <MemberRankSelect
+                          memberUserId={m.userId}
+                          rankId={rankIdByUser.get(m.userId) ?? null}
+                          ranks={rankOptions}
+                        />
+                      </span>
                     )}
-                    {/* THE "MEMBER" BADGE IS GONE, and only that one.
-                        The workspace's own access model is called Roles now
-                        (the section below, and the picker to the left of this),
-                        so a WorkOS role slug rendered as a badge put two
-                        different things called a role on one row — the picker
-                        said "Setter & Closer" and the badge beside it said
-                        "Member", about the same person, meaning unrelated
-                        things. "Member" was also the badge on everyone who
-                        wasn't the owner, which is a column of identical words.
-                        Owner survives because it is a distinct fact that
-                        nothing else on the row carries. */}
-                    {m.role === "owner" && <StatusPill tone="brand">Owner</StatusPill>}
-                  </span>
-                </div>
-              );
-            })}
-          </Card>
-        </section>
-
-        {isAdmin && (
-          <section className="mt-8">
-            {/* "Roles" in every string a user reads. The table, the columns and
-                every identifier under it stay `rank` — see RanksPanel's own
-                note. Renaming those is a migration across the permission model
-                for nothing anyone can see. */}
-            <div className="mb-3 flex items-center gap-2">
-              <SectionHeading className="mb-0">Roles</SectionHeading>
-              <Badge className="tnum">{rankRows.length}</Badge>
+                  </div>
+                );
+              })}
             </div>
-            <RanksPanel ranks={rankRows} memberCounts={memberCounts} catalogue={catalogue} />
-          </section>
-        )}
+          </SettingsSection>
 
-        {/* Inviting is governance — hidden with the rank editor. The action
-            re-checks server-side; this is the courtesy. */}
-        {isAdmin && (
-          <section className="mt-8">
-            {/* "Invite", not "Invite a teammate" — the field's own placeholder
-                is teammate@company.com and the button says Send invite, so the
-                heading was saying it a third time. */}
-            <SectionHeading>Invite</SectionHeading>
-            <Card variant="surface" padding="compact">
-              <form action={inviteMemberAction} className="flex flex-wrap gap-2">
+          {/* Inviting is governance — hidden with the rank editor. The action
+              re-checks server-side; this is the courtesy. */}
+          {isAdmin && (
+            <SettingsSection
+              label="Invite"
+              description="WorkOS sends the email and hosts the link. It is personal: only the address typed here can use it."
+            >
+              {/* THE FORM IS A SECTION NOW, not a field floating in a box. It
+                  sits under the header's hairline with the card's own padding,
+                  so the invite row starts on the same left edge as every member
+                  row above it. */}
+              <form action={inviteMemberAction} className="flex flex-wrap items-center gap-2.5 px-5 py-4">
                 <Input
                   type="email"
                   name="email"
@@ -290,55 +388,57 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   // almost certainly typed their colleague's before.
                   autoComplete="email"
                   placeholder="teammate@company.com"
-                  className="max-w-sm"
+                  aria-label="Teammate's email address"
+                  className="min-w-0 flex-1 sm:max-w-sm"
                 />
                 {/* THE PAGE'S ONE YELLOW. Workspace settings is a page of lists
                     you read and switches you flip; the single ACT it exists for
                     is putting another person in the workspace, and on this sheet
                     that is precisely what the neon is for. Nothing else here
-                    takes it — a second yellow would halve the value of this one,
-                    and the two destructive controls below are deliberately the
-                    quietest things on the page. */}
+                    takes it — not an avatar, not a chip — because a second
+                    yellow would halve the value of this one, and the two
+                    destructive controls below are deliberately the quietest
+                    things on the page. */}
                 <SubmitButton variant="yellow" pendingLabel="Sending…">
                   Send invite
                 </SubmitButton>
               </form>
-              {/* No note. It said an email goes out, that the link is also
-                  copyable from Pending invitations, and that invites expire —
-                  and Pending invitations renders directly below with the link
-                  in a labelled CopyField and the expiry date on the row. Every
-                  clause was a description of the next section down. */}
-            </Card>
-          </section>
-        )}
+            </SettingsSection>
+          )}
 
-        {pending.length > 0 && (
-          <section className="mt-8">
-            <div className="mb-3 flex items-center gap-2">
-              <SectionHeading className="mb-0">Pending invitations</SectionHeading>
-              <Badge className="tnum">{pending.length}</Badge>
-            </div>
-            <Card variant="surface" padding="none" className="divide-y divide-border">
-              {pending.map((inv) => (
-                <div key={inv.id} className="px-4 py-3">
-                  {/* Same recipe as the Members card: avatar mark, semibold
-                      title, one muted meta line, quiet action at the edge —
-                      including the tint pair, so a pending row and a member row
-                      are the same object at two stages rather than two designs. */}
-                  <div className="flex items-center gap-3">
+          {pending.length > 0 && (
+            <SettingsSection
+              label="Pending invitations"
+              count={pending.length}
+              description="Sent and not accepted yet. Revoking one kills its link immediately, wherever it was pasted."
+            >
+              <div className="divide-y divide-border">
+                {pending.map((inv) => (
+                  /* The member row's grid, one track wider: the revoke sits in
+                     its own column, and the link spans from the identity track
+                     to the edge so it lines up with the email above it rather
+                     than with a hand-typed indent. */
+                  <div
+                    key={inv.id}
+                    className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2 px-5 pb-1.5 pt-3.5"
+                  >
+                    {/* DASHED AND NEUTRAL — the one avatar on the page with no
+                        colour in it. A pending invitee is not a member yet, and
+                        the same dashed-outline idiom marks the empty slot at the
+                        foot of the roles list. */}
                     <span
-                      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
+                      className="flex size-9 items-center justify-center rounded-full border border-dashed border-border bg-muted text-xs font-semibold text-muted-foreground"
                       aria-hidden
                     >
                       {initials(inv.email)}
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-md font-semibold text-foreground">{inv.email}</span>
-                      <span className="block text-xs text-muted-foreground">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-foreground">{inv.email}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
                         {inv.expiresAt ? `Invited · expires ${formatDate(new Date(inv.expiresAt))}` : "Invited"}
                       </span>
                     </span>
-                    <form action={revokeInviteAction} className="shrink-0">
+                    <form action={revokeInviteAction}>
                       <input type="hidden" name="invitationId" value={inv.id} />
                       {/* destructiveGhost, not destructive: revoking is a real
                           action but never the point of this list — quiet until
@@ -347,25 +447,59 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                         Revoke
                       </Button>
                     </form>
+                    {/* The link WorkOS emailed, surfaced for hand-delivery. It was
+                        always in this list response (`acceptInvitationUrl`) and was
+                        simply never rendered — which made "invite over Slack" look
+                        like a missing feature instead of a missing <CopyField>.
+                        Not `isUrl`: that flag exists to catch an unset APP_BASE_URL
+                        on OUR urls; this one is WorkOS-hosted and never malformed. */}
+                    <div className="col-span-2 col-start-2">
+                      <CopyField
+                        label="Invite link — send it any way you like"
+                        value={inv.acceptInvitationUrl}
+                        hint={`The link is personal: it only admits ${inv.email}. Revoke kills it instantly.`}
+                      />
+                    </div>
                   </div>
-                  {/* The link WorkOS emailed, surfaced for hand-delivery. It was
-                      always in this list response (`acceptInvitationUrl`) and was
-                      simply never rendered — which made "invite over Slack" look
-                      like a missing feature instead of a missing <CopyField>.
-                      Not `isUrl`: that flag exists to catch an unset APP_BASE_URL
-                      on OUR urls; this one is WorkOS-hosted and never malformed. */}
-                  <div className="mt-2 pl-12">
-                    <CopyField
-                      label="Invite link — send it any way you like"
-                      value={inv.acceptInvitationUrl}
-                      hint={`The link is personal: it only admits ${inv.email}. Revoke kills it instantly.`}
-                    />
-                  </div>
-                </div>
-              ))}
-            </Card>
-          </section>
-        )}
+                ))}
+              </div>
+            </SettingsSection>
+          )}
+
+          {isAdmin && (
+            /* "Roles" in every string a user reads. The table, the columns and
+               every identifier under it stay `rank` — see RanksPanel's own
+               note. Renaming those is a migration across the permission model
+               for nothing anyone can see. */
+            <SettingsSection
+              label="Roles"
+              count={rankRows.length}
+              description="Named bundles of permissions and metric visibility, assigned to a member from the list above."
+              /**
+               * THE PAGE'S ONE RECESSED SECTION, and the reason the rest of it
+               * is white.
+               *
+               * Off-white is the app's page colour, which is exactly why it
+               * must not be a card's default fill as well: a surface that is
+               * the same value as the thing behind it has no presence, and a
+               * page where everything is that value has no depth at all. It
+               * earns its place in ONE spot — as a TRAY, cut into a white card,
+               * holding cards of its own. Miro's template strip is the
+               * reference: the recess says "these are items in a container",
+               * which is precisely what a list of roles is and what a list of
+               * members is not.
+               *
+               * `bg-muted` rather than `bg-background`: same #f5f5f5, and
+               * `muted` is the token that means "recessed surface" (globals.css
+               * says so on the line that declares it), so a theme that moves
+               * the page does not silently move this tray with it.
+               */
+              bodyClassName="bg-muted p-4"
+            >
+              <RanksPanel ranks={rankRows} memberCounts={memberCounts} catalogue={catalogue} />
+            </SettingsSection>
+          )}
+        </div>
       </PageContainer>
     </AppShell>
   );

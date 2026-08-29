@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Lock, Plug, X } from "lucide-react";
+import { Lock, X } from "lucide-react";
 import { requireOrg, requestAccess } from "@/lib/auth";
 import { getReadDb } from "@/db/client";
 import { connectionImportStatuses, type ImportStatus } from "@/lib/sync/import-status";
@@ -7,19 +7,15 @@ import { AppShell } from "@/components/app-shell";
 import { integrationsErrorMessage } from "./error-messages";
 import { connectionRecordCounts, listConnections, webhookUrlFor } from "@/lib/connections";
 import { CONNECTOR_CATALOG, catalogEntry, type ConnectorCatalogEntry } from "@/connectors/catalog";
-import { ConnectionRow } from "./ConnectionRow";
+import { AppDirectory, ConnectionRow, type DirectoryApp } from "./ConnectionRow";
 import { connectApiKeyAction } from "./actions";
 import { eventTimeNote, readEventTime } from "@/lib/webhooks/event-time";
-import { BOARD_GRID, PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
+import { PageContainer, PageHeader } from "@/components/ui/page";
 import { buttonVariants } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { Card } from "@/components/ui/card";
-import { Badge, StatusPill } from "@/components/ui/badge";
 import { Input, NO_AUTOFILL } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field";
 import { EmptyState } from "@/components/ui/empty-state";
-import { SourceMark } from "@/components/source-mark";
-import { sourceStyle } from "@/components/flow/controls/source-style";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -108,18 +104,56 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     .filter(([n]) => n > 0)
     .map(([n, word]) => `${n} ${word}`);
 
+  /**
+   * THE CATALOGUE, FLATTENED FOR THE GRID — AND THE CONNECT FORM WITH IT.
+   *
+   * The form is built HERE, on the server, and handed to the directory as a
+   * slot. That is not ceremony. `connectApiKeyAction` is a server action, and
+   * the masked fields are pinned by tests/no-autofill.test.ts, which reads THIS
+   * file: the one part of this page that must never drift into a client bundle
+   * is the part a client-side grid would otherwise have to own. The directory
+   * decides WHEN the dialog holding a form is on screen; it never has to know
+   * what is inside one.
+   */
+  const apps: DirectoryApp[] = CONNECTOR_CATALOG.map((entry) => ({
+    source: entry.source,
+    name: entry.name,
+    description: entry.description,
+    instant: entry.instant,
+    poll: entry.poll,
+    // Disconnected connections are deliberately not counted — see countBySource.
+    connectedCount: countBySource[entry.source] ?? 0,
+    // Google's connectors leave the app to connect, so there is nothing to type
+    // and no dialog to open: the card links straight out to the consent screen.
+    oauthHref: entry.connect === "google" ? `/api/oauth/google/start?source=${entry.source}` : undefined,
+    form: entry.connect === "apiKey" ? <ConnectForm entry={entry} /> : undefined,
+  }));
+
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
-      <PageContainer>
+      {/* A WHITE PAGE, WITH ONE OFF-WHITE SECTION ON IT.
+          Every other screen in this app sits directly on the off-white canvas,
+          which works when a page is a handful of islands. A catalogue is not: it
+          is a field of white cards, and on off-white a field of white cards has
+          no ground under it and no figure on it — everything sits one step from
+          everything. So the page takes `bg-card` and the collection gets a
+          recessed band of its own (the shelf, in AppDirectory). White page,
+          off-white section, white cards: three steps where there were two, which
+          is what lets the cards read as objects rather than as outlines.
+
+          `min-h-full` because the frame's own surface is the canvas colour: a
+          white page that stops where its content does leaves an off-white strip
+          under it that reads as a rendering fault rather than as a margin. */}
+      <PageContainer className="min-h-full bg-card">
         {/* "Apps", NOT "Integrations" — the rail item is the only door to this
             page and it has always said Apps, so the page said one word and the
             way in said another. A first-time user clicking a thing called Apps
             and landing on a page called Integrations has to spend a beat
             deciding whether they went where they meant to.
 
-            No lede either: it told you to connect an account and then preview
-            the records, which is the sequence the two sections below already
-            walk you through in that order. */}
+            The lede stays gone. The toolbar directly under this title says what
+            the page is for in controls rather than in a sentence, which is the
+            one form of instruction nobody skips. */}
         <PageHeader title="Apps" />
 
         {errorCode && (
@@ -143,243 +177,129 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           </div>
         )}
 
-        {/* NO HEADING ON THIS SECTION. It sat at the very top of the page under
-            an h1, labelling a list of connection rows as "Your connections" —
-            which the rows say by being there. "Add a connection" below keeps
-            its heading, because that one labels a catalogue of things you have
-            NOT connected, and without it the grid reads as more of this list. */}
-        <section className="mt-8">
-          {connectionsUnavailable ? (
-            <EmptyState
-              icon={<Plug />}
-              title="Your connections couldn’t be loaded"
-              description="This is a problem on our side — nothing has been disconnected and no data has been lost. Refresh to try again."
-            />
-          ) : connected.length === 0 ? (
-            <EmptyState
-              icon={<Plug />}
-              title="No connections yet"
-              description="Pick a tool below and connect an account — its records start arriving here."
-            />
-          ) : (
-            <>
-              {/* THE DISCONNECT-VS-DELETE PARAGRAPH IS GONE FROM HERE, and it
-                  was not lost — it was already duplicated. Both confirm panels
-                  in ConnectionRow say the whole difference at the moment it is
-                  being decided: the disconnect confirm promises "you can
-                  reconnect it later and your data comes back", and the delete
-                  panel leads with what is destroyed, how many records, and
-                  "disconnect instead if you only want it to stop syncing".
-                  Standing text at the top of a page explaining two buttons
-                  nobody has pressed yet is read by nobody and skimmed past by
-                  everybody; the panel you cannot avoid is where it lands. Both
-                  icon buttons also carry it in their `title`. */}
-              {/* ONE ISLAND, HEAD AND ALL — the same object the activity feed
-                  is built from, so the two list pages in this product are the
-                  same material. The head is the sheet's micro voice (12px, ALL
-                  CAPS, tracking-wide) and it carries the tally, which is the
-                  only thing a heading floating above the card could have said
-                  that the rows do not.
+        {/* THE TWO SECTIONS ARE TWO VIEWS NOW.
+            The page used to be your connections stacked on top of a catalogue
+            of everything else, which put the thing most people come for — add
+            an app — below the fold on any workspace with four connections, and
+            gave the thing they come for second — fix the one that broke — no
+            way to be found except by scrolling. A segment puts both one press
+            apart and makes DISCOVER the view you land on.
 
-                  Its wash is `bg-foreground/5`, not `bg-muted`: `--muted` and
-                  `--card` are THE SAME TOKEN in the dark theme, so a muted
-                  strip on a card is no strip at all there. An alpha of the
-                  foreground reads as one step recessed on both surfaces —
-                  the same argument the flows board's footer tray makes. */}
-              <Card variant="surface" padding="none" className="overflow-hidden">
-                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border bg-foreground/5 px-4 py-3">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Connected apps
-                  </span>
-                  {tally.length > 0 && <span className="text-xs text-muted-foreground">{tally.join(" · ")}</span>}
-                </div>
-                {/* The hairlines live on this wrapper, not on the Card: the head
-                    above already draws its own `border-b`, and a `divide-y` on
-                    the Card would put a second one directly under it. */}
-                <div className="divide-y divide-border">
-                  {connected.map((c) => (
-                    <ConnectionRow
-                      key={c.id}
-                      id={c.id}
-                      name={c.name}
-                      source={c.source}
-                      status={c.status}
-                      // F.3/F.6 surfaced on the LIST, not only the detail page: a
-                      // paused source looked simply "connected" here while it sat
-                      // out a breaker window, and the one page users actually visit
-                      // said nothing. Preformatted on the server so the client row
-                      // renders one stable string (no hydration-time re-clocking).
-                      pausedNote={
-                        c.pausedUntil && c.pausedUntil.getTime() > Date.now()
-                          ? `${c.pausedReason ?? "Waiting before the next attempt."} Retries automatically around ${formatTime(c.pausedUntil)} — nothing is lost.`
-                          : undefined
-                      }
-                      lastError={c.status === "error" ? (c.lastError ?? undefined) : undefined}
-                      // Webhook-capable sources carry their inbound URL right here.
-                      // It used to live only on the connection page, which meant a
-                      // Custom Webhook — a connector that is nothing BUT its URL —
-                      // was saved and then led nowhere.
-                      webhookUrl={catalogEntry(c.source)?.instant ? webhookUrlFor(c.id) : undefined}
-                      webhookSetup={catalogEntry(c.source)?.webhookSetup}
-                      // Only the catch-hook has this question: every other source
-                      // reads a documented timestamp field of its own.
-                      eventTimeNote={c.source === "webhook" ? eventTimeNote(readEventTime(c.config)) : undefined}
-                      records={records[c.id]}
-                      // Shown while importing AND when an import stopped early;
-                      // "done" is quiet, and "unknown" says nothing at all.
-                      importNote={importStatuses.get(c.id)?.state !== "done" ? importStatuses.get(c.id)?.note : undefined}
-                    />
-                  ))}
-                </div>
-              </Card>
-            </>
-          )}
-        </section>
-
-        <section className="mt-10">
-          <SectionHeading>Add a connection</SectionHeading>
-          {/* The shared board grid, so this catalogue steps its columns exactly
-              as the dashboard's tiles and the flows board do: one rhythm for
-              the whole product, now spelled in one place. */}
-          <div className={`items-start ${BOARD_GRID}`}>
-            {CONNECTOR_CATALOG.map((entry) => (
-              <ConnectorCard key={entry.source} entry={entry} connectedCount={countBySource[entry.source] ?? 0} />
-            ))}
-          </div>
-        </section>
+            `key` on the error code does exactly one job. A failed connect
+            redirects back here with `?error=…`, which is a soft navigation: the
+            directory stays mounted, and its dialog stays OPEN on top of the
+            banner explaining why the dialog failed. Re-keying remounts it
+            closed the instant a code arrives. */}
+        <AppDirectory
+          key={errorCode || "ok"}
+          apps={apps}
+          connectionsUnavailable={connectionsUnavailable}
+          tally={tally.join(" · ")}
+          connected={connected.map((c) => ({
+            id: c.id,
+            name: c.name,
+            source: c.source,
+            row: (
+              <ConnectionRow
+                id={c.id}
+                name={c.name}
+                source={c.source}
+                status={c.status}
+                // F.3/F.6 surfaced on the LIST, not only the detail page: a
+                // paused source looked simply "connected" here while it sat
+                // out a breaker window, and the one page users actually visit
+                // said nothing. Preformatted on the server so the client row
+                // renders one stable string (no hydration-time re-clocking).
+                pausedNote={
+                  c.pausedUntil && c.pausedUntil.getTime() > Date.now()
+                    ? `${c.pausedReason ?? "Waiting before the next attempt."} Retries automatically around ${formatTime(c.pausedUntil)} — nothing is lost.`
+                    : undefined
+                }
+                lastError={c.status === "error" ? (c.lastError ?? undefined) : undefined}
+                // Webhook-capable sources carry their inbound URL right here.
+                // It used to live only on the connection page, which meant a
+                // Custom Webhook — a connector that is nothing BUT its URL —
+                // was saved and then led nowhere.
+                webhookUrl={catalogEntry(c.source)?.instant ? webhookUrlFor(c.id) : undefined}
+                webhookSetup={catalogEntry(c.source)?.webhookSetup}
+                // Only the catch-hook has this question: every other source
+                // reads a documented timestamp field of its own.
+                eventTimeNote={c.source === "webhook" ? eventTimeNote(readEventTime(c.config)) : undefined}
+                records={records[c.id]}
+                // Shown while importing AND when an import stopped early;
+                // "done" is quiet, and "unknown" says nothing at all.
+                importNote={importStatuses.get(c.id)?.state !== "done" ? importStatuses.get(c.id)?.note : undefined}
+              />
+            ),
+          }))}
+        />
       </PageContainer>
     </AppShell>
   );
 }
 
-function ConnectorCard({ entry, connectedCount }: { entry: ConnectorCatalogEntry; connectedCount: number }) {
-  // The connector's own brand colour, from the same pure lookup `SourceMark`
-  // reads, so the wash behind the mark can be MIXED from it — the flows board's
-  // pattern (see FlowRow). A hex in this file would fail the kit gate, and
-  // rightly: the value belongs to the vendor's map, not to a card.
-  const brand = sourceStyle(entry.source).color;
+/**
+ * THE CREDENTIAL FORM — one connector's, rendered into the connect dialog.
+ *
+ * IT IS NO LONGER IN THE DOM UNTIL SOMEBODY ASKS FOR IT, and that is half the
+ * reason for the move. Every connector's form used to live inside a collapsed
+ * `<details>` on this page, so all seven were present the moment the tab
+ * loaded and four password managers had seven masked fields to fill with
+ * somebody's unrelated login. A dialog mounts one form when it opens and
+ * unmounts it when it closes; the opt-outs below are still the belt.
+ *
+ * NOTHING HERE IS A LOGIN, and a password manager has to be told so in four
+ * dialects — see `NO_AUTOFILL` in ui/input.tsx. The masked fields get it
+ * automatically from `Input`; the name field asks for it here, because a text
+ * box sitting directly above a masked one is precisely the shape a manager
+ * reads as "username, password" and fills with somebody's email.
+ */
+function ConnectForm({ entry }: { entry: ConnectorCatalogEntry }) {
   return (
-    // `surface`, like every other island in the app now — and the connector's
-    // own mark in front of its name, because this grid is the one place in the
-    // product where you are picking a TOOL rather than reading about one, and a
-    // logo is recognised a great deal faster than a word.
-    <Card variant="surface" padding="compact" className="flex flex-col">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          {/* THE MARK GETS A CHIP OF ITS OWN COLOUR, at 14% and mixed against
-              `transparent` rather than white so it composites onto whatever
-              surface is behind it (a dark card in the dark theme). A 44px block
-              of colour is what gives a card in a grid of eight a corner to be
-              recognised by; the 26px stamp alone was a stamp on a white sheet,
-              and a catalogue of stamps on white sheets is the grey this pass is
-              for. Nothing here is hard-coded per connector — one added tomorrow
-              brings its chip with it. */}
-          <span
-            aria-hidden
-            className="flex size-11 shrink-0 items-center justify-center rounded-card"
-            style={{ backgroundColor: `color-mix(in srgb, ${brand} 14%, transparent)` }}
-          >
-            <SourceMark source={entry.source} size={26} />
-          </span>
-          <div className="min-w-0">
-            <h3 className="text-md font-semibold text-foreground">{entry.name}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{entry.description}</p>
-          </div>
+    // No tray wash and no card of its own: the dialog IS the surface, and a
+    // recessed panel inside a floating one is two containers for one form.
+    <form action={connectApiKeyAction} autoComplete="off" className="mt-6 space-y-4">
+      <input type="hidden" name="source" value={entry.source} />
+      <div>
+        <FieldLabel htmlFor={`name-${entry.source}`}>Connection name</FieldLabel>
+        <Input id={`name-${entry.source}`} name="name" placeholder={entry.name} {...NO_AUTOFILL} />
+      </div>
+      {entry.credentialFields.map((f) => (
+        <div key={f.key}>
+          <FieldLabel htmlFor={`cred-${entry.source}-${f.key}`}>{f.label}</FieldLabel>
+          {/* No `autoComplete` override here on purpose: `Input` sets
+              `new-password` for a masked field, and "off" — which this call
+              site used to pass — is the one value browsers ignore on one.
+              Passing it back re-opens the bug. */}
+          <Input
+            id={`cred-${entry.source}-${f.key}`}
+            name={`cred_${f.key}`}
+            type="password"
+            placeholder={f.placeholder ?? ""}
+          />
         </div>
-        {/* A connected count is a STATE — this app is live in this workspace —
-            so it speaks in the success trio with the live dot, the same pill
-            the connection rows and the detail page use. It was a grey Badge,
-            i.e. the same object as "Polling" two lines below, which made the
-            one fact about YOUR workspace look like another spec sheet line. */}
-        {connectedCount > 0 && (
-          <StatusPill tone="success" dot className="tnum shrink-0">
-            {connectedCount} connected
-          </StatusPill>
-        )}
-      </div>
-      {/* Capabilities, not states: what this connector CAN do, which is the
-          quiet Badge's whole job. */}
-      <div className="mt-4 flex flex-wrap gap-2">
-        {entry.instant && <Badge>Instant webhook</Badge>}
-        {entry.poll && <Badge>Polling</Badge>}
-      </div>
-
-      <div className="mt-6">
-        {/* FULL-WIDTH, both branches. The action is the foot of a card in a
-            three-column grid, and a 96px pill floating at the left edge of a
-            370px card is the shape that made this catalogue read as unfinished.
-            Black, not violet: on this sheet black is the workhorse and there
-            are eight of these buttons on screen at once — eight violets would
-            spend the accent on a catalogue. */}
-        {entry.connect === "google" ? (
-          <a href={`/api/oauth/google/start?source=${entry.source}`} className={cn(buttonVariants(), "w-full")}>
-            Connect with Google
-          </a>
-        ) : (
-          <details>
-            <summary
-              className={cn(buttonVariants(), "w-full cursor-pointer list-none [&::-webkit-details-marker]:hidden")}
-            >
-              Connect
-            </summary>
-            {/* NOTHING ON THIS FORM IS A LOGIN, and a password manager has to
-                be told so in four dialects — see `NO_AUTOFILL` in ui/input.tsx.
-                The masked fields get it automatically from `Input`; the name
-                field asks for it here, because a text box sitting directly
-                above a masked one is precisely the shape a manager reads as
-                "username, password" and fills with somebody's email. */}
-            {/* THE OPEN FORM IS A TRAY, not more card — the same recessed band
-                the flows board puts its controls in. `bg-foreground/5` rather
-                than `bg-muted`, because `--muted` and the page are both #f5f5f5
-                and a muted tray on a white card is the page leaking through it;
-                an alpha of the foreground reads as one step recessed on both
-                surfaces and needs no dark variant. */}
-            <form
-              action={connectApiKeyAction}
-              autoComplete="off"
-              className="mt-4 space-y-4 rounded-card bg-foreground/5 p-4"
-            >
-              <input type="hidden" name="source" value={entry.source} />
-              <div>
-                <FieldLabel htmlFor={`name-${entry.source}`}>Connection name</FieldLabel>
-                <Input id={`name-${entry.source}`} name="name" placeholder={entry.name} {...NO_AUTOFILL} />
-              </div>
-              {entry.credentialFields.map((f) => (
-                <div key={f.key}>
-                  <FieldLabel htmlFor={`cred-${entry.source}-${f.key}`}>{f.label}</FieldLabel>
-                  {/* No `autoComplete` override here on purpose: `Input` sets
-                      `new-password` for a masked field, and "off" — which this
-                      call site used to pass — is the one value browsers ignore
-                      on one. Passing it back re-opens the bug. */}
-                  <Input
-                    id={`cred-${entry.source}-${f.key}`}
-                    name={`cred_${f.key}`}
-                    type="password"
-                    placeholder={f.placeholder ?? ""}
-                  />
-                </div>
-              ))}
-              <SubmitButton variant="secondary" pendingLabel="Saving…" className="w-full">
-                Save connection
-              </SubmitButton>
-              {/* A source with no credentials to enter (Custom Webhook) gives no
-                  clue that saving is only step one — the URL it mints is the
-                  whole product, and it appears above once the row exists.
-
-                  It points at the LIST rather than at the heading it used to
-                  name: the "Your connections" eyebrow is gone, and a note
-                  directing someone to a heading that no longer exists is worse
-                  than no note. The button it names is still exactly right. */}
-              {entry.credentialFields.length === 0 && entry.instant && (
-                <p className="text-tiny text-muted-foreground">
-                  Saving creates the inbound URL. Your new connection appears at the top of this page — open{" "}
-                  <span className="font-semibold text-foreground">Webhook URL</span> on that row and point any app at it.
-                </p>
-              )}
-            </form>
-          </details>
-        )}
-      </div>
-    </Card>
+      ))}
+      {/* A source with no credentials to enter (Custom Webhook) gives no clue
+          that saving is only step one — the URL it mints is the whole product,
+          and it appears on the row this creates. It names MANAGE now, because
+          that is where the row it is describing lives. */}
+      {entry.credentialFields.length === 0 && entry.instant && (
+        <p className="text-xs text-muted-foreground">
+          Saving creates the inbound URL. Find the new connection under{" "}
+          <span className="font-semibold text-foreground">Manage</span>, open{" "}
+          <span className="font-semibold text-foreground">Webhook URL</span> on its row, and point any app at it.
+        </p>
+      )}
+      {/* THE PAGE'S ONE YELLOW, and the sheet's rule for it exactly: the hero is
+          the single act a screen exists for, at most once per screen. Nothing
+          behind this dialog is yellow, and the seven Connect buttons in the
+          catalogue must not be — seven heroes is a menu, and the accent would be
+          spent on a list of choices. Here there is one button and one act, and
+          it is the act the whole page exists for. Black ink, because the yellow
+          is far too bright to carry white. */}
+      <SubmitButton variant="yellow" pendingLabel="Connecting…" className="w-full">
+        Connect {entry.name}
+      </SubmitButton>
+    </form>
   );
 }

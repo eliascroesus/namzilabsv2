@@ -104,19 +104,29 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
   const unpublished = await unpublishedFlowIds(getReadDb(), orgId).catch(() => new Set<string>());
 
   /**
-   * ONE ACT, TWO PLACES, AND ONLY ONE OF THEM IS THE HERO.
+   * ONE ACT, TWO PLACES, AND THE SAME BUTTON IN BOTH — BLACK, NOT NEON.
    *
-   * "Create flow" is the single thing this screen exists to let you do, which
-   * on this sheet is the definition of the YELLOW button — and the sheet's rule
-   * is at most one per screen, because the scarcity IS the meaning. The empty
-   * state repeats the same action a few hundred pixels below the header, so it
-   * takes the workhorse black: two neon buttons on one page would halve the
-   * value of the first without adding an affordance that is not already there.
+   * The header's Create was the yellow hero on the argument that "Create flow"
+   * is the single thing this screen exists to let you do. That argument holds
+   * for a landing page and it does not hold here. The sheet's rule is at most
+   * one yellow per screen because the scarcity IS the meaning, and the thing
+   * that makes it mean anything is that the yellow is the LOUDEST thing in
+   * view. On a page whose whole body is a list you came to read — a list where
+   * the violet already marks the row under your pointer and every connector
+   * chip carries its vendor's colour — a neon block in the top right is the
+   * loudest thing on a screen that has plenty to say, competing with the
+   * content rather than crowning it.
+   *
+   * So it takes the workhorse black, which is what the sheet gives to the
+   * default action everywhere else, and the yellow stays where it is worth
+   * something. Both call sites are the same button now: two blacks on one page
+   * is the workhorse doing its job, which is the one colour the ratio rule
+   * expects to see more than once.
    */
-  const createButton = (variant: "yellow" | "default") =>
+  const createButton = () =>
     canCreate ? (
       <form action={createFlowAction}>
-        <Button variant={variant}>
+        <Button>
           <Plus size={16} strokeWidth={2} />
           Create flow
         </Button>
@@ -180,7 +190,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
               Flows
             </span>
           }
-          actions={createButton("yellow")}
+          actions={createButton()}
         />
 
         {flowsUnavailable ? (
@@ -200,7 +210,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
                 Press <span className="font-semibold text-foreground">Create flow</span> to build one step by step.
               </>
             }
-            action={createButton("default")}
+            action={createButton()}
           />
         ) : (
           <FlowList flows={flows.map((f) => summarize(f, unpublished))} />
