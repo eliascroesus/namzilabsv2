@@ -157,7 +157,14 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
               app's foreground is ink-50. This is the one heading in the product
               with nothing above it to defer to — see the token's own note in
               globals.css — and it is the role that follows the PAGE rather than
-              the card, which is what a page title sits on. */}
+              the card, which is what a page title sits on.
+
+              30px (`display-sm`), UP FROM 24. The title shares its row with the
+              period control, which is a 40px band, and at 24px it read as a
+              caption beside it rather than as the page's name. The scale has no
+              32px step and inventing one to match a guess would put a tenth
+              size in a closed set; 30 is the neighbour that exists and it
+              carries the row. */}
           {/* NO `leading-5`. The Figma reports a 20px line-height on a 24px title,
               which is a Figma artefact — it measures the single line it drew.
               Applied literally it sets 20px leading on 24px type, so the moment
@@ -165,7 +172,7 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
               the product uses this, and a long metric name inside `width="narrow"`
               wraps at ordinary widths. The token's own 32px is the right answer
               and the comp cannot tell the difference on one line. */}
-          <h1 className="font-display text-display-xs font-semibold text-ground-ink">{title}</h1>
+          <h1 className="font-display text-display-sm font-semibold text-ground-ink">{title}</h1>
           {/* 14px, DOWN FROM 16, and the old argument for 16 is retired rather
               than overruled by taste. It said a lede has to be 16px "to read
               as a sentence rather than as a caption of the heading" — true when

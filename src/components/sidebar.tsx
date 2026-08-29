@@ -524,8 +524,8 @@ export function Sidebar({ hide }: { hide?: string[] }) {
             className={cn(
               SLOT,
               "transition-colors duration-(--duration-fast) ease-(--ease-standard)",
-              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:bg-accent-yellow group-hover/rail:px-1",
-              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:bg-accent-yellow group-focus-within/rail:px-1",
+              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:bg-accent-yellow group-hover/rail:px-1",
+              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:bg-accent-yellow group-focus-within/rail:px-1",
               "hover:brightness-95",
             )}
           >
@@ -534,13 +534,28 @@ export function Sidebar({ hide }: { hide?: string[] }) {
               className={cn(
                 ICON_COL,
                 "rounded-control border border-chrome-line bg-accent-yellow text-chrome-add-ink transition-colors duration-(--duration-fast) ease-(--ease-standard)",
-                "group-hover/rail:border-transparent group-hover/rail:bg-transparent",
-                "group-focus-within/rail:border-transparent group-focus-within/rail:bg-transparent",
+                /* THE "+" LEAVES WHEN THE WORDS ARRIVE. Collapsed, the glyph IS
+                   the control — it is the only thing a 70px rail can say.
+                   Expanded, the row reads "New flow" in full, and a plus beside
+                   those two words is the same instruction given twice. So the
+                   chip is removed from the layout entirely rather than made
+                   transparent: leaving a 40px invisible column in place would
+                   push the label off the button's centre, which is the one
+                   thing this control has to get right once it is a button. */
+                "group-hover/rail:hidden group-focus-within/rail:hidden",
               )}
             >
               <Plus className="size-4" />
             </span>
-            <RailLabel className="text-chrome-add-ink">New flow</RailLabel>
+            {/* SEMIBOLD, NOT MEDIUM, AND IT IS THE ONE LABEL IN THE RAIL THAT
+                IS. The other seven are nav rows and take `font-medium` like
+                every other destination in the product. This one is a BUTTON —
+                the same button, with the same two words, that the top bar
+                carries at 14px/600. Shipping it at 500 meant the identical
+                control read at two weights depending on which end of the chrome
+                you looked at, which is exactly the drift the kit exists to
+                stop. */}
+            <RailLabel className="font-semibold text-chrome-add-ink">New flow</RailLabel>
           </Link>
 
           {/* THE BELL, AND ITS DOT IS A PROMISE THIS COMMIT CANNOT KEEP.

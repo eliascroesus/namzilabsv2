@@ -966,7 +966,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               canEdit={access.can("create_flows")}
             />
           }
-          lede="Every published metric in this workspace."
           actions={
             /* ── THE PERIOD CONTROL ────────────────────────────────────────
                THE SAME SIX LINKS, ON THE OTHER SIDE OF THE PAGE. This is the
