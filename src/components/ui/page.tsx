@@ -141,7 +141,15 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
             top margin. 8px, stated once, so the pair sets as one object and
             a page with no lede is not a title carrying an invisible `mt-1.5`
             underneath it. */}
-        <div className="flex min-w-0 flex-col gap-2">
+        {/* NO `min-w-0`, AND THAT IS THE FIX FOR "Vie…".
+            This row wraps. With `min-w-0` the title block was allowed to
+            shrink below its own content, so a 520px period control on the
+            right squeezed the h1 down to a few characters and the `truncate`
+            on the span did the rest — "View 2" rendered as "Vie…" on a
+            1440px screen with an entire empty row beneath it. Flex would
+            rather shrink a shrinkable item than wrap. Take the permission
+            away and it wraps instead, which is what the wrap was for. */}
+        <div className="flex flex-col gap-2">
           {/* THE TITLE IS 24px, WHICH IS THE STEP THE KIT ALREADY NAMES FOR IT.
               It was set at `text-xl` — 20px — while `/design` printed
               `display-xs` beside the words "Page titles (PageHeader)", so the

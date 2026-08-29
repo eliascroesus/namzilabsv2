@@ -524,8 +524,8 @@ export function Sidebar({ hide }: { hide?: string[] }) {
             className={cn(
               SLOT,
               "transition-colors duration-(--duration-fast) ease-(--ease-standard)",
-              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:bg-accent-yellow group-hover/rail:px-1",
-              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:bg-accent-yellow group-focus-within/rail:px-1",
+              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:rounded-full group-hover/rail:bg-accent-yellow group-hover/rail:px-1",
+              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:rounded-full group-focus-within/rail:bg-accent-yellow group-focus-within/rail:px-1",
               "hover:brightness-95",
             )}
           >
@@ -533,7 +533,7 @@ export function Sidebar({ hide }: { hide?: string[] }) {
               aria-hidden
               className={cn(
                 ICON_COL,
-                "rounded-control border border-chrome-line bg-accent-yellow text-chrome-add-ink transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+                "rounded-control border border-chrome-line bg-accent-yellow text-neutral-900 transition-colors duration-(--duration-fast) ease-(--ease-standard)",
                 /* THE "+" LEAVES WHEN THE WORDS ARRIVE. Collapsed, the glyph IS
                    the control — it is the only thing a 70px rail can say.
                    Expanded, the row reads "New flow" in full, and a plus beside
@@ -555,7 +555,7 @@ export function Sidebar({ hide }: { hide?: string[] }) {
                 control read at two weights depending on which end of the chrome
                 you looked at, which is exactly the drift the kit exists to
                 stop. */}
-            <RailLabel className="font-semibold text-chrome-add-ink">New flow</RailLabel>
+            <RailLabel className="font-semibold text-neutral-900">New flow</RailLabel>
           </Link>
 
           {/* THE BELL, AND ITS DOT IS A PROMISE THIS COMMIT CANNOT KEEP.
