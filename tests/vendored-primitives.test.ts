@@ -107,3 +107,64 @@ describe("the Button is still safe to render on the server", () => {
     expect(src).not.toMatch(/from "radix-ui"/);
   });
 });
+
+/**
+ * WHITE INK NEEDS A FILL UNDERNEATH IT.
+ *
+ * `WorkspaceChip` drew its initials in `text-white` because it sat on a
+ * saturated hue derived from the workspace name. When those six coloured rail
+ * chips were removed, the fill went and the ink stayed — white-on-white at all
+ * five call sites, in the light theme only. The letters were still in the DOM
+ * and still announced, so nothing failed; dark mode rendered them perfectly,
+ * which is precisely why it survived a review.
+ *
+ * That is the shape of the bug worth pinning: an ink chosen FOR a background
+ * outliving the background. Checked on the one component it actually bit,
+ * rather than as a repo-wide rule — a parent can legitimately supply the fill,
+ * so a general scan would be mostly false positives and would be muted within
+ * a week.
+ */
+describe("the workspace chip carries its own fill", () => {
+  const src = readFileSync(join(__dirname, "..", "src/components/sidebar.tsx"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+
+  const chip = src.match(/export function WorkspaceChip[\s\S]*?\n\}/)?.[0] ?? "";
+
+  it("finds the component (a parse matching nothing would pass everything)", () => {
+    expect(chip).toMatch(/rounded-control/);
+  });
+
+  it("names a background, so its ink has something to sit on", () => {
+    expect(chip, "WorkspaceChip sets an ink with no fill — invisible on a light sidebar").toMatch(/\bbg-[a-z]/);
+  });
+
+  it("takes its ink from a role, not from a literal white", () => {
+    // `text-white` is only correct on a fill that is guaranteed dark in BOTH
+    // themes. `text-background` inverts with the theme; the literal does not.
+    expect(chip).not.toMatch(/\btext-white\b/);
+  });
+
+  /**
+   * THE SAME BUG, A SECOND TIME, TWENTY LINES AWAY.
+   *
+   * The active destination's icon chip was `bg-background/15 text-background` —
+   * a VEIL of the row's own ink, which is a sound idea while the active row is
+   * a solid violet fill. That fill became `bg-muted`, and a 15% wash of the
+   * page colour over the page colour is the page colour: the glyph measured
+   * 1.41:1 in light and 1.14:1 in dark, against the 3:1 non-text needs.
+   *
+   * Both bugs are one shape — an ink specified FOR a fill, outliving it — and
+   * both were invisible to every existing gate because the markup never
+   * changed. So the rule is spelled as the thing that actually went wrong: the
+   * ACTIVE branch may not paint its fill from a translucent role.
+   */
+  it("gives the active row's icon chip an opaque fill", () => {
+    const nav = src.match(/active \?[^,]+,/)?.[0] ?? "";
+    expect(nav, "the active/inactive chip ternary moved").toMatch(/active \?/);
+    expect(
+      nav,
+      "a translucent wash of a role over a row painted in a near-identical role is invisible",
+    ).not.toMatch(/bg-(background|foreground|muted|card)\/\d+/);
+  });
+});

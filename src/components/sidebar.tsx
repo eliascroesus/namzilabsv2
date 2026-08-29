@@ -92,19 +92,30 @@ const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; se
 ];
 
 /**
- * The workspace's initials, on its derived colour.
+ * The workspace's initials, on the sheet's deep black.
  *
  * EXPORTED because the account menu lists the OTHER workspaces, and a switcher
  * whose rows are bare text beside a chipped trigger is two spellings of one
- * object. The colour is derived from the name (above), so a second call site
- * cannot draw the same workspace in a different hue — but only while both call
- * sites go through this component rather than re-deriving it.
+ * object.
+ *
+ * IT USED TO CARRY A HUE DERIVED FROM THE NAME, AND THE FILL LEFT WITHOUT THE
+ * INK. When the six coloured rail chips were removed — they were the "different
+ * icon colors" that read as weird — `workspaceAccent()` went with them and this
+ * kept `text-white`, which had been white BECAUSE it sat on a saturated fill.
+ * On a white sidebar that is white-on-white: the initials were still in the DOM,
+ * still announced, and invisible at all five call sites in the light theme. Only
+ * dark mode ever showed them, which is exactly why it survived review.
+ *
+ * `bg-foreground text-background` is the fix and also the right answer: it is
+ * the top bar's own mark recipe, so the two first objects in the two chrome
+ * columns are now the same object, and it inverts with the theme instead of
+ * betting on the surface behind it.
  */
 export function WorkspaceChip({ name, className }: { name: string; className?: string }) {
   return (
     <span
       className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-control text-xs font-semibold text-white",
+        "flex size-8 shrink-0 items-center justify-center rounded-control bg-foreground text-xs font-semibold text-background",
         className,
       )}
       aria-hidden
@@ -303,16 +314,25 @@ export function Sidebar({
                           // air, which is the shape of a list that was resized
                           // without being redrawn.
                           "flex size-7 shrink-0 items-center justify-center rounded-control transition-colors",
-                          // ON THE VIOLET ROW THE CHIP BECOMES A VEIL, and it
-                          // has to. It carried its destination's colour at full
-                          // strength there, which put a violet chip on a violet
-                          // fill — Dashboard's vanished outright — and an orange
-                          // one on it next door: six chips that agree at rest
-                          // and disagree at the one moment the row is loud. A
-                          // wash of the row's own ink is one treatment for all
-                          // six, and it is the fill, not the chip, that says
-                          // where you are.
-                          active ? "bg-background/15 text-background" : "bg-muted text-muted-foreground",
+                          // THE ACTIVE CHIP IS THE SHEET'S BLACK, and it is the
+                          // second thing here that outlived its own background.
+                          //
+                          // It was `bg-background/15 text-background`: a veil of
+                          // the row's ink, which worked while the active row was
+                          // a solid VIOLET fill. That fill is now `bg-muted`, so
+                          // the veil composites to within a few points of the row
+                          // it sits on and the glyph is drawn in the page colour
+                          // on top of it — measured at 1.41:1 in light and 1.14:1
+                          // in dark, against the 3:1 that non-text needs. The
+                          // icon of the destination you are STANDING IN was the
+                          // one icon in the rail nobody could see.
+                          //
+                          // Inverting it is the fix and the sheet's own move: the
+                          // row says where you are with a wash, the chip says it
+                          // again in deep black, and both invert with the theme
+                          // rather than betting on the surface behind them. Same
+                          // recipe as the workspace chip and the top bar's mark.
+                          active ? "bg-foreground text-background" : "bg-muted text-muted-foreground",
                         )}
                       >
                         <Icon className="size-4" />
