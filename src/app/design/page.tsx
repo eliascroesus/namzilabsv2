@@ -212,6 +212,17 @@ export default function DesignPage() {
     // swatches ARE surfaces. Rendering white cards on the warm page they are
     // meant to float over would make the samples argue with the sample board.
     <AppFrame
+      /* Six specimen views, so the rail's nested list under Dashboard — and its
+         "Show all" fold past five — can be looked at rather than reasoned about.
+         The kit page is the only public route that mounts the real frame. */
+      views={[
+        { id: null, name: "Dashboard", pos: "a", kind: "groups", isDefault: true },
+        { id: "v1", name: "Revenue", pos: "b", kind: "groups" },
+        { id: "v2", name: "Pipeline health", pos: "c", kind: "custom" },
+        { id: "v3", name: "Team", pos: "d", kind: "groups" },
+        { id: "v4", name: "Weekly review", pos: "e", kind: "custom" },
+        { id: "v5", name: "Ops", pos: "f", kind: "groups" },
+      ]}
       surface="overflow-y-auto bg-card"
       account={{
         initials: "EC",

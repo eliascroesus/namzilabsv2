@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Bell, CalendarDays, LayoutDashboard, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme";
 import { cn } from "@/lib/utils";
+import type { BoardView } from "@/lib/board/types";
 
 /**
  * THE ICON RAIL — 70px at rest, 240px under the pointer, and the left half of
@@ -264,10 +266,106 @@ const SLOT = "group flex h-10 w-full shrink-0 items-center justify-start gap-3 r
  */
 const GUTTER = "px-[15px]";
 
-export function Sidebar({ hide }: { hide?: string[] }) {
+export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardView[] }) {
   const pathname = usePathname();
+  const params = useSearchParams();
+  /**
+   * "Show all" is the only state in this rail, and it is deliberately not
+   * persisted. The rail opens on hover and closes again; a fold the customer set
+   * three days ago on a different machine is not a fact worth storing, and
+   * restoring it would make the column open at two different heights depending
+   * on history nobody can see.
+   */
+  const [allViews, setAllViews] = useState(false);
+  /**
+   * The strip's own order, and the same comparator the board uses. An adopted
+   * default sorts first because its key was minted to; a view dragged elsewhere
+   * keeps where it was put.
+   */
+  const ordered = [...views]
+    .sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0))
+    /**
+     * THE DEFAULT BOARD IS ALREADY THE ROW ABOVE, so it is not repeated beneath
+     * it — the nav's "Dashboard" and the default view are the same destination,
+     * and listing both rendered "Dashboard" twice, nested under itself.
+     *
+     * Filtered on the NAME rather than on `isDefault`, because the default board
+     * can be renamed now. Left as "Dashboard" it is the parent row and nothing
+     * is lost by hiding it; renamed to "Sales" it is a distinct name the rail
+     * would otherwise never show, so it comes back as a child.
+     */
+    .filter((v) => !((v.isDefault || v.id == null) && v.name === "Dashboard"));
+  const NESTED_CAP = 5;
+  const shown = allViews ? ordered : ordered.slice(0, NESTED_CAP);
+  const activeView = params.get("view");
+  /** The default board is `?view=` absent — and, once adopted, its own row. */
+  const onDashboard = pathname === "/dashboard";
   const items = NAV.filter((i) => !hide?.includes(i.label));
   const sections = [...new Set(items.map((i) => i.section))];
+
+  /**
+   * THE VIEWS, NESTED UNDER DASHBOARD — Notion's shape, and Notion's rule that a
+   * page's children live under it in the sidebar rather than in a second menu.
+   *
+   * IT COLLAPSES BY HEIGHT, NOT BY OPACITY, and that is the one structural
+   * difference from every other label in this rail. The rest use `REVEAL` —
+   * `opacity-0` that fades in on hover — because they sit BESIDE an icon that is
+   * always there, so they cost no vertical space when invisible. These rows have
+   * no icon and are their own lines: left at opacity zero they would push
+   * Calendar, Activity and the whole BUILD section down the column at 70px, to
+   * make room for words nobody can see. So the wrapper animates its grid row
+   * from `0fr` to `1fr`, which collapses to nothing and needs no magic
+   * max-height.
+   *
+   * `group-focus-within/rail` matters as much as the hover: a keyboard user
+   * tabbing into a view link opens the column rather than moving focus into a
+   * region of zero height.
+   */
+  const ViewList = () => (
+    <div
+      className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-(--duration-base) ease-(--ease-standard) group-hover/rail:grid-rows-[1fr] group-focus-within/rail:grid-rows-[1fr]"
+    >
+      <div className="overflow-hidden">
+        {shown.map((v) => {
+          /* The default board is the one with no `?view=` in the URL — and once
+             it has been adopted it is an ordinary row with an id like any other,
+             so both spellings have to resolve to the same tab. */
+          const isDefault = v.isDefault || v.id == null;
+          const href = v.id && !v.isDefault ? `/dashboard?view=${v.id}` : "/dashboard";
+          const on = onDashboard && (isDefault ? !activeView : activeView === v.id);
+          return (
+            <Link
+              key={v.id ?? "default"}
+              href={href}
+              aria-current={on ? "page" : undefined}
+              /* Indented to the icon column's own axis, so the names line up
+                 under Dashboard's word rather than under its chip. */
+              className={cn(
+                "flex h-8 items-center rounded-control pl-[52px] pr-2 text-sm transition-colors duration-(--duration-fast)",
+                on ? "bg-ink-800 font-medium text-ink-50" : "text-ink-400 hover:bg-ink-900 hover:text-ink-50",
+              )}
+            >
+              <span className="truncate">{v.name}</span>
+            </Link>
+          );
+        })}
+        {ordered.length > NESTED_CAP && (
+          /* A count rather than a bare "Show all": the number is the reason to
+             press it, and without it the row asks you to guess how much is
+             hidden. It is a real button because it changes nothing but this
+             column — no URL, no navigation, nothing to share. */
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setAllViews((v) => !v)}
+            className="h-8 w-full justify-start rounded-control pl-[52px] pr-2 text-xs font-medium text-ink-400 hover:bg-ink-900 hover:text-ink-50 active:bg-ink-900"
+          >
+            {allViews ? "Show less" : `Show all ${ordered.length}`}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     // THE FOOTPRINT, AND ONLY THE FOOTPRINT. This element is 70px in every
@@ -446,16 +544,19 @@ export function Sidebar({ hide }: { hide?: string[] }) {
                        printed name cannot drift. It stays announced at 70px
                        because clipping and `opacity: 0` hide a thing from the
                        eye and not from the tree. */
-                    <Link key={href} href={href} aria-current={active ? "page" : undefined} className={SLOT}>
-                      <span className={ICON_COL}>
-                        <RailChip tone={active ? "active" : "rest"}>
-                          <Icon className="size-4" />
-                        </RailChip>
-                      </span>
-                      <RailLabel className={active ? "text-ink-50" : "text-ink-400 group-hover:text-ink-50"}>
-                        {label}
-                      </RailLabel>
-                    </Link>
+                    <Fragment key={href}>
+                      <Link href={href} aria-current={active ? "page" : undefined} className={SLOT}>
+                        <span className={ICON_COL}>
+                          <RailChip tone={active ? "active" : "rest"}>
+                            <Icon className="size-4" />
+                          </RailChip>
+                        </span>
+                        <RailLabel className={active ? "text-ink-50" : "text-ink-400 group-hover:text-ink-50"}>
+                          {label}
+                        </RailLabel>
+                      </Link>
+                      {label === "Dashboard" && ordered.length > 0 && <ViewList />}
+                    </Fragment>
                   );
                 })}
             </div>

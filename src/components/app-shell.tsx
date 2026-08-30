@@ -6,6 +6,7 @@ import { getDb } from "@/db/client";
 import { requestAccess } from "@/lib/auth";
 import { connections, flows } from "@/db/schema";
 import { AppFrame } from "./app-frame";
+import { navViewsOrNone } from "@/lib/board/nav-views";
 import { OrgSwitcher } from "./org-switcher";
 import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/actions";
@@ -87,6 +88,17 @@ export async function AppShell({
   metricCount?: number;
   children: React.ReactNode;
 }) {
+  /**
+   * STARTED BEFORE THE AWAIT BELOW, so it overlaps rather than queues.
+   *
+   * The note on `metricCount` explains why this shell is the wrong place to
+   * resolve a page's data, and it still is — but the rail's view list is not a
+   * page's data, it is navigation, needed on every route. `navViews` is
+   * `cache()`d per request, so on the dashboard this awaits the promise that
+   * page has already started and costs nothing; everywhere else it is one narrow
+   * read that runs alongside the membership lookup instead of after it.
+   */
+  const railViewsP = navViewsOrNone(orgId);
   const memberships = await listMemberships(userId);
   // Dedupe by org id (a duplicated membership row must never render twice).
   const seen = new Set<string>();
@@ -149,6 +161,7 @@ export async function AppShell({
       hide={hide}
       workspace={workspace}
       metricCount={metricCount}
+      views={await railViewsP}
       account={{
         initials,
         // Rendered on the server, opened by the client rail: the light

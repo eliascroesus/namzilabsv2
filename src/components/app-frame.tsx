@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
 import { cn } from "@/lib/utils";
+import type { BoardView } from "@/lib/board/types";
 
 /**
  * THE FRAME: three surfaces and two hairlines, and nothing else.
@@ -29,6 +30,7 @@ export function AppFrame({
   workspace,
   firstName,
   metricCount,
+  views,
   surface,
   hide,
   ownsMain = false,
@@ -59,6 +61,15 @@ export function AppFrame({
    * reason). Left undefined, the ring stands down — see `TopBar`.
    */
   metricCount?: number;
+  /**
+   * The workspace's dashboard views, for the rail's nested list under Dashboard.
+   *
+   * A PASS-THROUGH, like `metricCount` — but resolved in the shell rather than
+   * by each page, because unlike a metric count this is NAVIGATION and has to be
+   * the same on every route. `navViews` is per-request cached so the dashboard
+   * does not pay for it twice; see that file.
+   */
+  views?: BoardView[];
   surface: string;
   /** Rail items (by label) this viewer shouldn't see; AppShell decides. */
   hide?: string[];
@@ -131,7 +142,7 @@ export function AppFrame({
           every reference puts them. Passing them anyway would be two props a
           component ignores, which is how a signature stops describing what a
           thing actually needs. */}
-      <Sidebar hide={hide} />
+      <Sidebar hide={hide} views={views} />
       {/* The top bar belongs to the CONTENT column, not the viewport: the
           sidebar runs full height beside it, exactly as it does in Miro and
           Notion. A bar spanning both would put the workspace switcher above

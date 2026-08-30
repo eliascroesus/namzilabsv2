@@ -21,7 +21,8 @@ import { CustomBoard, type CanvasTile } from "./custom-board";
 import type { CustomTileSource } from "@/components/custom-tile";
 import { CHARTS, blockKindOf, chartsFor, shapeOfClassic, shapeOfTile } from "@/lib/board/charts";
 import { parseTileConfig } from "@/lib/board/tile-config";
-import { listBoardGroups, listBoardViews, listTilePlacements } from "@/lib/board/store";
+import { listBoardGroups, listTilePlacements } from "@/lib/board/store";
+import { navViews } from "@/lib/board/nav-views";
 import { listBoardTiles } from "@/lib/board/tiles-store";
 import {
   canvasRowFate,
@@ -207,7 +208,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         .from(flows)
         .where(eq(flows.orgId, orgId))
         .then((r) => Number(r[0]?.c ?? 0)),
-      listBoardViews(db, orgId),
+      // THE SAME PROMISE THE RAIL AWAITS. `navViews` is `cache()`d per request,
+      // so the sidebar's nested view list costs this page nothing — see its own
+      // note for why the shell cannot simply be handed the answer.
+      navViews(orgId),
     ]);
     /**
      * A VIEW THE WORKSPACE DOES NOT HAVE IS THE DEFAULT VIEW, not an error. A
