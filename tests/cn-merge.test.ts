@@ -71,6 +71,23 @@ describe("cn keeps a colour when a custom type token follows it", () => {
     expect(out.split(/\s+/)).not.toContain("text-sm");
   });
 
+  /**
+   * A LATER FONT-SIZE DELETES AN EARLIER `leading-*`, AND THAT COST A FIX.
+   *
+   * tailwind-merge knows a font-size utility can carry a line-height, so it
+   * treats `text-display-sm` as overriding a `leading-none` written before it.
+   * The page title passed exactly that pair in exactly that order, the class
+   * never reached the DOM, and its hover wash stayed 38px tall around 30px
+   * glyphs through three separate attempts to fix it.
+   *
+   * Pinned in BOTH directions so the ordering is a rule rather than a folk
+   * memory: before the size it is dropped, after it it survives.
+   */
+  it("a font-size deletes a line-height written before it, and not one written after", () => {
+    expect(cn("leading-none text-display-sm")).toBe("text-display-sm");
+    expect(cn("text-display-sm leading-none")).toBe("text-display-sm leading-none");
+  });
+
   it("still lets one colour win over another", () => {
     expect(cn("text-foreground", "text-muted-foreground")).toBe("text-muted-foreground");
   });

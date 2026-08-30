@@ -407,6 +407,14 @@ export function TopBar({
           whose buttons invert while its ground does not is a bar with two
           materials in it. */}
       <div className="flex shrink-0 items-center gap-4">
+        {/* A SECOND PORTAL, FOR STATE RATHER THAN FOR ACTS.
+            `#topbar-slot` above holds the builder's toolbar and sits in the
+            bar's centre column. A save state is not a toolbar control — it is a
+            fact about the session, and it belongs at the edge with the other
+            things that are about YOU rather than about the page. So the builder
+            portals it here instead, first in this group, and it renders nothing
+            at all on every route that has no save state to report. */}
+        <div id="topbar-status" className="flex shrink-0 items-center empty:hidden" />
         {/* `sm` — 36px in a 70px band. The bar is furniture; the page is the
             content, and a 44px default here would put the chrome's controls at
             the same weight as the page's own. */}

@@ -705,13 +705,23 @@ export function ViewTitle({
        * tailwind-merge did not know the kit's radius names and kept both — so a
        * wrapped title rendered inside a grey circle. See lib/utils.ts.
        */
-      /* `leading-none` IS WHAT MAKES THE WASH HUG THE WORD.
-         `text-display-sm` carries the token's own 38px line-height, drawn for a
-         heading with air around it — so the hover box was 38px tall around 30px
-         glyphs before its padding was even counted, and read as a loose grey
-         slab the title happened to be sitting in. Collapsing the line box to
-         the type size lets `py-1` mean what it says. */
-      className={`-mx-2 h-auto max-w-full shrink-0 justify-start whitespace-nowrap rounded-control px-2 py-1 text-left leading-none ${TITLE_TYPE} text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
+      /**
+       * `leading-none` AFTER `${TITLE_TYPE}`, AND THE ORDER IS THE WHOLE FIX.
+       *
+       * The wash was 38px tall around 30px glyphs before its padding was even
+       * counted, because `text-display-sm` carries the token's own 38px
+       * line-height. `leading-none` was already being passed to fix that — and
+       * tailwind-merge was DELETING it, because a registered font-size can set
+       * line-height too, so it treats a later `text-*` as overriding an earlier
+       * `leading-*`. The class never reached the DOM. Dumped from `cn()` rather
+       * than reasoned about, and pinned in tests/cn-merge.test.ts.
+       *
+       * Nothing here is fixed-width: the button is `inline-flex`, so it is
+       * shrink-to-fit, and `max-w-full` only stops it outgrowing the header.
+       * With the line box collapsed, the wash is the words plus 8px either side
+       * and 4px above and below.
+       */
+      className={`-mx-2 h-auto max-w-full shrink-0 justify-start whitespace-nowrap rounded-control px-2 py-1 text-left ${TITLE_TYPE} leading-none text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
     >
       {shown}
     </Button>

@@ -308,7 +308,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
   /** Transient notice: a step delete (with Undo), or a flow-action error (without). */
   const [toast, setToast] = useState<{ message: string; undoable?: boolean } | null>(null);
   /** Running a whole flow: which step number we are on, out of how many. */
-  const [runAll, setRunAll] = useState<{ at: number; of: number } | null>(null);
 
   const past = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
   const future = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
@@ -1886,37 +1885,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       }),
     [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId, metricByNode, refLineById, supersededById, dragging, dropSlot, splitGroupIds],
   );
-  /**
-   * RUN THE WHOLE FLOW, top to bottom.
-   *
-   * Every Test was per-step, and changing step 1 correctly marks every step
-   * below it dirty — so seeing the effect of one edit meant opening six panels
-   * and pressing six buttons. There was also no way at all to ask "what does
-   * this metric say right now?" without opening the last step, or publishing.
-   *
-   * Sequential on purpose: these are real queries over real data, and firing
-   * six at once would spike the very provider budget the sync engine spends
-   * the rest of its life protecting. In step order, so the canvas reads as a
-   * progress display — which is the moment the flow explains itself.
-   *
-   * Steps that need setup are SKIPPED rather than run: they would fail, and a
-   * red Error badge on a step whose only problem is being unfinished replaces
-   * a true amber with a false red.
-   */
-  const testAll = useCallback(async () => {
-    const runnable = displayNodes
-      .filter((n) => n.type !== "paths" && n.data.status !== "setup")
-      .sort((a, b) => (stepNoById.get(a.id) ?? 999) - (stepNoById.get(b.id) ?? 999));
-    if (runnable.length === 0) return;
-    for (let i = 0; i < runnable.length; i++) {
-      setRunAll({ at: i + 1, of: runnable.length });
-      setSelectedId(runnable[i].id);
-      await testNode(runnable[i].id);
-      // A cancel during a run-all stops the whole run, not just this step.
-      if (cancelTestRef.current) break;
-    }
-    setRunAll(null);
-  }, [displayNodes, stepNoById, testNode]);
 
   // Only the flow's chain edges are drawn — a compare step's number references are
   // picked in the panel and never rendered as lines (they'd cut across the canvas).
@@ -1959,10 +1927,6 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
         onRetrySave={saveNow}
         onDuplicate={duplicateFlow}
         onDelete={deleteFlow}
-        onTestAll={testAll}
-        onStopTestAll={cancelTest}
-        runAll={runAll}
-        showTestAll={!empty}
         publishedVersion={publishState.version}
         isPublished={publishState.status === "published"}
         unpublished={unpublished}

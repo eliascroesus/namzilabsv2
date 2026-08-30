@@ -8,11 +8,9 @@ import {
   Copy,
   Maximize2,
   MoreVertical,
-  Play,
   Redo2,
   Rocket,
   SlidersHorizontal,
-  Square,
   Trash2,
   Undo2,
   ZoomIn,
@@ -104,6 +102,20 @@ function TopBarPortal({ children }: { children: React.ReactNode }) {
   return slot ? createPortal(children, slot) : null;
 }
 
+/**
+ * THE SAVE STATE GOES TO THE BAR'S RIGHT EDGE, not to the toolbar's.
+ *
+ * It is a fact about the editing SESSION rather than a control on the flow, so
+ * it belongs with the things that are about you — Invite, New flow, the bell —
+ * and not among the acts. `#topbar-status` is its own slot for that reason;
+ * routes with nothing to report leave it empty and it collapses.
+ */
+function TopBarStatusPortal({ children }: { children: React.ReactNode }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => setSlot(document.getElementById("topbar-status")), []);
+  return slot ? createPortal(children, slot) : null;
+}
+
 function Island({ className = "", children }: { className?: string; children: React.ReactNode }) {
   return (
     <div className={`pointer-events-auto flex items-center gap-1 rounded-control border border-border bg-card p-[7px] shadow-surface ${className}`}>
@@ -163,10 +175,6 @@ export function FlowToolbar({
   onRetrySave,
   onDuplicate,
   onDelete,
-  onTestAll,
-  onStopTestAll,
-  runAll,
-  showTestAll,
   publishedVersion,
   isPublished,
   unpublished,
@@ -189,10 +197,6 @@ export function FlowToolbar({
   onRetrySave: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  onTestAll: () => void;
-  onStopTestAll: () => void;
-  runAll: { at: number; of: number } | null;
-  showTestAll: boolean;
   publishedVersion: number | null;
   isPublished: boolean;
   /**
@@ -295,25 +299,6 @@ export function FlowToolbar({
                 {shipping ? <Rocket /> : <SlidersHorizontal />}
                 {shipping ? "Review & publish" : "Edit output"}
               </Button>
-              {showTestAll && (
-                <Button
-                  variant="secondary"
-                  onClick={runAll ? onStopTestAll : onTestAll}
-                  title={runAll ? "Stop the run" : "Run every step, top to bottom"}
-                  aria-label={runAll ? "Stop the run" : "Test flow"}
-                  size={runAll ? "sm" : "iconSm"}
-                  className="shrink-0"
-                >
-                  {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
-                  {/* Icon only at rest — the play glyph IS the word. Quiet grey
-                      rather than a colour: a test run is a rehearsal, and the one
-                      saturated thing in this bar should be the act that actually
-                      ships. While a run is going it earns its words back:
-                      "Stop · 2/6" is a receipt, and dropping the count to stay
-                      square would be hiding progress to keep a shape. */}
-                  {runAll ? `Stop · ${runAll.at}/${runAll.of}` : null}
-                </Button>
-              )}
               <Switch
                 checked={isPublished}
                 disabled={publishedVersion == null || togglingEnabled}
@@ -339,40 +324,42 @@ export function FlowToolbar({
                 grid's auto column keeps it centred no matter how long it gets
                 or what appears either side of it. */}
             <span className="flex min-w-0 items-center justify-center">
-              <span className="flex min-w-0 items-center">
+              <span className="-mx-1.5 flex min-w-0 items-center">
                 {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
                     At the old fixed width a long name was cut mid-glyph, hard against
                     the padding with no ellipsis — while 87px of empty canvas sat to
                     its right and the wrapper's own max-width was never reached. The
                     floor keeps an empty field clickable; the ceiling keeps this
                     island clear of the one on the right. */}
-                <input
-                  value={name}
-                  onChange={(e) => onRename(e.target.value)}
-                  aria-label="Flow name"
-                  placeholder="Untitled flow"
-                  title={name}
-                  /* `+ 1`, not `+ 2`, and a floor of 10 rather than 13. The
-                     slack is INSIDE the visible box, so every character of it
-                     reads as gap after the name — two of them put ~16px of dead
-                     space between the words and whatever comes next, on top of
-                     the row's own 16px. One is enough to keep a caret at the end
-                     of the text from sitting on the edge. */
-                  style={{ width: `${Math.min(Math.max((name || "Untitled flow").length, 8), 34)}ch` }}
-                  /* 14px and 36px tall, matching the controls either side of
-                     it. At 16px in a row of 14px labels the name was the only
-                     thing in the bar set to its own size.
-                     `-mx-2 px-2` PULLS THE INSET OUT OF THE FLOW. The row is
-                     spaced `gap-4`, and an element that also carries its own
-                     horizontal padding measures that gap from its BOX while the
-                     eye measures it from the WORDS — so the name sat 16 + 10px
-                     from the switch while the pills either side of it sat at a
-                     true 16. The negative margin cancels the inset, so every
-                     boundary in the bar is optically the same, and the hover
-                     wash still has somewhere to be. Same trick the workspace
-                     name and the page title already use. */
-                  className="-mx-1.5 h-9 min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
-                />
+                {/* AN INPUT CANNOT SIZE ITSELF, so a sizer does it.
+                    This carried `style={{ width: `${…}ch` }}` — a FIXED width
+                    computed from the character COUNT. `ch` is the width of "0",
+                    and the interface is set in a proportional face, so the box
+                    was never the width of the words: "Untitled flow" and
+                    "IIIIIIIIIIIII" are thirteen characters and nowhere near the
+                    same size. That is the fixed width behind the box that
+                    refused to hug its text.
+                    The fix is the standard one: an invisible span holding the
+                    same string, in the same font, stacked in the SAME grid cell
+                    as the input. The cell sizes to the span — real, measured
+                    text — and the input fills it. It hugs by construction, at
+                    every length, with no arithmetic to be wrong. */}
+                <span className="inline-grid min-w-0 max-w-full items-center">
+                  <span
+                    aria-hidden
+                    className="invisible col-start-1 row-start-1 whitespace-pre px-1.5 text-sm font-semibold"
+                  >
+                    {name || "Untitled flow"}
+                  </span>
+                  <input
+                    value={name}
+                    onChange={(e) => onRename(e.target.value)}
+                    aria-label="Flow name"
+                    placeholder="Untitled flow"
+                    title={name}
+                    className="col-start-1 row-start-1 h-9 w-full min-w-0 rounded-control border border-transparent bg-transparent px-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
+                  />
+                </span>
               </span>
             </span>
 
@@ -390,19 +377,6 @@ export function FlowToolbar({
                   in the bar that can be wrong about the PRODUCT rather than
                   about the editing session, so it is the only thing here
                   wearing a tone. */}
-              {unpublished && (
-                <StatusPill
-                  tone="warn"
-                  className="shrink-0"
-                  title={
-                    publishedVersion == null
-                      ? "Nothing from this flow is on the dashboard yet"
-                      : "The dashboard is still showing the last published version of this flow"
-                  }
-                >
-                  {publishedVersion == null ? "Not published" : "Changes not live"}
-                </StatusPill>
-              )}
               {/* UNDO AND REDO ARE ON THE CANVAS ISLAND, NOT UP HERE.
                   They belong with the other things you do TO THE DRAWING —
                   zoom, fit — rather than with the things you do to the FLOW.
@@ -455,15 +429,27 @@ export function FlowToolbar({
 
               {/* 18px, not the Button's shared 16px: a 26px standalone glyph sits one
                   control away, and 16 beside it read as two different icon sets. */}
-              {/* SAVED SITS AT THE END, nearest the chrome's own actions.
-                  It was first in this group, so the least urgent word in the bar
-                  was the one closest to the flow's name. It is the last thing
-                  you check rather than the first, and the edge is where a
-                  status belongs. */}
-              <SaveChip state={saveState} onRetry={onRetrySave} />
+              {unpublished && (
+                <StatusPill
+                  tone="warn"
+                  className="shrink-0"
+                  title={
+                    publishedVersion == null
+                      ? "Nothing from this flow is on the dashboard yet"
+                      : "The dashboard is still showing the last published version of this flow"
+                  }
+                >
+                  {publishedVersion == null ? "Not published" : "Changes not live"}
+                </StatusPill>
+              )}
+
             </span>
           </div>
         </TopBarPortal>
+      {/* At the bar's right edge, first in the chrome's own group. */}
+      <TopBarStatusPortal>
+        <SaveChip state={saveState} onRetry={onRetrySave} />
+      </TopBarStatusPortal>
 
       {/* ── THE VIEW, ITS OWN LITTLE BAR ───────────────────────────────
           Zoom and fit are the only controls here that are about looking rather
