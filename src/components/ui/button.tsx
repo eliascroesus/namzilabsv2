@@ -85,6 +85,24 @@ const buttonVariants = cva(
         link: "text-accent-foreground underline-offset-4 hover:underline",
       },
       size: {
+        /**
+         * THE DENSE ROW'S SIZE, and it is a size because it was already being
+         * used as one.
+         *
+         * The metric tile's tray spelled it inline — `size="sm"` plus
+         * `className="h-7 gap-1.5 px-2.5 text-xs [&_svg]:size-3.5"`, twice,
+         * once for Refresh and once for Open. That is a sixth button geometry
+         * invented at a call site, which is exactly the drift `cva` is here to
+         * prevent, and the next dense row would have re-typed it slightly
+         * differently.
+         *
+         * It cannot simply become `sm`: at a real tile width (three columns
+         * inside 1152px) two 36px-tall buttons push the tray's timestamp into
+         * "1 hour …", and the provenance is the half of that row that carries a
+         * product rule. So the geometry the tray actually needs is named here
+         * once and the override is deleted.
+         */
+        xs: "h-7 gap-1.5 px-2.5 text-xs [&_svg]:size-3.5",
         sm: "h-9 px-3.5 text-sm [&_svg]:size-4",
         default: "h-11 px-5 text-sm [&_svg]:size-[18px]",
         lg: "h-13 px-7 text-md [&_svg]:size-5",

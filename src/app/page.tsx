@@ -71,7 +71,7 @@ export default async function Home() {
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
-        <span className="font-display text-title font-semibold text-foreground">Namzilabs</span>
+        <span className="font-display text-lg font-semibold text-foreground">Namzilabs</span>
         <nav className="flex items-center gap-1 sm:gap-2">
           {user ? (
             <Link className={cn(buttonVariants())} href="/dashboard">
@@ -95,7 +95,7 @@ export default async function Home() {
         <section className="mx-auto w-full max-w-6xl px-5 pb-16 pt-10 sm:px-8 sm:pb-24 sm:pt-16">
           <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)] lg:gap-16">
             <div>
-              <p className="text-micro font-semibold uppercase tracking-widest text-primary">
+              <p className="text-xs font-semibold uppercase tracking-widest text-primary">
                 For teams running on six tools
               </p>
               {/* `text-banner` is fluid — it resolves to 40px on a phone and
@@ -106,7 +106,7 @@ export default async function Home() {
                 <br />
                 and the receipts.
               </h1>
-              <p className="mt-6 max-w-xl text-title leading-relaxed text-muted-foreground">
+              <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
                 Your tools each answer &ldquo;how many meetings did we book?&rdquo; differently, and none of them are
                 lying. Namzilabs reads all of them, works out which records are the same person seen twice, and gives
                 you one figure you can take into a Monday meeting.
@@ -122,7 +122,7 @@ export default async function Home() {
                   </a>
                 )}
               </div>
-              <p className="mt-5 text-tiny text-muted-foreground">
+              <p className="mt-5 text-xs text-muted-foreground">
                 Read-only access. Disconnect any tool at any time and keep everything it already sent.
               </p>
             </div>
@@ -135,14 +135,14 @@ export default async function Home() {
         {/* ---- What you connect -------------------------------------------- */}
         <section className="border-y border-border bg-neutral-50">
           <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 sm:py-20">
-            <h2 className="text-micro font-semibold uppercase tracking-widest text-muted-foreground">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               What you can connect today
             </h2>
             <ul className="mt-8 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
               {CONNECTOR_CATALOG.map((entry) => (
                 <li key={entry.source} className="border-t border-border pt-4">
-                  <p className="text-lead font-semibold text-foreground">{entry.name}</p>
-                  <p className="mt-1 text-base text-muted-foreground">{entry.description}</p>
+                  <p className="text-md font-semibold text-foreground">{entry.name}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{entry.description}</p>
                 </li>
               ))}
             </ul>
@@ -151,7 +151,7 @@ export default async function Home() {
 
         {/* ---- How it works ------------------------------------------------ */}
         <section className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
-          <h2 className="text-micro font-semibold uppercase tracking-widest text-muted-foreground">How it works</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">How it works</h2>
           {/* NUMBERED, because this genuinely is a sequence: you cannot build a
               metric before connecting a tool, and the order is the thing a
               first-time reader most needs. Numbering something that is not a
@@ -159,9 +159,11 @@ export default async function Home() {
           <ol className="mt-8 grid gap-10 md:grid-cols-3 md:gap-8">
             {STEPS.map((step, i) => (
               <li key={step.title}>
-                <span className="stat-numeral block text-display leading-none text-primary">{i + 1}</span>
-                <h3 className="mt-4 text-title font-semibold tracking-tight text-foreground">{step.title}</h3>
-                <p className="mt-2 text-base leading-relaxed text-muted-foreground">{step.body}</p>
+                <span className="stat-numeral block text-display-xs leading-none text-primary">{i + 1}</span>
+                <h3 className="mt-4 text-lg font-semibold tracking-tight text-foreground">{step.title}</h3>
+                {/* 16px, not the app's 14 — reading copy, not chrome. See the
+                    note in ui/legal.tsx: `leading-relaxed` is the tell. */}
+                <p className="mt-2 text-md leading-relaxed text-muted-foreground">{step.body}</p>
               </li>
             ))}
           </ol>
@@ -170,8 +172,8 @@ export default async function Home() {
         {/* ---- Closing ----------------------------------------------------- */}
         <section className="border-t border-border bg-neutral-50">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 text-center sm:px-8 sm:py-20">
-            <h2 className="font-display text-hero font-semibold text-foreground">Stop reconciling by hand.</h2>
-            <p className="mx-auto mt-4 max-w-lg text-title text-muted-foreground">
+            <h2 className="font-display text-display-lg font-semibold text-foreground">Stop reconciling by hand.</h2>
+            <p className="mx-auto mt-4 max-w-lg text-lg text-muted-foreground">
               Connect one tool and build your first metric in an afternoon.
             </p>
             <div className="mt-8 flex justify-center">
@@ -185,7 +187,7 @@ export default async function Home() {
       </main>
 
       <footer className="border-t border-border">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-6 text-base text-muted-foreground sm:px-8">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-6 text-sm text-muted-foreground sm:px-8">
           <span>&copy; {new Date().getFullYear()} Namzilabs</span>
           <nav className="flex gap-5">
             <Link className="inline-flex min-h-6 items-center rounded-control transition-colors hover:text-foreground" href="/terms">
@@ -214,21 +216,21 @@ function HeroLedger() {
   return (
     <figure className="rounded-surface border border-border bg-card p-6 shadow-surface sm:p-7">
       <figcaption className="flex items-baseline justify-between gap-3">
-        <span className="text-lead font-semibold text-foreground">Meetings booked</span>
-        <span className="text-tiny text-muted-foreground">Last 7 days</span>
+        <span className="text-md font-semibold text-foreground">Meetings booked</span>
+        <span className="text-xs text-muted-foreground">Last 7 days</span>
       </figcaption>
 
       <ul className="mt-5 space-y-3">
         {LEDGER.map((row) => (
           <li key={row.source} className="flex items-baseline justify-between gap-4">
             <span className="min-w-0">
-              <span className="block truncate text-base font-medium text-foreground">{row.source}</span>
-              <span className="block truncate text-tiny text-muted-foreground">{row.note}</span>
+              <span className="block truncate text-sm font-medium text-foreground">{row.source}</span>
+              <span className="block truncate text-xs text-muted-foreground">{row.note}</span>
             </span>
             {/* The disagreeing numbers sit in muted ink: they are evidence,
                 not the answer, and typesetting them as loudly as the result
                 would be the card arguing with itself. */}
-            <span className="tnum shrink-0 text-title font-semibold text-muted-foreground">{row.count}</span>
+            <span className="tnum shrink-0 text-lg font-semibold text-muted-foreground">{row.count}</span>
           </li>
         ))}
       </ul>
@@ -237,15 +239,15 @@ function HeroLedger() {
 
       <div className="mt-5 flex items-end justify-between gap-4">
         <span className="min-w-0">
-          <span className="flex items-center gap-1.5 text-base font-semibold text-foreground">
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
             <Check aria-hidden className="size-4 shrink-0 text-success" />
             Namzilabs
           </span>
-          <span className="mt-1 block text-tiny text-muted-foreground">
+          <span className="mt-1 block text-xs text-muted-foreground">
             123 records in · 82 matched as the same person · 41 unique
           </span>
         </span>
-        <span className="stat-numeral shrink-0 text-stat leading-none text-foreground">41</span>
+        <span className="stat-numeral shrink-0 text-display-md leading-none text-foreground">41</span>
       </div>
     </figure>
   );

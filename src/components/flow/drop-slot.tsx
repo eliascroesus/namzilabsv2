@@ -47,7 +47,7 @@ export function DragGhost({ x, y, title, mark }: { x: number; y: number; title: 
       style={{ left: x + 14, top: y + 14, opacity: 0.95 }}
     >
       {mark}
-      <span className="min-w-0 truncate text-base font-semibold text-foreground">{title}</span>
+      <span className="min-w-0 truncate text-sm font-semibold text-foreground">{title}</span>
     </div>
   );
 }

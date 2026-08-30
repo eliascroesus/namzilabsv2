@@ -29,7 +29,7 @@ import { FieldLabel } from "@/components/ui/field";
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-3 text-micro font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
       {children}
     </div>
   );
@@ -43,15 +43,15 @@ export function BrandSheet() {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="flex h-32 flex-col justify-end rounded-card bg-foreground p-4">
             <p className="text-sm font-semibold uppercase tracking-wide text-background">Deep black</p>
-            <p className="font-mono text-tiny text-background/70">#1A1A1A</p>
+            <p className="font-mono text-xs text-background/70">#1A1A1A</p>
           </div>
           <div className="flex h-32 flex-col justify-end rounded-card border border-border bg-muted p-4">
             <p className="text-sm font-semibold uppercase tracking-wide text-foreground">Off-white</p>
-            <p className="font-mono text-tiny text-muted-foreground">#F5F5F5</p>
+            <p className="font-mono text-xs text-muted-foreground">#F5F5F5</p>
           </div>
           <div className="flex h-32 flex-col justify-end rounded-card bg-primary p-4">
             <p className="text-sm font-semibold uppercase tracking-wide text-primary-foreground">Vibrant violet</p>
-            <p className="font-mono text-tiny text-primary-foreground/80">#7C4DFF</p>
+            <p className="font-mono text-xs text-primary-foreground/80">#7C4DFF</p>
           </div>
         </div>
         {/* The accent four. Deliberately separate from the three above: these
@@ -65,7 +65,7 @@ export function BrandSheet() {
             { cls: "bg-accent-peri text-white", name: "Periwinkle" },
           ].map((a) => (
             <div key={a.name} className={`flex h-20 items-end rounded-card p-3 ${a.cls}`}>
-              <p className="text-tiny font-semibold uppercase tracking-wide">{a.name}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide">{a.name}</p>
             </div>
           ))}
         </div>
@@ -112,7 +112,7 @@ export function BrandSheet() {
               <Button size="lg" className="w-full">
                 Try again
               </Button>
-              <p className="mt-1.5 text-tiny text-danger-ink">Something went wrong. Please try again.</p>
+              <p className="mt-1.5 text-xs text-danger-ink">Something went wrong. Please try again.</p>
             </div>
           </div>
 
@@ -142,10 +142,10 @@ export function BrandSheet() {
             </span>
           </div>
           <div className="flex flex-col gap-2">
-            <span className="inline-flex h-8 items-center rounded-full border border-foreground px-4 text-micro font-semibold uppercase tracking-wide text-foreground">
+            <span className="inline-flex h-8 items-center rounded-full border border-foreground px-4 text-xs font-semibold uppercase tracking-wide text-foreground">
               Large
             </span>
-            <span className="inline-flex h-8 items-center rounded-full bg-foreground px-4 text-micro font-semibold uppercase tracking-wide text-background">
+            <span className="inline-flex h-8 items-center rounded-full bg-foreground px-4 text-xs font-semibold uppercase tracking-wide text-background">
               Small
             </span>
           </div>

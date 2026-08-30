@@ -39,14 +39,14 @@ export function LegalPage({
       <main id="main" className="mx-auto max-w-2xl px-5 py-12 sm:px-6 sm:py-16">
         <Link
           href="/"
-          className="inline-flex min-h-6 items-center gap-1.5 rounded-control text-base text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex min-h-6 items-center gap-1.5 rounded-control text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft size={14} />
           Namzilabs
         </Link>
 
-        <h1 className="font-display mt-8 text-display font-semibold text-foreground">{title}</h1>
-        <p className="mt-2 text-base text-muted-foreground">Last updated: {updated}</p>
+        <h1 className="font-display mt-8 text-display-xs font-semibold text-foreground">{title}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Last updated: {updated}</p>
 
         {/* `space-y-10` between sections and a measure capped by the container:
             a legal document is the one place in this product where somebody
@@ -54,7 +54,7 @@ export function LegalPage({
             leading rather than the app's denser UI leading. */}
         <div className="mt-10 space-y-10">{children}</div>
 
-        <p className="mt-14 border-t border-border pt-6 text-base text-muted-foreground">
+        <p className="mt-14 border-t border-border pt-6 text-sm text-muted-foreground">
           See also our{" "}
           <Link href={also.href} className="font-medium text-primary underline-offset-4 hover:underline">
             {also.label}
@@ -70,8 +70,17 @@ export function LegalPage({
 export function LegalSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="text-title font-semibold tracking-tight text-foreground">{title}</h2>
-      <div className="mt-3 space-y-3 text-base leading-relaxed text-muted-foreground">{children}</div>
+      <h2 className="text-lg font-semibold tracking-tight text-foreground">{title}</h2>
+      {/* 16px, WHERE THE APP'S BODY IS 14 — the one deliberate exception, and
+          it is about the surface rather than the token.
+          `text-sm` is the interface's body size: it is set for labels, table
+          cells and config panels, where the reader is SCANNING and density is
+          the point. This is a document somebody has to READ, paragraph after
+          paragraph, and 14px is a measurably worse size for that — which is why
+          the same `leading-relaxed` is here and nowhere in the app chrome.
+          `text-md` is the kit's own reading step; the landing's step copy takes
+          it for the same reason. */}
+      <div className="mt-3 space-y-3 text-md leading-relaxed text-muted-foreground">{children}</div>
     </section>
   );
 }

@@ -32,8 +32,19 @@ const canvas = readFileSync(join(root, "src/components/flow/flow-canvas.tsx"), "
  * lookup would return whichever definition came first in the file and quietly
  * measure the light theme twice.
  */
+/**
+ * `(?:,[^{]*)?` — THE BLOCK MAY BE ONE OF SEVERAL SELECTORS ON ITS RULE.
+ *
+ * `:root` is written `:root, .dark .tile-surface { … }` now: the metric tile is
+ * a light island inside the dark theme, and it gets there by NAMING the light
+ * role block a second time rather than by re-declaring ninety values that would
+ * then drift. Matching `:root\s*\{` stopped finding it, and the failure was the
+ * unhelpful kind — "no :root block in globals.css" — for a rule that is right
+ * there. Tolerate the selector list; keep requiring the block to start a line,
+ * which is what stops `.dark` matching `.dark .tile-surface`.
+ */
 function block(selector: string): string {
-  const m = css.match(new RegExp(`(?:^|\\n)${selector}\\s*\\{([\\s\\S]*?)\\n\\}`));
+  const m = css.match(new RegExp(`(?:^|\\n)${selector}\\s*(?:,[^{]*)?\\{([\\s\\S]*?)\\n\\}`));
   if (!m) throw new Error(`no ${selector} block in globals.css`);
   return m[1];
 }

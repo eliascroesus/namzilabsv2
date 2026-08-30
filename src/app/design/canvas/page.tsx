@@ -184,7 +184,7 @@ export default function CanvasSpecimen() {
     <div className="min-h-screen bg-canvas-bg py-10">
       <PageContainer>
         <SectionHeading>Custom view canvas</SectionHeading>
-        <p className="mt-1 text-small text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           {GRID_COLS} columns at desktop, 6 at tablet, 1 on a phone — one stored layout, three renderings. A row unit is{" "}
           {ROW_UNIT_PX}px including its gutter. Narrow the window to watch it reflow.
         </p>
@@ -205,7 +205,7 @@ export default function CanvasSpecimen() {
             production to produce each one is how three of them shipped
             unrendered on the canvas while the groups board drew them fine. */}
         <SectionHeading className="mt-12">Every chart</SectionHeading>
-        <p className="mt-1 text-small text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           The same metric — a value, a five-bucket trend, a two-group breakdown — drawn every way the kit allows.
         </p>
         <div className={`mt-4 ${BOARD_GRID}`}>
@@ -222,7 +222,7 @@ export default function CanvasSpecimen() {
             real ones — a heading is full width and two rows tall, a divider is
             full width and one. None of them wears a card. */}
         <SectionHeading className="mt-12">Blocks</SectionHeading>
-        <p className="mt-1 text-small text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           Tiles with no metric: a heading, a note and a rule. They drag and resize like any other tile and bind to
           nothing.
         </p>
@@ -241,7 +241,7 @@ export default function CanvasSpecimen() {
         </div>
 
         <SectionHeading className="mt-12">Every state</SectionHeading>
-        <p className="mt-1 text-small text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           One chart, every way it can fail to be a plain number. A state that replaces the mark and a state that
           qualifies it are different promises — these are both.
         </p>
@@ -280,7 +280,7 @@ export default function CanvasSpecimen() {
         </div>
 
         <SectionHeading className="mt-12">The tile settings panel</SectionHeading>
-        <p className="mt-1 text-small text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           Both tabs at once, because a screenshot can&rsquo;t click. On the dashboard this is one panel pinned to the
           right of the viewport, opened by clicking a tile — the swatches and switches here are live.
         </p>
@@ -291,7 +291,7 @@ export default function CanvasSpecimen() {
         </div>
 
         <SectionHeading className="mt-12">The live board — drag a card, drag its corner</SectionHeading>
-        <p className="mt-1 text-small text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           The real component with the server played by the harness: writes SUCCEED here, because the crash that shipped
           lived on the success path. The two buttons are another tab editing the same view.
         </p>

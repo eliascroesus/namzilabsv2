@@ -250,7 +250,7 @@ export function FlowToolbar({
                     ? "Your edits are not on the dashboard yet — publish to make them live"
                     : undefined
                 }
-                className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-lead [&_svg]:size-[18px]"
+                className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-md [&_svg]:size-[18px]"
               >
                 {shipping ? <Rocket /> : <SlidersHorizontal />}
                 {shipping ? "Review & publish" : "Edit output"}
@@ -261,7 +261,7 @@ export function FlowToolbar({
                   onClick={runAll ? onStopTestAll : onTestAll}
                   title={runAll ? "Stop the run" : "Run every step, top to bottom"}
                   aria-label={runAll ? "Stop the run" : "Test flow"}
-                  className={`h-[42px] shrink-0 text-lead [&_svg]:size-[18px] ${runAll ? "gap-2 px-[18px]" : "w-[42px] px-0"}`}
+                  className={`h-[42px] shrink-0 text-md [&_svg]:size-[18px] ${runAll ? "gap-2 px-[18px]" : "w-[42px] px-0"}`}
                 >
                   {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
                   {/* Icon only at rest — the play glyph IS the word. Quiet grey
@@ -313,7 +313,7 @@ export function FlowToolbar({
                   placeholder="Untitled flow"
                   title={name}
                   style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
-                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-lead font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
+                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-md font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
                 />
               </span>
             </span>
@@ -369,7 +369,7 @@ export function FlowToolbar({
                       setMenuOpen(false);
                       onDuplicate();
                     }}
-                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-foreground transition-colors hover:bg-muted"
+                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                   >
                     <Copy size={16} />
                     Duplicate flow
@@ -379,7 +379,7 @@ export function FlowToolbar({
                       setMenuOpen(false);
                       setConfirmingDelete(true);
                     }}
-                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-small font-medium text-destructive transition-colors hover:bg-danger-soft/60"
+                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-sm font-medium text-destructive transition-colors hover:bg-danger-soft/60"
                   >
                     <Trash2 size={16} />
                     Delete flow
@@ -419,7 +419,7 @@ export function FlowToolbar({
           <button
             onClick={onFitView}
             title="Fit the whole flow on screen"
-            className="tnum h-[42px] w-[42px] rounded-control text-base font-semibold text-foreground transition-colors hover:bg-muted"
+            className="tnum h-[42px] w-[42px] rounded-control text-sm font-semibold text-foreground transition-colors hover:bg-muted"
           >
             {zoomPct}%
           </button>
@@ -438,7 +438,7 @@ export function FlowToolbar({
       {confirmingDelete && (
         <Modal onClose={() => setConfirmingDelete(false)}>
           <ModalTitle>Delete this flow?</ModalTitle>
-          <p className="mt-1.5 text-small text-muted-foreground">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             {isPublished ? "Its dashboard metrics are removed too. " : ""}This can’t be undone.
           </p>
           <div className="mt-4 flex justify-end gap-2">
@@ -485,7 +485,7 @@ function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void })
     );
   }
   return (
-    <span className="shrink-0 whitespace-nowrap px-1 text-lead font-medium text-muted-foreground">
+    <span className="shrink-0 whitespace-nowrap px-1 text-md font-medium text-muted-foreground">
       {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Unsaved"}
     </span>
   );

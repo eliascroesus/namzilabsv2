@@ -151,7 +151,7 @@ function DialogTitle({
       // with it: a title that wraps to two lines had its descenders touching
       // the line below.
       className={cn(
-        "text-title font-semibold tracking-tight text-foreground",
+        "text-lg font-semibold tracking-tight text-foreground",
         className
       )}
       {...props}

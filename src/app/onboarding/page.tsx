@@ -33,8 +33,8 @@ export default async function OnboardingPage() {
     <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6">
       {hasWorkspaces ? (
         <>
-          <h1 className="font-display text-display font-semibold text-foreground">Choose a workspace</h1>
-          <p className="mt-2 text-base text-muted-foreground">
+          <h1 className="font-display text-display-xs font-semibold text-foreground">Choose a workspace</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
             You already belong to {orgs.length === 1 ? "a workspace" : `${orgs.length} workspaces`}. Pick one to continue.
           </p>
           <Card variant="surface" padding="none" className="mt-6 divide-y divide-border">
@@ -46,7 +46,7 @@ export default async function OnboardingPage() {
                   variant="ghost"
                   size="sm"
                   className={cn(
-                    "h-auto w-full justify-between rounded-none px-4 py-3 text-left text-base font-normal",
+                    "h-auto w-full justify-between rounded-none px-4 py-3 text-left text-sm font-normal",
                     i === 0 && "rounded-t-surface",
                     i === orgs.length - 1 && "rounded-b-surface",
                   )}
@@ -62,7 +62,7 @@ export default async function OnboardingPage() {
           </Card>
 
           <details className="group mt-6">
-            <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-base text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
               <ChevronRight size={14} strokeWidth={2.25} className="transition-transform group-open:rotate-90" />
               Create another workspace
             </summary>
@@ -71,8 +71,8 @@ export default async function OnboardingPage() {
         </>
       ) : (
         <>
-          <h1 className="font-display text-display font-semibold text-foreground">Create your workspace</h1>
-          <p className="mt-2 text-base text-muted-foreground">
+          <h1 className="font-display text-display-xs font-semibold text-foreground">Create your workspace</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
             A workspace is your organization&rsquo;s private space. All connected integrations and data
             live inside it.
           </p>

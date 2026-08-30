@@ -215,12 +215,37 @@ describe("a view tab carries its own menu", () => {
     expect(html).not.toContain("Options for Ops");
   });
 
-  it("never offers one on the default view, which has no row to rename or delete", () => {
-    // Sabotage: drop the `viewId != null` half of `editable` and the product
-    // grows a Delete button for a view that cannot be deleted — it is the
-    // absence of a row that makes it free. See the schema note.
+  /**
+   * THE DEFAULT VIEW HAS A MENU NOW, and this test used to assert the opposite.
+   *
+   * It was right when the default board could not be renamed: it is the absence
+   * of a row, so there was nothing to write a name onto and a kebab offering
+   * Rename and Delete would have been three controls that all refused. Renaming
+   * it is what MINTS the row now (`adoptDefaultView`), so the menu is how the
+   * feature is reached.
+   *
+   * What is still withheld is the pair that genuinely needs a row to point at —
+   * see the `hasRow` assertions below.
+   */
+  it("offers a menu on the default view, because renaming it is what mints its row", () => {
     const html = board([tab({ id: null, active: null, canEdit: true, name: "Dashboard" })]);
-    expect(html).not.toContain("Options for Dashboard");
+    expect(html).toContain("Options for Dashboard");
+  });
+
+  it("withholds duplicate and delete until the default view has a row", () => {
+    /**
+     * Asserted against the SOURCE rather than the render, because both live
+     * inside the Popover's panel and that panel is not in the tree until the
+     * menu is opened — which this static harness cannot do.
+     *
+     * Sabotage: drop either `hasRow &&` and the default board grows a Duplicate
+     * that has no id to copy and a Delete that has no row to destroy. Both would
+     * fail server-side, which is the wrong place to find out.
+     */
+    const src = readFileSync(join(process.cwd(), "src/app/dashboard/board-controls.tsx"), "utf8");
+    expect(src).toMatch(/const hasRow = viewId != null;/);
+    expect(src).toMatch(/\{hasRow && \(\s*<Button[\s\S]{0,400}?Duplicate/);
+    expect(src).toMatch(/\{!hasRow \? null : confirming \? \(/);
   });
 
   it("shows nothing to a member who may not edit the board", () => {

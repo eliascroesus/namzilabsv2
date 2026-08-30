@@ -45,9 +45,9 @@ export function CopyField({
 
   return (
     <div className="mb-2">
-      <span className="text-tiny text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
       <div className="mt-0.5 flex items-center gap-2">
-        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-control border border-border bg-muted/50 px-3 py-2 font-mono text-tiny">
+        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-control border border-border bg-muted/50 px-3 py-2 font-mono text-xs">
           {value}
         </code>
         <Button
@@ -63,12 +63,12 @@ export function CopyField({
         </Button>
       </div>
       {!usable && (
-        <p className="mt-1 text-tiny text-warn-ink">
+        <p className="mt-1 text-xs text-warn-ink">
           This is missing its https://… prefix, so nothing can post to it. Set{" "}
           <code>APP_BASE_URL</code> to the app&rsquo;s public URL and reload.
         </p>
       )}
-      {usable && hint && <p className="mt-1 text-tiny text-muted-foreground">{hint}</p>}
+      {usable && hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }

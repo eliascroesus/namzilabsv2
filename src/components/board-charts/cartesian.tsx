@@ -27,7 +27,7 @@ import type { ChartFormat, SeriesPoint } from "@/components/charts";
  * that disagrees with the headline above it is two claims about one number.
  */
 
-const AXIS_LABEL = "tnum whitespace-nowrap text-micro leading-none text-muted-foreground";
+const AXIS_LABEL = "tnum whitespace-nowrap text-xs leading-none text-muted-foreground";
 
 /** Where a value sits in the plot, as a percentage from the TOP. */
 const yPct = (v: number, lo: number, hi: number) => (hi === lo ? 100 : ((hi - v) / (hi - lo)) * 100);

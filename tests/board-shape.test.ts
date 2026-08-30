@@ -115,10 +115,21 @@ describe("what the board costs on every freshness poll", () => {
     // A wide column added to either table later must not ride along on the
     // hottest page in the product — the `dashboard-tiles.test.ts` discipline.
     expect(store).not.toMatch(/\.select\(\)/);
-    // Three now: views, groups, placements. Views rides the page's existing
-    // Promise.all; the other two are sequential because which groups to fetch
-    // depends on which view is active.
-    expect(store.match(/\.select\(\{/g) ?? []).toHaveLength(3);
+    /**
+     * FOUR SELECTS, THREE OF WHICH ARE THE POLL — and the number is the guard,
+     * so the split has to be stated rather than the total quietly bumped.
+     *
+     * The three that cost: views, groups, placements. Views rides the page's
+     * existing `Promise.all`; the other two are sequential because which groups
+     * to fetch depends on which view is active.
+     *
+     * The fourth is inside `adoptDefaultView`'s transaction, which runs when
+     * somebody RENAMES the default board — once per workspace, ever — and never
+     * on a render. It is not on the twelve-second budget this file protects.
+     */
+    expect(store.match(/\.select\(\{/g) ?? []).toHaveLength(4);
+    const pollReads = store.slice(0, store.indexOf("export async function adoptDefaultView"));
+    expect(pollReads.match(/\.select\(\{/g) ?? []).toHaveLength(3);
   });
 });
 
@@ -151,7 +162,15 @@ describe("views", () => {
 
   it("falls back to the default view rather than erroring on an unknown one", () => {
     // A stale link, or one shared after the view was deleted, opens the board.
-    expect(page).toMatch(/views\.some\(\(v\) => v\.id === requestedView\) \? requestedView : null/);
+    //
+    // "THE DEFAULT VIEW" IS NOW ONE OF TWO THINGS. A workspace that has never
+    // renamed its board still falls back to `null` — the board is `view_id IS
+    // NULL` and there is no row. One that HAS renamed it fell back to the empty
+    // husk the adoption left behind, so the fallback reads the adopted row's id.
+    // `adoptedDefault` is null in the first world and the id in the second, so
+    // one expression covers both.
+    expect(page).toMatch(/views\.some\(\(v\) => v\.id === requestedView\) \? requestedView : adoptedDefault/);
+    expect(page).toMatch(/const adoptedDefault = views\.find\(\(v\) => v\.isDefault\)\?\.id \?\? null;/);
   });
 
   it("carries the view through every other filter link", () => {

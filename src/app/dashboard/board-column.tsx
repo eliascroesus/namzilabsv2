@@ -207,7 +207,7 @@ export function BoardColumn({
                 }
               }}
               aria-label={`Rename ${g.name}`}
-              className="h-7 min-w-0 flex-1 px-2 py-0.5 text-small font-semibold"
+              className="h-7 min-w-0 flex-1 px-2 py-0.5 text-sm font-semibold"
             />
           ) : (
             /* THE NAME AS A COLOURED BADGE — a dot and a label on a wash of the
@@ -229,13 +229,13 @@ export function BoardColumn({
                   size="sm"
                   onClick={() => setEditing(true)}
                   title="Rename this group"
-                  className="h-auto min-w-0 justify-start truncate p-0 text-small font-semibold hover:bg-transparent"
+                  className="h-auto min-w-0 justify-start truncate p-0 text-sm font-semibold hover:bg-transparent"
                   style={{ color: groupInk(g.color) }}
                 >
                   <span className="truncate">{g.name}</span>
                 </Button>
               ) : (
-                <h3 className="min-w-0 truncate text-small font-semibold" style={{ color: groupInk(g.color) }}>
+                <h3 className="min-w-0 truncate text-sm font-semibold" style={{ color: groupInk(g.color) }}>
                   {g.name}
                 </h3>
               )}
@@ -249,7 +249,7 @@ export function BoardColumn({
                   per group, which would multiply the board's cost by its column
                   count on every twelve-second poll. */}
               <span
-                className="tnum shrink-0 pl-0.5 text-tiny font-semibold opacity-60"
+                className="tnum shrink-0 pl-0.5 text-xs font-semibold opacity-60"
                 style={{ color: groupInk(g.color) }}
               >
                 {lane.tiles.length}
@@ -269,7 +269,7 @@ export function BoardColumn({
               it reads as a setting, which is what it is. */}
           {sort && (
             <span
-              className="flex shrink-0 items-center gap-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground"
+              className="flex shrink-0 items-center gap-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
               title={`Sorted by ${sort.label} — ${sort.blurb}. A metric dropped here is placed by the sort; switch to Manual to place it by hand.`}
             >
               <ArrowUpDown size={11} />
@@ -421,7 +421,7 @@ export function BoardColumn({
                      inch from a column full of numbers reads like it might take
                      them with it. It never does. */
                   <div className="px-1.5 py-1">
-                    <p className="text-tiny text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {/* ONE STRING: the space after a JSX expression is kept
                           by esbuild and dropped by SWC when the text wraps, so
                           this read "metricsmove back to the row above" in the
@@ -469,11 +469,29 @@ export function BoardColumn({
         <div
           {...{ [LANE_ATTR]: g.id, [AXIS_ATTR]: "y", [ACCEPTS_ATTR]: "tile", [SORTED_ATTR]: sortedBy ? "1" : undefined }}
           className={`flex min-h-[140px] flex-col px-2.5 pb-2.5 transition-shadow duration-(--duration-fast) ${LANE_GAP}`}
-          style={
+          style={{
+            /**
+             * THE COLOUR EACH TILE WEARS ON ITS LEADING EDGE.
+             *
+             * Published as a CUSTOM PROPERTY rather than threaded as a prop,
+             * and that is the whole reason it works. The cards are rendered on
+             * the SERVER (`page.tsx` builds them as `node`), while which column
+             * a tile is in is decided on the CLIENT and changes on every drag —
+             * so there is no render at which the tile itself could be told its
+             * group. Inheritance does not care: the card reads
+             * `var(--tile-edge)` from whichever lane it currently sits in, so a
+             * tile dropped into another column changes allegiance on the frame
+             * it lands, with nothing passed anywhere.
+             *
+             * The ungrouped row above the columns sets nothing, so its tiles
+             * fall back to `--border` in `MetricCard` — the same geometry
+             * without claiming a group they are not in.
+             */
+            ["--tile-edge" as string]: groupAccent(g.color),
             // A SORTED LANE LIGHTS UP WHOLE, because it has no position to offer.
             // See the banner below.
-            dropping && sortedBy ? { boxShadow: `inset 0 0 0 2px ${groupAccent(g.color)}` } : undefined
-          }
+            ...(dropping && sortedBy ? { boxShadow: `inset 0 0 0 2px ${groupAccent(g.color)}` } : {}),
+          }}
         >
           {/* THE GAP WOULD BE A LIE HERE, so there isn't one.
               A placeholder says "it goes exactly here" — and in a sorted column
@@ -484,7 +502,7 @@ export function BoardColumn({
           {dropping && sortedBy && (
             <p
               /* Micro voice, like every other small label on this board. */
-              className="rounded-control px-2 py-1 text-center text-micro font-semibold uppercase tracking-wide"
+              className="rounded-control px-2 py-1 text-center text-xs font-semibold uppercase tracking-wide"
               style={{ background: groupBadge(g.color), color: groupInk(g.color) }}
             >
               Placed by {sortedBy}
@@ -499,7 +517,7 @@ export function BoardColumn({
                dashed box reads as a thing that failed rather than a place to put
                something. */
             <div
-              className="flex flex-1 items-center justify-center rounded-surface border border-dashed px-4 text-center text-tiny"
+              className="flex flex-1 items-center justify-center rounded-surface border border-dashed px-4 text-center text-xs"
               style={{ borderColor: `${groupAccent(g.color)}59`, color: groupInk(g.color) }}
             >
               Drop a metric here

@@ -157,10 +157,10 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         <PageHeader title="Apps" />
 
         {errorCode && (
-          <div className="mt-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-base text-danger-ink">
+          <div className="mt-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-sm text-danger-ink">
             <p>
               {integrationsErrorMessage(errorCode)}{" "}
-              <span className="text-tiny text-danger-ink">({errorCode})</span>
+              <span className="text-xs text-danger-ink">({errorCode})</span>
             </p>
             {/* Dismissal without client JS: dropping the query param re-renders
                 the page clean (this segment is force-dynamic). */}

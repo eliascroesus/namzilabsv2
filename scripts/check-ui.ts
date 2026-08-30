@@ -80,11 +80,21 @@ type Rule = {
  * banned a SECOND scale, because `text-lg` beside `text-title` is two 17px-ish
  * sizes that never quite match, and that is what an interface assembled from
  * two systems looks like. The set is now spelled Untitled UI's way so vendored
- * components compile, and the eight legacy names are in it while the app is
- * migrated surface by surface. What matters is that it is still CLOSED:
- * `text-2xl`, `rounded-3xl`-that-is-not-ours and `shadow-inner` are as
- * uncompilable as they ever were, and the day the legacy half empties out it
- * comes off this list rather than being left as a courtesy.
+ * components compile.
+ *
+ * THE LEGACY HALF HAS EMPTIED OUT, and the day it did is this one. The eight
+ * old names were allowed in "while the app is migrated surface by surface";
+ * what actually happened is that both spellings stayed live for months, so the
+ * app ran TWELVE names over NINE sizes with three-way ties at 12px and 16px.
+ * Every one of them compiled, so this file passed the whole time — a closed set
+ * that had quietly reopened, which is worse than never having had one, because
+ * the gate reported health.
+ *
+ * So they come off the list AND get a rule of their own below. Deleting the
+ * tokens alone would make `text-micro` compile to nothing, which is the kit's
+ * usual punishment and the wrong one here: 326 call sites were rewritten at
+ * once, and a missed one would render at its inherited size on a page nobody
+ * reopened. A named failure says which word to use instead.
  */
 /** Radius suffixes the kit owns. Anything else — including bare `rounded`. */
 const RADIUS_OK = /^(xs|sm|md|lg|xl|2xl|3xl|4xl|control|card|surface|frame|full|none)$/;
@@ -104,6 +114,41 @@ const RULES: Rule[] = [
      * is a colour, policed by the raw-palette rule below.
      */
     find: (line) => line.match(/\btext-[2-9]xl\b/)?.[0] ?? null,
+  },
+  {
+    name: "retired type alias",
+    why: "one name per size; these were the second spelling of a step that already had one, and they no longer exist in @theme",
+    /**
+     * The mapping, for whoever trips this:
+     *   text-micro | text-tiny -> text-xs          (12px)
+     *   text-small | text-base -> text-sm          (14px)
+     *   text-lead              -> text-md          (16px)
+     *   text-title             -> text-lg          (18px)
+     *   text-display           -> text-display-xs  (24px)
+     *   text-stat              -> text-display-md  (36px)
+     *   text-hero              -> text-display-lg  (48px)
+     *
+     * `text-banner` is NOT here: it is the landing's fluid clamp, the one step
+     * with no Untitled UI twin, and it keeps its own name.
+     *
+     * The negative lookahead on `display` is load-bearing — `\b` matches before
+     * a hyphen, so a naive `\btext-display\b` flags every `text-display-xs` in
+     * the app and the rule that bans the alias would ban its replacement.
+     */
+    find: (line) =>
+      line.match(/\btext-(?:micro|tiny|small|base|lead|title|stat|hero|display\b(?!-(?:xs|sm|md|lg)))\b/)?.[0] ?? null,
+  },
+  {
+    name: "font-bold",
+    why: "the kit runs 400 / medium / semibold; 700 is a fourth weight nothing else in the product uses",
+    /**
+     * Added because the NEWEST surface broke it. `top-bar.tsx` — shipped in the
+     * chrome rebuild — set the workspace name, the avatar initial and the
+     * greeting in `font-bold`, three of them, while every other heading in the
+     * app is `font-semibold`. Nothing failed, because this rule did not exist:
+     * §3 of the kit said "Never `font-bold`" and only prose was enforcing it.
+     */
+    find: (line) => (/\bfont-bold\b/.test(line) ? "font-bold" : null),
   },
   {
     name: "off-kit radius",

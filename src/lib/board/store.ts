@@ -1,4 +1,5 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { compareKeys, keyBetween } from "./order";
 import { dashboardGroups, dashboardTilePlacements, dashboardViews } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { asViewKind } from "./types";
@@ -33,15 +34,26 @@ import type { BoardGroup, BoardView, GroupSortKey, TilePlacement } from "./types
  * the same lie `publishedFlowTiles` documents at length for tiles.
  */
 /**
- * THE VIEWS A WORKSPACE HAS MADE — not counting the default one, which has no
- * row. The page prepends it, so the strip always has at least one tab.
+ * THE VIEWS A WORKSPACE HAS MADE.
+ *
+ * Not counting the default one WHILE IT IS STILL THE ABSENCE OF A ROW — the
+ * page prepends a synthetic tab for it, so the strip always has at least one.
+ * Once it has been adopted (renamed, which mints a row) it is in here like any
+ * other view, flagged `is_default`, and the page stops prepending.
  */
 export async function listBoardViews(db: DB, orgId: string): Promise<BoardView[]> {
   const rows = await db
-    // `kind` rides along inside the SAME projection rather than in a second
-    // read: one short string per view, on a query that already runs, against
-    // the alternative of a query per poll to learn which board to draw.
-    .select({ id: dashboardViews.id, name: dashboardViews.name, pos: dashboardViews.pos, kind: dashboardViews.kind })
+    // `kind` and `is_default` ride along inside the SAME projection rather than
+    // in a second read: one short string and one boolean per view, on a query
+    // that already runs, against the alternative of a query per poll to learn
+    // which board to draw and which tab to land on.
+    .select({
+      id: dashboardViews.id,
+      name: dashboardViews.name,
+      pos: dashboardViews.pos,
+      kind: dashboardViews.kind,
+      isDefault: dashboardViews.isDefault,
+    })
     .from(dashboardViews)
     .where(eq(dashboardViews.orgId, orgId));
   return rows.map((r) => ({ ...r, kind: asViewKind(r.kind) }));
@@ -128,4 +140,86 @@ export async function forgetTilePlacements(db: DB, orgId: string, prefix: string
         sql`${dashboardTilePlacements.tileKey} LIKE ${literal + "%"} ESCAPE '\\'`,
       ),
     );
+}
+
+/**
+ * TURN THE DEFAULT BOARD INTO A REAL VIEW — once, lazily, on the first rename.
+ *
+ * The default board is the ABSENCE of a row: `view_id IS NULL` on this org's
+ * groups and placements. That is what made views additive (migration 0027), and
+ * the cost was written into the schema at the time — the one board every
+ * workspace starts with was the one board nobody could rename. This is the
+ * other half of that trade, deferred to the moment it is actually needed: mint
+ * the row, flag it, and re-point the org's null rows at it. A workspace that
+ * never renames its dashboard is still never written to on a page load, which
+ * is what the original design was protecting.
+ *
+ * IT LIVES HERE RATHER THAN IN `board-actions.ts` for the reason the header of
+ * this file gives about the reads: it takes its DB handle as an argument, so
+ * `tests/board-default-view.test.ts` drives it against real SQL in PGlite. An
+ * action that can only be exercised through `requireOrg()` is an action whose
+ * transaction is never tested, and this one moves a customer's stored layout.
+ *
+ * ONE TRANSACTION, and the reason is the one `duplicateViewAction` gives at
+ * length: a half-adoption is worse than a failure. A view row minted without its
+ * groups following would show the customer an empty board under their own
+ * board's new name, and the groups left behind would be unreachable by any tab,
+ * because nothing renders `view_id IS NULL` for an org that has adopted.
+ *
+ * IT SORTS FIRST, DELIBERATELY. The synthetic tab it replaces was always
+ * leftmost, and a rename that also silently moved the tab to the end of the
+ * strip would read as two changes for one action.
+ */
+export async function adoptDefaultView(db: DB, orgId: string, name: string): Promise<string> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ id: dashboardViews.id, pos: dashboardViews.pos, isDefault: dashboardViews.isDefault })
+      .from(dashboardViews)
+      .where(eq(dashboardViews.orgId, orgId));
+
+    /**
+     * ALREADY ADOPTED — by another tab, or by the request that lost a race to
+     * this one. Renaming the existing row is the honest answer: the customer
+     * asked for this board to be called that, and it now is. An error here would
+     * be technically accurate and useless.
+     */
+    const existing = rows.find((r) => r.isDefault);
+    if (existing) {
+      await tx
+        .update(dashboardViews)
+        .set({ name, updatedAt: new Date() })
+        .where(and(eq(dashboardViews.id, existing.id), eq(dashboardViews.orgId, orgId)));
+      return existing.id;
+    }
+
+    const first = rows.map((v) => v.pos).sort(compareKeys).at(0) ?? null;
+    const id = crypto.randomUUID();
+    await tx.insert(dashboardViews).values({
+      id,
+      orgId,
+      name,
+      pos: keyBetween(null, first),
+      // The default board has always been a groups board and cannot be anything
+      // else — see the `kind` note on the table.
+      kind: "groups",
+      isDefault: true,
+    });
+    /**
+     * The two tables the default board's arrangement actually lives in.
+     *
+     * Both scoped by org AND by `view_id IS NULL`. `= NULL` is never true in
+     * SQL, so getting this wrong does not error — it adopts nothing, reports
+     * success, and leaves the customer looking at an empty board under their
+     * own board's new name.
+     */
+    await tx
+      .update(dashboardGroups)
+      .set({ viewId: id, updatedAt: new Date() })
+      .where(and(eq(dashboardGroups.orgId, orgId), isNull(dashboardGroups.viewId)));
+    await tx
+      .update(dashboardTilePlacements)
+      .set({ viewId: id, updatedAt: new Date() })
+      .where(and(eq(dashboardTilePlacements.orgId, orgId), isNull(dashboardTilePlacements.viewId)));
+    return id;
+  });
 }

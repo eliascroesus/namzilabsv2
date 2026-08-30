@@ -114,7 +114,7 @@ export default async function MetricDrillPage({
         />
 
         {error && (
-          <div className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
+          <div className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-sm text-warn-ink">
             {error}
           </div>
         )}
@@ -131,14 +131,14 @@ export default async function MetricDrillPage({
                 surface, same numeral, so the drill-in visibly continues the
                 tile rather than restating it. */}
             <Card variant="surface" className="mt-6">
-              <p className="stat-numeral text-stat leading-none">
+              <p className="stat-numeral text-display-md leading-none">
                 {formatMetricValue(headline, {
                   format: "number",
                   precision: headline != null && Number.isInteger(headline) ? 0 : 2,
                 })}
-                {metric.unit && <span className="ml-2 text-base font-normal text-muted-foreground">{metric.unit}</span>}
+                {metric.unit && <span className="ml-2 text-sm font-normal text-muted-foreground">{metric.unit}</span>}
               </p>
-              <p className="mt-2 text-tiny text-muted-foreground">{rangeLabel}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{rangeLabel}</p>
             </Card>
             <SectionHeading className="mt-8">Underlying events ({rows.length})</SectionHeading>
             {rows.length === 0 ? (

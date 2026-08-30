@@ -257,7 +257,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <PageHeader title="Workspace settings" />
 
         {invited && (
-          <div className="mt-6 flex items-start justify-between gap-4 rounded-card border border-success-soft bg-success-soft/50 p-4 text-base text-success-ink">
+          <div className="mt-6 flex items-start justify-between gap-4 rounded-card border border-success-soft bg-success-soft/50 p-4 text-sm text-success-ink">
             {/* One clause. The banner used to explain that an email goes out
                 and that the same link can be copied from Pending invitations —
                 and Pending invitations is directly below with the link already
@@ -283,7 +283,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </div>
         )}
         {inviteError && (
-          <div className="mt-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-base text-danger-ink">
+          <div className="mt-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-sm text-danger-ink">
             <p>{inviteError}</p>
             <Link
               href="/dashboard/settings"

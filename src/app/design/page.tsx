@@ -93,7 +93,8 @@ const INK: Array<{ step: string; cls: string; hex: string }> = [
  */
 const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample: string }> = [
   { token: "text-display-md", cls: "stat-numeral text-display-md", px: "36px", use: "Headline numbers, via formatMetricValue — set in the display face", sample: "1,204" },
-  { token: "text-display-xs", cls: "font-display text-display-xs font-semibold", px: "24px", use: "Page titles (PageHeader) — display face", sample: "Speed to lead" },
+  { token: "text-display-sm", cls: "font-display text-display-sm font-semibold", px: "30px", use: "Page titles (PageHeader) — display face", sample: "Speed to lead" },
+  { token: "text-display-xs", cls: "font-display text-display-xs font-semibold", px: "24px", use: "Document headings — the legal pages' h1", sample: "Speed to lead" },
   { token: "text-xl", cls: "text-xl font-semibold tracking-tight", px: "20px", use: "The step above a card title, where a section needs one", sample: "Speed to lead" },
   { token: "text-lg", cls: "text-lg font-semibold tracking-tight", px: "18px", use: "Card and modal titles", sample: "Speed to lead" },
   { token: "text-md", cls: "text-md font-semibold", px: "16px", use: "Panel titles, hero list rows", sample: "Speed to lead" },
@@ -182,10 +183,10 @@ export default function DesignPage() {
         panel: (
           <div className="space-y-3">
             <div>
-              <p className="mb-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Workspace</p>
-              <p className="truncate text-small font-semibold text-foreground">Namzilabs</p>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Workspace</p>
+              <p className="truncate text-sm font-semibold text-foreground">Namzilabs</p>
             </div>
-            <p className="truncate border-t border-border pt-2 text-tiny text-muted-foreground">elias@namzilabs.co</p>
+            <p className="truncate border-t border-border pt-2 text-xs text-muted-foreground">elias@namzilabs.co</p>
             <Button variant="secondary" size="sm" className="w-full">
               Sign out
             </Button>
@@ -205,7 +206,7 @@ export default function DesignPage() {
 
         <div className="min-w-0 max-w-4xl flex-1">
         <div className="flex items-start justify-between gap-4">
-          <p className="text-micro font-semibold uppercase tracking-widest text-primary">Brand kit</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary">Brand kit</p>
           {/* THE TOGGLE BELONGS ON THIS PAGE MORE THAN ANYWHERE ELSE. Half the
               kit is a set of role tokens that resolve differently under
               `.dark`, and a swatch board that can only be seen at one exposure
@@ -237,26 +238,26 @@ export default function DesignPage() {
           title="Colour"
           note="Three colours carry the brand: DEEP BLACK #1A1A1A, OFF-WHITE #F5F5F5 and VIBRANT VIOLET #7C4DFF. Fills take brand-500, the violet the sheet names; text and links take brand-700, because the 500 measures 4.42:1 on off-white and that is under AA — the colour survives, the reading of it is legal. Beside them sits a four-colour accent set (yellow, orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning."
         >
-          <p className="mb-2 text-tiny font-medium text-muted-foreground">Accent — brand-*</p>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Accent — brand-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
             {BRAND.map((s) => (
               <div key={s.step} className="min-w-0 flex-1">
                 <div className={`h-16 ${s.cls}`} />
                 <div className="border-t border-border px-2 py-1.5">
-                  <p className="text-micro font-medium text-foreground">{s.step}</p>
-                  <p className="truncate font-mono text-micro text-muted-foreground">{s.hex}</p>
+                  <p className="text-xs font-medium text-foreground">{s.step}</p>
+                  <p className="truncate font-mono text-xs text-muted-foreground">{s.hex}</p>
                 </div>
               </div>
             ))}
           </div>
-          <p className="mb-2 mt-5 text-tiny font-medium text-muted-foreground">Ink — dark surfaces, ink-*</p>
+          <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">Ink — dark surfaces, ink-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
             {INK.map((s) => (
               <div key={s.step} className="min-w-0 flex-1">
                 <div className={`h-16 ${s.cls}`} />
                 <div className="border-t border-border px-2 py-1.5">
-                  <p className="text-micro font-medium text-foreground">{s.step}</p>
-                  <p className="truncate font-mono text-micro text-muted-foreground">{s.hex}</p>
+                  <p className="text-xs font-medium text-foreground">{s.step}</p>
+                  <p className="truncate font-mono text-xs text-muted-foreground">{s.hex}</p>
                 </div>
               </div>
             ))}
@@ -291,19 +292,19 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Type" note="An 8px baseline and 16px spacing, set in Helvetica Neue — native on macOS, with Inter carrying every other platform rather than dropping to Arial. The kit's old names (micro/tiny/small/base/lead/title/display/stat) still compile as aliases while the app migrates, but new work reaches for these.">
+        <Section title="Type" note="An 8px baseline and 16px spacing, set in Helvetica Neue — native on macOS, with Inter carrying every other platform rather than dropping to Arial. One name per size: the kit's old aliases (micro/tiny/small/base/lead/title/display/stat/hero) have been deleted from the theme, and check:ui fails on them.">
           <Card padding="none" className="divide-y divide-border">
             {TYPE.map((t) => (
               <div key={t.token} className="flex items-baseline gap-4 px-4 py-3">
                 <span className={`${t.cls} min-w-0 flex-1 truncate text-foreground`}>{t.sample}</span>
-                <code className="shrink-0 font-mono text-micro text-muted-foreground">{t.token}</code>
-                <span className="tnum w-10 shrink-0 text-right text-micro text-muted-foreground">{t.px}</span>
-                <span className="w-56 shrink-0 text-tiny text-muted-foreground">{t.use}</span>
+                <code className="shrink-0 font-mono text-xs text-muted-foreground">{t.token}</code>
+                <span className="tnum w-10 shrink-0 text-right text-xs text-muted-foreground">{t.px}</span>
+                <span className="w-56 shrink-0 text-xs text-muted-foreground">{t.use}</span>
               </div>
             ))}
           </Card>
-          <p className="mt-2 text-tiny text-muted-foreground">
-            Plus text-hero (40px) — marketing and the landing page only, never in-app.
+          <p className="mt-2 text-xs text-muted-foreground">
+            Plus text-display-lg (48px) and the fluid text-banner — marketing and the landing page only, never in-app.
           </p>
         </Section>
 
@@ -314,8 +315,8 @@ export default function DesignPage() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {RADII.map((r) => (
               <div key={r.cls} className={`${r.cls} border border-border bg-card p-4 shadow-card`}>
-                <p className="text-small font-semibold text-foreground">{r.label}</p>
-                <p className="mt-0.5 text-tiny text-muted-foreground">{r.body}</p>
+                <p className="text-sm font-semibold text-foreground">{r.label}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{r.body}</p>
               </div>
             ))}
           </div>
@@ -325,12 +326,12 @@ export default function DesignPage() {
                 height rather than four re-typed boxes. */}
             {SHADOWS.map((e) => (
               <Card key={e.cls} padding="compact" className={e.cls}>
-                <p className="text-small font-semibold text-foreground">{e.cls}</p>
-                <p className="mt-0.5 text-tiny text-muted-foreground">{e.body}</p>
+                <p className="text-sm font-semibold text-foreground">{e.cls}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{e.body}</p>
               </Card>
             ))}
           </div>
-          <p className="mt-2 text-tiny text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             Each rung has a ringed twin (raised, lifted, float, pop) whose 1px spread stands in for an edge — for
             borderless surfaces only. Under a real border the rim reads 2px thick and dirty.
           </p>
@@ -419,7 +420,7 @@ export default function DesignPage() {
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-x-10 gap-y-5">
             <div>
-              <p className="mb-2 text-tiny font-medium text-muted-foreground">Switch — both sizes</p>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Switch — both sizes</p>
               <div className="flex items-center gap-3">
                 <Switch checked />
                 <Switch checked={false} />
@@ -428,7 +429,7 @@ export default function DesignPage() {
               </div>
             </div>
             <div>
-              <p className="mb-2 text-tiny font-medium text-muted-foreground">Chip — a question with one answer showing</p>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Chip — a question with one answer showing</p>
               <div className="flex items-center gap-2">
                 <Chip active count={12}>
                   Active
@@ -439,7 +440,7 @@ export default function DesignPage() {
             </div>
           </div>
           <div className="mt-6 max-w-sm">
-            <p className="mb-2 text-tiny font-medium text-muted-foreground">Skeleton — sized at the call site to hold its content&apos;s shape</p>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Skeleton — sized at the call site to hold its content&apos;s shape</p>
             <div className="space-y-2">
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="h-4 w-1/2" />
@@ -454,12 +455,12 @@ export default function DesignPage() {
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
-              <p className="text-base font-semibold text-foreground">Card</p>
-              <p className="mt-1 text-tiny text-muted-foreground">variant=&quot;card&quot; — rounded-card, shadow-card. Tiles and sections.</p>
+              <p className="text-sm font-semibold text-foreground">Card</p>
+              <p className="mt-1 text-xs text-muted-foreground">variant=&quot;card&quot; — rounded-card, shadow-card. Tiles and sections.</p>
             </Card>
             <Card variant="surface">
-              <p className="text-base font-semibold text-foreground">Surface</p>
-              <p className="mt-1 text-tiny text-muted-foreground">variant=&quot;surface&quot; — rounded-surface. Panels, tables, modals.</p>
+              <p className="text-sm font-semibold text-foreground">Surface</p>
+              <p className="mt-1 text-xs text-muted-foreground">variant=&quot;surface&quot; — rounded-surface. Panels, tables, modals.</p>
             </Card>
           </div>
 
@@ -519,7 +520,7 @@ export default function DesignPage() {
             <div>
               <Card variant="surface" className="shadow-panel">
                 <ModalTitle>Delete this flow?</ModalTitle>
-                <p className="mt-2 text-base text-muted-foreground">Its steps and run history go with it. This cannot be undone.</p>
+                <p className="mt-2 text-sm text-muted-foreground">Its steps and run history go with it. This cannot be undone.</p>
                 <div className="mt-4 flex justify-end gap-2">
                   <Button variant="secondary" size="sm">
                     Cancel
@@ -529,17 +530,17 @@ export default function DesignPage() {
                   </Button>
                 </div>
               </Card>
-              <p className="mt-2 text-tiny text-muted-foreground">
+              <p className="mt-2 text-xs text-muted-foreground">
                 The modal, shown flat. The real one floats on the one scrim — neutral-950/40 with backdrop blur — traps
                 focus while it is open, locks the page behind it, and returns focus to whatever opened it. Escape or an
                 outside press closes it.
               </p>
             </div>
             <div>
-              <div className="inline-flex items-center gap-3 rounded-surface bg-ink-900 px-4 py-2.5 text-base text-ink-50">
+              <div className="inline-flex items-center gap-3 rounded-surface bg-ink-900 px-4 py-2.5 text-sm text-ink-50">
                 Flow published
               </div>
-              <p className="mt-2 text-tiny text-muted-foreground">
+              <p className="mt-2 text-xs text-muted-foreground">
                 The toast, shown flat. The real one is fixed bottom-centre and dark on purpose — it floats over the
                 working area as chrome, not content.
               </p>
@@ -557,22 +558,22 @@ export default function DesignPage() {
                 <span className="flex size-10 items-center justify-center rounded-card bg-white/15 text-white">
                   <LayoutDashboard size={24} strokeWidth={2} />
                 </span>
-                <span className="px-1 text-center text-tiny font-medium leading-4 text-white">Active</span>
+                <span className="px-1 text-center text-xs font-medium leading-4 text-white">Active</span>
               </span>
               <span className="flex w-14 flex-col items-center">
                 <span className="flex size-10 items-center justify-center rounded-card bg-white/10 text-white">
                   <Workflow size={24} strokeWidth={2} />
                 </span>
-                <span className="px-1 text-center text-tiny font-medium leading-4 text-white">Hover</span>
+                <span className="px-1 text-center text-xs font-medium leading-4 text-white">Hover</span>
               </span>
               <span className="flex w-14 flex-col items-center">
                 <span className="flex size-10 items-center justify-center rounded-card text-white">
                   <Plug size={24} strokeWidth={2} />
                 </span>
-                <span className="px-1 text-center text-tiny font-medium leading-4 text-white/75">Rest</span>
+                <span className="px-1 text-center text-xs font-medium leading-4 text-white/75">Rest</span>
               </span>
             </div>
-            <div className="flex flex-1 flex-col justify-center gap-1 text-tiny text-muted-foreground">
+            <div className="flex flex-1 flex-col justify-center gap-1 text-xs text-muted-foreground">
               <p>
                 <code className="font-mono text-foreground">--color-rail</code> = ink-950. Flat, not a gradient.
               </p>
@@ -592,7 +593,7 @@ export default function DesignPage() {
             <div className="w-[100px] shrink-0" />
             <div className="flex-1 rounded-l-frame bg-canvas-bg" />
           </div>
-          <p className="mt-2 text-tiny text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             The page inside the notch is <code className="font-mono text-foreground">--color-canvas-bg</code> — the same
             warm surface the builder's canvas uses. Content sits on it in white islands, never flat on the page.
           </p>
@@ -604,9 +605,9 @@ export default function DesignPage() {
         >
           <div className="grid gap-4 rounded-card bg-canvas-bg p-4 sm:grid-cols-2">
             <div className="rounded-surface border border-border bg-card p-5 shadow-card">
-              <p className="text-base font-semibold text-foreground">Total leads</p>
+              <p className="text-sm font-semibold text-foreground">Total leads</p>
               <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                <p className="stat-numeral text-stat leading-none">44</p>
+                <p className="stat-numeral text-display-md leading-none">44</p>
                 <Delta current={44} previous={32} format={{ format: "number" }} since="vs prior" />
               </div>
               <Sparkbars
@@ -615,16 +616,16 @@ export default function DesignPage() {
               />
             </div>
             <div className="rounded-surface border border-border bg-card p-5 shadow-card">
-              <p className="text-base font-semibold text-foreground">Pickup rate</p>
+              <p className="text-sm font-semibold text-foreground">Pickup rate</p>
               <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                <p className="stat-numeral text-stat leading-none">57.1%</p>
+                <p className="stat-numeral text-display-md leading-none">57.1%</p>
                 <Delta current={57.1} previous={55.1} format={{ format: "percent", precision: 1 }} since="vs yesterday" />
               </div>
               <TargetBar value={57.1} target={50} format={{ format: "percent", precision: 1 }} />
             </div>
             <div className="rounded-surface border border-border bg-card p-5 shadow-card">
-              <p className="text-base font-semibold text-foreground">Leads by owner</p>
-              <p className="stat-numeral mt-1.5 text-stat leading-none">41</p>
+              <p className="text-sm font-semibold text-foreground">Leads by owner</p>
+              <p className="stat-numeral mt-1.5 text-display-md leading-none">41</p>
               <GroupBars
                 groups={[
                   { label: "Afeef", value: 23 },
@@ -638,15 +639,15 @@ export default function DesignPage() {
               />
             </div>
             <div className="rounded-surface border border-border bg-card p-5 shadow-card">
-              <p className="text-base font-semibold text-foreground">Source marks</p>
-              <p className="mt-1 text-tiny text-muted-foreground">
+              <p className="text-sm font-semibold text-foreground">Source marks</p>
+              <p className="mt-1 text-xs text-muted-foreground">
                 A connector&rsquo;s brand tile, at list scale — rows are read by shape before they are read by word.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 {["gsheets", "close", "gcal", "whop", "calendly", "instantly", "webhook"].map((s) => (
                   <span key={s} className="flex items-center gap-1.5">
                     <SourceMark source={s} />
-                    <code className="font-mono text-micro text-muted-foreground">{s}</code>
+                    <code className="font-mono text-xs text-muted-foreground">{s}</code>
                   </span>
                 ))}
               </div>
@@ -659,7 +660,7 @@ export default function DesignPage() {
             {(["app", "unite", "unite_match", "filter", "paths", "formula", "formula_compare", "time_between"] as const).map((t) => (
               <div key={t} className="flex items-center gap-2 rounded-card border border-border bg-card px-3 py-2">
                 <NodeIcon type={t.startsWith("unite") ? "unite" : t.startsWith("formula") ? "formula" : t} variant={t.includes("_") ? t : undefined} size={28} />
-                <code className="font-mono text-micro text-muted-foreground">{t}</code>
+                <code className="font-mono text-xs text-muted-foreground">{t}</code>
               </div>
             ))}
           </div>
@@ -772,10 +773,10 @@ export default function DesignPage() {
                   <NodeIcon type="formula" size={38} />
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="shrink-0 text-micro font-semibold uppercase tracking-wide text-muted-foreground">Step 3</span>
+                      <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Step 3</span>
                       <StatusPill tone="success">Tested</StatusPill>
                     </div>
-                    <p className="-ml-1.5 mt-0.5 truncate px-1.5 py-1 text-title font-semibold tracking-tight text-foreground">Summarize</p>
+                    <p className="-ml-1.5 mt-0.5 truncate px-1.5 py-1 text-lg font-semibold tracking-tight text-foreground">Summarize</p>
                   </div>
                   <span className="-mr-1.5 shrink-0 self-start rounded-control p-1.5 text-muted-foreground">
                     <X size={18} strokeWidth={2} />
@@ -875,14 +876,14 @@ const SECTIONS = [
 function KitIndex() {
   return (
     <aside className="sticky top-6 hidden w-56 shrink-0 xl:block">
-      <p className="mb-3 text-micro font-semibold uppercase tracking-wide text-muted-foreground">On this page</p>
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">On this page</p>
       <nav>
         <ul className="space-y-0.5">
           {SECTIONS.map((s) => (
             <li key={s}>
               <a
                 href={`#${sectionId(s)}`}
-                className="block rounded-control px-2 py-1 text-tiny text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted hover:text-foreground"
+                className="block rounded-control px-2 py-1 text-xs text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted hover:text-foreground"
               >
                 {s}
               </a>
@@ -906,7 +907,7 @@ function Section({ title, note, children }: { title: string; note: string; child
   return (
     <section id={sectionId(title)} className="mt-12 scroll-mt-20">
       <SectionHeading className="mb-0">{title}</SectionHeading>
-      <p className="mb-4 mt-1 text-tiny text-muted-foreground">{note}</p>
+      <p className="mb-4 mt-1 text-xs text-muted-foreground">{note}</p>
       {children}
     </section>
   );

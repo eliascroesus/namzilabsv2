@@ -58,7 +58,7 @@ function Disclosure({ summary, children }: { summary: string; children: ReactNod
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex items-center gap-1.5 rounded-control py-1 text-tiny font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="flex items-center gap-1.5 rounded-control py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronRight size={14} strokeWidth={2.25} className={`transition-transform ${open ? "rotate-90" : ""}`} aria-hidden />
         {summary}
@@ -120,7 +120,7 @@ export function ReviewPublishModal({
       <div className="flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-surface border border-border bg-card shadow-panel flow-pop-in" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h2 className="text-title font-semibold tracking-tight text-foreground">Review &amp; publish</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">Review &amp; publish</h2>
           </div>
           <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="Close" title="Close">
             <X />
@@ -128,7 +128,7 @@ export function ReviewPublishModal({
         </div>
 
         <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-muted/40 p-4">
-          {endpoints.length === 0 && <p className="text-base text-muted-foreground">This flow has no result step yet. Add a Calculate step, then come back.</p>}
+          {endpoints.length === 0 && <p className="text-sm text-muted-foreground">This flow has no result step yet. Add a Calculate step, then come back.</p>}
           {/* The one change in the reliability pass that MOVES a number, said
               at the moment of consequence rather than in a release note. */}
           {/* The bigger of the two window changes, and the one most likely to
@@ -136,13 +136,13 @@ export function ReviewPublishModal({
               instant, so a flow reading a calendar counted 9 of its 20
               matching meetings. */}
           {hasOpenEndedRange && (
-            <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-3 text-tiny text-warn-ink">
+            <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-3 text-xs text-warn-ink">
               A date range with no “To” now has no end at all. It used to stop at the moment the number was computed, so anything dated in the future —
               scheduled meetings — was left out. This number may rise.
             </p>
           )}
           {hasCustomRange && (
-            <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-3 text-tiny text-warn-ink">
+            <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-3 text-xs text-warn-ink">
               A custom date range now includes the whole of its “To” day. It used to stop at midnight, so this number may rise by up to a day&rsquo;s worth of records.
             </p>
           )}
@@ -154,18 +154,18 @@ export function ReviewPublishModal({
                 <label className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
                     <input type="checkbox" checked={m.enabled} onChange={(e) => set(ep.nodeId, { enabled: e.target.checked })} className="h-4 w-4 accent-brand-600" />
-                    <span className="truncate text-base font-semibold text-foreground">{ep.title}</span>
+                    <span className="truncate text-sm font-semibold text-foreground">{ep.title}</span>
                   </span>
-                  <Badge className="text-micro uppercase tracking-wide">Metric</Badge>
+                  <Badge className="text-xs uppercase tracking-wide">Metric</Badge>
                 </label>
                 {m.enabled && (
                   <div className="mt-3 space-y-2.5">
                     <label className="block">
-                      <span className="mb-1.5 block text-base font-semibold text-foreground">Metric name</span>
+                      <span className="mb-1.5 block text-sm font-semibold text-foreground">Metric name</span>
                       <Input value={m.name} onChange={(e) => set(ep.nodeId, { name: e.target.value })} placeholder="e.g. Show-up rate" />
                     </label>
                     {previews[ep.nodeId] != null && (
-                      <p className="tnum text-tiny font-medium text-muted-foreground">{formatMetricValue(previews[ep.nodeId], m)}</p>
+                      <p className="tnum text-xs font-medium text-muted-foreground">{formatMetricValue(previews[ep.nodeId], m)}</p>
                     )}
                     {/* THE ONE SETTING THAT CHANGES A NUMBER STAYS IN THE OPEN.
                         Everything else here is presentation and has a correct
@@ -175,7 +175,7 @@ export function ReviewPublishModal({
                         as a chart setting — the question is concrete and the
                         label now asks it. */}
                     <div>
-                      <span className="mb-1.5 block text-base font-semibold text-foreground">Date the dashboard filters by</span>
+                      <span className="mb-1.5 block text-sm font-semibold text-foreground">Date the dashboard filters by</span>
                       <Select
                         value={m.timeField ?? ""}
                         width={260}
@@ -193,7 +193,7 @@ export function ReviewPublishModal({
                     <Disclosure summary="Display options">
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <span className="mb-1.5 block text-base font-semibold text-foreground">Show as</span>
+                          <span className="mb-1.5 block text-sm font-semibold text-foreground">Show as</span>
                           <Select
                             value={m.viz}
                             width={210}
@@ -202,19 +202,19 @@ export function ReviewPublishModal({
                           />
                         </div>
                         <div>
-                          <span className="mb-1.5 block text-base font-semibold text-foreground">Format</span>
+                          <span className="mb-1.5 block text-sm font-semibold text-foreground">Format</span>
                           <Select value={m.format} width={210} options={formatOptionsFor(m.format)} onChange={(v) => set(ep.nodeId, { format: v })} />
                         </div>
                       </div>
                       {(m.viz === "line" || m.viz === "bar") && m.timeField && (
                         <div>
-                          <span className="mb-1.5 block text-base font-semibold text-foreground">Group by</span>
+                          <span className="mb-1.5 block text-sm font-semibold text-foreground">Group by</span>
                           <Select value={m.timeUnit ?? "month"} width={210} options={TIME_UNIT_OPTIONS} onChange={(v) => set(ep.nodeId, { timeUnit: v })} />
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-2">
                         <label className="block">
-                          <span className="mb-1.5 block text-base font-semibold text-foreground">Decimals</span>
+                          <span className="mb-1.5 block text-sm font-semibold text-foreground">Decimals</span>
                           {/* Not <input type="number">: Number("") is NaN, and a
                               NaN here fails the graph schema, so clearing this
                               box silently killed the autosave of this edit and
@@ -222,17 +222,17 @@ export function ReviewPublishModal({
                           <NumberField value={m.precision} min={0} onChange={(n) => set(ep.nodeId, { precision: n ?? 0 })} />
                         </label>
                         <label className="block">
-                          <span className="mb-1.5 block text-base font-semibold text-foreground">Goal / target</span>
+                          <span className="mb-1.5 block text-sm font-semibold text-foreground">Goal / target</span>
                           {/* The goal is in the metric's own format: % for percentages, $ for currency. */}
                           <div className="relative">
-                            {m.format === "currency" && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-muted-foreground">$</span>}
+                            {m.format === "currency" && <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>}
                             <NumberField
                               value={m.target}
                               allowNull
                               onChange={(n) => set(ep.nodeId, { target: n })}
                               className={`${m.format === "currency" ? "pl-6" : ""} ${m.format === "percent" ? "pr-7" : ""}`}
                             />
-                            {m.format === "percent" && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-base text-muted-foreground">%</span>}
+                            {m.format === "percent" && <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>}
                           </div>
                         </label>
                       </div>
@@ -246,7 +246,7 @@ export function ReviewPublishModal({
 
         <div className="space-y-2 border-t border-border p-4">
           {error && (
-            <div className="rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-tiny text-danger-ink">
+            <div className="rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-xs text-danger-ink">
               <p>{error}</p>
               {/* The per-issue list used to render only in a canvas banner
                   gated on the modal being CLOSED — and publish can only be
@@ -273,13 +273,13 @@ export function ReviewPublishModal({
               )}
             </div>
           )}
-          {warning && <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-3 text-tiny text-warn-ink">{warning}</p>}
+          {warning && <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-3 text-xs text-warn-ink">{warning}</p>}
           {/* WHAT THE BUTTON DOES, BEFORE IT IS PRESSED. "Publish 1 metric" is
               accurate and says nothing about consequences, and people hesitate
               at buttons that sound one-way. Both halves here are true: it
               starts updating by itself, and none of it is permanent. */}
           {enabledCount > 0 && !publishing && (
-            <p className="text-center text-tiny text-muted-foreground">Updates automatically. Editable any time.</p>
+            <p className="text-center text-xs text-muted-foreground">Updates automatically. Editable any time.</p>
           )}
           <Button onClick={onPublish} disabled={publishing || enabledCount === 0} className="w-full">
             {publishing ? "Publishing…" : publishedVersion != null ? `Update dashboard (${enabledCount})` : `Publish ${enabledCount} metric${enabledCount === 1 ? "" : "s"}`}

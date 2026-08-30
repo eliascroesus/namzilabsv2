@@ -85,7 +85,7 @@ export function ConditionEditor({
   return (
     <div className="space-y-3">
       {rules.length > 1 && (
-        <div className="flex items-center gap-2 text-tiny text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>Continue only if</span>
           <Select
             value={value.combinator}
@@ -108,7 +108,7 @@ export function ConditionEditor({
           return (
             <div key={i} className="rounded-card border border-border bg-muted/40 p-3">
               {i > 0 && (
-                <div className="-mt-1 mb-1.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground">{value.combinator === "or" ? "or" : "and"}</div>
+                <div className="-mt-1 mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{value.combinator === "or" ? "or" : "and"}</div>
               )}
               <div className="grid grid-cols-1 gap-3">
                 <div>
@@ -146,7 +146,7 @@ export function ConditionEditor({
                 <button
                   type="button"
                   onClick={() => removeRule(i)}
-                  className="rounded-control text-tiny text-muted-foreground transition-colors hover:text-danger-ink"
+                  className="rounded-control text-xs text-muted-foreground transition-colors hover:text-danger-ink"
                 >
                   Remove
                 </button>
@@ -159,7 +159,7 @@ export function ConditionEditor({
       <button
         type="button"
         onClick={addRule}
-        className="inline-flex items-center gap-1 rounded-control border border-dashed border-border px-2.5 py-1.5 text-tiny text-muted-foreground transition-colors hover:border-ring/50 hover:text-foreground"
+        className="inline-flex items-center gap-1 rounded-control border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-ring/50 hover:text-foreground"
       >
         <Plus size={14} strokeWidth={2.25} aria-hidden /> Add condition
       </button>

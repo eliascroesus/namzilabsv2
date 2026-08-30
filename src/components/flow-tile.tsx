@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { PencilLine } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
 import { isForwardRange } from "@/lib/metrics/range";
 import { refreshFlowAction } from "@/app/dashboard/flows/actions";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { MetricCard } from "@/components/metric-card";
 import { StatusPill, type StatusPillProps } from "@/components/ui/badge";
 import { Delta, GroupBars, ImportProgress, Sparkbars, TargetBar } from "@/components/charts";
 import type { ImportCoverage } from "@/connectors/types";
@@ -166,182 +165,132 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
    */
   return (
     /**
-     * THE TILE'S SHELL, AND THE ONE DECISION INSIDE IT: the number is the only
-     * thing on this card allowed to be loud.
+     * THE TILE'S SHELL LIVES IN `MetricCard` NOW — see that file for the shape
+     * and the two arguments behind it. What used to be spelled here (the card,
+     * the micro-label head, the headline row, the tray) was one of THREE
+     * spellings of the same object on one board; this file is left with what is
+     * actually particular to a materialized flow Output: which number answers
+     * the selected range, what qualifies it, and the two acts it offers.
      *
-     * `tile` (16px radius, the pointer response) is the kit's own rung — see
-     * ui/card.tsx — so this and the canvas board's `ChartFrame` cannot drift.
-     * The padding is `none` because the card is now two BANDS rather than one
-     * padded box: a body that holds the number and its qualifications, and a
-     * tray at the bottom that holds the provenance and the two actions. The
-     * tray is where "premium surface" comes from that a heavier shadow could
-     * not buy — the actions stop floating in the same white as the figure.
-     *
-     * `flex-col` + `flex-1` on the body pins that tray to the bottom edge, so
-     * a row of tiles stretched to equal height lines its Refresh buttons up
-     * instead of hanging them wherever each chart happened to end.
+     * The em-dash is one of those particulars. "No answer for this period" and
+     * "the answer is zero" are different facts and the tile that conflates them
+     * is the one nobody can trust — so `headline` is passed as `null` rather
+     * than as a string, and the card prints the dash at the same size a real
+     * number would take, so switching ranges never makes the tile jump.
      */
-    <Card variant="tile" padding="none" className="lift group/tile flex flex-col overflow-hidden">
-      <div className="flex flex-1 flex-col p-6 pb-5">
-        {/* HEAD: the name, and a status marker that is quiet when there is
-            nothing to say. A healthy tile carries a 6px dot; only a tile that
-            needs something wears a full pill. Eight green "Up to date" badges
-            on one board is eight pieces of furniture reporting no news. */}
-        <div className="flex items-start justify-between gap-3">
-          {/* THE KIT'S MICRO-LABEL VOICE — ALL CAPS, tracking-wide, muted.
-              It was 16px semibold in the foreground colour, which put a heading
-              and a 36px numeral an inch apart both asking to be read first. A
-              metric's name is a LABEL for the figure under it, and labelling it
-              as one is the whole of the hierarchy this card was missing.
-
-              A row whose tile jsonb is null has never computed successfully, so
-              there is no stored name — the output id is the only honest handle. */}
-          <h3 className="min-w-0 truncate text-micro font-semibold uppercase tracking-wide text-muted-foreground">
-            {t.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}
-          </h3>
-          {/* "Up to date" is about the ROW, and on a range this row predates it
-              contradicts the body two lines down ("not computed yet"). The row
-              being fresh is true and useless there — what the customer asked
-              about has no answer — so the healthy marker is withheld and only
-              the states that still mean something (refreshing, computing,
-              error) keep their pill. */}
-          {missing && row.status === "fresh" ? null : <Freshness status={row.status} />}
-        </div>
-
-        {/* An em-dash, not a 0: "no answer for this period" and "the answer is
-            zero" are different facts, and the tile that conflates them is the one
-            nobody can trust. Same stat size as a real number, so switching ranges
-            never makes the tile jump. */}
-        <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-          <p className={cn("stat-numeral text-stat leading-none", unavailable && "text-muted-foreground")}>
-            {unavailable ? "—" : fmt(t.value, t)}
-          </p>
-          {delta && <Delta current={delta.current} previous={delta.previous} format={t} since={delta.since} />}
-        </div>
-
-        {/* No number means no chart either: `t` has fallen back to the stored
-            tile, whose series and target are the flow's OWN all-time figures —
-            drawing them under a range that has no answer is the all-time-number-
-            under-the-Today-pill fallback wearing bars. */}
-        {unavailable ? (
-          <p className="mt-2.5 text-tiny text-muted-foreground" title={unavailable}>
-            {unavailable.length > 160 ? `${unavailable.slice(0, 160)}…` : unavailable}
-          </p>
-        ) : t.series && t.series.length > 0 && drawsItsSeries(windowed?.assembled === true, stored, t) ? (
-          <Sparkbars series={t.series} format={t} />
-        ) : t.groups && t.groups.length > 0 ? (
-          <GroupBars groups={t.groups} total={t.value} format={t} />
-        ) : t.target != null ? (
-          <TargetBar value={t.value ?? 0} target={t.target} format={t} />
-        ) : null}
-
-        {/* Directly under the number, because it is about the number: everything
-            below this point qualifies it too, and this is the qualification that
-            decides whether the figure means anything at all. */}
-        {row.unpublished && <NotLive flowId={row.flowId} />}
-
-        {/* The red pill alone says "broken" while withholding WHY. The stored
-            message names the failing node's error — truncated here, complete in
-            the title attribute (the same trick the timestamp below uses).
-
-            A TINTED BLOCK AT 12px, not 16px prose. It was set one step ABOVE
-            the tile's own title, so a broken tile's loudest element after the
-            em-dash was its stack trace. The danger wash carries the weight the
-            size used to — the same `soft`/`ink` pairing `ImportProgress` uses
-            two lines down, so the two qualifications read as one family.
-            `ChartFrame` keeps its plain line: a canvas tile can be four rows
-            tall, and a padded block there eats the mark. */}
-        {row.status === "error" && row.error && (
-          <p className="mt-2.5 rounded-card bg-danger-soft px-2.5 py-2 text-tiny text-danger-ink" title={row.error}>
-            {row.error.length > 200 ? `${row.error.slice(0, 200)}…` : row.error}{" "}
-            <Link href={`/dashboard/flows/${row.flowId}`} className="font-medium underline underline-offset-2">
-              Fix in the editor
-            </Link>
-          </p>
-        )}
-
-        {/* A record with no date in this metric's time reference belongs to no
-            period, so it is in "All time" and in none of the pills. Saying so is
-            the same rule the import bar follows: a number that leaves data out
-            has to admit it, or the gap reads as an answer. */}
-        {windowed?.undated ? (
-          <p className="mt-2 text-tiny text-warn-ink">
-            {windowed.undated} record{windowed.undated === 1 ? "" : "s"} carry no date, so they are counted only in All time.
-          </p>
-        ) : null}
-
-        {/* Phase 8 — a number computed over an import that is still running is
-            accurate and INCOMPLETE, and "Data as of <now>" says only the first
-            half. This says the second: a freshly computed tile can cover twelve
-            days of a ninety-day window, and without this the timestamp actively
-            misleads. */}
-        {row.importing && <ImportProgress importing={row.importing} />}
-      </div>
-
-      {/* THE TRAY: provenance on the left, actions on the right, on its own
-          faint surface behind a hairline.
-          The honesty marker (G.3): every materialized number says WHEN it was
-          true, and it says the WORD now — a bare "2 hours ago" under a figure
-          left the reader to guess whether it dated the number or the data.
-          A stale tile's timestamp shows exactly how far behind it is.
-
-          The wash is `foreground` at 3% rather than `muted`, because it has to
-          work in both themes from one value: 3% of near-black darkens the light
-          card, 3% of near-white lifts the dark one, and a tray that reads as
-          recessed in one theme and invisible in the other is not a tray. */}
-      <div className="flex items-center justify-between gap-2 border-t border-border bg-foreground/3 px-6 py-2.5">
-        {row.computedAt ? (
-          // NO "Updated " PREFIX. It was added with the tray and it does not
-          // fit: at three columns the tray has room for a relative time and two
-          // pills, and the prefix pushed every tile on the board to
-          // "Updated 2…". The tray IS the context — a timestamp sitting under a
+    <MetricCard
+      className="group/tile"
+      // A row whose tile jsonb is null has never computed successfully, so
+      // there is no stored name — the output id is the only honest handle.
+      title={t.name ?? `Output ${row.outputNodeId.slice(0, 8)}`}
+      /* "Up to date" is about the ROW, and on a range this row predates it
+         contradicts the body two lines down ("not computed yet"). The row being
+         fresh is true and useless there — what the customer asked about has no
+         answer — so the healthy marker is withheld and only the states that
+         still mean something (refreshing, computing, error) keep their pill. */
+      marker={missing && row.status === "fresh" ? null : <Freshness status={row.status} />}
+      headline={unavailable ? null : fmt(t.value, t)}
+      delta={delta && <Delta current={delta.current} previous={delta.previous} format={t} since={delta.since} />}
+      provenance={
+        row.computedAt ? (
+          // NO "Updated " PREFIX. At three columns the footline has room for a
+          // relative time and two pills, and the prefix pushed every tile on the
+          // board to "Updated 2…". The line IS the context — a timestamp under a
           // number, beside Refresh, is not ambiguous about what it timestamps.
-          <span
-            className="min-w-0 truncate text-micro text-muted-foreground"
-            title={formatDateTime(new Date(row.computedAt))}
-          >
+          <span className="min-w-0 truncate text-xs text-muted-foreground" title={formatDateTime(new Date(row.computedAt))}>
             {relativeTime(new Date(row.computedAt))}
           </span>
-        ) : (
-          <span />
-        )}
-        {/* Two matched ghost pills. They were a link-variant button beside a
-            bare anchor — the same weight, two different components, neither
-            with a hit area bigger than its word. Pills are what the sheet draws
-            buttons as, and a tray is where a pill can be quiet and still read
-            as pressable.
+        ) : null
+      }
+      /* Two matched ghost pills. They were a link-variant button beside a bare
+         anchor — the same weight, two different components, neither with a hit
+         area bigger than its word. `size="xs"` is the kit's own dense geometry
+         now; it used to be `sm` plus a four-class override, retyped here twice.
 
-            NO YELLOW HERE, and that is the ratio rule doing its job rather than
-            an omission: the hero colour is at most one per SCREEN, and a board
-            renders twelve of these. The single spot of colour a tile spends is
-            the accent that arrives under the pointer on `Open`. */}
-        <span className="flex shrink-0 items-center gap-1">
+         NO YELLOW HERE, and that is the ratio rule doing its job rather than an
+         omission: the hero colour is at most one per SCREEN, and a board renders
+         twelve of these. The single spot of colour a tile spends is the accent
+         that arrives under the pointer on `Open`. */
+      actions={
+        <>
           <form action={refreshFlowAction}>
             <input type="hidden" name="flowId" value={row.flowId} />
             {/* A submit, so it stays a real button. */}
-            <Button
-              type="submit"
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 px-2.5 text-micro [&_svg]:size-3.5"
-              title="Recompute this tile now"
-            >
+            <Button type="submit" variant="ghost" size="xs" title="Recompute this tile now">
               Refresh
             </Button>
           </form>
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 px-2.5 text-micro hover:text-accent-foreground [&_svg]:size-3.5"
-          >
-            <Link href={`/dashboard/flows/${row.flowId}`}>
-              Open
-            </Link>
+          <Button asChild variant="ghost" size="xs" className="hover:text-accent-foreground">
+            <Link href={`/dashboard/flows/${row.flowId}`}>Open</Link>
           </Button>
-        </span>
-      </div>
-    </Card>
+        </>
+      }
+      qualifications={
+        <>
+          {/* Directly under the number, because it is about the number:
+              everything below this point qualifies it too, and this is the
+              qualification that decides whether the figure means anything. */}
+          {row.unpublished && <NotLive flowId={row.flowId} />}
+
+          {/* The red pill alone says "broken" while withholding WHY. The stored
+              message names the failing node's error — truncated here, complete
+              in the title attribute.
+
+              A TINTED BLOCK AT 12px, not 16px prose. It was set one step ABOVE
+              the tile's own title, so a broken tile's loudest element after the
+              em-dash was its stack trace. The danger wash carries the weight the
+              size used to — the same `soft`/`ink` pairing `ImportProgress` uses,
+              so the two qualifications read as one family. */}
+          {row.status === "error" && row.error && (
+            <p className="mt-2.5 rounded-card bg-danger-soft px-2.5 py-2 text-xs text-danger-ink" title={row.error}>
+              {row.error.length > 200 ? `${row.error.slice(0, 200)}…` : row.error}{" "}
+              <Link href={`/dashboard/flows/${row.flowId}`} className="font-medium underline underline-offset-2">
+                Fix in the editor
+              </Link>
+            </p>
+          )}
+
+          {/* A record with no date in this metric's time reference belongs to no
+              period, so it is in "All time" and in none of the pills. Saying so
+              is the same rule the import bar follows: a number that leaves data
+              out has to admit it, or the gap reads as an answer. */}
+          {windowed?.undated ? (
+            <p className="mt-2 text-xs text-warn-ink">
+              {/* ONE STRING, NO JSX TEXT NODES — and re-broken once already
+                  while moving this block, which is why the test that caught it
+                  exists. esbuild keeps the space that begins a text node on the
+                  same line as the expression before it; Next's SWC transform
+                  drops it. So the sentence renders "3 recordscarry no date" in
+                  the browser and correctly under vitest, and no unit test can
+                  arbitrate — it runs under the transform that agrees with it.
+                  See custom-tile.tsx for the full account. */}
+              {`${windowed.undated} record${windowed.undated === 1 ? "" : "s"} carry no date, so they are counted only in All time.`}
+            </p>
+          ) : null}
+
+          {/* Phase 8 — a number computed over an import that is still running is
+              accurate and INCOMPLETE, and "Data as of <now>" says only the first
+              half. This says the second. */}
+          {row.importing && <ImportProgress importing={row.importing} />}
+        </>
+      }
+    >
+      {/* No number means no chart either: `t` has fallen back to the stored
+          tile, whose series and target are the flow's OWN all-time figures —
+          drawing them under a range that has no answer is the all-time-number-
+          under-the-Today-pill fallback wearing bars. */}
+      {unavailable ? (
+          <p className="mt-2.5 text-xs text-muted-foreground" title={unavailable}>
+            {unavailable.length > 160 ? `${unavailable.slice(0, 160)}…` : unavailable}
+          </p>
+      ) : t.series && t.series.length > 0 && drawsItsSeries(windowed?.assembled === true, stored, t) ? (
+        <Sparkbars series={t.series} format={t} />
+      ) : t.groups && t.groups.length > 0 ? (
+        <GroupBars groups={t.groups} total={t.value} format={t} />
+      ) : t.target != null ? (
+        <TargetBar value={t.value ?? 0} target={t.target} format={t} />
+      ) : null}
+    </MetricCard>
   );
 }
 
@@ -484,7 +433,7 @@ export function deriveDelta(
  */
 export function NotLive({ flowId }: { flowId: string }) {
   return (
-    <p className="mt-2 flex items-start gap-1.5 text-tiny text-warn-ink">
+    <p className="mt-2 flex items-start gap-1.5 text-xs text-warn-ink">
       <PencilLine size={14} className="mt-px shrink-0" aria-hidden />
       <span>
         Edited since publishing — this is the published version&rsquo;s number.{" "}

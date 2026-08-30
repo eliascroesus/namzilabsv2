@@ -70,8 +70,8 @@ export function PrimitiveSpecimens() {
           <Button variant="secondary">Popover</Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-64">
-          <p className="text-base font-semibold text-foreground">Anchored, and portalled</p>
-          <p className="mt-1 text-tiny text-muted-foreground">
+          <p className="text-sm font-semibold text-foreground">Anchored, and portalled</p>
+          <p className="mt-1 text-xs text-muted-foreground">
             It escapes every scroll container it is declared in, which is the whole reason the hand-rolled one grew a
             fixed-positioning mode.
           </p>
@@ -133,10 +133,10 @@ export function PrimitiveSpecimens() {
           <TabsTrigger value="data">Data</TabsTrigger>
           <TabsTrigger value="style">Style</TabsTrigger>
         </TabsList>
-        <TabsContent value="data" className="pt-2 text-base text-muted-foreground">
+        <TabsContent value="data" className="pt-2 text-sm text-muted-foreground">
           Arrow keys move between these. The app&rsquo;s three existing tab strips do not.
         </TabsContent>
-        <TabsContent value="style" className="pt-2 text-base text-muted-foreground">
+        <TabsContent value="style" className="pt-2 text-sm text-muted-foreground">
           <Check className="mr-1 inline size-4 text-success-ink" />
           And the panel follows the selection.
         </TabsContent>

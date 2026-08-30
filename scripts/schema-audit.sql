@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (22 tables, 223 columns).
+-- QUERY 1 — tables and columns (22 tables, 224 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -99,6 +99,7 @@ WITH expected (tbl, col) AS (
     ('dashboard_views', 'name'),
     ('dashboard_views', 'pos'),
     ('dashboard_views', 'kind'),
+    ('dashboard_views', 'is_default'),
     ('dashboard_views', 'created_at'),
     ('dashboard_views', 'updated_at'),
     ('dead_letter', 'id'),

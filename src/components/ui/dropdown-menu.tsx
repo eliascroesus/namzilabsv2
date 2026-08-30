@@ -29,8 +29,8 @@ import { cn } from "@/lib/utils"
  *   ACTIVE  `bg-accent text-accent-foreground` — the violet wash carrying the
  *           violet INK. Not `--primary`: brand-500 is 4.42:1 on our off-white
  *           and fails AA as text. Fills take the 500, words take the 700.
- *   LABEL   `text-micro font-semibold uppercase tracking-wide` — the same
- *           micro label the rail's section headings and every `StatusPill` use.
+ *   LABEL   `text-xs font-semibold uppercase tracking-wide` — the same micro
+ *           label the rail's section headings and every `StatusPill` use.
  *
  * Kept as prose rather than a shared constant on purpose: these are four
  * vendored files that `shadcn add --overwrite` can replace one at a time, and a
@@ -206,7 +206,7 @@ function DropdownMenuLabel({
         // font-medium`, the same size and nearly the same weight as the ROWS
         // beneath it, which is why a shadcn menu reads as a flat list with a
         // dead first item instead of as a titled group.
-        "px-3 pt-1.5 pb-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground data-[inset]:pl-8",
+        "px-3 pt-1.5 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground data-[inset]:pl-8",
         className
       )}
       {...props}
@@ -238,7 +238,7 @@ function DropdownMenuShortcut({
     <span
       data-slot="dropdown-menu-shortcut"
       className={cn(
-        "ml-auto text-micro tracking-widest text-muted-foreground",
+        "ml-auto text-xs tracking-widest text-muted-foreground",
         className
       )}
       {...props}

@@ -129,8 +129,12 @@ describe("the theme-color meta matches the app background", () => {
    * being re-typed here — which is the whole point: the meta tag and the
    * stylesheet must not be able to hold two different opinions.
    */
+  // `(?:,[^{]*)?` because `:root` shares its rule with `.dark .tile-surface` —
+  // the light island the metric card lives on. See tests/canvas-tokens.ts for
+  // the full note; the two parsers have to agree about this or one of them
+  // silently measures the wrong block.
   const resolve = (selector: string) => {
-    const src = css.match(new RegExp(`(?:^|\\n)${selector}\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+    const src = css.match(new RegExp(`(?:^|\\n)${selector}\\s*(?:,[^{]*)?\\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
     const direct = src.match(/--background:\s*(#[0-9a-fA-F]{6})\s*;/)?.[1];
     if (direct) return direct.toLowerCase();
     const alias = src.match(/--background:\s*var\(--([a-z0-9-]+)\)/)?.[1];

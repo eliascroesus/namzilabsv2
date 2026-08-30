@@ -137,7 +137,7 @@ function SheetTitle({
       // one caller and 16px in another. It is a modal title, so it takes the
       // modal title.
       className={cn(
-        "text-title font-semibold tracking-tight text-foreground",
+        "text-lg font-semibold tracking-tight text-foreground",
         className
       )}
       {...props}

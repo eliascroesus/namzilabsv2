@@ -113,7 +113,7 @@ function SelectLabel({
       // The menu's LABEL voice, so a grouped Select and a grouped DropdownMenu
       // put the same heading over the same list.
       className={cn(
-        "px-3 pt-1.5 pb-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground",
+        "px-3 pt-1.5 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
         className
       )}
       {...props}

@@ -185,9 +185,8 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
              caption that lost its card. */
           <Card variant="surface" padding="none" className="mt-4 overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border bg-foreground/5 px-4 py-3">
-              {/* `text-xs` rather than the `text-micro` alias — same 12px, and
-                  the alias is the legacy spelling each surface drops as it is
-                  rebuilt. */}
+              {/* `text-xs` is the only spelling of 12px now; the `text-micro`
+                  alias it was chosen over is gone from the theme. */}
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {source ? `${activeSourceLabel} · last ${FEED_ROWS}` : `Last ${FEED_ROWS} records`}
               </span>

@@ -44,7 +44,7 @@ export function ChartHover({ children }: { children: ReactNode }) {
       {tip && (
         <span
           role="status"
-          className="pointer-events-none absolute z-20 max-w-[16rem] truncate rounded-control border border-border bg-card px-2 py-1 text-tiny text-foreground shadow-raised"
+          className="pointer-events-none absolute z-20 max-w-[16rem] truncate rounded-control border border-border bg-card px-2 py-1 text-xs text-foreground shadow-raised"
           style={{
             // Clamped to the wrapper, and flipped near its right edge, so a
             // tooltip on the last bucket does not hang off the tile.

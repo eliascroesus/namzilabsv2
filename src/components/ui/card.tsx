@@ -50,8 +50,20 @@ const cardVariants = cva("border border-border bg-card", {
        * one surface. The metric tile is the surface the comp actually shows, so
        * it is the surface that changes — and it now reads at 15.3:1 against the
        * ground instead of 1.24:1.
+       *
+       * `tile-surface` IS WHAT MAKES THE INSIDE OF IT WHITE TOO.
+       *
+       * Turning the card white and stopping was the bug: `dark:text-neutral-900`
+       * fixed this element's own `color` and nothing else, so every child still
+       * asked the DARK theme for its ink and got `neutral-400` — 2.52:1 on the
+       * white it was now sitting on. The class re-points the whole role block at
+       * its light values for this subtree (see globals.css), so muted ink,
+       * hairlines and the state trios all come back to the values that were
+       * solved against white. `dark:text-neutral-900` is gone with it: the
+       * `text-foreground` below now answers near-black in both themes, which is
+       * the role saying it rather than a literal repeating it.
        */
-      tile: "rounded-surface shadow-xs transition-shadow duration-(--duration-base) ease-(--ease-standard) hover:shadow-card-hover dark:border-transparent dark:bg-white dark:text-neutral-900",
+      tile: "tile-surface rounded-surface bg-card text-foreground shadow-xs transition-shadow duration-(--duration-base) ease-(--ease-standard) hover:shadow-card-hover dark:border-transparent",
     },
     padding: {
       none: "",

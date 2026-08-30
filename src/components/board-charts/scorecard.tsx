@@ -117,7 +117,7 @@ export function GoalBar({ value, target, format }: { value: number; target: numb
           numerals beside it, and the percentage carrying the emphasis — it is
           the one number in this row that changes, and once it passes 100 it is
           also the good news. */}
-      <p className="mt-1.5 flex items-baseline justify-between gap-2 text-micro">
+      <p className="mt-1.5 flex items-baseline justify-between gap-2 text-xs">
         <span className="flex min-w-0 items-baseline gap-1 text-muted-foreground">
           <span className="uppercase tracking-wide">Goal</span>
           <span className="tnum truncate">{formatMetricValue(target, format)}</span>

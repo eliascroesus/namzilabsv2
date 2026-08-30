@@ -37,7 +37,7 @@ export function Segmented({
  title={o.hint}
  aria-pressed={active}
  onClick={() => onChange(o.value)}
- className={`min-w-0 flex-1 truncate rounded-[calc(var(--radius-control)-2px)] px-2.5 py-1.5 text-small font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 ${
+ className={`min-w-0 flex-1 truncate rounded-[calc(var(--radius-control)-2px)] px-2.5 py-1.5 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 ${
  active ?"bg-card text-foreground ring-1 ring-black/[0.06]" :"text-muted-foreground hover:text-foreground"
  }`}
  >

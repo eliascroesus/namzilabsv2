@@ -166,6 +166,13 @@ describe("the read stays inside its budget", () => {
     // That module's header describes three reads firing on every poll, and the
     // argument depends on the number. This one is conditional and mutually
     // exclusive with two of them, so it lives beside rather than in.
-    expect(store.match(/\.select\(\{/g) ?? []).toHaveLength(3);
+    //
+    // Counted BEFORE `adoptDefaultView`, which added a fourth select to that
+    // file that is not on the poll path at all — it runs inside the transaction
+    // that renames the default board, once per workspace. Counting the whole
+    // file would make this assertion drift every time a write is added there,
+    // which is the opposite of what it guards.
+    const pollReads = store.slice(0, store.indexOf("export async function adoptDefaultView"));
+    expect(pollReads.match(/\.select\(\{/g) ?? []).toHaveLength(3);
   });
 });

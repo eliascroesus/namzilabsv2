@@ -311,16 +311,38 @@
    * Untitled UI's values, and `scripts/check-ui.ts` still enforces a closed set
    * — just a different one. `text-2xl` upwards remains uncompilable.
    *
-   * The eight old names survive below as ALIASES onto the new steps. That is
-   * what keeps this a token commit: a hundred component files keep compiling,
-   * `src/components/charts.tsx` stays byte-identical under its SHA-256 freeze,
-   * and each surface drops its legacy spelling as it gets rebuilt anyway.
+   * THE EIGHT LEGACY ALIASES ARE GONE, AND THAT IS THE POINT OF THIS BLOCK.
+   *
+   * They were added as scaffolding — "a hundred component files keep compiling,
+   * and each surface drops its legacy spelling as it gets rebuilt anyway" — and
+   * the second half never happened. What the app had instead was TWELVE names
+   * resolving to NINE sizes, with three-way ties at 12px (`xs`/`micro`/`tiny`)
+   * and 16px (`md`/`base`/`lead`). Every one of them compiled, so `check:ui`
+   * passed while the same label was `text-micro` in one file and `text-xs` in
+   * the next — which is the exact failure this scale's opening argument is
+   * about, wearing the uniform of the fix.
+   *
+   * A closed set with two spellings per step is not closed. One name per size,
+   * and the gate now fails on the old ones (see `scripts/check-ui.ts`) rather
+   * than letting them resolve to nothing and vanish off the page.
+   *
+   *   micro, tiny -> xs   ·   small, base -> sm   ·   lead -> md
+   *   title -> lg   ·   display -> display-xs   ·   stat -> display-md
+   *   hero -> display-lg
+   *
+   * `base` MOVES A STEP DOWN in that table, and it is the only one that changes
+   * what anything looks like. It was re-pointed at `md` in cc8b7af ("a bigger
+   * scale") while `--text-sm` kept the comment calling it the app's default
+   * body — so body copy rendered at 16px wherever a file said `text-base` and
+   * 14px wherever it said `text-sm`, which is two body sizes chosen by spelling.
+   * Fourteen is the one the interface is built at. Long-form READING prose is
+   * the deliberate exception and asks for `text-md` by name: see ui/legal.tsx.
    */
   --text-xs: 0.75rem; /* 12px */
   --text-xs--line-height: 1.125rem;
   --text-sm: 0.875rem; /* 14px — the app's default body */
   --text-sm--line-height: 1.25rem;
-  --text-md: 1rem; /* 16px */
+  --text-md: 1rem; /* 16px — long-form reading prose, and the `lg` button */
   --text-md--line-height: 1.5rem;
   --text-lg: 1.125rem; /* 18px */
   --text-lg--line-height: 1.75rem;
@@ -335,38 +357,11 @@
   --text-display-lg: 3rem; /* 48px — the landing hero */
   --text-display-lg--line-height: 3.75rem;
 
-  /* THE OLD NAMES, POINTED AT THE NEW STEPS.
-     Two pairs collapse — micro and tiny both become `xs`, small and base both
-     become `sm` — which is the re-pitch, not an oversight: an 11px semibold
-     badge and a 13px field label were each a step nobody could pick out of a
-     line-up, and Untitled UI does not have them. Everything else moves up one
-     notch: lead 15→16, title 17→18. */
-  --text-micro: var(--text-xs);
-  --text-micro--line-height: var(--text-xs--line-height);
-  --text-tiny: var(--text-xs);
-  --text-tiny--line-height: var(--text-xs--line-height);
-  --text-small: var(--text-sm);
-  --text-small--line-height: var(--text-sm--line-height);
-  --text-base: var(--text-md);
-  --text-base--line-height: var(--text-md--line-height);
-  --text-lead: var(--text-md);
-  --text-lead--line-height: var(--text-md--line-height);
-  --text-title: var(--text-lg);
-  --text-title--line-height: var(--text-lg--line-height);
-  --text-display: var(--text-display-xs);
-  --text-display--line-height: var(--text-display-xs--line-height);
-  /* The metric numeral — the dashboard's one size above display, because a
-     tile's number is the product's payoff and 24px reads as a label. Always
-     set with .stat-numeral (display face + tabular figures). */
-  --text-stat: var(--text-display-md);
-  --text-stat--line-height: var(--text-display-md--line-height);
-  /* Marketing only — the landing hero. In-app nothing goes past `stat`. */
-  --text-hero: var(--text-display-lg);
-  --text-hero--line-height: var(--text-display-lg--line-height);
   /* The landing's one oversized moment, and the only size in the kit that
      exists purely to be impressive. Fluid, because a fixed 64px headline is a
-     four-line wall on a phone: it resolves to `hero` on a narrow screen and
-     grows to 64px once there is room, with no breakpoint to forget. */
+     four-line wall on a phone: it resolves to `display-lg` on a narrow screen
+     and grows to 64px once there is room, with no breakpoint to forget.
+     The one name in the scale with no Untitled UI twin, so it keeps its own. */
   --text-banner: clamp(2.5rem, 1.4rem + 4.6vw, 4rem);
   --text-banner--line-height: 1.04;
 
@@ -534,7 +529,37 @@
    */
 }
 
-:root {
+/**
+ * THE LIGHT ROLES — and `.tile-surface` is a LIGHT ISLAND inside the dark theme.
+ *
+ * THE BUG THIS SELECTOR FIXES. `Card variant="tile"` is white in both themes;
+ * that was decided from the Figma, which draws white metric cards on the dark
+ * board, and it is right. What came with it was only `dark:bg-white
+ * dark:text-neutral-900` — the SURFACE and the element's own `color`. Every
+ * role INSIDE the card kept answering with the dark theme's values, because
+ * `--muted-foreground` under `.dark` is `neutral-400`, a grey solved for a
+ * near-black background.
+ *
+ * So on the dark theme the product's primary surface measured:
+ *
+ *     metric name      #a3a3a3 on #ffffff   2.52:1   (needs 4.5)
+ *     tray timestamp   #a3a3a3 on #f7f7f7   2.35:1   (needs 4.5)
+ *
+ * — against 5.33:1 and 4.97:1 for the same two labels in light. Every muted
+ * word on every metric card, failing AA, on the one screen this product exists
+ * to be looked at all day. Measured in a browser, not inferred.
+ *
+ * ADDING THE SELECTOR HERE RATHER THAN RE-DECLARING THE VALUES is the whole
+ * point. A `.tile-surface { --muted-foreground: … }` block would be a second
+ * copy of the light theme that drifts from this one the first time a role
+ * changes; naming the same block twice means there is still exactly one place
+ * each colour is decided. A tile under `.dark` gets these declarations ON
+ * ITSELF, which beats the `.dark` values it would otherwise inherit, and every
+ * descendant — muted ink, hairlines, the state trios, `bg-muted` washes —
+ * resolves light without a single component knowing about it.
+ */
+:root,
+.dark .tile-surface {
   /* ---- shadcn semantic roles --------------------------------------------
    * Components should never name a RAMP ("bg-brand-600"), they should name a
    * ROLE ("bg-primary"). The ramps above are the palette; these are the

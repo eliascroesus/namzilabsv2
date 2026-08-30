@@ -61,7 +61,7 @@ export function PanelTabs<T extends string>({
  <button
  key={t}
  onClick={() => onSelect(t)}
- className={`-mb-px border-b-2 py-3 text-base capitalize transition-colors ${
+ className={`-mb-px border-b-2 py-3 text-sm capitalize transition-colors ${
  active === t ?"border-primary font-semibold text-foreground" :"border-transparent font-medium text-muted-foreground hover:text-foreground"
  }`}
  >

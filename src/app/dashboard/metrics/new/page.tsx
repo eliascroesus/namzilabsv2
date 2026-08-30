@@ -99,7 +99,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
           title="New metric"
           lede="Pick what to measure. Preview updates with your live data; save when it looks right."
           actions={
-            <Link href="/dashboard/funnels/new" className="text-base text-primary hover:underline">
+            <Link href="/dashboard/funnels/new" className="text-sm text-primary hover:underline">
               Build a funnel instead
             </Link>
           }
@@ -164,7 +164,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
             </div>
 
             <fieldset className="rounded-card border border-border p-3">
-              <legend className="px-1 text-tiny font-medium text-muted-foreground">Filters (optional)</legend>
+              <legend className="px-1 text-xs font-medium text-muted-foreground">Filters (optional)</legend>
               <Row htmlFor="combinator" label="Combine with">
                 <Select name="combinator" value={one(sp.combinator) || "and"} options={["and", "or"]}
                   labels={{ and: "AND", or: "OR" }} />
@@ -172,10 +172,10 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
               {[0, 1].map((i) => (
                 <div key={i} className="mt-2 grid gap-2 sm:grid-cols-3">
                   <Input name={`filter${i}_field`} defaultValue={one(sp[`filter${i}_field`])}
-                    placeholder="field (e.g. subject or properties.plan)" className="h-8 px-2 text-small" />
+                    placeholder="field (e.g. subject or properties.plan)" className="h-8 px-2 text-sm" />
                   <Select name={`filter${i}_op`} value={one(sp[`filter${i}_op`])} options={["", ...FILTER_OPS]} labels={{ "": "op" }} />
                   <Input name={`filter${i}_value`} defaultValue={one(sp[`filter${i}_value`])} placeholder="value"
-                    className="h-8 px-2 text-small" />
+                    className="h-8 px-2 text-sm" />
                 </div>
               ))}
             </fieldset>
@@ -200,7 +200,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
           <Card variant="surface" padding="default" className="mt-6">
             <SectionHeading>Live preview (last 90 days)</SectionHeading>
             {previewError ? (
-              <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
+              <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-sm text-warn-ink">
                 {previewError}
               </p>
             ) : (
@@ -208,17 +208,17 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
                 {/* Same formatter and recipe as the dashboard tile this metric
                     will become — the preview must not print "1234.5" for a
                     number the board will render as "1,234.5". */}
-                <p className="stat-numeral text-stat">
+                <p className="stat-numeral text-display-md">
                   {formatMetricValue(previewValue, { format: "number", precision: Number.isInteger(previewValue) ? 0 : 2 })}
-                  {one(sp.unit) && <span className="ml-2 text-base font-normal text-muted-foreground">{one(sp.unit)}</span>}
+                  {one(sp.unit) && <span className="ml-2 text-sm font-normal text-muted-foreground">{one(sp.unit)}</span>}
                 </p>
-                <p className="mt-4 text-tiny font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="mt-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Latest matching records
                 </p>
                 {sample.length === 0 ? (
-                  <p className="mt-1 text-base text-muted-foreground">No matching records yet.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">No matching records yet.</p>
                 ) : (
-                  <ul className="mt-1 divide-y divide-border text-base">
+                  <ul className="mt-1 divide-y divide-border text-sm">
                     {sample.map((e) => (
                       <li key={e.eventId} className="flex justify-between py-1.5">
                         <span title={e.eventType}>

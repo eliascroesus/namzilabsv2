@@ -74,7 +74,7 @@ export function MetricList({
       )}
       <div className="max-h-80 overflow-y-auto">
         {shown.length === 0 ? (
-          <p className="px-1 py-6 text-center text-small text-muted-foreground">
+          <p className="px-1 py-6 text-center text-sm text-muted-foreground">
             {eligible.length === 0 ? `Nothing here can be drawn as a ${label} yet.` : "No metric matches that."}
           </p>
         ) : (
@@ -94,7 +94,7 @@ export function MetricList({
                 className={`shrink-0 ${o.key === selected ? "text-primary" : "invisible"}`}
                 aria-hidden
               />
-              <span className="truncate text-small font-medium text-foreground">{o.title}</span>
+              <span className="truncate text-sm font-medium text-foreground">{o.title}</span>
             </Button>
           ))
         )}

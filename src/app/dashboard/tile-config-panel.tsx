@@ -73,7 +73,7 @@ function Group({ label, children }: { label?: string; children: React.ReactNode 
   return (
     <div className="flex flex-col gap-4 border-t border-border pt-4 first:border-t-0 first:pt-0">
       {label && (
-        <p className="-mb-1 text-micro font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="-mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       )}
       {children}
     </div>
@@ -262,10 +262,10 @@ export function TileConfigPanel({
         <div className="min-w-0 flex-1">
           {/* The eyebrow names the CHART, not the panel: "Chart settings" over
               a title the tile already shows said nothing the header did not. */}
-          <p className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {(CHARTS.find((c) => c.id === chart) ?? CHARTS[0]).label}
           </p>
-          <p className="mt-0.5 truncate text-title font-semibold text-foreground">{config.title || metricName}</p>
+          <p className="mt-0.5 truncate text-lg font-semibold text-foreground">{config.title || metricName}</p>
         </div>
         <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="Close chart settings" title="Close">
           <X size={18} strokeWidth={2} />
@@ -391,7 +391,7 @@ export function TileConfigPanel({
                 />
               </Row>
             ) : (
-              <p className="text-small text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 A divider has nothing to set — drag its edges to change how much room it takes.
               </p>
             )
@@ -412,7 +412,7 @@ export function TileConfigPanel({
                       aria-pressed={c.id === chart}
                       className="h-auto justify-start px-2 py-1.5 text-left"
                     >
-                      <span className="truncate text-small">{c.label}</span>
+                      <span className="truncate text-sm">{c.label}</span>
                     </Button>
                   ))}
                 </div>

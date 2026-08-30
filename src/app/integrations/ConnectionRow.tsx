@@ -152,8 +152,8 @@ export function ConnectionRow({
     const armed = typed.trim() === name.trim();
     return (
       <div className="border-l-2 border-danger bg-danger-soft/40 px-4 py-3">
-        <p className="text-base font-semibold text-foreground">Permanently delete {name}?</p>
-        <p className="mt-1 text-base text-muted-foreground">
+        <p className="text-sm font-semibold text-foreground">Permanently delete {name}?</p>
+        <p className="mt-1 text-sm text-muted-foreground">
           This removes the connection and{" "}
           <span className="font-semibold text-foreground">
             {records == null ? (
@@ -168,7 +168,7 @@ export function ConnectionRow({
           , along with their original payloads and this connection&rsquo;s entire sync history. Flows reading it will
           show no data.
         </p>
-        <p className="mt-1 text-base text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           <span className="font-semibold text-foreground">This cannot be undone.</span> Connecting the same account
           again starts from nothing and re-imports only as much history as the provider still offers — which is usually
           far less than you have now.{" "}
@@ -189,7 +189,7 @@ export function ConnectionRow({
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             placeholder={name}
-            className="h-8 min-w-0 flex-1 text-small"
+            className="h-8 min-w-0 flex-1 text-sm"
           />
           <Button
             type="button"
@@ -258,7 +258,7 @@ export function ConnectionRow({
       // read as one kind of object interrupting the list rather than as two
       // different treatments of the same moment.
       <div className="flex flex-wrap items-center justify-between gap-3 border-l-2 border-danger bg-danger-soft/40 px-4 py-3">
-        <p className="min-w-0 text-base text-muted-foreground">
+        <p className="min-w-0 text-sm text-muted-foreground">
           Disconnect <span className="font-semibold text-foreground">{name}</span>? Its synced records stop appearing in
           dashboards and flows, and it stops syncing. Any flow reading from it will have no data.
           {/* The disconnect is reversible and the user has to be told so, or
@@ -338,7 +338,7 @@ export function ConnectionRow({
             </Button>
           </span>
         )}
-        <span className="flex shrink-0 items-center gap-2 text-base text-muted-foreground">
+        <span className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
           {webhookUrl && (
             <Button
               type="button"

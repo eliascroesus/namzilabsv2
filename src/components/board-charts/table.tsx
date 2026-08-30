@@ -52,7 +52,7 @@ export function ChartTable({
       </div>
       {pages > 1 && (
         <div className="mt-1.5 flex shrink-0 items-center justify-between">
-          <span className="tnum text-tiny text-muted-foreground">
+          <span className="tnum text-xs text-muted-foreground">
             {at * pageSize + 1}–{Math.min(rows.length, (at + 1) * pageSize)} of {rows.length}
           </span>
           <span className="flex gap-1">

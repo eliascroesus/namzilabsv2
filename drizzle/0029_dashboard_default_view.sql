@@ -1,0 +1,28 @@
+-- The default view becomes a row the first time somebody renames it.
+--
+-- Until now the default board was the ABSENCE of a row: `view_id IS NULL` on
+-- `dashboard_groups` and `dashboard_tile_placements`. That is what made views an
+-- additive migration with no backfill, and the price was written down in the
+-- schema at the time — "the default view is therefore the one thing that cannot
+-- be renamed or deleted".
+--
+-- This buys the rename back without paying the backfill. Nothing here moves a
+-- single customer's rows: the column arrives `false` everywhere, every existing
+-- board still reads through `view_id IS NULL`, and the adoption — mint a row,
+-- re-point that org's null groups and placements at it — happens lazily, in one
+-- transaction, the first time somebody actually types a name. A workspace that
+-- never renames its dashboard is never written to.
+--
+-- `is_default` is what lets the READ know which of those two worlds it is in.
+-- Without it, `/dashboard` with no `?view=` cannot tell "this org has adopted,
+-- land on its first view" from "this org has not, land on the null board", and
+-- an adopted org would open on an empty board every time.
+ALTER TABLE "dashboard_views" ADD COLUMN IF NOT EXISTS "is_default" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+-- ONE default per workspace, enforced by the database rather than by the action
+-- that writes it. Adoption reads "does a default already exist?" and then
+-- inserts; two tabs pressing rename at the same moment both read "no" and both
+-- insert, and the loser of that race would leave the org with two rows claiming
+-- to be its default board and a tab strip showing the same board twice. A
+-- partial unique index makes the second insert fail instead, which the action
+-- turns into "reload and try again".
+CREATE UNIQUE INDEX IF NOT EXISTS "dashboard_views_one_default_uq" ON "dashboard_views" USING btree ("org_id") WHERE "is_default";

@@ -84,7 +84,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             on every single navigation. Hidden until focused (globals.css). */}
         <a
           href="#main"
-          className="skip-link rounded-control bg-primary px-4 py-2 text-base font-semibold text-primary-foreground shadow-panel"
+          className="skip-link rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-panel"
         >
           Skip to content
         </a>

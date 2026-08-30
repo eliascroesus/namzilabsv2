@@ -63,7 +63,7 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
           lede="Order the stages a lead moves through. We count distinct people reaching each stage and surface the biggest drop-off."
         />
         {one(sp.error) === "need_two_stages" && (
-          <p className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
+          <p className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-sm text-warn-ink">
             A funnel needs at least two stages.
           </p>
         )}
@@ -82,7 +82,7 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
             <div className="space-y-2">
               <div className="grid gap-2 sm:grid-cols-3">
                 {STAGE_COLUMNS.map((col) => (
-                  <span key={col} className="text-tiny font-medium text-muted-foreground">
+                  <span key={col} className="text-xs font-medium text-muted-foreground">
                     {col}
                   </span>
                 ))}
@@ -93,12 +93,12 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
                     name={`stage${i}_label`}
                     defaultValue={one(sp[`stage${i}_label`])}
                     placeholder={`Stage ${i + 1} name`}
-                    className="h-8 px-2 text-small"
+                    className="h-8 px-2 text-sm"
                   />
                   <NativeSelect
                     name={`stage${i}_eventType`}
                     defaultValue={one(sp[`stage${i}_eventType`])}
-                    className="[&_select]:h-8 [&_select]:pl-2 [&_select]:pr-7 [&_select]:text-small"
+                    className="[&_select]:h-8 [&_select]:pl-2 [&_select]:pr-7 [&_select]:text-sm"
                   >
                     <option value="">event type…</option>
                     {/* Bound to the stage's chosen source when one is picked —
@@ -111,7 +111,7 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
                   <NativeSelect
                     name={`stage${i}_source`}
                     defaultValue={one(sp[`stage${i}_source`])}
-                    className="[&_select]:h-8 [&_select]:pl-2 [&_select]:pr-7 [&_select]:text-small"
+                    className="[&_select]:h-8 [&_select]:pl-2 [&_select]:pr-7 [&_select]:text-sm"
                   >
                     <option value="">any source</option>
                     {sources.map((srcName) => (
@@ -132,7 +132,7 @@ export default async function NewFunnelPage({ searchParams }: { searchParams: Pr
             <Card variant="surface">
               <SectionHeading>Live preview (last 90 days)</SectionHeading>
               {previewError ? (
-                <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
+                <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-sm text-warn-ink">
                   {previewError}
                 </p>
               ) : (

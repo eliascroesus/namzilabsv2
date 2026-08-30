@@ -5,8 +5,9 @@ import { getReadDb } from "@/db/client";
 import { connections, flows } from "@/db/schema";
 import { requireOrg, requestAccess } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
+import { MetricCard } from "@/components/metric-card";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { PageContainer, PageHeader } from "@/components/ui/page";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
@@ -213,7 +214,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
      * stale link, or one shared after the view was deleted, opens the board
      * rather than a page reporting that it could not find something.
      */
-    activeView = views.some((v) => v.id === requestedView) ? requestedView : null;
+    /**
+     * AND "THE DEFAULT VIEW" IS ONE OF TWO THINGS, depending on whether this
+     * workspace has ever renamed its board.
+     *
+     *   NOT ADOPTED — there is no row, the board is `view_id IS NULL`, and
+     *                 `null` is the right answer exactly as it always was.
+     *   ADOPTED     — the board is a real row flagged `is_default`, and landing
+     *                 on `null` would render the empty husk the adoption left
+     *                 behind. Land on the row instead.
+     *
+     * Falling back to the FLAG rather than to "the first view by pos" is the
+     * load-bearing part: the two are the same today, because adoption mints a
+     * key that sorts first, and they stop being the same the moment somebody
+     * drags their default board to the middle of the strip.
+     */
+    const adoptedDefault = views.find((v) => v.isDefault)?.id ?? null;
+    activeView = views.some((v) => v.id === requestedView) ? requestedView : adoptedDefault;
     // The DEFAULT view has no row, so "which kind is it" must have an answer
     // when there is nothing to read. It is always a groups board.
     activeKind = views.find((v) => v.id === activeView)?.kind ?? "groups";
@@ -407,9 +424,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     return `/dashboard?${p.toString()}`;
   };
 
-  /** The default view first — it has no row, so nothing else can put it there. */
+  /**
+   * THE STRIP, AND THE ONE TAB THAT MAY OR MAY NOT BE A ROW.
+   *
+   * A workspace that has never renamed its board has no row for it, so the tab
+   * is synthesised here and sorts first — nothing else can put it there. Once it
+   * has been ADOPTED it is in `views` like any other tab, carrying its own `pos`
+   * (minted to sort first, and movable afterwards), so prepending would show the
+   * same board twice under two names.
+   */
+  const adopted = views.some((v) => v.isDefault);
   const viewTabs: BoardView[] = [
-    { id: null, name: "Dashboard", pos: "", kind: "groups" },
+    ...(adopted ? [] : [{ id: null, name: "Dashboard", pos: "", kind: "groups" as const }]),
     ...views.slice().sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0)),
   ];
 
@@ -532,8 +558,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                               <o.Icon size={15} />
                             </span>
                             <span className="flex min-w-0 flex-col gap-0.5">
-                              <span className="text-small font-semibold text-foreground">{o.label}</span>
-                              <span className="text-tiny font-normal text-muted-foreground">{o.blurb}</span>
+                              <span className="text-sm font-semibold text-foreground">{o.label}</span>
+                              <span className="text-xs font-normal text-muted-foreground">{o.blurb}</span>
                             </span>
                           </SubmitButton>
                         </form>
@@ -639,7 +665,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <SourceLink
               href={qs({ source: "" })}
               className={cn(
-                "block rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-accent hover:text-accent-foreground",
+                "block rounded-control px-2.5 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
                 /* THE ROW IN FORCE WEARS THE WASH, not violet words on nothing.
                    `text-primary` is brand-500, which is 4.42:1 on this surface
                    and fails AA at the size these are set in — the sheet's own
@@ -658,7 +684,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 key={srcName}
                 href={qs({ source: srcName })}
                 className={cn(
-                  "flex items-center gap-2 rounded-control px-2.5 py-1.5 text-small transition-colors hover:bg-accent hover:text-accent-foreground",
+                  "flex items-center gap-2 rounded-control px-2.5 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
                   boardSource === srcName ? "bg-accent font-semibold text-accent-foreground" : "text-foreground",
                 )}
               >
@@ -1035,7 +1061,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         />
 
         {loadError && (
-          <div className="mt-6 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
+          <div className="mt-6 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-sm text-warn-ink">
             Some dashboard data couldn&rsquo;t be loaded just now. Refresh to try again — nothing has been lost, and
             your numbers are still stored.
           </div>
@@ -1171,25 +1197,46 @@ function MetricTile({ tile }: { tile: Tile }) {
   const numberFormat = { format: "number" as const, precision: total != null && Number.isInteger(total) ? 0 : 2 };
 
   return (
-    // `surface`, matching FlowTile beside it: a tile is a thing floating on the
-    // canvas now, so it takes the 16px radius every other floating surface in
-    // the product wears, and answers the pointer with the ladder's hover rung.
-    <Card variant="surface" className="lift hover:shadow-card-hover">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="min-w-0 truncate text-base font-semibold text-foreground">{metric.name}</h3>
-      </div>
-
-      {tile.kind === "error" ? (
-        <p className="mt-2 text-tiny text-warn-ink">{tile.error}</p>
-      ) : (
-        total != null && (
-          <p className="stat-numeral mt-1.5 text-stat leading-none">
-            {formatMetricValue(total, numberFormat)}
-            {metric.unit && <span className="ml-1.5 text-base font-normal text-muted-foreground">{metric.unit}</span>}
-          </p>
-        )
-      )}
-
+    /**
+     * THE SAME CARD AS EVERY OTHER TILE ON THIS BOARD — which it was not.
+     *
+     * This component's own comment used to claim it was "kept in step with
+     * FlowTile's shape on purpose". It disagreed on four things at once: the
+     * shell (`surface`, not the `tile` rung with its pointer response), the
+     * padding, the title (16px sentence-case `text-foreground`, against the
+     * micro-label voice every other tile uses), and the footer. A workspace
+     * with one classic metric beside one flow metric showed two different
+     * objects in one grid, with nothing to explain the difference — the reader
+     * cannot see which storage a number came from, and should not be able to.
+     *
+     * Everything structural now comes from `MetricCard`, so the only things
+     * left here are the ones genuinely particular to a `metrics` row: it has no
+     * `computedAt` (it is computed live on this render, so a timestamp would be
+     * furniture saying "now"), no freshness marker for the same reason, and one
+     * act rather than two.
+     */
+    <MetricCard
+      title={metric.name}
+      headline={
+        tile.kind === "error" || total == null ? undefined : formatMetricValue(total, numberFormat)
+      }
+      /* The unit rides the headline slot rather than the name, because it
+         belongs to the FIGURE — "1,204 leads" is one fact, and putting the noun
+         up in the label row would make the number read as unitless. */
+      delta={
+        metric.unit && tile.kind !== "error" && total != null ? (
+          <span className="text-sm font-normal text-muted-foreground">{metric.unit}</span>
+        ) : null
+      }
+      qualifications={tile.kind === "error" ? <p className="mt-2 text-xs text-warn-ink">{tile.error}</p> : null}
+      actions={
+        tile.kind === "aggregate" ? (
+          <Button asChild variant="ghost" size="xs" className="hover:text-accent-foreground">
+            <Link href={`/dashboard/metrics/${metric.id}`}>Drill in</Link>
+          </Button>
+        ) : null
+      }
+    >
       {tile.kind === "aggregate" && tile.result.kind === "series" && (
         <Sparkbars series={tile.result.series} format={{ format: "number", precision: 2 }} />
       )}
@@ -1207,22 +1254,6 @@ function MetricTile({ tile }: { tile: Tile }) {
           <FunnelView result={tile.result} />
         </div>
       )}
-
-      {tile.kind === "aggregate" && (
-        <div className="mt-3 flex items-center justify-end text-tiny text-muted-foreground">
-          <Link
-            href={`/dashboard/metrics/${metric.id}`}
-            /* LINK VIOLET, not the fill violet. brand-500 is 4.42:1 on this
-               page — under AA — and a link is the one place the sheet is
-               explicit that words take the 700. `accent-foreground` is that
-               step, and it inverts with the theme where a raw ramp pick would
-               not. */
-            className="rounded-control font-medium transition-colors hover:text-accent-foreground"
-          >
-            Drill in
-          </Link>
-        </div>
-      )}
-    </Card>
+    </MetricCard>
   );
 }

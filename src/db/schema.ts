@@ -890,9 +890,18 @@ export const workspaceOwners = pgTable("workspace_owners", {
  * `view_id` IS NULLABLE ON BOTH TABLES BELOW, AND NULL IS THE DEFAULT VIEW —
  * the board every workspace already has. That is what makes this migration
  * additive: no backfill, no view row conjured on first read, and every group
- * and placement written before views existed keeps working untouched. The
- * default view is therefore the one thing that cannot be renamed or deleted,
- * which is the price of not writing to the database on a page load.
+ * and placement written before views existed keeps working untouched.
+ *
+ * THE PRICE USED TO BE THAT THE DEFAULT VIEW COULD NOT BE RENAMED, and it is
+ * not any more. It is ADOPTED instead: the first time somebody types a name for
+ * it, one transaction mints a real row, flags it `is_default`, and re-points
+ * that org's null groups and placements at it. After that it is an ordinary
+ * view — renameable, reorderable, duplicable — and `view_id IS NULL` simply has
+ * nothing left in it for that workspace.
+ *
+ * The lazy half is the whole point: a workspace that never renames its
+ * dashboard is still never written to on a page load, which is what the
+ * original design was protecting. See `adoptDefaultView` in board-actions.ts.
  */
 export const dashboardViews = pgTable(
   "dashboard_views",
@@ -924,6 +933,28 @@ export const dashboardViews = pgTable(
      * NULL` already plays, and the reason this column needs no backfill.
      */
     kind: text("kind").notNull().default("groups"),
+    /**
+     * THIS ROW IS THE WORKSPACE'S ADOPTED DEFAULT BOARD.
+     *
+     * Set on exactly one row per org, by `adoptDefaultView`, and never by
+     * anything else — a duplicate of the default is an ordinary view, and a
+     * view created from the "+" is too.
+     *
+     * It exists for the READ rather than the write. `/dashboard` with no
+     * `?view=` has to choose between two worlds: an org that has adopted (land
+     * on this row) and one that has not (land on the null board and render the
+     * synthetic "Dashboard" tab). Nothing else on the row can tell those apart
+     * — an adopted board and a hand-made one are the same shape — so the flag
+     * is the answer rather than an inference from whether some other table
+     * happens to be empty, which a brand-new workspace would fail.
+     *
+     * ONE PER ORG IS A DATABASE CONSTRAINT, not an intention: migration 0029
+     * adds `dashboard_views_one_default_uq`, a partial unique index on org_id
+     * WHERE is_default. Two tabs renaming at once both read "no default yet"
+     * and both insert; the index makes the loser fail instead of leaving the
+     * strip showing one board twice.
+     */
+    isDefault: boolean("is_default").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

@@ -60,10 +60,10 @@ export function recordWhen(iso: string | undefined): string {
  * values — it does NOT change which records the published flow processes.
  */
 export function RecordSamplePicker({ records, selectedIndex, onSelect }: { records: unknown[]; selectedIndex: number; onSelect: (i: number) => void }) {
-  if (records.length === 0) return <p className="text-tiny text-muted-foreground">No records returned.</p>;
+  if (records.length === 0) return <p className="text-xs text-muted-foreground">No records returned.</p>;
   return (
     <div className="space-y-1.5">
-      <p className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">Latest {records.length} records</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Latest {records.length} records</p>
       {records.map((r, i) => {
         const rec = (r ?? {}) as Rec;
         const selected = i === selectedIndex;
@@ -79,12 +79,12 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
               selected ? "border-brand-300 bg-accent/60" : "border-border bg-muted/40 hover:border-brand-200 hover:bg-muted",
             )}
           >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-tiny">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-xs">
               <span className="flex min-w-0 items-center gap-1.5">
                 {selected && <Star size={14} fill="currentColor" className="shrink-0 text-primary" aria-hidden />}
                 <span className={cn("truncate font-medium", selected ? "text-accent-foreground" : "text-foreground")}>{title || `Record ${i + 1}`}</span>
               </span>
-              <span className="shrink-0 text-micro text-muted-foreground">
+              <span className="shrink-0 text-xs text-muted-foreground">
                 {recordWhen(rec.occurredAt) && <span className="mr-1.5">{recordWhen(rec.occurredAt)}</span>}
                 {fields(rec).length} fields
               </span>
@@ -92,7 +92,7 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
             <div className="border-t border-border bg-card/70 px-2.5 py-2">
               <dl className="space-y-1">
                 {fields(rec).map((f) => (
-                  <div key={f.label} className="flex justify-between gap-2 text-micro">
+                  <div key={f.label} className="flex justify-between gap-2 text-xs">
                     <dt className="shrink-0 text-muted-foreground">{f.label}</dt>
                     <dd className="min-w-0 truncate text-right font-medium text-foreground">{f.value}</dd>
                   </div>

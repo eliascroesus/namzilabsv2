@@ -233,8 +233,8 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
  * Caps is what makes a 12px string read as a LABEL rather than as a very small
  * sentence, and the tracking is what stops caps setting solid.
  *
- * `text-xs` rather than the `text-micro` alias — same 12px, and the alias is
- * the legacy name each surface drops as it is rebuilt.
+ * `text-xs` is now the only spelling of 12px — the `text-micro` alias it was
+ * chosen over has been deleted from the theme, and `check:ui` fails on it.
  */
 export function SectionHeading({ className, ...props }: React.ComponentProps<"h2">) {
   return (

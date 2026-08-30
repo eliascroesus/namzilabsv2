@@ -145,10 +145,10 @@ export function Select({
             className={cn(fieldClasses, "mb-1 h-8 px-2.5")}
           />
         )}
-        {filtered.length === 0 && <p className="p-2 text-center text-tiny text-muted-foreground">No matches</p>}
+        {filtered.length === 0 && <p className="p-2 text-center text-xs text-muted-foreground">No matches</p>}
         {grouped.map(([g, opts]) => (
           <div key={g || "_"}>
-            {g && <p className="px-2 pb-0.5 pt-1.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground">{g}</p>}
+            {g && <p className="px-2 pb-0.5 pt-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{g}</p>}
             {opts.map((o) => {
               flatIndex += 1;
               const i = flatIndex;
@@ -164,11 +164,11 @@ export function Select({
                     if (!o.disabled) pick(o.value);
                   }}
                   onMouseEnter={() => setActive(i)}
-                  className={`flex w-full items-center justify-between gap-2 rounded-control px-2.5 py-1.5 text-left text-base transition-colors hover:bg-muted ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-accent text-accent-foreground" : ""}`}
+                  className={`flex w-full items-center justify-between gap-2 rounded-control px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-muted ${o.disabled ? "cursor-not-allowed opacity-50" : i === active ? "bg-accent text-accent-foreground" : ""}`}
                 >
                   <span className="min-w-0">
                     <span className={`block ${o.disabled ? "" : "truncate"} ${o.value === value ? "font-medium text-foreground" : "text-foreground"}`}>{o.label}</span>
-                    {o.hint && <span className={`block text-micro text-muted-foreground ${o.disabled ? "whitespace-normal" : "truncate"}`}>{o.hint}</span>}
+                    {o.hint && <span className={`block text-xs text-muted-foreground ${o.disabled ? "whitespace-normal" : "truncate"}`}>{o.hint}</span>}
                   </span>
                   {o.value === value && <Check size={14} className="shrink-0 text-muted-foreground" aria-hidden />}
                 </button>

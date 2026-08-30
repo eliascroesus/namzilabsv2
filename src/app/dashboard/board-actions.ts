@@ -11,6 +11,7 @@ import { requireOrg, type OrgContext } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { boardGroupCap, boardPlacementCap, boardTileCap, boardViewCap } from "@/lib/limits";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
+import { adoptDefaultView } from "@/lib/board/store";
 import { compact, GRID_COLS } from "@/lib/board/grid";
 import { BLOCK_IDS, CHART_IDS, asChartId, blockKindOf, defaultSize, minSize } from "@/lib/board/charts";
 import { parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
@@ -422,13 +423,22 @@ export async function addViewAction(fd: FormData): Promise<void> {
 
   const db = getDb();
   const existing = await db
-    .select({ pos: dashboardViews.pos })
+    .select({ pos: dashboardViews.pos, isDefault: dashboardViews.isDefault })
     .from(dashboardViews)
     .where(eq(dashboardViews.orgId, ctx.orgId));
 
   const cap = boardViewCap();
-  // The default view has no row, so it is not in `existing` — hence the `+ 1`.
-  if (existing.length + 1 >= cap) redirect(back("error=view_limit"));
+  /**
+   * THE DEFAULT BOARD COUNTS ONCE, whichever world this org is in.
+   *
+   * This used to be a flat `+ 1` with the comment "the default view has no row,
+   * so it is not in `existing`". True until the default could be adopted — after
+   * which it IS a row in `existing`, and the `+ 1` counted the same board twice
+   * and moved every adopted workspace's ceiling down by one. The board is
+   * counted where it actually is.
+   */
+  const adopted = existing.some((v) => v.isDefault);
+  if (existing.length + (adopted ? 0 : 1) >= cap) redirect(back("error=view_limit"));
 
   const last = existing.map((v) => v.pos).sort(compareKeys).at(-1) ?? null;
   const id = crypto.randomUUID();
@@ -448,8 +458,11 @@ export async function addViewAction(fd: FormData): Promise<void> {
   await db.insert(dashboardViews).values({
     id,
     orgId: ctx.orgId,
-    // "View 2" because the default one is View 1 and has no row to count.
-    name: `View ${existing.length + 2}`,
+    // The same arithmetic as the cap above, and for the same reason: the
+    // default board is View 1 whether or not it has a row yet, so counting it
+    // twice on an adopted workspace would name the next one "View 4" while
+    // three tabs are on screen.
+    name: `View ${existing.length + (adopted ? 1 : 2)}`,
     pos: keyBetween(last, null),
     kind,
   });
@@ -459,16 +472,28 @@ export async function addViewAction(fd: FormData): Promise<void> {
 }
 
 /**
- * RENAME A VIEW. The default view is not renameable and has no id to pass —
- * it has no row at all, which is what makes it free (see the schema note).
+ * RENAME A VIEW — including the default one, which is what `id: null` means.
+ *
+ * That case is not a rename at all on the first press: the default board has no
+ * row to write a name onto, so it is ADOPTED into one (above) and the name lands
+ * on that. Every press after the first is an ordinary update, because by then it
+ * is an ordinary view.
  */
-export async function renameViewAction(id: string, name: string): Promise<Result> {
+export async function renameViewAction(id: string | null, name: string): Promise<Result> {
   const ctx = await requireOrg();
   if (await blocked(ctx)) return fail(RANK_BLOCKS);
-  if (!idSchema.safeParse(id).success) return fail("Unknown view.");
+  if (id !== null && !idSchema.safeParse(id).success) return fail("Unknown view.");
   const parsed = nameSchema.safeParse(name);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "That name won't work.");
   try {
+    // The default board has no row to write a name onto, so the first rename
+    // ADOPTS it into one. Every press after that is the ordinary update below,
+    // because by then it is an ordinary view. The transaction lives in
+    // `lib/board/store.ts` so it can be driven against real SQL in a test.
+    if (id === null) {
+      await adoptDefaultView(getDb(), ctx.orgId, parsed.data);
+      return { ok: true };
+    }
     // Id AND org, the same discipline every mutation in this file follows: an
     // id from another workspace must find nothing rather than something.
     await getDb()
@@ -477,6 +502,15 @@ export async function renameViewAction(id: string, name: string): Promise<Result
       .where(and(eq(dashboardViews.id, id), eq(dashboardViews.orgId, ctx.orgId)));
     return { ok: true };
   } catch (e) {
+    /**
+     * The one failure worth naming: `dashboard_views_one_default_uq` rejecting a
+     * second default because another tab adopted this board a moment ago. The
+     * page is now describing a world that no longer exists, and the only useful
+     * instruction is to go and get the new one.
+     */
+    if (String((e as { message?: string })?.message ?? "").includes("dashboard_views_one_default_uq")) {
+      return fail("Someone else just renamed this board. Reload to see the current view.");
+    }
     return oops(e);
   }
 }
@@ -515,8 +549,23 @@ export async function duplicateViewAction(id: string): Promise<Result<{ viewId: 
 
   try {
     const db = getDb();
+    /**
+     * THE TWO COLUMNS THIS ACTUALLY READS, NAMED.
+     *
+     * It was a bare `.select()`, which is not `SELECT *` — drizzle expands it
+     * into an explicit column list built from `schema.ts`, so it names every
+     * column the SCHEMA declares whether or not this function wants it. That
+     * makes it break the moment a column is declared and before its migration
+     * has been pasted, which is the exact shape of the 0012 outage in
+     * drizzle/HAND_APPLY.md: adding `is_default` would have made duplicating a
+     * view throw `column "is_default" does not exist` in production, on a path
+     * with nothing to do with the new feature.
+     *
+     * Naming the two it reads also puts this on the same footing as every other
+     * query in the file, and off the schema's critical path for good.
+     */
     const [source] = await db
-      .select()
+      .select({ name: dashboardViews.name, kind: dashboardViews.kind })
       .from(dashboardViews)
       .where(and(eq(dashboardViews.id, id), eq(dashboardViews.orgId, ctx.orgId)));
     if (!source) return fail("That view isn't on this board any more.");

@@ -211,7 +211,11 @@ export function ViewTab({
     // An empty name is a tab with no handle. Snapping back says nothing
     // happened, which is true, rather than raising an error about a field the
     // customer has already left. The board-column rename does the same.
-    if (!viewId || !next || next === name) return;
+    //
+    // `!viewId` is deliberately NOT a bail: null is the default board before it
+    // has a row, and renaming it is what mints one. The action takes null and
+    // adopts; `router.refresh()` below brings the tab back carrying an id.
+    if (!next || next === name) return;
     setRenamed(next);
     setMenuOpen(false);
     void renameViewAction(viewId, next)
@@ -274,9 +278,22 @@ export function ViewTab({
    * Notion's rule, and it is the right one for a reason beyond imitation: a
    * kebab on every tab is a row of dots competing with the names, and one that
    * appears on hover makes every tab change width as the pointer crosses it.
-   * The default view never has one — it has no row to rename or delete.
+   *
+   * THE DEFAULT VIEW HAS ONE NOW. It used to be excluded on the grounds that it
+   * had "no row to rename or delete" — true of delete, and no longer true of
+   * rename, which is what mints the row. So the menu appears, and the two acts
+   * that genuinely need a row to point at are the ones withheld until there is
+   * one: see `hasRow` below.
    */
-  const editable = canEdit && viewId != null && active;
+  const editable = canEdit && active;
+  /**
+   * Duplicate and delete need something to copy or destroy, and before adoption
+   * the default board is the ABSENCE of a row — there is no id to hand either
+   * action. Rename is the one that changes that, so it is the one offered first.
+   * A press on it turns this tab into an ordinary view and the other two appear
+   * on the next render.
+   */
+  const hasRow = viewId != null;
 
   return (
     <span
@@ -316,11 +333,26 @@ export function ViewTab({
        * under the label without moving the label itself — the row's height is
        * set by the 24px gap and the kebab beside it, not by this padding.
        */
+      /**
+       * THE WEIGHT WAS THE WRONG WAY ROUND, and the note above is what makes
+       * that a defect rather than a preference.
+       *
+       * It argues the green rule is affordable at 1.78:1 on the light ground
+       * "ONLY because the underline is never the sole mark: the active tab is
+       * also the one set in `--ground-ink` while its neighbours sit muted."
+       * True of the ink. The WEIGHT ran the other way — active at 500, inactive
+       * at 600 — so on the light theme the five tabs you are not on were the
+       * boldest words in the row, and the one you were on was the lightest.
+       * Measured in the browser, not inferred: active w500, neighbours w600.
+       *
+       * Now the active tab is the heavier of the two, which is the direction
+       * every other selected thing in the product runs.
+       */
       className={cn(
         "inline-flex shrink-0 items-center border-b-3 text-sm transition-colors duration-(--duration-fast)",
         active
-          ? "border-tab-underline font-medium text-ground-ink"
-          : "border-transparent font-semibold text-muted-foreground hover:text-ground-ink",
+          ? "border-tab-underline font-semibold text-ground-ink"
+          : "border-transparent font-medium text-muted-foreground hover:text-ground-ink",
       )}
     >
       {editing ? (
@@ -334,7 +366,7 @@ export function ViewTab({
             if (e.key === "Escape") setEditing(false);
           }}
           aria-label={`Rename ${name}`}
-          className="h-7 w-28 px-2 py-0 text-small font-semibold"
+          className="h-7 w-28 px-2 py-0 text-sm font-semibold"
         />
       ) : (
         <a
@@ -426,32 +458,40 @@ export function ViewTab({
               Rename
             </Button>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className={MENU_ROW}
-              disabled={busy}
-              onClick={duplicate}
-            >
-              <CopyIcon />
-              Duplicate
-            </Button>
+            {/* DUPLICATE AND DELETE NEED A ROW TO POINT AT, and the default
+                board has none until it is renamed — there is no id to hand
+                either action. Hiding them is the honest answer: a disabled
+                control advertising something the interface will refuse is
+                worse than one that is not there yet, and Rename, which is
+                sitting directly above, is the press that brings them. */}
+            {hasRow && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={MENU_ROW}
+                disabled={busy}
+                onClick={duplicate}
+              >
+                <CopyIcon />
+                Duplicate
+              </Button>
+            )}
 
             {error && (
-              <p role="alert" className="px-1.5 py-1 text-tiny text-danger-ink">
+              <p role="alert" className="px-1.5 py-1 text-xs text-danger-ink">
                 {error}
               </p>
             )}
 
-            <div className="my-1.5 h-px bg-border" />
+            {hasRow && <div className="my-1.5 h-px bg-border" />}
 
-            {confirming ? (
+            {!hasRow ? null : confirming ? (
               /* INLINE, not a modal — the RanksPanel precedent. The sentence
                  says what survives, because "delete view" one inch from a
                  board full of numbers reads like it might take them with it.
                  It never does. */
               <div className="px-1.5 py-1">
-                <p className="text-tiny text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Delete this view? Its columns go with it. Your metrics stay on the board.
                 </p>
                 <div className="mt-2 flex gap-1.5">
@@ -514,7 +554,12 @@ export function ViewTitle({
   name,
   canEdit,
 }: {
-  /** `null` is the default view — no row, so no rename. */
+  /**
+   * `null` is the default view while it is still the absence of a row. It IS
+   * renameable now — the first commit adopts it into a real row server-side (see
+   * `adoptDefaultView`), and `router.refresh()` brings back a tab carrying an
+   * id. Nothing here has to know which of the two happened.
+   */
   viewId: string | null;
   name: string;
   canEdit: boolean;
@@ -529,7 +574,11 @@ export function ViewTitle({
   const commit = () => {
     setEditing(false);
     const next = draft.trim();
-    if (!viewId || !next || next === shown) return setDraft(shown);
+    // `!viewId` is NOT a bail any more — null is the un-adopted default board,
+    // and renaming it is exactly what mints its row. An empty name still is:
+    // snapping back says nothing happened, which is true, rather than raising an
+    // error about a field the customer has already left.
+    if (!next || next === shown) return setDraft(shown);
     setRenamed(next);
     void renameViewAction(viewId, next)
       .then((r) => {
@@ -541,32 +590,30 @@ export function ViewTitle({
       .catch(() => setRenamed(null));
   };
 
-  if (!canEdit || viewId == null) return <>{shown}</>;
+  if (!canEdit) return <>{shown}</>;
 
   /**
-   * THE TITLE'S TYPE, SPELLED THE ARBITRARY WAY, and it has to be.
+   * THE TITLE'S TYPE — `PageHeader`'s h1 recipe, verbatim.
    *
-   * `Button`'s size variant carries `text-sm` and `Input`'s recipe carries it
-   * too, so both halves of this control have to override a 14px inherited from
-   * a primitive. `text-display-xs` CANNOT: `cn()` does not resolve it against
-   * `text-sm` — tailwind-merge reads the kit's own type names as colours, so
-   * both classes survive, and Tailwind emits utilities alphabetically, which
-   * puts `.text-sm` after `.text-display-xs` and hands it the win. The title
-   * would silently render at 14px. Measured in the compiled stylesheet, not
-   * assumed.
+   * IT USED TO BE A DIFFERENT SIZE FROM THE TITLE IT REPLACES, which is the
+   * bug. Twelve lines up, the default view returns bare text and inherits the
+   * h1 it is sitting in — `text-display-sm`, 30px. Every OTHER view came
+   * through here at `display-xs`, 24px. So the page's title changed size as you
+   * moved between tabs, in the one slot on the screen that names where you are,
+   * and nothing reported it because both steps are legal.
    *
-   * `text-[length:var(--text-display-xs)]` is the same token said in a form
-   * tailwind-merge understands as a font size, so the conflicting class is
-   * dropped outright and no ordering is relied on. It is the trick
-   * `rounded-[var(--radius-control)]` plays against `Button`'s pill in
-   * dashboard/page.tsx, for the same reason: the arbitrary spelling is the one
-   * that can beat a primitive's own base.
+   * THE ARBITRARY SPELLING IS GONE WITH IT. It was here because `cn()` could
+   * not resolve a kit type name against `Button`'s own `text-sm` — tailwind
+   * -merge read our names as colours, so both survived and alphabetical order
+   * handed `.text-sm` the win. That was true of the LEGACY names; `lib/utils.ts`
+   * registers the `display-*` steps, so the named class now beats the
+   * primitive's base outright. Pinned by tests/cn-merge.test.ts, which asserts
+   * exactly this pair rather than trusting the claim.
    *
-   * `leading-8` comes with it because the arbitrary form carries the size only,
-   * where the named step carries the token's 32px line-height too — and a 24px
-   * title on its inherited leading is what makes a wrapped one overlap.
+   * No `leading-8` either: the named step carries the token's own line-height,
+   * where the arbitrary form set the size alone and needed one supplied.
    */
-  const TITLE_TYPE = "font-display text-[length:var(--text-display-xs)] font-semibold leading-8";
+  const TITLE_TYPE = "font-display text-display-sm font-semibold";
 
   if (editing) {
     return (

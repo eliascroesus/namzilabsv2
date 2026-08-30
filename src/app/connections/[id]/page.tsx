@@ -135,14 +135,14 @@ export default async function ConnectionPage({
         {/* F.3/F.6: a paused connection is never a dead end — it says WHY and
             WHEN it resumes, and it retries itself with no human action. */}
         {conn.pausedUntil && new Date(conn.pausedUntil).getTime() > Date.now() ? (
-          <div className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
+          <div className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-sm text-warn-ink">
             <b>Paused, retrying automatically.</b>{" "}
             {conn.pausedReason ?? "Waiting before the next attempt."} Next attempt around{" "}
             {formatTime(new Date(conn.pausedUntil))} — nothing is lost, syncing resumes on its own.
           </div>
         ) : (
           conn.lastError && (
-            <div className="mt-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-base text-danger-ink">
+            <div className="mt-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-sm text-danger-ink">
               {conn.lastError}
             </div>
           )
@@ -179,14 +179,14 @@ export default async function ConnectionPage({
             legacy per-email stream is an ordinary incremental walk. Rendering the
             source-wide value alone told a per-email user they had a guarantee
             they do not have. */}
-        {entry?.syncNote && <p className="mt-2 text-tiny text-muted-foreground">{entry.syncNote}</p>}
+        {entry?.syncNote && <p className="mt-2 text-xs text-muted-foreground">{entry.syncNote}</p>}
 
         {/* The weaker guarantee class is stated plainly, not hidden in a tooltip:
             with no list endpoint to reconcile against, a webhook this provider
             fails to deliver (downtime, expired subscription) is not recoverable
             by polling. */}
         {syncGuarantee(conn.source) === "webhook-only" && (
-          <div className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
+          <div className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-sm text-warn-ink">
             {/* `{" "}` rather than a bare space: the space that begins a JSX
                 text node on the same line as an expression survives esbuild
                 and is DROPPED by Next's SWC transform, so this read
@@ -270,7 +270,7 @@ export default async function ConnectionPage({
               </Card>
             )}
             {previewError && (
-              <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
+              <p className="rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-sm text-warn-ink">
                 {previewError}
               </p>
             )}
@@ -285,12 +285,12 @@ export default async function ConnectionPage({
           <section className="mt-10">
             <SectionHeading>Delivery issues</SectionHeading>
             {replay === "failed" && (
-              <p className="mb-3 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-base text-warn-ink">
+              <p className="mb-3 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-sm text-warn-ink">
                 That replay failed again — the row stays here, nothing was lost. The error below is updated.
               </p>
             )}
             {replay === "ok" && (
-              <p className="mb-3 rounded-card border border-success-soft bg-success-soft/50 p-4 text-base text-success-ink">
+              <p className="mb-3 rounded-card border border-success-soft bg-success-soft/50 p-4 text-sm text-success-ink">
                 Replayed. The payload was reprocessed from its stored raw body.
               </p>
             )}
@@ -298,7 +298,7 @@ export default async function ConnectionPage({
               <EmptyState className="p-6" title="No unresolved delivery issues" />
             ) : (
               <>
-                <p className="mb-2 text-base text-muted-foreground">
+                <p className="mb-2 text-sm text-muted-foreground">
                   These payloads were received and safely stored, but failed processing after every retry. Replaying
                   reprocesses the stored payload — nothing is re-fetched from the provider.
                 </p>
@@ -337,7 +337,7 @@ export default async function ConnectionPage({
                             ) : (
                               // A row with no stored raw body predates raw capture
                               // for its path; there is nothing to reprocess from.
-                              <span className="text-tiny text-muted-foreground" title="No stored payload to reprocess">
+                              <span className="text-xs text-muted-foreground" title="No stored payload to reprocess">
                                 not replayable
                               </span>
                             )}
@@ -405,7 +405,7 @@ export default async function ConnectionPage({
           </div>
         </section>
 
-        <p className="mt-8 text-tiny text-muted-foreground">
+        <p className="mt-8 text-xs text-muted-foreground">
           {conn.status === "disabled" ? (
             <>
               Disconnected. Its records are hidden, not deleted &mdash; reconnecting brings them back with no

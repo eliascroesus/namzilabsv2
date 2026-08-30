@@ -118,13 +118,13 @@ function DeadTile({ title }: { title: string }) {
     // sheet pills chips, the trio owns the colour, and a tinted badge is
     // legible at a glance across a board in a way a grey sentence is not.
     <Card data-tile-card variant="tile" padding="compact" className="flex h-full flex-col">
-      <p className="truncate text-micro font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
       <div className="mt-3 flex flex-1 flex-col items-start justify-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-warn-soft px-2.5 py-1 text-micro font-semibold uppercase tracking-wide text-warn-ink">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-warn-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-warn-ink">
           <AlertTriangle size={13} />
           Metric unavailable
         </span>
-        <p className="text-tiny text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           It isn&rsquo;t published any more. Publish it again, or point this tile at another metric.
         </p>
       </div>
@@ -165,11 +165,11 @@ function Block({ kind, text }: { kind: "heading" | "text" | "divider"; text?: st
   return (
     <div className={`flex h-full min-w-0 flex-col justify-center ${empty ? "text-muted-foreground" : ""}`}>
       {kind === "heading" ? (
-        <h3 className="truncate text-title font-semibold text-foreground">{words}</h3>
+        <h3 className="truncate text-lg font-semibold text-foreground">{words}</h3>
       ) : (
         // `whitespace-pre-line` so a paragraph typed with line breaks keeps
         // them; the tile's own height decides how much of it is on screen.
-        <p className="min-h-0 overflow-y-auto whitespace-pre-line text-small leading-relaxed text-muted-foreground quiet-scroll">
+        <p className="min-h-0 overflow-y-auto whitespace-pre-line text-sm leading-relaxed text-muted-foreground quiet-scroll">
           {words}
         </p>
       )}
@@ -428,7 +428,7 @@ export function CustomTile({
         <>
           {footer && <ChartFooter>{footer}</ChartFooter>}
           {!w.unavailable && undated > 0 && (
-            <p className="mt-2 text-tiny text-warn-ink">
+            <p className="mt-2 text-xs text-warn-ink">
               {/* ONE STRING, NO JSX TEXT NODES AT ALL — and that is not
                   fussiness, it is the second fix for this sentence.
 

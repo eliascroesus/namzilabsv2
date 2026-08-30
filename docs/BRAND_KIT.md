@@ -114,24 +114,46 @@ below 17px. `--font-mono` (system mono) carries IDs, keys, URLs and code.
 A product set entirely in Inter is the house style of every dashboard built
 since 2019 — legible, and indistinguishable.
 
-**Eight sizes in-app, nothing between them** (plus `hero` for marketing only):
-`micro` 11 · `tiny` 12 · `small` 13 · `base` 14 (default) · `lead` 15 ·
-`title` 17 · `display` 24 · `stat` 36 · (`hero` 40, landing only).
-Weights: 400, `font-medium`, `font-semibold`. Never `font-bold`.
+**Six sizes in-app, nothing between them** (plus three for marketing):
+`xs` 12 · `sm` 14 (default) · `md` 16 · `lg` 18 · `xl` 20 · `display-xs` 24 ·
+`display-sm` 30 · `display-md` 36 · (`display-lg` 48 and the fluid `banner`,
+landing only). Weights: 400, `font-medium`, `font-semibold`. Never
+`font-bold` — enforced, not merely asked for.
+
+**ONE NAME PER SIZE, and this is the second attempt at that rule.** The kit
+once spelled the scale `micro/tiny/small/base/lead/title/display/stat`, which
+kept the set closed but meant no vendored shadcn or Untitled UI component could
+render — `--text-*: initial` clears the stock names, so their `text-sm` resolved
+to nothing. The scale was re-pitched onto Untitled UI's spelling with the eight
+old names kept as ALIASES "while the app migrates surface by surface". The
+migration stalled: for months the app ran **twelve names over nine sizes**, with
+three-way ties at 12px (`xs`/`micro`/`tiny`) and 16px (`md`/`base`/`lead`), and
+`check:ui` passed the entire time because every one of them was legal. A closed
+set with two spellings per step is not closed. The aliases are deleted, all 326
+call sites are converted, and the gate now names the replacement.
+
+`base` moved a step DOWN on the way (16px → 14px). It had been re-pointed at
+`md` in a "bigger scale" commit while `--text-sm` kept the comment calling it
+the app's default body — so body copy rendered at 16px wherever a file said
+`text-base` and 14px wherever it said `text-sm`. Fourteen is the size the
+interface is built at.
 
 **Canonical recipes** (the only spellings):
 | Role | Recipe |
 |---|---|
-| Page title (h1) | `PageHeader` → `font-display text-display font-semibold text-foreground` |
-| Section heading (h2) | `SectionHeading` → `text-micro font-semibold uppercase tracking-wide text-muted-foreground` |
-| Card/modal title | `text-title font-semibold tracking-tight text-foreground` |
-| List-item title | `text-base font-semibold text-foreground` (or `text-lead` for hero rows) |
-| Body / secondary / caption | `text-base` / `text-base text-muted-foreground` / `text-tiny text-muted-foreground` |
-| Headline number | `.stat-numeral text-stat` + `formatMetricValue` — display face + tabular figures, no other size, ever |
-| Field label | `FieldLabel` (`mb-1.5 block text-base font-semibold text-foreground`) |
+| Page title (h1) | `PageHeader` → `font-display text-display-sm font-semibold text-ground-ink` |
+| Section heading (h2) | `SectionHeading` → `text-xs font-semibold uppercase tracking-wide text-muted-foreground` |
+| Card/modal title | `text-lg font-semibold tracking-tight text-foreground` |
+| List-item title | `text-sm font-semibold text-foreground` (or `text-md` for hero rows) |
+| Body / secondary / caption | `text-sm` / `text-sm text-muted-foreground` / `text-xs text-muted-foreground` |
+| Long-form reading prose | `text-md leading-relaxed` — legal pages and landing copy ONLY; the app's body is 14px |
+| Headline number | `.stat-numeral text-display-md` + `formatMetricValue` — display face + tabular figures, no other size, ever |
+| Field label | `FieldLabel` (`mb-1.5 block text-sm font-semibold text-foreground`) |
 
-Stock Tailwind sizes (`text-xs`…`text-9xl`) are banned and will be removed
-from the theme.
+`text-2xl` and up are not in the theme and compile to nothing. The nine retired
+aliases are a named `check:ui` failure rather than a silent no-op, because 326
+sites moved at once and a missed one would otherwise render at its inherited
+size on a page nobody reopened.
 
 ## 4. Shape & elevation
 
@@ -193,8 +215,11 @@ both shaped this way, each for a server component that has to read the string.
 
 ## 6. Components (`src/components/ui/`)
 
-`Button` (8 variants × 5 sizes — every clickable), `Card` (card/surface ×
-none/dense/compact/default), `Input`/`Textarea`/`NativeSelect`,
+`Button` (12 variants × 6 sizes — every clickable; `xs` is the dense row's
+geometry, for a tile footline where `sm` would crowd out the timestamp),
+`Card` (card/surface/**tile** × none/dense/compact/default),
+`MetricCard` (`src/components/metric-card.tsx` — the board's one tile shell),
+`Input`/`Textarea`/`NativeSelect`,
 `FieldLabel`/`FieldHint`/`FieldError`, `StatusPill` (5 tones, optional dot) /
 `Badge`, `Switch` (2 sizes), `Chip` (filter pill + count), `Modal`/`ModalTitle`
 (one scrim: `bg-neutral-950/40 backdrop-blur-sm`; focus-trapped, scroll-locked), `TableShell`/`Table`/`THead`/
@@ -289,6 +314,32 @@ only a tile that needs something wears a full `StatusPill`. A board where every
 card shows a green badge is furniture reporting no news, and it buries the one
 card that matters.
 
+**One card, and it wears its column on its leading edge.** Every tile on the
+groups board — a materialized flow Output and a legacy `metrics` row alike —
+renders through `MetricCard`. It had been three components that drifted into
+three different cards in one grid, one of them carrying a comment claiming it
+was "kept in step with FlowTile's shape on purpose" while disagreeing on the
+shell, the padding, the title recipe and the footer. The reader cannot tell
+which table a number came from, and should not be able to.
+
+The card is one block of padding with a 4px leading edge in its group's colour,
+borrowed from the builder's step card. The colour arrives as `--tile-edge`, set
+by the lane in `board-column.tsx` and read by inheritance — so a tile dragged to
+another column changes allegiance on the frame it lands, with nothing threaded
+through a server-rendered node, and the ungrouped row falls back to `--border`
+rather than claiming a group. Content takes the slack (`flex-1 justify-center`,
+so a bare scalar centres instead of hanging off the top of a stretched card) and
+the footline is welded to the bottom, because a ragged row of footers is §5's
+difference between a board and a pile.
+
+**The tile is a LIGHT ISLAND in the dark theme.** `Card variant="tile"` carries
+`tile-surface`, which re-points the whole role block at its light values for
+that subtree. Turning the card white and stopping was a real bug: every muted
+label inside it measured **2.52:1** on the white it now sat on, because
+`--muted-foreground` under `.dark` is a grey solved for a near-black background.
+Both themes now measure identically — 5.33:1 for the name, 4.97:1 for the
+timestamp, 17.4:1 for the numeral.
+
 **Heat is magnitude, never judgement.** The calendar tints each day by its
 share of the month's largest day, in the one accent — `color-mix(in srgb,
 var(--color-brand-600) 8–38%, white)`, which keeps the numeral past 9:1 at
@@ -309,13 +360,18 @@ types are humanized via `catalogEntry`/`eventTypeLabel`. Dates:
 
 ## 11. Enforcement
 
-`pnpm check:ui` (`scripts/check-ui.ts`) gates nine rules: stock
-type/radius/shadow classes, raw chromatic palette classes, `bg-neutral-900`
-as a primary, hex literals outside the three sanctioned files, bare
-`toLocale*()` outside `format.ts`, text glyphs used as icons, and raw
-`<button>` outside the primitives and the builder's bespoke chrome. Each rule
-carries a per-path allowlist with a stated reason — "it's fine" is how the
-next drift gets waved through.
+`pnpm check:ui` (`scripts/check-ui.ts`) gates eleven rules: stock
+type/radius/shadow classes, the nine retired type aliases, `font-bold`, raw
+chromatic palette classes, `bg-neutral-900` as a primary, hex literals outside
+the three sanctioned files, bare `toLocale*()` outside `format.ts`, text glyphs
+used as icons, and raw `<button>` outside the primitives and the builder's
+bespoke chrome. Each rule carries a per-path allowlist with a stated reason —
+"it's fine" is how the next drift gets waved through.
+
+The last two rules are there because the gate was PASSING while the drift it
+exists to stop was in the tree: two legal spellings of 12px, and a fourth font
+weight in the newest file in the product. A rule that only bans what nobody was
+doing reports health it has not checked.
 
 **The landing and legal exemptions are gone.** `/`, `/privacy` and `/terms`
 were carved out as "out of scope this pass"; they now render through the kit

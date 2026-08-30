@@ -69,11 +69,11 @@ export function PieChart({
                 style={{ background: sliceAccent(i, s.label) }}
                 aria-hidden
               />
-              <span className="min-w-0 flex-1 truncate text-tiny text-muted-foreground" title={s.label}>
+              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={s.label}>
                 {s.label}
               </span>
-              <span className="tnum shrink-0 text-tiny text-foreground">{formatMetricValue(s.value, format)}</span>
-              <span className="tnum w-8 shrink-0 text-right text-tiny text-muted-foreground">{pct(s.share)}</span>
+              <span className="tnum shrink-0 text-xs text-foreground">{formatMetricValue(s.value, format)}</span>
+              <span className="tnum w-8 shrink-0 text-right text-xs text-muted-foreground">{pct(s.share)}</span>
             </div>
           ))}
         </div>

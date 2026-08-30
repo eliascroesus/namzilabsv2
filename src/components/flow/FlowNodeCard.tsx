@@ -42,7 +42,7 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
         </button>
       }
     >
-      <div className="nodrag p-1 text-base">
+      <div className="nodrag p-1 text-sm">
         <button
           type="button"
           onClick={(e) => {
@@ -220,23 +220,23 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
         <span className="min-w-0 flex-1 pt-0.5">
           <span className="flex items-center gap-1.5">
             {data.stepNo != null && (
-              <span className="tnum rounded-control bg-muted px-1.5 py-0.5 text-micro font-semibold text-muted-foreground">{data.stepNo}</span>
+              <span className="tnum rounded-control bg-muted px-1.5 py-0.5 text-xs font-semibold text-muted-foreground">{data.stepNo}</span>
             )}
-            <span className="min-w-0 truncate text-lead font-semibold text-foreground">{nodeTitle(t, data)}</span>
+            <span className="min-w-0 truncate text-md font-semibold text-foreground">{nodeTitle(t, data)}</span>
           </span>
           {bodyLine && (
-            <span className={`mt-1 block truncate text-tiny font-medium ${bodyLine.cls}`} title={bodyTitle}>
+            <span className={`mt-1 block truncate text-xs font-medium ${bodyLine.cls}`} title={bodyTitle}>
               {bodyLine.struck && <span className="line-through">{bodyLine.struck}</span>}
               {bodyLine.text}
             </span>
           )}
           {refLine && (
-            <span className="mt-0.5 block truncate text-tiny text-brand-600" title={refLine}>
+            <span className="mt-0.5 block truncate text-xs text-brand-600" title={refLine}>
               {refLine}
             </span>
           )}
           {sourceLine && (
-            <span className="mt-0.5 block truncate text-tiny text-warn-ink" title={sourceLine}>
+            <span className="mt-0.5 block truncate text-xs text-warn-ink" title={sourceLine}>
               {sourceLine}
             </span>
           )}
@@ -263,7 +263,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           hairline between them has no token at the 100 step, so it stays raw. */}
       {publishes != null && (
         <div
-          className={`flex items-center gap-1.5 rounded-b-[calc(var(--radius-surface)-1px)] border-t px-3.5 py-2 text-micro font-semibold ${
+          className={`flex items-center gap-1.5 rounded-b-[calc(var(--radius-surface)-1px)] border-t px-3.5 py-2 text-xs font-semibold ${
             publishes ? "border-brand-100 bg-accent text-accent-foreground" : "border-border bg-muted/50 text-muted-foreground"
           }`}
           title={publishes ? "This step's result becomes a tile when you publish." : "Switched off in Review & publish — this step publishes nothing."}
@@ -293,7 +293,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             (data as NodeData).onAddFrom?.(id, null, anchorFromRect(e.currentTarget.getBoundingClientRect()));
           }}
           title="Add the next step"
-          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-left text-base font-semibold text-muted-foreground shadow-surface transition-colors duration-(--duration-fast) hover:border-primary hover:text-primary"
+          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-left text-sm font-semibold text-muted-foreground shadow-surface transition-colors duration-(--duration-fast) hover:border-primary hover:text-primary"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
             <Plus size={16} strokeWidth={2} />
@@ -314,7 +314,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
                 (data as NodeData).onAddFrom?.(id, h.id, anchorFromRect(e.currentTarget.getBoundingClientRect()));
               }}
               title={`Add a step to “${h.label}”`}
-              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-border bg-card px-3 py-1.5 text-tiny font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-primary hover:text-primary"
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-primary hover:text-primary"
             >
               <Plus size={14} strokeWidth={2.25} />
               {h.label}

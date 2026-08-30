@@ -158,12 +158,12 @@ export function NodeLibraryModal({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2 pt-1">
           {items.length === 0 ? (
-            <p className="p-8 text-center text-base text-muted-foreground">No matching steps.</p>
+            <p className="p-8 text-center text-sm text-muted-foreground">No matching steps.</p>
           ) : (
             <div className="flex flex-col gap-0.5">
               {sections.map((sec) => (
                 <div key={sec.stage}>
-                  <p className="px-2.5 pb-1 pt-2 text-micro font-semibold uppercase tracking-wide text-muted-foreground">{sec.stage}</p>
+                  <p className="px-2.5 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{sec.stage}</p>
                   {sec.items.map((e) => (
                     <button
                       key={e.key}
@@ -172,8 +172,8 @@ export function NodeLibraryModal({
                     >
                       <NodeIcon type={e.type} variant={e.key === "unite_match" ? "unite_match" : e.key === "formula_compare" ? "formula_compare" : undefined} size={40} />
                       <span className="min-w-0">
-                        <span className="block text-lead font-semibold leading-tight text-foreground">{e.label}</span>
-                        <span className="mt-0.5 block text-small leading-tight text-muted-foreground">{e.blurb}</span>
+                        <span className="block text-md font-semibold leading-tight text-foreground">{e.label}</span>
+                        <span className="mt-0.5 block text-sm leading-tight text-muted-foreground">{e.blurb}</span>
                       </span>
                     </button>
                   ))}

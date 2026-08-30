@@ -54,8 +54,8 @@ export function OnboardingChecklist({
     // thing a new workspace sees, and on the warm canvas an unfilled box reads
     // as a placeholder that failed to load rather than as an invitation.
     <div className="mt-6 rounded-surface border border-border bg-card p-8 shadow-card">
-      <h2 className="font-display text-title font-semibold text-foreground">Get your first metric live</h2>
-      <p className="mt-1 text-base text-muted-foreground">Three steps — the first takes about a minute.</p>
+      <h2 className="font-display text-lg font-semibold text-foreground">Get your first metric live</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Three steps — the first takes about a minute.</p>
       <ol className="mt-5 space-y-4">
         {steps.map((step, i) => (
           <li key={step.title} className="flex items-start gap-3">
@@ -66,7 +66,7 @@ export function OnboardingChecklist({
             ) : (
               <span
                 className={cn(
-                  "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-base font-semibold",
+                  "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
                   i === next ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground",
                 )}
               >
@@ -78,7 +78,7 @@ export function OnboardingChecklist({
                 {step.title}
               </p>
               {!step.done && (
-                <p className="mt-0.5 text-base text-muted-foreground">
+                <p className="mt-0.5 text-sm text-muted-foreground">
                   {step.detail}{" "}
                   {i === next && (
                     <Link href={step.href} className="whitespace-nowrap font-medium text-primary hover:underline">

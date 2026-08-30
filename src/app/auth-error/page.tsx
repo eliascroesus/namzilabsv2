@@ -18,11 +18,11 @@ import { cn } from "@/lib/utils";
 export default function AuthErrorPage() {
   return (
     <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-16">
-      <h1 className="font-display text-display font-semibold text-foreground">That sign-in didn&rsquo;t finish</h1>
-      <p className="mt-3 text-base text-muted-foreground">
+      <h1 className="font-display text-display-xs font-semibold text-foreground">That sign-in didn&rsquo;t finish</h1>
+      <p className="mt-3 text-sm text-muted-foreground">
         Something interrupted the last step. It&rsquo;s almost always one of these:
       </p>
-      <ul className="mt-4 list-disc space-y-2 pl-5 text-base text-muted-foreground">
+      <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
         <li>
           <b className="font-semibold">Joining from an invite?</b> Open the invite link again and finish in one go —
           and make sure you sign in with <b className="font-semibold">the same email address the invite was sent to</b>.
@@ -37,7 +37,7 @@ export default function AuthErrorPage() {
           Back to home
         </Link>
       </div>
-      <p className="mt-6 text-tiny text-muted-foreground">
+      <p className="mt-6 text-xs text-muted-foreground">
         Still stuck? Ask the person who invited you to send a fresh link — invites expire and can be re-sent
         in seconds.
       </p>

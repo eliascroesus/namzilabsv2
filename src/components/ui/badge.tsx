@@ -16,7 +16,7 @@ const pillVariants = cva(/**
    * brand sheet is set that way, and at 12px it reads as a LABEL rather than
    * as a very small sentence.
    */
-  "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-micro font-semibold uppercase tracking-wide", {
+  "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide", {
   variants: {
     tone: {
       /**
@@ -63,7 +63,7 @@ export function Badge({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center rounded-full bg-muted px-2 py-0.5 text-tiny font-medium text-muted-foreground",
+        "inline-flex shrink-0 items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground",
         className,
       )}
       {...props}

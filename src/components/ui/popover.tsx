@@ -69,7 +69,7 @@ function PopoverTitle({ className, ...props }: React.ComponentProps<"h2">) {
       // A popover's heading is a card title one step down, so it takes the
       // kit's list-item title rather than a bare `font-medium` that inherits
       // whatever size it lands in.
-      className={cn("text-base font-semibold text-foreground", className)}
+      className={cn("text-sm font-semibold text-foreground", className)}
       {...props}
     />
   )

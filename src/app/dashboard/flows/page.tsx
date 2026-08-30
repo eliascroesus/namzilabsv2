@@ -137,7 +137,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       <PageContainer>
         {one(sp.error) === "rank" && (
-          <div className="mb-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-base text-danger-ink">
+          <div className="mb-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-sm text-danger-ink">
             <p>Your role doesn&rsquo;t allow editing flows.</p>
             <Link
               href="/dashboard/flows"
@@ -152,7 +152,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
           </div>
         )}
         {one(sp.error) === "flow_limit" && (
-          <div className="mb-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-base text-danger-ink">
+          <div className="mb-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-sm text-danger-ink">
             <p>This workspace has reached its flow limit, so nothing was created. Contact us and we&rsquo;ll raise it.</p>
             <Link
               href="/dashboard/flows"

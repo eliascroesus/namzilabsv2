@@ -102,7 +102,7 @@ export function ChartFrame({
             LABELS the figure under it, and setting it at 14px in the
             foreground colour put a heading and a 36px numeral in the same
             breath. Caps and muted is what makes the number the loud thing. */}
-        <p className="flex min-w-0 items-baseline text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="flex min-w-0 items-baseline text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {/* The TITLE truncates; the period marker does not. It sits at the
               end of the line, and `truncate` ellipsises the END — so with one
               truncating span the marker was the first thing to disappear, on
@@ -132,7 +132,7 @@ export function ChartFrame({
         <span className="flex shrink-0 items-center gap-1.5">
           {status && <Freshness status={status} />}
           {computedAt && (
-            <span className="text-micro text-muted-foreground" title={formatDateTime(new Date(computedAt))}>
+            <span className="text-xs text-muted-foreground" title={formatDateTime(new Date(computedAt))}>
               {relativeTime(new Date(computedAt))}
             </span>
           )}
@@ -143,7 +143,7 @@ export function ChartFrame({
           to belong to it, far enough that the numeral is not sitting on it. */}
       {headline !== undefined && (
         <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-          <p className={cn("stat-numeral text-stat leading-none", headline == null && "text-muted-foreground")}>
+          <p className={cn("stat-numeral text-display-md leading-none", headline == null && "text-muted-foreground")}>
             {headline ?? "—"}
           </p>
           {delta}
@@ -152,7 +152,7 @@ export function ChartFrame({
 
       <div className="mt-2.5 flex min-h-0 flex-1 flex-col justify-center">
         {blocked ? (
-          <p className="text-tiny text-muted-foreground" title={blocked}>
+          <p className="text-xs text-muted-foreground" title={blocked}>
             {blocked.length > 160 ? `${blocked.slice(0, 160)}…` : blocked}
           </p>
         ) : (
@@ -165,7 +165,7 @@ export function ChartFrame({
       {/* The qualifications — beside the number, never instead of it. */}
       {unpublished && flowId && <NotLive flowId={flowId} />}
       {status === "error" && error && (
-        <p className="mt-2 text-tiny text-danger-ink">
+        <p className="mt-2 text-xs text-danger-ink">
           {error.length > 160 ? `${error.slice(0, 160)}…` : error}{" "}
           {flowId && (
             <Link
@@ -184,5 +184,5 @@ export function ChartFrame({
 
 /** The honesty line under a mark that showed you less than it has. */
 export function ChartFooter({ children }: { children: ReactNode }) {
-  return <p className="mt-2 text-tiny text-muted-foreground">{children}</p>;
+  return <p className="mt-2 text-xs text-muted-foreground">{children}</p>;
 }

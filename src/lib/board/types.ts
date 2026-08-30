@@ -25,7 +25,14 @@ export type BoardViewKind = "groups" | "custom";
 /** An unknown stored value reads as the board every workspace already had. */
 export const asViewKind = (v: unknown): BoardViewKind => (v === "custom" ? "custom" : "groups");
 
-export type BoardView = { id: string | null; name: string; pos: string; kind: BoardViewKind };
+/**
+ * `id: null` is the SYNTHETIC default tab — the board that exists as the absence
+ * of a row, prepended by the page for a workspace that has never renamed it.
+ * `isDefault` is the ADOPTED one: a real row carrying the same board after
+ * somebody typed a name for it. Exactly one of the two shapes is ever present
+ * in a strip, which is what stops "Dashboard" appearing twice.
+ */
+export type BoardView = { id: string | null; name: string; pos: string; kind: BoardViewKind; isDefault?: boolean };
 
 /**
  * ONE METRIC THE PICKER MAY OFFER, and the charts its shape supports.

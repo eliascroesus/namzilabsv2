@@ -1056,3 +1056,61 @@ columns.
 > `batch5/retention-purge` branch. Like 0024–0027 this migration carries no
 > drizzle snapshot and its journal entry uses a synthetic `when` stamp
 > continuing that sequence.
+
+---
+
+## 0029 — `dashboard_views.is_default`, and the rename the default board never had
+
+The default view was the ABSENCE of a row — `view_id IS NULL` on
+`dashboard_groups` and `dashboard_tile_placements`. That is what made 0027
+additive with no backfill, and the schema wrote the price down at the time: "the
+default view is therefore the one thing that cannot be renamed or deleted".
+
+This buys the rename back without paying the backfill. **Nothing in this
+migration moves a customer's rows.** The column arrives `false` everywhere,
+every existing board still reads through `view_id IS NULL`, and the adoption —
+mint a row, re-point that org's null groups and placements at it — happens
+lazily, in one transaction, the first time somebody actually types a name. A
+workspace that never renames its dashboard is never written to.
+
+`is_default` is what lets the READ know which of the two worlds an org is in.
+Without it, `/dashboard` with no `?view=` cannot tell "this org has adopted, so
+land on its first view" from "this org has not, so land on the null board", and
+an adopted workspace would open on an empty board every time.
+
+```sql
+ALTER TABLE "dashboard_views" ADD COLUMN IF NOT EXISTS "is_default" boolean DEFAULT false NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS "dashboard_views_one_default_uq" ON "dashboard_views" USING btree ("org_id") WHERE "is_default";
+```
+
+The partial unique index is not decoration. Adoption reads "does a default
+already exist?" and then inserts; two tabs pressing rename in the same second
+both read "no" and both insert, and the loser would leave the workspace with two
+rows claiming to be its default board and a tab strip showing the same board
+twice. The index makes the second insert fail, which the action turns into
+"reload and try again" rather than into a corrupted strip.
+
+Verify — expect `1` and `1`:
+
+```sql
+SELECT
+  (SELECT count(*) FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='dashboard_views'
+      AND column_name='is_default')                                          AS col_should_be_1,
+  (SELECT count(*) FROM pg_indexes
+    WHERE schemaname='public' AND indexname='dashboard_views_one_default_uq') AS idx_should_be_1;
+```
+
+And the one that would rot quietly — the column landing nullable or without its
+default. Every existing read would then return `null` for `is_default`, which is
+falsy, so every adopted workspace would silently fall back to the empty null
+board. Expect `false` and `NO`:
+
+```sql
+SELECT column_default, is_nullable
+FROM information_schema.columns
+WHERE table_schema='public' AND table_name='dashboard_views' AND column_name='is_default';
+```
+
+> Like 0024–0028 this migration carries no drizzle snapshot and its journal entry
+> uses a synthetic `when` stamp continuing that sequence.

@@ -33,18 +33,18 @@ export function Pipeline({ result, accent }: { result: FunnelResult; accent: str
                 the one vocabulary rather than a second. */}
             <div className="flex items-baseline justify-between gap-2">
               <span className="flex min-w-0 items-baseline gap-1.5">
-                <span className="truncate text-tiny text-muted-foreground" title={stage.label}>
+                <span className="truncate text-xs text-muted-foreground" title={stage.label}>
                   {stage.label}
                 </span>
                 {bottleneck && <StatusPill tone="danger">Biggest drop-off</StatusPill>}
               </span>
               <span className="flex shrink-0 items-baseline gap-2">
                 {i > 0 && (
-                  <span className="tnum text-tiny text-muted-foreground">
+                  <span className="tnum text-xs text-muted-foreground">
                     {formatMetricValue(stage.conversionFromPrev * 100, { format: "percent", precision: 0 })} from prev
                   </span>
                 )}
-                <span className="tnum text-tiny font-semibold text-foreground">
+                <span className="tnum text-xs font-semibold text-foreground">
                   {formatMetricValue(stage.count, fmt)}
                 </span>
               </span>

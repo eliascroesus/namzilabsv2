@@ -161,7 +161,11 @@ export function TopBar({
         {initial}
       </span>
       <span className="flex min-w-0 items-center gap-1.5">
-        <span className="truncate text-md font-bold text-white">{workspace}</span>
+        {/* `font-semibold`, matching the avatar disc beside it and every other
+            heading in the product. It was `font-bold` — a fourth weight, used
+            in three places in this file and nowhere else, sitting 100 units
+            heavier than the initial it shares a baseline with. */}
+        <span className="truncate text-md font-semibold text-white">{workspace}</span>
         {account && <ChevronDown aria-hidden className="size-3 shrink-0 text-neutral-300" />}
       </span>
     </>
@@ -317,7 +321,7 @@ export function TopBar({
                       )}
                     </svg>
                   </span>
-                  <span className="text-md font-bold text-white">
+                  <span className="text-md font-semibold text-white">
                     {tracked}/{METRIC_GOAL}
                   </span>
                 </span>
@@ -368,7 +372,7 @@ export function TopBar({
           id="topbar-slot"
           className="peer flex min-w-0 flex-1 items-center gap-2 pl-1 before:mr-2 before:h-6 before:w-px before:shrink-0 before:bg-chrome-line before:content-[''] empty:hidden empty:before:hidden"
         />
-        <span className="truncate text-md font-bold text-white peer-[:not(:empty)]:hidden">{greeting}</span>
+        <span className="truncate text-md font-semibold text-white peer-[:not(:empty)]:hidden">{greeting}</span>
       </div>
 
       {/* ── WHAT YOU CAN START ──────────────────────────────────────────────

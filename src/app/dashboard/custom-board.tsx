@@ -626,7 +626,7 @@ export function CustomBoard({
           it, counting it or hinting at its shape would leak the thing the
           omission exists to protect. */}
       {layoutFrozen && canEdit && (
-        <p className="mt-2 text-tiny text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground">
           This view includes a chart your access doesn&rsquo;t cover, so its arrangement is locked. You can still
           change how the charts you can see are drawn.
         </p>
@@ -635,8 +635,8 @@ export function CustomBoard({
       {empty ? (
         <div className="mt-4 flex flex-col items-center justify-center rounded-surface border border-dashed border-border py-16 text-center">
           <LayoutGrid className="size-5 text-muted-foreground" aria-hidden />
-          <p className="mt-2 text-small font-semibold text-foreground">Nothing on this view yet</p>
-          <p className="mt-1 max-w-sm text-tiny text-muted-foreground">
+          <p className="mt-2 text-sm font-semibold text-foreground">Nothing on this view yet</p>
+          <p className="mt-1 max-w-sm text-xs text-muted-foreground">
             {canEdit
               ? "Add a chart to start building it. The same metric can appear more than once, drawn a different way each time."
               : "Nobody has added a chart to this view yet."}
@@ -900,8 +900,8 @@ function AddChartMenu({
             >
               <Icon className="mt-0.5 shrink-0 text-muted-foreground" />
               <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-small font-semibold text-foreground">{c.label}</span>
-                <span className="text-tiny font-normal text-muted-foreground">
+                <span className="text-sm font-semibold text-foreground">{c.label}</span>
+                <span className="text-xs font-normal text-muted-foreground">
                   {key ? c.blurb : "No metric here can be drawn this way yet."}
                 </span>
               </span>
@@ -1050,7 +1050,7 @@ function TileMenu({
               side effect of offering the alternatives; the list moved to the
               settings panel, and without a word here two tiles of the same
               metric drawn two ways are indistinguishable at a glance. */}
-          <p className="px-1.5 pb-1.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="px-1.5 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {CHARTS.find((c) => c.id === asChartId(tile.chart))?.label ?? "Chart"}
           </p>
           {editing ? (
@@ -1066,7 +1066,7 @@ function TileMenu({
                 }}
                 aria-label={`Rename ${title}`}
                 placeholder="Follow the metric's name"
-                className="h-8 text-small"
+                className="h-8 text-sm"
               />
             </div>
           ) : (
@@ -1197,7 +1197,7 @@ function TileMenu({
                because "remove" an inch from a number reads like it might take
                the metric with it. It never does. */
             <div className="px-1.5 py-1">
-              <p className="text-tiny text-muted-foreground">Remove this chart? The metric itself stays on the board.</p>
+              <p className="text-xs text-muted-foreground">Remove this chart? The metric itself stays on the board.</p>
               <div className="mt-2 flex gap-1.5">
                 <Button variant="destructive" size="sm" onClick={onDelete}>
                   Remove
