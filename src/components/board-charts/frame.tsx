@@ -98,38 +98,30 @@ export function ChartFrame({
     // — at ROW_UNIT_PX 40 the cartesian floor is measured against it).
     <Card data-tile-card variant="tile" padding="compact" className="flex h-full flex-col overflow-hidden">
       <div className="flex items-start justify-between gap-2">
-        {/* THE KIT'S MICRO-LABEL VOICE, matching `FlowTile`: a metric's name
-            LABELS the figure under it, and setting it at 14px in the
-            foreground colour put a heading and a 36px numeral in the same
-            breath. Caps and muted is what makes the number the loud thing. */}
-        <p className="flex min-w-0 items-baseline text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {/* The TITLE truncates; the period marker does not. It sits at the
-              end of the line, and `truncate` ellipsises the END — so with one
-              truncating span the marker was the first thing to disappear, on
-              exactly the narrow tiles most likely to carry a pin. A tile
-              answering a different period than the pill above it with no
-              visible sign is the one failure this marker exists to prevent, so
-              it is the title that yields. */}
-          <span className="truncate">{title}</span>
-          {/* THE TILE'S OWN PERIOD, PRINTED ONLY WHEN IT DISAGREES with the
-              board's pills. A tile silently answering a different question
-              from the one the pill above says is being asked is the whole risk
-              a per-tile range carries, so the override announces itself — and
-              a tile following the board says nothing, because there is nothing
-              to say. Inside the truncating line on purpose: the metric's name
-              yields first, since the period is the shorter and the surprising
-              half. */}
-          {chartLabel && (
-            <span className="ml-1.5 shrink-0 whitespace-nowrap font-medium text-muted-foreground">· {chartLabel}</span>
-          )}
-          {rangeLabel && (
-            <span className="ml-1.5 shrink-0 whitespace-nowrap font-medium text-muted-foreground">· {rangeLabel}</span>
-          )}
+        {/* ONE LINE, ALWAYS. A canvas tile's height is its row span, so a
+            header that wraps steals it from the mark below and pushes a goal
+            bar's own caption out through the bottom edge. `truncate` here is
+            therefore a height guarantee rather than a width preference — and it
+            is safe to keep only because the qualifiers below now yield first on
+            a narrow tile (see `chartLabel` in custom-tile.tsx), which is what
+            leaves the name the whole line it needs. */}
+        <p className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground" title={title}>
+          {title}
         </p>
-        {/* The marker and the as-of, in that order: one says whether the number
-            can be trusted, the other says as of when. `gap-1.5` and the dot's
-            own 16px wash keep them on one baseline whichever state is showing. */}
-        <span className="flex shrink-0 items-center gap-1.5">
+        {/* THE CHART LABEL AND THE PERIOD MOVED OFF THE NAME'S LINE.
+            They used to share it, with `truncate` on the name so the markers
+            survived — which is how a tile ended up headed "PICK…". Letting the
+            name wrap instead cost a second line, and a canvas tile has a FIXED
+            height (its row span), so the extra line pushed a goal bar's own
+            "GOAL 20 / 60%" caption out through the bottom edge. Both fixes were
+            wrong in the same place: the header was carrying three facts on one
+            line and something had to give.
+            So the qualifiers sit on the right, beside the freshness marker,
+            where they are already `shrink-0` and cost no height at all — and
+            the name gets the whole line to itself and needs no ellipsis. */}
+        <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {chartLabel && <span className="whitespace-nowrap">{chartLabel}</span>}
+          {rangeLabel && <span className="whitespace-nowrap">· {rangeLabel}</span>}
           {status && <Freshness status={status} />}
           {computedAt && (
             <span className="text-xs text-muted-foreground" title={formatDateTime(new Date(computedAt))}>
@@ -139,18 +131,24 @@ export function ChartFrame({
         </span>
       </div>
 
-      {/* THE PAYOFF. `mt-2` is one baseline step off the label — close enough
-          to belong to it, far enough that the numeral is not sitting on it. */}
+      {/* THE PAYOFF, AND THE COMPARISON SITS UNDER IT RATHER THAN BESIDE IT.
+          A delta on the numeral's own baseline competes with the figure for the
+          first read, and on a narrow tile it wrapped into it. Under, at label
+          size, it reads as what it is: the sentence qualifying the number. */}
       {headline !== undefined && (
-        <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+        <div className="mt-1.5">
           <p className={cn("stat-numeral text-display-md leading-none", headline == null && "text-muted-foreground")}>
             {headline ?? "—"}
           </p>
-          {delta}
+          {delta && <div className="mt-1.5">{delta}</div>}
         </div>
       )}
 
-      <div className="mt-2.5 flex min-h-0 flex-1 flex-col justify-center">
+      {/* `justify-end` rather than `justify-center`: a mark that does not fill
+          its tile should sit ON the card's floor, not float in the middle of it
+          with dead space above and below. A tall breakdown tile used to leave a
+          third of a card empty under two bars. */}
+      <div className="mt-3 flex min-h-0 flex-1 flex-col justify-end">
         {blocked ? (
           <p className="text-xs text-muted-foreground" title={blocked}>
             {blocked.length > 160 ? `${blocked.slice(0, 160)}…` : blocked}

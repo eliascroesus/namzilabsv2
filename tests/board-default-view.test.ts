@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createTestDb } from "./helpers/testdb";
 import { dashboardGroups, dashboardTilePlacements, dashboardViews } from "@/db/schema";
 import { adoptDefaultView, listBoardGroups, listBoardViews, listTilePlacements } from "@/lib/board/store";
@@ -143,6 +145,33 @@ describe("adopting the default view", () => {
     const id = await adoptDefaultView(db, A, "Sales");
     expect((await listBoardViews(db, A))[0]).toMatchObject({ id, name: "Sales", isDefault: true });
     expect(await listBoardGroups(db, A, id)).toEqual([]);
+  });
+
+  /**
+   * THE GUARD THIS SUITE WAS MISSING, AND WHY IT SHIPPED BROKEN ANYWAY.
+   *
+   * Every test above passed while the rename failed on every single press in
+   * production. `adoptDefaultView` was written with `db.transaction()`, and
+   * PGlite is a real embedded Postgres WITH sessions, so the suite was greener
+   * than the app by construction. The deployed driver is `neon-http`
+   * (DB_DRIVER defaults to "http" in db/client.ts), which is stateless and
+   * answers `transaction()` with `throw new Error("No transactions support in
+   * neon-http driver")`.
+   *
+   * A behavioural test cannot catch that — the behaviour is correct on the
+   * database this file runs against. So the constraint is asserted on the
+   * SOURCE, which is the only place the two environments differ.
+   */
+  it("uses no interactive transaction, because the deployed driver has no sessions", () => {
+    const src = readFileSync(join(process.cwd(), "src/lib/board/store.ts"), "utf8");
+    const fn = src.slice(src.indexOf("export async function adoptDefaultView"));
+    // Matched as a CALL, not as a mention: the function's own comment explains
+    // at length why `db.transaction()` was removed, and a bare /\.transaction\(/
+    // would fail on the explanation rather than on the code.
+    expect(fn).not.toMatch(/(?:return|await)\s+\w+\.transaction\(/);
+    // Atomicity comes from the three writes being ONE statement instead.
+    expect(fn).toMatch(/WITH v AS \(/);
+    expect(fn).toMatch(/INSERT INTO/);
   });
 
   it("does not flag a workspace's other views as default", async () => {

@@ -171,55 +171,72 @@ export async function forgetTilePlacements(db: DB, orgId: string, prefix: string
  * strip would read as two changes for one action.
  */
 export async function adoptDefaultView(db: DB, orgId: string, name: string): Promise<string> {
-  return db.transaction(async (tx) => {
-    const rows = await tx
-      .select({ id: dashboardViews.id, pos: dashboardViews.pos, isDefault: dashboardViews.isDefault })
-      .from(dashboardViews)
-      .where(eq(dashboardViews.orgId, orgId));
+  const rows = await db
+    .select({ id: dashboardViews.id, pos: dashboardViews.pos, isDefault: dashboardViews.isDefault })
+    .from(dashboardViews)
+    .where(eq(dashboardViews.orgId, orgId));
 
-    /**
-     * ALREADY ADOPTED — by another tab, or by the request that lost a race to
-     * this one. Renaming the existing row is the honest answer: the customer
-     * asked for this board to be called that, and it now is. An error here would
-     * be technically accurate and useless.
-     */
-    const existing = rows.find((r) => r.isDefault);
-    if (existing) {
-      await tx
-        .update(dashboardViews)
-        .set({ name, updatedAt: new Date() })
-        .where(and(eq(dashboardViews.id, existing.id), eq(dashboardViews.orgId, orgId)));
-      return existing.id;
-    }
+  /**
+   * ALREADY ADOPTED — by another tab, or by the request that lost a race to
+   * this one. Renaming the existing row is the honest answer: the customer
+   * asked for this board to be called that, and it now is. An error here would
+   * be technically accurate and useless.
+   */
+  const existing = rows.find((r) => r.isDefault);
+  if (existing) {
+    await db
+      .update(dashboardViews)
+      .set({ name, updatedAt: new Date() })
+      .where(and(eq(dashboardViews.id, existing.id), eq(dashboardViews.orgId, orgId)));
+    return existing.id;
+  }
 
-    const first = rows.map((v) => v.pos).sort(compareKeys).at(0) ?? null;
-    const id = crypto.randomUUID();
-    await tx.insert(dashboardViews).values({
-      id,
-      orgId,
-      name,
-      pos: keyBetween(null, first),
-      // The default board has always been a groups board and cannot be anything
-      // else — see the `kind` note on the table.
-      kind: "groups",
-      isDefault: true,
-    });
-    /**
-     * The two tables the default board's arrangement actually lives in.
-     *
-     * Both scoped by org AND by `view_id IS NULL`. `= NULL` is never true in
-     * SQL, so getting this wrong does not error — it adopts nothing, reports
-     * success, and leaves the customer looking at an empty board under their
-     * own board's new name.
-     */
-    await tx
-      .update(dashboardGroups)
-      .set({ viewId: id, updatedAt: new Date() })
-      .where(and(eq(dashboardGroups.orgId, orgId), isNull(dashboardGroups.viewId)));
-    await tx
-      .update(dashboardTilePlacements)
-      .set({ viewId: id, updatedAt: new Date() })
-      .where(and(eq(dashboardTilePlacements.orgId, orgId), isNull(dashboardTilePlacements.viewId)));
-    return id;
-  });
+  const first = rows.map((v) => v.pos).sort(compareKeys).at(0) ?? null;
+  const id = crypto.randomUUID();
+  const pos = keyBetween(null, first);
+
+  /**
+   * ONE STATEMENT, NOT ONE TRANSACTION — and the difference is the whole reason
+   * this is written in raw SQL rather than three drizzle calls.
+   *
+   * IT WAS `db.transaction()`, WHICH THROWS IN PRODUCTION. `DB_DRIVER` defaults
+   * to `http` (see db/client.ts), and drizzle's neon-http session answers
+   * `transaction()` with `throw new Error("No transactions support in
+   * neon-http driver")` — it is a stateless one-statement-per-request driver
+   * and cannot hold a session open. So the rename failed on every press, the
+   * action returned `{ ok: false }`, and the title snapped back to "Dashboard"
+   * with nothing on screen to say why.
+   *
+   * It passed its tests because PGlite is a real embedded Postgres WITH
+   * sessions: the suite was greener than production by construction. That is
+   * the gap this file now closes by not needing a session at all.
+   *
+   * A single statement is atomic in Postgres by definition, so the three writes
+   * still land together or not at all — which is the property that mattered.
+   * Data-modifying CTEs "are executed exactly once, and always to completion,
+   * independently of whether the primary query reads their output", so the
+   * INSERT runs even though nothing selects from `v`.
+   *
+   * THE UPDATES NAME `id` DIRECTLY rather than reading it back out of `v`. The
+   * id is minted here, so there is nothing to learn from the RETURNING; and the
+   * foreign key on `view_id` is satisfied because constraint triggers fire at
+   * the END of the statement, by which time the row exists. Verified against
+   * real SQL in tests/board-default-view.test.ts rather than reasoned about.
+   *
+   * A LOST RACE STILL FAILS SAFELY: `dashboard_views_one_default_uq` rejects the
+   * INSERT, the whole statement rolls back, and neither UPDATE is applied.
+   */
+  await db.execute(sql`
+    WITH v AS (
+      INSERT INTO ${dashboardViews} (id, org_id, name, pos, kind, is_default, created_at, updated_at)
+      VALUES (${id}, ${orgId}, ${name}, ${pos}, 'groups', true, now(), now())
+      RETURNING id
+    ), g AS (
+      UPDATE ${dashboardGroups} SET view_id = ${id}, updated_at = now()
+      WHERE org_id = ${orgId} AND view_id IS NULL
+    )
+    UPDATE ${dashboardTilePlacements} SET view_id = ${id}, updated_at = now()
+    WHERE org_id = ${orgId} AND view_id IS NULL
+  `);
+  return id;
 }

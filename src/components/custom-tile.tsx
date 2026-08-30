@@ -409,7 +409,20 @@ export function CustomTile({
       title={title}
       /* A scorecard is just the number, so naming it adds nothing; every mark
          that DRAWS something says which drawing it is. */
-      chartLabel={chart === "number" ? undefined : (CHARTS.find((c) => c.id === chart) ?? CHARTS[0]).label}
+      /**
+       * THE CHART LABEL YIELDS BEFORE THE METRIC'S NAME DOES.
+       *
+       * Two tiles of one metric drawn two ways carry the same title and the
+       * same number, so naming the drawing is what tells them apart — but only
+       * once the NAME is legible. On a narrow tile the pair shared one line and
+       * the name lost, which is how a card ended up headed "PICK…".
+       *
+       * `cols` is this tile's width in grid columns and is already in hand, so
+       * the qualifier simply stands down below four of them. A scorecard names
+       * no drawing at all: it is just the number, so saying "number" adds
+       * nothing.
+       */
+      chartLabel={chart === "number" || cols < 4 ? undefined : (CHARTS.find((c) => c.id === chart) ?? CHARTS[0]).label}
       rangeLabel={rangeLabel}
       /* A funnel, a pipeline and a table have no single figure to head. */
       headline={

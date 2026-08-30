@@ -232,6 +232,32 @@ describe("a view tab carries its own menu", () => {
     expect(html).toContain("Options for Dashboard");
   });
 
+  it("shows the whole view name — the title never truncates", () => {
+    /**
+     * It rendered "Dashbo…" and "Vie…" with most of the header empty beside it.
+     *
+     * `truncate` is the load-bearing half rather than `min-w-0`: an element with
+     * `overflow: hidden` contributes ZERO to min-content width, so one anywhere
+     * inside the title makes the whole ancestor chain collapsible and flex
+     * shrinks it instead of wrapping the row — defeating `PageHeader`'s own
+     * documented fix for this exact symptom from one level down.
+     *
+     * Sabotage: put `truncate` back on the title and the ellipsis returns on a
+     * 1440px screen with an entire empty row beneath it.
+     */
+    const src = readFileSync(join(process.cwd(), "src/app/dashboard/board-controls.tsx"), "utf8");
+    // Bounded to ViewTitle: the file holds several components, and an unbounded
+    // slice would assert about markup this test says nothing about.
+    const from = src.indexOf("export function ViewTitle");
+    const next = src.indexOf("\nexport ", from + 1);
+    const fn = src.slice(from, next === -1 ? undefined : next);
+    // Mentions of the word in the explanation are fine; a CLASS is not.
+    expect(fn).not.toMatch(/className=[^>]*\btruncate\b/);
+    expect(fn).not.toMatch(/className=[^>]*\bmin-w-0\b/);
+    // …and it has to be allowed to wrap, over `buttonVariants`' own nowrap.
+    expect(fn).toMatch(/whitespace-normal/);
+  });
+
   it("withholds duplicate and delete until the default view has a row", () => {
     /**
      * Asserted against the SOURCE rather than the render, because both live

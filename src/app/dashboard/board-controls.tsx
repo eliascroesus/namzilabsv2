@@ -646,6 +646,30 @@ export function ViewTitle({
        so the stock ghost would answer the pointer with nothing on exactly the
        surface this title lives on. An alpha of the page's own ink reads in both
        themes and needs no second token. */
+    /**
+     * THE TITLE SAYS THE WHOLE NAME. IT DOES NOT TRUNCATE.
+     *
+     * It rendered "Dashbo…" and "Vie…" with most of the row empty beside it,
+     * and `PageHeader` already carries a note about fixing exactly that by NOT
+     * putting `min-w-0` on the title block. That fix was undone from in here,
+     * twice over:
+     *
+     *   · `min-w-0` on this button re-granted the permission to shrink that the
+     *     block above had deliberately withheld.
+     *   · `truncate` is the deeper half, and it defeats the fix on its own. An
+     *     element with `overflow: hidden` contributes ZERO to min-content width,
+     *     so a `truncate` span makes its whole ancestor chain collapsible no
+     *     matter what any parent says about `min-w-0`. Flex then shrinks the
+     *     title rather than wrapping the row, and the ellipsis eats the name.
+     *
+     * So the name is plain text that WRAPS. `whitespace-normal` is needed to
+     * override `buttonVariants`' own `whitespace-nowrap`, and `text-left`
+     * because a wrapped second line would otherwise centre under the first.
+     * The token's line-height carries the wrap; a long name takes two lines and
+     * the header's `flex-wrap` drops the period control below it, which is the
+     * correct trade — a board's name is the one string on this page that must
+     * be readable in full.
+     */
     <Button
       variant="ghost"
       onClick={() => {
@@ -653,9 +677,9 @@ export function ViewTitle({
         setEditing(true);
       }}
       title="Rename this view"
-      className={`-mx-2 h-auto min-w-0 max-w-full justify-start px-2 py-0.5 ${TITLE_TYPE} text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
+      className={`-mx-2 h-auto max-w-full justify-start whitespace-normal px-2 py-0.5 text-left ${TITLE_TYPE} text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
     >
-      <span className="truncate">{shown}</span>
+      {shown}
     </Button>
   );
 }

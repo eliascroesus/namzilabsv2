@@ -530,36 +530,20 @@
 }
 
 /**
- * THE LIGHT ROLES — and `.tile-surface` is a LIGHT ISLAND inside the dark theme.
+ * THE LIGHT ROLES.
  *
- * THE BUG THIS SELECTOR FIXES. `Card variant="tile"` is white in both themes;
- * that was decided from the Figma, which draws white metric cards on the dark
- * board, and it is right. What came with it was only `dark:bg-white
- * dark:text-neutral-900` — the SURFACE and the element's own `color`. Every
- * role INSIDE the card kept answering with the dark theme's values, because
- * `--muted-foreground` under `.dark` is `neutral-400`, a grey solved for a
- * near-black background.
+ * This rule briefly carried a second selector — `.dark .tile-surface` — which
+ * made the metric card a LIGHT ISLAND inside the dark theme. It existed to fix
+ * a real measurement: the tile was forced white in dark by `dark:bg-white`,
+ * which changed the surface and not the ink, so every muted label on it read
+ * 2.52:1 against 4.5 required.
  *
- * So on the dark theme the product's primary surface measured:
- *
- *     metric name      #a3a3a3 on #ffffff   2.52:1   (needs 4.5)
- *     tray timestamp   #a3a3a3 on #f7f7f7   2.35:1   (needs 4.5)
- *
- * — against 5.33:1 and 4.97:1 for the same two labels in light. Every muted
- * word on every metric card, failing AA, on the one screen this product exists
- * to be looked at all day. Measured in a browser, not inferred.
- *
- * ADDING THE SELECTOR HERE RATHER THAN RE-DECLARING THE VALUES is the whole
- * point. A `.tile-surface { --muted-foreground: … }` block would be a second
- * copy of the light theme that drifts from this one the first time a role
- * changes; naming the same block twice means there is still exactly one place
- * each colour is decided. A tile under `.dark` gets these declarations ON
- * ITSELF, which beats the `.dark` values it would otherwise inherit, and every
- * descendant — muted ink, hairlines, the state trios, `bg-muted` washes —
- * resolves light without a single component knowing about it.
+ * The island is gone because the thing it was compensating for is gone. The
+ * tile follows the theme now (see ui/card.tsx), so a dark card carries the ink
+ * the dark theme already solved for it and the whole problem stops existing.
+ * Naming this block twice was the right patch for the wrong shape.
  */
-:root,
-.dark .tile-surface {
+:root {
   /* ---- shadcn semantic roles --------------------------------------------
    * Components should never name a RAMP ("bg-brand-600"), they should name a
    * ROLE ("bg-primary"). The ramps above are the palette; these are the
