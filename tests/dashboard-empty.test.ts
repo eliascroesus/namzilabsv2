@@ -22,10 +22,23 @@ const picker = readFileSync(join(process.cwd(), "src/app/dashboard/view-template
 const empty = readFileSync(join(process.cwd(), "src/components/board-empty.tsx"), "utf8");
 
 describe("deciding a workspace is empty", () => {
-  it("requires all three facts, not just the absence of view rows", () => {
+  it("asks whether there is a BOARD, not whether there are metrics", () => {
+    /**
+     * `&& !hasTiles` was in here and it broke the feature: a workspace that had
+     * published anything could never be empty, so deleting every view put the
+     * synthesised "Dashboard" tab straight back with the metrics under it — the
+     * auto-created default board this exists to remove, returning the instant
+     * you removed the last real view. A metric is not a board.
+     */
+    expect(page).toMatch(/const emptyWorkspace = views\.length === 0 && groups\.length === 0;/);
+    expect(page).not.toMatch(/emptyWorkspace = .*hasTiles/);
+  });
+
+  it("still refuses to call a pre-views board empty", () => {
     // `views.length === 0` ALONE is the dangerous version: it is true of every
-    // workspace whose board predates views.
-    expect(page).toMatch(/const emptyWorkspace = views\.length === 0 && groups\.length === 0 && !hasTiles;/);
+    // workspace that has never renamed its dashboard, and those have real
+    // columns reachable only through the synthesised tab.
+    expect(page).toMatch(/groups\.length === 0/);
   });
 
   it("costs no new query — every fact is one the page already resolved", () => {
@@ -112,12 +125,16 @@ describe("the first view a workspace ever makes", () => {
     expect(actions).not.toMatch(/fd\.get\("first"\)/);
   });
 
-  it("checks placements as well as groups", () => {
-    // A board can hold tiles in the ungrouped row without ever having had a
-    // column, and that is still a board somebody arranged.
+  it("asks the same question the page asks, or the two disagree", () => {
+    /**
+     * The page decides a workspace is empty on `groups.length === 0`. If this
+     * counted placements too it would answer "not empty" for that same
+     * workspace — naming its first view "View 2" and leaving the synthesised tab
+     * in place beside it. Two rules for one fact.
+     */
     const fn = store.slice(store.indexOf("export async function hasLegacyBoard"));
     expect(fn).toMatch(/dashboardGroups/);
-    expect(fn).toMatch(/dashboardTilePlacements/);
+    expect(fn).not.toMatch(/dashboardTilePlacements/);
   });
 });
 

@@ -431,29 +431,35 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const hasTiles = activeKind === "custom" || tiles.length > 0 || flowTiles.length > 0;
 
   /**
-   * NOTHING HERE AT ALL — a workspace that has never made a view and has nothing
-   * to put on one. It gets the Get-started card and none of this page's chrome.
+   * NO VIEWS AND NO BOARD BEHIND THEM — the Get-started card, and none of this
+   * page's chrome.
    *
-   * THREE FACTS, AND NO NEW QUERY. All of them are already resolved above:
-   * `views` came from `navViews`, `groups` is the active view's columns — and
-   * with no views the "active view" IS the legacy `view_id IS NULL` board, so
-   * this reads the pre-views arrangement without asking for it separately — and
-   * `hasTiles` is the metric reads. That matters: this page re-renders every
-   * twelve seconds in every open tab, and depth is what costs.
+   * IT DELIBERATELY DOES NOT ASK WHETHER THERE ARE METRICS. It did, and that was
+   * wrong: `&& !hasTiles` meant a workspace that had published anything could
+   * never be empty, so deleting every view put the synthesised "Dashboard" tab
+   * straight back with the metrics under it — the auto-created default board
+   * this whole feature exists to remove, returning the moment you removed the
+   * last real view.
    *
-   * PLACEMENTS ARE DELIBERATELY NOT CONSULTED. They are only read when a view
-   * has groups (see the note on that read), and a placement pointing at a tile
-   * that does not exist renders nothing. "No groups and no tiles" already means
-   * there is no board here.
+   * A metric is not a board. Published metrics live in `flow_results` and are
+   * untouched by any of this; what is missing when there are no views is
+   * somewhere to PUT them, which is exactly what the card offers. Creating one
+   * brings every one of them back on the next render — a Columns view with no
+   * groups renders the same plain grid the board showed before.
    *
-   * `activeKind` is "groups" whenever there are no views, so the `custom` clause
-   * inside `hasTiles` cannot mask an empty workspace.
+   * WHAT IT DOES ASK is whether there is an arrangement behind the tabs. The
+   * default board is the ABSENCE of a row, so "no view rows" is also true of
+   * every workspace that has never renamed its dashboard — and those have real
+   * columns at `view_id IS NULL` reachable only through the synthesised tab.
+   * Calling them empty would hide a board somebody arranged.
    *
-   * IT IS NOT "no view ROWS". An existing workspace's board lives at
-   * `view_id IS NULL` with no row of its own, and treating that as empty would
-   * hide a board somebody is using behind an invitation to start one.
+   * `groups` IS THAT CHECK, at no cost. With no views the active view is null,
+   * so the groups already read for this render ARE the legacy board's columns.
+   * Placements are not consulted and do not need to be: without a group they are
+   * ignored by the renderer anyway (see the note on that read), so a placement
+   * with no column is not an arrangement anyone can see.
    */
-  const emptyWorkspace = views.length === 0 && groups.length === 0 && !hasTiles;
+  const emptyWorkspace = views.length === 0 && groups.length === 0;
 
 
   const qs = (over: Record<string, string>) => {

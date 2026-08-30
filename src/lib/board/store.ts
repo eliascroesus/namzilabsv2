@@ -264,16 +264,18 @@ export async function adoptDefaultView(db: DB, orgId: string, name: string): Pro
  * "I was on the empty screen" field would take the second workspace's board off
  * the screen entirely — a visibility bug from a checkbox.
  *
- * TWO EXISTS IN ONE STATEMENT. Placements are checked as well as groups because
- * a board can hold tiles in the ungrouped row above the columns without ever
- * having had a column, and that is still a board somebody arranged.
+ * COLUMNS ONLY, WHICH IS WHAT THE PAGE ASKS TOO. A placement with no group is
+ * ignored by the renderer, so it is not an arrangement anybody can see — and
+ * more importantly the two questions have to agree: the page decides the
+ * workspace is empty on `groups.length === 0`, and if this counted placements as
+ * well it would answer "not empty" for the same workspace, name its first view
+ * "View 2" and leave the synthesised tab in place beside it.
  */
 export async function hasLegacyBoard(db: DB, orgId: string): Promise<boolean> {
   const [row] = await db
     .select({
       groups: sql<boolean>`exists (select 1 from ${dashboardGroups} where ${dashboardGroups.orgId} = ${orgId} and ${dashboardGroups.viewId} is null)`,
-      placements: sql<boolean>`exists (select 1 from ${dashboardTilePlacements} where ${dashboardTilePlacements.orgId} = ${orgId} and ${dashboardTilePlacements.viewId} is null)`,
     })
     .from(sql`(select 1) as one`);
-  return Boolean(row?.groups) || Boolean(row?.placements);
+  return Boolean(row?.groups);
 }
