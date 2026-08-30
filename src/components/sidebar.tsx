@@ -282,19 +282,19 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
    * default sorts first because its key was minted to; a view dragged elsewhere
    * keeps where it was put.
    */
-  const ordered = [...views]
-    .sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0))
-    /**
-     * THE DEFAULT BOARD IS ALREADY THE ROW ABOVE, so it is not repeated beneath
-     * it — the nav's "Dashboard" and the default view are the same destination,
-     * and listing both rendered "Dashboard" twice, nested under itself.
-     *
-     * Filtered on the NAME rather than on `isDefault`, because the default board
-     * can be renamed now. Left as "Dashboard" it is the parent row and nothing
-     * is lost by hiding it; renamed to "Sales" it is a distinct name the rail
-     * would otherwise never show, so it comes back as a child.
-     */
-    .filter((v) => !((v.isDefault || v.id == null) && v.name === "Dashboard"));
+  /**
+   * EVERY VIEW, INCLUDING THE DEFAULT ONE — and yes, that means "Dashboard" can
+   * appear nested under "Dashboard".
+   *
+   * This briefly filtered the default board out when its name still matched the
+   * nav row above it, on the grounds that the two are the same destination. That
+   * reads tidier on a workspace which has never renamed it, and it is wrong the
+   * moment this list does anything more than point: the default board is a view
+   * like the others, it can be renamed, and a list that silently omits one of
+   * its members is a list you cannot trust to be complete. The parent row is the
+   * section, not a duplicate of its first child.
+   */
+  const ordered = [...views].sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0));
   const NESTED_CAP = 5;
   const shown = allViews ? ordered : ordered.slice(0, NESTED_CAP);
   const activeView = params.get("view");
@@ -345,6 +345,14 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
                 on ? "bg-ink-800 font-medium text-ink-50" : "text-ink-400 hover:bg-ink-900 hover:text-ink-50",
               )}
             >
+              {/* A DASH, DRAWN RATHER THAN TYPED. It marks these rows as
+                  children of the one above without repeating an icon column
+                  they do not have — and it is a rule, not an en-dash, because
+                  the kit bans text glyphs used as marks and because `bg-current`
+                  makes it inherit the row's own ink, so it lights with the name
+                  on hover and on the active row instead of staying a fixed grey
+                  beside text that moved. */}
+              <span aria-hidden className="mr-2 h-px w-2 shrink-0 bg-current opacity-60" />
               <span className="truncate">{v.name}</span>
             </Link>
           );
@@ -358,7 +366,10 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             variant="ghost"
             size="sm"
             onClick={() => setAllViews((v) => !v)}
-            className="h-8 w-full justify-start rounded-control pl-[52px] pr-2 text-xs font-medium text-ink-400 hover:bg-ink-900 hover:text-ink-50 active:bg-ink-900"
+            /* 68px, not 52: the rows above are pushed a further 16px by their
+               dash and its margin, and a fold that starts left of the names it
+               folds reads as belonging to the section rather than to them. */
+            className="h-8 w-full justify-start rounded-control pl-[68px] pr-2 text-xs font-medium text-ink-400 hover:bg-ink-900 hover:text-ink-50 active:bg-ink-900"
           >
             {allViews ? "Show less" : `Show all ${ordered.length}`}
           </Button>
