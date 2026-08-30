@@ -1,6 +1,6 @@
 import { BoardLayout } from "@/app/dashboard/board-layout";
-import { BoardControls, TileArea, ViewTab } from "@/app/dashboard/board-controls";
-import { PageContainer } from "@/components/ui/page";
+import { BoardControls, TileArea, ViewTab, ViewTitle } from "@/app/dashboard/board-controls";
+import { PageContainer, PageHeader } from "@/components/ui/page";
 import { FlowTile } from "@/components/flow-tile";
 import type { BoardGroup, BoardTile, TilePlacement } from "@/lib/board/types";
 
@@ -71,6 +71,15 @@ export default function BoardLab() {
     <div className="relative min-w-0 flex-1 overflow-y-auto rounded-l-frame bg-canvas-bg" style={{ height: "100vh" }}>
       <PageContainer>
         <BoardControls>
+          {/* THE PAGE TITLE, ON A PUBLIC ROUTE, BECAUSE IT COULD NOT BE LOOKED AT.
+              `ViewTitle` only renders behind WorkOS, so every judgement about it
+              was made from class names — and it was fixed wrong three times in a
+              row on exactly that basis: the padding, then the radius, then the
+              flex alignment, while the class that would have worked was being
+              deleted by `cn()` on the way out. This is the same control the
+              dashboard mounts, with `canEdit` on, so its hover box can be
+              screenshotted like everything else on /design. */}
+          <PageHeader title={<ViewTitle viewId="v-demo" name="Dashboard" canEdit />} />
           <TileArea count={TILES.length} columns={GROUPS.length}>
             <BoardLayout
               tiles={TILES}

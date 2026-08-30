@@ -706,24 +706,34 @@ export function ViewTitle({
        * wrapped title rendered inside a grey circle. See lib/utils.ts.
        */
       /**
-       * `leading-none` AFTER `${TITLE_TYPE}`, AND THE ORDER IS THE WHOLE FIX.
+       * THE WASH IS ON THE TEXT, NOT ON THE BUTTON — and it is inline style.
        *
-       * The wash was 38px tall around 30px glyphs before its padding was even
-       * counted, because `text-display-sm` carries the token's own 38px
-       * line-height. `leading-none` was already being passed to fix that — and
-       * tailwind-merge was DELETING it, because a registered font-size can set
-       * line-height too, so it treats a later `text-*` as overriding an earlier
-       * `leading-*`. The class never reached the DOM. Dumped from `cn()` rather
-       * than reasoned about, and pinned in tests/cn-merge.test.ts.
+       * Three attempts fought `cn()` for this and lost. `text-display-sm` emits
+       * a font-size AND the token's 38px line-height, so the wash was 38px tall
+       * around 30px glyphs; every `leading-none` written to collapse it was
+       * either deleted by tailwind-merge (a later font-size overrides an earlier
+       * line-height) or left to fight the emitted rule on source order. Both are
+       * ways of hoping.
        *
-       * Nothing here is fixed-width: the button is `inline-flex`, so it is
-       * shrink-to-fit, and `max-w-full` only stops it outgrowing the header.
-       * With the line box collapsed, the wash is the words plus 8px either side
-       * and 4px above and below.
+       * So the background moves off the Button and onto a SPAN that wraps only
+       * the words, and the line-height is set as an inline style, which no class
+       * ordering and no merge can touch. The span is inline-level: it is the
+       * width of its text by definition. There is nothing left to be fixed-width
+       * or to inherit a heading's air — the highlight is the glyphs plus 8px
+       * across and 4px down, by construction.
+       *
+       * The Button keeps the semantics, the focus ring and the hit area, and
+       * gives up its own padding and hover fill so it cannot draw a second box
+       * around the first.
        */
-      className={`-mx-2 h-auto max-w-full shrink-0 justify-start whitespace-nowrap rounded-control px-2 py-1 text-left ${TITLE_TYPE} leading-none text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
+      className={`group/title -mx-2 h-auto max-w-full shrink-0 justify-start whitespace-nowrap bg-transparent p-0 text-left hover:bg-transparent active:bg-transparent ${TITLE_TYPE}`}
     >
-      {shown}
+      <span
+        style={{ lineHeight: 1 }}
+        className="rounded-control px-2 py-1 text-ground-ink transition-colors duration-(--duration-fast) group-hover/title:bg-ground-ink/10 group-active/title:bg-ground-ink/15"
+      >
+        {shown}
+      </span>
     </Button>
   );
 }
