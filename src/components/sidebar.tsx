@@ -340,15 +340,14 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
               aria-current={on ? "page" : undefined}
               /* Indented to the icon column's own axis, so the names line up
                  under Dashboard's word rather than under its chip. */
-              /* NO LEFT INSET OF ITS OWN. The section already carries the
-                 rail's 15px gutter, so the dash starts exactly where the
-                 Dashboard icon above it starts — which is what makes these read
-                 as children of that row rather than as a second, narrower
-                 column floating to the right of it. It was `pl-[52px]`, which
-                 lined the dash up with the parent's LABEL and put it a full icon
-                 width out from the only thing it is nested under. */
+              /* 16px INSIDE the section's own 15px gutter. Flush against it the
+                 dash sat hard on the rail's edge with nothing between it and the
+                 column border, which reads as a rule the rail is drawing rather
+                 than as a mark belonging to the row. One step in is enough to
+                 make it a child of the Dashboard chip above without pushing it
+                 out to the parent's label, which is where it started. */
               className={cn(
-                "flex h-8 items-center rounded-control pr-2 text-sm transition-colors duration-(--duration-fast)",
+                "flex h-8 items-center rounded-control pl-4 pr-2 text-sm transition-colors duration-(--duration-fast)",
                 on ? "bg-ink-800 font-medium text-ink-50" : "text-ink-400 hover:bg-ink-900 hover:text-ink-50",
               )}
             >
@@ -373,11 +372,11 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             variant="ghost"
             size="sm"
             onClick={() => setAllViews((v) => !v)}
-            /* `pl-4` puts this level with the NAMES above it — they are pushed
-               16px in by the dash and its margin, and a fold that starts left of
-               the names it folds reads as belonging to the section rather than
-               to them. */
-            className="h-8 w-full justify-start rounded-control pl-4 pr-2 text-xs font-medium text-ink-400 hover:bg-ink-900 hover:text-ink-50 active:bg-ink-900"
+            /* `pl-8` — the rows above are inset 16px and then pushed a further
+               16px by their dash and its margin, so this is level with their
+               NAMES. A fold that starts left of the names it folds reads as
+               belonging to the section rather than to them. */
+            className="h-8 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-ink-400 hover:bg-ink-900 hover:text-ink-50 active:bg-ink-900"
           >
             {allViews ? "Show less" : `Show all ${ordered.length}`}
           </Button>
