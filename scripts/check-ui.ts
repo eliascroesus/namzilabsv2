@@ -170,6 +170,14 @@ const RULES: Rule[] = [
       }
       return null;
     },
+    allow: {
+      // `rounded:` there is a tailwind-merge CLASS GROUP KEY, not a class — the
+      // group that teaches the merger our four radius names so `rounded-control`
+      // can beat `buttonVariants`' `rounded-full`. The rule's own regex accepts
+      // a trailing `:` (it has to, to catch `rounded:` inside a variant), so an
+      // object key spelled the same way reads as a bare radius.
+      "src/lib/utils.ts": "the tailwind-merge radius class-group key, which is not a class",
+    },
   },
   {
     name: "stock shadow",

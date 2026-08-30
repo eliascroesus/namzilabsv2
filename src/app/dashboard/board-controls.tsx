@@ -690,7 +690,22 @@ export function ViewTitle({
        * line-height is drawn for a single heading, and two lines of it inside a
        * hover wash reads as two separate headings rather than one wrapped name.
        */
-      className={`-mx-2 h-auto max-w-full justify-start whitespace-normal rounded-control px-2 py-1 text-left leading-tight ${TITLE_TYPE} text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
+      /**
+       * ONE LINE. The title does not wrap and does not truncate.
+       *
+       * Letting it wrap was the wrong half of the fix. "View 2" broke into
+       * "View" / "2" the moment the row got tight, which is a worse answer than
+       * the ellipsis it replaced — a two-word name split across two lines reads
+       * as two things. The header row already has `flex-wrap`, so the honest
+       * behaviour is for the NAME to stay whole and the period control to drop
+       * to its own line when they cannot share one.
+       *
+       * `rounded-control` now actually applies, too. It was passed before and
+       * silently lost to `buttonVariants`' `rounded-full`, because
+       * tailwind-merge did not know the kit's radius names and kept both — so a
+       * wrapped title rendered inside a grey circle. See lib/utils.ts.
+       */
+      className={`-mx-2 h-auto max-w-full shrink-0 justify-start whitespace-nowrap rounded-control px-2 py-1 text-left ${TITLE_TYPE} text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
     >
       {shown}
     </Button>

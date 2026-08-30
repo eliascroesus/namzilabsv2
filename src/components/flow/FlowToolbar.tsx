@@ -247,7 +247,7 @@ export function FlowToolbar({
           The config panel opens in the band BELOW it, so nothing ever has to
           move out of anything's way. */}
       <TopBarPortal>
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-4">
             {/* WHERE YOU CAME FROM, THEN WHAT YOU DO WITH THE FLOW.
                 Ship, run, on/off — the three acts, together at the reading
                 edge; the name stays centred by the grid regardless. */}
@@ -255,7 +255,11 @@ export function FlowToolbar({
                 the publish button plus an `mx-1` on the switch — three spacings
                 for one row, so the arrow sat 4px from the button and the switch
                 8px from the thing before it. */}
-            <span className="flex min-w-0 items-center gap-2">
+            {/* `gap-4` — the exact spacing between "Invite members" and "New
+                flow" on the other end of this bar. Every group in the top bar
+                is spaced this way now, so the switch no longer sits tight
+                against the publish button while the chrome's own pills breathe. */}
+            <span className="flex min-w-0 items-center gap-4">
               <Link
                 href="/dashboard/flows"
                 title="All flows"
@@ -359,7 +363,7 @@ export function FlowToolbar({
                 the back arrow; what stays here is what you rarely touch —
                 whether it saved, undo/redo, and the step menu at the far
                 corner. */}
-            <span className="flex items-center justify-end gap-2">
+            <span className="flex items-center justify-end gap-4">
               <SaveChip state={saveState} onRetry={onRetrySave} />
               {/* SAVED IS NOT LIVE, AND THE BAR HAS TO SAY WHICH IT MEANS.
                   Deliberately AFTER "Saved", because it corrects it: the word
@@ -383,12 +387,11 @@ export function FlowToolbar({
                   {publishedVersion == null ? "Not published" : "Changes not live"}
                 </StatusPill>
               )}
-              <IslandButton compact onClick={onUndo} disabled={!canUndo} label="Undo">
-                <Undo2 />
-              </IslandButton>
-              <IslandButton compact onClick={onRedo} disabled={!canRedo} label="Redo">
-                <Redo2 />
-              </IslandButton>
+              {/* UNDO AND REDO ARE ON THE CANVAS ISLAND, NOT UP HERE.
+                  They belong with the other things you do TO THE DRAWING —
+                  zoom, fit — rather than with the things you do to the FLOW.
+                  Moving them also empties this corner down to what it should
+                  always have been: whether it saved, and the step menu. */}
               <Popover
                 open={menuOpen}
                 setOpen={setMenuOpen}
@@ -463,6 +466,17 @@ export function FlowToolbar({
           <IslandButton onClick={onZoomIn} label="Zoom in">
             <ZoomIn />
           </IslandButton>
+          {/* A hairline between the two jobs: zooming changes what you SEE,
+              undo changes what IS. Sitting them in one island without a seam
+              reads as five controls doing one thing. */}
+          <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-border" />
+          <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
+            <Undo2 />
+          </IslandButton>
+          <IslandButton onClick={onRedo} disabled={!canRedo} label="Redo">
+            <Redo2 />
+          </IslandButton>
+          <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-border" />
           <IslandButton onClick={onFitView} label="Fit the whole flow on screen">
             <Maximize2 />
           </IslandButton>

@@ -179,7 +179,18 @@ export function TopBar({
     //
     // `dark` — see the long note above. It re-inks the PORTAL's contents, not
     // this bar's own.
-    <header className="dark flex h-[70px] shrink-0 items-center justify-between gap-4 border-b border-chrome-line bg-ink-950 py-2.5">
+    /* THE TWO EDGES ARE THE SAME, and they belong to the header rather than to
+       its children. The left group carried `pl-6` and the right `pr-10`, so the
+       bar was inset 24px on one side and 40px on the other — and on the builder,
+       where the left group stands down entirely, the back arrow sat hard against
+       the rail with no inset at all. One value here makes the two edges equal by
+       construction instead of by agreement.
+
+       The prose sits ABOVE the tag deliberately: tests/page-width.test.ts reads
+       this bar's height by matching `<header className="…"`, and a comment
+       between the two breaks the check that keeps the loading skeleton's band
+       the same height as the real one. */
+    <header className="dark flex h-[70px] shrink-0 items-center justify-between gap-4 border-b border-chrome-line bg-ink-950 px-6 py-2.5">
       {/* ── WHERE YOU ARE ───────────────────────────────────────────────────
           Workspace, then a slash, then how much of it you are measuring. It
           reads as a path because it IS one: the workspace is the root and the
@@ -197,7 +208,7 @@ export function TopBar({
           membership list and the count from the page's own metric reads, so a
           route can honestly have one and not the other. */}
       {workspace && (
-      <div className="flex min-w-0 items-center gap-6 pl-6">
+      <div className="flex min-w-0 items-center gap-6">
         {account ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -395,7 +406,7 @@ export function TopBar({
           both themes — they are the same pills the page below wears, and a bar
           whose buttons invert while its ground does not is a bar with two
           materials in it. */}
-      <div className="flex shrink-0 items-center gap-4 pr-10">
+      <div className="flex shrink-0 items-center gap-4">
         {/* `sm` — 36px in a 70px band. The bar is furniture; the page is the
             content, and a 44px default here would put the chrome's controls at
             the same weight as the page's own. */}

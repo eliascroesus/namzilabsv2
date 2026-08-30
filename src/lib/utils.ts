@@ -43,6 +43,27 @@ const twMerge = extendTailwindMerge({
        * nothing, which is the one thing the gate is supposed to make visible.
        */
       "font-size": [{ text: ["md", "display-xs", "display-sm", "display-md", "display-lg", "banner"] }],
+      /**
+       * THE KIT'S RADIUS NAMES, FOR EXACTLY THE SAME REASON AS THE SIZES.
+       *
+       * tailwind-merge did not know `control`, `card`, `surface` or `frame`, so
+       * it could not see that `rounded-control` and `rounded-full` are the same
+       * DECISION. Both survived the merge, and the winner was decided by their
+       * order in the generated stylesheet rather than by the call site — which
+       * means a component could not override the pill on `buttonVariants`' base
+       * at all.
+       *
+       * That is not hypothetical: the page title is a Button that wraps, and a
+       * full radius on a two-line box is half its height, so it rendered as a
+       * grey CIRCLE around the words. `rounded-control` was passed, ignored,
+       * and nothing anywhere reported it.
+       *
+       * The workaround already in the tree is the arbitrary spelling —
+       * `rounded-[var(--radius-control)]` in top-bar.tsx — which tailwind-merge
+       * understands because it looks like a value. Registering the names is the
+       * fix that spelling was standing in for.
+       */
+      rounded: [{ rounded: ["control", "card", "surface", "frame"] }],
     },
   },
 });
