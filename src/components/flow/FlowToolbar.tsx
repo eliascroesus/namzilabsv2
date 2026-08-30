@@ -96,6 +96,82 @@ export type SaveState = "saved" | "saving" | "unsaved" | "error";
  * server (and on the very first client pass) `getElementById` is null. Render
  * nothing rather than crash, then fill it in on mount.
  */
+/**
+ * THE FLOW'S NAME — extracted so it can be LOOKED AT.
+ *
+ * It lived inline in a toolbar that only renders behind WorkOS, which meant its
+ * box was judged from class names, which is how it shipped twice at the wrong
+ * width. It mounts on /design/board beside the page title for the same reason
+ * that one does: a control nobody can screenshot is a control that gets fixed
+ * by guessing.
+ */
+export function FlowNameField({ name, onRename }: { name: string; onRename?: (v: string) => void }) {
+  /**
+   * `onRename` IS OPTIONAL SO THIS CAN MOUNT ON A SERVER PAGE.
+   *
+   * /design/board is a server component, and React refuses to pass a function
+   * across that boundary — so a harness cannot hand it a no-op. Defaulting here,
+   * inside the client component, lets the specimen render read-only while the
+   * builder passes the real handler. The alternative is not rendering it on a
+   * public route at all, which is how it got fixed by guessing twice.
+   */
+  const rename = onRename ?? (() => {});
+  return (
+    <span className="-mx-1.5 flex min-w-0 items-center">
+                {/* AN INPUT CANNOT SIZE ITSELF, so a sizer does it.
+                    This carried `style={{ width: `${…}ch` }}` — a FIXED width
+                    computed from the character COUNT. `ch` is the width of "0",
+                    and the interface is set in a proportional face, so the box
+                    was never the width of the words: "Untitled flow" and
+                    "IIIIIIIIIIIII" are thirteen characters and nowhere near the
+                    same size. That is the fixed width behind the box that
+                    refused to hug its text.
+                    The fix is the standard one: an invisible span holding the
+                    same string, in the same font, stacked in the SAME grid cell
+                    as the input. The cell sizes to the span — real, measured
+                    text — and the input fills it. It hugs by construction, at
+                    every length, with no arithmetic to be wrong. */}
+                <span className="inline-grid min-w-0 max-w-full items-center">
+                  <span
+                    aria-hidden
+                    /* ONE PIXEL WIDER EITHER SIDE THAN THE INPUT'S OWN PADDING.
+                       Sized to the text EXACTLY, the content box equals the
+                       string's width and the last glyph clips on the sub-pixel:
+                       "Untitled flow" rendered with half a w. An input clips,
+                       where a span would simply overflow, so the sizer has to
+                       ask for slightly more than it measures. */
+                    className="invisible col-start-1 row-start-1 whitespace-pre px-[7px] text-sm font-semibold"
+                  >
+                    {name || "Untitled flow"}
+                  </span>
+                  <input
+                    value={name}
+                    onChange={(e) => rename(e.target.value)}
+                    aria-label="Flow name"
+                    placeholder="Untitled flow"
+                    title={name}
+                    /**
+                     * `size={1}` IS WHAT MAKES THE SIZER WIN.
+                     *
+                     * A grid column takes the MAX-CONTENT of every item in the
+                     * cell, and an `<input>` has an intrinsic width of about
+                     * twenty characters whatever CSS says — so the cell sized to
+                     * the input, not to the invisible span, and the box stayed
+                     * wider than the words exactly as it had with the `ch`
+                     * arithmetic. `w-full` cannot help: it resolves against a
+                     * column the input is itself inflating.
+                     * One character of intrinsic width puts the span back in
+                     * charge, and `w-full` then fills whatever the span asked
+                     * for.
+                     */
+                    size={1}
+                    className="col-start-1 row-start-1 h-9 w-full min-w-0 rounded-control border border-transparent bg-transparent px-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
+                  />
+                </span>
+    </span>
+  );
+}
+
 function TopBarPortal({ children }: { children: React.ReactNode }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   useEffect(() => setSlot(document.getElementById("topbar-slot")), []);
@@ -324,43 +400,7 @@ export function FlowToolbar({
                 grid's auto column keeps it centred no matter how long it gets
                 or what appears either side of it. */}
             <span className="flex min-w-0 items-center justify-center">
-              <span className="-mx-1.5 flex min-w-0 items-center">
-                {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
-                    At the old fixed width a long name was cut mid-glyph, hard against
-                    the padding with no ellipsis — while 87px of empty canvas sat to
-                    its right and the wrapper's own max-width was never reached. The
-                    floor keeps an empty field clickable; the ceiling keeps this
-                    island clear of the one on the right. */}
-                {/* AN INPUT CANNOT SIZE ITSELF, so a sizer does it.
-                    This carried `style={{ width: `${…}ch` }}` — a FIXED width
-                    computed from the character COUNT. `ch` is the width of "0",
-                    and the interface is set in a proportional face, so the box
-                    was never the width of the words: "Untitled flow" and
-                    "IIIIIIIIIIIII" are thirteen characters and nowhere near the
-                    same size. That is the fixed width behind the box that
-                    refused to hug its text.
-                    The fix is the standard one: an invisible span holding the
-                    same string, in the same font, stacked in the SAME grid cell
-                    as the input. The cell sizes to the span — real, measured
-                    text — and the input fills it. It hugs by construction, at
-                    every length, with no arithmetic to be wrong. */}
-                <span className="inline-grid min-w-0 max-w-full items-center">
-                  <span
-                    aria-hidden
-                    className="invisible col-start-1 row-start-1 whitespace-pre px-1.5 text-sm font-semibold"
-                  >
-                    {name || "Untitled flow"}
-                  </span>
-                  <input
-                    value={name}
-                    onChange={(e) => onRename(e.target.value)}
-                    aria-label="Flow name"
-                    placeholder="Untitled flow"
-                    title={name}
-                    className="col-start-1 row-start-1 h-9 w-full min-w-0 rounded-control border border-transparent bg-transparent px-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
-                  />
-                </span>
-              </span>
+              <FlowNameField name={name} onRename={onRename} />
             </span>
 
             {/* QUIET STATE AND HISTORY. The acts moved to the left edge with

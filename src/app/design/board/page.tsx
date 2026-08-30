@@ -2,6 +2,7 @@ import { BoardLayout } from "@/app/dashboard/board-layout";
 import { BoardControls, TileArea, ViewTab, ViewTitle } from "@/app/dashboard/board-controls";
 import { PageContainer, PageHeader } from "@/components/ui/page";
 import { FlowTile } from "@/components/flow-tile";
+import { FlowNameField } from "@/components/flow/FlowToolbar";
 import type { BoardGroup, BoardTile, TilePlacement } from "@/lib/board/types";
 
 /**
@@ -80,6 +81,13 @@ export default function BoardLab() {
               dashboard mounts, with `canEdit` on, so its hover box can be
               screenshotted like everything else on /design. */}
           <PageHeader title={<ViewTitle viewId="v-demo" name="Dashboard" canEdit />} />
+          {/* The builder's flow-name field, on the same public route and for the
+              same reason: its box was judged from class names and shipped at the
+              wrong width twice. Rendered on the bar's own near-black so the
+              hover wash is judged against the surface it actually sits on. */}
+          <div className="dark mb-4 flex w-fit items-center rounded-control bg-ink-950 px-6 py-3">
+            <FlowNameField name="Untitled flow" />
+          </div>
           <TileArea count={TILES.length} columns={GROUPS.length}>
             <BoardLayout
               tiles={TILES}
