@@ -337,7 +337,7 @@ export function FlowToolbar({
                 grid's auto column keeps it centred no matter how long it gets
                 or what appears either side of it. */}
             <span className="flex min-w-0 items-center justify-center">
-              <span className="flex min-w-0 items-center gap-2">
+              <span className="flex min-w-0 items-center">
                 {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
                     At the old fixed width a long name was cut mid-glyph, hard against
                     the padding with no ellipsis — while 87px of empty canvas sat to
@@ -350,11 +350,26 @@ export function FlowToolbar({
                   aria-label="Flow name"
                   placeholder="Untitled flow"
                   title={name}
-                  style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
+                  /* `+ 1`, not `+ 2`, and a floor of 10 rather than 13. The
+                     slack is INSIDE the visible box, so every character of it
+                     reads as gap after the name — two of them put ~16px of dead
+                     space between the words and whatever comes next, on top of
+                     the row's own 16px. One is enough to keep a caret at the end
+                     of the text from sitting on the edge. */
+                  style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 1, 10), 34)}ch` }}
                   /* 14px and 36px tall, matching the controls either side of
                      it. At 16px in a row of 14px labels the name was the only
-                     thing in the bar set to its own size. */
-                  className="h-9 min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
+                     thing in the bar set to its own size.
+                     `-mx-2 px-2` PULLS THE INSET OUT OF THE FLOW. The row is
+                     spaced `gap-4`, and an element that also carries its own
+                     horizontal padding measures that gap from its BOX while the
+                     eye measures it from the WORDS — so the name sat 16 + 10px
+                     from the switch while the pills either side of it sat at a
+                     true 16. The negative margin cancels the inset, so every
+                     boundary in the bar is optically the same, and the hover
+                     wash still has somewhere to be. Same trick the workspace
+                     name and the page title already use. */
+                  className="-mx-2 h-9 min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
                 />
               </span>
             </span>
@@ -466,17 +481,12 @@ export function FlowToolbar({
           <IslandButton onClick={onZoomIn} label="Zoom in">
             <ZoomIn />
           </IslandButton>
-          {/* A hairline between the two jobs: zooming changes what you SEE,
-              undo changes what IS. Sitting them in one island without a seam
-              reads as five controls doing one thing. */}
-          <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-border" />
           <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
             <Undo2 />
           </IslandButton>
           <IslandButton onClick={onRedo} disabled={!canRedo} label="Redo">
             <Redo2 />
           </IslandButton>
-          <span aria-hidden className="mx-0.5 h-6 w-px shrink-0 bg-border" />
           <IslandButton onClick={onFitView} label="Fit the whole flow on screen">
             <Maximize2 />
           </IslandButton>
@@ -536,7 +546,7 @@ function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void })
     );
   }
   return (
-    <span className="shrink-0 whitespace-nowrap px-1 text-sm font-medium text-muted-foreground">
+    <span className="shrink-0 whitespace-nowrap text-sm font-medium text-muted-foreground">
       {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Unsaved"}
     </span>
   );
