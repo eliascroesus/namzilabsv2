@@ -8,7 +8,7 @@ import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme";
 import { cn } from "@/lib/utils";
-import type { BoardView } from "@/lib/board/types";
+import { viewStrip, type BoardView } from "@/lib/board/types";
 
 /**
  * THE ICON RAIL — 70px at rest, 240px under the pointer, and the left half of
@@ -294,7 +294,7 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
    * its members is a list you cannot trust to be complete. The parent row is the
    * section, not a duplicate of its first child.
    */
-  const ordered = [...views].sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0));
+  const ordered = viewStrip(views);
   const NESTED_CAP = 5;
   const shown = allViews ? ordered : ordered.slice(0, NESTED_CAP);
   const activeView = params.get("view");
@@ -340,8 +340,15 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
               aria-current={on ? "page" : undefined}
               /* Indented to the icon column's own axis, so the names line up
                  under Dashboard's word rather than under its chip. */
+              /* NO LEFT INSET OF ITS OWN. The section already carries the
+                 rail's 15px gutter, so the dash starts exactly where the
+                 Dashboard icon above it starts — which is what makes these read
+                 as children of that row rather than as a second, narrower
+                 column floating to the right of it. It was `pl-[52px]`, which
+                 lined the dash up with the parent's LABEL and put it a full icon
+                 width out from the only thing it is nested under. */
               className={cn(
-                "flex h-8 items-center rounded-control pl-[52px] pr-2 text-sm transition-colors duration-(--duration-fast)",
+                "flex h-8 items-center rounded-control pr-2 text-sm transition-colors duration-(--duration-fast)",
                 on ? "bg-ink-800 font-medium text-ink-50" : "text-ink-400 hover:bg-ink-900 hover:text-ink-50",
               )}
             >
@@ -366,10 +373,11 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             variant="ghost"
             size="sm"
             onClick={() => setAllViews((v) => !v)}
-            /* 68px, not 52: the rows above are pushed a further 16px by their
-               dash and its margin, and a fold that starts left of the names it
-               folds reads as belonging to the section rather than to them. */
-            className="h-8 w-full justify-start rounded-control pl-[68px] pr-2 text-xs font-medium text-ink-400 hover:bg-ink-900 hover:text-ink-50 active:bg-ink-900"
+            /* `pl-4` puts this level with the NAMES above it — they are pushed
+               16px in by the dash and its margin, and a fold that starts left of
+               the names it folds reads as belonging to the section rather than
+               to them. */
+            className="h-8 w-full justify-start rounded-control pl-4 pr-2 text-xs font-medium text-ink-400 hover:bg-ink-900 hover:text-ink-50 active:bg-ink-900"
           >
             {allViews ? "Show less" : `Show all ${ordered.length}`}
           </Button>

@@ -28,6 +28,7 @@ import {
   canvasRowFate,
   tileKeyOfFlow,
   tileKeyOfMetric,
+  viewStrip as buildViewStrip,
   type BoardGroup,
   type BoardTile,
   type BoardTileRow,
@@ -437,11 +438,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * (minted to sort first, and movable afterwards), so prepending would show the
    * same board twice under two names.
    */
-  const adopted = views.some((v) => v.isDefault);
-  const viewTabs: BoardView[] = [
-    ...(adopted ? [] : [{ id: null, name: "Dashboard", pos: "", kind: "groups" as const }]),
-    ...views.slice().sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0)),
-  ];
+  // Shared with the rail's nested list — see `viewStrip`. It was spelled here
+  // and nowhere else, which is why the rail showed no views at all on a
+  // workspace whose only board is the default one.
+  const viewTabs: BoardView[] = buildViewStrip(views);
 
   /**
    * THE VIEW STRIP, hoisted so BOTH boards wear the same one.

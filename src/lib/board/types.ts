@@ -179,3 +179,29 @@ export function canvasRowFate(tileKey: string, joined: boolean, existing: Readon
   if (blockKindOf(tileKey)) return "render";
   return existing.has(tileKey) ? "hidden" : "dead";
 }
+
+/**
+ * THE VIEW STRIP — every view a workspace has, in order, including the default
+ * board whether or not it has a row yet.
+ *
+ * THE DEFAULT BOARD IS THE ABSENCE OF A ROW until somebody renames it, so
+ * `listBoardViews` cannot return it and every caller has to put it back. The
+ * dashboard did that inline for its tab strip; the rail did not, and the result
+ * was a workspace with no named views showing NOTHING nested under Dashboard —
+ * the one board every workspace has was the one board the navigation omitted.
+ *
+ * So the rule lives here, once, and both callers read it. It is pure data with
+ * no database and no server imports, which is what lets the rail — a client
+ * component — use the same function as the page.
+ *
+ * `id: null` is the synthetic default; a workspace that HAS adopted its default
+ * board already carries it as a real row flagged `isDefault`, and prepending a
+ * second one would show the same board twice under two names.
+ */
+export function viewStrip(views: BoardView[]): BoardView[] {
+  const adopted = views.some((v) => v.isDefault);
+  return [
+    ...(adopted ? [] : [{ id: null, name: "Dashboard", pos: "", kind: "groups" as const }]),
+    ...views.slice().sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0)),
+  ];
+}
