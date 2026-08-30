@@ -29,14 +29,13 @@ import {
 import type { ConnMeta, FieldGroup, FNode, Filters, InputDescriptor } from "./graph-utils";
 import { computeNodeStatus, STD_META } from "./graph-utils";
 import { NumberField } from "./controls/NumberField";
-import { STATUS_META, defaultTitle, formulaExpression, formulaHandleLabels, nodeVariant, resultLabel, type NodeStatus } from "./node-meta";
+import { defaultTitle, formulaExpression, formulaHandleLabels, nodeVariant, resultLabel } from "./node-meta";
 import { RecordSamplePicker, recordWhen } from "./RecordSamplePicker";
 import { NodeIcon } from "./icons";
 import { nodeAccent } from "./node-accent";
 import { PANEL_SHELL, PanelTabs } from "./panel-chrome";
 import { ArrowLeft, Check, ChevronDown, ChevronRight, Database, Play, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StatusPill } from "@/components/ui/badge";
 import { FieldLabel } from "@/components/ui/field";
 import { fieldClasses } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
@@ -116,15 +115,6 @@ const ADD_PILL =
  * Same reasoning as above: the link violet, never the fill violet.
  */
 const INLINE_LINK = "rounded-control font-semibold text-accent-foreground transition-colors duration-(--duration-fast) hover:underline";
-
-/** The pill tone each step status wears — labels come from STATUS_META. */
-const STATUS_TONE: Record<NodeStatus, "success" | "warn" | "danger" | "pending"> = {
-  ready: "success",
-  setup: "warn",
-  untested: "pending",
-  updating: "pending",
-  error: "danger",
-};
 
 const AGG_LABELS: Record<string, string> = { count: "Count of records", count_distinct: "Count of distinct values", sum: "Sum of a field", avg: "Average of a field", median: "Median of a field", min: "Minimum of a field", max: "Maximum of a field" };
 const FORMULA_LABELS: Record<string, string> = {
@@ -231,7 +221,6 @@ export function ConfigPanel({
   // session's edits and edits that outlived a reload — so the pill reads them
   // as one. Anything else lets the header say "Tested" over a stale result.
   const status = computeNodeStatus({ type, cfg, inputCount, inputHandles: inputs.map((i) => i.targetHandle), branchMode: branch?.mode ?? null, lastTest: node.data.lastTest, dirty: node.data.dirty || superseded, updating: testing });
-  const sm = STATUS_META[status];
   const err = node.data.lastTest?.status === "error" ? node.data.lastTest.error : null;
   const tested = status === "ready";
   // Memoized: the field browser flattens these into a list that can run to
@@ -285,8 +274,6 @@ export function ConfigPanel({
    * and a 94%-white wash on a #2b2b2b panel is a light slab, not a tint.
    */
   const accent = nodeAccent(type, nodeVariant(type, cfg));
-  const accentWash = `color-mix(in srgb, ${accent} 7%, var(--card))`;
-  const accentEdge = `color-mix(in srgb, ${accent} 22%, var(--border))`;
 
   return (
     // Fixed at 452px, which on a 13" laptop is 35% of the screen before the
@@ -330,27 +317,22 @@ export function ConfigPanel({
           The close button is the other half: the panel could only be dismissed
           by clicking empty canvas, which is a gesture you have to already know
           — and on a full canvas there may be no empty pixel to click. */}
-      <div
-        className={`flex items-center gap-3 border-b py-4 ${GUTTER}`}
-        style={{ backgroundColor: accentWash, borderBottomColor: accentEdge }}
-      >
+      {/* PLAIN, NOT TINTED. The wash was the step's own identity at 7%, meant to
+          say which kind of step this is before a word was read — but the icon
+          two inches to the left already says exactly that, in full colour, and
+          a coloured band across the top of a white panel reads as a state the
+          panel is IN rather than as a label. The panel is one surface now, and
+          the hairline is the app's own. */}
+      <div className={`flex items-center gap-3 border-b border-border py-4 ${GUTTER}`}>
         <NodeIcon type={type} source={String((cfg as { source?: unknown }).source ?? "")} variant={nodeVariant(type, cfg)} size={38} />
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            {/* The step NUMBER is a chip in the step's colour, not grey text.
-                It is the one fact in the header that never changes while the
-                panel is open, and a chip is what the sheet uses for exactly
-                that — a small identifying label, pill-shaped, caps. */}
-            {stepNo != null && (
-              <span
-                className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide"
-                style={{ backgroundColor: `color-mix(in srgb, ${accent} 16%, var(--card))`, color: `color-mix(in srgb, ${accent} 72%, black)` }}
-              >
-                Step {stepNo}
-              </span>
-            )}
-            <StatusPill tone={STATUS_TONE[status]} className="shrink-0">{sm.label}</StatusPill>
-          </div>
+          {/* NO EYEBROW. "STEP 1" and "NEEDS SETUP" were two read-only chips
+              above the one editable thing in the panel, and both are said
+              better elsewhere: the step's number is on its card on the canvas,
+              and its state is the dot on that same card — which is where you
+              were looking when you opened this. A panel that opens by
+              restating what you just clicked is a panel with a wasted first
+              line. */}
           {/* The name reads as the heading it is. `hover:bg-card` over a tinted
               header is now a real affordance rather than white-on-white: the
               box lifts OUT of the wash the moment it is hoverable. */}
@@ -359,7 +341,7 @@ export function ConfigPanel({
             onChange={(e) => onRename(e.target.value)}
             placeholder={defaultTitle(type, node.data)}
             aria-label="Step name"
-            className="-ml-1.5 mt-1 w-[calc(100%+0.375rem)] min-w-0 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-lg font-semibold tracking-tight text-foreground transition-colors hover:border-border hover:bg-card focus-visible:border-ring focus-visible:bg-card"
+            className="-ml-1.5 w-[calc(100%+0.375rem)] min-w-0 rounded-control border border-transparent bg-transparent px-1.5 py-1 text-lg font-semibold tracking-tight text-foreground transition-colors hover:border-border hover:bg-card focus-visible:border-ring focus-visible:bg-card"
           />
         </div>
         {onClose && (
@@ -2384,15 +2366,37 @@ function TestResults({ node, superseded, onChange }: { node: FNode; superseded: 
           Superseded goes back to the grey box on purpose: a struck-through
           number on a confident black card still reads as a headline, and this
           one is being disowned. */}
-      <p
+      {/* THE RESULT IS A CARD LIKE EVERY OTHER SURFACE IN THE PRODUCT.
+          It was a solid near-black slab with the figure reversed out of it,
+          centred, on the argument that "black does the work and nothing else in
+          the panel is dark, which is what makes it the thing you see first". It
+          did make it the thing you see first — and it made it the only object in
+          the app shaped that way, on a panel of white fields, which is why it
+          read as pasted in from somewhere else.
+          It is the metric tile's own grammar instead: the micro-label voice for
+          what this is, the figure in the display face beneath it, left-aligned
+          on the card the rest of the panel is made of. The as-of moves onto the
+          label's line, where the tile puts it too. */}
+      <div
         className={cn(
-          "tnum rounded-card p-4 text-center text-display-xs font-semibold",
-          superseded ? "border border-border bg-muted/50 text-muted-foreground line-through" : "bg-foreground text-background shadow-xs",
+          "rounded-card border border-border p-4",
+          superseded ? "bg-muted/50" : "bg-card shadow-xs",
         )}
       >
-        {resultLabel(type, t, node.data.config as Record<string, unknown>)}
-      </p>
-      {measured && <p className="text-center text-xs text-muted-foreground">Measured {relativeTime(measured)}.</p>}
+        {/* No second "Result" — the SectionHeading above already says it. What
+            goes on this line is the as-of, which is where the metric tile puts
+            it too. */}
+        {measured && <p className="text-xs text-muted-foreground">Measured {relativeTime(measured)}</p>}
+        <p
+          className={cn(
+            "stat-numeral text-display-xs leading-none",
+            measured && "mt-1.5",
+            superseded && "text-muted-foreground line-through",
+          )}
+        >
+          {resultLabel(type, t, node.data.config as Record<string, unknown>)}
+        </p>
+      </div>
       {type === "app" ? (
         <RecordSamplePicker records={t.sample} selectedIndex={sampleIndex} onSelect={(i) => onChange({ sampleIndex: i })} />
       ) : (

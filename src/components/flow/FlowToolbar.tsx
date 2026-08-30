@@ -106,7 +106,7 @@ function TopBarPortal({ children }: { children: React.ReactNode }) {
 
 function Island({ className = "", children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={`pointer-events-auto flex items-center gap-1 rounded-surface border border-border bg-card p-[7px] shadow-surface ${className}`}>
+    <div className={`pointer-events-auto flex items-center gap-1 rounded-control border border-border bg-card p-[7px] shadow-surface ${className}`}>
       {children}
     </div>
   );

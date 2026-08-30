@@ -149,7 +149,13 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
             1440px screen with an entire empty row beneath it. Flex would
             rather shrink a shrinkable item than wrap. Take the permission
             away and it wraps instead, which is what the wrap was for. */}
-        <div className="flex flex-col gap-2">
+        {/* `items-start` — THE FIX FOR THE HOVER WASH THAT WAS WIDER THAN THE
+            WORD. A flex column stretches its children by default, so the title
+            Button filled this block's whole width and its hover background ran
+            the length of the header while `justify-start` merely parked the
+            text at the left of it. The wash has to hug the name, because the
+            name is what you press. */}
+        <div className="flex flex-col items-start gap-2">
           {/* THE TITLE IS 24px, WHICH IS THE STEP THE KIT ALREADY NAMES FOR IT.
               It was set at `text-xl` — 20px — while `/design` printed
               `display-xs` beside the words "Page titles (PageHeader)", so the
