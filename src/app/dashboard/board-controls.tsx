@@ -677,7 +677,20 @@ export function ViewTitle({
         setEditing(true);
       }}
       title="Rename this view"
-      className={`-mx-2 h-auto max-w-full justify-start whitespace-normal px-2 py-0.5 text-left ${TITLE_TYPE} text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
+      /**
+       * `rounded-control`, BECAUSE `buttonVariants` IS A PILL.
+       *
+       * Every other button in the kit is one line tall, so `rounded-full` reads
+       * as a pill. This one is `h-auto` and WRAPS, and a full radius on a
+       * two-line box is half its height — so a wrapped title sat inside a grey
+       * circle the size of the words. The 8px control radius is the shape a
+       * multi-line pressable block should have had all along.
+       *
+       * `leading-tight` for the same reason: the display step's own 38px
+       * line-height is drawn for a single heading, and two lines of it inside a
+       * hover wash reads as two separate headings rather than one wrapped name.
+       */
+      className={`-mx-2 h-auto max-w-full justify-start whitespace-normal rounded-control px-2 py-1 text-left leading-tight ${TITLE_TYPE} text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
     >
       {shown}
     </Button>

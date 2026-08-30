@@ -116,11 +116,27 @@ function IslandButton({
   onClick,
   disabled,
   label,
+  /**
+   * THE TOP BAR'S RUNG, NOT THE CANVAS ISLAND'S.
+   *
+   * This component serves two places: the floating zoom island ON the canvas,
+   * and undo/redo/kebab in the top bar. They want different sizes and it took a
+   * regression to notice — resizing the shared default to match the bar shrank
+   * the canvas island's buttons with it, leaving them mismatched against the
+   * zoom readout they sit either side of.
+   *
+   * The canvas keeps its 42px/26px, deliberately: it is a floating island over
+   * a drawing surface, pressed while dragging, and it is not mine to restyle.
+   * The bar takes `iconSm` — 36px around an 18px glyph — so its icons are the
+   * same object as the pills beside them.
+   */
+  compact,
   children,
 }: {
   onClick: () => void;
   disabled?: boolean;
   label: string;
+  compact?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -129,7 +145,9 @@ function IslandButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent [&_svg]:size-[26px] [&_svg]:stroke-[2]"
+      className={`flex shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent [&_svg]:stroke-[2] ${
+        compact ? "size-9 [&_svg]:size-[18px]" : "h-[42px] w-[42px] [&_svg]:size-[26px]"
+      }`}
     >
       {children}
     </button>
@@ -233,13 +251,21 @@ export function FlowToolbar({
             {/* WHERE YOU CAME FROM, THEN WHAT YOU DO WITH THE FLOW.
                 Ship, run, on/off — the three acts, together at the reading
                 edge; the name stays centred by the grid regardless. */}
-            <span className="flex min-w-0 items-center gap-1">
+            {/* ONE GAP FOR THE WHOLE GROUP. It was `gap-1` plus an `ml-1` on
+                the publish button plus an `mx-1` on the switch — three spacings
+                for one row, so the arrow sat 4px from the button and the switch
+                8px from the thing before it. */}
+            <span className="flex min-w-0 items-center gap-2">
               <Link
                 href="/dashboard/flows"
                 title="All flows"
-                className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
+                /* size-9 and a 20px glyph: the kit's `iconSm` geometry, so the
+                   arrow is the same object as the pills it sits beside. It was
+                   42px square around a 26px chevron — bigger than every control
+                   in the bar and the only one drawn to no rung of the ladder. */
+                className="flex size-9 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
               >
-                <ChevronLeft size={26} strokeWidth={2} />
+                <ChevronLeft size={20} strokeWidth={2} />
               </Link>
 
               <Button
@@ -250,7 +276,15 @@ export function FlowToolbar({
                     ? "Your edits are not on the dashboard yet — publish to make them live"
                     : undefined
                 }
-                className="ml-1 h-[42px] shrink-0 gap-2 px-[18px] text-md [&_svg]:size-[18px]"
+                /* `size="sm"` — the SAME rung "Invite members" and "New flow"
+                   take one row up. This was `h-[42px] px-[18px] text-md`: 42px
+                   tall against their 36, 18px of padding against 14, and a 16px
+                   label against their 14. Three near-misses, so the builder's
+                   primary act and the chrome's primary acts read as two
+                   different button systems sharing a bar. No `ml-1` either —
+                   the row's own `gap-2` is the spacing. */
+                size="sm"
+                className="shrink-0"
               >
                 {shipping ? <Rocket /> : <SlidersHorizontal />}
                 {shipping ? "Review & publish" : "Edit output"}
@@ -261,7 +295,8 @@ export function FlowToolbar({
                   onClick={runAll ? onStopTestAll : onTestAll}
                   title={runAll ? "Stop the run" : "Run every step, top to bottom"}
                   aria-label={runAll ? "Stop the run" : "Test flow"}
-                  className={`h-[42px] shrink-0 text-md [&_svg]:size-[18px] ${runAll ? "gap-2 px-[18px]" : "w-[42px] px-0"}`}
+                  size={runAll ? "sm" : "iconSm"}
+                  className="shrink-0"
                 >
                   {runAll ? <Square className="fill-current" /> : <Play className="fill-current" />}
                   {/* Icon only at rest — the play glyph IS the word. Quiet grey
@@ -285,7 +320,6 @@ export function FlowToolbar({
                       : "Turn on"
                 }
                 aria-label={isPublished ? "Turn flow off" : "Turn flow on"}
-                className="mx-1"
               />
 
               {/* No "Flows /" crumb. The back arrow beside it already goes there
@@ -299,7 +333,7 @@ export function FlowToolbar({
                 grid's auto column keeps it centred no matter how long it gets
                 or what appears either side of it. */}
             <span className="flex min-w-0 items-center justify-center">
-              <span className="flex min-w-0 items-center gap-1 pr-1">
+              <span className="flex min-w-0 items-center gap-2">
                 {/* Sized to its VALUE, not to an <input>'s intrinsic 20 characters.
                     At the old fixed width a long name was cut mid-glyph, hard against
                     the padding with no ellipsis — while 87px of empty canvas sat to
@@ -313,7 +347,10 @@ export function FlowToolbar({
                   placeholder="Untitled flow"
                   title={name}
                   style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 2, 13), 34)}ch` }}
-                  className="min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 py-2 text-md font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
+                  /* 14px and 36px tall, matching the controls either side of
+                     it. At 16px in a row of 14px labels the name was the only
+                     thing in the bar set to its own size. */
+                  className="h-9 min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
                 />
               </span>
             </span>
@@ -346,10 +383,10 @@ export function FlowToolbar({
                   {publishedVersion == null ? "Not published" : "Changes not live"}
                 </StatusPill>
               )}
-              <IslandButton onClick={onUndo} disabled={!canUndo} label="Undo">
+              <IslandButton compact onClick={onUndo} disabled={!canUndo} label="Undo">
                 <Undo2 />
               </IslandButton>
-              <IslandButton onClick={onRedo} disabled={!canRedo} label="Redo">
+              <IslandButton compact onClick={onRedo} disabled={!canRedo} label="Redo">
                 <Redo2 />
               </IslandButton>
               <Popover
@@ -358,7 +395,7 @@ export function FlowToolbar({
                 width={210}
                 align="left"
                 anchor={
-                  <IslandButton onClick={() => setMenuOpen(!menuOpen)} label="Flow actions">
+                  <IslandButton compact onClick={() => setMenuOpen(!menuOpen)} label="Flow actions">
                     <MoreVertical />
                   </IslandButton>
                 }
@@ -485,7 +522,7 @@ function SaveChip({ state, onRetry }: { state: SaveState; onRetry: () => void })
     );
   }
   return (
-    <span className="shrink-0 whitespace-nowrap px-1 text-md font-medium text-muted-foreground">
+    <span className="shrink-0 whitespace-nowrap px-1 text-sm font-medium text-muted-foreground">
       {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Unsaved"}
     </span>
   );

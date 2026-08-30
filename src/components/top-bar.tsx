@@ -370,7 +370,21 @@ export function TopBar({
       <div className="flex min-w-0 flex-1 items-center justify-center">
         <div
           id="topbar-slot"
-          className="peer flex min-w-0 flex-1 items-center gap-2 pl-1 before:mr-2 before:h-6 before:w-px before:shrink-0 before:bg-chrome-line before:content-[''] empty:hidden empty:before:hidden"
+          /**
+           * NO LEADING RULE ANY MORE.
+           *
+           * This carried a `before:` hairline meant to divide the workspace
+           * block from the builder's toolbar. It rendered at the START of the
+           * slot — which is to say to the LEFT of the back chevron, hard against
+           * the rail, separating the toolbar from nothing. A 1px line floating
+           * at the edge of a bar reads as a rendering fault rather than as a
+           * seam, which is exactly how it was reported.
+           *
+           * The division it was drawing already exists without it: the toolbar's
+           * own controls are white pills on near-black, and the workspace block
+           * to their left is text. Two materials do not need a rule between them.
+           */
+          className="peer flex min-w-0 flex-1 items-center gap-2 empty:hidden"
         />
         <span className="truncate text-md font-semibold text-white peer-[:not(:empty)]:hidden">{greeting}</span>
       </div>

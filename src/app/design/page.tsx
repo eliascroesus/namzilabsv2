@@ -83,14 +83,51 @@ const INK: Array<{ step: string; cls: string; hex: string }> = [
   { step: "50", cls: "bg-ink-50", hex: "#fafafa" },
 ];
 /**
- * UNTITLED UI'S SCALE. The legacy names still compile as aliases onto these
- * steps while the app is migrated surface by surface, so this table lists the
- * step you should REACH FOR — not the eight spellings currently in the tree.
+ * THE DECISIONS THE TOKEN TABLES CANNOT HOLD.
  *
- * Two pairs collapsed on the way in: micro (11px) and tiny (12px) both became
- * `xs`, and small (13px) and base (14px) both became `sm`. Neither pair was a
- * step anyone could pick out of a line-up.
+ * Each row is a rule that shaped a surface, paired with the reason it exists —
+ * because "use the brand colours" is not a rule anybody can apply twice the
+ * same way, and every one of these was learned by getting it wrong once.
  */
+const DIRECTION: Array<{ rule: string; why: string }> = [
+  {
+    rule: "Quiet chrome, loud numbers",
+    why: "Six tools disagree and this app answers in one figure. The number is the only thing allowed to be loud; everything around it is furniture, and furniture that shouts is why most operational tools are exhausting by 4pm.",
+  },
+  {
+    rule: "The band never inverts",
+    why: "The rail and top bar are ink-950 at both exposures; only the page inside them switches. A rail that changes colour with the theme is a rail with no identity — it is the one thing on screen that says where you are before you read a word.",
+  },
+  {
+    rule: "Content floats on the ground",
+    why: "Nothing sits flat on the page but a heading or a caption. Everything with content in it is an island with an edge — and it follows the theme rather than fighting it, because a card pinned to one exposure carries ink solved for the other.",
+  },
+  {
+    rule: "One colour, one job",
+    why: "Near-black works, violet marks selection, yellow is the single hero act per screen, green says which slice of this page. Yellow's scarcity IS its meaning; a second one halves the value of the first.",
+  },
+  {
+    rule: "Pills press, rectangles contain",
+    why: "Everything clickable is a full pill; everything holding something takes 8 / 12 / 16px. The exception proves it — a control that WRAPS takes the 8px radius, because a full radius on a two-line box renders as a circle.",
+  },
+  {
+    rule: "Two sizes do the work",
+    why: "14px interface, 12px labels. 16px is reading prose only. The micro-label voice — 12px, ALL CAPS, tracked, muted — is the product's signature and what lets a small string read as a label rather than as very small prose.",
+  },
+  {
+    rule: "The active thing is the heavier one",
+    why: "Weight, ink and the mark all move together. This ran backwards in the view strip for a while, so the five tabs you were NOT on were the boldest words in the row.",
+  },
+  {
+    rule: "A press lands immediately",
+    why: "The control lights on the press and its content becomes content-shaped skeletons while the server answers. Never dim the old numbers — a legible figure under a pill that now says something else is a wrong answer shown confidently.",
+  },
+  {
+    rule: "Honesty over tidiness",
+    why: "A number says when it was true. An em-dash is not a zero. A fabricated comparison is worse than none, deltas are never green or red, and a figure that leaves data out has to admit it.",
+  },
+];
+
 const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample: string }> = [
   { token: "text-display-md", cls: "stat-numeral text-display-md", px: "36px", use: "Headline numbers, via formatMetricValue — set in the display face", sample: "1,204" },
   { token: "text-display-sm", cls: "font-display text-display-sm font-semibold", px: "30px", use: "Page titles (PageHeader) — display face", sample: "Speed to lead" },
@@ -226,6 +263,27 @@ export default function DesignPage() {
             </span>
           }
         />
+
+        {/* THE DIRECTION, ABOVE THE INVENTORY.
+            This page is a parts bin: it answers "what is the radius of a menu
+            row" and cannot answer "why does the screen look like this". The
+            band, the ground and the colour ratio are decisions rather than
+            tokens, and somebody arriving here to build a new surface needs them
+            first — so they are stated at the top and argued in full in
+            DESIGN.md, which this section is the index to. */}
+        <Section
+          title="The direction"
+          note="DESIGN.md is the argued version — this is the shape of it. The band and the furniture are settled; the metric card and the chart card are mid-rework and are deliberately NOT a reference for anything else yet."
+        >
+          <Card padding="none" className="divide-y divide-border">
+            {DIRECTION.map((d) => (
+              <div key={d.rule} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-4">
+                <p className="w-56 shrink-0 text-sm font-semibold text-foreground">{d.rule}</p>
+                <p className="min-w-0 text-sm text-muted-foreground">{d.why}</p>
+              </div>
+            ))}
+          </Card>
+        </Section>
 
         <Section
           title="Brand sheet"
@@ -849,6 +907,8 @@ export default function DesignPage() {
  * `sectionId` the sections use, so the two cannot drift apart silently.
  */
 const SECTIONS = [
+  // First, because it is the argument the rest of the page is an inventory of.
+  "The direction",
   "Brand sheet",
   "Colour",
   "State",
