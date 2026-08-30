@@ -34,10 +34,17 @@ import { ViewTemplatePicker } from "@/app/dashboard/view-template-picker";
  * client component a function.
  */
 
+/**
+ * THE THREE PRESSES, NOT THREE CONCEPTS. Each is a thing the reader is about to
+ * do, in the order they will do it — which is why none carries a second line:
+ * "Select a template" needs no gloss, and one under each would be padding
+ * dressed as guidance. The flow builder's steps DO carry details, because those
+ * describe a metric rather than a sequence of clicks.
+ */
 const STEPS = [
-  { n: 1, title: "Pick a layout", detail: "columns to group by, or a grid to arrange freely" },
-  { n: 2, title: "Your metrics appear on it", detail: "everything published, ready to place" },
-  { n: 3, title: "Add more views", detail: "the same numbers, read a different way" },
+  { n: 1, title: "Get started" },
+  { n: 2, title: "Select a template" },
+  { n: 3, title: "Add your metrics" },
 ];
 
 export function EmptyBoard({
@@ -61,15 +68,20 @@ export function EmptyBoard({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    /* Centred in a generous block rather than absolutely positioned: the builder
-       floats this over a canvas that fills the viewport, and the dashboard has no
-       canvas — it has a page that would otherwise collapse to the height of the
-       card and leave it pinned under the chrome that is no longer there. */
-    <div className="flex min-h-[60vh] items-center justify-center p-6">
+    /* CENTRED IN WHATEVER HEIGHT THE CALLER GIVES IT.
+       `h-full`, not a viewport fraction of its own. It was `min-h-[60vh]`, which
+       centred the card in the top six-tenths of the screen and therefore read as
+       sitting high — and any fixed replacement would have been wrong in the
+       other direction on `/design`, where the specimen is a box a few hundred
+       pixels tall rather than a page.
+       So height is the caller's, the same seam `GetStartedCard` draws for
+       placement: the dashboard hands it the page, the kit page hands it a
+       specimen box, and this centres in both. */
+    <div className="flex h-full items-center justify-center p-6">
       {/* The same shell the flow builder's empty canvas uses — see
           `GetStartedCard`. Sharing it is the point: two ways of saying "there is
           nothing here yet" is a product telling you something about itself. */}
-      <GetStartedCard eyebrow="New dashboard" title="Start with a view" steps={STEPS} className="w-full max-w-md">
+      <GetStartedCard eyebrow="New dashboard" title="Build a dashboard in three clicks" steps={STEPS} className="w-full max-w-md">
         {/* The one yellow on the screen, which is the whole ratio rule: this is
             the single act the page exists for right now — when there is one. A
             viewer who may not create says so in a sentence instead, rather than

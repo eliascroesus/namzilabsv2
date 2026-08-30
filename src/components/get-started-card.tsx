@@ -36,7 +36,14 @@ export function GetStartedCard({
 }: {
   eyebrow: string;
   title: string;
-  steps: ReadonlyArray<{ n: number; title: string; detail: string }>;
+  /**
+   * `detail` IS OPTIONAL, because the two callers describe different things.
+   * The builder's steps each need a clarifying line — "from an app you've
+   * connected" — while the dashboard's are the three presses themselves and a
+   * second line under each would be padding. A step with no detail sets as one
+   * line rather than one line and an empty box.
+   */
+  steps: ReadonlyArray<{ n: number; title: string; detail?: string }>;
   /** Sizing and placement — the caller's, not the shell's. */
   className?: string;
   /** The act. One per card: see the yellow's ratio rule. */
@@ -61,13 +68,20 @@ export function GetStartedCard({
         <h2 className="mt-1 text-display-xs font-semibold tracking-tight text-foreground">{title}</h2>
         <ol className="mt-6 space-y-4">
           {steps.map((s) => (
-            <li key={s.n} className="flex items-start gap-3">
-              <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold tabular-nums text-primary-foreground">
+            /* `items-center` when there is no detail, so a single line sits on
+               the numeral's middle instead of hanging off its top. */
+            <li key={s.n} className={cn("flex gap-3", s.detail ? "items-start" : "items-center")}>
+              <span
+                className={cn(
+                  "flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold tabular-nums text-primary-foreground",
+                  s.detail && "mt-0.5",
+                )}
+              >
                 {s.n}
               </span>
               <span className="min-w-0">
                 <span className="block text-md font-semibold text-foreground">{s.title}</span>
-                <span className="block text-sm leading-snug text-muted-foreground">{s.detail}</span>
+                {s.detail && <span className="block text-sm leading-snug text-muted-foreground">{s.detail}</span>}
               </span>
             </li>
           ))}

@@ -911,7 +911,25 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             reads failed sees the banner and the ordinary page, never an
             invitation to start over on top of numbers that exist. */}
         {emptyWorkspace && !loadError ? (
-          <EmptyBoard rangeKey={rangeKey} source={boardSource} canCreate={access.can("create_flows")} />
+          <>
+            {/* A TITLE, AND ONLY A TITLE.
+                The empty state removes this page's chrome, and a heading is not
+                chrome — it is the one line that says where you are, and without
+                it the screen opens on a card floating in a void. It is the same
+                recipe `PageHeader` renders (`ui/page.tsx`) rather than a second
+                h1 spelling, but not `PageHeader` itself: that component's right
+                slot is where the period track lives, and the period track is
+                exactly the furniture there is nothing here to filter. */}
+            <h1 className="font-display text-display-sm font-semibold text-ground-ink">Build your dashboard</h1>
+            {/* THE CARD CENTRES IN WHAT IS LEFT, computed rather than guessed:
+                the viewport, less the 70px chrome band, less `PageContainer`'s
+                4rem of vertical padding, less the title's own line and the gap
+                under it. Those add back to 100dvh, so this cannot introduce a
+                scrollbar of its own. */}
+            <div className="min-h-[calc(100dvh-70px-4rem-6rem)]">
+              <EmptyBoard rangeKey={rangeKey} source={boardSource} canCreate={access.can("create_flows")} />
+            </div>
+          </>
         ) : (
         <>
         {/* The filters and the tiles are ONE control: pressing a pill has to

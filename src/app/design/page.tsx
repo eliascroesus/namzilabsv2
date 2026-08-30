@@ -782,16 +782,16 @@ export default function DesignPage() {
             the third. */}
         <Section
           title="Empty dashboard"
-          note="What a workspace with no views and nothing on them sees: one card, one act, and none of the board's chrome — no title, no period track, no tab strip, no action row. Deliberately the same shell as the empty flow below it, because they are the same moment in two places. The button opens the layout picker."
+          note="What a workspace with no views sees. The page keeps a heading — that is where you are, not chrome — and drops everything that describes a board: the period track, the tab strip, the action row. The card itself is the same shell as the empty flow below it, because they are the same moment in two places. Left: someone who can create. Right: someone whose rank cannot, who is told so rather than given a button that will refuse. The button opens the layout picker."
         >
           {/* BOTH STATES, the way the empty flow below shows both of its own.
               The second one is the whole reason the gate exists and would
               otherwise have no coverage at all. */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-card bg-ground p-4">
+            <div className="h-[460px] rounded-card bg-ground">
               <EmptyBoard rangeKey="7d" source={null} canCreate />
             </div>
-            <div className="rounded-card bg-ground p-4">
+            <div className="h-[460px] rounded-card bg-ground">
               <EmptyBoard rangeKey="7d" source={null} canCreate={false} />
             </div>
           </div>
