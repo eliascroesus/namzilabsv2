@@ -292,45 +292,40 @@ describe("what duplicating refuses", () => {
 
   it("leaves NOTHING behind when the copy fails part-way", async () => {
     /**
-     * THE REASON THIS IS ONE TRANSACTION. A view holding two of its eleven
-     * charts looks like a finished view somebody made badly — the customer
-     * cannot tell it is half, so they trust it or repair it by hand. Here the
-     * tile insert is made to fail after the view row has already been written.
+     * THE REASON THIS IS ONE STATEMENT. A view holding two of its eleven charts
+     * looks like a finished view somebody made badly — the customer cannot tell
+     * it is half, so they trust it or repair it by hand.
+     *
+     * IT USED TO BE ONE TRANSACTION, and this test used to inject its failure by
+     * spying on `db.transaction` and proxying the `tx` handle. That test was
+     * green against code that COULD NOT WORK IN PRODUCTION: the deployed driver
+     * is `neon-http`, which is stateless and answers `transaction()` with
+     * `throw new Error("No transactions support in neon-http driver")`, while
+     * PGlite — a real embedded Postgres with sessions — ran it happily. The
+     * suite was greener than the app by construction, so duplicating a view has
+     * never once worked for a customer.
+     *
+     * The copy is now a single data-modifying CTE, and this asserts the property
+     * that replaced the rollback: a statement that aborts writes NOTHING, which
+     * is Postgres's own guarantee rather than a driver feature.
+     *
+     * THE FAILURE IS REAL, NOT MOCKED. `crypto.randomUUID` is pinned to one
+     * value, so both copied tiles are minted with the same primary key and the
+     * second row violates it — Postgres aborts the whole statement after the
+     * view row inside it would have been written. Nothing is stubbed to throw;
+     * the database does the refusing, which is the only version of this test
+     * that can fail if the atomicity is lost.
      */
     await seedTile();
     await seedTile({ x: 3 });
     const before = await viewsOf(A);
 
-    /**
-     * The failure is injected INSIDE the real transaction, on `tx` rather than
-     * on `db` — every write in this action goes through the handle the
-     * transaction hands back, so a spy on `db.insert` never sees them and the
-     * first version of this test passed against no rollback at all. The real
-     * transaction still runs, so what is asserted below is Postgres rolling
-     * back rather than a mock pretending to.
-     */
-    const realTransaction = db.transaction.bind(db);
-    let calls = 0;
-    const spy = vi.spyOn(db, "transaction").mockImplementation(((fn: (tx: unknown) => unknown) =>
-      realTransaction(async (tx) => {
-        const proxy = new Proxy(tx as object, {
-          get(t, prop, recv) {
-            if (prop !== "insert") return Reflect.get(t, prop, recv);
-            return (...args: unknown[]) => {
-              // The view row goes in; the tiles throw.
-              if (++calls > 1) throw new Error("boom");
-              return (Reflect.get(t, prop, recv) as (...a: unknown[]) => unknown).apply(t, args);
-            };
-          },
-        });
-        return fn(proxy);
-      })) as never);
-
+    const spy = vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue("11111111-2222-4333-8444-555555555555");
     const r = await duplicateViewAction("canvas");
     spy.mockRestore();
 
     expect(r.ok).toBe(false);
-    // Sabotage: run the two inserts without a transaction and the view row
+    // Sabotage: split the CTE back into two statements and the view row
     // survives here — an empty "Canvas (copy)" nobody asked for.
     expect(await viewsOf(A)).toHaveLength(before.length);
     expect(await db.select().from(dashboardTiles).where(and(eq(dashboardTiles.orgId, A)))).toHaveLength(2);

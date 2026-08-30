@@ -21,7 +21,7 @@ import { NodeIcon } from "@/components/flow/icons";
 import { PanelTabsPreview } from "@/components/flow/panel-preview";
 import { PANEL_SHELL } from "@/components/flow/panel-chrome";
 import { FlowList } from "@/app/dashboard/flows/FlowRow";
-import { CalendarBoard, type CalendarMetric } from "@/app/dashboard/calendar/CalendarBoard";
+import { CalendarBoard, type CalendarMetric } from "@/components/calendar/calendar-board";
 import { calendarMonths, dayKey, daysInMonth } from "@/lib/metrics/calendar";
 import { Delta, GroupBars, Sparkbars, TargetBar } from "@/components/charts";
 import { SourceMark } from "@/components/source-mark";
@@ -782,14 +782,29 @@ export default function DesignPage() {
             the third. */}
         <Section
           title="Empty dashboard"
-          note="What a workspace with no views sees. The page keeps a heading — that is where you are, not chrome — and drops everything that describes a board: the period track, the tab strip, the action row. The card itself is the same shell as the empty flow below it, because they are the same moment in two places. Left: someone who can create. Right: someone whose rank cannot, who is told so rather than given a button that will refuse. The button opens the layout picker."
+          note="What a workspace with no views sees. The page keeps a heading — that is where you are, not chrome — and drops everything that describes a board: the period track, the tab strip, the action row. The card itself is the same shell as the empty flow below it, because they are the same moment in two places. Left: someone who can create, whose button opens the three-template picker (Columns, Custom, Calendar — the last asks which metric next). Right: someone whose rank cannot, who is told so rather than given a button that will refuse."
         >
           {/* BOTH STATES, the way the empty flow below shows both of its own.
               The second one is the whole reason the gate exists and would
               otherwise have no coverage at all. */}
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="flex h-[460px] items-center justify-center rounded-card bg-ground p-6">
-              <EmptyBoard rangeKey="7d" source={null} canCreate />
+              {/* THE METRIC LIST IS FED HERE so the picker's SECOND step has
+                  something to draw. Without it this page could only ever show
+                  the "nothing published yet" branch, and the populated list —
+                  the one every customer with a metric will see — would have no
+                  coverage on the only screen where it can be looked at. Same
+                  metrics the calendar section below uses. */}
+              <EmptyBoard
+                rangeKey="7d"
+                source={null}
+                canCreate
+                calendarOptions={KIT_CALENDAR_METRICS.map((m) => ({
+                  key: `flow:${m.id}`,
+                  name: m.name,
+                  hint: m.flowName,
+                }))}
+              />
             </div>
             <div className="flex h-[460px] items-center justify-center rounded-card bg-ground p-6">
               <EmptyBoard rangeKey="7d" source={null} canCreate={false} />

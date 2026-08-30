@@ -292,8 +292,17 @@ describe("a canvas computes only the classic metrics it points at", () => {
      * canvas referencing none of them was paying for all of them.
      */
     expect(page).toMatch(/const referencedKeys = new Set\(canvasRows\.map\(\(r\) => r\.tileKey\)\)/);
-    expect(page).toMatch(/activeKind === "custom" \? metrics\.filter\(\(m\) => referencedKeys\.has\(tileKeyOfMetric\(m\.id\)\)\) : metrics/);
+    expect(page).toMatch(/activeKind === "custom"\s*\?\s*metrics\.filter\(\(m\) => referencedKeys\.has\(tileKeyOfMetric\(m\.id\)\)\)\s*:\s*metrics/);
     expect(page).toMatch(/classicsToCompute\.map\(/);
+    /**
+     * THE SAME ARGUMENT, ONE STEP STRONGER, since the calendar became a view
+     * kind. A canvas computes the classics it references; a CALENDAR references
+     * none and cannot draw one at all — classic metrics are computed live by the
+     * frozen engine in `lib/metrics/compute.ts` and never materialised, so they
+     * have no `byDay`. The ternary this assertion pins now has three arms and
+     * this is the first of them.
+     */
+    expect(page).toMatch(/activeKind === "calendar"\s*\?\s*\[\]/);
   });
 
   it("offers flow metrics only in the picker, so the referenced set can only shrink", () => {

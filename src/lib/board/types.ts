@@ -20,10 +20,38 @@ import type { ReactNode } from "react";
  * views existed. It has no row and cannot be renamed or deleted, which is the
  * price of not writing to the database on a page load. See the schema.
  */
-export type BoardViewKind = "groups" | "custom";
+export type BoardViewKind = "groups" | "custom" | "calendar";
 
-/** An unknown stored value reads as the board every workspace already had. */
-export const asViewKind = (v: unknown): BoardViewKind => (v === "custom" ? "custom" : "groups");
+/**
+ * An unknown stored value reads as the board every workspace already had.
+ *
+ * THE ONE PLACE `kind` IS INTERPRETED, which is why a third kind was cheap. The
+ * column is plain `text` with a default and no CHECK constraint (schema.ts), so
+ * the database never had an opinion about the vocabulary — this function is the
+ * whole of it, and everything downstream is a comparison against its output.
+ */
+export const asViewKind = (v: unknown): BoardViewKind =>
+  v === "custom" ? "custom" : v === "calendar" ? "calendar" : "groups";
+
+/**
+ * THE THREE ARRANGEMENTS, AND WHERE EACH ONE'S LAYOUT LIVES.
+ *
+ * A `kind` is not a rendering preference — it decides which table the view's
+ * arrangement is stored in, which is why the three cannot be collapsed:
+ *
+ *   groups   — `dashboard_tile_placements`, one row per metric, carrying a
+ *              column and a position.
+ *   custom   — `dashboard_tiles`, one row per CHART, so a metric can appear
+ *              several times drawn several ways.
+ *   calendar — `dashboard_tile_placements` again, but exactly ONE row and no
+ *              group: the single metric this calendar breaks down by day.
+ *
+ * Calendar reuses the placements table rather than earning a column of its own
+ * because the row means the same thing it always did — this metric belongs to
+ * this view — and it inherits the unique index and the ON DELETE CASCADE for
+ * free. What differs is arity, which the writer enforces, not the shape.
+ */
+export const VIEW_KINDS: readonly BoardViewKind[] = ["groups", "custom", "calendar"] as const;
 
 /**
  * `id: null` is the SYNTHETIC default tab — the board that exists as the absence

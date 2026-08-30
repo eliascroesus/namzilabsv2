@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import Link from "next/link";
+import { CalendarDays, ChevronLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalTitle } from "@/components/ui/modal";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -80,6 +81,42 @@ function CustomPreview() {
 }
 
 /**
+ * A MONTH, AT A TWENTIETH OF ITS SIZE — seven columns and a heat ramp, which is
+ * what makes this card unmistakable beside the other two at a glance.
+ *
+ * The leading blanks are drawn, not trimmed, for the same reason `monthGrid`
+ * emits them: a calendar whose 1st sits under the wrong weekday is not a
+ * picture of a calendar. The tinted squares fade the way the real ramp does, so
+ * the thumbnail says "heat map" rather than merely "grid".
+ *
+ * Orange, where the other two are violet and neutral — it is the calendar
+ * kind's identity tint, and the board you land on wears the same colour on the
+ * chip beside its metric picker.
+ */
+function CalendarPreview() {
+  /* Two leading blanks, then a month of squares whose weight rises and falls —
+     hand-picked rather than random so the thumbnail is the same every render
+     (and because `Math.random()` in a component is a hydration mismatch). */
+  const heat = [0, 0, 15, 30, 55, 20, 10, 40, 75, 35, 60, 25, 90, 45, 15, 70, 30, 55, 20, 80, 40];
+  return (
+    <div className="grid h-full grid-cols-7 gap-1 p-3">
+      {heat.map((h, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className="rounded-xs"
+          style={
+            h === 0
+              ? undefined
+              : { background: `color-mix(in srgb, var(--color-accent-orange) ${h}%, var(--color-card))` }
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
  * The two kinds, and the one place they are described.
  */
 const TEMPLATES = [
@@ -95,18 +132,128 @@ const TEMPLATES = [
     blurb: "Place and size charts on a grid. One metric can appear several times, drawn several ways.",
     Preview: CustomPreview,
   },
+  {
+    /**
+     * THE THIRD KIND, AND THE ONE THAT ASKS A SECOND QUESTION.
+     *
+     * It was a page of its own with a row in the rail, which said the calendar
+     * was a separate part of the product. It is not: `materializeFlow` computes
+     * the range pills, the chart buckets and every calendar day in ONE pass and
+     * stores them side by side, so a calendar is a third way of drawing numbers
+     * the board already has. That is a view.
+     *
+     * Unlike the other two it cannot be created blind — a calendar is a
+     * breakdown OF something, so `needsMetric` sends this card to a second step
+     * instead of straight to the server.
+     */
+    kind: "calendar",
+    label: "Calendar",
+    blurb: "One metric, broken down day by day, with the busy days shaded. Two months at a time.",
+    Preview: CalendarPreview,
+    needsMetric: true,
+  },
 ] as const;
+
+/** One published metric this picker may point a calendar at. */
+export type CalendarOption = { key: string; name: string; hint?: string };
 
 export function ViewTemplatePicker({
   onClose,
   rangeKey,
   source,
+  calendarOptions = [],
 }: {
   onClose: () => void;
   /** Carried through so a new view opens on the period you were already reading. */
   rangeKey: string;
   source: string | null;
+  /**
+   * THE METRICS A CALENDAR COULD BE OF — derived on the server from the flow
+   * tiles the board already holds, so offering this choice costs NO NEW QUERY.
+   *
+   * Empty is a real answer, not a missing prop: a workspace with nothing
+   * published has nothing to break down by day, and step two says so rather
+   * than creating a calendar that can only report its own emptiness.
+   */
+  calendarOptions?: CalendarOption[];
 }) {
+  /**
+   * WHICH KIND IS MID-CHOICE. `null` is step one.
+   *
+   * Only the calendar ever sets it — the other two post on the first press,
+   * which is the behaviour that was already there and worth not spending.
+   */
+  const [picking, setPicking] = useState<string | null>(null);
+
+  if (picking === "calendar") {
+    return (
+      <Modal onClose={onClose} size="lg">
+        <ModalTitle>Which metric?</ModalTitle>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          A calendar breaks one metric down day by day. You can change it later, and the view will remember.
+        </p>
+        {calendarOptions.length === 0 ? (
+          /* NOTHING TO OFFER, SAID PLAINLY. The alternative — create the view
+             anyway and let it explain itself — spends a view and a click to
+             deliver the same sentence. */
+          <div className="mt-5 rounded-surface border border-border bg-ground p-6 text-center">
+            <p className="text-md font-semibold text-foreground">No published metrics yet</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+              A calendar needs a published metric to break down. Build a flow and publish it, then this view will have
+              something to show.
+            </p>
+            <Button asChild variant="yellow" className="mt-4">
+              <Link href="/dashboard/flows">Go to flows</Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-5 max-h-80 space-y-2 overflow-y-auto">
+            {calendarOptions.map((o) => (
+              /* One form per row, for the reason the cards below use one each:
+                 the choice is a SUBMIT, so the existing server action and its
+                 redirect are untouched. `label` names the view after the metric
+                 so the tab says which calendar it is. */
+              <form key={o.key} action={addViewAction}>
+                <input type="hidden" name="range" value={rangeKey} />
+                <input type="hidden" name="source" value={source ?? ""} />
+                <input type="hidden" name="kind" value="calendar" />
+                <input type="hidden" name="tileKey" value={o.key} />
+                <input type="hidden" name="label" value={o.name} />
+                <SubmitButton
+                  variant="ghost"
+                  pendingLabel="Creating…"
+                  className="h-auto w-full justify-start whitespace-normal rounded-card border border-border bg-card p-3 text-left transition-colors hover:border-primary hover:bg-card"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span
+                      aria-hidden
+                      className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-orange text-white"
+                    >
+                      <CalendarDays className="size-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-md font-semibold text-foreground">{o.name}</span>
+                      {o.hint && <span className="block truncate text-sm font-normal text-muted-foreground">{o.hint}</span>}
+                    </span>
+                  </span>
+                </SubmitButton>
+              </form>
+            ))}
+          </div>
+        )}
+        {/* BACK, NOT CANCEL. A second step with only a way out is a dead end;
+            this returns to the three cards, which is where a reader who came
+            here by mistake wants to be. */}
+        <div className="mt-5 flex justify-start">
+          <Button variant="ghost" onClick={() => setPicking(null)}>
+            <ChevronLeft />
+            Back
+          </Button>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal onClose={onClose} size="lg">
       <ModalTitle>Choose a layout</ModalTitle>
@@ -115,11 +262,11 @@ export function ViewTemplatePicker({
         are laid out. You can add more later.
       </p>
 
-      {/* Two cards, so two columns. `BOARD_GRID`'s third rung would leave a gap
-          at this width, and the kit's own note says three is a ceiling rather
-          than a target. */}
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        {TEMPLATES.map((t) => (
+      {/* THREE CARDS, THREE COLUMNS — which is `BOARD_GRID`'s own ceiling
+          rather than a number picked for this modal. It was two while there
+          were two kinds. */}
+      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+        {TEMPLATES.map((t) => {
           /* THE WHOLE CARD IS THE CONTROL, and this is the one place that is
              right. The connector catalogue's rule — a card is not a button,
              every action on it is a real control — exists because those cards
@@ -128,21 +275,26 @@ export function ViewTemplatePicker({
              at a small button under a large picture of the thing they are
              choosing is the worse interface, and it is not what Miro or Notion
              do either.
-             It is a submit rather than a click handler, so the existing server
-             action and its redirect are untouched. */
-          <form key={t.kind} action={addViewAction}>
-            <input type="hidden" name="range" value={rangeKey} />
-            <input type="hidden" name="source" value={source ?? ""} />
-            <input type="hidden" name="kind" value={t.kind} />
-            <SubmitButton
-              variant="ghost"
-              pendingLabel="Creating…"
-              /* `h-auto` and `whitespace-normal` because `buttonVariants`' base
-                 is a one-line pill; `rounded-[var(--radius-surface)]` because
-                 the arbitrary spelling is the one that beats that pill — the
-                 named class loses to it in `cn()`. */
-              className="group/tpl h-auto w-full flex-col items-stretch gap-0 whitespace-normal rounded-[var(--radius-surface)] border border-border bg-card p-0 text-left transition-colors hover:border-primary hover:bg-card"
-            >
+
+             `whitespace-normal` because `buttonVariants`' base is a one-line
+             pill; `rounded-[var(--radius-surface)]` because the arbitrary
+             spelling is the one that beats that pill — the named class loses to
+             it in `cn()`.
+
+             `h-full` RATHER THAN `h-auto`, and `justify-start` rather than the
+             base's `justify-center`. Both were measured rather than guessed:
+             with `h-auto` the Custom card came out 251px inside a 270px grid
+             cell — a short card with a hairline floating clear of its
+             neighbours — because the `<form>` stretches and the button inside
+             it does not. And once a card DOES fill its cell, the base's
+             `justify-center` centres the spare space, which pushed the Calendar
+             card's heading 10px below the other two. Three cards whose titles
+             sit on three different lines is the kind of thing that reads as
+             sloppiness without ever being noticed as a bug. */
+          const shell =
+            "group/tpl h-full w-full flex-col items-stretch justify-start gap-0 whitespace-normal rounded-[var(--radius-surface)] border border-border bg-card p-0 text-left transition-colors hover:border-primary hover:bg-card";
+          const face = (
+            <>
               {/* THE THUMBNAIL, on the page's own ground rather than the card's
                   white — a layout is a thing that sits ON a board, and drawing
                   it on the same surface as the card would leave its tiles with
@@ -154,9 +306,32 @@ export function ViewTemplatePicker({
                 <span className="block text-md font-semibold text-foreground">{t.label}</span>
                 <span className="mt-1 block text-sm font-normal leading-snug text-muted-foreground">{t.blurb}</span>
               </span>
-            </SubmitButton>
-          </form>
-        ))}
+            </>
+          );
+
+          /* A CALENDAR IS A VIEW OF SOMETHING, so its card opens the second
+             step rather than posting. The other two carry everything the server
+             needs already, and sending them through a step that asks nothing
+             would be ceremony. */
+          return "needsMetric" in t && t.needsMetric ? (
+            <Button key={t.kind} variant="ghost" className={shell} onClick={() => setPicking(t.kind)}>
+              {face}
+            </Button>
+          ) : (
+            /* A submit rather than a click handler, so the existing server
+               action and its redirect are untouched. */
+            /* `h-full` on the FORM too: it is the grid item, so it is what the
+               row stretches, and the button's own `h-full` resolves against it. */
+            <form key={t.kind} action={addViewAction} className="h-full">
+              <input type="hidden" name="range" value={rangeKey} />
+              <input type="hidden" name="source" value={source ?? ""} />
+              <input type="hidden" name="kind" value={t.kind} />
+              <SubmitButton variant="ghost" pendingLabel="Creating…" className={shell}>
+                {face}
+              </SubmitButton>
+            </form>
+          );
+        })}
       </div>
     </Modal>
   );
@@ -171,7 +346,16 @@ export function ViewTemplatePicker({
  * buttons outside the primitives and the builder's own chrome, and this file is
  * neither.
  */
-export function AddViewButton({ rangeKey, source }: { rangeKey: string; source: string | null }) {
+export function AddViewButton({
+  rangeKey,
+  source,
+  calendarOptions,
+}: {
+  rangeKey: string;
+  source: string | null;
+  /** Passed straight through — see the picker's own note. */
+  calendarOptions?: CalendarOption[];
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -186,7 +370,14 @@ export function AddViewButton({ rangeKey, source }: { rangeKey: string; source: 
         <span className="sr-only">Add a view</span>
       </Button>
       {/* `Modal` has no `open` prop — the caller mounts it. */}
-      {open && <ViewTemplatePicker onClose={() => setOpen(false)} rangeKey={rangeKey} source={source} />}
+      {open && (
+        <ViewTemplatePicker
+          onClose={() => setOpen(false)}
+          rangeKey={rangeKey}
+          source={source}
+          calendarOptions={calendarOptions}
+        />
+      )}
     </>
   );
 }

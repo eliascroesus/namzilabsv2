@@ -39,9 +39,13 @@ import {
   type TilePlacement,
 } from "@/lib/board/types";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
-import { publishedFlowTiles, unpublishedFlowIds } from "@/lib/flow/materialize";
+import { calendarFlowTiles, publishedFlowTiles, unpublishedFlowIds } from "@/lib/flow/materialize";
+import { listFlowNames } from "@/lib/flow/store";
+import { CalendarBoard, type CalendarMetric } from "@/components/calendar/calendar-board";
+import { calendarMonths, dayKey } from "@/lib/metrics/calendar";
 import { refreshAllFlowsAction } from "@/app/dashboard/flows/actions";
-import { AddViewButton } from "./view-template-picker";
+import { AddViewButton, type CalendarOption } from "./view-template-picker";
+import { setCalendarMetricAction } from "./board-actions";
 import { listMetrics, type Metric } from "@/lib/metrics/store";
 import { parseDefinition } from "@/lib/metrics/types";
 import {
@@ -255,6 +259,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       // neither — no columns, no lane order. Asking for them would be two
       // queries per poll returning two empty arrays.
       canvasRows = await listBoardTiles(db, orgId, activeView);
+    } else if (activeKind === "calendar" && activeView) {
+      /**
+       * A CALENDAR VIEW READS ONE ROW: which metric it is a calendar of.
+       *
+       * No groups — it has no columns — so the groups read is skipped for the
+       * same reason a canvas skips it. `listTilePlacements` is reused rather
+       * than given a narrower sibling: a calendar view holds exactly one
+       * placement, so "read this view's placements" already returns it, and a
+       * second query spelling the same thing is the drift this board keeps
+       * avoiding elsewhere.
+       */
+      placements = await listTilePlacements(db, orgId, activeView);
     } else {
       groups = await listBoardGroups(db, orgId, activeView);
       // THE THIRD BOARD READ, AND THE WHOLE COST ARGUMENT FOR IT. A view with no
@@ -311,8 +327,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * so every compute is consumed.
    */
   const referencedKeys = new Set(canvasRows.map((r) => r.tileKey));
+  /**
+   * A CALENDAR VIEW COMPUTES NONE OF THEM, which is the largest saving on this
+   * page and the reason the branch is worth having at all.
+   *
+   * Classic metrics are not stored — each one is a live `events` query per
+   * render and a funnel is one query PER STAGE, and this block re-runs on every
+   * `router.refresh()` and every twelve-second freshness poll. A calendar draws
+   * a single materialised metric's `byDay` and cannot show a classic metric at
+   * all (they have no day map — see the note on `calendarOptions`), so every one
+   * of those queries would be paid for and thrown away.
+   *
+   * The `custom` narrowing above is the same argument one step weaker: a canvas
+   * computes the classics it references. A calendar references none.
+   */
   const classicsToCompute =
-    activeKind === "custom" ? metrics.filter((m) => referencedKeys.has(tileKeyOfMetric(m.id))) : metrics;
+    activeKind === "calendar"
+      ? []
+      : activeKind === "custom"
+        ? metrics.filter((m) => referencedKeys.has(tileKeyOfMetric(m.id)))
+        : metrics;
 
   const tiles: Tile[] = await Promise.all(
     classicsToCompute.map(async (metric): Promise<Tile> => {
@@ -448,6 +482,106 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
   const emptyWorkspace = views.length === 0;
 
+  /**
+   * THE CALENDAR VIEW'S OWN READ, and the two things it feeds.
+   *
+   * `calendarFlowTiles` is the MIRROR of `publishedFlowTiles`: it selects the
+   * name, the six keys that decide how a number is spelled, and `byDay` — and
+   * nothing else. The dashboard's read drops `byDay` in SQL for exactly the same
+   * reason, because sixty-odd day entries per tile on a query that runs every
+   * twelve seconds is real money against a database that bills by the byte.
+   * Choosing between them per view kind is the pattern the pair was built for.
+   *
+   * ONE READ SERVES BOTH the sheet and the picker, because the narrow projection
+   * already carries the names.
+   *
+   * THE COST THAT IS NOT HIDDEN: `flowRowsP` was started at the top of this
+   * function, before anything knew which view was active — deliberately, so it
+   * overlaps the board reads. On a calendar view that result is discarded. The
+   * alternative is awaiting the view list before choosing, which adds a serial
+   * round trip to EVERY view on the most-rendered page in the product to save
+   * one read on a single kind. The promise already carries its own `.catch`, so
+   * nothing is left unhandled.
+   */
+  let calendarMetrics: CalendarMetric[] = [];
+  let calendarRowsFailed = false;
+  if (activeKind === "calendar" && !loadError) {
+    const calRows = await calendarFlowTiles(db, orgId).catch((err) => {
+      console.error("[dashboard] calendar tile read failed", err);
+      return null;
+    });
+    // `null` is a FAILED read; `[]` is a workspace with nothing published. The
+    // two must not collapse — one is our outage rendered as the customer's
+    // empty workspace, which is the product telling them their work is gone.
+    if (calRows == null) calendarRowsFailed = true;
+    else {
+      const flowNames = new Map<string, string>();
+      try {
+        for (const f of await listFlowNames(db, orgId)) flowNames.set(f.id, f.name);
+      } catch {
+        // A missing hint costs a subtitle, never the board.
+      }
+      calendarMetrics = calRows
+        // THE SAME RANK GATE THE BOARD APPLIES. A metric hidden from a member on
+        // one view must be hidden on every other way of looking at it, or the
+        // restriction is decoration.
+        .filter((r) => access.canSeeMetric(`flow:${r.flowId}`))
+        .map((r) => {
+          const stored = (r.tile ?? {}) as Record<string, unknown> & { byDay?: CalendarMetric["days"] };
+          return {
+            id: `${r.flowId}:${r.outputNodeId}`,
+            flowId: r.flowId,
+            flowName: flowNames.get(r.flowId) ?? "Flow",
+            // A row whose tile jsonb is null has never computed successfully, so
+            // there is no stored name — the output id is the only honest handle.
+            name: (stored.name as string | undefined) ?? `Output ${r.outputNodeId.slice(0, 8)}`,
+            format: {
+              format: stored.format as string | undefined,
+              precision: stored.precision as number | undefined,
+              unit: stored.unit as string | undefined,
+              currency: stored.currency as string | undefined,
+              durationDisplay: stored.durationDisplay as string | undefined,
+            },
+            days: stored.byDay ?? {},
+            status: r.status,
+            error: r.error,
+            computedAt: r.computedAt ? new Date(r.computedAt).toISOString() : null,
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, "en-US"));
+    }
+  }
+
+  /**
+   * WHAT A CALENDAR COULD BE OF — the picker's second step, costing no query.
+   *
+   * On a calendar view it comes from the narrow read above; on any other view
+   * from the flow tiles the board already holds. Either way the list is one the
+   * page had in hand.
+   *
+   * CLASSIC METRICS ARE ABSENT, and that is a property of the data rather than a
+   * policy: they are computed live by the frozen engine in `lib/metrics/compute.ts`
+   * and never materialised, so they have no `byDay` for a calendar to draw. The
+   * standalone page never offered them either.
+   */
+  const calendarOptions: CalendarOption[] =
+    activeKind === "calendar"
+      ? calendarMetrics.map((m) => ({ key: `flow:${m.id}`, name: m.name, hint: m.flowName }))
+      : flowTiles.map((r) => {
+          const stored = (r.tile ?? {}) as { name?: string };
+          return {
+            key: tileKeyOfFlow(r.flowId, r.outputNodeId),
+            name: stored.name ?? `Output ${r.outputNodeId.slice(0, 8)}`,
+          };
+        });
+
+  /**
+   * WHICH METRIC THIS CALENDAR IS OF — the view's one placement, as the id the
+   * board speaks. A view with no placement yet (or one whose row was cleaned up)
+   * is `null`, which opens on the first metric exactly as the old page did.
+   */
+  const calendarSelected =
+    activeKind === "calendar" ? (placements[0]?.tileKey?.replace(/^flow:/, "") ?? null) : null;
 
   const qs = (over: Record<string, string>) => {
     const p = new URLSearchParams();
@@ -520,7 +654,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     {v.name}
                   </ViewTab>
                 ))}
-                {access.can("create_flows") && <AddViewButton rangeKey={rangeKey} source={boardSource} />}
+                {access.can("create_flows") && (
+                  <AddViewButton rangeKey={rangeKey} source={boardSource} calendarOptions={calendarOptions} />
+                )}
               </div>
   );
 
@@ -918,7 +1054,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
              scrolls. The heading travels inside `EmptyBoard`, so this centres
              the pair rather than pinning a title to the top of an empty page. */
           <div className="flex min-h-[calc(100dvh-70px-3rem)] items-center justify-center p-6 sm:min-h-[calc(100dvh-70px-4rem)]">
-            <EmptyBoard rangeKey={rangeKey} source={boardSource} canCreate={access.can("create_flows")} />
+            <EmptyBoard
+              rangeKey={rangeKey}
+              source={boardSource}
+              canCreate={access.can("create_flows")}
+              calendarOptions={calendarOptions}
+            />
           </div>
         ) : (
         <>
@@ -976,6 +1117,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             />
           }
           actions={
+            /* NOT ON A CALENDAR VIEW. The period pills narrow WHICH NUMBERS a
+               board shows; a calendar answers two fixed months — the only two
+               the materializer stores — and its own stepper is the control that
+               moves time here. Six live pills that changed nothing on screen
+               would be the interface offering something it cannot do, which is
+               the gap this board keeps closing rather than opening. */
+            activeKind === "calendar" ? null : (
             /* ── THE PERIOD CONTROL ────────────────────────────────────────
                THE SAME SIX LINKS, ON THE OTHER SIDE OF THE PAGE. This is the
                range track that used to open the filter island — moved, not
@@ -1040,6 +1188,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 ))}
               </div>
             </div>
+            )
           }
         />
 
@@ -1112,7 +1261,52 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             is also the more honest arrangement: a workspace with a view and no
             metrics has furniture AND advice, not one pretending the other is
             not there. */}
-        {!emptyWorkspace && (
+        {/* A CALENDAR VIEW IS RENDERED OUTSIDE `TileArea`, ON PURPOSE.
+            `TileArea` exists to swap the board for same-sized skeletons the
+            instant a range pill is pressed. A calendar answers two fixed months
+            from values already in this payload — "there is no spinner because
+            there is nothing to wait for" — and the period pills do not apply to
+            it at all (they are hidden above, with `PageHeader`'s track). Putting
+            it inside would flash a three-up column of skeletons for a press that
+            changes nothing on screen.
+            It still carries `viewStrip` and `boardActions`, because those are
+            rendered by the BOARD components rather than by this page — a branch
+            that forgot them would lose the tab strip and the `+`. */}
+        {!emptyWorkspace && activeKind === "calendar" ? (
+          <div className="mt-4">
+            <div className="flex items-center justify-between gap-4">
+              {viewStrip}
+              {boardActions}
+            </div>
+            {calendarRowsFailed ? (
+              <p className="mt-6 rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-md text-danger-ink">
+                This calendar couldn&rsquo;t be loaded. Nothing has been deleted and no number has changed — refresh to
+                try again.
+              </p>
+            ) : (
+              <CalendarBoard
+                // A DIFFERENT VIEW IS A DIFFERENT CALENDAR: the board seeds its
+                // selected metric once (so the twelve-second poll cannot yank it
+                // mid-read), which means switching tabs has to remount it.
+                key={activeView ?? "default"}
+                metrics={calendarMetrics}
+                months={calendarMonths()}
+                // Decided on the SERVER: every value was filed under a UTC day,
+                // so a browser working out "today" locally would ring the wrong
+                // square for anyone east of Greenwich after midnight.
+                todayKey={dayKey(new Date())}
+                selectedId={calendarSelected}
+                /* A SERVER ACTION, bound to this view — which is what crosses
+                   the RSC boundary. A plain closure would fail the build, and
+                   is why `/design` renders this component with the prop left
+                   off entirely. Rank-gated like every other write on the board:
+                   a viewer who may not arrange the dashboard gets a picker that
+                   still switches locally but writes nothing. */
+                onPick={access.can("create_flows") && activeView ? setCalendarMetricAction.bind(null, activeView) : undefined}
+              />
+            )}
+          </div>
+        ) : !emptyWorkspace ? (
           // Swapped for same-sized skeletons the instant a filter is pressed:
           // the alternative is leaving last range's numbers on screen under a
           // pill that now says something else.
@@ -1169,8 +1363,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             />
             )}
           </TileArea>
-        )}
-        {!hasTiles && !loadError && (
+        ) : null}
+        {/* The checklist is about BUILDING metrics, and a calendar view is a way
+            of reading one — a workspace that has got as far as making a calendar
+            has not got there without a metric. It also cannot render inside that
+            branch's own layout without sitting under a month grid, which is the
+            wrong place for onboarding advice. */}
+        {!hasTiles && !loadError && activeKind !== "calendar" && (
           <OnboardingChecklist hasConnection={connCount > 0} hasFlow={flowCount > 0} hasPublished={flowTiles.length > 0} />
         )}
         </BoardControls>

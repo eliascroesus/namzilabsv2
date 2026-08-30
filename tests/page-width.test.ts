@@ -208,31 +208,50 @@ describe("the board grid", () => {
 });
 
 describe("the calendar's day square", () => {
-  const cell = read("src/app/dashboard/calendar/day-cell.ts");
-  const loading = read("src/app/dashboard/calendar/loading.tsx");
+  /**
+   * MOVED OUT OF A ROUTE AND INTO A COMPONENT. The calendar was `/dashboard/
+   * calendar`; it is a view KIND now, so the sheet and this constant live in
+   * `src/components/calendar/` and the route — `page.tsx` and its `loading.tsx`
+   * — is deleted.
+   */
+  const cell = read("src/components/calendar/day-cell.ts");
 
-  it("is one measurement, read by both the sheet and its skeleton", () => {
-    // Same mirror problem, smaller: `loading.tsx` draws the same square, and a
-    // literal there would go stale the moment the cell grows a rung.
+  it("is one measurement, spelled once", () => {
+    /**
+     * THE SKELETON HALF OF THIS TEST IS GONE WITH THE ROUTE, and it is recorded
+     * here rather than quietly dropped. It asserted that `loading.tsx` imported
+     * the same constant instead of re-spelling `h-[92px]`, because a literal
+     * there would go stale the moment the cell grew a rung. There is no
+     * `loading.tsx` any more: a view renders inside the dashboard's own page,
+     * which has no per-view fallback, and the calendar needs none — every day it
+     * can show is already in the payload, which is why it has never had a
+     * spinner.
+     *
+     * What survives is the constant itself, and the guard below, which is the
+     * half that was load-bearing.
+     */
     expect(cell).toMatch(/export const DAY_CELL_H = "min-h-\[92px\]";/);
-    expect(read("src/app/dashboard/calendar/CalendarBoard.tsx")).toContain('from "./day-cell"');
-    expect(loading).toContain('from "./day-cell"');
-    // The literal it replaced. Its return means the two have parted again.
-    expect(loading).not.toContain("h-[92px] rounded-card");
+    expect(read("src/components/calendar/calendar-board.tsx")).toContain('from "./day-cell"');
   });
 
   it("lives where the SERVER can read it as a string", () => {
     /**
      * The real hazard, and it fails silently rather than loudly.
      *
-     * `loading.tsx` is a server component — the route is `force-dynamic` and
-     * has a loading.tsx, so the fallback is server-rendered on every request.
-     * A `"use client"` module's exports are not values on the server: Next's
-     * flight loader swaps each one for a registered client reference, which
-     * for an ESM module is a throwing stub FUNCTION. Interpolating that into a
-     * className does not throw — it stringifies the function, so all 35 day
-     * cells ship a ~264-character class holding `function(){throw ...}` and no
-     * height at all.
+     * IT HAS NO SERVER CONSUMER TODAY — `loading.tsx` was deleted with the
+     * route — and the guard is kept anyway, deliberately. The constant exists
+     * to be shared; the next thing that draws a day square on the server (a
+     * skeleton for the calendar view, an export, a printed sheet) will import
+     * it, and the failure mode below is invisible in review. A directive added
+     * to this file on the day it grows a second consumer is exactly the change
+     * nobody would think to question. Cheap guard, silent bug.
+     *
+     * The original hazard, for the record: a server component interpolating a
+     * `"use client"` module's export gets a registered client reference, which
+     * for an ESM module is a throwing stub FUNCTION. Putting that in a className
+     * does not throw — it stringifies the function, so all 35 day cells shipped
+     * a ~264-character class holding `function(){throw ...}` and no height at
+     * all.
      *
      * This constant briefly lived in CalendarBoard.tsx, which is `"use
      * client"`, and did exactly that. The rule it now follows is the one
@@ -246,6 +265,5 @@ describe("the calendar's day square", () => {
      * cannot tell the two apart fails on its own documentation.
      */
     expect(firstStatementOf(cell)).not.toMatch(/^["']use client["']/);
-    expect(loading).not.toContain('from "./CalendarBoard"');
   });
 });

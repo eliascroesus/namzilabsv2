@@ -87,8 +87,9 @@ export async function setFlowEnabledAction(
     // The dashboard's tiles come and go with this, so it has to re-render too.
     revalidatePath("/dashboard/flows");
     revalidatePath("/dashboard");
-    // The calendar reads the same stored tiles, so it goes stale with them.
-    revalidatePath("/dashboard/calendar");
+    // The calendar is a VIEW of the same stored tiles now, so it is already
+    // covered by the line above — it was its own route until this became a view
+    // kind, and a revalidate naming a dead path is a silent no-op.
     return { ok: true, state };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -379,15 +380,13 @@ export async function refreshFlowAction(formData: FormData): Promise<void> {
     const access = await effectiveAccess(getDb(), ctx);
     if (!access.canSeeMetric(`flow:${id}`)) {
       revalidatePath("/dashboard");
-      // The calendar reads the same stored tiles, so it goes stale with them.
-      revalidatePath("/dashboard/calendar");
+      // The calendar is a view of /dashboard now — covered above.
       return;
     }
     await materializeFlow(getDb(), orgId, id);
   }
   revalidatePath("/dashboard");
-  // The calendar reads the same stored tiles, so it goes stale with them.
-  revalidatePath("/dashboard/calendar");
+  // The calendar is a view of /dashboard now — covered above.
 }
 
 /**
@@ -407,8 +406,7 @@ export async function refreshAllFlowsAction(): Promise<void> {
   await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.orgId, orgId));
   await materializeStaleAll(db, { orgId });
   revalidatePath("/dashboard");
-  // The calendar reads the same stored tiles, so it goes stale with them.
-  revalidatePath("/dashboard/calendar");
+  // The calendar is a view of /dashboard now — covered above.
 }
 
 export async function publishFlowAction(

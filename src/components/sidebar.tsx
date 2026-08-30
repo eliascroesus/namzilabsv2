@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Bell, CalendarDays, LayoutDashboard, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
+import { Bell, LayoutDashboard, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme";
@@ -110,10 +110,17 @@ const PRODUCT = "Namzilabs";
  * where you LOOK at things, the second is where you BUILD them, and that
  * division is the same one the named column drew with a rule and a caps label.
  * It IS that caps label again — the string is the heading, not just the key.
+ *
+ * THE CALENDAR IS NOT HERE ANY MORE, and its absence is the point. It was a
+ * destination of its own, which said it was a separate part of the product; it
+ * is not — `materializeFlow` computes the dashboard's range pills, the chart
+ * buckets and every calendar day in ONE pass and stores them side by side, so a
+ * calendar is a third way of drawing numbers the board already has. It is a view
+ * kind now, and it appears in the list of views nested under Dashboard below,
+ * beside the reader's Columns and Custom boards.
  */
 const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; section: string }> = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Workspace" },
-  { label: "Calendar", href: "/dashboard/calendar", icon: CalendarDays, section: "Workspace" },
   { label: "Activity", href: "/dashboard/activity", icon: Radio, section: "Workspace" },
   { label: "Flows", href: "/dashboard/flows", icon: Workflow, section: "Build" },
   { label: "Apps", href: "/integrations", icon: Plug, section: "Build" },

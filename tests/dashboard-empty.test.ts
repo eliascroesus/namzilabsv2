@@ -94,16 +94,28 @@ describe("what happens after you pick one", () => {
    * is what showed the condition was wrong rather than the copy.
    */
   it("gates the board on there being a board, not on there being tiles", () => {
-    expect(page).toMatch(/\{!emptyWorkspace && \(/);
+    // The calendar branch shares this gate: `{!emptyWorkspace && activeKind
+    // === "calendar" ? (…) : !emptyWorkspace ? (…) : null}`. Both arms ask the
+    // same question, which is the property being pinned.
+    expect(page).toMatch(/\{!emptyWorkspace && activeKind === "calendar" \? \(/);
+    expect(page).toMatch(/\) : !emptyWorkspace \? \(/);
     // The old spelling must not come back.
     expect(page).not.toMatch(/\{!hasTiles && !loadError \? \(/);
   });
 
   it("keeps the checklist as a supplement under the board, not a replacement", () => {
-    const board = page.indexOf("{!emptyWorkspace && (");
+    // Anchored on a string that still EXISTS. It was `"{!emptyWorkspace && ("`,
+    // which the calendar branch changed — and `indexOf` answers -1 rather than
+    // failing, so the comparison below would have passed against any page at
+    // all. A position test has to be pinned to something present.
+    const board = page.indexOf("{!emptyWorkspace && activeKind === \"calendar\" ? (");
     const checklist = page.indexOf("<OnboardingChecklist");
+    expect(board).toBeGreaterThan(-1);
     expect(checklist).toBeGreaterThan(board);
-    expect(page).toMatch(/\{!hasTiles && !loadError && \(/);
+    // Plus a third clause since the calendar became a view kind: onboarding
+    // advice is about BUILDING metrics, and a workspace that has made a
+    // calendar has one. It would also land under a month grid.
+    expect(page).toMatch(/\{!hasTiles && !loadError && activeKind !== "calendar" && \(/);
   });
 });
 
@@ -145,28 +157,53 @@ describe("a refusal says so", () => {
 
 describe("one picker, reached from both places", () => {
   it("the + opens it rather than a dropdown of its own", () => {
-    expect(page).toMatch(/<AddViewButton rangeKey=\{rangeKey\} source=\{boardSource\} \/>/);
+    expect(page).toMatch(/<AddViewButton\s+rangeKey=\{rangeKey\}\s+source=\{boardSource\}\s+calendarOptions=\{calendarOptions\}\s*\/>/);
     // The `<details>` it replaced is gone, not merely hidden.
     expect(page).not.toMatch(/group\/add/);
   });
 
   it("still gates on the same permission the dropdown did", () => {
-    expect(page).toMatch(/access\.can\("create_flows"\) && <AddViewButton/);
+    expect(page).toMatch(/access\.can\("create_flows"\) && \(\s*<AddViewButton/);
   });
 
   it("posts to the existing server action with the fields it has always taken", () => {
-    expect(picker).toMatch(/<form key=\{t\.kind\} action=\{addViewAction\}>/);
+    // `className="h-full"` joined it so the form — which is the grid item —
+    // stretches, and the button's own `h-full` has something definite to
+    // resolve against. Measured: without it the Custom card sat 19px short of
+    // its neighbours.
+    expect(picker).toMatch(/<form key=\{t\.kind\} action=\{addViewAction\} className="h-full">/);
     for (const field of ["range", "source", "kind"]) {
       expect(picker).toMatch(new RegExp(`name="${field}"`));
     }
   });
 
-  it("offers exactly the two kinds the schema has", () => {
+  it("offers exactly the three kinds the schema has", () => {
+    /**
+     * THIS ASSERTION USED TO SAY THE OPPOSITE, and the reason it changed is
+     * worth keeping rather than deleting. It read:
+     *
+     *   // Calendar is a route, not a view kind. A third card here would be a
+     *   // template that cannot be created.
+     *   expect(picker).not.toMatch(/kind: "calendar"/);
+     *
+     * Both halves were true when it was written and the first is no longer:
+     * the calendar HAD its own route and its own row in the rail. It was never
+     * a separate part of the product though — `materializeFlow` computes the
+     * range pills, the chart buckets and every calendar day in one pass and
+     * stores them side by side — so the route was a third way of drawing the
+     * board's own numbers, wearing a destination. It is a view kind now, the
+     * route is deleted, and `asViewKind` accepts three.
+     *
+     * The second half still holds, which is why this is a same-shaped assertion
+     * rather than a deleted one: the picker must offer exactly what can be
+     * created, no more.
+     */
     expect(picker).toMatch(/kind: "groups"/);
     expect(picker).toMatch(/kind: "custom"/);
-    // Calendar is a route, not a view kind. A third card here would be a
-    // template that cannot be created.
-    expect(picker).not.toMatch(/kind: "calendar"/);
+    expect(picker).toMatch(/kind: "calendar"/);
+    // Still nothing beyond the three the column accepts.
+    const kinds = new Set([...picker.matchAll(/kind: "(\w+)"/g)].map((m) => m[1]));
+    expect([...kinds].sort()).toEqual(["calendar", "custom", "groups"]);
   });
 
   it("makes the whole card the control, and it is a submit rather than a handler", () => {
@@ -198,7 +235,7 @@ describe("one picker, reached from both places", () => {
     // A yellow button that leads to a silent `?error=rank` redirect this page
     // never reads is worse than no button.
     expect(empty).toMatch(/canCreate \? \(/);
-    expect(empty).toMatch(/\{canCreate && open && <ViewTemplatePicker/);
+    expect(empty).toMatch(/\{canCreate && open && \(\s*<ViewTemplatePicker/);
     expect(page).toMatch(/canCreate=\{access\.can\("create_flows"\)\}/);
   });
 
@@ -215,7 +252,7 @@ describe("one picker, reached from both places", () => {
   });
 
   it("is opened by the empty card too, from the same component", () => {
-    expect(empty).toMatch(/import \{ ViewTemplatePicker \}/);
+    expect(empty).toMatch(/import \{ ViewTemplatePicker, type CalendarOption \}/);
     expect(empty).toMatch(/<ViewTemplatePicker/);
   });
 });

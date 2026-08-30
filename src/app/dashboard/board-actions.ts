@@ -15,7 +15,7 @@ import { adoptDefaultView } from "@/lib/board/store";
 import { compact, GRID_COLS } from "@/lib/board/grid";
 import { BLOCK_IDS, CHART_IDS, asChartId, blockKindOf, defaultSize, minSize } from "@/lib/board/charts";
 import { parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
-import type { BoardTileRow } from "@/lib/board/types";
+import { asViewKind, type BoardTileRow } from "@/lib/board/types";
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
 import type { BoardGroup } from "@/lib/board/types";
 
@@ -39,6 +39,35 @@ import type { BoardGroup } from "@/lib/board/types";
  */
 
 const RANK_BLOCKS = "Your role doesn't allow changing the dashboard layout.";
+
+/**
+ * A NEW VIEW ROW, AS THE OPENING CTE OF A LARGER STATEMENT.
+ *
+ * WHY ANY OF THIS IS RAW SQL. Three writers here have to create a view AND the
+ * rows that only make sense alongside it — a calendar's metric, a duplicate's
+ * groups and placements. The obvious tool is `db.transaction()`, and it is not
+ * available: the deployed driver is `neon-http` (DB_DRIVER defaults to "http" in
+ * db/client.ts), which is stateless and answers `transaction()` with
+ * `throw new Error("No transactions support in neon-http driver")`. It throws
+ * rather than silently degrading, so `duplicateViewAction` has simply never
+ * worked in production while passing every test in `board-duplicate.test.ts` —
+ * PGlite is a real embedded Postgres WITH sessions, so the suite is GREENER THAN
+ * PRODUCTION by construction. `adoptDefaultView` shipped the same bug and
+ * `board-default-view.test.ts` now guards it on the SOURCE, which is the only
+ * place the two environments differ.
+ *
+ * A data-modifying CTE is one statement and therefore atomic on every driver.
+ * Not exported, because Next.js requires every export of a "use server" module
+ * to be an async function.
+ */
+function newViewCte(id: string, orgId: string, name: string, pos: string, kind: string) {
+  return sql`
+    with v as (
+      insert into ${dashboardViews} (id, org_id, name, pos, kind)
+      values (${id}, ${orgId}, ${name}, ${pos}, ${kind})
+      returning id
+    )`;
+}
 
 /**
  * The gate: arranging the shared dashboard is editing the workspace's furniture,
@@ -442,36 +471,131 @@ export async function addViewAction(fd: FormData): Promise<void> {
   /**
    * WHICH KIND OF BOARD, chosen at creation and never changed afterwards.
    *
-   * The two kinds store their arrangements in different tables — columns of
+   * The three kinds store their arrangements in different places — columns of
    * whole metrics in `dashboard_tile_placements`, charts on a grid in
-   * `dashboard_tiles` — so switching an existing view would mean either
-   * discarding one arrangement or inventing the other, and neither is a thing
-   * a customer asked for. Making it a creation-time choice keeps that honest.
+   * `dashboard_tiles`, and a calendar's single metric back in placements again
+   * — so switching an existing view would mean either discarding one
+   * arrangement or inventing the other, and neither is a thing a customer asked
+   * for. Making it a creation-time choice keeps that honest.
    *
    * Anything unrecognised reads as `groups`, the board every workspace already
    * had, so a hand-edited form post cannot mint a view nothing can render.
+   * `asViewKind` is that rule, and it is the ONLY place the vocabulary lives —
+   * the column itself is plain text with no CHECK constraint, so this function
+   * is the whole of the validation.
    */
-  const kind = String(fd.get("kind") ?? "") === "custom" ? "custom" : "groups";
+  const kind = asViewKind(fd.get("kind"));
 
-  await db.insert(dashboardViews).values({
-    id,
-    orgId: ctx.orgId,
-    /**
-     * PLAIN ARITHMETIC NOW, because there is no unrowed board to count around.
-     *
-     * This was `existing.length + (adopted ? 1 : 2)`: the `+2` existed because a
-     * workspace's default board was View 1 WITHOUT having a row, so the first
-     * real view was the second tab. The synthesised tab is gone (see
-     * `viewStrip`), so every view is a row and the count is the count — the
-     * first one a workspace makes is View 1.
-     */
-    name: `View ${existing.length + 1}`,
-    pos: keyBetween(last, null),
-    kind,
-  });
+  /**
+   * A CALENDAR IS A VIEW OF ONE METRIC, and it is chosen in the same modal that
+   * chose the kind — so the tile key arrives on this very post.
+   *
+   * Validated against the KEY FORMAT rather than against the metric list. A
+   * post naming a metric that does not exist is not an error worth a round trip
+   * to detect: a placement is explicitly allowed to outlive its tile (that is
+   * how republishing a flow restores a board), so "points at nothing" is a
+   * state the calendar already renders honestly. What must not get through is a
+   * malformed key, which would sit in the table forever matching nothing.
+   */
+  const rawKey = String(fd.get("tileKey") ?? "");
+  const tileKey = kind === "calendar" && /^flow:[\w-]+:[\w-]+$/.test(rawKey) ? rawKey : null;
+  if (kind === "calendar" && !tileKey) redirect(back("error=no_metric"));
+
+  /**
+   * THE NAME. A calendar view is named after its metric, so the tab says which
+   * calendar it is rather than `View 3` — three calendars called View 3, View 4
+   * and View 5 is a tab strip that has to be clicked through to be read.
+   *
+   * Falls back to the counted name when the label is missing or unusable, which
+   * keeps a hand-rolled post from minting a view with an empty tab.
+   */
+  const label = String(fd.get("label") ?? "").trim().slice(0, 60);
+  const name = kind === "calendar" && label ? label : `View ${existing.length + 1}`;
+
+  /**
+   * ONE STATEMENT, NOT A TRANSACTION — see `newViewCte` for the whole argument.
+   * The view and the metric it is a calendar OF cannot half-exist.
+   *
+   * Non-calendar kinds take the plain insert: there is no second row to keep in
+   * step with the first.
+   */
+  if (tileKey) {
+    await db.execute(sql`
+      ${newViewCte(id, ctx.orgId, name, keyBetween(last, null), kind)}
+      insert into ${dashboardTilePlacements} (org_id, tile_key, group_id, view_id, pos)
+      select ${ctx.orgId}, ${tileKey}, null, v.id, ${keyBetween(null, null)} from v
+    `);
+  } else {
+    await db.insert(dashboardViews).values({
+      id,
+      orgId: ctx.orgId,
+      /**
+       * PLAIN ARITHMETIC NOW, because there is no unrowed board to count around.
+       *
+       * This was `existing.length + (adopted ? 1 : 2)`: the `+2` existed because a
+       * workspace's default board was View 1 WITHOUT having a row, so the first
+       * real view was the second tab. The synthesised tab is gone (see
+       * `viewStrip`), so every view is a row and the count is the count — the
+       * first one a workspace makes is View 1.
+       */
+      name,
+      pos: keyBetween(last, null),
+      kind,
+    });
+  }
   // Straight onto it: a tab that appears somewhere else and waits to be found
   // is a worse answer than the one you just asked for.
   redirect(back(`view=${id}`));
+}
+
+/**
+ * WHICH METRIC THIS CALENDAR IS FOR — the one thing a calendar view stores.
+ *
+ * Bound to its view on the SERVER and handed to `CalendarBoard` as a server
+ * action, which is why the form carries only the metric: a server action
+ * reference crosses the RSC boundary, an ordinary closure does not.
+ *
+ * REPLACE, NEVER APPEND. A calendar view holds exactly one placement, and that
+ * arity is the writer's job — `dashboard_placements_key_uq` stops the SAME key
+ * being stored twice but has nothing to say about two different ones. Both
+ * statements run as one, for the reason `addViewAction` gives at length.
+ */
+export async function setCalendarMetricAction(viewId: string, fd: FormData): Promise<Result> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  if (!idSchema.safeParse(viewId).success) return fail("Unknown view.");
+  const tileKey = String(fd.get("tileKey") ?? "");
+  if (!/^flow:[\w-]+:[\w-]+$/.test(tileKey)) return fail("That isn't a metric we know.");
+
+  try {
+    await getDb().execute(sql`
+      with cleared as (
+        delete from ${dashboardTilePlacements}
+         where org_id = ${ctx.orgId} and view_id = ${viewId}
+      )
+      insert into ${dashboardTilePlacements} (org_id, tile_key, group_id, view_id, pos)
+      select ${ctx.orgId}, ${tileKey}, null, ${viewId}, ${keyBetween(null, null)}
+       where exists (
+         select 1 from ${dashboardViews}
+          where id = ${viewId} and org_id = ${ctx.orgId} and kind = 'calendar'
+       )
+    `);
+    /**
+     * NO `revalidatePath` — the rule this whole module follows, and it holds
+     * here for the same reason. `CalendarBoard` seeds its selection once and
+     * ignores the prop afterwards, precisely so `FreshnessPoller`'s twelve-second
+     * `router.refresh()` cannot yank a metric out from under somebody mid-read.
+     * A revalidation would therefore re-render the entire dashboard — the tile
+     * read included — into a prop the client is deliberately ignoring.
+     *
+     * Nothing goes stale by skipping it: the page is `force-dynamic` and Next's
+     * client router cache does not reuse dynamic segments, so the next
+     * navigation reads the row back from the database.
+     */
+    return { ok: true };
+  } catch (e) {
+    return oops(e);
+  }
 }
 
 /**
@@ -600,31 +724,30 @@ export async function duplicateViewAction(id: string): Promise<Result<{ viewId: 
         return fail(`This view has more than the limit of ${tileCap} charts, so it can't be copied.`);
       }
 
-      await db.transaction(async (tx) => {
-        await tx.insert(dashboardViews).values({
-          id: newViewId,
-          orgId: ctx.orgId,
-          name,
-          pos: keyBetween(last, null),
-          kind: "custom",
-        });
-        if (tiles.length > 0) {
-          await tx.insert(dashboardTiles).values(
-            tiles.map((t) => ({
-              id: crypto.randomUUID(),
-              orgId: ctx.orgId,
-              viewId: newViewId,
-              tileKey: t.tileKey,
-              chart: t.chart,
-              config: t.config,
-              x: t.x,
-              y: t.y,
-              w: t.w,
-              h: t.h,
-            })),
-          );
-        }
-      });
+      /**
+       * ONE STATEMENT — see `copyStatement` below for why this cannot be
+       * `db.transaction()`.
+       */
+      if (tiles.length === 0) {
+        await db
+          .insert(dashboardViews)
+          .values({ id: newViewId, orgId: ctx.orgId, name, pos: keyBetween(last, null), kind: "custom" });
+      } else {
+        await db.execute(sql`
+          ${newViewCte(newViewId, ctx.orgId, name, keyBetween(last, null), "custom")}
+          insert into ${dashboardTiles} (id, org_id, view_id, tile_key, chart, config, x, y, w, h)
+          select t.id, ${ctx.orgId}, v.id, t.tile_key, t.chart, t.config, t.x, t.y, t.w, t.h
+            from v cross join (values ${sql.join(
+              tiles.map(
+                (t) =>
+                  sql`(${crypto.randomUUID()}::text, ${t.tileKey}::text, ${t.chart}::text, ${JSON.stringify(
+                    t.config ?? {},
+                  )}::jsonb, ${t.x}::int, ${t.y}::int, ${t.w}::int, ${t.h}::int)`,
+              ),
+              sql`, `,
+            )}) as t(id, tile_key, chart, config, x, y, w, h)
+        `);
+      }
       return { ok: true, viewId: newViewId };
     }
 
@@ -649,43 +772,50 @@ export async function duplicateViewAction(id: string): Promise<Result<{ viewId: 
     /** old group id → new group id. Built BEFORE the write, used inside it. */
     const remap = new Map(groups.map((g) => [g.id, crypto.randomUUID()]));
 
-    await db.transaction(async (tx) => {
-      await tx.insert(dashboardViews).values({
-        id: newViewId,
-        orgId: ctx.orgId,
-        name,
-        pos: keyBetween(last, null),
-        kind: "groups",
-      });
-      if (groups.length > 0) {
-        await tx.insert(dashboardGroups).values(
-          groups.map((g) => ({
-            id: remap.get(g.id)!,
-            orgId: ctx.orgId,
-            viewId: newViewId,
-            name: g.name,
-            color: g.color,
-            pos: g.pos,
-            sortKey: g.sortKey,
-          })),
-        );
-      }
-      if (placements.length > 0) {
-        await tx.insert(dashboardTilePlacements).values(
-          placements.map((p) => ({
-            orgId: ctx.orgId,
-            viewId: newViewId,
-            tileKey: p.tileKey,
-            // THE REMAP. `?? null` rather than `?? p.groupId`: an ungrouped
-            // placement has a null group and stays ungrouped, and a placement
-            // whose group somehow is not in this view must NOT keep pointing at
-            // it — that is the cross-link this whole branch exists to avoid.
-            groupId: p.groupId ? (remap.get(p.groupId) ?? null) : null,
-            pos: p.pos,
-          })),
-        );
-      }
-    });
+    const view = newViewCte(newViewId, ctx.orgId, name, keyBetween(last, null), "groups");
+    const groupsInsert = sql`
+      insert into ${dashboardGroups} (id, org_id, view_id, name, color, pos, sort_key)
+      select g.id, ${ctx.orgId}, v.id, g.name, g.color, g.pos, g.sort_key
+        from v cross join (values ${sql.join(
+          groups.map(
+            (g) =>
+              sql`(${remap.get(g.id)!}::text, ${g.name}::text, ${g.color}::text, ${g.pos}::text, ${g.sortKey}::text)`,
+          ),
+          sql`, `,
+        )}) as g(id, name, color, pos, sort_key)`;
+    const placementsInsert = sql`
+      insert into ${dashboardTilePlacements} (org_id, tile_key, group_id, view_id, pos)
+      select ${ctx.orgId}, p.tile_key, p.group_id, v.id, p.pos
+        from v cross join (values ${sql.join(
+          placements.map(
+            (p) =>
+              // THE REMAP. `?? null` rather than `?? p.groupId`: an ungrouped
+              // placement has a null group and stays ungrouped, and a placement
+              // whose group somehow is not in this view must NOT keep pointing
+              // at it — that is the cross-link this branch exists to avoid.
+              sql`(${p.tileKey}::text, ${p.groupId ? (remap.get(p.groupId) ?? null) : null}::text, ${p.pos}::text)`,
+          ),
+          sql`, `,
+        )}) as p(tile_key, group_id, pos)`;
+
+    /**
+     * THE FOUR SHAPES A COPY CAN TAKE, and each is ONE statement.
+     *
+     * A data-modifying CTE runs exactly once whether or not the primary query
+     * reads it (Postgres docs), which is what lets the groups insert ride as a
+     * CTE with the placements insert as the statement proper.
+     */
+    if (groups.length === 0 && placements.length === 0) {
+      await db
+        .insert(dashboardViews)
+        .values({ id: newViewId, orgId: ctx.orgId, name, pos: keyBetween(last, null), kind: "groups" });
+    } else if (placements.length === 0) {
+      await db.execute(sql`${view} ${groupsInsert}`);
+    } else if (groups.length === 0) {
+      await db.execute(sql`${view} ${placementsInsert}`);
+    } else {
+      await db.execute(sql`${view}, g as (${groupsInsert} returning 1) ${placementsInsert}`);
+    }
     return { ok: true, viewId: newViewId };
   } catch (e) {
     return oops(e);
@@ -960,17 +1090,42 @@ export async function duplicateCustomTileAction(id: string): Promise<Result<{ ti
      */
     const packed = compact([...siblings.map(({ id: i, x, y, w, h }) => ({ id: i, x, y, w, h })), { ...copy }], GRID_COLS);
 
-    await db.transaction(async (tx) => {
-      await tx.insert(dashboardTiles).values({ ...copy, orgId: ctx.orgId, viewId: source.viewId });
-      for (const box of packed) {
-        await tx
-          .update(dashboardTiles)
-          .set({ x: box.x, y: box.y, w: box.w, h: box.h, updatedAt: new Date() })
-          .where(and(eq(dashboardTiles.id, box.id), eq(dashboardTiles.orgId, ctx.orgId)));
-      }
-    });
-
+    /**
+     * ONE STATEMENT — the same argument `newViewCte` makes, and this one was
+     * broken in production for the same reason: `db.transaction()` THROWS on
+     * `neon-http`, so duplicating a chart has never worked, while PGlite (a real
+     * embedded Postgres with sessions) ran the tests green.
+     *
+     * THE COPY IS INSERTED AT ITS FINAL POSITION rather than inserted and then
+     * moved, and that ordering is forced by Postgres rather than chosen: a
+     * data-modifying CTE's rows are NOT visible to the rest of the statement —
+     * everything reads one snapshot — so an UPDATE here could never see the row
+     * the CTE just inserted. `compact` already computed where the copy lands, so
+     * the insert simply uses it and the UPDATE touches only the siblings that
+     * actually moved.
+     */
     const placed = packed.find((b) => b.id === copy.id) ?? copy;
+    const moved = packed.filter((b) => b.id !== copy.id);
+    const insertCopy = sql`
+      insert into ${dashboardTiles} (id, org_id, view_id, tile_key, chart, config, x, y, w, h)
+      values (${copy.id}, ${ctx.orgId}, ${source.viewId}, ${copy.tileKey}, ${copy.chart},
+              ${JSON.stringify(copy.config)}::jsonb, ${placed.x}, ${placed.y}, ${placed.w}, ${placed.h})`;
+
+    if (moved.length === 0) {
+      await db.execute(insertCopy);
+    } else {
+      await db.execute(sql`
+        with ins as (${insertCopy})
+        update ${dashboardTiles} as t
+           set x = p.x, y = p.y, w = p.w, h = p.h, updated_at = now()
+          from (values ${sql.join(
+            moved.map((b) => sql`(${b.id}::text, ${b.x}::int, ${b.y}::int, ${b.w}::int, ${b.h}::int)`),
+            sql`, `,
+          )}) as p(id, x, y, w, h)
+         where t.id = p.id and t.org_id = ${ctx.orgId}
+      `);
+    }
+
     return { ok: true, tile: { ...copy, x: placed.x, y: placed.y, w: placed.w, h: placed.h } };
   } catch (e) {
     return oops(e);

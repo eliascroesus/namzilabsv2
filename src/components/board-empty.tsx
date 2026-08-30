@@ -4,7 +4,7 @@ import { useState } from "react";
 import { LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GetStartedCard } from "@/components/get-started-card";
-import { ViewTemplatePicker } from "@/app/dashboard/view-template-picker";
+import { ViewTemplatePicker, type CalendarOption } from "@/app/dashboard/view-template-picker";
 
 /**
  * A DASHBOARD WITH NOTHING ON IT — one card, one act, and no furniture.
@@ -51,9 +51,17 @@ export function EmptyBoard({
   rangeKey,
   source,
   canCreate,
+  calendarOptions,
 }: {
   rangeKey: string;
   source: string | null;
+  /**
+   * Handed to the picker's Calendar step. Usually EMPTY here and that is
+   * correct: a workspace with no views normally has nothing published either,
+   * and step two says so rather than offering a metric that is not there. A
+   * workspace that deleted every view but kept its metrics gets the real list.
+   */
+  calendarOptions?: CalendarOption[];
   /**
    * WHETHER THIS VIEWER MAY MAKE ONE — the same permission the `+` is gated on.
    *
@@ -102,7 +110,14 @@ export function EmptyBoard({
           </p>
         )}
       </GetStartedCard>
-      {canCreate && open && <ViewTemplatePicker onClose={() => setOpen(false)} rangeKey={rangeKey} source={source} />}
+      {canCreate && open && (
+        <ViewTemplatePicker
+          onClose={() => setOpen(false)}
+          rangeKey={rangeKey}
+          source={source}
+          calendarOptions={calendarOptions}
+        />
+      )}
     </div>
   );
 }

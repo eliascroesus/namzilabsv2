@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { Select } from "@/components/flow/controls";
@@ -89,27 +89,109 @@ const HEAT_STOPS = [0.05, 0.3, 0.55, 0.8, 1] as const;
  * WHERE THE COLOUR GOES, now that there is some. The sheet's ratio is black for
  * the work, violet for selection and identity, yellow once. Here that reads:
  * the ramp and today's date chip are violet, the month's best day carries the
- * single yellow mark, and the accent set appears exactly once more — orange,
- * on the chip that matches this page's row in the rail. Everything else is
- * still furniture.
+ * single yellow mark, and the accent set appears exactly once more — orange, on
+ * the chip beside the picker.
+ *
+ * THAT ORANGE USED TO BE AN ECHO OF THE RAIL, back when the calendar was its own
+ * destination and the rail filled its row orange when you were on it. There is
+ * no such row any more — the calendar is a VIEW now — so the chip keeps the
+ * colour for a different and better reason: orange is this view KIND's identity
+ * tint, the same one the template picker's Calendar card wears. A reader who
+ * chose the orange card lands on a board with the orange chip.
  */
 export function CalendarBoard({
   metrics,
   months,
   todayKey,
+  selectedId,
+  onPick,
 }: {
   metrics: CalendarMetric[];
   /** Oldest first; the last is the current month. */
   months: MonthKey[];
   /** "2026-05-24" — the server's UTC today. */
   todayKey: string;
+  /**
+   * WHICH METRIC THIS VIEW IS FOR, as stored — `${flowId}:${outputNodeId}`.
+   *
+   * A calendar VIEW remembers its metric; the standalone page did not have one
+   * to remember, so it opened on whichever metric sorted first. Undefined keeps
+   * exactly that old behaviour, which is what `/design` renders.
+   *
+   * A stored id that is not in `metrics` is NOT an error to swallow: the metric
+   * was deleted, unpublished, or is hidden from this viewer by rank. See the
+   * `missing` branch below — it says so and offers the picker rather than
+   * silently sliding to a different metric's numbers under the view's name.
+   */
+  selectedId?: string | null;
+  /**
+   * PERSIST THE CHOICE — a SERVER ACTION, not a callback.
+   *
+   * A server action reference survives the RSC boundary; an ordinary function
+   * does not, and passing one from a server component fails the build. That is
+   * the whole reason this is shaped as `(fd: FormData) => Promise<void>` rather
+   * than `(id: string) => void`, and it is what lets `/design` render this
+   * component directly by simply omitting the prop — the trap `EmptyCanvas` fell
+   * into, which needed a whole `-preview` wrapper because it takes an `onStart`.
+   *
+   * Already bound to the view id on the server, so the form carries only the
+   * metric.
+   *
+   * IT RETURNS ITS RESULT AND THIS COMPONENT READS IT. A fire-and-forget write
+   * would make a refusal — a rank block, a lost connection — look exactly like
+   * success: the dropdown moves, the sheet redraws from data already in the
+   * payload, and the old metric comes back on the next load with nothing having
+   * said so. That is the worst failure available here, because it only surfaces
+   * later and on a different screen.
+   */
+  onPick?: (fd: FormData) => Promise<{ ok: boolean; error?: string }>;
 }) {
-  const [metricId, setMetricId] = useState(metrics[0]?.id ?? "");
+  /**
+   * The stored choice SEEDS the picker; it does not own it. The switch has to
+   * feel instant — the day map for every metric is already in this payload, so
+   * there is genuinely nothing to wait for — while the write goes out behind it.
+   * Seeded once on purpose: re-syncing from the prop would make the poller's
+   * refresh yank a metric out from under somebody mid-read.
+   */
+  const [metricId, setMetricId] = useState(selectedId ?? metrics[0]?.id ?? "");
   const [monthIdx, setMonthIdx] = useState(months.length - 1);
+  const [, startTransition] = useTransition();
 
-  const metric = metrics.find((m) => m.id === metricId) ?? metrics[0];
+  /**
+   * A VIEW POINTING AT A METRIC THAT IS NOT HERE — the case a placement is
+   * explicitly allowed to reach. `store.ts` keeps placements when a tile goes
+   * away, because that is what makes republishing a flow restore its board.
+   * So "the id is set but nothing matches" is an ordinary state, and the honest
+   * answer is to name it rather than fall through to `metrics[0]`.
+   */
+  const missing = metricId !== "" && !metrics.some((m) => m.id === metricId);
+  const metric = metrics.find((m) => m.id === metricId);
   const month = months[monthIdx] ?? months[months.length - 1];
   const weeks = useMemo(() => monthGrid(month), [month]);
+
+  /**
+   * Instant locally, durable behind it — and NOISY IF THE DURABLE PART FAILS.
+   * See `onPick`: a switch that only looks like it worked is worse than one
+   * that refuses out loud.
+   */
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const pick = (id: string) => {
+    setMetricId(id);
+    if (!onPick) return;
+    setSaveError(null);
+    const fd = new FormData();
+    fd.set("tileKey", `flow:${id}`);
+    startTransition(async () => {
+      try {
+        const r = await onPick(fd);
+        if (!r.ok) setSaveError(r.error ?? "That didn't save.");
+      } catch {
+        // A dropped connection is the common case and reads the same to the
+        // reader: what they picked is not what will be here next time.
+        setSaveError("That didn't save — check your connection and try again.");
+      }
+    });
+  };
 
   /**
    * The month's own numbers, derived from the squares on screen — never from
@@ -175,6 +257,29 @@ export function CalendarBoard({
   }
 
   const hasDays = metric != null && Object.keys(metric.days).length > 0;
+  /** The six presentation keys, or none — so a day reads like its tile either way. */
+  const fmt = metric?.format ?? {};
+
+  /**
+   * THE METRIC THIS VIEW NAMES IS NOT HERE — deleted, unpublished, or hidden
+   * from this viewer by rank. The bar still renders below, so the picker is
+   * right there to choose another; what must NOT happen is quietly drawing a
+   * different metric's days under this view's name, which is the version of
+   * this bug that ships numbers to the wrong label.
+   *
+   * Rank is deliberately not distinguished from deletion in the wording. A
+   * member who cannot see a metric must not learn from an error message that it
+   * exists — the same reason the board drops hidden tiles at the source rather
+   * than rendering a placeholder where one used to be.
+   */
+  const gone = missing ? (
+    <EmptyState
+      className="mt-6"
+      icon={<CalendarDays />}
+      title="This metric is no longer available"
+      description="It may have been deleted, unpublished, or it is not shared with you. Pick another metric above and this view will remember it."
+    />
+  ) : null;
 
   return (
     <>
@@ -185,14 +290,12 @@ export function CalendarBoard({
           exists to stop — and the character is inside it. */}
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-card p-2 shadow-card">
         <div className="flex min-w-0 items-center gap-2">
-          {/* THE PAGE, WEARING ITS OWN ROW FROM THE RAIL. The rail draws every
-              destination as an icon in a coloured chip and fills the Calendar's
-              in orange when you are here — so the bar at the top of the page
-              you are on carries the same chip at the same strength. It is the
-              cheapest possible statement that this page belongs to that row,
-              and it is the reason the left end of the bar is no longer a
-              dropdown floating on white. Decorative: the Select beside it is
-              what actually says what you are looking at. */}
+          {/* THE VIEW KIND'S CHIP. It began as an echo of the rail — that row
+              filled orange when you were on the Calendar page — and the page is
+              gone. The chip stays because the colour now carries the kind:
+              orange is what the template picker's Calendar card wears, so the
+              board you land on is the card you pressed. Decorative; the Select
+              beside it is what actually says what you are looking at. */}
           <span
             aria-hidden
             className="flex size-9 shrink-0 items-center justify-center rounded-control bg-accent-orange text-white"
@@ -203,12 +306,18 @@ export function CalendarBoard({
               act as picking a field inside a step, and it searches once a
               workspace has twenty metrics. */}
           <Select
-            value={metric?.id ?? ""}
+            /* `metricId`, NOT `metric?.id` — they differ in exactly the case
+               that matters. When the stored metric is gone `metric` is
+               undefined, and reading the id off it would blank the control, so
+               the bar would say nothing is selected while the sheet below says
+               something is missing. The raw id keeps the two telling the same
+               story. */
+            value={missing ? "" : metricId}
             width={320}
             searchable={metrics.length > 8}
             placeholder="Choose a metric…"
             options={metrics.map((m) => ({ value: m.id, label: m.name, hint: m.flowName }))}
-            onChange={setMetricId}
+            onChange={pick}
           />
           {metric?.status === "error" && <StatusPill tone="danger">Error</StatusPill>}
           {metric?.status === "stale" && <StatusPill tone="warn">Refreshing soon</StatusPill>}
@@ -293,17 +402,20 @@ export function CalendarBoard({
         {stats ? (
           <>
             <StatChip label="Best day">
-              <span className="tnum font-semibold text-foreground">{formatMetricValue(stats.best.value, metric.format)}</span>
+              <span className="tnum font-semibold text-foreground">{formatMetricValue(stats.best.value, fmt)}</span>
               <span className="text-muted-foreground"> on {monthDayLabel(stats.best.key)}</span>
             </StatChip>
             <StatChip label="Average day">
-              <span className="tnum font-semibold text-foreground">{formatMetricValue(stats.average, metric.format)}</span>
+              <span className="tnum font-semibold text-foreground">{formatMetricValue(stats.average, fmt)}</span>
             </StatChip>
             <StatChip label="Days with data">
               <span className="tnum font-semibold text-foreground">{stats.days}</span>
             </StatChip>
           </>
-        ) : (
+        ) : missing ? null : (
+          // Not said when the metric itself is gone: "no days carry a value for
+          // this metric" describes a metric that exists and is quiet, which is a
+          // different fact from the one the banner below is reporting.
           <span className="text-xs text-muted-foreground">No days in {monthLabel(month)} carry a value for this metric.</span>
         )}
         {metric?.computedAt && (
@@ -344,11 +456,27 @@ export function CalendarBoard({
         </div>
       )}
 
+      {/* THE CHOICE DID NOT STICK. Local state has already moved, so without
+          this the reader has no way of knowing the view will open on the old
+          metric next time. */}
+      {saveError && (
+        <p className="mt-3 rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-md text-danger-ink">
+          {saveError}
+        </p>
+      )}
+
+      {/* THE VIEW'S METRIC IS GONE — said instead of the sheet, never under it.
+          Thirty empty squares with a working month stepper above them is a
+          calendar claiming this metric had a quiet month; the truth is that
+          there is no metric to have had one. */}
+      {gone}
+
       {/* THE GRID SCROLLS RATHER THAN CRUSHING ITS SQUARES. Seven columns of a
           readable width need ~640px; below that the sheet scrolls sideways
           inside its own card instead of squeezing a number into 40px. Above it
           the sheet simply stops growing with the page's own cap, so a month
           looks the same on every screen. */}
+      {!missing && (
       <Card variant="surface" padding="none" className="mt-4 overflow-hidden">
         <div className="overflow-x-auto p-3 sm:p-4">
           <div className="min-w-[640px]">
@@ -417,6 +545,7 @@ export function CalendarBoard({
           </div>
         )}
       </Card>
+      )}
     </>
   );
 }
