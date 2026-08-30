@@ -16,6 +16,7 @@ import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/tab
 import { formatDate } from "@/lib/format";
 import { CanvasPreview, FlowNodeCard } from "@/components/flow/flow-canvas-preview";
 import { EmptyCanvasPreview } from "@/components/flow/empty-canvas-preview";
+import { EmptyBoard } from "@/components/board-empty";
 import { NodeIcon } from "@/components/flow/icons";
 import { PanelTabsPreview } from "@/components/flow/panel-preview";
 import { PANEL_SHELL } from "@/components/flow/panel-chrome";
@@ -779,6 +780,23 @@ export default function DesignPage() {
             check:orphans (it is not an exported function), not the type
             checker (it was not asked). All three gaps are closed now; this is
             the third. */}
+        <Section
+          title="Empty dashboard"
+          note="What a workspace with no views and nothing on them sees: one card, one act, and none of the board's chrome — no title, no period track, no tab strip, no action row. Deliberately the same shell as the empty flow below it, because they are the same moment in two places. The button opens the layout picker."
+        >
+          {/* BOTH STATES, the way the empty flow below shows both of its own.
+              The second one is the whole reason the gate exists and would
+              otherwise have no coverage at all. */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-card bg-ground p-4">
+              <EmptyBoard rangeKey="7d" source={null} canCreate />
+            </div>
+            <div className="rounded-card bg-ground p-4">
+              <EmptyBoard rangeKey="7d" source={null} canCreate={false} />
+            </div>
+          </div>
+        </Section>
+
         <Section title="Empty flow" note="Both states of the first screen. With an account connected the button MAKES a Get data step and opens its panel — the old version opened the full picker, from which a first-timer could choose a step that needs an input there is no way to give it.">
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="relative h-[420px] overflow-hidden rounded-card bg-canvas-bg">
@@ -935,6 +953,7 @@ const SECTIONS = [
   "Step icons",
   "Flow list",
   "Calendar",
+  "Empty dashboard",
   "Empty flow",
   "The canvas",
   "Step cards",

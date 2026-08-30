@@ -123,11 +123,13 @@ describe("what the board costs on every freshness poll", () => {
      * existing `Promise.all`; the other two are sequential because which groups
      * to fetch depends on which view is active.
      *
-     * The fourth is inside `adoptDefaultView`'s transaction, which runs when
-     * somebody RENAMES the default board — once per workspace, ever — and never
-     * on a render. It is not on the twelve-second budget this file protects.
+     * The fourth and fifth are on WRITE paths and never on a render:
+     * `adoptDefaultView` reads when somebody renames the default board — once
+     * per workspace, ever — and `hasLegacyBoard` reads when a view is created,
+     * to tell a genuinely new workspace from one whose board predates views.
+     * Neither is on the twelve-second budget this file protects.
      */
-    expect(store.match(/\.select\(\{/g) ?? []).toHaveLength(4);
+    expect(store.match(/\.select\(\{/g) ?? []).toHaveLength(5);
     const pollReads = store.slice(0, store.indexOf("export async function adoptDefaultView"));
     expect(pollReads.match(/\.select\(\{/g) ?? []).toHaveLength(3);
   });

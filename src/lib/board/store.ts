@@ -240,3 +240,40 @@ export async function adoptDefaultView(db: DB, orgId: string, name: string): Pro
   `);
   return id;
 }
+
+/**
+ * IS THERE A BOARD HERE THAT PREDATES VIEWS? — one round trip, on a write path.
+ *
+ * `addViewAction` needs this to answer two questions about the FIRST view a
+ * workspace creates: what to call it, and whether it is that workspace's default
+ * board.
+ *
+ * The distinction it draws cannot be skipped. Two workspaces both have zero
+ * rows in `dashboard_views`:
+ *
+ *   · one is genuinely new — nothing at `view_id IS NULL`, so the view being
+ *     created is the first board it has ever had. It is View 1, and it IS the
+ *     default: flagged, so `viewStrip` stops synthesising a "Dashboard" tab that
+ *     would sit beside it pointing at nothing.
+ *   · the other has a board from before views existed, reachable only through
+ *     that synthesised tab. THAT board is View 1, the new one is View 2, and
+ *     flagging the new one default would stop the tab being synthesised and
+ *     leave the old board reachable from nowhere.
+ *
+ * Which is why this is a server read and not a hint from the client. A forged
+ * "I was on the empty screen" field would take the second workspace's board off
+ * the screen entirely — a visibility bug from a checkbox.
+ *
+ * TWO EXISTS IN ONE STATEMENT. Placements are checked as well as groups because
+ * a board can hold tiles in the ungrouped row above the columns without ever
+ * having had a column, and that is still a board somebody arranged.
+ */
+export async function hasLegacyBoard(db: DB, orgId: string): Promise<boolean> {
+  const [row] = await db
+    .select({
+      groups: sql<boolean>`exists (select 1 from ${dashboardGroups} where ${dashboardGroups.orgId} = ${orgId} and ${dashboardGroups.viewId} is null)`,
+      placements: sql<boolean>`exists (select 1 from ${dashboardTilePlacements} where ${dashboardTilePlacements.orgId} = ${orgId} and ${dashboardTilePlacements.viewId} is null)`,
+    })
+    .from(sql`(select 1) as one`);
+  return Boolean(row?.groups) || Boolean(row?.placements);
+}

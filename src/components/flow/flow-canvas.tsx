@@ -2,6 +2,7 @@
 
 import { Database, Plug, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { GetStartedCard } from "@/components/get-started-card";
 import { Modal, ModalTitle } from "@/components/ui/modal";
 import { Toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -2282,48 +2283,37 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
         the list rather than a stripe someone liked, and the two cannot drift.
         The shell clips it, so it takes the card's own top corners.
       */}
-      <div className="pointer-events-auto w-full max-w-md overflow-hidden rounded-surface border border-border bg-card shadow-surface">
-        <div aria-hidden className="h-1.5 bg-primary" />
-        <div className="p-8">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">New flow</p>
-          {/* 24px, up from 18. It is the only heading on the screen and it was
-              set at the size a field label uses two panels away. */}
-          <h2 className="mt-1 text-display-xs font-semibold tracking-tight text-foreground">Build a metric in three moves</h2>
-          <ol className="mt-6 space-y-4">
-            {steps.map((s) => (
-              <li key={s.n} className="flex items-start gap-3">
-                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold tabular-nums text-primary-foreground">
-                  {s.n}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-md font-semibold text-foreground">{s.title}</span>
-                  <span className="block text-sm leading-snug text-muted-foreground">{s.detail}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
-          {hasConnections ? (
-            /* THE HERO ACT. This screen exists to get one step onto the canvas;
-               there is no second thing to do on it, which is the precise
-               condition the sheet reserves the neon yellow for. */
-            <Button onClick={onStart} variant="yellow" size="lg" className="mt-8 w-full">
-              <Database />
-              Start with Get data
-            </Button>
-          ) : (
-            <>
-              {/* With no account connected, THIS is the one act the screen
-                  exists for instead — so the yellow moves with it rather than
-                  appearing twice or not at all. */}
-              <Link href="/integrations" className={cn(buttonVariants({ variant: "yellow", size: "lg" }), "mt-8 w-full")}>
-                <Plug size={16} />
-                Connect an app first
-              </Link>
-              <p className="mt-3 text-center text-xs text-muted-foreground">A flow reads records from a connected account — there aren&rsquo;t any yet.</p>
-            </>
-          )}
-        </div>
-      </div>
+      {/* The shell is shared with the dashboard's empty board — see
+          `GetStartedCard`. `pointer-events-auto` is this caller's alone: the
+          positioner above is `pointer-events-none` so the canvas underneath
+          stays pannable, and the card has to take its own presses back. */}
+      <GetStartedCard
+        eyebrow="New flow"
+        title="Build a metric in three moves"
+        steps={steps}
+        className="pointer-events-auto w-full max-w-md"
+      >
+        {hasConnections ? (
+          /* THE HERO ACT. This screen exists to get one step onto the canvas;
+             there is no second thing to do on it, which is the precise
+             condition the sheet reserves the neon yellow for. */
+          <Button onClick={onStart} variant="yellow" size="lg" className="mt-8 w-full">
+            <Database />
+            Start with Get data
+          </Button>
+        ) : (
+          <>
+            {/* With no account connected, THIS is the one act the screen exists
+                for instead — so the yellow moves with it rather than appearing
+                twice or not at all. */}
+            <Link href="/integrations" className={cn(buttonVariants({ variant: "yellow", size: "lg" }), "mt-8 w-full")}>
+              <Plug size={16} />
+              Connect an app first
+            </Link>
+            <p className="mt-3 text-center text-xs text-muted-foreground">A flow reads records from a connected account — there aren&rsquo;t any yet.</p>
+          </>
+        )}
+      </GetStartedCard>
     </div>
   );
 }

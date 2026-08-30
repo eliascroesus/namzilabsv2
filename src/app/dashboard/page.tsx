@@ -1,4 +1,4 @@
-import { ChevronDown, Columns3, LayoutGrid, Plus } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
@@ -6,8 +6,9 @@ import { connections, flows } from "@/db/schema";
 import { requireOrg, requestAccess } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { MetricCard } from "@/components/metric-card";
+import { EmptyBoard } from "@/components/board-empty";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { PageContainer, PageHeader } from "@/components/ui/page";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
@@ -40,7 +41,7 @@ import {
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
 import { publishedFlowTiles, unpublishedFlowIds } from "@/lib/flow/materialize";
 import { refreshAllFlowsAction } from "@/app/dashboard/flows/actions";
-import { addViewAction } from "./board-actions";
+import { AddViewButton } from "./view-template-picker";
 import { listMetrics, type Metric } from "@/lib/metrics/store";
 import { parseDefinition } from "@/lib/metrics/types";
 import {
@@ -66,6 +67,18 @@ export const dynamic = "force-dynamic";
  * tests/timeout-budgets.test.ts.
  */
 export const maxDuration = 60;
+
+/**
+ * THE TWO WAYS CREATING A VIEW CAN BE REFUSED, and the sentences for them.
+ *
+ * Both arrive as a redirect param from `addViewAction`, which is the only voice
+ * a FormData action has. Spelled as data so the page renders them in one place
+ * rather than growing a branch per error.
+ */
+const VIEW_ERRORS = [
+  ["rank", "Your role doesn\u2019t allow adding views to this dashboard."],
+  ["view_limit", "This workspace has reached its view limit, so nothing was created. Delete one to add another."],
+] as const;
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
@@ -417,6 +430,31 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
   const hasTiles = activeKind === "custom" || tiles.length > 0 || flowTiles.length > 0;
 
+  /**
+   * NOTHING HERE AT ALL — a workspace that has never made a view and has nothing
+   * to put on one. It gets the Get-started card and none of this page's chrome.
+   *
+   * THREE FACTS, AND NO NEW QUERY. All of them are already resolved above:
+   * `views` came from `navViews`, `groups` is the active view's columns — and
+   * with no views the "active view" IS the legacy `view_id IS NULL` board, so
+   * this reads the pre-views arrangement without asking for it separately — and
+   * `hasTiles` is the metric reads. That matters: this page re-renders every
+   * twelve seconds in every open tab, and depth is what costs.
+   *
+   * PLACEMENTS ARE DELIBERATELY NOT CONSULTED. They are only read when a view
+   * has groups (see the note on that read), and a placement pointing at a tile
+   * that does not exist renders nothing. "No groups and no tiles" already means
+   * there is no board here.
+   *
+   * `activeKind` is "groups" whenever there are no views, so the `custom` clause
+   * inside `hasTiles` cannot mask an empty workspace.
+   *
+   * IT IS NOT "no view ROWS". An existing workspace's board lives at
+   * `view_id IS NULL` with no row of its own, and treating that as empty would
+   * hide a board somebody is using behind an invitation to start one.
+   */
+  const emptyWorkspace = views.length === 0 && groups.length === 0 && !hasTiles;
+
 
   const qs = (over: Record<string, string>) => {
     const p = new URLSearchParams();
@@ -489,88 +527,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     {v.name}
                   </ViewTab>
                 ))}
-                {access.can("create_flows") && (
-                  /* TWO KINDS OF VIEW, SO THE `+` HAS TO ASK.
-                     A <details> rather than a Popover for the same reason the
-                     source picker above is one: this page renders on the server
-                     and the `+` has always worked with no client JavaScript at
-                     all. Two plain form posts keep it that way. */
-                  <details className="group/add relative">
-                    <summary
-                      /* The tabs beside it hover into the violet tint; a `+`
-                         that hovered into a grey wash — one that is the page's
-                         own colour, so into nothing — would be the only control
-                         on the row answering the pointer differently. */
-                      className="inline-flex size-7 cursor-pointer list-none items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-accent hover:text-accent-foreground [&::-webkit-details-marker]:hidden"
-                      title="Add a view"
-                    >
-                      <Plus size={15} />
-                      <span className="sr-only">Add a view</span>
-                    </summary>
-                    <div className="absolute left-0 top-full z-20 mt-1.5 w-64 rounded-surface border border-border bg-card p-1.5 shadow-surface">
-                      {[
-                        {
-                          kind: "groups",
-                          label: "Columns",
-                          blurb: "Group your metrics into named, coloured columns.",
-                          Icon: Columns3,
-                          /* IDENTITY, NEVER STATE — which is the whole licence
-                             the accent four have. The two kinds of view are the
-                             one place on this screen where two things need
-                             telling apart at a glance rather than ranking, so
-                             they get a chip each out of the sheet's decorative
-                             range. success/warn/danger keep their monopoly on
-                             meaning something. */
-                          tint: "bg-accent-peri/30",
-                        },
-                        {
-                          kind: "custom",
-                          label: "Custom",
-                          blurb: "Place and size charts on a grid. One metric, several charts.",
-                          Icon: LayoutGrid,
-                          tint: "bg-accent-pink/35",
-                        },
-                      ].map((o) => (
-                        <form key={o.kind} action={addViewAction}>
-                          <input type="hidden" name="range" value={rangeKey} />
-                          <input type="hidden" name="source" value={boardSource ?? ""} />
-                          <input type="hidden" name="kind" value={o.kind} />
-                          <SubmitButton
-                            variant="ghost"
-                            size="sm"
-                            pendingLabel="Adding…"
-                            /* `whitespace-normal` because `buttonVariants`'
-                               base is `whitespace-nowrap`: the blurb refused to
-                               wrap and ran straight out of the panel. The same
-                               inherited nowrap overflowed the chart picker when
-                               it was a modal.
-                               `rounded-[var(--radius-control)]` and not
-                               `rounded-control`: a row inside a panel is a
-                               rounded rectangle, and the arbitrary spelling is
-                               the one that can take `Button`'s pill off — see
-                               MENU_SHAPE in board-tile-menu.tsx for why. It is
-                               spelled out rather than imported because that
-                               module is a client one, and a server component
-                               importing a value from a client module gets a
-                               throwing stub, not the string. */
-                            className="h-auto w-full items-start justify-start whitespace-normal rounded-[var(--radius-control)] px-2 py-2 text-left"
-                          >
-                            <span
-                              className={`flex size-7 shrink-0 items-center justify-center rounded-control text-foreground ${o.tint}`}
-                              aria-hidden
-                            >
-                              <o.Icon size={15} />
-                            </span>
-                            <span className="flex min-w-0 flex-col gap-0.5">
-                              <span className="text-sm font-semibold text-foreground">{o.label}</span>
-                              <span className="text-xs font-normal text-muted-foreground">{o.blurb}</span>
-                            </span>
-                          </SubmitButton>
-                        </form>
-                      ))}
-                    </div>
-                  </details>
-                )}
+                {access.can("create_flows") && <AddViewButton rangeKey={rangeKey} source={boardSource} />}
               </div>
   );
 
@@ -943,6 +900,27 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {/* G.4: refresh the server-rendered tiles when the org's results move. */}
       <FreshnessPoller />
       <PageContainer width="full">
+        {/* ── NOTHING HERE YET ──────────────────────────────────────────────
+            A whole page shape rather than the usual one with holes in it. The
+            title, the period track, the tab strip and the action row all
+            describe a board, and there is no board — so none of them render,
+            and the only thing on screen is the invitation to make one.
+            Most of that is free: `viewStrip` and `boardActions` are rendered
+            INSIDE `BoardLayout`/`CustomBoard`, which live inside `TileArea`, so
+            not taking that branch already removes the strip, the `+`, New group,
+            All sources and Refresh all. `PageHeader` is the only chrome that
+            survived the old empty path, and this is what removes it.
+            `BoardControls` is skipped with it. It is a context provider that
+            emits no DOM, and nothing here calls `useBoard()` — `RangeLink`,
+            `SourceLink`, `ViewTab` and `TileArea` are its only consumers and
+            none of them render in this branch.
+            A LOAD ERROR IS NOT AN EMPTY BOARD, so it wins: a workspace whose
+            reads failed sees the banner and the ordinary page, never an
+            invitation to start over on top of numbers that exist. */}
+        {emptyWorkspace && !loadError ? (
+          <EmptyBoard rangeKey={rangeKey} source={boardSource} canCreate={access.can("create_flows")} />
+        ) : (
+        <>
         {/* The filters and the tiles are ONE control: pressing a pill has to
             change both, and the second one has to say it is thinking. They
             share a client boundary so the press can land before the server
@@ -1064,6 +1042,34 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           }
         />
 
+        {/* WHAT `addViewAction` SAID WHEN IT REFUSED.
+            It redirects to `?error=rank` or `?error=view_limit` and this page
+            read neither, so a refusal was a navigation that changed nothing —
+            you pressed a layout and landed back where you were, with no view and
+            no reason. The `<details>` at least stayed open showing its two rows;
+            the modal unmounts on the redirect, so there was not even that.
+            Dismissable by navigating back to the board without the param, the
+            same shape the flows list uses for its own two. */}
+        {VIEW_ERRORS.map(([key, message]) =>
+          one(sp.error) === key ? (
+            <div
+              key={key}
+              className="mb-6 flex items-start justify-between gap-4 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-sm text-danger-ink"
+            >
+              <p>{message}</p>
+              <Link
+                href={qs({})}
+                aria-label="Dismiss"
+                className={cn(
+                  buttonVariants({ variant: "ghost", size: "iconSm" }),
+                  "text-danger-ink/70 hover:bg-danger-soft hover:text-danger-ink",
+                )}
+              >
+                <X />
+              </Link>
+            </div>
+          ) : null,
+        )}
         {loadError && (
           <div className="mt-6 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-sm text-warn-ink">
             Some dashboard data couldn&rsquo;t be loaded just now. Refresh to try again — nothing has been lost, and
@@ -1086,9 +1092,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             number and at most four bars — at two-up on a 1152px container each
             one was 560px wide holding a 36px numeral, which reads as a mostly
             empty card rather than a confident one. */}
-        {!hasTiles && !loadError ? (
-          <OnboardingChecklist hasConnection={connCount > 0} hasFlow={flowCount > 0} hasPublished={flowTiles.length > 0} />
-        ) : !hasTiles ? null : (
+        {/* THE BOARD RENDERS WHENEVER THERE IS A BOARD — which is not the same
+            question as "are there tiles", and conflating the two put a hole in
+            the one path this whole feature exists to create.
+            It used to be `!hasTiles ? checklist : board`. Follow that from the
+            empty state: Get started → Columns → `addViewAction` inserts the row
+            and redirects onto it → `views.length` is 1 so the page is no longer
+            empty → but a brand-new workspace still has no tiles, so `hasTiles`
+            is false → the checklist rendered INSTEAD of the board, and the view
+            just created had no tab strip, no `+`, no New group and nothing to
+            put a metric into. A dead end reachable in two clicks.
+            Custom escaped it by accident: `hasTiles` is true for a canvas
+            whatever it holds, so that template landed correctly while the other
+            did not — two templates behaving differently after creation, which is
+            the tell that the condition was wrong rather than the copy.
+            `emptyWorkspace` answers the real question, and the checklist becomes
+            a supplement UNDER the board rather than a replacement for it. That
+            is also the more honest arrangement: a workspace with a view and no
+            metrics has furniture AND advice, not one pretending the other is
+            not there. */}
+        {!emptyWorkspace && (
           // Swapped for same-sized skeletons the instant a filter is pressed:
           // the alternative is leaving last range's numbers on screen under a
           // pill that now says something else.
@@ -1146,7 +1169,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             )}
           </TileArea>
         )}
+        {!hasTiles && !loadError && (
+          <OnboardingChecklist hasConnection={connCount > 0} hasFlow={flowCount > 0} hasPublished={flowTiles.length > 0} />
+        )}
         </BoardControls>
+        </>
+        )}
       </PageContainer>
     </AppShell>
   );

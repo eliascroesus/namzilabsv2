@@ -11,7 +11,7 @@ import { requireOrg, type OrgContext } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { boardGroupCap, boardPlacementCap, boardTileCap, boardViewCap } from "@/lib/limits";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
-import { adoptDefaultView } from "@/lib/board/store";
+import { adoptDefaultView, hasLegacyBoard } from "@/lib/board/store";
 import { compact, GRID_COLS } from "@/lib/board/grid";
 import { BLOCK_IDS, CHART_IDS, asChartId, blockKindOf, defaultSize, minSize } from "@/lib/board/charts";
 import { parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
@@ -455,16 +455,42 @@ export async function addViewAction(fd: FormData): Promise<void> {
    * had, so a hand-edited form post cannot mint a view nothing can render.
    */
   const kind = String(fd.get("kind") ?? "") === "custom" ? "custom" : "groups";
+
+  /**
+   * THE FIRST VIEW A GENUINELY EMPTY WORKSPACE MAKES IS ITS DEFAULT BOARD.
+   *
+   * Two things went wrong without this, and they are the same thing.
+   *
+   * IT WAS CALLED "View 2". The name counts the unrowed default board as View 1,
+   * which is right for every workspace that has one — and an empty workspace, by
+   * definition, does not. The first board somebody ever creates being numbered
+   * two is the arithmetic showing through.
+   *
+   * AND A PHANTOM TAB CAME BACK. `viewStrip` synthesises a "Dashboard" tab
+   * whenever no row is flagged `isDefault`. So the workspace that had just been
+   * shown the Get-started card — for the express purpose of NOT auto-creating a
+   * default board — got one back the moment it made a real view: an empty
+   * "Dashboard" beside "View 1", pointing at nothing. Flagging the new row is
+   * what stops the synthesis, and it is true: with nothing behind it, this IS
+   * the workspace's default board.
+   *
+   * `hasLegacyBoard` is a server read rather than a hint from the picker,
+   * because the two cases are indistinguishable from the client and getting it
+   * wrong the other way takes an existing board off the screen. See its note.
+   */
+  const first = existing.length === 0 && !(await hasLegacyBoard(db, ctx.orgId));
   await db.insert(dashboardViews).values({
     id,
     orgId: ctx.orgId,
     // The same arithmetic as the cap above, and for the same reason: the
     // default board is View 1 whether or not it has a row yet, so counting it
     // twice on an adopted workspace would name the next one "View 4" while
-    // three tabs are on screen.
-    name: `View ${existing.length + (adopted ? 1 : 2)}`,
+    // three tabs are on screen. `first` is the case where there is no View 1 to
+    // count at all.
+    name: `View ${existing.length + (adopted || first ? 1 : 2)}`,
     pos: keyBetween(last, null),
     kind,
+    isDefault: first,
   });
   // Straight onto it: a tab that appears somewhere else and waits to be found
   // is a worse answer than the one you just asked for.

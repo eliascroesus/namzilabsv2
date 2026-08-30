@@ -156,7 +156,15 @@ describe("the page branches on the view's kind", () => {
   });
 
   it("gives the default view a kind, since it has no row to read one from", () => {
-    expect(page).toMatch(/kind: "groups"/);
+    /**
+     * ONE ASSERTION, NOT TWO. This also matched `/kind: "groups"/`, which was
+     * never the fallback — it was the `kind: "groups"` literal in the `+`
+     * dropdown's option list, a few hundred lines away and about CREATING a
+     * view rather than about reading one. It passed for the wrong reason and
+     * would have gone on passing if the fallback below were deleted, which is
+     * the only thing this test is named for. The options moved to
+     * `view-template-picker.tsx`; the guard stays here and is now the real one.
+     */
     expect(page).toMatch(/views\.find\(\(v\) => v\.id === activeView\)\?\.kind \?\? "groups"/);
   });
 });
