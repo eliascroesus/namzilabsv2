@@ -788,10 +788,10 @@ export default function DesignPage() {
               The second one is the whole reason the gate exists and would
               otherwise have no coverage at all. */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <div className="h-[460px] rounded-card bg-ground">
+            <div className="flex h-[460px] items-center justify-center rounded-card bg-ground p-6">
               <EmptyBoard rangeKey="7d" source={null} canCreate />
             </div>
-            <div className="h-[460px] rounded-card bg-ground">
+            <div className="flex h-[460px] items-center justify-center rounded-card bg-ground p-6">
               <EmptyBoard rangeKey="7d" source={null} canCreate={false} />
             </div>
           </div>

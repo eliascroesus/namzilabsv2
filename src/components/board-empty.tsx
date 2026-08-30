@@ -68,16 +68,15 @@ export function EmptyBoard({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    /* CENTRED IN WHATEVER HEIGHT THE CALLER GIVES IT.
-       `h-full`, not a viewport fraction of its own. It was `min-h-[60vh]`, which
-       centred the card in the top six-tenths of the screen and therefore read as
-       sitting high — and any fixed replacement would have been wrong in the
-       other direction on `/design`, where the specimen is a box a few hundred
-       pixels tall rather than a page.
-       So height is the caller's, the same seam `GetStartedCard` draws for
-       placement: the dashboard hands it the page, the kit page hands it a
-       specimen box, and this centres in both. */
-    <div className="flex h-full items-center justify-center p-6">
+    /* NO WRAPPER OF ITS OWN — this is the card and the modal, nothing else.
+       It had one, and the wrapper is what broke the centring: `h-full` is
+       `height: 100%`, and a percentage resolves against the parent's HEIGHT. The
+       caller set `min-height`, which does not give a percentage anything to
+       resolve against, so the box collapsed to its content and the card sat at
+       the top of the space it was supposed to be centred in.
+       Centring is the caller's now, done with flex rather than percentages, and
+       it is the same seam `GetStartedCard` already draws for placement. */
+    <>
       {/* The same shell the flow builder's empty canvas uses — see
           `GetStartedCard`. Sharing it is the point: two ways of saying "there is
           nothing here yet" is a product telling you something about itself. */}
@@ -99,6 +98,6 @@ export function EmptyBoard({
         )}
       </GetStartedCard>
       {canCreate && open && <ViewTemplatePicker onClose={() => setOpen(false)} rangeKey={rangeKey} source={source} />}
-    </div>
+    </>
   );
 }
