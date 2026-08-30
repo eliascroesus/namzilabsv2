@@ -131,12 +131,14 @@ function IslandButton({
    * same object as the pills beside them.
    */
   compact,
+  className = "",
   children,
 }: {
   onClick: () => void;
   disabled?: boolean;
   label: string;
   compact?: boolean;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -147,7 +149,7 @@ function IslandButton({
       aria-label={label}
       className={`flex shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent [&_svg]:stroke-[2] ${
         compact ? "size-9 [&_svg]:size-[18px]" : "h-[42px] w-[42px] [&_svg]:size-[26px]"
-      }`}
+      } ${className}`}
     >
       {children}
     </button>
@@ -356,7 +358,7 @@ export function FlowToolbar({
                      space between the words and whatever comes next, on top of
                      the row's own 16px. One is enough to keep a caret at the end
                      of the text from sitting on the edge. */
-                  style={{ width: `${Math.min(Math.max((name || "Untitled flow").length + 1, 10), 34)}ch` }}
+                  style={{ width: `${Math.min(Math.max((name || "Untitled flow").length, 8), 34)}ch` }}
                   /* 14px and 36px tall, matching the controls either side of
                      it. At 16px in a row of 14px labels the name was the only
                      thing in the bar set to its own size.
@@ -369,7 +371,7 @@ export function FlowToolbar({
                      boundary in the bar is optically the same, and the hover
                      wash still has somewhere to be. Same trick the workspace
                      name and the page title already use. */
-                  className="-mx-2 h-9 min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
+                  className="-mx-1.5 h-9 min-w-0 max-w-full rounded-control border border-transparent bg-transparent px-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
                 />
               </span>
             </span>
@@ -379,7 +381,6 @@ export function FlowToolbar({
                 whether it saved, undo/redo, and the step menu at the far
                 corner. */}
             <span className="flex items-center justify-end gap-4">
-              <SaveChip state={saveState} onRetry={onRetrySave} />
               {/* SAVED IS NOT LIVE, AND THE BAR HAS TO SAY WHICH IT MEANS.
                   Deliberately AFTER "Saved", because it corrects it: the word
                   beside it answers a different question — the draft reached the
@@ -413,7 +414,7 @@ export function FlowToolbar({
                 width={210}
                 align="left"
                 anchor={
-                  <IslandButton compact onClick={() => setMenuOpen(!menuOpen)} label="Flow actions">
+                  <IslandButton compact className="-mx-1.5" onClick={() => setMenuOpen(!menuOpen)} label="Flow actions">
                     <MoreVertical />
                   </IslandButton>
                 }
@@ -454,6 +455,12 @@ export function FlowToolbar({
 
               {/* 18px, not the Button's shared 16px: a 26px standalone glyph sits one
                   control away, and 16 beside it read as two different icon sets. */}
+              {/* SAVED SITS AT THE END, nearest the chrome's own actions.
+                  It was first in this group, so the least urgent word in the bar
+                  was the one closest to the flow's name. It is the last thing
+                  you check rather than the first, and the edge is where a
+                  status belongs. */}
+              <SaveChip state={saveState} onRetry={onRetrySave} />
             </span>
           </div>
         </TopBarPortal>

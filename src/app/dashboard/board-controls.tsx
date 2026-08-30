@@ -705,7 +705,13 @@ export function ViewTitle({
        * tailwind-merge did not know the kit's radius names and kept both — so a
        * wrapped title rendered inside a grey circle. See lib/utils.ts.
        */
-      className={`-mx-2 h-auto max-w-full shrink-0 justify-start whitespace-nowrap rounded-control px-2 py-1 text-left ${TITLE_TYPE} text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
+      /* `leading-none` IS WHAT MAKES THE WASH HUG THE WORD.
+         `text-display-sm` carries the token's own 38px line-height, drawn for a
+         heading with air around it — so the hover box was 38px tall around 30px
+         glyphs before its padding was even counted, and read as a loose grey
+         slab the title happened to be sitting in. Collapsing the line box to
+         the type size lets `py-1` mean what it says. */
+      className={`-mx-2 h-auto max-w-full shrink-0 justify-start whitespace-nowrap rounded-control px-2 py-1 text-left leading-none ${TITLE_TYPE} text-ground-ink hover:bg-ground-ink/10 hover:text-ground-ink active:bg-ground-ink/15`}
     >
       {shown}
     </Button>

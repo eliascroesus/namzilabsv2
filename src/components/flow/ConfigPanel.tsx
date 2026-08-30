@@ -2412,17 +2412,73 @@ function TestResults({ node, superseded, onChange }: { node: FNode; superseded: 
   );
 }
 
+/**
+ * THE FIELDS ON ONE SAMPLE RECORD, for the disclosure below.
+ *
+ * Empty values are dropped rather than listed as blanks: a record with forty
+ * columns and six answers is six facts, and printing the other thirty-four as
+ * "—" is a wall to scroll past before reaching them. `fields` is stringified
+ * because a nested object rendered as [object Object] is worse than its JSON.
+ */
+function sampleFields(r: unknown): Array<{ label: string; value: string }> {
+  const rec = (r ?? {}) as Record<string, unknown>;
+  const out: Array<{ label: string; value: string }> = [];
+  for (const [k, v] of Object.entries(rec)) {
+    if (v == null || v === "") continue;
+    out.push({ label: k, value: typeof v === "object" ? JSON.stringify(v) : String(v) });
+  }
+  return out;
+}
+
 function BeforeAfter({ before, after }: { before: unknown[]; after: unknown[] }) {
-  const col = (recs: unknown[], label: string, tone: string) => (
-    <div>
+  /**
+   * THE AFTER COLUMN OPENS; THE BEFORE COLUMN DOES NOT.
+   *
+   * What passed the step is the thing you are checking, and a one-line summary
+   * answers "did the right kind of record survive" without answering "why did
+   * THIS one". The full record was already in hand — `t.sample` is the same
+   * array the record picker reads — so the disclosure costs no new data.
+   *
+   * The BEFORE column stays a flat line on purpose: it is context for the
+   * column beside it, and two expandable grids side by side is a panel asking
+   * which half to read. It is also, deliberately, NOT the record picker: only
+   * a source step can nominate a sample, because only a source step has one to
+   * nominate.
+   */
+  const col = (recs: unknown[], label: string, tone: string, open: boolean) => (
+    <div className="min-w-0">
       <p className={cn(BOX_LABEL, "mb-1")}>{label} ({recs.length})</p>
       <div className="space-y-1">
         {recs.length === 0 && <p className="text-xs text-muted-foreground">—</p>}
-        {recs.slice(0, 3).map((r, i) => <div key={i} className={`truncate rounded-control border p-1.5 text-xs ${tone}`}>{sampleLine(r)}</div>)}
+        {recs.slice(0, 3).map((r, i) =>
+          open ? (
+            <details key={i} className={`min-w-0 overflow-hidden rounded-control border text-xs ${tone}`}>
+              <summary className="cursor-pointer list-none truncate px-1.5 py-1.5 hover:underline" title="Show this record's fields">
+                {sampleLine(r)}
+              </summary>
+              <dl className="space-y-1 border-t border-border/60 bg-card px-1.5 py-1.5 text-muted-foreground">
+                {sampleFields(r).length === 0 && <p>This record carries no values.</p>}
+                {sampleFields(r).map((f) => (
+                  <div key={f.label} className="flex min-w-0 gap-2">
+                    <dt className="w-24 shrink-0 truncate font-medium text-foreground">{f.label}</dt>
+                    <dd className="min-w-0 break-words">{f.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          ) : (
+            <div key={i} className={`truncate rounded-control border p-1.5 text-xs ${tone}`}>{sampleLine(r)}</div>
+          ),
+        )}
       </div>
     </div>
   );
-  return <div className="grid grid-cols-2 gap-2">{col(before, "Before", "border-border bg-muted/50 text-muted-foreground")}{col(after, "After", "border-success-soft bg-success-soft/50 text-success-ink")}</div>;
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {col(before, "Before", "border-border bg-muted/50 text-muted-foreground", false)}
+      {col(after, "After", "border-success-soft bg-success-soft/50 text-success-ink", true)}
+    </div>
+  );
 }
 
 function sampleLine(r: unknown): string {
