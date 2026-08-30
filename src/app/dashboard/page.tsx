@@ -233,22 +233,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
      * rather than a page reporting that it could not find something.
      */
     /**
-     * AND "THE DEFAULT VIEW" IS ONE OF TWO THINGS, depending on whether this
-     * workspace has ever renamed its board.
+     * WHICH VIEW, AND WHAT `/dashboard` WITH NO `?view=` LANDS ON.
      *
-     *   NOT ADOPTED — there is no row, the board is `view_id IS NULL`, and
-     *                 `null` is the right answer exactly as it always was.
-     *   ADOPTED     — the board is a real row flagged `is_default`, and landing
-     *                 on `null` would render the empty husk the adoption left
-     *                 behind. Land on the row instead.
+     * A stale link, or one shared after the view was deleted, opens the board
+     * rather than a page reporting that it could not find something.
      *
-     * Falling back to the FLAG rather than to "the first view by pos" is the
-     * load-bearing part: the two are the same today, because adoption mints a
-     * key that sorts first, and they stop being the same the moment somebody
-     * drags their default board to the middle of the strip.
+     * The fallback used to be the row flagged `isDefault`, because a workspace
+     * always had a default board — synthesised if it had no row. It does not any
+     * more (see `viewStrip`), so there is nothing privileged to fall back TO:
+     * the honest answer is the first tab in the strip, which is what a reader
+     * sees selected. `null` only survives for a workspace with no views at all,
+     * which never reaches a board — it gets the Get-started card.
      */
-    const adoptedDefault = views.find((v) => v.isDefault)?.id ?? null;
-    activeView = views.some((v) => v.id === requestedView) ? requestedView : adoptedDefault;
+    const ordered = buildViewStrip(views);
+    activeView = views.some((v) => v.id === requestedView) ? requestedView : (ordered[0]?.id ?? null);
     // The DEFAULT view has no row, so "which kind is it" must have an answer
     // when there is nothing to read. It is always a groups board.
     activeKind = views.find((v) => v.id === activeView)?.kind ?? "groups";
@@ -431,35 +429,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const hasTiles = activeKind === "custom" || tiles.length > 0 || flowTiles.length > 0;
 
   /**
-   * NO VIEWS AND NO BOARD BEHIND THEM — the Get-started card, and none of this
-   * page's chrome.
+   * NO VIEWS — the Get-started card, and none of this page's chrome.
    *
-   * IT DELIBERATELY DOES NOT ASK WHETHER THERE ARE METRICS. It did, and that was
-   * wrong: `&& !hasTiles` meant a workspace that had published anything could
-   * never be empty, so deleting every view put the synthesised "Dashboard" tab
-   * straight back with the metrics under it — the auto-created default board
-   * this whole feature exists to remove, returning the moment you removed the
-   * last real view.
+   * It is one fact now. It carried two more, and both were scaffolding for the
+   * synthesised default tab that no longer exists:
    *
-   * A metric is not a board. Published metrics live in `flow_results` and are
-   * untouched by any of this; what is missing when there are no views is
-   * somewhere to PUT them, which is exactly what the card offers. Creating one
-   * brings every one of them back on the next render — a Columns view with no
-   * groups renders the same plain grid the board showed before.
+   *   `&& !hasTiles` meant a workspace with any published metric could never be
+   *   empty, so deleting every view put the board back with the metrics on it. A
+   *   metric is not a board — they live in `flow_results`, untouched by any of
+   *   this, and what is missing with no views is somewhere to PUT them. Creating
+   *   one brings every one of them back on the next render.
    *
-   * WHAT IT DOES ASK is whether there is an arrangement behind the tabs. The
-   * default board is the ABSENCE of a row, so "no view rows" is also true of
-   * every workspace that has never renamed its dashboard — and those have real
-   * columns at `view_id IS NULL` reachable only through the synthesised tab.
-   * Calling them empty would hide a board somebody arranged.
+   *   `&& groups.length === 0` protected a board stored at `view_id IS NULL`,
+   *   which only the synthesised tab could reach. With that tab gone the check
+   *   protects nothing, and the live database has no such rows in any case.
    *
-   * `groups` IS THAT CHECK, at no cost. With no views the active view is null,
-   * so the groups already read for this render ARE the legacy board's columns.
-   * Placements are not consulted and do not need to be: without a group they are
-   * ignored by the renderer anyway (see the note on that read), so a placement
-   * with no column is not an arrangement anyone can see.
+   * A view is a row. No rows, no board.
    */
-  const emptyWorkspace = views.length === 0 && groups.length === 0;
+  const emptyWorkspace = views.length === 0;
 
 
   const qs = (over: Record<string, string>) => {

@@ -123,13 +123,10 @@ describe("what the board costs on every freshness poll", () => {
      * existing `Promise.all`; the other two are sequential because which groups
      * to fetch depends on which view is active.
      *
-     * The fourth and fifth are on WRITE paths and never on a render:
-     * `adoptDefaultView` reads when somebody renames the default board — once
-     * per workspace, ever — and `hasLegacyBoard` reads when a view is created,
-     * to tell a genuinely new workspace from one whose board predates views.
-     * Neither is on the twelve-second budget this file protects.
+     * The fourth is inside `adoptDefaultView`, a WRITE path that never runs on
+     * a render. It is not on the twelve-second budget this file protects.
      */
-    expect(store.match(/\.select\(\{/g) ?? []).toHaveLength(5);
+    expect(store.match(/\.select\(\{/g) ?? []).toHaveLength(4);
     const pollReads = store.slice(0, store.indexOf("export async function adoptDefaultView"));
     expect(pollReads.match(/\.select\(\{/g) ?? []).toHaveLength(3);
   });
@@ -162,17 +159,18 @@ describe("views", () => {
     expect(page).toMatch(/viewId=\{activeView\}/);
   });
 
-  it("falls back to the default view rather than erroring on an unknown one", () => {
-    // A stale link, or one shared after the view was deleted, opens the board.
-    //
-    // "THE DEFAULT VIEW" IS NOW ONE OF TWO THINGS. A workspace that has never
-    // renamed its board still falls back to `null` — the board is `view_id IS
-    // NULL` and there is no row. One that HAS renamed it fell back to the empty
-    // husk the adoption left behind, so the fallback reads the adopted row's id.
-    // `adoptedDefault` is null in the first world and the id in the second, so
-    // one expression covers both.
-    expect(page).toMatch(/views\.some\(\(v\) => v\.id === requestedView\) \? requestedView : adoptedDefault/);
-    expect(page).toMatch(/const adoptedDefault = views\.find\(\(v\) => v\.isDefault\)\?\.id \?\? null;/);
+  it("falls back to the first tab rather than erroring on an unknown view", () => {
+    /**
+     * A stale link, or one shared after the view was deleted, opens the board
+     * rather than a page reporting it could not find something.
+     *
+     * IT USED TO FALL BACK TO THE ROW FLAGGED `isDefault`, because a workspace
+     * always had a default board — synthesised when it had no row. `viewStrip`
+     * no longer conjures one, so there is nothing privileged to land on and the
+     * honest answer is the first tab in the strip. `null` survives only for a
+     * workspace with no views, which never reaches a board at all.
+     */
+    expect(page).toMatch(/activeView = views\.some\(\(v\) => v\.id === requestedView\) \? requestedView : \(ordered\[0\]\?\.id \?\? null\);/);
   });
 
   it("carries the view through every other filter link", () => {

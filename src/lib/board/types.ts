@@ -181,27 +181,27 @@ export function canvasRowFate(tileKey: string, joined: boolean, existing: Readon
 }
 
 /**
- * THE VIEW STRIP — every view a workspace has, in order, including the default
- * board whether or not it has a row yet.
+ * THE VIEW STRIP — the views a workspace has made, in order. Nothing else.
  *
- * THE DEFAULT BOARD IS THE ABSENCE OF A ROW until somebody renames it, so
- * `listBoardViews` cannot return it and every caller has to put it back. The
- * dashboard did that inline for its tab strip; the rail did not, and the result
- * was a workspace with no named views showing NOTHING nested under Dashboard —
- * the one board every workspace has was the one board the navigation omitted.
+ * IT USED TO CONJURE A "Dashboard" TAB, and that is what this deletes.
  *
- * So the rule lives here, once, and both callers read it. It is pure data with
- * no database and no server imports, which is what lets the rail — a client
- * component — use the same function as the page.
+ * The default board was the ABSENCE of a row: `listBoardViews` could not return
+ * it, so every caller put it back by prepending a synthetic
+ * `{ id: null, name: "Dashboard" }` whenever no row was flagged `isDefault`.
+ * That was right while the board could not be empty. It is wrong now, and it was
+ * wrong in the way that undid the whole empty state: rename the first view,
+ * delete it, and the tab came straight back — a board nobody created, holding
+ * nothing, that could not itself be deleted because it had no row to delete.
+ * "There is always at least one tab" was being enforced by inventing one.
  *
- * `id: null` is the synthetic default; a workspace that HAS adopted its default
- * board already carries it as a real row flagged `isDefault`, and prepending a
- * second one would show the same board twice under two names.
+ * A view is now a row and only a row. No views means no views, which is what
+ * lets the dashboard show its Get-started card instead of a board.
+ *
+ * VERIFIED SAFE AGAINST THE LIVE DATABASE BEFORE REMOVING IT, because the
+ * synthetic tab was the only route to any content stored at `view_id IS NULL`
+ * and cutting it blind would have made such a board unreachable: zero groups and
+ * zero placements carry a null `view_id`, so it was reaching nothing.
  */
 export function viewStrip(views: BoardView[]): BoardView[] {
-  const adopted = views.some((v) => v.isDefault);
-  return [
-    ...(adopted ? [] : [{ id: null, name: "Dashboard", pos: "", kind: "groups" as const }]),
-    ...views.slice().sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0)),
-  ];
+  return views.slice().sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0));
 }

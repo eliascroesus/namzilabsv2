@@ -11,7 +11,7 @@ import { requireOrg, type OrgContext } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { boardGroupCap, boardPlacementCap, boardTileCap, boardViewCap } from "@/lib/limits";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
-import { adoptDefaultView, hasLegacyBoard } from "@/lib/board/store";
+import { adoptDefaultView } from "@/lib/board/store";
 import { compact, GRID_COLS } from "@/lib/board/grid";
 import { BLOCK_IDS, CHART_IDS, asChartId, blockKindOf, defaultSize, minSize } from "@/lib/board/charts";
 import { parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
@@ -429,16 +429,13 @@ export async function addViewAction(fd: FormData): Promise<void> {
 
   const cap = boardViewCap();
   /**
-   * THE DEFAULT BOARD COUNTS ONCE, whichever world this org is in.
+   * EVERY VIEW IS A ROW, so the cap counts rows.
    *
-   * This used to be a flat `+ 1` with the comment "the default view has no row,
-   * so it is not in `existing`". True until the default could be adopted — after
-   * which it IS a row in `existing`, and the `+ 1` counted the same board twice
-   * and moved every adopted workspace's ceiling down by one. The board is
-   * counted where it actually is.
+   * This carried a `+ 1` for the default board that had no row of its own, then
+   * a conditional `+ 1` once that board could be adopted into one. Neither is
+   * needed: nothing is a view without being a row any more.
    */
-  const adopted = existing.some((v) => v.isDefault);
-  if (existing.length + (adopted ? 0 : 1) >= cap) redirect(back("error=view_limit"));
+  if (existing.length >= cap) redirect(back("error=view_limit"));
 
   const last = existing.map((v) => v.pos).sort(compareKeys).at(-1) ?? null;
   const id = crypto.randomUUID();
@@ -456,41 +453,21 @@ export async function addViewAction(fd: FormData): Promise<void> {
    */
   const kind = String(fd.get("kind") ?? "") === "custom" ? "custom" : "groups";
 
-  /**
-   * THE FIRST VIEW A GENUINELY EMPTY WORKSPACE MAKES IS ITS DEFAULT BOARD.
-   *
-   * Two things went wrong without this, and they are the same thing.
-   *
-   * IT WAS CALLED "View 2". The name counts the unrowed default board as View 1,
-   * which is right for every workspace that has one — and an empty workspace, by
-   * definition, does not. The first board somebody ever creates being numbered
-   * two is the arithmetic showing through.
-   *
-   * AND A PHANTOM TAB CAME BACK. `viewStrip` synthesises a "Dashboard" tab
-   * whenever no row is flagged `isDefault`. So the workspace that had just been
-   * shown the Get-started card — for the express purpose of NOT auto-creating a
-   * default board — got one back the moment it made a real view: an empty
-   * "Dashboard" beside "View 1", pointing at nothing. Flagging the new row is
-   * what stops the synthesis, and it is true: with nothing behind it, this IS
-   * the workspace's default board.
-   *
-   * `hasLegacyBoard` is a server read rather than a hint from the picker,
-   * because the two cases are indistinguishable from the client and getting it
-   * wrong the other way takes an existing board off the screen. See its note.
-   */
-  const first = existing.length === 0 && !(await hasLegacyBoard(db, ctx.orgId));
   await db.insert(dashboardViews).values({
     id,
     orgId: ctx.orgId,
-    // The same arithmetic as the cap above, and for the same reason: the
-    // default board is View 1 whether or not it has a row yet, so counting it
-    // twice on an adopted workspace would name the next one "View 4" while
-    // three tabs are on screen. `first` is the case where there is no View 1 to
-    // count at all.
-    name: `View ${existing.length + (adopted || first ? 1 : 2)}`,
+    /**
+     * PLAIN ARITHMETIC NOW, because there is no unrowed board to count around.
+     *
+     * This was `existing.length + (adopted ? 1 : 2)`: the `+2` existed because a
+     * workspace's default board was View 1 WITHOUT having a row, so the first
+     * real view was the second tab. The synthesised tab is gone (see
+     * `viewStrip`), so every view is a row and the count is the count — the
+     * first one a workspace makes is View 1.
+     */
+    name: `View ${existing.length + 1}`,
     pos: keyBetween(last, null),
     kind,
-    isDefault: first,
   });
   // Straight onto it: a tab that appears somewhere else and waits to be found
   // is a worse answer than the one you just asked for.

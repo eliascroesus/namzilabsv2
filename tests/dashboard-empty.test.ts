@@ -22,23 +22,36 @@ const picker = readFileSync(join(process.cwd(), "src/app/dashboard/view-template
 const empty = readFileSync(join(process.cwd(), "src/components/board-empty.tsx"), "utf8");
 
 describe("deciding a workspace is empty", () => {
-  it("asks whether there is a BOARD, not whether there are metrics", () => {
+  it("is one fact: are there any views", () => {
     /**
-     * `&& !hasTiles` was in here and it broke the feature: a workspace that had
-     * published anything could never be empty, so deleting every view put the
-     * synthesised "Dashboard" tab straight back with the metrics under it — the
-     * auto-created default board this exists to remove, returning the instant
-     * you removed the last real view. A metric is not a board.
+     * It carried two more, both scaffolding for a default board that was
+     * SYNTHESISED rather than stored, and both broke the feature:
+     *
+     *   `&& !hasTiles` meant a workspace with any published metric could never
+     *   be empty, so deleting every view put the board back with the metrics on
+     *   it. A metric is not a board.
+     *
+     *   `&& groups.length === 0` protected an arrangement at `view_id IS NULL`
+     *   that only the synthesised tab could reach. That tab is gone, so the
+     *   check protects nothing.
      */
-    expect(page).toMatch(/const emptyWorkspace = views\.length === 0 && groups\.length === 0;/);
+    expect(page).toMatch(/const emptyWorkspace = views\.length === 0;/);
     expect(page).not.toMatch(/emptyWorkspace = .*hasTiles/);
+    expect(page).not.toMatch(/emptyWorkspace = .*groups\.length/);
   });
 
-  it("still refuses to call a pre-views board empty", () => {
-    // `views.length === 0` ALONE is the dangerous version: it is true of every
-    // workspace that has never renamed its dashboard, and those have real
-    // columns reachable only through the synthesised tab.
-    expect(page).toMatch(/groups\.length === 0/);
+  it("has no synthesised board to fall back to", () => {
+    // The regression this whole change exists to stop: rename the first view,
+    // delete it, and a "Dashboard" tab nobody created came straight back.
+    // Comments stripped first: the function's own note explains the tab it used
+    // to conjure, and prose about a thing is not the thing. `board-shape.test.ts`
+    // strips for the same reason — its cost rules failed on the word `count(*)`
+    // inside the comment forbidding it.
+    const types = readFileSync(join(process.cwd(), "src/lib/board/types.ts"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(types).not.toMatch(/name: "Dashboard"/);
+    expect(types).toMatch(/export function viewStrip\(views: BoardView\[\]\): BoardView\[\] \{\s*return views\.slice\(\)/);
   });
 
   it("costs no new query — every fact is one the page already resolved", () => {
@@ -96,45 +109,26 @@ describe("what happens after you pick one", () => {
 
 describe("the first view a workspace ever makes", () => {
   const actions = readFileSync(join(process.cwd(), "src/app/dashboard/board-actions.ts"), "utf8");
-  const store = readFileSync(join(process.cwd(), "src/lib/board/store.ts"), "utf8");
 
-  it("is View 1, not View 2", () => {
-    // The name counts the unrowed default board as View 1, which is right for
-    // every workspace that has one — and an empty workspace does not.
-    expect(actions).toMatch(/View \$\{existing\.length \+ \(adopted \|\| first \? 1 : 2\)\}/);
+  it("is View 1, by plain arithmetic", () => {
+    /**
+     * It was `existing.length + (adopted ? 1 : 2)`. The `+2` existed because a
+     * workspace's default board was View 1 WITHOUT having a row, so the first
+     * real view was the second tab. Every view is a row now, so the count is the
+     * count.
+     */
+    expect(actions).toMatch(/View \$\{existing\.length \+ 1\}/);
   });
 
-  it("becomes the default board, so no phantom tab is synthesised beside it", () => {
-    /**
-     * `viewStrip` prepends a "Dashboard" tab whenever no row is flagged
-     * `isDefault`. Without this the workspace that was just shown the
-     * Get-started card — for the express purpose of NOT auto-creating a default
-     * board — got one back the instant it made a real view.
-     */
-    expect(actions).toMatch(/isDefault: first,/);
+  it("needs no default flag and asks nothing about a legacy board", () => {
+    // Both existed to stop the synthesised tab appearing beside the new view.
+    // There is no synthesised tab.
+    expect(actions).not.toMatch(/isDefault: first/);
+    expect(actions).not.toMatch(/hasLegacyBoard/);
   });
 
-  it("asks the database, not the client, whether the workspace was really empty", () => {
-    /**
-     * A forged "I came from the empty screen" field would flag the new view
-     * default on a workspace whose board predates views — which stops the tab
-     * being synthesised and leaves that board reachable from nowhere. A
-     * visibility bug from a hidden input.
-     */
-    expect(actions).toMatch(/const first = existing\.length === 0 && !\(await hasLegacyBoard\(db, ctx\.orgId\)\)/);
-    expect(actions).not.toMatch(/fd\.get\("first"\)/);
-  });
-
-  it("asks the same question the page asks, or the two disagree", () => {
-    /**
-     * The page decides a workspace is empty on `groups.length === 0`. If this
-     * counted placements too it would answer "not empty" for that same
-     * workspace — naming its first view "View 2" and leaving the synthesised tab
-     * in place beside it. Two rules for one fact.
-     */
-    const fn = store.slice(store.indexOf("export async function hasLegacyBoard"));
-    expect(fn).toMatch(/dashboardGroups/);
-    expect(fn).not.toMatch(/dashboardTilePlacements/);
+  it("counts the cap in rows, because a view is a row", () => {
+    expect(actions).toMatch(/if \(existing\.length >= cap\) redirect\(back\("error=view_limit"\)\);/);
   });
 });
 
