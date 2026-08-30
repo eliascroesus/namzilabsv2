@@ -911,29 +911,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             reads failed sees the banner and the ordinary page, never an
             invitation to start over on top of numbers that exist. */}
         {emptyWorkspace && !loadError ? (
-          /* THE PAGE, AS A COLUMN THAT FILLS. The height is the viewport less
+          /* THE PAGE, CENTRED ON ITS ONE BLOCK. The height is the viewport less
              the 70px chrome band and `PageContainer`'s own vertical padding —
-             which is `py-6` below `sm` and `py-8` above it, so the subtraction
-             steps with it. Matched, the three add back to exactly 100dvh and
-             this cannot introduce a scrollbar; mismatched, a phone scrolls by
-             the 16px difference on a screen with one card on it. The title takes its line and the card's slot
-             takes the REST via `flex-1`, which is what actually centres it:
-             flex distributes the free space a `min-height` establishes, where a
-             percentage height had nothing to resolve against and collapsed to
-             the content. */
-          <div className="flex min-h-[calc(100dvh-70px-3rem)] flex-col sm:min-h-[calc(100dvh-70px-4rem)]">
-            {/* A TITLE, AND ONLY A TITLE.
-                The empty state removes this page's chrome, and a heading is not
-                chrome — it is the one line that says where you are, and without
-                it the screen opens on a card floating in a void. It is the same
-                recipe `PageHeader` renders (`ui/page.tsx`) rather than a second
-                h1 spelling, but not `PageHeader` itself: that component's right
-                slot is where the period track lives, and the period track is
-                exactly the furniture there is nothing here to filter. */}
-            <h1 className="font-display text-display-sm font-semibold text-ground-ink">Build your dashboard</h1>
-            <div className="flex flex-1 items-center justify-center p-6">
-              <EmptyBoard rangeKey={rangeKey} source={boardSource} canCreate={access.can("create_flows")} />
-            </div>
+             `py-6` below `sm` and `py-8` above it, so the subtraction steps with
+             it. Matched, the three add back to exactly 100dvh and nothing
+             scrolls. The heading travels inside `EmptyBoard`, so this centres
+             the pair rather than pinning a title to the top of an empty page. */
+          <div className="flex min-h-[calc(100dvh-70px-3rem)] items-center justify-center p-6 sm:min-h-[calc(100dvh-70px-4rem)]">
+            <EmptyBoard rangeKey={rangeKey} source={boardSource} canCreate={access.can("create_flows")} />
           </div>
         ) : (
         <>

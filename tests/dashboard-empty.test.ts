@@ -155,7 +155,7 @@ describe("one picker, reached from both places", () => {
   });
 
   it("posts to the existing server action with the fields it has always taken", () => {
-    expect(picker).toMatch(/<form action=\{addViewAction\}>/);
+    expect(picker).toMatch(/<form key=\{t\.kind\} action=\{addViewAction\}>/);
     for (const field of ["range", "source", "kind"]) {
       expect(picker).toMatch(new RegExp(`name="${field}"`));
     }
@@ -169,10 +169,29 @@ describe("one picker, reached from both places", () => {
     expect(picker).not.toMatch(/kind: "calendar"/);
   });
 
-  it("does not make the choice cards clickable — the action is a real control", () => {
-    // The house rule the connector catalogue states outright. A card that is
-    // itself a button swallows the submit inside it.
-    expect(picker).not.toMatch(/<Card[^>]*onClick/);
+  it("makes the whole card the control, and it is a submit rather than a handler", () => {
+    /**
+     * THE ONE PLACE THE CATALOGUE'S RULE DOES NOT APPLY, and the inversion is
+     * deliberate rather than an oversight. "A card is not a button; every action
+     * on it is a real control" exists because a connector card carries SEVERAL
+     * acts and a clickable surface swallows them. A template card has exactly
+     * one — choose this — and making the reader aim at a small button beneath a
+     * large picture of the thing they are choosing is the worse interface.
+     *
+     * It stays a SUBMIT, so the server action and its redirect are untouched and
+     * the choice still works through a form rather than through state.
+     */
+    expect(picker).toMatch(/<SubmitButton/);
+    expect(picker).not.toMatch(/onClick=\{\(\) => [^}]*addView/);
+  });
+
+  it("shows a picture of each layout rather than an icon of it", () => {
+    // Miro and Notion both lead a template picker with a thumbnail: the fastest
+    // way to say what an arrangement looks like is to show a small one. Drawn
+    // from tokens, not shipped as an image, so it cannot go stale unnoticed.
+    expect(picker).toMatch(/function ColumnsPreview/);
+    expect(picker).toMatch(/function CustomPreview/);
+    expect(picker).toMatch(/<t\.Preview \/>/);
   });
 
   it("does not offer to create to a viewer who may not", () => {

@@ -68,19 +68,24 @@ export function EmptyBoard({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    /* NO WRAPPER OF ITS OWN — this is the card and the modal, nothing else.
-       It had one, and the wrapper is what broke the centring: `h-full` is
-       `height: 100%`, and a percentage resolves against the parent's HEIGHT. The
-       caller set `min-height`, which does not give a percentage anything to
-       resolve against, so the box collapsed to its content and the card sat at
-       the top of the space it was supposed to be centred in.
-       Centring is the caller's now, done with flex rather than percentages, and
-       it is the same seam `GetStartedCard` already draws for placement. */
-    <>
+    /* THE TITLE TRAVELS WITH THE CARD, in one block, rather than being a page
+       heading that happens to sit above it. That is what the comp shows and it
+       is the more honest arrangement: on this screen the heading is not the
+       PAGE's title — there is no page yet — it is the first line of the one
+       thing on it. Keeping them together also means they centre as a unit
+       instead of the heading pinning to the top-left while the card floats in
+       the middle, which is what it did.
+       `max-w-md` matches the card, so the heading's left edge is the card's. */
+    <div className="w-full max-w-md">
       {/* The same shell the flow builder's empty canvas uses — see
           `GetStartedCard`. Sharing it is the point: two ways of saying "there is
           nothing here yet" is a product telling you something about itself. */}
-      <GetStartedCard eyebrow="New dashboard" title="Build a dashboard in three clicks" steps={STEPS} className="w-full max-w-md">
+      {/* `PageHeader`'s own h1 recipe rather than a second spelling of it — but
+          not `PageHeader` itself: that component's right slot is where the
+          period track lives, and the period track is exactly the furniture
+          there is nothing here to filter. */}
+      <h1 className="mb-4 font-display text-display-sm font-semibold text-ground-ink">Build your dashboard</h1>
+      <GetStartedCard eyebrow="New dashboard" title="Build a dashboard in three clicks" steps={STEPS}>
         {/* The one yellow on the screen, which is the whole ratio rule: this is
             the single act the page exists for right now — when there is one. A
             viewer who may not create says so in a sentence instead, rather than
@@ -98,6 +103,6 @@ export function EmptyBoard({
         )}
       </GetStartedCard>
       {canCreate && open && <ViewTemplatePicker onClose={() => setOpen(false)} rangeKey={rangeKey} source={source} />}
-    </>
+    </div>
   );
 }
