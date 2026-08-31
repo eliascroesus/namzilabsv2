@@ -143,18 +143,20 @@
   --shadow-*: initial;
 
   /* --- Typefaces ----------------------------------------------------------
-   * THE REFERENCE IS SET IN SF PRO, WHICH CANNOT BE SHIPPED.
+   * `system-ui` LEADS, WHICH IS WHAT THE REFERENCE ACTUALLY ASKS FOR.
    *
-   * It is Apple-licensed: there is no webfont to serve and no self-hosting
-   * arrangement that is legal. What IS available is the copy already installed
-   * on every Mac and iPhone, and `-apple-system` is the keyword that reaches it
-   * without a network request or a layout shift.
+   * The Figma export names "SF Pro", and the stack here chased it with
+   * `-apple-system` first. But the reference's own rendered page reports
+   * `System-ui Semi-bold` / `System-ui Regular` in the inspector — it is asking
+   * the platform for its UI face, not naming Apple's. Leading with `system-ui`
+   * is the same thing said correctly: it resolves to SF Pro on Apple hardware,
+   * Segoe UI Variable on Windows and the platform's own face on Linux, which is
+   * what "the system UI font" means everywhere rather than only on a Mac.
    *
-   * So the stack resolves to REAL SF Pro on Apple hardware — pixel-identical to
-   * the design it was drawn against — and to Inter everywhere else, which is
-   * the closest free match in width, x-height and terminal cut. The alternative
-   * (Inter for everyone) is uniform and wrong on the machines this product is
-   * actually designed and reviewed on.
+   * `-apple-system` stays one rung down as the fallback for older Safari, which
+   * shipped the keyword before it understood `system-ui`. Inter is last and
+   * still loaded, so a platform with no UI face of its own gets something cut
+   * for an interface rather than the browser's default sans.
    *
    * `--font-display` is no longer a DIFFERENT face. Instrument Sans was here to
    * stop a page set entirely in Inter reading as the house style of every
@@ -175,9 +177,9 @@
      nobody can say why" this file exists to prevent. Measured in the browser,
      not inferred. */
   /* prettier-ignore */
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-inter, "Inter"), "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", var(--font-inter, "Inter"), sans-serif;
   /* prettier-ignore */
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", var(--font-inter, "Inter"), "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-display: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", var(--font-inter, "Inter"), sans-serif;
   /* IDs, API keys, webhook URLs, code. System mono — nothing to load, and
      technical strings stop wearing the browser's fallback serif-mono mix. */
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;

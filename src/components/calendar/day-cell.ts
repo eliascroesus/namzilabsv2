@@ -15,10 +15,20 @@
  * 1.72), so the shape nobody complained about is the shape this preserves —
  * it just keeps it as the calendar gets wider instead of flattening.
  *
- * `min-h` SURVIVES AS A FLOOR. On a phone the seven columns are ~40px wide and
- * the ratio would give a 22px cell with a date and a percentage in it; when the
- * aspect-derived height falls under the floor, the floor wins and the cell grows
- * to fit its content instead of clipping it.
+ * A FLOOR AND A CEILING, AND THE CEILING IS THE ONE THAT WAS MISSING.
+ *
+ * The floor is for a phone: seven columns are ~40px wide there and the ratio
+ * alone would give a 22px cell with a date and a percentage in it.
+ *
+ * The CEILING is for the opposite end and it is the bug that shipped. A month
+ * is six rows; at 16/9 with no cap, a 2500px-wide window makes each cell ~190px
+ * and the grid ~1200px, so the one view whose entire job is to be seen AT ONCE
+ * no longer fits on the screen it was widened onto. 132px keeps six rows plus
+ * the header and the footnote inside a 900px viewport, which is the shortest
+ * laptop this is used on.
+ *
+ * So the ratio governs the middle — the range where the calendar is genuinely
+ * getting wider — and the two bounds stop it running away at either end.
  *
  * ── WHY THIS IS ITS OWN FILE, WITH NO `"use client"` ───────────────────────
  *
@@ -42,4 +52,4 @@
  * module with no directive. Adding `"use client"` here re-breaks the skeleton
  * silently; tests/page-width.test.ts pins that it stays absent.
  */
-export const DAY_CELL_H = "aspect-[16/9] min-h-[92px]";
+export const DAY_CELL_H = "aspect-[16/9] max-h-[132px] min-h-[84px]";

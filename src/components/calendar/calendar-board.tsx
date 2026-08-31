@@ -354,24 +354,27 @@ export function CalendarBoard({
           {/* The builder's own combobox, not a native select: this is the same
               act as picking a field inside a step, and it searches once a
               workspace has twenty metrics.
-              WEARING THE DASHBOARD'S CONTROL SHAPE, not the config panel's. Its
-              default shell is a rounded RECTANGLE, which is right in a column of
-              fields and wrong in this row: "+ Add", "All sources" and "Refresh
-              all" are all 36px pills, and a rounded rectangle among them reads
-              as a control from a different set. `triggerClassName` replaces the
-              shape and nothing else — every caller in the builder is untouched.
-              THE CHIP MOVED INSIDE IT, as `leading`, which is exactly what the
-              source picker does with its `SourceMark`. Beside the control it was
-              a second object on the row; inside it, it is this control's mark.
+              WEARING THE BOARD'S OWN CONTROL GEOMETRY — h-8 / px-3 / text-sm,
+              which is what `buttonVariants` emits and therefore what "Refresh
+              all" beside it measures. It carried `px-1.5 py-0 pr-3 text-xs`,
+              a shape inherited from the config panel: 13px type in an
+              asymmetric box, so the two controls on this row were a different
+              height inside and a different size of word, with the gap between
+              them reading as uneven because the boxes were.
+              (The note here used to reason about "36px pills" and "All sources"
+              — both gone: pressables are 8px rectangles at 32, and the source
+              picker was removed from every view.)
+              THE CHIP IS INSIDE IT, as `leading`. Beside the control it was a
+              second object on the row; inside it, it is this control's mark.
               Orange still carries the view kind — it is what the template
               picker's Calendar card wears, so the board you land on is the card
               you pressed. */}
           <Select
-            triggerClassName="h-8 rounded-control border-border bg-card px-1.5 py-0 pr-3 text-xs font-medium shadow-xs"
+            triggerClassName="h-8 gap-2 rounded-control border-border bg-card px-3 text-sm font-medium shadow-xs"
             leading={
               <span
                 aria-hidden
-                className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-orange text-white"
+                className="flex size-5 shrink-0 items-center justify-center rounded-full bg-accent-orange text-neutral-950"
               >
                 <CalendarDays className="size-3.5" />
               </span>

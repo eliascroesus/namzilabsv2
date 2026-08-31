@@ -1,4 +1,4 @@
-import { ChevronDown, X } from "lucide-react";
+import { X } from "lucide-react";
 import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
@@ -12,11 +12,10 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { PageContainer, PageHeader, PERIOD_PILL, PERIOD_TRACK } from "@/components/ui/page";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
-import { SourceMark } from "@/components/source-mark";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
-import { BoardControls, RangeLink, SourceLink, TileArea, ViewTab, ViewTitle } from "./board-controls";
+import { BoardControls, RangeLink, TileArea, ViewTab, ViewTitle } from "./board-controls";
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import type { CustomTileSource } from "@/components/custom-tile";
@@ -52,12 +51,10 @@ import { parseDefinition } from "@/lib/metrics/types";
 import {
   computeAggregate,
   computeFunnel,
-  connectedSources,
   type AggregateResult,
   type FunnelResult,
 } from "@/lib/metrics/compute";
 import { resolveRange, RANGE_OPTIONS } from "@/lib/metrics/range";
-import { catalogEntry } from "@/connectors/catalog";
 import { formatMetricValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ImportCoverage } from "@/connectors/types";
@@ -173,7 +170,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const requestedView = one(sp.view) || null;
 
   let metrics: Metric[] = [];
-  let sources: string[] = [];
   let connCount = 0;
   let flowCount = 0;
   let views: BoardView[] = [];
@@ -205,30 +201,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * reads of tables holding a handful of rows per workspace.
    */
   try {
-    [metrics, sources, connCount, flowCount, views] = await Promise.all([
+    [metrics, connCount, flowCount, views] = await Promise.all([
       listMetrics(orgId),
-      /**
-       * THE SOURCES A WORKSPACE IS CONNECTED TO, not the ones its history
-       * mentions.
-       *
-       * This asked `distinctSources`, which is `select distinct source from
-       * events` — a scan of the org's ENTIRE live event table, on every render
-       * of the most-rendered page in the product, to fill a dropdown that never
-       * holds more than about six items. There is no index carrying `source`,
-       * so it is a heap pass: measured at ~55ms per render at 100k live rows
-       * and half a second to a second at a million, growing with history
-       * forever while the answer stays the same six words.
-       *
-       * `connections` is a tens-of-rows table and answers the same question
-       * better: this picker exists to filter the board by APP, and the apps are
-       * the ones you have connected. The one behaviour it changes is at the
-       * edges — a source whose connection was deleted stops being offered
-       * (its events are gone with it), and a freshly connected app is offered
-       * before its first event lands, which is the honest state of things.
-       * The legacy metric builders keep the event-derived list: they filter
-       * events directly, and they are cold pages where the scan costs nothing.
-       */
-      connectedSources(db, orgId),
       db
         .select({ c: sql<number>`count(*)::int` })
         .from(connections)
@@ -705,8 +679,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * board-controls.tsx.
    */
 
-  const activeSourceLabel = boardSource ? (catalogEntry(boardSource)?.name ?? boardSource) : "All sources";
-
   /**
    * THE ACTION HALF OF THE TAB ROW — and the filter island is gone.
    *
@@ -739,81 +711,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
   const boardActions = (
     <>
-      {/* A <details> popover rather than a select: the source lives in the URL,
-          so each option has to be a real link, and this page renders on the
-          server with no client JS to submit a form. Collapsing the sources
-          behind their own current value is also what stops the row growing
-          every time a workspace connects another app. */}
-      {/* NOT ON A CALENDAR VIEW, for the reason the period track is not either.
-          The source filter narrows which EVENTS a number is computed from, and
-          a calendar draws values that were already computed and stored — every
-          square comes from the tile's `byDay`, which no filter on this page can
-          reach. Pressing a source would have changed the URL, re-rendered the
-          page and left all 31 squares exactly as they were.
-          "Refresh all" stays: recomputing every flow is what fills these
-          squares in, so it is the one control on this row that still acts. */}
-      {sources.length > 0 && activeKind !== "calendar" && (
-        <details className="group/src relative shrink-0">
-          {/* `Button`'s `default` GEOMETRY, HAND-COPIED, because a <summary>
-              cannot be a Button. h-8 / px-3 / text-sm / rounded-control — the
-              same four values `buttonVariants` emits — so this sits in the row
-              between "Add" and "Refresh all" at exactly their height and their
-              type size.
-              The note here used to argue for a PILL "because the buttons either
-              side are rounded-full from the kit's own base". They are not: the
-              kit's pressables are 8px rectangles now, and this row was the whole
-              reason to check — a single capsule among three rectangles is the
-              control from a different set the old note was worried about, just
-              the other way round. */}
-          <summary className="inline-flex h-8 cursor-pointer list-none items-center gap-1.5 whitespace-nowrap rounded-control border border-border bg-card px-3 text-sm font-medium text-foreground shadow-xs transition-colors duration-(--duration-fast) hover:bg-accent [&::-webkit-details-marker]:hidden">
-            {boardSource && <SourceMark source={boardSource} />}
-            {activeSourceLabel}
-            <ChevronDown size={14} className="text-muted-foreground transition-transform group-open/src:rotate-180" />
-          </summary>
-          {/* Right-aligned: the control sits near the row's right edge, so a
-              left-anchored menu opened off the end of the page.
-              PANEL then ROW, and nothing in between: `rounded-surface` +
-              `shadow-surface` for the floating surface, `p-1.5` so a row's
-              corner clears the panel's own, `rounded-control` on the rows.
-              It is the shape the vendored menu, the Select and the Command
-              palette all take — see `ui/dropdown-menu.tsx`, where the menu
-              language is written down. */}
-          <div className="absolute right-0 top-full z-20 mt-1.5 min-w-52 rounded-surface border border-border bg-card p-1.5 shadow-surface">
-            <SourceLink
-              href={qs({ source: "" })}
-              className={cn(
-                "block rounded-control px-2.5 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
-                /* THE ROW IN FORCE WEARS THE WASH, not coloured words on
-                   nothing. `text-primary` is the brand yellow, which measures
-                   1.55:1 as text on this white panel — it is a fill colour and
-                   cannot be read as ink at all. What speaks is the marker, and
-                   its ramp splits the same way: the 500 draws while the 700
-                   (6.79:1) carries text. `accent`/`accent-foreground` is that
-                   pair spelled as roles. */
-                !boardSource ? "bg-accent font-semibold text-accent-foreground" : "text-foreground",
-              )}
-            >
-              All sources
-            </SourceLink>
-            {/* The connector's own name, not its storage key: this row read
-                "gsheets · close · webhook" while every other screen in the
-                product says "Google Sheets", "Close CRM". */}
-            {sources.map((srcName) => (
-              <SourceLink
-                key={srcName}
-                href={qs({ source: srcName })}
-                className={cn(
-                  "flex items-center gap-2 rounded-control px-2.5 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
-                  boardSource === srcName ? "bg-accent font-semibold text-accent-foreground" : "text-foreground",
-                )}
-              >
-                <SourceMark source={srcName} />
-                {catalogEntry(srcName)?.name ?? srcName}
-              </SourceLink>
-            ))}
-          </div>
-        </details>
-      )}
+      {/* THE SOURCE FILTER IS GONE, FROM EVERY VIEW.
+          It was a <details> popover narrowing the board to one connected app,
+          and it had already been switched off for calendars on the grounds that
+          a calendar draws values that were computed and stored, so no filter on
+          this page could reach them. That argument turns out to be the general
+          case rather than the exception: every number on this board is
+          materialised, the filter re-rendered the page to change which flows
+          were LISTED rather than what any figure said, and the row it sat in is
+          the one place a customer looks for controls that act.
+          Removed rather than hidden: a control nobody can reach is still a
+          prop and a branch, and the `connectedSources` query that filled it
+          goes with it — one fewer read on the most-rendered page in the
+          product.
+          `?source=` ITSELF STAYS LIVE, and that is deliberate rather than an
+          oversight. `computeAggregate` and `computeFunnel` still take it, so a
+          link someone has already saved or shared keeps answering the same
+          number; what has gone is the UI that minted new ones. Apps is where
+          you go to see what is connected. */}
       {/* Recompute every published metric.
           THE YELLOW IS SPENT HERE, and the reason is no longer scarcity. This
           file used to argue at length about how many yellows a screen may hold
@@ -1091,7 +1006,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             survived the old empty path, and this is what removes it.
             `BoardControls` is skipped with it. It is a context provider that
             emits no DOM, and nothing here calls `useBoard()` — `RangeLink`,
-            `SourceLink`, `ViewTab` and `TileArea` are its only consumers and
+            `ViewTab` and `TileArea` are its only consumers now and
             none of them render in this branch.
             A LOAD ERROR IS NOT AN EMPTY BOARD, so it wins: a workspace whose
             reads failed sees the banner and the ordinary page, never an

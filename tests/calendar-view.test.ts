@@ -325,13 +325,35 @@ describe("the states a calendar view can be in", () => {
     expect(fn).toMatch(/if \(tileKey\) \{/);
   });
 
-  it("drops the source filter, which cannot reach a stored day map", () => {
-    // The source narrows which EVENTS a number is computed from; every square
-    // here comes from the tile's `byDay`, already computed. Pressing a source
-    // would re-render the page and leave all 31 squares identical.
-    expect(page).toMatch(/sources\.length > 0 && activeKind !== "calendar" &&/);
+  it("has no source filter — and neither does any other view now", () => {
+    /**
+     * THIS USED TO ASSERT THE CALENDAR'S OWN EXEMPTION, and the exemption turned
+     * out to be the general case.
+     *
+     * The calendar was carved out on the grounds that the source narrows which
+     * EVENTS a number is computed from, while every square here comes from the
+     * tile's stored `byDay` — so pressing a source re-rendered the page and left
+     * all 31 squares identical. That reasoning holds for the whole board: every
+     * figure on it is materialised, and the control was changing which flows
+     * were LISTED rather than what any of them said.
+     *
+     * So the picker is gone everywhere, and this asserts its absence rather
+     * than its guard. `connectedSources` goes with it — one fewer read on the
+     * most-rendered page in the product.
+     */
+    // CODE, NOT PROSE. Both files explain at length what they stopped doing,
+    // and a rule that reads its own gravestone fails forever — the same reason
+    // `page-width.test.ts` strips comments before checking for retired gutters.
+    const code = page.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toMatch(/activeSourceLabel|connectedSources|<SourceLink/);
     // Refresh all stays — recomputing the flows is what fills the squares in.
     expect(page).toMatch(/refreshAllFlowsAction/);
+    /**
+     * `?source=` ITSELF STAYS LIVE, deliberately: the compute path still takes
+     * it, so a link somebody saved before the control was removed keeps
+     * answering the same number. What went is the UI that minted new ones.
+     */
+    expect(page).toMatch(/boardSource/);
   });
 });
 

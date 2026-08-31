@@ -120,7 +120,20 @@ export const BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";
  * prevent one layout down — and it is the kind nobody files a bug for, because
  * each control looks fine until you switch tabs and the row moves.
  *
- * 32px AROUND 24px PILLS, DOWN FROM 40 AROUND 32. This is the reference's
+ * THE SEGMENTS FILL THE TRACK, AND THE TRACK IS A BUTTON'S HEIGHT.
+ *
+ * It was a 32px groove holding 28px pills with a 2px inset, which is the
+ * classic segmented shape and the wrong one beside "Refresh all": the group
+ * measured 32 but every option in it measured 28, so a row containing both had
+ * two control heights in it and the one you press was the shorter.
+ *
+ * `h-full` on the segment and `overflow-hidden` on the track: each option is
+ * the full 32, the active fill runs edge to edge, and the track's own 10px
+ * corners clip it. `rounded-none` on the segment is what lets that work — a
+ * radius inside a clipped container draws a gap at the corners rather than a
+ * seam.
+ *
+ * 32px, DOWN FROM 40. This is the reference's
  * control height and it is the same 32 as every select, every date picker and
  * every dense button in the product — which is the point of shrinking it. At 40
  * it was the tallest object in the page header and it sat beside a title that
@@ -140,11 +153,11 @@ export const BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";
  * that inverted separately. There is one surface; a control is `--control`.
  */
 export const PERIOD_TRACK =
-  "inline-flex h-8 items-center gap-0.5 rounded-card border border-border bg-control p-0.5";
+  "inline-flex h-8 items-center overflow-hidden rounded-card border border-border bg-control";
 
 /** One control inside that groove — a period link, a month arrow, "This month". */
 export const PERIOD_PILL =
-  "inline-flex h-7 shrink-0 items-center rounded-[calc(var(--radius-card)-2px)] px-3 text-sm font-medium transition-colors duration-(--duration-fast)";
+  "inline-flex h-full shrink-0 items-center rounded-none px-3 text-sm font-medium transition-colors duration-(--duration-fast)";
 
 /**
  * Title row: optional back link, one h1 recipe, optional lede, actions on

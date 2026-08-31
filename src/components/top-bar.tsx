@@ -359,19 +359,15 @@ export function TopBar({
                         />
                       )}
                     </svg>
-                    {/* THE NUMERAL IS BACK, and it is the export's own. It was
-                        removed once and the arc thickened to 4px to compensate,
-                        on the argument that the arc had become the figure and
-                        had to carry the reading alone. With the numeral present
-                        that argument is void, so the stroke returns to the
-                        export's 3px and the two halves share the job again:
-                        the ring is what you notice, the digit is what you read.
-                        `text-xs` rather than the export's 10px — the type scale
-                        is closed at 12px and a sixth size for one glyph inside
-                        a 24px circle is not a trade the kit makes. */}
-                    <span className="relative text-xs font-semibold leading-none tabular-nums text-muted-foreground">
-                      {tracked}
-                    </span>
+                    {/* THE NUMERAL INSIDE THE RING IS GONE, AND IT WAS SAYING
+                        THE SAME THING TWICE.
+                        It has been removed once before and put back, so the
+                        argument is worth settling: the digit inside the circle
+                        and the "3/6" two millimetres to its right are the same
+                        fact at two sizes, and the smaller one is a 12px glyph
+                        squeezed into a 24px disc where the arc is already
+                        drawing the proportion. The ring shows HOW FAR ALONG,
+                        the fraction says HOW MANY — one job each. */}
                   </span>
                   <span className="text-sm font-medium text-foreground">
                     {tracked}/{METRIC_GOAL}

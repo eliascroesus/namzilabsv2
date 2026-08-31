@@ -199,11 +199,13 @@ of light is the only thing that reads as height at all.
 
 ## 6. Type
 
-**Set in SF Pro**, reached through `-apple-system`, with Inter carrying every
-other platform. The reference is drawn in SF Pro and it is Apple-licensed: there
-is no webfont to serve, and the copy already installed on every Mac and iPhone
-is the only legal way to get it. Inter is the closest free match in width,
-x-height and terminal cut.
+**Set in `system-ui`**, with `-apple-system` one rung down for older Safari and
+Inter last. The reference's export names "SF Pro", and this chased it with
+`-apple-system` first — but the reference's own rendered page reports
+`System-ui Semi-bold` in the inspector. It is asking the platform for its UI
+face, not naming Apple's. `system-ui` is the same thing said correctly: SF Pro
+on Apple hardware, Segoe UI Variable on Windows, the platform's own face on
+Linux.
 
 **The display face is gone.** Instrument Sans ran page titles, the landing hero
 and the metric numeral, because a page set entirely in Inter is the house style
@@ -250,7 +252,10 @@ exemption. Both Figma exports set small numerals and chrome labels at 700;
   other two could not afford — with the rule legible on its own, the label is
   free to say SELECTED rather than LINKED, which is what a coloured word says.
 - **Period track** — six mutually exclusive windows in a segmented group, 32px
-  around 24px pills at the control radius. It used to be the one control that
+  outside with the segments filling it edge to edge. It held 28px pills inside a
+  2px inset, which is the classic segmented shape and the wrong one beside a
+  button: the group measured a button's height and every option in it measured
+  less, so the thing you actually press was the shorter object in the row. It used to be the one control that
   followed the PAGE rather than the band, with three tokens of its own, because
   a near-black pill group on a light page was a second dark object competing
   with the chrome. There is one surface; a control is `--control`.

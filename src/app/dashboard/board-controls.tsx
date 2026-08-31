@@ -356,8 +356,16 @@ export function ViewTab({
        * every other selected thing in the product runs.
        */
       className={cn(
-        "inline-flex shrink-0 items-center border-b-2 text-sm font-medium transition-colors duration-(--duration-fast)",
-        active ? "border-marker text-heading" : "border-transparent text-muted-foreground hover:text-foreground",
+        "inline-flex shrink-0 items-center border-b-2 text-sm transition-colors duration-(--duration-fast)",
+        // THE ACTIVE TAB IS HEAVIER AS WELL AS WHITER. The rule carries the
+        // state on its own now (9.83:1 on the console, 5.91:1 on white), so the
+        // weight is not compensating for anything — it is there because a
+        // selection should be unmistakable, and `--heading` is the same ink the
+        // page title above it takes, so the two things that say WHERE YOU ARE
+        // are spelled the same way.
+        active
+          ? "border-marker font-semibold text-heading"
+          : "border-transparent font-medium text-muted-foreground hover:text-foreground",
       )}
     >
       {editing ? (

@@ -297,10 +297,17 @@ describe("the calendar's day square", () => {
      * and a flat 92px against the second is the letterbox slot the flat value
      * was introduced to prevent. 16/9 is within a hair of what the capped page
      * produced by hand (158/92 = 1.72), so it preserves the shape rather than
-     * choosing a new one. The `min-h` survives as the floor that stops a phone's
-     * ~40px column clipping a date and a percentage into a 22px cell.
+     * choosing a new one.
+     *
+     * BOTH BOUNDS ARE LOAD-BEARING AND THE CEILING SHIPPED BROKEN WITHOUT ONE.
+     * A month is six rows; at 16/9 uncapped, a 2500px window makes each cell
+     * ~190px and the grid ~1200px, so the one view whose whole job is to be seen
+     * AT ONCE stopped fitting on the screen it had been widened onto. 132px
+     * keeps six rows plus the header and the footnote inside a 900px viewport.
+     * The floor is the opposite end: a phone's ~40px column would give a 22px
+     * cell holding a date and a percentage.
      */
-    expect(cell).toMatch(/export const DAY_CELL_H = "aspect-\[16\/9\] min-h-\[92px\]";/);
+    expect(cell).toMatch(/export const DAY_CELL_H = "aspect-\[16\/9\] max-h-\[132px\] min-h-\[84px\]";/);
     expect(read("src/components/calendar/calendar-board.tsx")).toContain('from "./day-cell"');
   });
 

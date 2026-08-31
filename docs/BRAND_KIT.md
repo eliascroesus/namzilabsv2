@@ -161,10 +161,10 @@ ARRIVE when the goal lands — which is the honest reading anyway, since a bar a
 
 ## 3. Typography
 
-**SF Pro**, reached through `-apple-system`, with **Inter** carrying every other
-platform. The reference is drawn in SF Pro and it is Apple-licensed — there is
-no webfont to serve, and the copy on every Mac and iPhone is the only legal way
-to get it.
+**`system-ui`**, with `-apple-system` behind it for older Safari and **Inter**
+last. The reference's export names "SF Pro"; its rendered page reports
+`System-ui`. It is asking the platform for its UI face rather than naming
+Apple's, and `system-ui` is that request spelled correctly.
 
 **The display face is deleted.** Instrument Sans ran page titles, the landing
 hero and the metric numeral. The distinction this interface draws is between the
