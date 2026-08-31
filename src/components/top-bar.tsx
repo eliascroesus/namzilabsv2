@@ -14,53 +14,48 @@ import { cn } from "@/lib/utils";
  *
  * WHAT CHANGED, AND WHY IT IS NOT A RESKIN.
  *
- * The bar was 64px of OFF-WHITE carrying the product's own mark. It is 70px of
- * near-black now, and the mark has gone to the rail's top block — because the
- * rail and this bar are one continuous band around the page, and a band that
- * says "Namzilabs" twice in its two corners is saying it once too often. What
- * this bar carries instead is the answer to WHICH WORKSPACE and HOW MUCH OF IT
- * IS MEASURED: the workspace avatar, its name, and the metrics ring. Those are
- * facts about your account, and they were previously split between a rail
- * footer and nowhere at all.
+ * The bar was 64px of OFF-WHITE, then 70px of charcoal, and it is 56px of
+ * `--background` now — the same colour as the rail to its left and the page
+ * below it, closed by a 1px hairline that is the only thing separating any of
+ * the three. The mark lives in the rail's top block, because a band that says
+ * "Namzilabs" in two corners is saying it once too often. What this bar carries
+ * instead is the answer to WHICH WORKSPACE and HOW MUCH OF IT IS MEASURED: the
+ * workspace avatar, its name, and the metrics ring.
  *
- * THE CHROME DOES NOT INVERT — and that is the one design decision in this file
- * worth arguing for. `bg-ink-950` in BOTH themes, with only the PAGE below
- * switching. It is the repo's own 60/30/10 doctrine (see globals.css: "white
- * canvas is the 60, this rail is the 30, and the accent is the 10") and it is
- * what Miro, Notion and Linear all do. A rail that flips with the theme is a
- * rail with no identity: you lose the one shape that stays put while everything
- * inside it changes.
+ * 56 = the reference's 40px content row plus 8px of padding top and bottom. The
+ * 14px it gives back over the old 70 go to the page, which is the point of a
+ * console: the chrome should cost what it costs and not a pixel more.
  *
- * `dark` ON THE HEADER IS HOW THAT IS PAID FOR, NOT A SHORTCUT.
+ * THE SCOPED `dark` CLASS IS GONE, AND ITS WHOLE PROBLEM WENT WITH IT.
  *
- * globals.css declares `@custom-variant dark (&:where(.dark, .dark *))` and
- * puts the dark ROLE values in a plain `.dark {}` block — so the class scopes,
- * and any subtree can be told "you are on dark material" without the document
- * being on it. That matters here for exactly one reason: the flow builder
- * PORTALS its whole toolbar into `#topbar-slot` below, and every one of those
+ * This header carried `className="dark …"` for one reason. The flow builder
+ * PORTALS its entire toolbar into `#topbar-slot` below, and every one of those
  * controls is spelled in roles — `text-foreground`, `bg-card`, `border-border`.
- * On a light document those resolve to near-black ink on a white island, which
- * on this bar would be near-black on near-black: an invisible toolbar on the
- * one screen that cannot function without it. Scoping `dark` here re-inks the
- * portal's contents for the surface they actually land on, and costs nothing in
- * the dark theme, where it is a no-op nested inside the document's own `.dark`.
+ * On a light document those resolved to near-black ink on a white island, which
+ * on a charcoal bar was near-black on near-black: an invisible toolbar on the
+ * one screen that cannot function without it. Scoping `dark` re-inked the
+ * portal's contents for the surface they actually landed on.
  *
- * Everything this file draws ITSELF is spelled in constants — `bg-ink-950`,
- * `bg-white`, `text-neutral-900`, the `--chrome-*` roles, which are declared
- * only in `:root` on purpose — so the scoped class never moves the bar's own
- * furniture. It moves only what other files render into it.
+ * The bar is `--background` now and so is everything else, so a role means the
+ * same thing on both sides of a portal by construction. There is no surface to
+ * warn a subtree about.
  *
- * THE BAR HOLDS TWO YELLOWS NOW, AND THAT IS THE REBRAND IN ONE LINE. It used
- * to hold exactly one — "New flow", the verb — because the kit's rule was that
- * yellow is the hero at most once per screen and its scarcity is its meaning.
- * The rule is now "yellow FILLS, violet DRAWS", so the count stopped mattering
- * and the SHAPE started: the hero pill and the unread badge are both filled
- * objects carrying near-black ink, which is the only form yellow may take on a
- * light chip, and the progress arc is yellow too because on this charcoal band
- * a yellow stroke measures 8.77:1 rather than the 1.42:1 it would manage on the
- * page. Everything else here is a hairline, a white chip, or the one violet
- * that means "identity" — the workspace avatar, and the single place in the
- * product where the marker is a fill rather than a line.
+ * That also deletes the constraint the rest of this file was written under.
+ * Everything the bar drew ITSELF had to be spelled in CONSTANTS — `bg-ink-950`,
+ * `bg-white`, `text-neutral-900`, and nine `--chrome-*` roles declared only in
+ * `:root` — precisely so the scoped class could not move the bar's own
+ * furniture while it re-inked the portal's. All nine of those tokens are
+ * retired; this file speaks the same roles as every other file now.
+ *
+ * ONE GREEN, IN THREE SHAPES. The kit ran "yellow FILLS, violet DRAWS" because
+ * #eecf00 is 1.55:1 as a line on white — it could not be both. On this ground
+ * the green is 9.83:1 as a stroke and 7.70:1 as a fill, so the bar spends it as
+ * a FILL on the hero pill and the unread badge, as a STROKE on the setup ring's
+ * arc, and as INK on nothing here at all. The workspace avatar is neutral: it
+ * was the one place the marker was allowed to be a fill, because identity is
+ * not a control — and with the brand doing every other job on this bar, a
+ * coloured avatar would be the fourth green competing with three that are
+ * actually pressable.
  */
 
 /** The ring: r=9 in a 24px box, so a 4px stroke sits inside with a pixel spare. */
@@ -164,7 +159,7 @@ export function TopBar({
           same kind of object. */}
       <span
         aria-hidden
-        className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-chrome-avatar text-sm font-semibold text-neutral-50"
+        className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-neutral-700 text-xs font-semibold text-foreground"
       >
         {initial}
       </span>
@@ -176,8 +171,8 @@ export function TopBar({
             this at 700 and it is one of the five places this build deliberately
             does not follow it: the kit's ladder is 400/500/600 and `check:ui`
             fails on the fourth rung. */}
-        <span className="truncate text-md font-semibold text-white">{workspace}</span>
-        {account && <ChevronDown aria-hidden className="size-3 shrink-0 text-white" />}
+        <span className="truncate text-sm font-medium text-foreground">{workspace}</span>
+        {account && <ChevronDown aria-hidden className="size-3 shrink-0 text-muted-foreground" />}
       </span>
     </>
   );
@@ -187,33 +182,32 @@ export function TopBar({
     // so the bar's bottom hairline and the rail's right hairline meet at one
     // corner and the chrome reads as a single seam rather than two edges that
     // nearly line up.
-    //
-    // `dark` — see the long note above. It re-inks the PORTAL's contents, not
-    // this bar's own.
-    /* THE EDGES ARE 24 AND 40, WHICH THE EXPORT MEASURES AND WHICH IS NOT THE
-       BUG THIS ONCE HAD. They were briefly equal at 24 both sides, and the note
-       here argued for that — but the fault being fixed then was that the left
-       inset lived on the left GROUP, so on the builder, where that group stands
-       down entirely, the back arrow sat hard against the rail with NO inset at
-       all. What mattered was that both edges are owned by the header and neither
-       is zero. That still holds; the two numbers simply differ, because the
-       right edge carries four controls in a row and the left carries one
-       address, and the export gives the busier end more air.
+    /* 56px: the reference's 40px content row plus its 8px of padding top and
+       bottom. Down from 70, and the 14px it gives back go to the page.
 
-       NO BOTTOM RULE. The export closes the bar with #2d2d2d on #2e2e2e —
-       1.005:1, which is not a hairline, it is the absence of one drawn anyway.
-       Below this bar is the ground at #f5f5f5, so the seam is a 40-point
-       luminance step between two different materials, and DESIGN.md §5 already
-       says what to do about that: "a rule drawn where two different materials
-       already meet is a rule doing nothing". The rail's right edge lost its
-       border for the same reason, and the band is now one unbroken charcoal
-       shape with the ground's 16px corner cut into it.
+       THE EDGES ARE 24 BOTH SIDES, which is what the reference measures and
+       what this bar briefly had before. It went to 24/40 on the argument that
+       "the right edge carries four controls and the left carries one address,
+       so the busier end gets more air" — a reasonable-sounding rule that the
+       reference does not follow and that nothing else in the product does
+       either. Every page below this bar is inset 24px on both sides; a header
+       whose right edge stood 16px further in than the content beneath it was a
+       misalignment you could see down the whole right-hand side of every screen.
+
+       THE BOTTOM RULE IS BACK, AND IT IS NOW THE ONLY THING HOLDING THIS BAR
+       UP. It was removed, correctly, when the bar was charcoal: below it was
+       the ground at #f5f5f5, so the seam was a 40-point luminance step between
+       two different materials, and a rule drawn where two different materials
+       already meet is a rule doing nothing. Below it now is #0f1011 — the same
+       colour as the bar itself — so without `border-b` there is no seam at all
+       and the chrome bleeds into the page. This is the inversion at the centre
+       of the re-theme, in one class.
 
        The prose sits ABOVE the tag deliberately: tests/page-width.test.ts reads
        this bar's height by matching `<header className="…"`, and a comment
        between the two breaks the check that keeps the loading skeleton's band
        the same height as the real one. */
-    <header className="dark flex h-[70px] shrink-0 items-center justify-between gap-4 bg-ink-950 py-2.5 pl-6 pr-10">
+    <header className="flex h-[56px] shrink-0 items-center justify-between gap-4 border-b border-border bg-background px-6 py-2">
       {/* ── WHERE YOU ARE ───────────────────────────────────────────────────
           Workspace, then a slash, then how much of it you are measuring. It
           reads as a path because it IS one: the workspace is the root and the
@@ -246,7 +240,7 @@ export function TopBar({
                 // chevron's own `size-3` on specificity no matter which order
                 // they are written in. Overriding at the same level is the only
                 // spelling that actually lands.
-                className="-mx-2 h-auto min-w-0 gap-2.5 rounded-[var(--radius-control)] px-2 py-1.5 text-left hover:bg-ink-900 active:bg-ink-800 [&_svg]:size-3"
+                className="-mx-2 h-auto min-w-0 gap-2.5 rounded-[var(--radius-control)] px-2 py-1.5 text-left hover:bg-neutral-700 active:bg-neutral-700 [&_svg]:size-3"
                 aria-label={`${workspace} — workspace and account`}
               >
                 {identity}
@@ -288,7 +282,7 @@ export function TopBar({
             like. */}
         {tracked != null && (
           <>
-            <span aria-hidden className="text-md text-white">
+            <span aria-hidden className="text-sm font-light text-muted-foreground">
               /
             </span>
 
@@ -310,17 +304,20 @@ export function TopBar({
                 the ring and the fraction beside it are announced once as the
                 label rather than as "0, 0 of 6".
 
-                `focus-ring-light` is the sanctioned white twin of the app's
-                focus ring — `--ring` is invisible on this near-black band — and
-                the global rule in globals.css already selects `[tabindex]`, so
-                the outline lands without this element spelling one. */}
+                THE RING IT TAKES IS THE PRODUCT'S OWN. This carried
+                `focus-ring-light` — a sanctioned white twin — because `--ring`
+                was violet and invisible against a charcoal band. `--ring` is
+                the brand green at 9.83:1 on this exact surface now, so the twin
+                is retired and the global rule in globals.css already selects
+                `[tabindex]`: the outline lands without this element spelling
+                one. */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
                   tabIndex={0}
                   role="img"
                   aria-label={`${tracked} of ${METRIC_GOAL} metrics tracked`}
-                  className="flex shrink-0 items-center gap-2 rounded-[var(--radius-control)] focus-ring-light"
+                  className="flex shrink-0 items-center gap-2 rounded-[var(--radius-control)]"
                 >
                   <span className="relative flex size-6 items-center justify-center">
                     {/* `-rotate-90` starts the arc at twelve o'clock — an arc
@@ -333,7 +330,7 @@ export function TopBar({
                         r={RING_RADIUS}
                         fill="none"
                         strokeWidth="3"
-                        className="stroke-chrome-ring-track"
+                        className="stroke-neutral-500"
                       />
                       {arc > 0 && (
                         <circle
@@ -345,18 +342,20 @@ export function TopBar({
                           strokeLinecap="round"
                           strokeDasharray={RING_CIRCUMFERENCE}
                           strokeDashoffset={RING_CIRCUMFERENCE - arc}
-                          /* THE ONE PLACE IN THE PRODUCT YELLOW IS A STROKE.
-                             The kit's rule is that yellow fills and violet
-                             draws, because #eecf00 measures 1.42:1 as a line on
-                             the light ground. On THIS surface it measures
-                             8.77:1 — the band is charcoal, and the whole reason
-                             the rule exists does not apply here.
-                             It was `--chrome-presence` green, chosen when the
-                             chrome had no brand colour of its own to spend. It
-                             does now, and a ring that fills as you build the
-                             thing the product is for is exactly what the brand
-                             should be pointing at. */
-                          className="stroke-primary"
+                          /* THE ARC IS THE STROKE STEP, NOT THE FILL ONE.
+                             This was `stroke-primary` and it was the single
+                             exemption in the whole `yellow-as-stroke` gate rule
+                             — #eecf00 measures 1.42:1 as a line on the light
+                             ground and 8.77:1 on the charcoal band, so the one
+                             surface in the product where the brand could be
+                             drawn rather than filled was this one.
+                             There is no exemption left to take: `--marker` is
+                             #00d492 at 9.83:1 on this ground and on every other
+                             surface in the app, and it is what every line in
+                             the product is drawn in. A ring that fills as you
+                             build the thing the product is for is still exactly
+                             what the brand should be pointing at. */
+                          className="stroke-marker"
                         />
                       )}
                     </svg>
@@ -370,11 +369,11 @@ export function TopBar({
                         `text-xs` rather than the export's 10px — the type scale
                         is closed at 12px and a sixth size for one glyph inside
                         a 24px circle is not a trade the kit makes. */}
-                    <span className="relative text-xs font-semibold leading-none tabular-nums text-ink-400">
+                    <span className="relative text-xs font-semibold leading-none tabular-nums text-muted-foreground">
                       {tracked}
                     </span>
                   </span>
-                  <span className="text-md font-semibold text-white">
+                  <span className="text-sm font-medium text-foreground">
                     {tracked}/{METRIC_GOAL}
                   </span>
                 </span>
@@ -439,7 +438,7 @@ export function TopBar({
            */
           className="peer flex min-w-0 flex-1 items-center gap-2 empty:hidden"
         />
-        <span className="truncate text-md font-semibold text-white peer-[:not(:empty)]:hidden">{greeting}</span>
+        <span className="truncate text-sm font-medium text-foreground peer-[:not(:empty)]:hidden">{greeting}</span>
       </div>
 
       {/* ── WHAT YOU CAN START ──────────────────────────────────────────────
@@ -471,7 +470,7 @@ export function TopBar({
             // a white chip, the chrome's hairline, near-black ink. These are
             // the same three values the bell and the account chip wear, which
             // is what makes the four controls read as one row.
-            "border-chrome-chip-line bg-chrome-chip text-neutral-900 hover:bg-neutral-100 active:bg-neutral-200",
+            "border-border bg-card text-foreground hover:bg-neutral-700 active:bg-neutral-700",
           )}
           title="Invite someone to this workspace"
         >
@@ -507,11 +506,11 @@ export function TopBar({
           variant="ghost"
           size="iconSm"
           aria-label={unread > 0 ? `Notifications — ${unread} unread` : "Notifications"}
-          className="relative border border-chrome-chip-line bg-chrome-chip text-neutral-800 hover:bg-neutral-100 hover:text-neutral-900 active:bg-neutral-200"
+          className="relative border border-border bg-card text-foreground hover:bg-neutral-700 active:bg-neutral-700"
         >
           <Bell />
           {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full border border-neutral-50 bg-chrome-badge text-xs font-semibold leading-none text-chrome-badge-ink">
+            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full border border-background bg-primary text-2xs font-semibold leading-none text-primary-foreground">
               {unread > 9 ? "9+" : unread}
             </span>
           )}
@@ -533,7 +532,7 @@ export function TopBar({
                 variant="ghost"
                 size="iconSm"
                 aria-label="Account"
-                className="border border-chrome-chip-line bg-chrome-chip text-xs font-semibold text-neutral-900 hover:bg-neutral-100 active:bg-neutral-200 data-[state=open]:bg-neutral-100"
+                className="border border-border bg-card text-xs font-semibold text-foreground hover:bg-neutral-700 active:bg-neutral-700 data-[state=open]:bg-neutral-700"
               >
                 {/* THE PICTURE IF THERE IS ONE, the initials if not — and the
                     initials are not a placeholder for a missing image, they are

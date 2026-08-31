@@ -96,7 +96,7 @@ export function MetricList({
               <Check
                 size={13}
                 strokeWidth={3}
-                className={`shrink-0 ${o.key === selected ? "text-marker-ink" : "invisible"}`}
+                className={`shrink-0 ${o.key === selected ? "text-marker" : "invisible"}`}
                 aria-hidden
               />
               <span className="truncate text-sm font-medium text-foreground">{o.title}</span>

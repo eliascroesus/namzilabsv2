@@ -58,61 +58,59 @@ export function ShellSkeleton({
 
           IT HAS NO RIGHT EDGE EITHER, ANY MORE — the same lesson in the other
           axis. The charcoal rebrand took the rail's `border-r` off, because the
-          band lightened to #2e2e2e and the ground beside it is #f5f5f5: a
+          band lightened to #2e2e2e and the ground beside it was #f5f5f5: a
           hairline drawn where two materials already differ by 40 points of
-          luminance is a rule doing nothing. A mirror that keeps it shifts every
-          route's content column 1px sideways at hydration, which is precisely
-          the jolt this file exists to prevent.
+          luminance is a rule doing nothing.
 
-          The COLOUR is mirrored instead, and it has to be: this band is
-          `ink-950` in BOTH themes (the chrome does not invert — see the note in
-          sidebar.tsx), so a skeleton drawing it in `bg-sidebar` would flash a
-          white column in the light theme for exactly as long as the page takes
-          to stream. Nothing else in the rail is drawn: the real one is about to
+          THE BORDER IS BACK, AND IT IS NOW LOAD-BEARING RATHER THAN DECORATIVE.
+          The rail and the page are the same #0f1011, so `border-r` is the only
+          thing that says where the column ends. Mirroring it is not tidiness:
+          the rule occupies a pixel of the 48px footprint, and a skeleton
+          without it shifts every route's content column 1px sideways at
+          hydration — precisely the jolt this file exists to prevent.
+
+          The COLOUR is mirrored too, and it is simply `bg-background` now. It
+          was `bg-ink-950` in BOTH themes because the chrome did not invert and
+          a skeleton drawing `bg-sidebar` would have flashed a white column in
+          the light theme for as long as the page took to stream. There is one
+          theme and one surface; the rail, this ghost and the page are all the
+          same token. Nothing else in the rail is drawn: the real one is about to
           occupy this space and a shimmering ghost of furniture that never moves
-          is noise. Nothing in it changes the column's WIDTH, which is the only
-          thing the page beside it can feel. */}
-      <div className="w-[70px] shrink-0 bg-ink-950" />
+          is noise. */}
+      <div className="w-[48px] shrink-0 border-r border-border bg-background" />
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* THE TOP BAR WAS MISSING ENTIRELY, AND IT IS 70px TALL.
+        {/* THE TOP BAR WAS MISSING ENTIRELY ONCE, AND IT IS 56px TALL.
             This file's whole argument is that a skeleton whose geometry
             disagrees with the page behind it does the one thing a skeleton
             exists to prevent — and it reserved the rail, the wash and the
             gutter while leaving out the bar above all of them. Content
-            shimmered at the top of the canvas and then dropped 70px the moment
-            the real chrome landed, on every first load of every route.
+            shimmered at the top of the canvas and then dropped the bar's whole
+            height the moment the real chrome landed, on every first load of
+            every route. `tests/page-width.test.ts` reads this number out of
+            `top-bar.tsx` rather than trusting the two to agree.
 
-            AND IT IS CHARCOAL, IN BOTH THEMES, because the bar behind it is: a
-            pale band that turns dark the instant the route arrives is the same
-            jump in the other dimension. The colour is the bar's own spelling —
-            `bg-ink-950`, and nothing else — so the two cannot drift.
-
-            NO `border-b`, for the same reason the rail beside it lost its
-            `border-r`: the real bar closes on the ground at #f5f5f5, a step no
-            hairline improves, so the rebrand removed both of the band's
-            internal seams. A skeleton still drawing one drops the whole page
-            1px when the route lands.
+            `border-b` FOR THE SAME REASON THE RAIL REGAINED ITS `border-r`. It
+            was correctly absent while the bar was charcoal closing onto an
+            off-white ground — a step no hairline improves. The bar and the page
+            are one colour now, so the rule IS the bar's bottom edge, and a
+            skeleton without it drops the whole page 1px when the route lands.
 
             Empty, like the rail column, for the same reason: the real bar is
             about to occupy it, and a shimmering placeholder under a wordmark
             that never moves is noise. */}
-        <div className="h-[70px] shrink-0 bg-ink-950" />
+        <div className="h-[56px] shrink-0 border-b border-border bg-background" />
         {/* `overflow-y-auto`, matching AppShell's own surface — with
             `overflow-hidden` a classic scrollbar appeared only after the swap
             and stole width from the canvas column at the same moment. The wash
             is a mirror too: without it the skeleton is a white sheet where the
-            app's working surface will be — and it is `bg-ground`, the role
+            app's working surface will be — and it is `bg-background`, the role
             AppFrame paints for every route, not the builder's `canvas-bg`.
-            Those were the same colour while the page was off-white; the ground
-            is near-black in dark now, so the stale spelling meant a pale sheet
-            flashing behind every dark-theme navigation. */}
-        <div className="flex-1 overflow-y-auto bg-ground">
+            Those two are no longer even close: the page is #0f1011 and the
+            canvas is frozen at #1b191a for this pass, so a skeleton borrowing
+            the builder's spelling would flash six counts off the real page. */}
+        <div className="flex-1 overflow-y-auto bg-background">
           {/* Not <main>: PageContainer renders the page's one main landmark. */}
-          <div
-            className={`mx-auto w-full px-5 py-6 sm:px-8 sm:py-8 lg:px-10 ${
-              width === "narrow" ? "max-w-3xl" : "max-w-6xl"
-            }`}
-          >
+          <div className={`mx-auto w-full p-6 ${width === "narrow" ? "max-w-3xl" : "max-w-6xl"}`}>
             <Skeleton className="h-8 w-48" />
             {children}
           </div>

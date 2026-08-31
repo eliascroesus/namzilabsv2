@@ -115,23 +115,26 @@ export function AppFrame({
    * other route gets the ground without mentioning it.
    */
   /**
-   * `rounded-tl-frame` IS THE FRAME'S ONE CORNER, and it only exists because
-   * of the line below it in the tree.
+   * THE NOTCH IS GONE, AND `--radius-frame` IS 0 TO SAY SO.
    *
-   * A radius reveals whatever is BEHIND the element it is cut into. This
-   * column's parent used to be `bg-background` — #f5f5f5, the same colour as
-   * the ground itself — so a rounded corner here would have shown off-white
-   * behind off-white and been perfectly invisible. The content column is
-   * painted `bg-ink-950` for exactly this reason: the notch has to open onto
-   * the band's charcoal, which is the whole point of cutting it.
+   * `rounded-tl-frame` cut a 16px corner out of the page's top-left — the one
+   * corner where the page met both halves of the band at once, the rail to its
+   * left and the top bar above it — and it is what turned two straight edges
+   * into one wrapped shape.
    *
-   * TOP-LEFT ONLY. It is the single corner where the page meets both halves of
-   * the band at once — the rail to its left, the top bar above it — and it is
-   * what turns two straight edges into one wrapped shape. The other three run
-   * to the viewport; rounding them would float the page inside the window like
-   * a card, which is not what it is.
+   * A radius reveals whatever is BEHIND the element it is cut into, and that is
+   * exactly why it cannot survive here: the thing behind this column is now the
+   * SAME COLOUR as this column. Cutting a corner out of #0f1011 to reveal
+   * #0f1011 draws nothing at all, at the cost of a rounded gap that the top
+   * bar's hairline then has to end short of. The class is dropped rather than
+   * pointed at a zero token, so nothing is computing a radius nobody can see.
+   *
+   * `bg-background` rather than `bg-ground`: `--ground` is retired. The page and
+   * the app's background were two tokens because the band wrapped a page that
+   * was a different surface from it; they are one surface now, by construction
+   * rather than by coincidence, so they are one token.
    */
-  const className = cn("relative min-w-0 flex-1 rounded-tl-frame bg-ground", surface);
+  const className = cn("relative min-w-0 flex-1 bg-background", surface);
 
   return (
     // `h-dvh`, not `h-screen`: on mobile Safari `100vh` is the height the
@@ -164,14 +167,14 @@ export function AppFrame({
           sidebar runs full height beside it, exactly as it does in Miro and
           Notion. A bar spanning both would put the workspace switcher above
           the navigation that switching it changes. */}
-      {/* `bg-ink-950` IS WHAT THE CORNER OPENS ONTO. This column holds the top
-          bar (charcoal) above the ground (off-white), and the ground's top-left
-          radius cuts a notch out of itself — so whatever this element is
-          painted shows through that notch. Painted the band's own colour, the
-          notch reads as the chrome wrapping the page. Left at `background` it
-          read as nothing at all, because the ground and the page behind it were
-          the same off-white. */}
-      <div className="flex min-w-0 flex-1 flex-col bg-ink-950">
+      {/* NOTHING SHOWS THROUGH THIS ANY MORE, so it is the plain background.
+          It was `bg-background` — the band's charcoal — for one reason: the page
+          below cut a notch out of its own top-left corner and whatever this
+          element was painted showed through it. There is no notch (see the
+          `className` note above) and there is no second colour: the bar, this
+          column and the page are all `--background`, and the hairline under the
+          bar is what says where one stops. */}
+      <div className="flex min-w-0 flex-1 flex-col bg-background">
         {/* THE BAR IS WHERE IDENTITY LANDS. The workspace's name and the
             account panel used to go to the rail; at 70px the rail is icons and
             nothing else, so both come here — the workspace avatar and name at

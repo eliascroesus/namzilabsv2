@@ -54,7 +54,12 @@ describe("the /design swatch captions match the tokens they render", () => {
     // suite going quietly green on zero assertions.
     expect(rows.length).toBeGreaterThanOrEqual(15);
     expect(rows.some((r) => r.cls.startsWith("brand-"))).toBe(true);
-    expect(rows.some((r) => r.cls.startsWith("ink-"))).toBe(true);
+    // `ink-*` WAS the second ramp here. It was the dark-surface ladder, and it
+    // existed because the product was a dark band around a light page and
+    // needed two greys. One surface, one ramp: both the surface half and the
+    // ink half of the page's tables are now `neutral-*`.
+    expect(rows.some((r) => r.cls.startsWith("neutral-"))).toBe(true);
+    expect(rows.some((r) => r.cls === "neutral-950")).toBe(true);
   });
 
   for (const { cls, hex } of rows) {
@@ -111,45 +116,49 @@ describe("the theme-color meta matches the app background", () => {
   const layout = readFileSync(join(root, "src/app/layout.tsx"), "utf8");
 
   /**
-   * ONE COLOUR PER THEME. A single themeColor left the address bar glowing
-   * white above a dark app — the one piece of chrome a dark theme cannot fix
-   * from CSS, because the browser paints it from this tag and nothing else.
+   * ONE COLOUR, BECAUSE THERE IS ONE THEME.
+   *
+   * This used to assert a media-query PAIR — a light answer and a dark one —
+   * and the pair is now the bug rather than the fix. With the light theme gone,
+   * a `prefers-color-scheme: light` entry would paint the address bar `#f5f5f5`
+   * above an app that is `#0f1011` on every machine, for every visitor whose OS
+   * happens to be set to light. So the shape being pinned is a bare string, and
+   * the assertion below is what stops the pair growing back.
    */
-  const declared = [...layout.matchAll(/color:\s*"(#[0-9a-fA-F]{6})"/g)].map((m) => m[1].toLowerCase());
+  const declared = layout.match(/themeColor:\s*"(#[0-9a-fA-F]{6})"/)?.[1].toLowerCase();
 
-  it("declares one themeColor per scheme", () => {
-    expect(layout).toMatch(/prefers-color-scheme: light/);
-    expect(layout).toMatch(/prefers-color-scheme: dark/);
-    expect(declared).toHaveLength(2);
+  it("declares exactly one themeColor, with no per-scheme split", () => {
+    expect(declared).toBeTruthy();
+    expect(layout).not.toMatch(/prefers-color-scheme/);
+    expect(layout).toMatch(/colorScheme:\s*"dark"/);
   });
 
   /**
-   * `--background` is a hex in `:root` and an alias in `.dark` (it points at
-   * the warm neutral ramp), so the dark side is resolved one hop rather than
-   * being re-typed here — which is the whole point: the meta tag and the
-   * stylesheet must not be able to hold two different opinions.
+   * `--background` is an alias in `:root` (it points at the neutral ramp), so
+   * it is resolved one hop rather than re-typed here — which is the whole
+   * point: the meta tag and the stylesheet must not be able to hold two
+   * different opinions.
    */
-  // `(?:,[^{]*)?` because `:root` shares its rule with `.dark .tile-surface` —
-  // the light island the metric card lives on. See tests/canvas-tokens.ts for
-  // the full note; the two parsers have to agree about this or one of them
-  // silently measures the wrong block.
   const resolve = (selector: string) => {
-    const src = css.match(new RegExp(`(?:^|\\n)${selector}\\s*(?:,[^{]*)?\\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+    const src = css.match(new RegExp(`(?:^|\\n)${selector}\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
     const direct = src.match(/--background:\s*(#[0-9a-fA-F]{6})\s*;/)?.[1];
     if (direct) return direct.toLowerCase();
     const alias = src.match(/--background:\s*var\(--([a-z0-9-]+)\)/)?.[1];
-    return css.match(new RegExp(`--${alias}:\\s*(#[0-9a-fA-F]{6})\\s*;`))?.[1].toLowerCase();
+    return css.match(new RegExp(`--${alias}:\\s*(#[0-9a-fA-F]{6})`))?.[1].toLowerCase();
   };
 
-  it("the light one equals --background in :root", () => {
+  it("equals --background in :root", () => {
     const background = resolve(":root");
     expect(background).toBeTruthy();
-    expect(declared[0]).toBe(background);
+    expect(declared).toBe(background);
   });
 
-  it("the dark one equals --background in .dark", () => {
-    const background = resolve("\\.dark");
-    expect(background).toBeTruthy();
-    expect(declared[1]).toBe(background);
+  /**
+   * THE THEME THAT IS GONE MUST STAY GONE. A `.dark` block reappearing in
+   * globals.css means either the light theme came back without this file
+   * hearing about it, or forty roles are being kept in step by hand again.
+   */
+  it("has no .dark role block to disagree with", () => {
+    expect(css).not.toMatch(/(?:^|\n)\.dark\s*\{/);
   });
 });

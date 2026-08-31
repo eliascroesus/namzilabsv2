@@ -1,32 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Instrument_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
 /**
- * THE FONT IS THE BRAND. The app shipped on ui-sans-serif, which renders as
- * whatever the OS defaults to — the single loudest "nobody chose this" signal
- * an interface can send. Inter is what the products this one is measured
- * against (Linear, Figma, Vercel) actually run on, and next/font self-hosts
- * it at build time: no runtime fetch, no layout shift, no third-party request.
+ * THE FALLBACK, NOT THE FACE.
  *
- * Inter runs the INTERFACE — 13–15px labels in tables and config panels, where
- * the job of a typeface is to disappear.
+ * The interface is set in SF Pro, which is Apple-licensed and cannot be shipped
+ * — `--font-sans` reaches the copy already installed on every Mac and iPhone
+ * through `-apple-system`. Inter is what everyone else gets, and next/font
+ * self-hosts it at build time: no runtime fetch, no layout shift, no
+ * third-party request.
+ *
+ * It is still loaded unconditionally, which is deliberate. Serving it only to
+ * non-Apple clients would mean sniffing the user agent to pick a stylesheet,
+ * and the file is ~40KB subsetted against a font stack that has to be correct
+ * on the first paint.
+ *
+ * INSTRUMENT SANS IS GONE. It ran page titles, the landing hero and the metric
+ * numeral, on the argument that a product set entirely in one face is the house
+ * style of every dashboard built since 2019. That argument was answered rather
+ * than abandoned: the distinction this interface draws is between the chrome
+ * and the NUMBER, and 36px at -0.03em against a 14px interface already carries
+ * it. A second family was buying separation the size step had paid for, at the
+ * cost of a second font request.
  */
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
-/**
- * …and Instrument Sans runs the three places that should NOT disappear: page
- * titles, the landing hero, and the metric numeral.
- *
- * A product set entirely in Inter is the house style of every dashboard built
- * since 2019 — legible, and indistinguishable. Instrument Sans is narrower and
- * has more tension in the letterforms, which gives a heading spine and gives
- * the tile's number the look of a figure on a statement rather than a large
- * label. It never appears below 17px, where its character would start costing
- * legibility and buy nothing.
- */
-const instrument = Instrument_Sans({ subsets: ["latin"], variable: "--font-instrument", display: "swap" });
-import { ThemeProvider } from "@/components/theme";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { withAuth } from "@workos-inc/authkit-nextjs";
@@ -49,16 +48,21 @@ export const metadata: Metadata = {
  */
 export const viewport: Viewport = {
   /**
-   * TWO COLOURS NOW, ONE PER THEME. A single `#ffffff` left the address bar
-   * glowing white above a dark app — the one piece of chrome a dark theme
-   * cannot fix from CSS, because the browser paints it from this tag.
-   * Both are pinned to `--background` by tests/design-swatches.test.ts.
+   * ONE COLOUR, BECAUSE THERE IS ONE THEME.
+   *
+   * This was a media-query pair — a light answer and a dark one — for as long
+   * as the product had two themes. Keeping the pair now would mean the address
+   * bar on a machine set to light rendered `#f5f5f5` above an app that is
+   * `#0f1011` on every machine, which is the one piece of chrome CSS cannot
+   * reach: the browser paints it from this tag alone.
+   *
+   * Pinned to `--background` by tests/design-swatches.test.ts rather than
+   * trusted, because it must be a build-time literal — Next cannot read a
+   * custom property here — and a surface change that misses it leaves a pale
+   * band above the app on mobile with nothing failing.
    */
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f5f5" },
-    { media: "(prefers-color-scheme: dark)", color: "#1a1a1a" },
-  ],
-  colorScheme: "light dark",
+  themeColor: "#0f1011",
+  colorScheme: "dark",
   viewportFit: "cover",
 };
 
@@ -74,11 +78,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    // `suppressHydrationWarning` is required, not defensive: next-themes stamps
-    // the theme class onto <html> from a blocking script before React hydrates,
-    // so this one element is knowingly different on the client. See theme.tsx.
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${instrument.variable}`}>
+    // `suppressHydrationWarning` AND THE BLOCKING SCRIPT ARE BOTH GONE.
+    //
+    // next-themes existed to solve two problems, and a one-theme app has
+    // neither. It injected a script into <head> to stamp the theme class before
+    // the first paint (there is no stored preference to read), which in turn
+    // mutated <html> before hydration and forced the suppression above (there
+    // is nothing mutating it now). The theme is declared in CSS: `color-scheme`
+    // on <html> and the roles in `:root`, both present in the first byte.
+    <html lang="en">
+      <body className={inter.variable}>
         {/* The first stop on every tab order. Without it, reaching a page's
             content by keyboard means tabbing the whole navigation rail again
             on every single navigation. Hidden until focused (globals.css). */}
@@ -90,12 +99,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </a>
         {/* `delayDuration={0}` is set in the component, not here: this product's
             tooltips label icon-only controls, and a control whose only label
-            appears after a beat is a control you have to hover twice. */}
-        <ThemeProvider>
-          <TooltipProvider>
-            <AuthKitProvider initialAuth={initialAuth}>{children}</AuthKitProvider>
-          </TooltipProvider>
-        </ThemeProvider>
+            appears after a beat is a control you have to hover twice. The rail
+            is icon-only at rest, so this is most of its labelling. */}
+        <TooltipProvider>
+          <AuthKitProvider initialAuth={initialAuth}>{children}</AuthKitProvider>
+        </TooltipProvider>
       </body>
     </html>
   );

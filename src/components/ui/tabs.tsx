@@ -131,7 +131,7 @@ function TabsTrigger({
         // A 2px rule is a STROKE, so the colour that says it is the marker's:
         // the yellow that reads at 11.24:1 as a fill draws at 1.42:1 on the
         // ground, and an indicator carrying state cannot be the one thing on the
-        // strip you cannot see. `--tab-underline` in globals.css is the same
+        // strip you cannot see. `--marker` in globals.css is the same
         // value for the same reason, one layout up.
         "after:absolute after:bg-marker after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
         className

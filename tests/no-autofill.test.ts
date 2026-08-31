@@ -95,10 +95,17 @@ describe("an autofilled field, when one legitimately is", () => {
   const css = readFileSync(join(__dirname, "..", "src", "app", "globals.css"), "utf8");
 
   it("is repainted in the kit's own colours", () => {
-    // The UA paints its own pale blue behind a filled input and outranks
-    // `bg-card`; the inset shadow is the only thing that covers it. Without
-    // this, one filled box on a warm white form renders cold blue.
-    expect(css).toMatch(/input:-webkit-autofill[\s\S]{0,400}box-shadow:\s*0 0 0 1000px var\(--card\) inset/);
+    // The UA paints its own pale blue behind a filled input and outranks the
+    // field's own background; the inset shadow is the only thing that covers
+    // it. Without this, one filled box on a form renders as a glowing pale
+    // slab — which on a near-black surface is louder than it ever was on white.
+    //
+    // `--control`, NOT `--card`. The cover has to be the colour of the thing
+    // being covered, and an input is not a card: it is `--control` (#141518),
+    // one step DOWN from the card it sits on, so a row of fields reads as
+    // recessed slots. Painting `--card` here would leave every autofilled
+    // field a visible step lighter than the empty one beside it.
+    expect(css).toMatch(/input:-webkit-autofill[\s\S]{0,400}box-shadow:\s*0 0 0 1000px var\(--control\) inset/);
     expect(css).toMatch(/input:-webkit-autofill[\s\S]{0,400}-webkit-text-fill-color:\s*var\(--foreground\)/);
   });
 });

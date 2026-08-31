@@ -18,15 +18,17 @@
  * THE DEFAULT BORDER COLOUR — the step that made every vendored panel look
  * hand-drawn.
  *
- * Tailwind v3's bare `border` painted `gray-200`. v4 changed it to
- * `currentColor`, and every shadcn component uses bare `border` because it was
- * written against v3. So a dropdown, a dialog and a popover all drew a 1px rim
- * in whatever their TEXT colour was — near-black #101828 against a #eaecf0
- * hairline everywhere else in the product. It read as a heavy hand-drawn box
- * and no component looked responsible, because none of them names a colour.
+ * Tailwind v4's bare `border` paints `currentColor`, and every shadcn component
+ * uses bare `border` because it was written against v3 (which painted
+ * `gray-200`). So a dropdown, a dialog and a popover all drew a 1px rim in
+ * whatever their TEXT colour was — #dcdcdc against a #2b2d2f hairline everywhere
+ * else in the product. It reads as a heavy hand-drawn box and no component looks
+ * responsible, because none of them names a colour.
  *
- * shadcn's own v4 install includes this rule; it was missed here because
- * components.json was hand-written to stop the CLI rewriting this file.
+ * This matters more in a one-surface product than it did in a two-surface one:
+ * the hairline is now the ONLY thing separating anything from anything (see the
+ * kit's opening argument), so a component drawing its own is not a cosmetic
+ * near-miss, it is the structure coming apart.
  */
 @layer base {
   *,
@@ -61,14 +63,17 @@
 }
 
 /**
- * `dark:` FOLLOWS THE CLASS, NOT THE OPERATING SYSTEM.
+ * `dark:` IS INERT, AND IT IS DEFINED HERE SO THAT IT STAYS THAT WAY.
  *
- * Tailwind v4 ships `dark:` wired to `prefers-color-scheme`, which cannot be
- * overridden by a user who wants the other theme — the media query does not
- * care what our toggle thinks. Redefining the variant against `.dark` on the
- * root element makes the class the single source of truth, and `next-themes`
- * is what puts it there (including on the server's first paint, so there is no
- * flash of the wrong theme).
+ * The product has ONE theme now. The obvious move is to delete this line, and
+ * it is the wrong one: Tailwind v4 ships `dark:` wired to `prefers-color-scheme`
+ * by default, so removing the override does not disable the variant — it hands
+ * it to the operating system, and a stray `dark:bg-card` starts firing on half
+ * the machines that load the page with no way for anyone here to see it.
+ *
+ * Bound to `.dark` instead, which nothing in the app ever stamps. The variant
+ * compiles, matches nothing, and `scripts/check-ui.ts` fails the build on any
+ * `dark:` in `src` so the dead spelling cannot accumulate.
  */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -76,8 +81,8 @@
  * THE UI KIT — the whole visual language, in one place.
  *
  * Everything below is a Tailwind v4 `@theme` token, which means it is also a
- * utility class: `--color-ink-700` is `text-ink-700`, `bg-ink-700`,
- * `border-ink-700`. Nothing here is decoration for its own sake; each scale
+ * utility class: `--color-neutral-800` is `text-neutral-800`, `bg-neutral-800`,
+ * `border-neutral-800`. Nothing here is decoration for its own sake; each scale
  * exists because the product was picking values ad hoc and drifting.
  *
  * THE THESIS: QUIET CHROME, LOUD NUMBERS.
@@ -89,26 +94,27 @@
  * furniture, and furniture that shouts is the reason most operational tools
  * feel exhausting by 4pm.
  *
- * WHAT CHANGED, AND WHY (the warm pass).
- * The kit was built on a cool neutral ramp with pure #000 text — technically
- * correct, and the single most common palette in software. Two problems. Pure
- * black on white is a 21:1 glare that no printed page has ever asked anyone to
- * read, and a COOL grey app makes every warm thing in it (a customer's logo, a
- * photo, an amber warning) look like a foreign object. The whole neutral ramp
- * is now warm — a low-saturation ~40° hue, the colour of paper rather than of
- * screens — and the foreground is a warm near-black at 16.4:1, which is still
- * far past AAA and stops fighting the reader.
+ * WHAT CHANGED, AND WHY: ONE SURFACE, SEPARATED BY HAIRLINES.
  *
- * Warm neutrals also fix the rail. It was cool graphite beside a cool white
- * app, which is two greys that never quite agree; it is now a warm near-black
- * cut from the same ramp as the paper, so the dark column and the light page
- * read as one material seen at two exposures.
+ * The product used to be a #2e2e2e BAND — a 70px rail and a 70px top bar —
+ * wrapping a #f5f5f5 page, with no rule anywhere inside the band because a
+ * 40-point luminance step finds its own edge. That was a good argument and it
+ * has been replaced by its opposite.
  *
- * THE RULE FOR COLOUR: the RAIL carries the product's mood, and everything to
- * the right of it stays neutral except for (a) identity — which kind of step
- * this is — and (b) state — what needs the user. That division is what lets
- * the rail be dark without the app becoming noisy; a canvas where everything
- * is coloured can point at nothing.
+ * The rail, the top bar and the page are now ONE COLOUR (#0f1011), and every
+ * separation in the product is a 1px #2b2d2f hairline. Cards step UP to #1a1b1e
+ * rather than down to white. Nothing inverts, because there is nothing to invert
+ * INTO: the light theme is gone.
+ *
+ * The consequence worth stating up front, because it governs every recipe
+ * below: THE HAIRLINE IS NOW STRUCTURAL. It is not trim. A card whose border is
+ * missing is not a slightly flatter card, it is an invisible one — #1a1b1e on
+ * #0f1011 is a 1.11:1 step, which is a step you can measure and not one you can
+ * see. Every surface in this file draws its edge.
+ *
+ * THE RULE FOR COLOUR: the app is greyscale except for (a) the brand, which is
+ * one green doing one job, and (b) state, which is what needs the user. A
+ * console where everything is coloured can point at nothing.
  * ========================================================================== */
 @theme {
   /* --- The stock scales, cleared ------------------------------------------
@@ -126,250 +132,140 @@
    * NOT cleared: `--color-*`, because `white`, `black` and `transparent` live
    * there and the kit's roles are built ON them. The neutral and red ramps are
    * REDEFINED below rather than cleared, so the handful of sanctioned raw
-   * `neutral-*` / `red-*` classes inside `src/components/ui` warm up with the
-   * rest of the app instead of staying cool against it. Colour discipline is
-   * enforced by scripts/check-ui.ts.
+   * `neutral-*` / `red-*` classes inside `src/components/ui` re-cut for the
+   * dark surface with the rest of the app instead of staying light against it.
+   * Colour discipline is enforced by scripts/check-ui.ts.
    */
   --text-*: initial;
   --radius-*: initial;
   --shadow-*: initial;
 
   /* --- Typefaces ----------------------------------------------------------
-   * TWO FACES, WITH DIFFERENT JOBS.
+   * THE REFERENCE IS SET IN SF PRO, WHICH CANNOT BE SHIPPED.
    *
-   * Inter runs the interface, because at 13–15px in dense tables and config
-   * panels its job is to disappear, and nothing disappears better. But a page
-   * set ENTIRELY in Inter is the house style of every dashboard built since
-   * 2019 — it is the typographic equivalent of not choosing.
+   * It is Apple-licensed: there is no webfont to serve and no self-hosting
+   * arrangement that is legal. What IS available is the copy already installed
+   * on every Mac and iPhone, and `-apple-system` is the keyword that reaches it
+   * without a network request or a layout shift.
    *
-   * So the display face is Instrument Sans: slightly narrower, with more
-   * tension in the letterforms and a lower, more editorial x-height that gives
-   * headings and the metric numeral some spine. It appears in exactly three
-   * places — page titles, the landing hero, and the tile's headline number —
-   * and it is never used below 17px, where its character would cost legibility
-   * and buy nothing.
+   * So the stack resolves to REAL SF Pro on Apple hardware — pixel-identical to
+   * the design it was drawn against — and to Inter everywhere else, which is
+   * the closest free match in width, x-height and terminal cut. The alternative
+   * (Inter for everyone) is uniform and wrong on the machines this product is
+   * actually designed and reviewed on.
+   *
+   * `--font-display` is no longer a DIFFERENT face. Instrument Sans was here to
+   * stop a page set entirely in Inter reading as the house style of every
+   * dashboard built since 2019 — a real problem, answered differently now: the
+   * distinction this interface draws is between the CHROME and the NUMBER, and
+   * a numeral at 36px in the same face at -0.03em tracking already carries it
+   * (see `.stat-numeral`). A second family was buying separation the size step
+   * had already paid for.
    */
-  --font-sans: "Helvetica Neue", var(--font-inter), ui-sans-serif, system-ui, -apple-system, Helvetica, Arial, sans-serif;
-  --font-display: "Helvetica Neue", var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-inter), "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-display:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", var(--font-inter), "Segoe UI", ui-sans-serif, system-ui,
+    sans-serif;
   /* IDs, API keys, webhook URLs, code. System mono — nothing to load, and
      technical strings stop wearing the browser's fallback serif-mono mix. */
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* --- Brand: the yellow, and the one rule that governs it ----------------
-   * YELLOW FILLS. VIOLET DRAWS.
+  /* --- Brand: the green, and why it no longer needs a rule to govern it ----
+   * ONE COLOUR, BOTH JOBS.
    *
-   * That sentence replaces the old "yellow is the hero, at most once per
-   * screen", and the reason it replaces it is that the old one was a taste rule
-   * nothing could check, while this one is a measurement:
+   * The kit ran "YELLOW FILLS, VIOLET DRAWS" for exactly one reason, and it is
+   * worth writing down because the reason is now gone rather than forgotten.
+   * #eecf00 measures 1.55:1 as a stroke on white and 11.24:1 as a fill under
+   * near-black ink. That is not a dim line and a bright box, it is an ABSENT
+   * line and a superb box — so the brand could only ever safely do one of the
+   * two jobs, a second colour had to do the other, and `check-ui.ts` needed a
+   * rule (`yellow-as-stroke`) to keep them from swapping places.
    *
-   *              as a STROKE or TEXT        as a FILL under #1a1a1a ink
-   *   on white         1.55:1                        11.24:1
-   *   on the ground    1.42:1                          —
-   *   on the band      8.77:1                          —
+   * On #0f1011 the green measures:
    *
-   * A yellow line on a light page is invisible and a yellow fill is superb. So
-   * the brand is spent on FILLED OBJECTS — the mark, the active rail chip, every
-   * primary button, the notification badge, the step markers, the card's cap —
-   * and never on a rule, a ring, a border or a glyph standing on the page. What
-   * draws is the marker ramp below.
+   *                                as a STROKE / TEXT    as a FILL under #0f1011
+   *   on the ground   #0f1011            9.83:1                    —
+   *   on a card       #1a1b1e            8.88:1                    —
+   *   #00bc7d fill                         —                     7.70:1
    *
-   * AND THE FILL HAS TO HAVE SOMETHING ON IT. This is the half of the rule that
-   * only shows up in practice, and three separate surfaces found it at once: a
-   * switch track, a progress bar and a chart series are all filled shapes, and
-   * every one of them was WRONG in yellow. The 11.24:1 above is the whole
-   * licence for yellow to be a surface — it is a contrast against the INK it
-   * carries. A fill with nothing written on it never collects that number. The
-   * only ratio its reader gets is fill-against-neighbour, and there the yellow
-   * is 1.07:1 on a switch's off track, 1.42:1 on a muted progress groove and
-   * ~1.1:1 as a series bar on a white card. All three are invisible.
+   * Both columns clear their bar with room, so the split has nothing left to
+   * prevent. `--primary` fills, `--marker` draws, and they are two steps of one
+   * ramp rather than two colours holding each other's job open. The gate rule
+   * retires with the token it policed.
    *
-   * So the rule is: YELLOW FILLS WHERE SOMETHING SITS ON IT — a label, a
-   * numeral, an icon. A bare coloured area that only has to differ from the
-   * area beside it is a MARK, and marks are the marker's: the switch's on
-   * state (3.31:1 against its track), the progress indicator, every chart
-   * series, the active tab's rule. That line runs cleanly through every case
-   * the sweep met, which the shorter version of the rule did not.
-   *
-   * The one place yellow may stroke is a DARK surface, where it measures 8.77:1:
-   * the top bar's progress arc is yellow for that reason and a link never is.
-   *
-   * `scripts/check-ui.ts` fails the build on `text-primary`, `border-primary`
-   * and `ring-primary` so that this cannot quietly come apart again — which is
-   * exactly what the scarcity rule had no way to do.
-   *
-   * 600 is the brand; 700 is the pressed step (hover walks DOWN the ramp, it
-   * does not brighten — brightening a yellow moves it toward the white behind
-   * it and the label's contrast falls at the moment of the press); 50/100 are
-   * washes for a tinted surface that is not a control.
+   * HOVER WALKS UP, NOT DOWN. On a light ground the brand darkened under the
+   * pointer, because brightening a yellow moves it toward the white behind it
+   * and the label's contrast falls at the moment of the press. On near-black
+   * the argument inverts with the surface: raised means lighter, so hover is
+   * `500` and the press is `700`.
    */
-  --color-brand-50: #fefae6;
-  --color-brand-100: #fdf3bf;
-  --color-brand-200: #fae98a;
-  --color-brand-300: #f7de4d;
-  --color-brand-400: #f2d519;
-  --color-brand-500: #f5d91f; /* hover-on-dark */
-  --color-brand-600: #eecf00; /* THE BRAND — 11.24:1 under #1a1a1a */
-  --color-brand-700: #d4b800; /* pressed */
-  --color-brand-800: #b89f00;
+  --color-brand-50: #e6fbf3;
+  --color-brand-100: #b8f4de;
+  --color-brand-200: #7aeac4;
+  --color-brand-300: #3ce0aa;
+  --color-brand-400: #19d99c;
+  --color-brand-500: #00d492; /* THE STROKE — 9.83:1 on the ground, 8.88:1 on a card */
+  --color-brand-600: #00bc7d; /* THE FILL — 7.70:1 under #0f1011 ink */
+  --color-brand-700: #00a46d; /* pressed */
+  --color-brand-800: #008c5c;
 
-  /* --- Marker: the violet, and everything the yellow cannot do ------------
-   * THE STROKE HALF OF THE SPLIT ABOVE. Focus rings, links, hover borders,
-   * selection rings, the calendar's "today" edge, the active tab's rule — every
-   * place the product needs to DRAW rather than to fill.
+  /* --- The decorative set -------------------------------------------------
+   * The kit page draws its chips and pins in a fixed set beside the neutrals.
+   * They are NOT states — success/warn/danger own that vocabulary — and they
+   * are not the brand. They exist for the places a surface needs to be
+   * IDENTIFIABLE rather than to mean something.
    *
-   * These are the exact values the ramp has always held; only its NAME and its
-   * job changed. It was `brand-*` while violet was the primary, and leaving it
-   * under that name once yellow took the job would be a ramp called "brand"
-   * that is not the brand colour — a lie a future edit is entitled to believe.
-   *
-   * 500 is the object colour (4.41:1 on the ground, past the 3:1 a non-text
-   * mark owes). 700 is the INK step, because 4.41:1 is short of the 4.5:1 body
-   * text owes and a link is body text. 400 is the focus ring.
+   * Re-cut for a near-black ground. The old three were mixed to sit on white
+   * and every one of them landed under 4.5:1 here; these are the same hues
+   * lifted until they clear it on #1a1b1e.
    */
-  --color-marker-50: #f3eeff;
-  --color-marker-100: #e7dcff;
-  --color-marker-200: #d0bcff;
-  --color-marker-300: #b494ff;
-  --color-marker-400: #9670ff; /* focus ring */
-  --color-marker-500: #7c4dff; /* the mark itself — 4.41:1 on the ground */
-  --color-marker-600: #6d3aff;
-  --color-marker-700: #6229f0; /* link ink — 6.79:1 */
-  --color-marker-800: #5318d1;
-
-  /* --- THE RATIO: WHERE EACH OF THE THREE GOES ----------------------------
-   * The band is charcoal, the brand is yellow and the marker is violet, and the
-   * reason they read as a brand rather than as three colours is that each has
-   * ONE job. Written down because "use the brand colours" is not a rule anybody
-   * can apply twice the same way:
-   *
-   *   CHARCOAL  is the band, and only the band. #2e2e2e wrapping the page in an
-   *             unbroken shape — no seam inside it, because there is no second
-   *             material in there to divide from.
-   *   YELLOW    FILLS. Every filled object the product wants you to press or to
-   *             notice: the mark, the active nav chip, primary buttons, the
-   *             unread badge, step markers, the empty card's cap.
-   *   VIOLET    DRAWS. Every line and every coloured glyph: the focus ring,
-   *             links, hover borders, selection rings, the active tab's rule,
-   *             and the workspace avatar (identity, which is a fill, and the
-   *             one place violet is allowed to be one).
-   *
-   * IT USED TO SAY "YELLOW IS THE HERO, AT MOST ONCE PER SCREEN", and the
-   * scarcity was said to be its meaning. That rule died of being uncheckable:
-   * nothing failed when a second yellow arrived, so the count was enforced by
-   * whoever happened to be reviewing. The fill/stroke split says something a
-   * script can test, and check-ui.ts tests it.
-   *
-   * The accent three below are decoration on top of that, never state.
-   */
-
-  /* --- The sheet's accent set --------------------------------------------
-   * The brand sheet draws its chips, tabs and pins in a fixed set beside the
-   * black. They are NOT states — success/warn/danger own that vocabulary — they
-   * are the kit's decorative range, for the places a surface needs to be
-   * identifiable rather than to mean something.
-   *
-   * THE YELLOW LEFT THIS SET, because it became the brand. It was `#faf63c`, a
-   * highlighter neon, and it lived here as one decorative colour among four
-   * while `--primary` was violet. Now that yellow IS the primary, a second
-   * yellow under a second name is the drift this file exists to stop: the two
-   * were four counts apart in hue and would have been indistinguishable on
-   * screen and impossible to keep in step. Anything that wants the brand's
-   * yellow asks for `--primary` or `brand-600` by name.
-   */
-  --color-accent-orange: #ff6b35;
-  --color-accent-pink: #ffa5a5;
-  --color-accent-peri: #9b9be8;
+  --color-accent-orange: #ff8a5c;
+  --color-accent-pink: #ffb3b3;
+  --color-accent-peri: #a8a8f0;
 
   /* --- The neutral ramp ----------------------------------------------------
-   * TAILWIND'S `neutral-*`, REDEFINED IN PLACE.
+   * TAILWIND'S `neutral-*`, REDEFINED IN PLACE — and this time it is the whole
+   * interface rather than half of it.
    *
-   * Overriding the stock ramp rather than adding a parallel one is deliberate:
-   * the roles below are built on it, the `ui/` primitives are allowed to reach
-   * for it directly, and a second ramp beside the first is precisely the drift
-   * this file exists to prevent. Change it here and the switch's track, the
-   * ghost button's rest state and every `--muted` surface move together.
+   * The kit used to run TWO grey ramps: `neutral-*` for the light app and
+   * `ink-*` for "the navigation rail and any dark surface". That division made
+   * sense while the product was a dark band around a light page. It does not
+   * survive a product that is one surface: `ink-*` is retired, every value here
+   * is cut for #0f1011, and there is one ladder from the ground to the ink.
    *
-   * THE RAMP IS COOL AGAIN, AND THIS TIME ON PURPOSE.
+   * The ramp keeps the conventional direction — 50 is the lightest, 950 the
+   * darkest — so a `neutral-800` still means what it means in every other
+   * codebase. What changed is where the STEPS are: seven of the eleven now live
+   * between #0f1011 and #3a3d40, because that is the range this interface
+   * actually builds surfaces in, and the four above it are text.
    *
-   * It was warm (~40°) on the argument that a cool grey app makes every warm
-   * thing in it look foreign. True, and it cost more than it bought: warm greys
-   * read as parchment beside the products this one is measured against, and the
-   * whole interface sat a half-step toward beige. This is Untitled UI's ramp —
-   * a faint blue cast at very low saturation — which is the grey Notion, Linear
-   * and Stripe all land near, and which lets a screen full of neutral chrome
-   * read as neutral rather than as a colour choice.
+   * THE SURFACE HALF (950 → 500) and THE INK HALF (400 → 50) are separated on
+   * purpose and never trade places. 500 is the last step you may draw a LINE in
+   * and 400 the first you may set TEXT in; there is a deliberate gap between
+   * them, because the value that is legible as a 1px rule and the value that is
+   * legible as 12px copy are not the same value and the product had been
+   * pretending they were.
    */
+  --color-neutral-950: #0f1011; /* THE GROUND — rail, top bar and page, one colour */
+  --color-neutral-900: #141518; /* controls: selects, inputs, the period track */
+  --color-neutral-800: #1a1b1e; /* CARDS and popovers — a 1.11:1 step, so they draw their edge */
+  --color-neutral-700: #222325; /* raised: a card's hover, a menu row, the toast */
+  --color-neutral-600: #2b2d2f; /* THE HAIRLINE — every separation in the product */
+  --color-neutral-500: #3a3d40; /* the heavier rule: switch track, table divider, ring track */
+  --color-neutral-400: #7d8593; /* the dimmest INK — 4.63:1 on a card, 5.12:1 on the ground */
+  --color-neutral-300: #9ca3af; /* descriptions, captions — 6.78:1 on a card */
+  --color-neutral-200: #dcdcdc; /* body and card titles — 12.55:1 on a card */
+  --color-neutral-100: #ebebeb;
   --color-neutral-50: #fafafa;
-  --color-neutral-100: #f5f5f5; /* --muted: recessed surfaces, table headers */
-  --color-neutral-200: #e8e8e8; /* the heavier hairline: switch track, dividers */
-  --color-neutral-300: #d6d6d6;
-  --color-neutral-400: #a3a3a3; /* decorative / disabled only — 2.5:1, never text */
-  --color-neutral-500: #6b6b6b; /* --muted-foreground — 5.68:1, up from 4.74:1 */
-  --color-neutral-600: #525252;
-  --color-neutral-700: #3d3d3d;
-  --color-neutral-800: #2b2b2b;
-  --color-neutral-900: #1a1a1a; /* --foreground — 16.43:1 */
-  --color-neutral-950: #0f0f0f;
 
-  /* The red ramp, warmed to match. Only `ui/button.tsx` reaches for these
-     directly (the destructive ghost's hover wash and the outline's border);
-     left cool they were the one cold thing on a warm surface. */
-  --color-red-50: #fdf0ee;
-  --color-red-100: #fbe6e3;
-  --color-red-200: #f6cdc8;
-  --color-red-600: #dc2626;
-
-  /* --- Ink: the navigation rail and any dark surface ----------------------
-   * A ladder, which is the minimum a dark surface needs to express elevation
-   * at all: base, raised, hover, hairline, then three steps of text.
-   *
-   * THE LADDER RUNS UPWARDS NOW, AND THAT IS THE WHOLE STORY OF THIS BLOCK.
-   *
-   * The band moved from #0f0f0f to #2e2e2e — a charcoal rather than a
-   * near-black — and every step above was built to go DOWN from the old value.
-   * `ink-900` was #1a1a1a and `ink-800` #2b2b2b: both DARKER than the new base.
-   * Left alone, every rail hover and every active row would have receded into
-   * the band instead of rising out of it, which is not a slightly-wrong colour,
-   * it is elevation pointing the wrong way.
-   *
-   * On a charcoal band, raised means LIGHTER. The three surface steps are
-   * re-cut above the base rather than below it, and the ratios in the comments
-   * are against the band itself, because that is the only surface they are ever
-   * seen on.
-   */
-  --color-ink-950: #2e2e2e; /* THE BAND — rail and top bar, both themes */
-  --color-ink-900: #3a3a3a; /* rail hover — 1.31:1 on the band */
-  --color-ink-800: #434343; /* rail raised (active row), the toast — 1.45:1 */
-  --color-ink-700: #5e5e5e; /* hairline on dark — 2.10:1 */
-  --color-ink-400: #a1a1a1; /* muted text on dark — 5.26:1 on the band */
-  --color-ink-100: #e8e8e8; /* body text on dark */
-  --color-ink-50: #fafafa; /* headings on dark */
-
-  /* --- Canvas -------------------------------------------------------------
-   * THE WHOLE APP'S WORKING SURFACE — not the builder's alone any more.
-   *
-   * Every authenticated page used to be pure white with white cards on it, so
-   * a card was announced only by a hairline: the dashboard read as one flat
-   * sheet with faint boxes drawn on it, while the builder next door read as
-   * objects floating over a surface. Same product, two materials.
-   *
-   * The pages now sit on THIS colour and everything with content in it is a
-   * white island with a border and a shadow — which is exactly the builder's
-   * grammar, applied to the rest of the app. Cards stop needing to shout to be
-   * seen (their own edge does the work), and the tile's number is the loudest
-   * thing on the page again.
-   *
-   * Kept as tokens so the dot grid, the page behind it and the edge colour can
-   * never drift apart again.
-   *
-   * THE VALUES MOVED TO `:root` / `.dark`. A token declared in `@theme` is a
-   * constant — it cannot answer differently under a `.dark` ancestor, because
-   * that class is not in scope when Tailwind resolves it. So everything the
-   * theme SWITCHES (the canvas, the rail, the state trios, the roles) is
-   * declared there and bridged back into utility-space by `@theme inline`.
-   * The raw ramps above stay here: a palette is a palette in both themes; it
-   * is the roles built on it that move.
-   */
+  /* The red ramp, re-cut for the dark surface. Only `ui/button.tsx` reaches for
+     these directly (the destructive ghost's hover wash and the outline's
+     border); left at their light values the wash was a pink slab. */
+  --color-red-50: #2a1614;
+  --color-red-100: #3d1c19;
+  --color-red-200: #5a2621;
+  --color-red-600: #f0665c; /* 5.31:1 on a card */
 
   /* --- Type scale ---------------------------------------------------------
    * UNTITLED UI'S PITCH, UNDER THE KIT'S DISCIPLINE.
@@ -382,39 +278,26 @@
    * a `text-sm` on a vendored component resolves to NOTHING and the component
    * arrives silently unstyled.
    *
-   * So the scale is now spelled the way the rest of the world spells it, with
-   * Untitled UI's values, and `scripts/check-ui.ts` still enforces a closed set
-   * — just a different one. `text-2xl` upwards remains uncompilable.
-   *
-   * THE EIGHT LEGACY ALIASES ARE GONE, AND THAT IS THE POINT OF THIS BLOCK.
-   *
-   * They were added as scaffolding — "a hundred component files keep compiling,
-   * and each surface drops its legacy spelling as it gets rebuilt anyway" — and
-   * the second half never happened. What the app had instead was TWELVE names
-   * resolving to NINE sizes, with three-way ties at 12px (`xs`/`micro`/`tiny`)
-   * and 16px (`md`/`base`/`lead`). Every one of them compiled, so `check:ui`
-   * passed while the same label was `text-micro` in one file and `text-xs` in
-   * the next — which is the exact failure this scale's opening argument is
-   * about, wearing the uniform of the fix.
-   *
-   * A closed set with two spellings per step is not closed. One name per size,
-   * and the gate now fails on the old ones (see `scripts/check-ui.ts`) rather
-   * than letting them resolve to nothing and vanish off the page.
+   * So the scale is spelled the way the rest of the world spells it, with
+   * Untitled UI's values, and `scripts/check-ui.ts` enforces a closed set — just
+   * a different one. `text-2xl` upwards remains uncompilable.
    *
    *   micro, tiny -> xs   ·   small, base -> sm   ·   lead -> md
    *   title -> lg   ·   display -> display-xs   ·   stat -> display-md
    *   hero -> display-lg
    *
-   * `base` MOVES A STEP DOWN in that table, and it is the only one that changes
-   * what anything looks like. It was re-pointed at `md` in cc8b7af ("a bigger
-   * scale") while `--text-sm` kept the comment calling it the app's default
-   * body — so body copy rendered at 16px wherever a file said `text-base` and
-   * 14px wherever it said `text-sm`, which is two body sizes chosen by spelling.
-   * Fourteen is the one the interface is built at. Long-form READING prose is
-   * the deliberate exception and asks for `text-md` by name: see ui/legal.tsx.
+   * `2xs` IS NEW, and it is the one step the reference added. It is the 10px
+   * ALL-CAPS badge — "Free", "Developer", an unread count — and it exists as a
+   * named step rather than an arbitrary value because there were about to be
+   * four of them and they were about to disagree. It is the ONLY size in the
+   * kit below 12px and it is never used for prose: at 10px a sentence is not
+   * small text, it is unreadable text, and the only thing legible at that size
+   * is a short string in caps with tracking opened up (see `--tracking-label`).
    */
-  --text-xs: 0.75rem; /* 12px */
-  --text-xs--line-height: 1.125rem;
+  --text-2xs: 0.625rem; /* 10px — the caps badge, and nothing else */
+  --text-2xs--line-height: 0.9375rem;
+  --text-xs: 0.75rem; /* 12px — labels, captions, dense controls */
+  --text-xs--line-height: 1rem;
   --text-sm: 0.875rem; /* 14px — the app's default body */
   --text-sm--line-height: 1.25rem;
   --text-md: 1rem; /* 16px — long-form reading prose, and the `lg` button */
@@ -440,71 +323,89 @@
   --text-banner: clamp(2.5rem, 1.4rem + 4.6vw, 4rem);
   --text-banner--line-height: 1.04;
 
+  /* THE MICRO-LABEL'S TRACKING, as a token because it is spelled at every caps
+     label in the product and 0.12px is not a number anybody re-types the same
+     way twice. Caps at 10–12px close up and stop being readable as words; this
+     is what re-opens them. */
+  --tracking-label: 0.12px;
+
   /* --- Radius -------------------------------------------------------------
-   * Three steps. Controls, cards, floating surfaces. Everything else was a
-   * one-off.
+   * THE LADDER LOST ITS TOP TWO RUNGS, AND THE PRODUCT LOOKS MORE COHERENT FOR
+   * IT.
+   *
+   * The kit ran control=8, card=10, surface=16 — three shapes for "a thing that
+   * contains something", which meant a panel, a card and a modal were three
+   * different objects on one screen and nothing said which was which. The
+   * reference draws exactly one: 10px, on every card, every panel, every
+   * popover and every select. `--radius-surface` drops from 16 to 10 and the
+   * distinction goes with it.
+   *
+   * The stock rungs 12 / 16 / 20 / 24 STAY DEFINED, because vendored components
+   * arrive spelling `rounded-xl` and a radius that compiles to nothing is the
+   * silent failure this file exists to prevent. They are simply not what the
+   * kit's own surfaces ask for.
    */
-  /* Untitled UI's ladder. The three steps the kit already used are IN it —
-     8, 12 and 16 — so the shapes on screen do not move; what changes is that
-     `rounded-md` / `rounded-lg` / `rounded-xl` now compile, which is what lets
-     a vendored component arrive looking like itself. */
-  --radius-xs: 0.25rem; /* 4px */
+  --radius-xs: 0.25rem; /* 4px — the 10px caps badge, and the smallest chips */
   --radius-sm: 0.375rem; /* 6px */
-  --radius-md: 0.5rem; /* 8px — inputs, buttons, nav items */
-  --radius-lg: 0.625rem; /* 10px */
-  --radius-xl: 0.75rem; /* 12px — tiles, sections, list rows */
-  --radius-2xl: 1rem; /* 16px — step cards, panels, modals, popovers */
+  --radius-md: 0.5rem; /* 8px — inputs, buttons, nav items, soft pills */
+  --radius-lg: 0.625rem; /* 10px — EVERY card, panel, popover and select */
+  --radius-xl: 0.75rem; /* 12px — vendored only */
+  --radius-2xl: 1rem; /* 16px — vendored only */
   --radius-3xl: 1.25rem; /* 20px */
   --radius-4xl: 1.5rem; /* 24px */
 
-  /* The kit's names, kept as aliases. Same pixels, so nothing reshapes. */
-  /* PILLS ARE FOR BUTTONS AND CHIPS, NOT FOR EVERYTHING.
-     This was `9999px` for one commit and 51 files inherited it — every text
-     field, every menu row, every small panel went capsule-shaped, which is not
-     what either sheet draws. The sheets pill BUTTONS and CHIPS; their inputs,
-     textareas, dropdown panels and cards are all rounded rectangles. Those two
-     components ask for `rounded-full` by name now, and this token goes back to
-     being the small radius everything else shares. */
+  /* The kit's names. PILLS ARE FOR BUTTONS AND CHIPS, NOT FOR EVERYTHING — this
+     was `9999px` for one commit and 51 files inherited it, so every text field,
+     menu row and small panel went capsule-shaped. Those two components ask for
+     `rounded-full` by name; this is the rectangle everything else shares. */
   --radius-control: var(--radius-md);
   --radius-card: var(--radius-lg);
-  --radius-surface: var(--radius-2xl);
-  /* THE FRAME'S OWN CORNER — where the ground is cut into the band's charcoal.
-     Applied TOP-LEFT ONLY, which is the one corner where the page meets both
-     halves of the band at once: the rail below-left and the top bar above. The
-     other three corners run to the viewport, and rounding them would float the
-     page inside the window like a card, which it is not.
+  --radius-surface: var(--radius-lg);
 
-     BACK FROM ZERO. It was 32px while the frame painted a gradient behind a
-     transparent rail, then 0 when the navigation briefly became a white column
-     and there was no wash left to cut into. There is again — the band is
-     charcoal and the ground is #f5f5f5 — and 16px is what the export draws. */
-  --radius-frame: 1rem;
+  /* THE FRAME'S CORNER IS ZERO, AND THAT IS THE WHOLE CHROME CHANGE IN ONE
+     TOKEN.
+     It was 16px: the radius of the notch cut out of the band's charcoal where
+     the light page met the rail below-left and the top bar above. There is no
+     notch now, because there is no second material to cut into — the rail, the
+     bar and the page are the same #0f1011 and what separates them is a
+     hairline. Rounding a corner between two identical surfaces draws a shape
+     nobody can see, on a page that then has to carry the layout cost of it.
+     Kept at 0 rather than deleted so `rounded-frame` stays a legal spelling for
+     whatever the builder's shell decides next. */
+  --radius-frame: 0px;
 
   /* --- Chrome band --------------------------------------------------------
    * How far the builder's floating panels stay clear of the canvas's top edge.
    *
-   * It was 106px — a 24px viewport inset plus a 58px toolbar island plus a
-   * 24px gap — because the builder floated its whole toolbar over the canvas.
-   * That toolbar is in the app's top bar now, so there is no island to clear
-   * and the band is the inset alone.
-   *
-   * Kept as a token rather than inlined because the config panel, the publish
-   * error banner and the warning banner all measure from it, and nothing but
-   * this variable keeps the four of them agreeing.
+   * It is the viewport INSET alone — not a function of the top bar's height —
+   * which is why shrinking that bar from 70px to 40px leaves this at 24. The
+   * config panel, the publish error banner and the warning banner all measure
+   * from it, and nothing but this variable keeps the four of them agreeing.
+   * `tests/chrome-band.test.ts` is what says so out loud.
    */
   --spacing-chrome-band: 24px;
 
-  /* --- Motion -------------------------------------------------------------
-   * THE TIMINGS WERE ALL ONE-OFFS. 0.12s, 0.16s, 0.19s, 200ms and four
-   * different cubic-beziers were spread across six files, which is why some
-   * things in the app felt crisp and others felt slightly wrong without
-   * anyone being able to say which.
+  /* --- The shell's own geometry -------------------------------------------
+   * THREE NUMBERS THAT HAVE TO AGREE ACROSS FOUR FILES.
    *
-   * Three durations and three curves. `standard` is the everyday
-   * colour/opacity change; `spring` is the one with overshoot, reserved for
-   * things that appear or that a user just did (a switch knob, a popping
-   * surface); `exit` is asymmetric on purpose — things should leave faster
-   * than they arrive, because a slow dismissal reads as lag while a slow
+   * The rail's width and the top bar's height are written in `sidebar.tsx`,
+   * `top-bar.tsx`, `app-frame.tsx` AND `shell-skeleton.tsx` — the last of which
+   * is a hand-copied mirror that stands in front of a streaming page. When they
+   * disagreed the app visibly JUMPED at hydration, which is the bug
+   * `tests/page-width.test.ts` was written after. Tokens, so there is one place
+   * to change and the skeleton cannot drift from the thing it stands in for.
+   */
+  --spacing-rail: 48px; /* the icon rail at rest */
+  --spacing-rail-open: 240px; /* and under the pointer */
+  --spacing-topbar: 40px; /* the bar's CONTENT box; +8px padding each side, +1px rule */
+
+  /* --- Motion -------------------------------------------------------------
+   * Three durations, three curves. The timings were all one-offs — 0.12s,
+   * 0.16s, 0.19s, 200ms and four different cubic-beziers across six files —
+   * which is why some surfaces felt snappy and others felt like lag.
+   *
+   * `spring` is only for things that APPEAR or that the user just did; exit is
+   * faster than entry, because a slow dismissal reads as lag while a slow
    * entrance reads as grace.
    */
   --ease-standard: cubic-bezier(0.2, 0, 0.13, 1);
@@ -515,537 +416,226 @@
   --duration-slow: 280ms;
 
   /* --- Elevation ----------------------------------------------------------
-   * One ladder in two finishes. A surface that is merely on the page uses the
-   * `raised` rung, one being dragged or hovered the `lifted` rung, one over
-   * the canvas `float`, and a modal `pop`.
+   * A SHADOW ON NEAR-BLACK IS ALMOST NOTHING, AND THE LADDER IS HONEST ABOUT
+   * IT NOW.
    *
-   * Cast in WARM ink (41 37 33) rather than cool slate. A shadow is the
-   * surface's own colour with the light taken out of it, so a blue-grey shadow
-   * under a warm-white card is light arriving from a different room — small,
-   * and one of the things that separates a palette that was assembled from one
-   * that was chosen.
+   * On the old #f5f5f5 ground a four-rung shadow ladder did real work: a card
+   * at rung 1 and a modal at rung 4 were visibly at different heights. Paint
+   * the same four rungs on #0f1011 and they are four indistinguishable
+   * nothings — black at 10% over near-black is a change of about one count.
+   *
+   * The reference knows this and draws its shadows anyway, at the same alphas,
+   * which is the right call and worth stating plainly rather than quietly
+   * "fixing": the shadow is not what separates a card from the page. THE BORDER
+   * IS. What the shadow does is keep the corner from looking cut out, and 10%
+   * black is enough for that.
+   *
+   * So the ladder keeps its rungs — vendored components spell `shadow-sm` and
+   * `shadow-lg` and must compile — but only two of them are ever chosen on
+   * purpose: `card` for anything in the page flow, `pop` for anything floating
+   * over it. The FLOATING ones carry a white inset ring instead of more black,
+   * because on a dark surface a hairline of light is the only thing that reads
+   * as height at all.
    */
-  /* UNTITLED UI'S LADDER, CAST IN THIS PRODUCT'S WARM INK.
-     Their geometry — the offsets and blurs — because it is a better-tuned
-     ladder than the one here; their neutral (10 13 18) replaced by the warm
-     (41 37 33) this file already argued for, since a blue-grey shadow under a
-     warm-white card is light arriving from a different room. */
-  --shadow-xs: 0 1px 2px 0 rgb(41 37 33 / 0.05);
-  --shadow-sm: 0 1px 3px 0 rgb(41 37 33 / 0.1), 0 1px 2px -1px rgb(41 37 33 / 0.1);
-  --shadow-md: 0 4px 6px -1px rgb(41 37 33 / 0.1), 0 2px 4px -2px rgb(41 37 33 / 0.1);
-  --shadow-lg: 0 12px 16px -4px rgb(41 37 33 / 0.08), 0 4px 6px -2px rgb(41 37 33 / 0.03);
-  --shadow-xl: 0 20px 24px -4px rgb(41 37 33 / 0.08), 0 8px 8px -4px rgb(41 37 33 / 0.03);
-  --shadow-2xl: 0 24px 48px -12px rgb(41 37 33 / 0.18);
-  --shadow-3xl: 0 32px 64px -12px rgb(41 37 33 / 0.14);
+  --shadow-xs: 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.2), 0 2px 4px -2px rgb(0 0 0 / 0.2);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.6);
+  --shadow-3xl: 0 32px 64px -12px rgb(0 0 0 / 0.7);
 
-  --shadow-raised: 0 0 0 1px rgb(41 37 33 / 0.05), 0 1px 2px rgb(41 37 33 / 0.05), 0 2px 4px -2px rgb(41 37 33 / 0.06);
-  --shadow-lifted: 0 0 0 1px rgb(41 37 33 / 0.06), 0 2px 4px rgb(41 37 33 / 0.05), 0 10px 20px -6px rgb(41 37 33 / 0.12);
-  --shadow-float: 0 0 0 1px rgb(41 37 33 / 0.07), 0 4px 8px -2px rgb(41 37 33 / 0.06), 0 16px 28px -8px rgb(41 37 33 / 0.14);
-  --shadow-pop: 0 0 0 1px rgb(41 37 33 / 0.07), 0 8px 16px -4px rgb(41 37 33 / 0.08), 0 28px 56px -12px rgb(41 37 33 / 0.2);
+  /* The ringed twins — the same heights with a light hairline on top. */
+  --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.04), 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-lifted: 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 8px -2px rgb(0 0 0 / 0.4);
+  --shadow-float: 0 0 0 1px rgb(255 255 255 / 0.06), 0 10px 15px -3px rgb(0 0 0 / 0.45);
+  --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.07), 0 25px 50px -12px rgb(0 0 0 / 0.6);
 
-  /* THE SAME LADDER, MINUS THE RING — and the rule that keeps being
-     rediscovered one component at a time.
-     `raised`, `lifted`, `float`, `pop` and `.flow-shadow` every one open with
-     a `0 0 0 1px` spread ring that stands in for an edge on a surface with no
-     border of its own. Put a real `border` on top of one and you get two
-     adjacent 1px bands in different hues, the OUTER one darker: the rim reads
-     2px thick and slightly dirty instead of as one crisp hairline, and it
-     stops being monotonic, because hovering swaps a lighter ring under a
-     border that never moved.
-     So: a surface that draws its own border takes the ring-free twin instead.
-     card replaces raised, card-hover replaces lifted, island replaces float,
-     panel replaces pop. shadcn's surfaces are border + soft shadow, which is
-     exactly this half of the ladder. */
+  /* The two the kit actually chooses, by name. */
   --shadow-card: var(--shadow-sm);
   --shadow-card-hover: var(--shadow-md);
   --shadow-island: var(--shadow-lg);
-  /* MODALS ONLY — pop minus its ring. Its 56px 0.2 halo is sized for a
-     centred dialog over a dimmed backdrop. Docked to the canvas it spread
-     DARKER than the 1px border it surrounded, so the ramp reversed at the
-     edge and the hairline read as a light stripe inside a bruise instead of
-     as an edge. The config panel takes `shadow-island`: it is another
-     surface floating on the canvas, exactly like the toolbar islands. */
-  --shadow-panel: var(--shadow-2xl);
-  /* THE ONE SHADOW EVERY FLOATING SURFACE USES — the step picker's own
-     elevation, minus its 1px ring because all of them draw a real border.
-     The top bar, the step cards, the config panel and the picker were on
-     four different rungs; a canvas where every floating thing sits at the
-     same height is the point, and one token is how it stays that way. */
-  --shadow-surface: var(--shadow-xl);
-
-  /* --- The rail ------------------------------------------------------------
-   * THE 30 IN A 60/30/10 SPLIT. White canvas is the 60, this rail is the 30,
-   * and the ultramarine accent is the 10 — which only works if the rail is NOT
-   * the accent. It has been Make's violet→fuchsia (theirs, not ours), the
-   * accent itself (so primary buttons had nothing to pop against), and a warm
-   * brown that matched nothing else in the palette.
-   *
-   * Now it IS the ink ladder's base: the warm near-black the ladder was built
-   * around, so the rail and every dark surface (the canvas toast) are the same
-   * material by construction rather than by coincidence.
-   */
-  /* FLAT, not a gradient. It was a three-stop wash so a 100px column would
-     not read as a slab; at this value it does not need the help, and a flat
-     colour is one number a future edit cannot get half-right.
-     The value itself is in `:root` / `.dark` — see the note in the canvas
-     section for why anything the theme switches cannot live in `@theme`. */
-
-  /* --- State, as tokens rather than raw palette picks ---------------------
-   * Green/amber/red were being reached for directly all over the app, which
-   * is how three different greens end up on one screen. Each state is a trio:
-   * the colour itself (dots, strokes), a soft wash (badge/banner fill), and
-   * an ink (text ON the wash). Pending/transient state takes `muted` +
-   * `muted-foreground` — deliberately NOT blue, so nothing competes with the
-   * ultramarine accent.
-   *
-   * THE INKS ARE SOLVED, NOT PICKED. Each one is the darkest step that still
-   * looks like its hue, chosen so that ink-on-its-own-soft lands in a 5.2–5.5:1
-   * band. That tight band is the point: a badge row where green measures 4.4
-   * and red measures 6.1 reads as inconsistent weight even when nobody can say
-   * why. The previous greens and ambers sat at 4.38 and 4.41 — under AA for
-   * the 11px semibold these are actually set in.
-   *
-   * The nine values are in `:root` / `.dark`, because a state wash is exactly
-   * the kind of thing that has to invert with the theme.
-   */
+  --shadow-panel: var(--shadow-pop);
+  --shadow-surface: var(--shadow-float);
 }
 
 /**
- * THE LIGHT ROLES.
+ * THE ROLES.
  *
- * This rule briefly carried a second selector — `.dark .tile-surface` — which
- * made the metric card a LIGHT ISLAND inside the dark theme. It existed to fix
- * a real measurement: the tile was forced white in dark by `dark:bg-white`,
- * which changed the surface and not the ink, so every muted label on it read
- * 2.52:1 against 4.5 required.
+ * Components should never name a RAMP (`bg-neutral-800`), they should name a
+ * ROLE (`bg-card`). The ramps above are the palette; these are the vocabulary,
+ * and they are what makes a surface change a one-file edit instead of a
+ * find-and-replace across ninety components.
  *
- * The island is gone because the thing it was compensating for is gone. The
- * tile follows the theme now (see ui/card.tsx), so a dark card carries the ink
- * the dark theme already solved for it and the whole problem stops existing.
- * Naming this block twice was the right patch for the wrong shape.
+ * THIS BLOCK USED TO HAVE A TWIN. There was a `:root` of light values and a
+ * `.dark` of dark ones, and roughly forty tokens had to be kept in step across
+ * the two by hand. The product ships one theme now, so there is one block, and
+ * the whole class of "these two disagreed and nobody noticed until a screenshot"
+ * bug is gone with it.
+ *
+ * The tokens that were RETIRED in that collapse are worth naming, because their
+ * classes still parse and would compile to nothing:
+ *
+ *   --ground, --ground-ink, --ground-ink-muted   the page was a different
+ *       surface from `--background` while the band wrapped it. It is the same
+ *       surface now, by construction rather than by coincidence, so it is the
+ *       same token. Use `bg-background` / `text-foreground` / `text-muted-foreground`.
+ *   --chrome-line, --chrome-chip, --chrome-chip-line, --chrome-badge,
+ *   --chrome-badge-ink, --chrome-presence, --chrome-avatar, --chrome-add-ink,
+ *   --chrome-ring-track                          nine tokens that existed only
+ *       because the band did not invert with the theme and therefore could not
+ *       use the roles. There is no theme to not-invert-with. Use `--border`,
+ *       `--card`, `--primary`, `--muted-foreground`.
+ *   --period-bg, --period-line, --period-ink     the period track was "the one
+ *       control that follows the PAGE rather than the band". Same surface now.
+ *       Use `--control` / `--border` / `--muted-foreground`.
+ *   --tab-underline                              use `--marker`.
+ *   --rail, --sidebar, --sidebar-accent          the rail is `--background`.
+ *   --marker-ink                                 the split's second step. The
+ *       violet needed one because 4.41:1 clears the 3:1 a rule owes and falls
+ *       short of the 4.5:1 a link does. The green is 9.83:1 and clears both.
+ *
+ * `scripts/check-ui.ts` fails the build on every one of them.
  */
 :root {
-  /* ---- shadcn semantic roles --------------------------------------------
-   * Components should never name a RAMP ("bg-brand-600"), they should name a
-   * ROLE ("bg-primary"). The ramps above are the palette; these are the
-   * vocabulary, and they are what makes a theme swap a one-file change
-   * instead of a find-and-replace across ninety components.
-   *
-   * Values point at the tokens already defined in @theme, so there is exactly
-   * one place each colour is decided.
-   */
-  --background: #f5f5f5; /* OFF-WHITE — the app's surface */
-  /* WARM NEAR-BLACK, not pure black. #000 on #fff is 21:1 — a contrast no
-     printed page has ever asked a reader to sustain, and the reason long
-     sessions in this kind of tool feel like glare. The warm 900 measures
-     16.43:1, which is still comfortably past AAA, and leaves the top of the
-     scale free so that something genuinely emphatic still has somewhere to go. */
-  --foreground: var(--color-neutral-900);
+  /* ---- Surface ----------------------------------------------------------- */
+  --background: var(--color-neutral-950); /* #0f1011 — rail, top bar and page */
+  --foreground: var(--color-neutral-200); /* #dcdcdc — 12.9:1 on the ground */
 
-  --card: #ffffff;
-  --card-foreground: var(--color-neutral-900);
-  --popover: #ffffff;
-  --popover-foreground: var(--color-neutral-900);
+  --card: var(--color-neutral-800); /* #1a1b1e — a 1.11:1 step; it draws its edge */
+  --card-foreground: var(--color-neutral-200);
+  --popover: var(--color-neutral-800);
+  --popover-foreground: var(--color-neutral-200);
 
-  /* THE FILL HALF OF THE SPLIT. Yellow, under near-black ink at 11.24:1 — and
-     the ink is a CONSTANT rather than `--foreground`, because the yellow does
-     not invert and neither may the thing written on it. A primary button is the
-     same object in both themes. */
-  --primary: var(--color-brand-600); /* #eecf00 */
-  --primary-foreground: #1a1a1a;
+  /* THE CONTROL SURFACE — one step DOWN from a card rather than up.
+     A select on a card is a recessed slot, not a raised chip: #141518 sits
+     between the card it is on and the ground behind it, which is what makes a
+     row of them read as fields rather than as buttons. */
+  --control: var(--color-neutral-900);
 
-  /* THE STROKE HALF. Every line and every coloured glyph in the product; see
-     the ramp's own note for the measurement that forces the split. `--marker`
-     is the object colour and `--marker-ink` the step that may carry text, and
-     the gap between them is the whole reason there are two: 4.41:1 clears the
-     3:1 a ring or a rule owes and falls short of the 4.5:1 a link does. */
-  --marker: var(--color-marker-500); /* #7c4dff — 4.41:1 on the ground */
-  --marker-ink: var(--color-marker-700); /* #6229f0 — 6.79:1 */
+  /* ---- Brand ------------------------------------------------------------- */
+  /* THE FILL. Green under near-black ink at 7.70:1 — and the ink is a CONSTANT
+     rather than `--foreground`, because a primary button is one object and the
+     thing written on it does not get to be #dcdcdc on #00bc7d (2.1:1). */
+  --primary: var(--color-brand-600);
+  --primary-foreground: var(--color-neutral-950);
 
-  --secondary: var(--color-neutral-100);
-  --secondary-foreground: var(--color-neutral-900);
+  /* THE STROKE. Every line, ring and coloured glyph: the focus ring, links, the
+     active tab's rule, the active rail chip's glyph, a selected edge. 9.83:1 on
+     the ground and 8.88:1 on a card, so unlike the violet it replaces it needs
+     no second step to carry text. */
+  --marker: var(--color-brand-500);
+  /* The brand as a WASH — the "Free" and "Developer" pills, a selected row, a
+     soft banner. Alpha rather than a mixed step so it sits correctly on the
+     card AND on the ground without a second token. */
+  --brand-soft: rgb(0 188 125 / 0.1);
+  --brand-soft-line: rgb(0 188 125 / 0.2);
 
-  --muted: var(--color-neutral-100);
-  --muted-foreground: var(--color-neutral-500);
+  /* ---- Neutral roles ----------------------------------------------------- */
+  --secondary: var(--color-neutral-700);
+  --secondary-foreground: var(--color-neutral-200);
 
-  /* The MARKER's tint pair, not the brand's. A selected menu row and a link
-     both live here, and both are things violet does — the row is a wash behind
-     ink rather than a filled object, and the link is text. A yellow wash under
-     yellow ink would be the one combination the split forbids. */
-  --accent: var(--color-marker-50);
-  --accent-foreground: var(--color-marker-700); /* 6.79:1 — the link step */
+  --muted: var(--color-neutral-800);
+  --muted-foreground: var(--color-neutral-300); /* #9ca3af — 6.78:1 on a card */
+
+  /* shadcn's hover wash, and it is NEUTRAL now. It was the marker's tint pair,
+     because on a light page a selected menu row wanted to say "selected" in the
+     product's own colour. On near-black a raised step already says it — coming
+     forward IS the selection — and a green wash behind every hovered row spends
+     the brand on the least important event in the interface. */
+  --accent: var(--color-neutral-700);
+  --accent-foreground: var(--color-neutral-200);
 
   --destructive: var(--color-red-600);
-  --destructive-foreground: #ffffff;
+  --destructive-foreground: var(--color-neutral-950);
 
-  /* The hairline, cut from the warm ramp so it belongs to the same family as
-     the shadow falling around it. It was #e5e4ed — a faintly lavender grey
-     chosen to match a cool palette that no longer exists. */
-  /* ONE HAIRLINE, AND IT IS THE EXPORT'S.
-     The export draws two — #cfcfcf around the card and #d3d3d3 around every
-     button and chip — which are FOUR COUNTS apart: indistinguishable on any
-     screen, and guaranteed to drift the first time one of them is edited alone.
-     That is the near-miss this file opens by arguing against, so they collapse
-     to the one the export uses most.
-     It is materially harder than the #e8e8e8 that was here (1.50:1 on white
-     against 1.21:1), which is what the export asks for; dividers and table
-     rules harden with it. `--color-neutral-200` deliberately stays #e8e8e8, so
-     the press states built on it do not darken along with the edges. */
-  --border: #d3d3d3;
-  /* The SAME hairline as --border, not a step darker. They were #d4d4d4 and
-     #e5e5e5, seventeen levels apart in one hue, so a select inside the config
-     panel was drawn harder than the panel containing it — almost-but-not-
-     quite, which reads as a mistake rather than a hierarchy. shadcn ships
-     these two equal for the same reason. */
+  /* ---- The hairline ------------------------------------------------------
+   * THE MOST LOAD-BEARING TOKEN IN THE FILE.
+   *
+   * In the old two-surface product a border was trim: a white card on a grey
+   * page was already a card, and the hairline only tidied its edge. Here it is
+   * the entire structure. #1a1b1e on #0f1011 is 1.11:1 — a step that exists in
+   * the numbers and not in the eye — so a card, a panel, a menu and the top bar
+   * are all announced by THIS VALUE and nothing else.
+   *
+   * 1.38:1 against the ground. That is under the 3:1 a non-text indicator owes,
+   * and it is correct: this is a seam between two surfaces, not the edge of a
+   * control, and nothing becomes unusable for a reader who cannot resolve it.
+   * The controls that DO owe 3:1 (a checkbox, a switch track, an input at rest)
+   * take `--color-neutral-500` instead, which is 2.4:1 — see the ramp's note on
+   * why the line half and the ink half of it never trade places.
+   */
+  --border: var(--color-neutral-600);
   --input: var(--border);
-  /* THE RING IS A STROKE, so it is the marker's, not the brand's. A yellow
-     focus ring measures 1.55:1 on white — the single most important indicator
-     in the product, invisible. */
-  --ring: var(--color-marker-400);
+  /* THE RING IS A STROKE, so it is the marker's. 9.83:1 on the ground — the
+     single most important indicator in the product, and on this surface the
+     brand is finally the right colour for it, which on the light page it
+     provably was not (1.55:1). */
+  --ring: var(--marker);
 
   /* shadcn components that do their own `calc()` off a single base radius. */
   --radius: 0.5rem;
 
-  /* ---- State ------------------------------------------------------------
+  /* ---- State -------------------------------------------------------------
    * Each state is a trio: the colour itself (dots, strokes), a soft wash
    * (badge/banner fill), and an ink (text ON the wash). The inks are SOLVED,
-   * not picked — each is the darkest step that still looks like its hue,
-   * chosen so ink-on-its-own-soft lands in a 5.2–5.5:1 band. A badge row where
-   * green measures 4.4 and red measures 6.1 reads as inconsistent weight even
-   * when nobody can say why.
+   * not picked — each is the step that lands ink-on-its-own-soft in a 5.2–5.5:1
+   * band. A badge row where green measures 4.4 and red measures 6.1 reads as
+   * inconsistent weight even when nobody can say why.
+   *
+   * SUCCESS IS THE BRAND, AND THAT IS A DELIBERATE COLLISION.
+   *
+   * The kit's old rule was "state is a separate vocabulary and never borrows
+   * from these", which was enforceable while the brand was yellow. It cannot
+   * survive a green brand: a success green that is not #00d492 is a second
+   * green four counts away, indistinguishable on screen and guaranteed to drift
+   * — the exact near-miss this file opens by arguing against.
+   *
+   * So the rule is replaced rather than patched: GREEN MEANS GOOD-OR-BRAND, and
+   * warn and danger are the only separate state hues. What keeps that from
+   * turning the console into a wall of green is the half of the old rule that
+   * was doing the real work anyway — STATUS IS QUIET WHEN FINE. A healthy thing
+   * carries a 6px dot; only a thing that needs something wears a full pill. A
+   * board where every card shows a green badge is furniture reporting no news,
+   * and it buries the one card that matters.
    */
-  --success: #16a34a;
-  --success-soft: #e8f6e9;
-  --success-ink: #14713a; /* 5.44:1 on its soft */
-  --warn: #e8720c;
-  --warn-soft: #fceedf;
-  --warn-ink: #a44a07; /* 5.18:1 on its soft */
-  --danger: #dc2626;
-  --danger-soft: #fbe6e3;
-  --danger-ink: #b42318; /* 5.49:1 on its soft */
+  --success: var(--color-brand-500);
+  --success-soft: rgb(0 188 125 / 0.1);
+  --success-ink: var(--color-brand-400);
+  --warn: #f5a524;
+  --warn-soft: rgb(245 165 36 / 0.1);
+  --warn-ink: #f7b955;
+  --danger: #fb2c36;
+  --danger-soft: rgb(251 44 54 / 0.1);
+  --danger-ink: #ff7a80;
 
-  /* ---- The working surface and the rail ---------------------------------- */
-  --canvas-bg: #f5f5f5;
-  --canvas-dot: #d6d6d6; /* Δ 31, 31, 31 from off-white */
-  --canvas-edge: #98a2b3;
-  --rail: #ffffff;
-  /* The sidebar is a RECESSED surface now, not a dark wall: one step off the
-     page, separated by a hairline rather than by 40 points of luminance. */
-  --sidebar: #ffffff;
-  --sidebar-accent: var(--color-neutral-200);
+  /* ---- The builder's canvas ----------------------------------------------
+   * FROZEN, AND THE SIX COUNTS ARE ON PURPOSE.
+   *
+   * The canvas and its nodes are explicitly out of scope for this re-theme, so
+   * these keep the exact values they had in the old dark theme rather than
+   * moving to #0f1011 with everything else. The consequence is visible and
+   * known: the canvas sits six counts off the chrome around it. Changing it is
+   * a canvas decision, and this is not the pass that gets to make one.
+   */
+  --canvas-bg: #1b191a;
+  --canvas-dot: #2e3646;
+  --canvas-edge: #475467;
 
   /* The far end a group's name is mixed toward — see `groupInk` in
-     node-accent.ts. Warm near-black here so the label sits on its own pale
-     badge; near-white in the dark theme, where the badge is the dark thing. */
-  --group-ink-end: #0c111d;
-
-  /* ---- The chrome: the icon rail and the top bar -------------------------
-   * ONE DARK BAND, WRAPPING A DARK PAGE.
-   *
-   * The 264px sidebar is a 70px icon rail now, and it and the 70px top bar are
-   * a single near-black band around a board that itself sits on a dark ground.
-   *
-   * THAT BAND'S COLOUR IS NOT NEW. The Figma measures #0F1011, which is 0, 1
-   * and 2 counts off `--color-ink-950` — a difference no screen and no eye can
-   * resolve, and precisely the near-miss this file's opening argument is about:
-   * two near-blacks under two names, indistinguishable today and drifting apart
-   * at the first edit. The chrome is `ink-950`. The nine tokens below are only
-   * what the ramps genuinely do not already hold.
-   *
-   * They are declared HERE, beside the other roles, rather than in `@theme`,
-   * because they are roles — a component should ask for `border-chrome-line`,
-   * not for a grey. They are deliberately ABSENT from `.dark`: this band is the
-   * one part of the app that does not invert. It is the same material at both
-   * exposures by construction, so a `.dark` twin would be nine values to keep
-   * in step for no visible change — and nine chances to fall out of step.
-   */
-
-  /* The hairline that closes the band — the rail's right edge, the top bar's
-     bottom, and the period control's rim. Neither existing hairline could do
-     this job: `--border` is a light-surface value that vanishes on near-black,
-     and `ink-700` was drawn to divide the rail from ITSELF, where it only has
-     to beat one surface. This one has to read against the page ground beside it
-     too. 2.11:1 on the chrome — under the 3:1 non-text bar, and correctly so:
-     it is the seam between two surfaces, not the edge of a control, and nothing
-     becomes unusable for a reader who cannot resolve it. */
-  --chrome-line: #5e5e5e;
-  /* The 36px chip under the top bar's bell and avatar, and under the rail's
-     "+". It INVERTED: it was a solid #d3d3d3 disc, and the export draws a WHITE
-     one with a #d3d3d3 hairline around it. That is a different object — a light
-     surface with an edge, which is what every other pill in the bar is, rather
-     than a grey blob — and it is what makes the bell, the avatar, "Invite
-     members" and "New flow" read as one row of controls at one elevation.
-     White is 15.4:1 against the band and carries near-black ink at 18.9:1. */
-  --chrome-chip: #ffffff;
-  /* Their hairline. A CONSTANT beside the other chrome roles rather than
-     `--border`, for the reason the whole `--chrome-*` block exists: the top bar
-     carries a scoped `dark` class so the builder's portalled toolbar re-inks
-     for the surface it lands on, and `--border` under that class answers with
-     the DARK theme's #3d3d3d — a near-invisible edge on a white chip. */
-  --chrome-chip-line: #d3d3d3;
-  /* The unread-count badge on that bell. THE BRAND, and it is a fill carrying
-     dark ink, which is the only shape yellow is allowed to take. It was blue
-     (#3859ff) on the argument that a count is neither a failure nor a
-     selection and deserved its own colour; that argument was answered by the
-     rebrand rather than overruled by it. Selection is no longer violet, so
-     there is nothing left for a yellow badge to collide WITH, and a fourth
-     hue in a band that already holds charcoal, yellow and violet was one
-     colour more than the chrome could say anything with. 8.77:1 on the band. */
-  --chrome-badge: var(--color-brand-600);
-  --chrome-badge-ink: #1a1a1a; /* 11.24:1 on the badge */
-  /* The presence dot on the RAIL's bell — 8px, no number, so it says "there is
-     something" rather than "there are three". It follows the badge above onto
-     the brand for the same reason, and loses the green it had: that green was
-     chosen to avoid `--success` ("a row succeeded") while still reading as
-     health, and a notification is not a health report either. The yellow says
-     only "the product wants you", which is all a dot can honestly mean. */
-  --chrome-presence: var(--color-brand-600);
-  /* The workspace avatar in the top bar — and the ONE place violet is a fill
-     rather than a stroke. It is IDENTITY: which workspace you are in, a fact
-     about your account rather than a control, so it is not competing with the
-     yellow for a press. The export measures #7c4dff, which is `marker-500`
-     exactly — the ramp the product already had, doing the one job the rebrand
-     left it. #f5f5f5 on it measures 4.42:1, at AA for the 14px/600 the initial
-     is set in. */
-  --chrome-avatar: var(--color-marker-500);
-  /* The "+" in the rail's foot. Its chip is WHITE now rather than yellow — the
-     export moved the brand off this control and onto the mark and the active
-     row — so the grey is no longer softening a neon, it is ordinary ink on an
-     ordinary chip: 7.23:1 on white. Kept as a role because the chip is chrome
-     and must not answer the scoped `dark`. */
-  --chrome-add-ink: #575757;
-  /* The metrics ring in the top bar. Its TRACK is a dark step (the arc has to
-     have something to be drawn against) and its ARC is the brand — the one
-     place in the product yellow is allowed to be a stroke, because on this band
-     it measures 8.77:1 rather than the 1.42:1 it would manage on the page. */
-  --chrome-ring-track: #4a4a4a;
-
-  /* ---- The ground: the page the board sits on ----------------------------
-   * WHITE TILES ON A DARK PAGE — the builder's grammar (see the canvas note
-   * above) taken one exposure further. On the old off-white page a white card
-   * was announced only by its hairline; on the dark ground its own edge does
-   * the work, and the tile's number is the loudest thing on screen again,
-   * which is the whole thesis at the top of this file.
-   *
-   * AND THE GROUND IS THE ONLY THING IN THE CHROME REDESIGN THAT SWITCHES.
-   *
-   * The band never inverts — that is the argument in the chrome note above,
-   * and it is what Miro, Notion and Linear all do: a rail that changes colour
-   * with the theme is a rail with no identity. The PAGE inside it has to,
-   * because a light theme whose only light surfaces are the cards is not a
-   * light theme — it is the dark one with white boxes on it.
-   *
-   * So the ground is one role with two answers, and the two inks that sit on
-   * it come with it. The light three are here, the dark three are in `.dark`,
-   * and there are no others: the metric tiles, the group columns, the white
-   * "New group" / "All sources" pills and the yellow "Refresh all" are the same
-   * objects at both exposures.
-   *
-   * LIGHT — the canvas the app already ships. Deliberately NOT a new grey:
-   * `--background` and `--canvas-bg` are both this value, and a page ground a
-   * half-step off either of them is precisely the near-miss this file opens by
-   * arguing against.
-   */
-  --ground: var(--color-neutral-100);
-  /* The page title. 15.96:1 on the light ground — the same ink everything else
-     in the light theme reads in, because a title that is a DIFFERENT near-black
-     from the body text around it is a second foreground nobody asked for. */
-  --ground-ink: var(--color-neutral-900);
-  /* The subtitle under it. 4.89:1 on the light ground — past AA at the 14px/400
-     it is set in, and a clear rung below the title's 15.96:1 so the pair reads
-     as a hierarchy rather than as two greys arguing.
-     Written as the RAMP step rather than as `--muted-foreground`, even though
-     the two are the same colour here: that role inverts to `neutral-400` in
-     dark and this ink does not follow it there. Two tokens that happen to agree
-     in one theme are not one token. */
-  --ground-ink-muted: var(--color-neutral-500);
-  /* The 2px rule under the active tab, and the one token the rebrand REPAIRED
-     rather than merely recoloured.
-     It was green #00d492, and the note that stood here confessed the problem in
-     its own words: 9.02:1 on the dark ground but "1.78:1 on the light one,
-     where a 2px rule is well under the 3:1 an indicator that carries state is
-     meant to hold… If the tab row ever loses that weight change, this token
-     needs a light answer of its own."
-     A rule is a STROKE, and the split now says what a stroke is drawn in. The
-     marker measures 4.41:1 on the light ground and 6.60:1 on the dark one, so
-     the underline carries the state on its own at both exposures and stops
-     depending on the weight change beside it to be legible at all. The green
-     had no job left: it was chosen to differ from a selection violet that the
-     rail no longer wears. */
-  --tab-underline: var(--color-marker-500);
-
-  /* ---- The period control: the one control that follows the page ---------
-   * Today · Yesterday · Last 7 days · … — a pill group at the right of the
-   * page header. It sits on the GROUND, not on the band, and that is the whole
-   * reason it is the one control here that inverts: a near-black pill group on
-   * a #f5f5f5 page is a second dark object competing with the chrome for the
-   * eye, and the chrome has to win that fight, because it is the thing that
-   * says where you are.
-   *
-   * THREE TOKENS, NOT FIVE. The active pill is `bg-primary` +
-   * `text-primary-foreground`, which answer in BOTH themes, and giving them a
-   * second name here is how a product ends up with two primaries that drift
-   * apart at the first edit.
-   *
-   * THAT PILL IS YELLOW NOW, and it follows from the split rather than from the
-   * export (which does not draw this control). An active segment is a FILLED
-   * object — the same object as the rail's active chip, one surface over — and
-   * the rule says a filled object is the brand. It also keeps the two "you are
-   * here" marks in the product spelled the same way, which the old arrangement
-   * did by accident and would have lost: the rail's chip went yellow while this
-   * pill stayed violet, and two selections in two colours point at nothing.
-   *
-   * LIGHT — a white group with the app's own hairline, so it reads as the same
-   * material as the white pills beside it in the action row.
-   */
-  --period-bg: #ffffff;
-  --period-line: var(--color-neutral-200); /* 1.23:1 — a seam, not an edge */
-  /* The inactive label, and the one value the spec holds fixed across both
-     themes. It is comfortable in light (5.33:1 on the white group) and it is
-     NOT in dark: 3.60:1 on the near-black group, under AA for the 14px/500
-     these pills are set in. Kept because it is what the export measures and
-     because these labels are a segmented control whose active member is
-     unmistakable — but it is the weakest text in the redesign, and the fix if
-     it is ever taken is `neutral-400` in `.dark`, which lands at 7.6:1. */
-  --period-ink: var(--color-neutral-500);
+     node-accent.ts. Near-white, because the badge is the dark thing. */
+  --group-ink-end: #f9fafb;
 }
 
 /**
- * DARK.
+ * THE BRIDGE.
  *
- * THE PROBLEM THIS THEME HAD TO SOLVE. In light mode the rail is the dark
- * thing in a light app, and `AppFrame` cuts a 32px notch out of the page so
- * the rail's wash shows through it. Take the light away and that contrast is
- * gone — rail and page are both dark, and the notch stops meaning anything.
- *
- * So separation comes from ELEVATION instead, and the ladder runs the other
- * way: the rail is the darkest surface, the page sits one step above it, and
- * cards sit above that. Coming forward means getting lighter, which is how a
- * dark interface expresses depth, and the notch still reads because the rail
- * is still a different (darker) surface from the page beside it.
- *
- * Every value below is cut from the ramps already in `@theme` — no new greys —
- * so the two themes are demonstrably the same palette at two exposures.
+ * A role declared in `:root` is a custom property and nothing more — only an
+ * inline style could reach it. This block is what makes each one a UTILITY, so
+ * `bg-card`, `text-muted-foreground`, `border-border` and `ring-marker` all
+ * COMPILE. Without it the roles above are forty variables and a rail ends up
+ * with a hex in its class list.
  */
-.dark {
-  --background: var(--color-neutral-900); /* #211f1d — the page */
-  --foreground: var(--color-ink-50); /* 15.2:1 on the page */
-
-  --card: var(--color-neutral-800); /* #2c2a26 — one step forward */
-  --card-foreground: var(--color-ink-50);
-  --popover: var(--color-neutral-800);
-  --popover-foreground: var(--color-ink-50);
-
-  /* THE PRIMARY DOES NOT INVERT, and this is the one role in the block that
-     restates its light value rather than answering differently.
-     The old note here explained why violet had to move a step (brand-600 was
-     7.19:1 on white and 1.5:1 on the dark page — it disappeared). The yellow
-     has the opposite problem, which is to say none: it is a LIGHT fill, so it
-     is 8.20:1 on the dark page and 11.24:1 under its own ink at both exposures.
-     A primary button is deliberately the same object in both themes — the same
-     argument the band makes about itself, applied to the one control the band
-     is there to point at. */
-  --primary: var(--color-brand-600);
-  --primary-foreground: #1a1a1a;
-
-  /* The marker's object step is unchanged (marker-500 is a mid-tone chosen to
-     work on both grounds — 6.60:1 here), but its INK step cannot survive: #6229f0
-     measures 1.55:1 on this page and is not dim, it is gone. Ink goes UP the
-     ramp in dark exactly as it goes down in light. */
-  --marker: var(--color-marker-500);
-  --marker-ink: var(--color-marker-300); /* #b494ff — 7.02:1 on the page */
-
-  --secondary: var(--color-neutral-800);
-  --secondary-foreground: var(--color-ink-50);
-
-  --muted: var(--color-neutral-800);
-  --muted-foreground: var(--color-neutral-400); /* 6.49:1 on page, 5.66:1 on card */
-
-  /* The light theme's accent is a MARKER tint (marker-50). Its dark twin has to
-     be a marker SHADE, or a selected row glows brighter than the primary
-     button. 6.71:1 for the ink on it. */
-  --accent: #241e50;
-  --accent-foreground: var(--color-marker-300);
-
-  /* Unchanged: red-600 carries white at 4.53:1, so the destructive button is
-     the same object in both themes rather than inverting into a pale pill. */
-  --destructive: var(--color-red-600);
-  --destructive-foreground: #ffffff;
-
-  --border: var(--color-neutral-700);
-  --input: var(--border);
-  --ring: var(--color-marker-400); /* 4.24:1 on a card — past the 3:1 non-text bar */
-
-  /* State, re-solved for dark rather than inverted by eye.
-     The light trios put dark ink on a pale wash at 5.2–5.5:1; flipping that
-     naively gives a MID-tone ink on near-black, which reads muddy. These are
-     light ink on a lifted wash, solved to 6.9–7.0:1 — and, more to the point,
-     solved to within 0.07 of EACH OTHER, which is what the band was always
-     for. The solids are solved separately, per hue, to 4.6:1 on a card:
-     equal HSL lightness is not equal luminance, and a green and a red set to
-     the same lightness differ by more than 2:1. */
-  --success: #25a75b; /* 4.61:1 on a card */
-  --success-soft: #244c35;
-  --success-ink: #ace7c5; /* 6.94:1 on its soft */
-  --warn: #da7925; /* 4.60:1 */
-  --warn-soft: #4c3724;
-  --warn-ink: #e7c7ac; /* 7.00:1 on its soft */
-  --danger: #da756c; /* 4.60:1 */
-  --danger-soft: #4c2724;
-  --danger-ink: #e7b1ac; /* 6.95:1 on its soft */
-
-  /* The canvas is the page, and the rail drops below it. The dot keeps the
-     same 20–45 per-channel separation the light theme was tuned to — it is a
-     texture that must survive being zoomed out, not a colour. */
-  --canvas-bg: var(--color-neutral-900);
-  --canvas-dot: #2e3646; /* Δ 30, 30, 30 from the canvas */
-  --canvas-edge: #475467;
-  --rail: var(--color-neutral-950);
-  --sidebar: var(--color-neutral-950);
-  --sidebar-accent: var(--color-neutral-800);
-  --group-ink-end: #f9fafb;
-
-  /* ---- The ground, and the two inks on it -------------------------------
-   * THE HALF OF THE CHROME REDESIGN THAT INVERTS. The band around this page
-   * does not — the six `--chrome-*` roles are absent from this block on
-   * purpose, and the note beside them in `:root` is why.
-   *
-   * THE STEP BETWEEN THEM REVERSED WHEN THE BAND LIGHTENED, and the reversal is
-   * the correct one rather than something to correct. The band was #0f0f0f and
-   * this ground sat a hair above it, so the rail read as very slightly recessed.
-   * The band is #2e2e2e now, which puts it 1.29:1 ABOVE this page — and that is
-   * the same direction the whole ink ladder turned when the band moved (see its
-   * note: on a charcoal band, raised means lighter). The chrome is the surface
-   * in front and the page is behind it, consistently, in both themes.
-   *
-   * The magnitude is what was worth preserving, not the sign: 1.29:1 is still
-   * deliberately below the threshold at which two surfaces read as two
-   * MATERIALS. The chrome and the page are one dark substance at two
-   * exposures, rather than two panels that failed to match.
-   */
-  --ground: #1b191a;
-  /* The page title — 17.49:1. Pure white, not `--foreground`'s ink-50: this is
-     the one surface in the app where a heading has nothing above it to defer
-     to, and #fafafa here measures 16.76:1 to white's 17.49:1 — the same
-     decision, one step short of it. */
-  --ground-ink: #ffffff;
-  /* The subtitle. 6.89:1, a clear rung below the title so the pair still reads
-     as a hierarchy. `--muted-foreground` cannot serve: at 1.9:1 on this ground
-     it is not dim, it is gone. */
-  --ground-ink-muted: #9ca3af;
-
-  /* The period control, which lives on the ground and therefore moves with it.
-     Near-black on near-black, held apart by the chrome hairline — which is what
-     makes the group read as a recessed track with one lit pill in it rather
-     than as six loose labels. `--period-ink` is deliberately NOT restated here;
-     see its note in `:root` for the ratio that costs. */
-  --period-bg: var(--color-ink-950);
-  --period-line: var(--chrome-line);
-}
-
-/* Roles become utilities: `bg-primary`, `text-muted-foreground`,
-   `border-border`, `ring-ring`. `inline` so they resolve to the same values
-   the CSS vars hold rather than being re-declared. */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -1053,14 +643,12 @@
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
+  --color-control: var(--control);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  /* The stroke half of the split, so `border-marker`, `ring-marker`,
-     `stroke-marker` and `text-marker-ink` COMPILE. Without this pair the rule
-     in the brand block is advice rather than something a component can spell —
-     and a rule you cannot write down in a class list gets ignored. */
   --color-marker: var(--marker);
-  --color-marker-ink: var(--marker-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-line: var(--brand-soft-line);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -1072,10 +660,6 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-
-  /* The state trios and the working surface, bridged the same way, so
-     `bg-success-soft`, `text-warn-ink`, `bg-canvas-bg` and `.bg-rail` all
-     answer to the theme instead of being frozen at their light values. */
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-success-ink: var(--success-ink);
@@ -1088,41 +672,6 @@
   --color-canvas-bg: var(--canvas-bg);
   --color-canvas-dot: var(--canvas-dot);
   --color-canvas-edge: var(--canvas-edge);
-  --color-rail: var(--rail);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-accent: var(--sidebar-accent);
-
-  /* The chrome band, the ground the board sits on, and the period control,
-     bridged the same way, so `border-chrome-line`, `bg-chrome-chip`,
-     `bg-chrome-badge`, `bg-chrome-presence`, `bg-chrome-avatar`,
-     `text-chrome-add-ink`, `bg-ground`, `text-ground-ink`,
-     `text-ground-ink-muted`, `border-tab-underline`, `bg-period-bg`,
-     `border-period-line` and `text-period-ink` all COMPILE. Without this half
-     nothing above is a utility — it is twelve custom properties that only an
-     inline style could reach, which is how a rail ends up with a hex in its
-     class list.
-
-     The `--chrome-*` six resolve to one value in both themes because they are
-     declared only in `:root`; the ground three and the period two answer
-     differently under `.dark` because they are declared in both. That
-     difference is the entire theme story of this redesign, and it is legible
-     right here in which block each name appears in. */
-  --color-chrome-line: var(--chrome-line);
-  --color-chrome-chip: var(--chrome-chip);
-  --color-chrome-chip-line: var(--chrome-chip-line);
-  --color-chrome-badge: var(--chrome-badge);
-  --color-chrome-badge-ink: var(--chrome-badge-ink);
-  --color-chrome-presence: var(--chrome-presence);
-  --color-chrome-avatar: var(--chrome-avatar);
-  --color-chrome-add-ink: var(--chrome-add-ink);
-  --color-chrome-ring-track: var(--chrome-ring-track);
-  --color-ground: var(--ground);
-  --color-ground-ink: var(--ground-ink);
-  --color-ground-ink-muted: var(--ground-ink-muted);
-  --color-tab-underline: var(--tab-underline);
-  --color-period-bg: var(--period-bg);
-  --color-period-line: var(--period-line);
-  --color-period-ink: var(--period-ink);
 }
 
 /**
@@ -1135,27 +684,24 @@
 html {
   /* SAYING WHICH THEME IS ON is not a no-op: it decides how the browser paints
      scrollbars, spinners, native <select> popups and form controls, none of
-     which we style. Get it wrong and a visitor whose OS is dark sees dark
-     scrollbars against our white surfaces — and every control is repainted at
-     hydration when the class finally lands.
-     Declared per-theme rather than once, because there are two now. */
-  color-scheme: light;
+     which we style. Get it wrong and every native control on the page arrives
+     as a light widget on a near-black surface.
+     ONE VALUE NOW, and this line is also why deleting the light theme did not
+     need a `prefers-color-scheme` fallback: the app declares its own scheme
+     rather than asking. */
+  color-scheme: dark;
   /* Anchored headings otherwise land flush against the top of the viewport
      with their first line under the edge. */
   scroll-padding-top: 5rem;
 }
 
-html.dark {
-  color-scheme: dark;
-}
-
 /**
  * `tabindex="-1"` IS NOT A CONTROL, AND MUST NOT RING.
  *
- * The selector above deliberately catches anything focusable, which was right
- * while every focusable thing in the app was a control. Radix changed that: it
- * puts `tabindex="-1"` on menu, dialog and popover CONTENT and focuses it
- * programmatically on open, so the shared outline drew a hard 2px box around
+ * The focus-ring selector below deliberately catches anything focusable, which
+ * was right while every focusable thing in the app was a control. Radix changed
+ * that: it puts `tabindex="-1"` on menu, dialog and popover CONTENT and focuses
+ * it programmatically on open, so the shared outline drew a hard 2px box around
  * every dropdown the moment it appeared.
  *
  * `-1` means "reachable by script, never by Tab" — which is exactly the set
@@ -1187,13 +733,9 @@ html.dark {
  * the menu is at 30, which is the order that makes the ghost visible — the
  * reverse looked like the card had been swallowed.
  *
- * TOASTS SIT AT 40, BELOW MODAL SURFACES, and this note was wrong about that
- * before it was written — it listed them at 50 to match Radix while the
- * shipped `ui/toast.tsx` had been at 40 all along. The code is the fact and it
- * is also the better rule: a dialog is a focused task with its own scrim, and
- * a toast from the page behind it punching through that scrim reads as a bug.
- * Moving them to 50 is a stacking-BEHAVIOUR change, not a restyle, and wants
- * its own commit and its own look on screen.
+ * TOASTS SIT AT 40, BELOW MODAL SURFACES. A dialog is a focused task with its
+ * own scrim, and a toast from the page behind it punching through that scrim
+ * reads as a bug.
  */
 
 /**
@@ -1216,9 +758,10 @@ textarea {
 }
 
 /* Chosen rather than inherited: the default is a translucent grey block that
-   ignores our radii, so a tapped pill flashes as a rectangle. */
+   ignores our radii, so a tapped pill flashes as a rectangle. The brand at 12%,
+   which on this ground is a flash of green rather than a grey smear. */
 html {
-  -webkit-tap-highlight-color: rgb(124 77 255 / 0.12);
+  -webkit-tap-highlight-color: rgb(0 212 146 / 0.12);
 }
 
 body {
@@ -1230,24 +773,23 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  /* Inter at UI sizes wants a touch of negative tracking — Linear runs
-     -0.011em at 15px and -0.013em at 14px; anything past that is the limit
-     the four reference products never cross. */
-  letter-spacing: -0.008em;
-  /* Linear's typographic identity, verbatim from their live CSS: cv01
-     (alternate a) + ss03 (rounded r). Without these you get default Inter,
-     which is exactly the "every AI project" look this kit exists to shed. */
-  font-feature-settings: "cv01", "ss03";
+  /* THE TRACKING IS OFF NOW, and that is a consequence of the typeface change
+     rather than a change of taste. The -0.008em here was cut for Inter, which
+     wants a touch of negative tracking at UI sizes — Linear runs -0.011em at
+     15px. SF Pro Text does not: it ships optical sizing that has already
+     tightened the small sizes, and pulling it in further is what makes a Mac
+     render the interface a half-step denser than the design. Inter still gets
+     its correction, from the fallback stack rather than from here. */
+  letter-spacing: normal;
 }
 
 /**
  * AN AUTOFILLED FIELD IS STILL ONE OF OUR FIELDS.
  *
  * When a browser fills an input it paints its own background — a pale blue or
- * yellow wash straight from the UA stylesheet — and it wins over `bg-card`
- * because it is applied to a pseudo-class no author rule outranks. On a warm
- * white form that lands as one cold blue box among five, which is exactly what
- * a screenshot of the connect form showed.
+ * yellow wash straight from the UA stylesheet — and it wins over `bg-control`
+ * because it is applied to a pseudo-class no author rule outranks. On a
+ * near-black form that lands as one glowing pale box among five.
  *
  * The inset shadow is the documented way to defeat it: the fill is painted
  * behind the shadow, so a 1000px inset spread in our own surface colour covers
@@ -1255,11 +797,10 @@ body {
  *
  * `-webkit-text-fill-color` for the same reason: the UA overrides `color` on a
  * filled field, and without this a filled value reads in the browser's near-
- * black rather than the kit's warm one.
+ * black — which on this surface is invisible rather than merely wrong.
  *
  * NOT a licence to autofill: `ui/input.tsx` turns it off wherever it would be
- * wrong (see `NO_AUTOFILL`). This is what the two fields that legitimately fill
- * — the invite email — should look like when they do.
+ * wrong (see `NO_AUTOFILL`).
  */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
@@ -1267,8 +808,8 @@ input:-webkit-autofill:focus,
 textarea:-webkit-autofill,
 select:-webkit-autofill {
   -webkit-text-fill-color: var(--foreground);
-  -webkit-box-shadow: 0 0 0 1000px var(--card) inset;
-  box-shadow: 0 0 0 1000px var(--card) inset;
+  -webkit-box-shadow: 0 0 0 1000px var(--control) inset;
+  box-shadow: 0 0 0 1000px var(--control) inset;
   caret-color: var(--foreground);
 }
 
@@ -1295,21 +836,25 @@ select:-webkit-autofill {
 /* A SCROLLER THAT DOES NOT SHOUT.
 
    Opt-in, for the horizontal scrollers the dashboard board is built from. The
-   platform bar is a heavy, near-black slab on macOS whenever a mouse is
-   attached, and two of them stacked across a page of quiet cards read as the
-   loudest thing on the screen — furniture outranking the numbers, which is the
-   one thing "quiet chrome, loud numbers" forbids.
+   platform bar is a heavy slab on macOS whenever a mouse is attached, and two
+   of them stacked across a page of quiet cards read as the loudest thing on the
+   screen — furniture outranking the numbers, which is the one thing "quiet
+   chrome, loud numbers" forbids.
 
    Both spellings on purpose: `scrollbar-width` / `scrollbar-color` are the
    standard and cover Firefox and current Chrome, and the `::-webkit-` rules
    cover Safari, which still implements neither. A browser that honours only one
    gets the same result rather than half of it.
 
+   THE THUMB IS A SURFACE STEP, NOT AN INK ONE. It was `neutral-300`, which on
+   the light ramp was a pale grey and on this one is #9ca3af — a bar brighter
+   than the body text it scrolls past.
+
    NOT GLOBAL. A page's own scrollbar is a navigation aid and stays the size the
    platform made it; this is for bars that sit inside the content. */
 .quiet-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-neutral-300) transparent;
+  scrollbar-color: var(--color-neutral-500) transparent;
 }
 .quiet-scroll::-webkit-scrollbar {
   height: 10px;
@@ -1321,7 +866,7 @@ select:-webkit-autofill {
 .quiet-scroll::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   background-clip: content-box;
-  background-color: var(--color-neutral-300);
+  background-color: var(--color-neutral-500);
   border-radius: 999px;
 }
 .quiet-scroll:hover::-webkit-scrollbar-thumb {
@@ -1342,11 +887,7 @@ select:-webkit-autofill {
    `ROW_UNIT_PX` the resize gesture converts pixels to rows with. The two numbers
    are one fact spelled two ways, and src/lib/board/grid.ts owns it; a tile `h`
    rows tall measures `h * 40 - 16` px. If they ever disagree, a tile settles a
-   row away from where it was dropped.
-
-   The cells are placed on explicit grid lines, so DOM order does not decide
-   position — it decides TAB order, and it is the desktop reading order at every
-   width, which is the only order that is honest on a phone. */
+   row away from where it was dropped. */
 .board-canvas {
   display: grid;
   grid-template-columns: repeat(1, minmax(0, 1fr));
@@ -1381,23 +922,21 @@ select:-webkit-autofill {
    product (Stripe: "tnum" on metric spans only). For numbers that update in
    place: a metric that reflows as it ticks reads as jitter, not change. */
 .tnum {
-  font-feature-settings: "cv01", "ss03", "tnum";
+  font-feature-settings: "tnum";
   font-variant-numeric: tabular-nums;
 }
 
 /**
- * THE LEDGER NUMERAL — the product's one signature, and the only place the
- * display face and tabular figures are used together.
+ * THE LEDGER NUMERAL — the product's one signature.
  *
  * A tile's number is the entire payoff of the product: six tools disagreed,
- * and this is the answer. Set in Inter at UI tracking it read as a slightly
- * large label. In the display face at -0.03em it reads as a figure on a
- * statement — which is what it is, and what the user is going to quote to
- * somebody else.
+ * and this is the answer. It carries the WHOLE separation between the chrome
+ * and the content now that there is no second typeface doing half of it — 36px
+ * at -0.03em against a 14px interface, which is a bigger gap than a family
+ * change was ever making.
  *
- * `tabular-nums` is not decoration here either: these numbers refresh in
- * place, and proportional figures make a tile twitch every time a 1 becomes
- * a 4.
+ * `tabular-nums` is not decoration: these numbers refresh in place, and
+ * proportional figures make a tile twitch every time a 1 becomes a 4.
  */
 .stat-numeral {
   font-family: var(--font-display);
@@ -1415,6 +954,24 @@ select:-webkit-autofill {
 .font-display {
   font-family: var(--font-display);
   letter-spacing: -0.022em;
+}
+
+/**
+ * THE MICRO-LABEL — the product's signature voice, as one class.
+ *
+ * 10px, ALL CAPS, tracked open, muted. It is what a section heading, a metric's
+ * name, a group's sort marker and a status pill all share, and it is what lets
+ * a very small string read as a LABEL rather than as very small prose.
+ *
+ * A class rather than four utilities because it was four utilities, spelled
+ * slightly differently in eleven files, and `tracking-wide` in one of them.
+ */
+.label-micro {
+  font-size: var(--text-2xs);
+  line-height: var(--text-2xs--line-height);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
 }
 
 /**
@@ -1436,16 +993,17 @@ select:-webkit-autofill {
  *
  * Every component was spelling its own `focus-visible:ring-4 ring-ring/40`,
  * which is four tokens to get wrong and which several controls simply omitted.
- * A keyboard user should never have to wonder where they are — and on a dark
- * surface the same ring is invisible, so the rail and the toast opt into the
- * white twin instead.
+ * A keyboard user should never have to wonder where they are.
+ *
+ * `.focus-ring-light` IS GONE. It existed because the ring was violet and the
+ * rail was charcoal, so the one dark surface in a light app needed a white
+ * twin. Every surface is that surface now, and the ring is green at 9.83:1 on
+ * all of them — a second spelling would be a second answer to a question that
+ * has one.
  */
 :where(a, button, summary, [role="button"], [role="switch"], [tabindex]:not([tabindex="-1"])):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
-}
-.focus-ring-light:focus-visible {
-  outline-color: rgb(255 255 255 / 0.9);
 }
 
 /**
@@ -1503,9 +1061,8 @@ select:-webkit-autofill {
   pointer-events: none;
 }
 /*
- * Connection lines. A soft, warm-grey DASHED stroke with rounded caps and
- * rounded corners (from the edge geometry) — calm and intentional, like
- * Make.com.
+ * Connection lines. A soft DASHED stroke with rounded caps and rounded corners
+ * (from the edge geometry) — calm and intentional, like Make.com.
  */
 .react-flow__edge-path {
   stroke: var(--color-canvas-edge);
@@ -1538,18 +1095,16 @@ summary {
  * config panel, so every floating surface feels like the same system.
  */
 .flow-shadow {
-  /* Figma UI3's floating-panel elevation, near-verbatim: a hairline ring
-     (their 0.5px outline layer, here a 1px ring so it survives non-retina),
-     one big soft ambient, one tight contact shadow. The old value was a
-     36px non-directional glow, which reads as haze; this reads as height.
-     The ring replaces any border — a border PLUS this ring is a double
-     hairline, which is exactly the mud it replaces. */
+  /* A hairline ring plus one big soft ambient. On near-black the ring is what
+     reads as height — see the elevation ladder's note — and a border PLUS this
+     ring is a double hairline, which is exactly the mud it replaces. */
   box-shadow: var(--shadow-float);
 }
 
-/* The rail's wash, as a utility so only one file decides it. */
+/* The rail's wash, as a utility so only one file decides it. It is the same
+   colour as the page now; the RULE at its right edge is what separates them. */
 .bg-rail {
-  background-color: var(--color-rail);
+  background-color: var(--background);
 }
 
 /**

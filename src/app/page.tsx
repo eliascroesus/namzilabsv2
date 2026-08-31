@@ -99,7 +99,7 @@ export default async function Home() {
                   brand's #eecf00 measures 1.42:1 on this ground — a caps
                   eyebrow set in it is a blank line with letter-spacing. Yellow
                   fills on this page (the buttons below); violet draws. */}
-              <p className="text-xs font-semibold uppercase tracking-widest text-marker-ink">
+              <p className="text-xs font-semibold uppercase tracking-widest text-marker">
                 For teams running on six tools
               </p>
               {/* `text-banner` is fluid — it resolves to 40px on a phone and
@@ -168,7 +168,7 @@ export default async function Home() {
                     filled discs carrying near-black ink. This numeral is bare
                     glyph on the ground with nothing behind it, so it is a
                     stroke and it takes the marker. */}
-                <span className="stat-numeral block text-display-xs leading-none text-marker-ink">{i + 1}</span>
+                <span className="stat-numeral block text-display-xs leading-none text-marker">{i + 1}</span>
                 <h3 className="mt-4 text-lg font-semibold tracking-tight text-foreground">{step.title}</h3>
                 {/* 16px, not the app's 14 — reading copy, not chrome. See the
                     note in ui/legal.tsx: `leading-relaxed` is the tell. */}

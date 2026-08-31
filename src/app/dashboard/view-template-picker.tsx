@@ -359,7 +359,7 @@ export function ViewTemplatePicker({
                   On the page's own ground rather than the card's surface — a
                   layout is a thing that sits ON a board, and drawing it on the
                   card's own colour leaves its tiles nothing to be seen against. */}
-              <span className="block aspect-[4/3] w-full overflow-hidden rounded-t-[calc(var(--radius-surface)-1px)] border-b border-border bg-ground">
+              <span className="block aspect-[4/3] w-full overflow-hidden rounded-t-[calc(var(--radius-surface)-1px)] border-b border-border bg-background">
                 <t.Preview />
               </span>
               <span className="block px-4 py-3 text-md font-semibold text-foreground">{t.label}</span>

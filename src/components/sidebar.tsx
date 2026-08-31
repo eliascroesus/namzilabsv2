@@ -6,29 +6,34 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Bell, LayoutDashboard, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme";
 import { cn } from "@/lib/utils";
 import { viewStrip, type BoardView } from "@/lib/board/types";
 
 /**
- * THE ICON RAIL — 70px at rest, 240px under the pointer, and the left half of
- * one dark band.
+ * THE ICON RAIL — 48px at rest, 240px under the pointer.
  *
- * WHAT IT WAS: a 264px named column on the app's own white surface, opening
- * with a workspace switcher, then a search field, then two ruled groups of
- * 40px rows set as text-with-an-icon, then a foot holding a plan card and a
- * theme toggle. It was a good column and it is the wrong shape for this
- * product now, for one reason that has nothing to do with taste: the page it
- * borders became DARK. A white 264px column beside a near-black board is the
- * loudest object on the screen and it is the object with the least to say —
- * six destinations, spelled out in full, taking a fifth of the viewport away
- * from the numbers this app exists to show.
+ * WHAT IT WAS: 70px of `ink-950` running the full height, with the top bar
+ * carrying the same charcoal across the rest. The two were ONE BAND wrapping a
+ * lighter page, and the whole design followed from that: no hairline inside the
+ * band (a 40-point luminance step finds its own edge), a notch cut out of the
+ * band's inner corner, a chip under every glyph so the icons had a surface to
+ * sit on, and a `focus-ring-light` because the product's one focus ring was
+ * invisible on near-black.
  *
- * WHAT IT IS: 70px of `ink-950` running the full height, with the top bar
- * carrying the same colour across the rest. The two are ONE BAND wrapping the
- * page, which is why the rail's right hairline and the bar's bottom hairline
- * are the same `--chrome-line` and why the rail's top block is exactly the
- * bar's 70px — the two seams meet at one corner instead of nearly meeting.
+ * WHAT IT IS: 48px of `--background` — the SAME COLOUR as the top bar and the
+ * page — separated from both by a 1px `--border` hairline and nothing else.
+ * Every one of the five decisions above inverts with that. There is no band, so
+ * there is no notch and no second material to avoid drawing a rule between;
+ * there is one hairline down the right edge doing the entire job. The glyphs sit
+ * directly on the ground at 12.9:1 with no chip, because a chip is a surface
+ * step and there is nothing here to step away from. The focus ring is the
+ * product's own — green at 9.83:1 on this exact colour, which is the ring the
+ * light page provably could not carry.
+ *
+ * The rail's top block is still exactly the top bar's height, and that is still
+ * the point: it is what makes the corner where the rail's rule meets the bar's
+ * rule ONE seam rather than two that nearly meet. `tests/page-width.test.ts`
+ * pins the two together.
  *
  * AND IT OPENS. Point at it and the column widens IN PLACE to 240px and the
  * names fade in beside the chips: the wordmark, the two caps headings, every
@@ -38,8 +43,8 @@ import { viewStrip, type BoardView } from "@/lib/board/types";
  * thing 70px genuinely could not hold. It holds them now, for as long as you
  * are looking at it.
  *
- * IT OVERLAYS, IT DOES NOT PUSH. The `<aside>` keeps a flat 70px footprint in
- * the layout and the panel inside it is `absolute`, so the 170px it gains are
+ * IT OVERLAYS, IT DOES NOT PUSH. The `<aside>` keeps a flat 48px footprint in
+ * the layout and the panel inside it is `absolute`, so the 192px it gains are
  * taken from the page rather than given by it. The alternative — widening in
  * flow — reflows the entire board on a pointer-move, which on the dashboard
  * means every tile re-laying out and on the builder means the canvas resizing
@@ -51,22 +56,23 @@ import { viewStrip, type BoardView } from "@/lib/board/types";
  * hydration — a rail that ignores the pointer for the first second of a cold
  * load is worse than one that never moved.
  *
- * THE BAND DOES NOT INVERT. `bg-ink-950` in BOTH themes; only the page inside
- * it switches. That is the repo's own 60/30/10 doctrine (globals.css: "white
- * canvas is the 60, this rail is the 30, and the accent is the 10") and it is
- * what Miro, Notion and Linear all do. A rail that flips with the theme is a
- * rail with no identity — the one shape that should stay put while everything
- * inside it changes.
+ * THERE IS NOTHING LEFT TO INVERT. This block used to argue that the band must
+ * keep `bg-background` in BOTH themes while only the page inside it switched — the
+ * thing Miro, Notion and Linear all do, on the grounds that a rail which flips
+ * with the theme is a rail with no identity. The argument was right and it has
+ * no subject: there is one theme, and the rail is `--background`, which is
+ * exactly what the page is. What gives it identity now is not being a different
+ * colour, it is the hairline and the fact that it is the only column on screen.
  *
- * EVERY ROW IS A 40px SLOT HOLDING A 28px CHIP, and the split matters. The
- * CHIP is the picture — a pale rounded square that lifts a 16px glyph off the
- * near-black, because a bare icon on this surface is a smudge. The SLOT is the
- * hit area: 40px tall, and as WIDE as the column is at the moment you press it,
- * so an open rail lets you click the name as well as the picture. Colour is
- * spent in exactly one place — the row you are standing on is a solid `primary`
- * chip and the other six are neutral.
+ * EVERY ROW IS A 32px SLOT HOLDING A 24px CHIP, and the split matters. The CHIP
+ * is the picture — a bare 16px glyph at 12.9:1, with no plate under it, because
+ * on this ground there is no surface to lift it off. The SLOT is the hit area:
+ * 32px tall, and as WIDE as the column is at the moment you press it, so an open
+ * rail lets you click the name as well as the picture. Colour is spent in
+ * exactly one place — the row you are standing on carries a green glyph on a
+ * raised chip and the other four are plain.
  *
- * WHAT THE 70px COULD NOT HOLD, AND WHERE EACH THING WENT. Every one of these
+ * WHAT THE 48px COULD NOT HOLD, AND WHERE EACH THING WENT. Every one of these
  * came BACK with the hover panel; what follows is what the collapsed column
  * still does not say, and where the answer is instead:
  *
@@ -94,11 +100,10 @@ import { viewStrip, type BoardView } from "@/lib/board/types";
  * · THE TOOLTIPS. GONE, all seven, and that is a decision rather than an
  *   omission. They existed to name a glyph for a pointer user; the panel now
  *   names it, at the same moment, from the same string. Worse, they were
- *   `side="right"` — anchored to a row that is now 210px wide, a tooltip opens
+ *   `side="right"` — anchored to a row that is now 216px wide, a tooltip opens
  *   ON TOP of the very label it duplicates. A control cannot be its own
  *   annotation.
- * · THE THEME TOGGLE. KEPT, in the foot, and it is the one control here that
- *   gets no label — see the note there.
+ * · THE THEME TOGGLE. GONE, with the second theme it switched between.
  */
 
 /** The product's name: the mark's accessible name, and the wordmark the open
@@ -158,37 +163,44 @@ export function WorkspaceChip({ name, className }: { name: string; className?: s
 }
 
 /**
- * THE CHIP INSIDE A ROW — the 28px picture, at the control radius.
+ * THE CHIP INSIDE A ROW — the 24px picture, at the control radius.
  *
- * TWO TONES NOW, NOT THREE, AND THE RESTING ONE IS NOTHING AT ALL.
+ * REST IS NOTHING AT ALL: a bare `--foreground` glyph, which on this ground
+ * measures 12.9:1 and needs no plate to be found. The hover wash is `neutral-700`
+ * — one raised step — and it is the chip that lights rather than the row,
+ * because a 210px bar lighting under the pointer is a shape nothing else in this
+ * column draws.
  *
- * It used to be a pale square with a hairline: a filled chip on near-black,
- * because "a bare icon on this surface is a smudge". On #0f0f0f that was true.
- * The band is #2e2e2e now — a charcoal a full step lighter — and a white 16px
- * glyph on it measures 12.9:1, which is not a smudge, it is a legible mark. The
- * export draws exactly that: `rgba(245,245,245,0)` on `rgba(72,73,75,0)`, which
- * is a chip with no fill and no edge, present only as a hit target and a hover
- * surface. Seven pale squares stacked down a 70px column were the loudest thing
- * in the chrome, and the chrome's job is to be quiet.
+ * ACTIVE IS THE GREEN GLYPH, WITH A RAISED CHIP UNDER IT, AND THE CHIP IS THE
+ * ONE PLACE THIS RAIL OVERRULES ITS REFERENCE.
  *
- * `search` HAS GONE as a tone. It was "the same shape in white, which is what
- * marks it as the row that is NOT a destination" — a distinction the export
- * does not draw, and one that cost a third branch to express. The row is still
- * not a destination; it is a Button rather than a Link, which is where that
- * fact belongs.
+ * The reference draws the active row as a green glyph and nothing else — no
+ * fill, no rule, no chip. That is colour carrying state on its own, which is the
+ * failure WCAG 1.4.1 is about: it is invisible to a red-green colour-blind
+ * reader, who then has no way at all to tell which of six identical grey icons
+ * is the page they are on. `aria-current="page"` covers the semantic half and
+ * covers nothing for someone who can see the screen perfectly well and simply
+ * cannot separate those two hues.
  *
- * ACTIVE IS THE BRAND, and it is the reason the rest can be bare: with one
- * filled yellow chip in the column there is no question which row you are on,
- * so the other six do not have to compete to be seen. 8.77:1 on the band.
+ * So the green stays — it is what the reference draws and it is 9.83:1 here —
+ * and a `neutral-700` chip goes under it, which is the same raised step the
+ * hover already uses. Two signals, one of them not a colour, and the row still
+ * looks like the reference's.
+ *
+ * IT USED TO BE THE OTHER WAY ROUND: a filled yellow chip with dark ink, on the
+ * argument that one filled object in a column settles the question so the other
+ * six do not have to compete. That still holds, and the filled object is now the
+ * "+" in the foot — the column's one VERB. Spending the fill on the active row
+ * as well would have been two filled objects saying different things.
  */
 function RailChip({ tone, children }: { tone: "rest" | "active"; children: ReactNode }) {
   return (
     <span
       className={cn(
-        "flex size-7 items-center justify-center rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+        "flex size-6 items-center justify-center rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard)",
         tone === "active"
-          ? "bg-primary text-primary-foreground"
-          : "text-white group-hover:bg-ink-900",
+          ? "bg-neutral-700 text-marker"
+          : "text-foreground group-hover:bg-neutral-700",
       )}
     >
       {children}
@@ -230,18 +242,28 @@ const REVEAL =
  * uncovered by the panel's edge, which is the motion the reference has.
  */
 function RailLabel({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn("shrink-0 whitespace-nowrap text-sm font-medium text-ink-100", REVEAL, className)}>{children}</span>;
+  return (
+    <span className={cn("shrink-0 whitespace-nowrap text-sm font-medium text-foreground", REVEAL, className)}>
+      {children}
+    </span>
+  );
 }
 
 /**
- * THE ICON COLUMN — 40px, and it never moves.
+ * THE ICON COLUMN — 24px, and it never moves.
  *
- * Every chip in the rail sits in one of these, so the mark, the six
- * destinations, the theme toggle, the "+" and the bell are on a single vertical
- * axis at 70px AND at 240px. The rail widens; the pictures do not budge, which
- * is the whole difference between a column opening and a column reflowing.
+ * Every chip in the rail sits in one of these, so the mark, the five
+ * destinations, the "+" and the bell are on a single vertical axis at 48px AND
+ * at 240px. The rail widens; the pictures do not budge, which is the whole
+ * difference between a column opening and a column reflowing.
+ *
+ * 24, down from 40, and the number is forced rather than chosen: the rail is
+ * 48px with a 12px gutter either side, so 24 is exactly what is left. That is
+ * also why the HIT TARGET is not this box — see `SLOT`, which is 32px tall and
+ * full-width. A 24px square would meet WCAG 2.2's minimum by one pixel and feel
+ * like it.
  */
-const ICON_COL = "flex size-10 shrink-0 items-center justify-center";
+const ICON_COL = "flex size-6 shrink-0 items-center justify-center";
 
 /**
  * The row's own class string, shared by the mark, the nav links, the search
@@ -255,32 +277,39 @@ const ICON_COL = "flex size-10 shrink-0 items-center justify-center";
  *
  * `justify-start` is not redundant: `Button`'s base variant centres its
  * contents, and a centred row whose content is wider than its box (which is
- * every row at 70px) pushes the chip left off the axis every other row sits on.
+ * every row at 48px) pushes the chip left off the axis every other row sits on.
  *
- * `focus-ring-light` is not decoration either: globals.css draws one ring for
- * the whole product in `--ring`, which is invisible on near-black, and this
- * class is the sanctioned white twin.
+ * `focus-ring-light` IS GONE, and it went with the thing it was for. globals.css
+ * draws one ring for the whole product in `--ring`; while that ring was violet
+ * and this rail was the one dark surface in a light app, it was invisible here
+ * and needed a sanctioned white twin. The ring is green on a ground that is now
+ * the SAME colour everywhere, so the product's own ring is the correct one and a
+ * second spelling would be a second answer.
+ *
+ * 32px TALL, ON A 24px PICTURE. The reference's rows are the glyph plus 6px of
+ * padding, which is 28px — over WCAG 2.2's 24px minimum by four pixels and
+ * under what a rail you click all day should ask for. The extra four cost
+ * nothing: the chip is what you see and it is still 24.
  */
-const SLOT = "group flex h-10 w-full shrink-0 items-center justify-start gap-3 rounded-control focus-ring-light";
+const SLOT = "group flex h-8 w-full shrink-0 items-center justify-start gap-3 rounded-control";
 
 /**
  * THE GUTTER, WRITTEN DOWN.
  *
- * 15px, which is what `items-center` used to compute on its own: half of what
- * is left when a 40px slot sits in a 70px column. It has to be a number now
- * because the rows are full-width — centring a 210px row centres nothing — and
- * it is the one measurement that keeps the open panel's chips standing exactly
- * where the closed one's were. It also gives the focus ring its 2px offset back
- * from the panel's clip, which a flush row would lose.
+ * 12px, which is the reference's own rail padding and also exactly what is left
+ * when a 24px chip sits in a 48px column. It has to be a number rather than an
+ * `items-center` because the rows are full-width — centring a 216px row centres
+ * nothing — and it is the one measurement that keeps the open panel's chips
+ * standing exactly where the closed one's were.
  *
  * THE MARK'S BLOCK SPELLS IT OUT INSTEAD OF READING IT, and that is not an
  * oversight to tidy up. tests/page-width.test.ts matches that block's class
  * attribute as a LITERAL — `className="flex h-… shrink-0 items-center` — to
  * check the rail's top block against the top bar's height, and a `cn()` call
  * there matches nothing and fails the file with "could not find the rail's top
- * block". Two spellings of 15px, and this is the note that keeps them in step.
+ * block". Two spellings of 12px, and this is the note that keeps them in step.
  */
-const GUTTER = "px-[15px]";
+const GUTTER = "px-3";
 
 export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardView[] }) {
   const pathname = usePathname();
@@ -363,7 +392,9 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
                  out to the parent's label, which is where it started. */
               className={cn(
                 "flex h-8 items-center rounded-control pl-4 pr-2 text-sm transition-colors duration-(--duration-fast)",
-                on ? "bg-ink-800 font-medium text-ink-50" : "text-ink-400 hover:bg-ink-900 hover:text-ink-50",
+                on
+                  ? "bg-neutral-700 font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-neutral-700 hover:text-foreground",
               )}
             >
               {/* A DASH, DRAWN RATHER THAN TYPED. It marks these rows as
@@ -391,7 +422,7 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
                16px by their dash and its margin, so this is level with their
                NAMES. A fold that starts left of the names it folds reads as
                belonging to the section rather than to them. */
-            className="h-8 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-ink-400 hover:bg-ink-900 hover:text-ink-50 active:bg-ink-900"
+            className="h-8 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-muted-foreground hover:bg-neutral-700 hover:text-foreground active:bg-neutral-700"
           >
             {allViews ? "Show less" : `Show all ${ordered.length}`}
           </Button>
@@ -401,7 +432,7 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
   );
 
   return (
-    // THE FOOTPRINT, AND ONLY THE FOOTPRINT. This element is 70px in every
+    // THE FOOTPRINT, AND ONLY THE FOOTPRINT. This element is 48px in every
     // state; the panel inside it is what grows. The width is pinned against
     // `shell-skeleton.tsx` by tests/page-width.test.ts — the skeleton reserves
     // this exact column while a route streams, and the two drifting is content
@@ -409,8 +440,8 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
     // `w-[…px]` in each file, which is this one, so nothing wider may be
     // written above it.
     //
-    // 70, down from 264. It is not a shrunken column, it is a different object:
-    // a 15px gutter either side of a 40px slot with a 28px chip in it, and
+    // 48, down from 70 and from 264 before that. It is not a shrunken column,
+    // it is a different object: a 12px gutter either side of a 24px chip, and
     // nothing else has to fit until the pointer arrives.
     //
     // `z-20` IS READ OFF THE LADDER IN globals.css, NOT INVENTED. That file
@@ -420,29 +451,40 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
     // not surface through it. Below 30, because anchored surfaces (menus,
     // popovers, the field browser) have to open OVER the rail, and below 40/50
     // because a toast and a dialog outrank all chrome.
-    <aside className="group/rail relative z-20 h-full w-[70px] shrink-0">
+    <aside className="group/rail relative z-20 h-full w-[48px] shrink-0">
       {/* THE PANEL — the whole rail, floated out of the layout.
-          `inset-y-0 left-0` pins it to the footprint above and `w-[70px]`
+          `inset-y-0 left-0` pins it to the footprint above and `w-[48px]`
           keeps the two the same object at rest; the two `group-*` widths are
           the only thing that ever differs.
 
-          THE HAIRLINE TRAVELS WITH IT. The band's seam is the panel's right
-          edge, so opening the rail moves the seam rather than leaving a line
-          behind at 70px with the panel spilling past it. For the seconds it is
-          open the panel covers the top bar's left end — its workspace address —
-          which is the cost of overlaying rather than pushing, and it is paid
-          back the instant the pointer leaves.
+          THE HAIRLINE TRAVELS WITH IT, and in a one-surface product it is doing
+          considerably more work than it used to. The rail is the same #0f1011
+          as the page beside it, so `border-r` is the ONLY thing that says where
+          one ends and the other starts — leaving the rule behind at 48px while
+          the panel opened past it would not read as a rail overhanging a page,
+          it would read as a stray line down the middle of one flat surface.
 
-          NO SHADOW, on purpose. Everything else in this app that floats over
-          the page takes a rung of the elevation ladder; this is the BAND, and a
-          band that lifts off the page on hover stops being the frame around it.
-          Its own hairline is what separates it from what it covers. */}
-      <div className="absolute inset-y-0 left-0 flex w-[70px] flex-col overflow-hidden bg-ink-950 transition-[width] duration-(--duration-base) ease-(--ease-standard) group-hover/rail:w-60 group-focus-within/rail:w-60">
+          For the seconds it is open the panel covers the top bar's left end —
+          its workspace address — which is the cost of overlaying rather than
+          pushing, and it is paid back the instant the pointer leaves.
+
+          NO SHADOW, on purpose, and the reason changed with the surface. It
+          used to be "this is the BAND, and a band that lifts off the page stops
+          being the frame around it". There is no band; the reason now is that a
+          black shadow on #0f1011 is a change of about one count (see the
+          elevation ladder) and would buy nothing but a class. The hairline is
+          the separation. */}
+      <div className="absolute inset-y-0 left-0 flex w-[48px] flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-(--duration-base) ease-(--ease-standard) group-hover/rail:w-60 group-focus-within/rail:w-60">
         {/* THE TOP BLOCK IS THE TOP BAR'S OWN HEIGHT, AND THAT IS THE POINT.
-            70px with the bar's hairline landing exactly at its foot means the
-            band's two seams meet at one corner and the chrome reads as a single
-            shape rather than as two components bolted together. Pinned to the
-            bar's height by tests/page-width.test.ts.
+            56px with the bar's hairline landing exactly at its foot means the
+            rail's rule and the bar's rule meet at ONE corner rather than
+            crossing at two — which is the difference between chrome that reads
+            as a single frame and chrome that reads as two components bolted
+            together. Pinned to the bar's height by tests/page-width.test.ts.
+
+            56 = the reference's 40px content row plus its 8px of padding top
+            and bottom. The reference's own rail head is 48px, because nothing
+            over there requires the two to line up; here the corner does.
 
             THE MARK IS HERE NOW rather than in the bar, because the bar carries
             the WORKSPACE — its avatar, its name, the setup ring — and a band
@@ -451,8 +493,12 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             which is right. A band that said the product's name twice would not.
 
             It is a LINK HOME, which is what a mark in this position is
-            everywhere else, and it is the neon rather than the black square it
-            used to be: on `ink-950` a near-black mark is not a mark.
+            everywhere else, and it is a RINGED DISC rather than a filled tile:
+            the reference draws its mark as a 2px green ring around a glyph on
+            the bare ground, which is the one place in this rail that a stroke
+            says "brand" without also saying "press me". A filled green square
+            here would be the second filled object in a column whose only filled
+            object is the "+" in the foot.
 
             THE ONE ROW THAT KEEPS AN `aria-label`, because its name is not its
             label: the accessible name says where the link GOES ("— dashboard"),
@@ -461,17 +507,17 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             contained in the announced one, which is what WCAG's Label in Name
             actually asks for. The "NA" tile is `aria-hidden` — without that the
             name would open with two letters nobody says out loud. */}
-        <div className="flex h-[70px] shrink-0 items-center px-[15px]">
+        <div className="flex h-[56px] shrink-0 items-center px-3">
           <Link href="/dashboard" aria-label={`${PRODUCT} — dashboard`} className={SLOT}>
             <span className={ICON_COL}>
               <span
                 aria-hidden
-                className="flex size-9 items-center justify-center rounded-control bg-primary text-xs font-semibold text-primary-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-700"
+                className="flex size-6 items-center justify-center rounded-full border-2 border-marker text-2xs font-semibold text-marker transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-soft"
               >
                 NA
               </span>
             </span>
-            <RailLabel className="font-semibold text-white">{PRODUCT}</RailLabel>
+            <RailLabel className="font-semibold text-foreground">{PRODUCT}</RailLabel>
           </Link>
         </div>
 
@@ -553,11 +599,11 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
                     <Search />
                   </RailChip>
                 </span>
-                <RailLabel className="text-ink-400 group-hover:text-ink-50">Search</RailLabel>
+                <RailLabel className="text-muted-foreground group-hover:text-foreground">Search</RailLabel>
                 <span
                   aria-hidden
                   className={cn(
-                    "ml-auto rounded-sm border border-chrome-line px-1.5 py-0.5 text-xs font-medium text-ink-400",
+                    "ml-auto rounded-xs border border-border px-1.5 py-0.5 text-2xs font-medium text-muted-foreground",
                     REVEAL,
                   )}
                 >
@@ -582,7 +628,9 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
                             <Icon className="size-4" />
                           </RailChip>
                         </span>
-                        <RailLabel className={active ? "text-ink-50" : "text-ink-400 group-hover:text-ink-50"}>
+                        <RailLabel
+                          className={active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"}
+                        >
                           {label}
                         </RailLabel>
                       </Link>
@@ -598,65 +646,44 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             is pinned by the space the nav gives back instead of by the column's
             distribution.
 
-            THE THEME TOGGLE IS THE ONE THING HERE THE FIGMA DOES NOT DRAW, and
-            it stayed. It is the app's only control for a preference the app
-            actually ships, and dropping it would leave the light theme reachable
-            only by changing the operating system's. It is drawn as a BARE GLYPH
-            rather than a chip, which is also the argument for where it sits: the
-            foot's grammar is "one loud object and some quiet ones", so it joins
-            the bell as a quiet one and leaves the yellow "+" and the bell pair
-            at the very bottom exactly as the export has them.
-
-            IT IS ALSO THE ONE CONTROL THE OPEN PANEL DOES NOT NAME, and the
-            reason is worth writing down because "add a label to it too" looks
-            obviously right. Its accessible name is a sentence that changes with
-            the state it is in — "Switch to the light theme" / "Switch to the
-            dark theme" — and it is owned by `theme.tsx`, which is where it
-            belongs. A visible "Theme" beside that announced name is a Label in
-            Name failure (voice control users say what they read, and "theme"
-            is not in the name); printing the sentence itself puts a clause in a
-            column of nouns. So it keeps its 40px square, on the same axis as
-            every chip above it, and says nothing. */}
+            THE THEME TOGGLE WAS HERE AND IS GONE, along with the preference it
+            expressed. It was the app's only control for a theme the app
+            actually shipped, and dropping it while two themes existed would
+            have left the light one reachable only by changing the operating
+            system's. There is one theme, so the control has nothing to say. */}
         <div className={cn("mt-auto flex shrink-0 flex-col gap-0.5 pb-4", GUTTER)}>
-          <ThemeToggle className="size-10 rounded-control text-ink-400 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus-ring-light hover:bg-ink-800 hover:text-ink-50 active:bg-ink-800 [&_svg]:size-4" />
+          {/* THE "+" IS THE COLUMN'S ONE FILLED OBJECT, AND THAT IS WHY IT CAN
+              BE THE ONLY GREEN FILL IN THE RAIL.
+              It has been a yellow slab, then a white chip with a hairline, and
+              the argument each time was about how much brand a column could
+              carry. That argument resolves cleanly here: the mark at the top is
+              a green RING, the active row is a green GLYPH on a neutral chip,
+              and this is the single FILL. Three appearances of one colour in
+              three different shapes, each doing a different job — identity,
+              location, action — rather than three fills competing to be the
+              thing you press.
 
-          {/* THE "+" IS A WHITE CHIP NOW, AND THE BRAND LEFT THE FOOT.
-              It was a 40px slab of neon — "the one coloured object in the foot,
-              the same yellow as the mark 500px above it, so the rail opens and
-              closes on the brand". That was the right call while yellow appeared
-              once or twice in the whole product and had to be spent where it
-              would be seen. It is the primary now: it is on the mark, on the
-              active row, on the badge, on every hero button. A column carrying
-              it in three places at once has stopped pointing at any of them, and
-              the export accordingly draws this control as a white 36px chip with
-              a hairline — the same object as the top bar's bell and avatar, one
-              surface over.
+              THE INK IS THE GROUND. `--primary-foreground` is #0f1011 at 7.70:1
+              on the fill, which is a constant rather than a role: the green does
+              not invert and neither may what is written on it.
 
-              THE INK STAYS GREY, and the reason has survived the change of
-              surface intact. It was 6.30:1 on the old yellow, chosen over
-              near-black because a 15:1 glyph read as a filled primary demanding
-              a press. On white it measures 7.23:1 and does the same job: this is
-              a quiet control sitting under six quieter rows.
-
-              36px, NOT 40. The chip is the object now rather than a picture
-              inside a slot, so it takes the chrome's own control size — the
-              bell, the avatar, the two pills in the bar are all 36 — while the
-              40px `ICON_COL` axis above it is kept by centring rather than by
-              filling. */}
+              24px, ON THE `ICON_COL` AXIS. The chip is the same size as every
+              other picture in the column, so the rail's single vertical line
+              runs unbroken from the mark to the bell. */}
           {/* IT BECOMES A BUTTON WHEN THERE IS ROOM TO BE ONE.
-              Collapsed, the yellow is a 28px chip inside the 40px icon column,
-              because a 70px rail has space for a mark and nothing else.
+              Collapsed, the green is a 24px chip inside the icon column,
+              because a 48px rail has space for a mark and nothing else.
               Expanded, the fill moves OUT of the chip and onto the row itself,
               so "New flow" reads as the same full-width primary the top bar
               carries rather than as a coloured square with a caption beside it
               — which is what it looked like, and it is the one control in the
               foot that is a verb.
-              The fill swaps rather than stacks: the chip goes transparent at
-              the same moment the row fills, so there is never a yellow square
-              sitting on a yellow bar. `-mx-1 px-1` lets the filled row breathe
-              to the gutter's edge without moving the chip, which is the whole
-              point of the icon column — every glyph in the rail stays on one
-              vertical line in both states. */}
+              The fill swaps rather than stacks: the chip is removed at the same
+              moment the row fills, so there is never a green square sitting on
+              a green bar. `-mx-1 px-1` lets the filled row breathe to the
+              gutter's edge without moving the chip, which is the whole point of
+              the icon column — every glyph in the rail stays on one vertical
+              line in both states. */}
           <Link
             href="/dashboard/flows"
             className={cn(
@@ -669,10 +696,10 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             <span
               aria-hidden
               className={cn(
-                "flex size-9 shrink-0 items-center justify-center",
-                "rounded-control border border-chrome-chip-line bg-chrome-chip text-chrome-add-ink transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-neutral-100",
+                "flex size-6 shrink-0 items-center justify-center",
+                "rounded-control bg-primary text-primary-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-500",
                 /* THE "+" LEAVES WHEN THE WORDS ARRIVE. Collapsed, the glyph IS
-                   the control — it is the only thing a 70px rail can say.
+                   the control — it is the only thing a 48px rail can say.
                    Expanded, the row reads "New flow" in full, and a plus beside
                    those two words is the same instruction given twice. So the
                    chip is removed from the layout entirely rather than made
@@ -700,9 +727,15 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
               standing the search field had for a commit, and comment-marked for
               the same reason. The 8px dot is drawn because the export draws it;
               it says PRESENCE ("there is something") rather than a count, and it
-              is `--chrome-presence` green rather than `--success` on purpose:
-              the success trio means a row SUCCEEDED, and a dot that borrows it
-              turns a notification into a result.
+              is `--primary` now, and the old argument against that has expired:
+              it used to have a token of its own specifically so it would not
+              borrow `--success`, because the success trio means a row SUCCEEDED
+              and a dot wearing it turns a notification into a result. Success
+              and the brand are the same green now (see the state block in
+              globals.css), so there is nothing left to keep apart — what stops
+              this reading as "everything is fine" is that a bare dot is not a
+              status pill, which is the quiet-when-fine rule the rest of the
+              product already runs on.
 
               When notifications land, the dot takes a prop and the button takes
               a handler. Until then this note is the honest record that the dot
@@ -711,23 +744,27 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
               COLUMN, which is the same 40px square it used to be. Left on the
               button it would paint the whole 210px row on hover — the one shape
               nothing else in this rail draws. */}
-          <Button variant="ghost" size="iconSm" className={cn(SLOT, "text-white hover:bg-transparent active:bg-transparent")}>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            className={cn(SLOT, "text-foreground hover:bg-transparent active:bg-transparent")}
+          >
             <span
               className={cn(
                 ICON_COL,
-                "relative rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-ink-800",
+                "relative rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-neutral-700",
               )}
             >
               <Bell />
               {/* Measured off the ICON COLUMN, not the row and not the glyph:
-                  the row is 40px wide at rest and 210px open, so a dot pinned to
-                  its right edge would fly across the panel as it opens. The 40px
-                  column centres a 16px icon at 12–28px, so `right-2.5 top-2.5`
+                  the row is 24px wide at rest and 216px open, so a dot pinned to
+                  its right edge would fly across the panel as it opens. The 24px
+                  column centres a 16px icon at 4–20px, so `-right-0.5 -top-0.5`
                   lands on the bell's own top-right corner and stays there at
                   every width. */}
-              <span aria-hidden className="absolute top-2.5 right-2.5 size-2 rounded-full bg-chrome-presence" />
+              <span aria-hidden className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-primary" />
             </span>
-            <RailLabel className="text-ink-400 group-hover:text-ink-50">Notifications</RailLabel>
+            <RailLabel className="text-muted-foreground group-hover:text-foreground">Notifications</RailLabel>
           </Button>
         </div>
       </div>

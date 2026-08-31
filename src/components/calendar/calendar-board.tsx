@@ -417,7 +417,7 @@ export function CalendarBoard({
             <Button
               variant="ghost"
               size="iconSm"
-              className="rounded-full text-period-ink hover:bg-ground-ink/10 hover:text-ground-ink"
+              className="rounded-full text-muted-foreground hover:bg-neutral-700 hover:text-foreground"
               onClick={() => setMonthIdx((i) => Math.max(0, i - 1))}
               disabled={monthIdx === 0}
               title={monthIdx === 0 ? "The calendar keeps two months" : `Go to ${monthLabel(months[monthIdx - 1])}`}
@@ -428,17 +428,17 @@ export function CalendarBoard({
             {/* Fixed width so stepping between months does not shuffle the
                 buttons either side of the label — sized for the longest month
                 name there is ("September 2026"), not for the one on screen.
-                `text-ground-ink` because this track sits on the GROUND: the
+                `text-foreground` because this track sits on the GROUND: the
                 page's own ink is white on the dark group and near-black on the
                 light one, where `--foreground` would be wrong in exactly one
                 theme. Same reasoning the range pills' hover already carries. */}
-            <span className="w-40 whitespace-nowrap text-center text-sm font-semibold text-ground-ink">
+            <span className="w-40 whitespace-nowrap text-center text-sm font-semibold text-foreground">
               {monthLabel(month)}
             </span>
             <Button
               variant="ghost"
               size="iconSm"
-              className="rounded-full text-period-ink hover:bg-ground-ink/10 hover:text-ground-ink"
+              className="rounded-full text-muted-foreground hover:bg-neutral-700 hover:text-foreground"
               onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))}
               disabled={monthIdx === months.length - 1}
               title={monthIdx === months.length - 1 ? "This is the current month" : `Go to ${monthLabel(months[monthIdx + 1])}`}
@@ -454,7 +454,7 @@ export function CalendarBoard({
               variant="ghost"
               onClick={() => setMonthIdx(months.length - 1)}
               disabled={monthIdx === months.length - 1}
-              className={cn(PERIOD_PILL, "text-period-ink hover:bg-ground-ink/10 hover:text-ground-ink")}
+              className={cn(PERIOD_PILL, "text-muted-foreground hover:bg-neutral-700 hover:text-foreground")}
             >
               This month
             </Button>
@@ -471,7 +471,7 @@ export function CalendarBoard({
               be the third hue in a bar that already has two. */}
           <span
             title="Days are UTC — the same days your metrics are counted in"
-            className="rounded-full border border-period-line px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-period-ink"
+            className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
           >
             UTC
           </span>

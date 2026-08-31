@@ -183,7 +183,7 @@ export async function AppShell({
 
   return (
     // The sidebar and the top bar are fixed; only the page column scrolls.
-    // SCROLLING IS ALL THIS SAYS NOW. The ground it scrolls on is `bg-ground`,
+    // SCROLLING IS ALL THIS SAYS NOW. The ground it scrolls on is `bg-background`,
     // painted by AppFrame for every route at once — see the note there. This
     // read `bg-canvas-bg`, which made the shell that fetches memberships also
     // the file that decided what colour the dashboard is.

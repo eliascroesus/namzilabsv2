@@ -91,7 +91,7 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
                     be a 1.55:1 star on a violet wash. It takes the ink step so
                     it is the same violet as the title beside it, instead of two
                     violets two rungs apart on one row. */}
-                {selected && <Star size={14} fill="currentColor" className="shrink-0 text-marker-ink" aria-hidden />}
+                {selected && <Star size={14} fill="currentColor" className="shrink-0 text-marker" aria-hidden />}
                 <span className={cn("truncate font-medium", selected ? "text-accent-foreground" : "text-foreground")}>{title || `Record ${i + 1}`}</span>
               </span>
               <span className="shrink-0 text-xs text-muted-foreground">

@@ -56,7 +56,7 @@ export function LegalPage({
 
         <p className="mt-14 border-t border-border pt-6 text-sm text-muted-foreground">
           See also our{" "}
-          <Link href={also.href} className="font-medium text-marker-ink underline-offset-4 hover:underline">
+          <Link href={also.href} className="font-medium text-marker underline-offset-4 hover:underline">
             {also.label}
           </Link>
           .
@@ -99,7 +99,7 @@ export function LegalLink({ className, ...props }: React.ComponentProps<"a">) {
   return (
     <a
       className={cn(
-        "rounded-control font-medium text-marker-ink underline underline-offset-4 hover:no-underline",
+        "rounded-control font-medium text-marker underline underline-offset-4 hover:no-underline",
         className,
       )}
       {...props}

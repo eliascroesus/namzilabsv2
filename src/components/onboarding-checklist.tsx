@@ -90,7 +90,7 @@ export function OnboardingChecklist({
                       call to action nobody could read. The 700 is 6.79:1,
                       which is what body copy owes. */}
                   {i === next && (
-                    <Link href={step.href} className="whitespace-nowrap font-medium text-marker-ink hover:underline">
+                    <Link href={step.href} className="whitespace-nowrap font-medium text-marker hover:underline">
                       {step.cta}
                     </Link>
                   )}

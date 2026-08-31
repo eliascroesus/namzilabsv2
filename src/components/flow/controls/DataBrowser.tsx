@@ -145,7 +145,7 @@ export function DataBrowser({
       // the object step is short of what 12px text owes. `text-primary` was
       // this line while the primary was violet; today that spelling is yellow
       // text on a white flyout at 1.55:1.
-      className="mt-1 w-full rounded-control px-2.5 py-1.5 text-left text-xs font-medium text-marker-ink transition-colors hover:bg-accent"
+      className="mt-1 w-full rounded-control px-2.5 py-1.5 text-left text-xs font-medium text-marker transition-colors hover:bg-accent"
     >
       Show all {hidden + VISIBLE} fields
     </button>

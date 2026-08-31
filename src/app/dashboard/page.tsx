@@ -1232,7 +1232,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                        black on the white one. `--foreground` would have been
                        wrong in exactly one theme, which is the kind of bug that
                        ships. */
-                    idleClassName="text-period-ink hover:text-ground-ink"
+                    idleClassName="text-muted-foreground hover:text-foreground"
                   >
                     {r.label}
                   </RangeLink>

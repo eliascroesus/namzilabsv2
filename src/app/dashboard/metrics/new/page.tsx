@@ -102,7 +102,7 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
             /* A LINK IS TEXT, so it is drawn rather than filled: `marker-ink` is
                the step the kit reserves for exactly this, at 6.79:1, where the
                brand yellow would put this escape hatch on the page at 1.55:1. */
-            <Link href="/dashboard/funnels/new" className="text-sm text-marker-ink hover:underline">
+            <Link href="/dashboard/funnels/new" className="text-sm text-marker hover:underline">
               Build a funnel instead
             </Link>
           }

@@ -205,33 +205,26 @@ const RULES: Rule[] = [
       "src/components/ui": "primitives are the sanctioned home of the few raw tints the trios can't express",
     },
   },
-  {
-    name: "black-as-primary",
-    why: "the workhorse button is the `foreground` ROLE, which inverts; bg-neutral-900 is that black frozen at one exposure",
-    /**
-     * THE RULE SURVIVED THE REBRAND; ITS RATIONALE DID NOT.
-     *
-     * This line used to read "the product has ONE primary and it is
-     * ultramarine", and every word of that is now false. `--primary` is
-     * `#eecf00`, and the button this rule is actually about was never the
-     * primary anyway — the default `Button` variant is `bg-foreground`, the
-     * near-black that carries the ordinary act on every screen.
-     *
-     * What is banned is spelling that near-black as a RAMP STEP at a call
-     * site. `--foreground` answers `neutral-900` in light and `ink-50` in
-     * dark, so a `bg-foreground` button inverts with the theme; `bg-neutral-900`
-     * is pinned to `#1a1a1a`, which is the dark theme's own PAGE colour — a
-     * black button on a black page, invisible, and identical to the correct
-     * one in light mode, which is precisely why nobody would catch it by eye.
-     */
-    find: (line) => (line.includes("bg-neutral-900") ? "bg-neutral-900" : null),
-    // The landing's exemption is gone too — its buttons were the last
-    // black-as-primary in the product and are now `buttonVariants()` like
-    // every other button.
-    allow: {
-      "src/components/charts.tsx": "if bars ever need a neutral series tone, it is decided there once",
-    },
-  },
+  /**
+   * `black-as-primary` IS RETIRED, AND IT IS THE ONE RULE THE RE-THEME KILLED
+   * OUTRIGHT RATHER THAN REPLACED.
+   *
+   * It banned `bg-neutral-900` at a call site, and the whole argument was about
+   * INVERSION: `--foreground` answered `neutral-900` in light and `ink-50` in
+   * dark, so a `bg-foreground` button flipped with the theme while a
+   * `bg-neutral-900` one was that black frozen at one exposure — invisible on
+   * the dark theme's own page colour, and identical to the correct spelling in
+   * light, which is precisely why nobody would catch it by eye.
+   *
+   * There is one theme. Nothing inverts, so nothing can be frozen against an
+   * exposure that does not exist, and `neutral-900` is no longer a near-black
+   * pretending to be a role — it is #141518, the CONTROL surface, which the
+   * period track and every select in the product legitimately name.
+   *
+   * Keeping the rule would have meant banning the spelling of a surface the kit
+   * had just introduced. It goes, rather than acquiring an allowlist entry for
+   * every file that draws a select.
+   */
   {
     name: "yellow-as-stroke",
     why: "#eecf00 is 1.55:1 as a stroke or as text on white and 11.24:1 as a fill under #1a1a1a ink — the primary may only be FILLED; lines and coloured glyphs take --marker",

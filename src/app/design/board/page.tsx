@@ -85,7 +85,7 @@ export default function BoardLab() {
               same reason: its box was judged from class names and shipped at the
               wrong width twice. Rendered on the bar's own near-black so the
               hover wash is judged against the surface it actually sits on. */}
-          <div className="dark mb-4 flex w-fit items-center rounded-control bg-ink-950 px-6 py-3">
+          <div className="dark mb-4 flex w-fit items-center rounded-control bg-background px-6 py-3">
             <FlowNameField name="Untitled flow" />
           </div>
           <TileArea count={TILES.length} columns={GROUPS.length}>

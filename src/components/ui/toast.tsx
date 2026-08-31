@@ -47,7 +47,7 @@ export function Toast({ children, action, className }: ToastProps) {
           // Asymmetric padding on purpose — the action button carries its own
           // 10px, so an even inset would leave the right side visibly airier
           // than the left.
-          "flow-pop-in pointer-events-auto flex max-w-[min(32rem,calc(100vw-2rem))] items-center gap-3 rounded-surface bg-ink-800 py-3 pl-5 pr-3 text-sm text-ink-50 shadow-surface",
+          "flow-pop-in pointer-events-auto flex max-w-[min(32rem,calc(100vw-2rem))] items-center gap-3 rounded-surface bg-neutral-700 py-3 pl-5 pr-3 text-sm text-foreground shadow-surface",
           className,
         )}
       >
@@ -65,7 +65,7 @@ export function Toast({ children, action, className }: ToastProps) {
             // The label is the sheet's micro voice — the same ALL CAPS as a chip
             // — because at this size on this surface it is a control, not a word
             // in the sentence beside it.
-            className="focus-ring-light shrink-0 rounded-control px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/90 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-white/15 hover:text-white"
+            className="shrink-0 rounded-control px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/90 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-white/15 hover:text-white"
           >
             {action.label}
           </button>

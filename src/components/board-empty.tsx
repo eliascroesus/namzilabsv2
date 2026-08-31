@@ -98,7 +98,7 @@ export function EmptyBoard({
           reserved for a moment that is meant to be impressive. It was
           `display-sm` at 30px, which is a page title; this is the only thing on
           the screen. */}
-      <h1 className="font-display text-display-lg font-semibold text-ground-ink">Build your Dashboard</h1>
+      <h1 className="font-display text-display-lg font-semibold text-foreground">Build your Dashboard</h1>
       {/* The same shell the flow builder's empty canvas uses — see
           `GetStartedCard`. Sharing it is the point: two ways of saying "there is
           nothing here yet" is a product telling you something about itself.

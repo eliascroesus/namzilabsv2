@@ -26,7 +26,6 @@ import { CalendarBoard, type CalendarMetric } from "@/components/calendar/calend
 import { calendarMonths, dayKey, daysInMonth } from "@/lib/metrics/calendar";
 import { Delta, GroupBars, Sparkbars, TargetBar } from "@/components/charts";
 import { SourceMark } from "@/components/source-mark";
-import { ThemeToggle } from "@/components/theme";
 import { PrimitiveSpecimens } from "./primitives";
 import { BrandSheet } from "./brand-sheet";
 import { Gallery } from "./gallery";
@@ -66,62 +65,81 @@ export const metadata = { title: "Namzilabs — UI kit" };
  * indigo hexes — a kit page confidently lying about the kit.
  */
 /**
- * THE BRAND RAMP IS THE YELLOW ONE, AND IT USED TO HOLD THE VIOLET BELOW IT.
+ * THE BRAND RAMP IS ONE GREEN, AND IT NO LONGER NEEDS A SECOND COLOUR BESIDE
+ * IT.
  *
- * Both ramps are printed because the product needs both names to be readable
- * on one screen: they are not two options, they are the two halves of one rule.
- * `brand-*` is what a FILLED object is; `marker-*` is what a LINE is. A ramp
- * called `brand` that is not the brand colour is a lie a future edit is
- * entitled to believe, which is the whole reason the violet was renamed rather
- * than left where it was.
+ * This table used to be printed next to a violet one, because the two were the
+ * halves of a single rule: `brand-*` was what a FILLED object is and `marker-*`
+ * was what a LINE is, and the split existed because #eecf00 measures 1.55:1 as
+ * a stroke on white and 11.24:1 as a fill. The brand could only ever safely do
+ * one of the two jobs.
  *
- * 600 is the brand. Hover walks DOWN to 700 and press to 800 — never up:
- * brightening a yellow moves it toward the white behind it, so the label's
- * contrast falls at the moment of the press.
+ * On #0f1011 the green is 9.83:1 as a stroke and 7.70:1 as a fill under
+ * near-black ink. Both clear their bar, so 500 DRAWS and 600 FILLS as two steps
+ * of one ramp rather than as two colours covering for each other.
+ *
+ * HOVER WALKS UP, NOT DOWN, and that inverted with the surface: on a light
+ * ground brightening the brand moved it toward the white behind it and the
+ * label's contrast fell at the moment of the press. On near-black, raised means
+ * lighter.
  */
 const BRAND: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "50", cls: "bg-brand-50", hex: "#fefae6" },
-  { step: "100", cls: "bg-brand-100", hex: "#fdf3bf" },
-  { step: "200", cls: "bg-brand-200", hex: "#fae98a" },
-  { step: "300", cls: "bg-brand-300", hex: "#f7de4d" },
-  { step: "400", cls: "bg-brand-400", hex: "#f2d519" },
-  { step: "500", cls: "bg-brand-500", hex: "#f5d91f" },
-  { step: "600", cls: "bg-brand-600", hex: "#eecf00" },
-  { step: "700", cls: "bg-brand-700", hex: "#d4b800" },
+  { step: "50", cls: "bg-brand-50", hex: "#e6fbf3" },
+  { step: "100", cls: "bg-brand-100", hex: "#b8f4de" },
+  { step: "200", cls: "bg-brand-200", hex: "#7aeac4" },
+  { step: "300", cls: "bg-brand-300", hex: "#3ce0aa" },
+  { step: "400", cls: "bg-brand-400", hex: "#19d99c" },
+  { step: "500", cls: "bg-brand-500", hex: "#00d492" },
+  { step: "600", cls: "bg-brand-600", hex: "#00bc7d" },
+  { step: "700", cls: "bg-brand-700", hex: "#00a46d" },
 ];
 /**
- * THE MARKER — the exact values the `brand-*` ramp held when violet was the
- * primary. Only the NAME and the job changed: 500 is the object colour
- * (4.41:1 on the ground, past the 3:1 a non-text mark owes), 400 is the focus
- * ring, and 700 is the INK step, because 4.41:1 is short of the 4.5:1 body text
- * owes and a link is body text.
+ * THE SURFACE HALF of the neutral ramp — the five steps the interface is built
+ * out of, and they are five because the product has five surfaces and not
+ * because five is a nice number.
+ *
+ * 950 is the GROUND, and the rail, the top bar and the page are all of it: one
+ * colour, with a 1px 600 hairline doing every separation in the product. 800 is
+ * a CARD, which is a 1.11:1 step off the ground — a step you can measure and
+ * not one you can see, which is why a card without its border is an invisible
+ * card rather than a flat one. 900 is a CONTROL, one step DOWN from a card, so
+ * a select reads as a recessed slot rather than a raised chip. 700 is RAISED —
+ * a hover, a menu row, the toast. 500 is the heavier rule a checkbox or a
+ * switch track owes.
  */
-const MARKER: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "50", cls: "bg-marker-50", hex: "#f3eeff" },
-  { step: "100", cls: "bg-marker-100", hex: "#e7dcff" },
-  { step: "200", cls: "bg-marker-200", hex: "#d0bcff" },
-  { step: "300", cls: "bg-marker-300", hex: "#b494ff" },
-  { step: "400", cls: "bg-marker-400", hex: "#9670ff" },
-  { step: "500", cls: "bg-marker-500", hex: "#7c4dff" },
-  { step: "600", cls: "bg-marker-600", hex: "#6d3aff" },
-  { step: "700", cls: "bg-marker-700", hex: "#6229f0" },
+const SURFACE: Array<{ step: string; cls: string; hex: string }> = [
+  { step: "950", cls: "bg-neutral-950", hex: "#0f1011" },
+  { step: "900", cls: "bg-neutral-900", hex: "#141518" },
+  { step: "800", cls: "bg-neutral-800", hex: "#1a1b1e" },
+  { step: "700", cls: "bg-neutral-700", hex: "#222325" },
+  { step: "600", cls: "bg-neutral-600", hex: "#2b2d2f" },
+  { step: "500", cls: "bg-neutral-500", hex: "#3a3d40" },
 ];
 /**
- * THE INK LADDER RUNS UPWARDS, and that inversion is the whole story of this
- * table. The band moved from #0f0f0f to #2e2e2e, and every step above it was
- * cut to go DOWN from the old value — `ink-900` was #1a1a1a and `ink-800`
- * #2b2b2b, both DARKER than the new base. Left alone, every rail hover and
- * active row would have receded into the band instead of rising out of it.
- * On a charcoal band, raised means LIGHTER.
+ * THE INK HALF — four values, and the count is the point.
+ *
+ * The reference this interface is drawn from ships SEVEN greys for text:
+ * #ffffff, #dcdcdc, #e5e7eb, #a1a1a1, #9ca3af, #99a1af and #6a7282. Three of
+ * those are within three counts of each other. That is the same failure the
+ * type scale was closed to prevent — twelve names over nine sizes — arriving in
+ * the colour layer, and it collapses here to one value per job.
+ *
+ * 400 IS NOT THE REFERENCE'S #6a7282, and this is the one measurement in the
+ * kit that overrules the source outright: that value is 3.56:1 on the #1a1b1e
+ * card the reference sets its own empty-state copy on, against the 4.5:1 body
+ * text owes. Raised four steps in the same hue to 4.63:1.
+ *
+ * There is a deliberate GAP between this half and the surface half above. 500
+ * is the last step a LINE may be drawn in and 400 the first that TEXT may be
+ * set in; the value that reads as a 1px rule and the value that reads as 12px
+ * copy are not the same value, and the product had been pretending they were.
  */
 const INK: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "950", cls: "bg-ink-950", hex: "#2e2e2e" },
-  { step: "900", cls: "bg-ink-900", hex: "#3a3a3a" },
-  { step: "800", cls: "bg-ink-800", hex: "#434343" },
-  { step: "700", cls: "bg-ink-700", hex: "#5e5e5e" },
-  { step: "400", cls: "bg-ink-400", hex: "#a1a1a1" },
-  { step: "100", cls: "bg-ink-100", hex: "#e8e8e8" },
-  { step: "50", cls: "bg-ink-50", hex: "#fafafa" },
+  { step: "400", cls: "bg-neutral-400", hex: "#7d8593" },
+  { step: "300", cls: "bg-neutral-300", hex: "#9ca3af" },
+  { step: "200", cls: "bg-neutral-200", hex: "#dcdcdc" },
+  { step: "100", cls: "bg-neutral-100", hex: "#ebebeb" },
+  { step: "50", cls: "bg-neutral-50", hex: "#fafafa" },
 ];
 /**
  * THE DECISIONS THE TOKEN TABLES CANNOT HOLD.
@@ -301,16 +319,18 @@ export default function DesignPage() {
 
         <div className="min-w-0 max-w-4xl flex-1">
         <div className="flex items-start justify-between gap-4">
-          {/* `text-marker-ink`, not `text-primary`. This eyebrow is TEXT, and
-              the primary is a fill: #eecf00 measures 1.55:1 on this sheet and
-              would be a caps label nobody could read on the one page whose job
-              is to be read. The marker's ink step is 6.79:1. */}
-          <p className="text-xs font-semibold uppercase tracking-widest text-marker-ink">Brand kit</p>
-          {/* THE TOGGLE BELONGS ON THIS PAGE MORE THAN ANYWHERE ELSE. Half the
-              kit is a set of role tokens that resolve differently under
-              `.dark`, and a swatch board that can only be seen at one exposure
-              is documenting half of itself. */}
-          <ThemeToggle />
+          {/* `text-marker`, and the eyebrow no longer needs a second token to
+              say so. This is TEXT in the brand, which under the old yellow was
+              the one thing the brand could not be — #eecf00 measures 1.55:1 on
+              a light sheet, so a caps label in it was unreadable on the one
+              page whose entire job is to be read, and `--marker-ink` existed to
+              carry exactly this case. The green is 9.83:1 here. */}
+          <p className="text-xs font-semibold uppercase tracking-widest text-marker">Brand kit</p>
+          {/* THE TOGGLE IS GONE, along with the theme it toggled. It belonged on
+              this page more than anywhere else while half the kit was role
+              tokens that resolved differently under `.dark` — a swatch board
+              that can only be seen at one exposure was documenting half of
+              itself. There is one exposure now, so the board is complete. */}
         </div>
         {/* The h1 comes from PageHeader like every other page's — a kit page
             that re-typed the title recipe would be the first thing on it that
@@ -358,7 +378,7 @@ export default function DesignPage() {
           title="Colour"
           note="YELLOW FILLS. VIOLET DRAWS. That is a measurement, not a preference: #EECF00 is 1.55:1 as a stroke or as text on white and 11.24:1 as a fill under #1A1A1A ink, so the brand is spent on filled objects — the mark, the active rail chip, primary buttons, the unread badge, step markers — and never on a rule, a ring, a border or a glyph standing on the page. Everything that draws is the marker's violet: focus rings, links, hover borders, selection rings, the active tab's rule. The one place yellow may stroke is a dark surface, where it measures 8.77:1 — which is why the top bar's progress arc is yellow and a link never is. check:ui's yellow-as-stroke rule fails the build the moment the primary is spelled as text, a border, a ring, a stroke, a fill or a divide, which is what makes this rule enforceable where 'yellow is the hero at most once per screen' never was — nothing could ever count the yellows on a screen. Beside the two sits a three-colour accent set (orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning."
         >
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Brand — what FILLS, brand-*</p>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Brand — 500 draws, 600 fills, brand-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
             {BRAND.map((s) => (
               <div key={s.step} className="min-w-0 flex-1">
@@ -370,9 +390,11 @@ export default function DesignPage() {
               </div>
             ))}
           </div>
-          <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">Marker — what DRAWS, marker-*</p>
+          <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">
+            Surface — the five things the app is built out of, neutral-*
+          </p>
           <div className="flex overflow-hidden rounded-card border border-border">
-            {MARKER.map((s) => (
+            {SURFACE.map((s) => (
               <div key={s.step} className="min-w-0 flex-1">
                 <div className={`h-16 ${s.cls}`} />
                 <div className="border-t border-border px-2 py-1.5">
@@ -382,7 +404,7 @@ export default function DesignPage() {
               </div>
             ))}
           </div>
-          <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">Ink — dark surfaces, ink-*</p>
+          <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">Ink — four values, one per job, neutral-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
             {INK.map((s) => (
               <div key={s.step} className="min-w-0 flex-1">
@@ -672,7 +694,7 @@ export default function DesignPage() {
                   which is what `ui/toast.tsx` actually paints. On a charcoal
                   band raised means LIGHTER, so this now sits ABOVE ink-950
                   rather than below it. */}
-              <div className="inline-flex items-center gap-3 rounded-surface bg-ink-800 px-4 py-2.5 text-sm text-ink-50">
+              <div className="inline-flex items-center gap-3 rounded-surface bg-neutral-700 px-4 py-2.5 text-sm text-foreground">
                 Flow published
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
@@ -688,12 +710,12 @@ export default function DesignPage() {
           note="The 30 of the 60/30/10 split: ink-950 charcoal carrying a 70px icon column, so the brand's yellow has something to be the one filled object on. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else."
         >
           <div className="flex items-stretch gap-4">
-            {/* `bg-ink-950`, the band's own token, rather than `bg-rail`: that
+            {/* `bg-background`, the band's own token, rather than `bg-rail`: that
                 role answers WHITE in the light theme (the 264px sidebar it was
                 named for became a recessed light column long ago) and painting
                 a swatch of the chrome with it would show white glyphs on white.
                 The band is the ink ladder's base and does not invert. */}
-            <div className="inline-flex items-start gap-3 rounded-card bg-ink-950 px-5 py-4">
+            <div className="inline-flex items-start gap-3 rounded-card bg-background px-5 py-4">
               <span className="flex w-14 flex-col items-center">
                 <span className="flex size-10 items-center justify-center rounded-control bg-primary text-primary-foreground">
                   <LayoutDashboard size={24} strokeWidth={2} />
@@ -701,7 +723,7 @@ export default function DesignPage() {
                 <span className="px-1 text-center text-xs font-medium leading-4 text-white">Active</span>
               </span>
               <span className="flex w-14 flex-col items-center">
-                <span className="flex size-10 items-center justify-center rounded-control bg-ink-900 text-white">
+                <span className="flex size-10 items-center justify-center rounded-control bg-neutral-700 text-white">
                   <Workflow size={24} strokeWidth={2} />
                 </span>
                 <span className="px-1 text-center text-xs font-medium leading-4 text-white">Hover</span>
@@ -710,7 +732,7 @@ export default function DesignPage() {
                 <span className="flex size-10 items-center justify-center rounded-control text-white">
                   <Plug size={24} strokeWidth={2} />
                 </span>
-                <span className="px-1 text-center text-xs font-medium leading-4 text-ink-400">Rest</span>
+                <span className="px-1 text-center text-xs font-medium leading-4 text-muted-foreground">Rest</span>
               </span>
             </div>
             <div className="flex flex-1 flex-col justify-center gap-1 text-xs text-muted-foreground">
@@ -735,9 +757,9 @@ export default function DesignPage() {
           title="Frame"
           note="Every authenticated page, not just the builder: the app cuts the 16px frame radius out of the ground's TOP-LEFT corner and lets the band's charcoal show through, so the shape of the application never changes as you move around it. One corner, because that is the single place the page meets both halves of the band at once — the rail to its left and the top bar above it. The other three run to the viewport; rounding them would float the page inside the window like a card, which it is not."
         >
-          <div className="flex h-40 overflow-hidden rounded-card bg-ink-950">
+          <div className="flex h-40 overflow-hidden rounded-card bg-background">
             <div className="w-[100px] shrink-0" />
-            <div className="flex-1 rounded-tl-frame bg-ground" />
+            <div className="flex-1 rounded-tl-frame bg-background" />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             A radius reveals whatever is BEHIND the element it is cut into, which is why the column holding the top bar
@@ -866,7 +888,7 @@ export default function DesignPage() {
               The second one is the whole reason the gate exists and would
               otherwise have no coverage at all. */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <div className="flex min-h-[560px] items-center justify-center rounded-card bg-ground p-6">
+            <div className="flex min-h-[560px] items-center justify-center rounded-card bg-background p-6">
               {/* THE METRIC LIST IS FED HERE so the picker's SECOND step has
                   something to draw. Without it this page could only ever show
                   the "nothing published yet" branch, and the populated list —
@@ -884,7 +906,7 @@ export default function DesignPage() {
                 }))}
               />
             </div>
-            <div className="flex min-h-[560px] items-center justify-center rounded-card bg-ground p-6">
+            <div className="flex min-h-[560px] items-center justify-center rounded-card bg-background p-6">
               <EmptyBoard rangeKey="7d" source={null} canCreate={false} />
             </div>
           </div>

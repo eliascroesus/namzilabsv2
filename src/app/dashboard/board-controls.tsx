@@ -312,7 +312,7 @@ export function ViewTab({
        * is a place in a document, so it is a RULE, which every product that has
        * this row agrees on — and a rule is a stroke.
        *
-       * The colour is `--tab-underline`, one value in both themes on purpose,
+       * The colour is `--marker`, one value in both themes on purpose,
        * and the rebrand REPAIRED it rather than merely recolouring it. It was
        * green #00d492: 9.02:1 on the dark ground but 1.78:1 on the light one,
        * which the token's own note admitted was well under the 3:1 an indicator
@@ -358,8 +358,8 @@ export function ViewTab({
       className={cn(
         "inline-flex shrink-0 items-center border-b-3 text-sm transition-colors duration-(--duration-fast)",
         active
-          ? "border-tab-underline font-semibold text-ground-ink"
-          : "border-transparent font-medium text-muted-foreground hover:text-ground-ink",
+          ? "border-marker font-semibold text-foreground"
+          : "border-transparent font-medium text-muted-foreground hover:text-foreground",
       )}
     >
       {editing ? (
@@ -440,7 +440,7 @@ export function ViewTab({
                  the light theme at all, while it read fine in dark, which is
                  exactly why it survived so long. The ROW'S own ink is the right
                  answer, because it follows the ground under both exposures. */
-                  className="mr-0.5 size-6 text-ground-ink-muted hover:bg-foreground/10 hover:text-ground-ink"
+                  className="mr-0.5 size-6 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
               onClick={() => setMenuOpen((o) => !o)}
               aria-label={`Options for ${name}`}
               aria-haspopup="menu"
@@ -737,7 +737,7 @@ export function ViewTitle({
     >
       <span
         style={{ lineHeight: 1 }}
-        className="rounded-control px-2 py-1 text-ground-ink transition-colors duration-(--duration-fast) group-hover/title:bg-ground-ink/10 group-active/title:bg-ground-ink/15"
+        className="rounded-control px-2 py-1 text-foreground transition-colors duration-(--duration-fast) group-hover/title:bg-neutral-700 group-active/title:bg-background-ink/15"
       >
         {shown}
       </span>

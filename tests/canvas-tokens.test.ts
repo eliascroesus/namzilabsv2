@@ -26,25 +26,22 @@ const css = readFileSync(join(root, "src/app/globals.css"), "utf8");
 const canvas = readFileSync(join(root, "src/components/flow/flow-canvas.tsx"), "utf8");
 
 /**
- * The theme-varying tokens live in `:root` and `.dark` now — `@theme` holds
- * constants and cannot answer differently under a class — so each one has TWO
- * values and both have to hold the relationship below. Scoped by block, or a
- * lookup would return whichever definition came first in the file and quietly
- * measure the light theme twice.
- */
-/**
- * `(?:,[^{]*)?` — THE BLOCK MAY BE ONE OF SEVERAL SELECTORS ON ITS RULE.
+ * ONE BLOCK NOW, NOT TWO.
  *
- * `:root` is written `:root, .dark .tile-surface { … }` now: the metric tile is
- * a light island inside the dark theme, and it gets there by NAMING the light
- * role block a second time rather than by re-declaring ninety values that would
- * then drift. Matching `:root\s*\{` stopped finding it, and the failure was the
- * unhelpful kind — "no :root block in globals.css" — for a rule that is right
- * there. Tolerate the selector list; keep requiring the block to start a line,
- * which is what stops `.dark` matching `.dark .tile-surface`.
+ * This file used to resolve every token TWICE — once in `:root` and once in
+ * `.dark` — because the canvas had a light answer and a dark one, and a lookup
+ * that ignored the block would return whichever came first in the file and
+ * quietly measure the light theme twice. The product has one theme, so there is
+ * one block and the loop below runs once. It is kept as a loop rather than
+ * flattened so that the relationship being asserted stays visible: it is a
+ * property of a THEME, and if a second one ever returns it wants the same check.
+ *
+ * The `(?:,[^{]*)?` selector-list tolerance is gone with the thing that needed
+ * it — `:root` was written `:root, .dark .tile-surface { … }` while the metric
+ * tile was a light island inside the dark theme.
  */
 function block(selector: string): string {
-  const m = css.match(new RegExp(`(?:^|\\n)${selector}\\s*(?:,[^{]*)?\\{([\\s\\S]*?)\\n\\}`));
+  const m = css.match(new RegExp(`(?:^|\\n)${selector}\\s*\\{([\\s\\S]*?)\\n\\}`));
   if (!m) throw new Error(`no ${selector} block in globals.css`);
   return m[1];
 }
@@ -53,8 +50,8 @@ function token(name: string, selector: string): string {
   const src = block(selector);
   const m = src.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,8})\\s*;`));
   if (!m) {
-    // A `var(--x)` here is not a failure — it is one token pointing at another,
-    // which is how the light canvas reuses the neutral ramp. Follow it once.
+    // A `var(--x)` here is not a failure — it is one token pointing at another.
+    // Follow it once, into the palette.
     const alias = src.match(new RegExp(`--${name}:\\s*var\\(--([a-z0-9-]+)\\)\\s*;`));
     if (alias) return token(alias[1], "@theme");
     throw new Error(`--${name} is neither a hex nor an alias in ${selector}`);
@@ -62,11 +59,7 @@ function token(name: string, selector: string): string {
   return m[1].toLowerCase();
 }
 
-/** Both themes, so neither can regress without the other noticing. */
-const THEMES = [
-  { name: "light", selector: ":root" },
-  { name: "dark", selector: "\\.dark" },
-];
+const THEMES = [{ name: "the one theme", selector: ":root" }];
 
 describe("the canvas Background matches the theme tokens", () => {
   const bg = canvas.match(/<Background\b[^>]*\/>/);

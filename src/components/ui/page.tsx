@@ -20,14 +20,33 @@ export function PageContainer({
       // is the page's one landmark — see AppFrame's `ownsMain`.
       id="main"
       className={cn(
-        // The gutter steps with the viewport. At a flat px-6 the content of a
-        // page sat 24px off a phone's edge, which is fine, and 24px off a 27"
-        // display's rail, which is not — a 1440px window and a 390px one were
-        // asking for the same margin.
-        "rise-in mx-auto w-full px-5 py-6 sm:px-8 sm:py-8 lg:px-10",
-        // `full` keeps the step but adds Notion's own outer margin at the sizes
-        // where a bare `lg:px-8` leaves a board hanging off the rail.
-        width === "full" && "xl:px-14 2xl:px-24",
+        /**
+         * THE GUTTER IS 24px, AND IT STOPPED STEPPING WITH THE VIEWPORT.
+         *
+         * It ran `px-5 py-6 sm:px-8 sm:py-8 lg:px-10` — 20px on a phone, 32
+         * from `sm`, 40 from `lg` — on the argument that a 390px window and a
+         * 1440px one should not ask for the same margin. That argument is
+         * right for a page of PROSE, where the margin is what protects the
+         * measure. It is wrong for a console, and the reference is flatly the
+         * other way: 24px, at every width, on every screen.
+         *
+         * The reason is the top bar. Its own inset is 24px and it does not step
+         * — chrome cannot, because the workspace name would slide sideways as
+         * you resize. So every rung the page stepped through was a rung where
+         * the page's content and the bar's content stood on two different
+         * vertical lines, and at `lg` they were 16px apart down the entire
+         * left-hand side of every screen in the product.
+         *
+         * `py-6` (24px) is kept at every width for the same reason: it is what
+         * the reference measures between the bar's rule and the page title.
+         */
+        "rise-in mx-auto w-full p-6",
+        // `full` USED TO ADD ITS OWN OUTER MARGIN — `xl:px-14 2xl:px-24` — so
+        // that an uncapped board did not hang off the rail on a wide display.
+        // It goes with the stepping gutter above and for the same reason: the
+        // reference runs its widest board at a flat 24px, and a board inset
+        // 96px on a 2560px screen while the bar above it is inset 24px is the
+        // misalignment this change exists to close, at its most visible.
         /**
          * THE PAGE HAS A WIDTH, AND IT DOES NOT CHASE THE WINDOW.
          *
@@ -101,19 +120,31 @@ export const BOARD_GRID = "grid gap-4 sm:grid-cols-2 xl:grid-cols-3";
  * prevent one layout down — and it is the kind nobody files a bug for, because
  * each control looks fine until you switch tabs and the row moves.
  *
- * 40px around 32px pills: the 2px padding is the groove the selected pill sits
- * IN, and the remaining 4px is what stops a lit pill touching the rim.
+ * 32px AROUND 24px PILLS, DOWN FROM 40 AROUND 32. This is the reference's
+ * control height and it is the same 32 as every select, every date picker and
+ * every dense button in the product — which is the point of shrinking it. At 40
+ * it was the tallest object in the page header and it sat beside a title that
+ * has just come DOWN to 24px; the row read as a control with a caption rather
+ * than a page with a filter.
  *
- * `--period-bg` and `--period-line` rather than card/border, because this group
- * sits on the GROUND and answers differently under `.dark` — see their notes in
- * globals.css, which carry the ratios.
+ * THE GROOVE IS A ROUNDED RECTANGLE, NOT A CAPSULE. Pills are for buttons and
+ * chips; the reference draws every segmented and dropdown control at
+ * `rounded-card` (10px), which is also the radius of the cards the control
+ * filters. A capsule here was the one shape in the header that matched nothing
+ * below it.
+ *
+ * `bg-control` + `border-border`, and the three `--period-*` tokens are retired.
+ * They existed because this was "the one control that follows the PAGE rather
+ * than the band" — a near-black pill group on a #f5f5f5 page would have been a
+ * second dark object competing with the chrome, so it needed its own surface
+ * that inverted separately. There is one surface; a control is `--control`.
  */
 export const PERIOD_TRACK =
-  "inline-flex h-10 items-center gap-0.5 rounded-full border border-period-line bg-period-bg p-0.5";
+  "inline-flex h-8 items-center gap-0.5 rounded-card border border-border bg-control p-0.5";
 
 /** One control inside that groove — a period link, a month arrow, "This month". */
 export const PERIOD_PILL =
-  "inline-flex h-8 shrink-0 items-center rounded-full px-3.5 text-sm font-medium transition-colors duration-(--duration-fast)";
+  "inline-flex h-6 shrink-0 items-center rounded-[calc(var(--radius-card)-3px)] px-2.5 text-xs font-medium transition-colors duration-(--duration-fast)";
 
 /**
  * Title row: optional back link, one h1 recipe, optional lede, actions on
@@ -141,7 +172,7 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
      * `pb-4` stays: it is what stops a title touching the thing beneath it, and
      * dropping both would have been a different change.
      */
-    <header className={cn("pb-4", className)}>
+    <header className={cn("pb-6", className)}>
       {back && (
         /**
          * A PILL, NOT A LINE OF TEXT. The sheet's shape rule is pill-first, and
@@ -191,27 +222,25 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
               The display face's one in-app appearance besides the metric
               numeral. `.font-display` carries its own tracking (-0.022em), so
               no `tracking-tight` here — the two would compound. */}
-          {/* `text-ground-ink`, NOT `text-foreground`, and the difference is
-              only visible in dark: the ground's ink is pure white where the
-              app's foreground is ink-50. This is the one heading in the product
-              with nothing above it to defer to — see the token's own note in
-              globals.css — and it is the role that follows the PAGE rather than
-              the card, which is what a page title sits on.
+          {/* `text-white`, NOT `text-foreground`, and it is the one place in the
+              product that reaches past the ink ramp's top rung on purpose. The
+              body ink is #dcdcdc; a page title in it is the same weight of grey
+              as the sentence under it, and the reference draws the title in
+              pure white for exactly that reason — it is the one heading with
+              nothing above it to defer to, so it gets the one value nothing
+              else may have.
 
-              30px (`display-sm`), UP FROM 24. The title shares its row with the
-              period control, which is a 40px band, and at 24px it read as a
-              caption beside it rather than as the page's name. The scale has no
-              32px step and inventing one to match a guess would put a tenth
-              size in a closed set; 30 is the neighbour that exists and it
-              carries the row. */}
-          {/* NO `leading-5`. The Figma reports a 20px line-height on a 24px title,
-              which is a Figma artefact — it measures the single line it drew.
-              Applied literally it sets 20px leading on 24px type, so the moment
-              a title wraps the two lines overlap by 12px. Every PageHeader in
-              the product uses this, and a long metric name inside `width="narrow"`
-              wraps at ordinary widths. The token's own 32px is the right answer
-              and the comp cannot tell the difference on one line. */}
-          <h1 className="font-display text-display-sm font-semibold text-ground-ink">{title}</h1>
+              24px (`display-xs`), DOWN FROM 30. It went UP to 30 when the title
+              shared its row with a 40px period band and read as a caption
+              beside it; that control is 32px now and the row no longer
+              overpowers a 24px heading. 24/600 at 32px leading with 0.07px
+              tracking is what the reference measures, and it is also the step
+              `/design` has printed beside "Page titles" the whole time.
+
+              `.font-display` and the app's face are the same stack now (see
+              layout.tsx), so this class buys only its -0.022em tracking. Kept
+              because the tracking is the half that was doing the work. */}
+          <h1 className="font-display text-display-xs font-semibold text-white">{title}</h1>
           {/* 14px, DOWN FROM 16, and the old argument for 16 is retired rather
               than overruled by taste. It said a lede has to be 16px "to read
               as a sentence rather than as a caption of the heading" — true when
@@ -223,7 +252,7 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
               `max-w-2xl` survives for the pages that still put a whole sentence
               here: one running the full 1152px of the container is ~150
               characters a line, roughly twice a comfortable measure. */}
-          {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-ground-ink-muted">{lede}</p>}
+          {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-muted-foreground">{lede}</p>}
         </div>
         {/* THE RIGHT SLOT, AND IT CENTRES NOW.
             It was `items-start` because a wrapping row put buttons half a line

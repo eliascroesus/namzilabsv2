@@ -58,12 +58,30 @@ function sourceFiles(dir = join(root, "src"), out: string[] = []): string[] {
 }
 
 describe("the page container and the skeleton that stands in for it", () => {
-  it("share one gutter, rung for rung", () => {
-    // 16px on a phone, 24 from `sm`, 32 from `lg`. A flat value asked a 390px
-    // window and a 27" display for the same margin.
-    const gutter = "px-5 py-6 sm:px-8 sm:py-8 lg:px-10";
+  it("share one gutter", () => {
+    /**
+     * 24px, FLAT, AND THE RUNGS ARE GONE.
+     *
+     * This ran `px-5 py-6 sm:px-8 sm:py-8 lg:px-10` and the note here argued
+     * that a flat value asked a 390px window and a 27" display for the same
+     * margin. True, and it is the wrong trade for a console: the TOP BAR's
+     * inset cannot step (the workspace name would slide sideways as you
+     * resize), so every rung was a width at which the page's content and the
+     * bar's content stood on two different vertical lines — 16px apart at `lg`,
+     * down the whole left edge of every screen.
+     *
+     * The assertion stays a PAIR because the reason it exists has not changed:
+     * the skeleton is a hand-copy of these classes and has drifted from them
+     * twice.
+     */
+    const gutter = "w-full p-6";
     expect(page).toContain(gutter);
     expect(skeleton).toContain(gutter);
+    // The old rungs must not creep back into one file and not the other —
+    // measured against CODE, because both files explain in prose what they
+    // stopped spelling, and a rule that reads its own gravestone fails forever.
+    const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    for (const src of [page, skeleton]) expect(code(src)).not.toMatch(/sm:px-8|lg:px-10|2xl:px-24/);
   });
 
   it("agree on both caps, so the shimmer stands where the page will", () => {
@@ -178,11 +196,34 @@ describe("the page container and the skeleton that stands in for it", () => {
     // `flex` — it opens with the scoped `dark` that re-inks whatever the flow
     // builder portals into it.
     const bar = band(topBar, /<header className="[^"]*?\bh-(\S+) shrink-0/, "the top bar's height");
-    expect(band(skeleton, /className="h-(\S+) shrink-0 bg-ink-950"/, "the skeleton's top bar band")).toEqual(bar);
+    expect(band(skeleton, /className="h-(\S+) shrink-0 border-b/, "the skeleton's top bar band")).toEqual(bar);
     // The rail's top block: the first `flex h-… shrink-0 items-center` in the
     // file. The `<aside>` above it cannot match — its own height is `h-full`
-    // and `w-[70px]` sits between that and its `shrink-0`.
+    // and `w-[48px]` sits between that and its `shrink-0`.
     expect(band(sidebar, /className="flex h-(\S+) shrink-0 items-center/, "the rail's top block")).toEqual(bar);
+  });
+
+  /**
+   * THE HAIRLINES ARE PART OF THE GEOMETRY NOW, WHICH THEY WERE NOT BEFORE.
+   *
+   * While the chrome was a charcoal band around a light page, both of its
+   * internal seams were correctly absent — a rule drawn where two materials
+   * already differ by 40 points of luminance is a rule doing nothing. The
+   * chrome and the page are the same colour now, so each rule is the only thing
+   * marking an edge AND it occupies a pixel the content column does not get.
+   *
+   * A skeleton that omits either one is a 1px jump at hydration in that axis,
+   * which is the exact failure this file exists to catch, so both are asserted
+   * on both sides rather than left to the height/width check above.
+   */
+  it("mirrors both of the chrome's hairlines, which now take real pixels", () => {
+    const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    // The rail's right edge, and the ghost standing in for it.
+    expect(code(sidebar)).toMatch(/border-r border-border/);
+    expect(code(skeleton)).toMatch(/w-\[48px\][^"]*border-r border-border/);
+    // The bar's bottom edge, and its ghost.
+    expect(code(read("src/components/top-bar.tsx"))).toMatch(/<header className="[^"]*border-b border-border/);
+    expect(code(skeleton)).toMatch(/h-\[56px\][^"]*border-b border-border/);
   });
 });
 
