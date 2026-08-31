@@ -1,14 +1,18 @@
 import { unstable_cache } from "next/cache";
+import Link from "next/link";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
-import { LogOut } from "lucide-react";
-import { inArray } from "drizzle-orm";
+import { LogOut, UserRound } from "lucide-react";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { requestAccess } from "@/lib/auth";
-import { connections, flows } from "@/db/schema";
+import { getProfile } from "@/lib/profile";
+import { workspaceCap } from "@/lib/limits";
+import { connections, flows, workspaceOwners } from "@/db/schema";
 import { AppFrame } from "./app-frame";
 import { navViewsOrNone } from "@/lib/board/nav-views";
 import { OrgSwitcher } from "./org-switcher";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { signOutAction } from "@/app/actions";
 
 /**
@@ -145,7 +149,34 @@ export async function AppShell({
     // Full rail on failure — never a broken frame.
   }
 
-  const initials = (userEmail ?? "?").slice(0, 2).toUpperCase();
+  /**
+   * WHO THIS IS, as the product shows them — their chosen name and picture if
+   * they have set any, their email if not. One `cache()`d read shared with the
+   * page (see `getProfile`), and it never throws: a failed profile read draws
+   * initials from the email rather than taking out every route at once.
+   */
+  const profile = await getProfile(userId, userEmail ?? null);
+  const initials = profile.initials;
+
+  /**
+   * HOW MANY WORKSPACES THIS PERSON HAS MADE, for the switcher's create row.
+   *
+   * Counted from `workspace_owners` rather than from the membership list above,
+   * because the cap is on what you CREATE — being invited into a dozen must not
+   * spend your own three. Same fact `createOrganizationAction` checks; this one
+   * only decides whether to draw the row, and a failed count draws it (the
+   * server refuses if it is genuinely at the cap).
+   */
+  let ownedCount = 0;
+  try {
+    ownedCount = await getDb()
+      .select({ c: sql<number>`count(*)::int` })
+      .from(workspaceOwners)
+      .where(and(eq(workspaceOwners.userId, userId), eq(workspaceOwners.source, "created")))
+      .then((r) => Number(r[0]?.c ?? 0));
+  } catch {
+    // The frame must never fail on a DB hiccup.
+  }
   // The active workspace's own name, for the top bar. Falls back rather than
   // rendering an empty slot: a membership list can come back short.
   const workspace = orgs.find((o) => o.id === orgId)?.name ?? "Workspace";
@@ -164,6 +195,7 @@ export async function AppShell({
       views={await railViewsP}
       account={{
         initials,
+        avatarUrl: profile.avatarUrl,
         // Rendered on the server, opened by the client rail: the light
         // panel beside the avatar. Workspace first, then identity, then
         // the way out.
@@ -196,16 +228,54 @@ export async function AppShell({
                   violet tint, so the panel visibly belongs to the control that
                   opened it. Violet is the sheet's identity colour, and the ink
                   is the 700: the 500 is a fill, and 4.42:1 as text. */}
-              <span
-                aria-hidden
-                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
-              >
-                {initials}
-              </span>
+              {profile.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={profile.avatarUrl}
+                  alt=""
+                  className="size-8 shrink-0 rounded-full border border-border object-cover"
+                />
+              ) : (
+                <span
+                  aria-hidden
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
+                >
+                  {initials}
+                </span>
+              )}
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Signed in</p>
-                <p className="truncate text-sm font-medium text-foreground">{userEmail ?? "Your account"}</p>
+                {/* THE NAME LEADS AND THE EMAIL FOLLOWS, once there is a name to
+                    lead with. This band answers "which account is this browser
+                    in", and for somebody who has set a name the email is the
+                    confirming detail rather than the answer. With no name set
+                    the email IS the answer and there is only one line — not a
+                    line of placeholder above it. */}
+                {profile.displayName ? (
+                  <>
+                    <p className="truncate text-sm font-medium text-foreground">{profile.displayName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
+                  </>
+                ) : (
+                  <p className="truncate text-sm font-medium text-foreground">{userEmail ?? "Your account"}</p>
+                )}
               </div>
+            </div>
+            {/* THE WAY TO YOUR OWN PAGE, in the band that is already about you.
+                Clicking your avatar and finding only a workspace list and a way
+                out is the gap this closes — "my name, my picture" is the first
+                thing that control implies. */}
+            <div className="border-t border-border p-1.5">
+              <Link
+                href="/dashboard/profile"
+                className={cn(
+                  buttonVariants({ variant: "ghost", size: "sm" }),
+                  "h-9 w-full justify-start gap-2.5 rounded-[var(--radius-control)] px-2 font-normal text-foreground [&_svg]:text-muted-foreground",
+                )}
+              >
+                <UserRound />
+                Your profile
+              </Link>
             </div>
             {/* `p-1.5` matches the padding DropdownMenuContent would have given
                 this band if the panel were not `p-0` — the rows have to clear
@@ -215,7 +285,7 @@ export async function AppShell({
               <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {orgs.length > 1 ? "Workspaces" : "Workspace"}
               </p>
-              <OrgSwitcher orgs={orgs} currentId={orgId} />
+              <OrgSwitcher orgs={orgs} currentId={orgId} canCreate={ownedCount < workspaceCap()} />
             </div>
             <form action={signOutAction} className="border-t border-border p-1.5">
               {/* Same override as the switcher's rows, for the same reason: the

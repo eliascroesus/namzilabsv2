@@ -36,7 +36,7 @@ export function AppFrame({
   ownsMain = false,
   children,
 }: {
-  account?: { initials: string; panel: ReactNode };
+  account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
   /** The workspace's own name — shown beside its avatar in the top bar. */
   workspace?: string;
   /**

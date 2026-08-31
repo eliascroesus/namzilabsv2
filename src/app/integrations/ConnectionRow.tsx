@@ -656,15 +656,18 @@ export function AppDirectory({
         )}
       </div>
 
-      {/* THE SHELF — the page's one off-white section.
-          The page itself is white now (see page.tsx), so this band is the only
-          recessed surface on the screen and it is what gives the white cards
-          something to sit ON: a grid of white cards on a white page is a page
-          of hairlines. `bg-background` by name, so the off-white here is the
-          same token the rest of the app's canvas is cut from and the dark theme
-          gets the same one-step-recessed relationship for free.
-          Both views share it, so switching Discover for Manage changes what is
-          on the shelf rather than swapping one kind of surface for another. */}
+      {/* THE SHELF — the band the catalogue sits in.
+          It was the page's one recessed section back when the page itself was
+          painted `bg-card`; that is gone (see page.tsx for why it only ever
+          worked in light theme), so this is now the app's own surface and the
+          band is defined by its BORDER and its padding rather than by a change
+          of colour. That is the honest version: the cards are the figures, and
+          they read against this surface in both themes without the page having
+          to become a third one.
+          `bg-background` by name so it stays the canvas colour if anything ever
+          places this shelf on something else. Both views share it, so switching
+          Discover for Manage changes what is on the shelf rather than swapping
+          one kind of surface for another. */}
       <section className="mt-5 rounded-surface border border-border bg-background p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <SectionHeading className="mb-0">{view === "discover" ? "All apps" : "Connected apps"}</SectionHeading>

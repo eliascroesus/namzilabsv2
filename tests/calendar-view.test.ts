@@ -113,11 +113,31 @@ describe("the board still has its furniture", () => {
     expect(branch.slice(0, 400)).toMatch(/key=\{activeView \?\? "default"\}/);
   });
 
-  it("hides the period track, which filters nothing here", () => {
-    // A calendar answers the two months the materializer stores; its own
-    // stepper is what moves time. Six live pills that changed nothing would be
-    // the interface offering what it cannot do.
-    expect(page).toMatch(/activeKind === "calendar" \? null : \(/);
+  it("puts its own time control where every view puts one", () => {
+    /**
+     * NOT MERELY "hides the period pills", which is what this asserted first.
+     * Six live pills that changed nothing would be the interface offering what
+     * it cannot do — but the SLOT is right: the header beside the title is
+     * where every view says what span it is reading, and a calendar reads in
+     * months. Dropping the pills and leaving the slot empty made a calendar tab
+     * look like a different kind of page, which is the thing being fixed.
+     */
+    expect(page).toMatch(/activeKind === "calendar" \? \(\s*<div id="calendar-period"/);
+    // And the metric picker lands where a groups board puts "New group" and a
+    // canvas puts "+ Add" — the control that changes what you are looking at.
+    expect(page).toMatch(/<div id="calendar-tools"/);
+    expect(page).toMatch(/hosted\b/);
+  });
+
+  it("keeps a self-contained bar when there is no chrome to portal into", () => {
+    // `/design` renders the board bare. A kit page showing a calendar with no
+    // controls would be documenting something that does not exist.
+    expect(board).toMatch(/hosted \? \(/);
+    expect(board).toMatch(/<Slot id="calendar-tools">/);
+    expect(board).toMatch(/<Slot id="calendar-period">/);
+    // The prop is a PROP, not a probe: probing the DOM means one frame rendered
+    // in the wrong shape.
+    expect(board).toMatch(/hosted = false/);
   });
 });
 

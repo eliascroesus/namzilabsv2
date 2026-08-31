@@ -1,8 +1,11 @@
 "use server";
 
 import { getWorkOS, withAuth, switchToOrganization, signOut } from "@workos-inc/authkit-nextjs";
+import { redirect } from "next/navigation";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { workspaceOwners } from "@/db/schema";
+import { workspaceCap } from "@/lib/limits";
 
 /**
  * Create a new WorkOS organization (the tenant/workspace), add the current user
@@ -33,6 +36,32 @@ export async function createOrganizationAction(formData: FormData): Promise<void
     await switchToOrganization(dup.organizationId, { returnTo: "/dashboard" });
     return;
   }
+
+  /**
+   * THE CAP, COUNTED IN WORKSPACES THIS PERSON OWNS.
+   *
+   * Not in memberships: being invited into a dozen workspaces must not consume
+   * somebody's own allowance, and the count that matters for runaway tenants is
+   * how many were CREATED. `workspace_owners` records exactly that at the only
+   * moment it is certain — see the insert below — with `source = 'created'`
+   * separating a real creation from the backfill that adopted pre-existing orgs.
+   *
+   * CHECKED AFTER THE DUPLICATE GUARD, on purpose. A double-submit at the cap
+   * must still land you in the workspace you just made rather than refusing;
+   * the guard above answers that case first and returns.
+   *
+   * IT IS THE SERVER'S ANSWER, NOT THE MENU'S. The switcher also hides the row
+   * at the cap, but that is a courtesy — this is the wall, because a form post
+   * is a public endpoint whatever the menu is currently drawing.
+   */
+  const cap = workspaceCap();
+  const owned = await getDb()
+    .select({ c: sql<number>`count(*)::int` })
+    .from(workspaceOwners)
+    .where(and(eq(workspaceOwners.userId, auth.user.id), eq(workspaceOwners.source, "created")))
+    .then((r) => Number(r[0]?.c ?? 0))
+    .catch(() => 0); // A read failure must not lock somebody out of their own product.
+  if (owned >= cap) redirect(`/dashboard?error=workspace_limit`);
 
   const org = await workos.organizations.createOrganization({ name });
   const membership = await workos.userManagement.createOrganizationMembership({

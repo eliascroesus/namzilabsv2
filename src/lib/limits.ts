@@ -81,6 +81,24 @@ export function boardViewCap(): number {
 }
 
 /**
+ * How many workspaces one person may CREATE.
+ *
+ * Three, for now, and deliberately low: a workspace is a whole tenant — its own
+ * connections, its own flows, its own billing surface later — so the cost of a
+ * runaway here is not a slow page, it is orphaned infrastructure nobody is
+ * looking at. Raising it is one env var.
+ *
+ * COUNTED OVER ACTIVE MEMBERSHIPS, WHICH IS NOT THE SAME AS "MADE BY YOU", and
+ * the difference is the honest one: being invited into five workspaces must not
+ * stop you making your own, so `createOrganizationAction` counts only the orgs
+ * this user OWNS (`workspace_owners.source = 'created'`). Somebody who has been
+ * added to a dozen still has their three.
+ */
+export function workspaceCap(): number {
+  return intEnv("MAX_WORKSPACES_PER_USER", 3);
+}
+
+/**
  * How many charts one custom view may hold.
  *
  * PER VIEW, not per org, and that is the honest unit: a view is what renders,

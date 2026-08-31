@@ -82,6 +82,14 @@ const TABLES: Record<string, Classification> = {
     by: "at most one row per (org, member) — the composite PK enforces it; assignment is an upsert, never an append",
   },
   workspace_owners: { kind: "bounded", by: "exactly one row per org — the org id IS the primary key" },
+  user_profiles: {
+    kind: "bounded",
+    by:
+      "at most one row per PERSON — the user id is the primary key and every write is an upsert. " +
+      "It is also written only when somebody edits their name or picture, so it grows with people " +
+      "who have customised themselves rather than with sign-ins. The avatar is a URL, never bytes: " +
+      "the image lives in blob storage, so a row stays a few hundred characters however large the picture is",
+  },
   dashboard_views: {
     kind: "bounded",
     by: "one row per view a human added above their board — the default view has no row at all, so this counts only the extra tabs",

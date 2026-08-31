@@ -82,6 +82,19 @@ export const maxDuration = 60;
 const VIEW_ERRORS = [
   ["rank", "Your role doesn\u2019t allow adding views to this dashboard."],
   ["view_limit", "This workspace has reached its view limit, so nothing was created. Delete one to add another."],
+  /**
+   * NOT A VIEW ERROR, AND IT LANDS HERE ANYWAY. `createOrganizationAction`
+   * refuses at the workspace cap with a redirect, and a redirect needs
+   * somewhere to say why \u2014 this banner is the only reader of `?error=` the
+   * product has. Without the entry the refusal is a navigation that changes
+   * nothing: you name a workspace, press Create, and arrive back on the
+   * dashboard with no workspace and no reason, which is the exact failure the
+   * other two rows in this table were added to stop.
+   */
+  [
+    "workspace_limit",
+    "You\u2019ve created as many workspaces as your account allows, so nothing was created.",
+  ],
 ] as const;
 
 type SP = Record<string, string | string[] | undefined>;
@@ -1125,13 +1138,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             />
           }
           actions={
-            /* NOT ON A CALENDAR VIEW. The period pills narrow WHICH NUMBERS a
-               board shows; a calendar answers two fixed months — the only two
-               the materializer stores — and its own stepper is the control that
-               moves time here. Six live pills that changed nothing on screen
-               would be the interface offering something it cannot do, which is
-               the gap this board keeps closing rather than opening. */
-            activeKind === "calendar" ? null : (
+            /* A CALENDAR PUTS ITS OWN TIME CONTROL HERE INSTEAD.
+               The period pills narrow WHICH NUMBERS a board shows; a calendar
+               answers two fixed months — the only two the materializer stores —
+               so six live pills would be the interface offering something it
+               cannot do. But the SLOT is right: this is where every view says
+               what span it is reading, and a calendar reads in months. The
+               board fills this from the client (it owns which month is on
+               screen); an empty div collapses to nothing if it never does. */
+            activeKind === "calendar" ? (
+              <div id="calendar-period" className="flex items-center gap-1.5" />
+            ) : (
             /* ── THE PERIOD CONTROL ────────────────────────────────────────
                THE SAME SIX LINKS, ON THE OTHER SIDE OF THE PAGE. This is the
                range track that used to open the filter island — moved, not
@@ -1282,9 +1299,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             that forgot them would lose the tab strip and the `+`. */}
         {!emptyWorkspace && activeKind === "calendar" ? (
           <div className="mt-4">
+            {/* THE SAME ROW EVERY OTHER VIEW HAS: arrangement on the left,
+                what-changes-the-board and the actions on the right. The metric
+                picker lands in `#calendar-tools`, which is where a groups board
+                puts "New group" and a canvas puts "+ Add" — the one control
+                that changes what you are looking at. */}
             <div className="flex items-center justify-between gap-4">
               {viewStrip}
-              {boardActions}
+              <div className="flex items-center gap-2">
+                <div id="calendar-tools" className="flex items-center gap-2" />
+                {boardActions}
+              </div>
             </div>
             {calendarRowsFailed ? (
               <p className="mt-6 rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-md text-danger-ink">
@@ -1304,6 +1329,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 // square for anyone east of Greenwich after midnight.
                 todayKey={dayKey(new Date())}
                 selectedId={calendarSelected}
+                // The two slots above are this page's; the board fills them.
+                hosted
                 /* A SERVER ACTION, bound to this view — which is what crosses
                    the RSC boundary. A plain closure would fail the build, and
                    is why `/design` renders this component with the prop left

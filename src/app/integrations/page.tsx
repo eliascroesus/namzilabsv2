@@ -131,20 +131,26 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
-      {/* A WHITE PAGE, WITH ONE OFF-WHITE SECTION ON IT.
-          Every other screen in this app sits directly on the off-white canvas,
-          which works when a page is a handful of islands. A catalogue is not: it
-          is a field of white cards, and on off-white a field of white cards has
-          no ground under it and no figure on it — everything sits one step from
-          everything. So the page takes `bg-card` and the collection gets a
-          recessed band of its own (the shelf, in AppDirectory). White page,
-          off-white section, white cards: three steps where there were two, which
-          is what lets the cards read as objects rather than as outlines.
+      {/* THIS PAGE SITS ON THE APP'S SURFACE, LIKE EVERY OTHER PAGE.
+          It used to take `min-h-full bg-card`, and the argument was a good one
+          in exactly one theme: a catalogue is a field of WHITE cards, and on the
+          off-white canvas a field of white cards has no ground under it, so the
+          page went white and the collection got a recessed band — three steps
+          where there were two.
 
-          `min-h-full` because the frame's own surface is the canvas colour: a
-          white page that stops where its content does leaves an off-white strip
-          under it that reads as a rendering fault rather than as a margin. */}
-      <PageContainer className="min-h-full bg-card">
+          IN DARK THEME THAT INVERTS, AND `--card` IS THE PROBLEM. It is the
+          LIGHTEST surface in the app (#2c2a26, one step FORWARD of the page's
+          #211f1d), so `bg-card` on the container painted the whole viewport in a
+          colour no other screen uses — a flat lighter slab from the top bar to
+          the fold, with the cards on it now the same value as the page they sat
+          on. The token that means "one step forward" cannot also mean "the
+          ground", and a class chosen for a light-theme relationship inherited
+          the dark theme's opposite one.
+
+          The cards keep their contrast without it: white on off-white in light,
+          #2c2a26 on #211f1d in dark. Both are a genuine step, which is what the
+          `bg-card` was reaching for and only achieved in one theme. */}
+      <PageContainer>
         {/* "Apps", NOT "Integrations" — the rail item is the only door to this
             page and it has always said Apps, so the page said one word and the
             way in said another. A first-time user clicking a thing called Apps

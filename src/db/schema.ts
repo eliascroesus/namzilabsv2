@@ -881,6 +881,42 @@ export const workspaceOwners = pgTable("workspace_owners", {
 });
 
 /**
+ * WHAT A PERSON CHOSE TO BE CALLED, AND THE PICTURE THEY PICKED.
+ *
+ * NOT IN WORKOS, and that is the same call `workspace_owners` makes one table
+ * up: the IdP AUTHENTICATES — it owns the email and the fact that a session is
+ * real — and everything the product lets you edit about yourself is ours. Two
+ * writers on one record is how a display name ends up disagreeing with itself
+ * depending on which page rendered last, and WorkOS's user profile is shaped for
+ * an identity directory (given/family name) rather than for a name somebody
+ * types into a box.
+ *
+ * NO ROW IS THE DEFAULT, and every reader must handle its absence — the same
+ * "absence is the default" trick `view_id IS NULL` plays. Nobody gets a row on
+ * sign-up; one appears the first time they change something. That keeps the
+ * sign-in path free of a write, and it means the initials the rail already draws
+ * from the email stay the fallback rather than becoming a stored duplicate of it.
+ *
+ * `avatar_url` IS A URL, NEVER BYTES. The image lives in blob storage and this
+ * column holds a short string, because a table read on every page render must
+ * not carry a photograph — the same argument `publishedFlowTiles` makes for
+ * dropping `byDay`, against a database that bills what it returns.
+ */
+export const userProfiles = pgTable("user_profiles", {
+  /** The WorkOS user id — the only identifier that survives an email change. */
+  userId: text("user_id").primaryKey(),
+  /**
+   * What they want to be called. Nullable: clearing the field means "go back to
+   * using my email", which is a real choice and is not the same as never having
+   * set one.
+   */
+  displayName: text("display_name"),
+  /** Where the picture lives. Null is "draw my initials", the default. */
+  avatarUrl: text("avatar_url"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
  * ONE WAY OF LOOKING AT THE DASHBOARD — a Notion view.
  *
  * The metrics are the same in every view; what differs is the arrangement, so a

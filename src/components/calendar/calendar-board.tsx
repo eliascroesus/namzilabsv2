@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { Select } from "@/components/flow/controls";
@@ -69,6 +70,23 @@ function heatFill(share: number, negative = false): string {
 const HEAT_STOPS = [0.05, 0.3, 0.55, 0.8, 1] as const;
 
 /**
+ * RENDER INTO A SLOT THE PAGE PUT IN ITS CHROME.
+ *
+ * The same portal `FlowToolbar`'s `TopBarStatusPortal` uses, and for the same
+ * reason: the state belongs to this client component, the position belongs to
+ * the server-rendered page, and neither can hand the other what it has.
+ *
+ * `null` until the effect runs — the slot cannot be read during render, and
+ * `useEffect` is the only hook that is allowed to touch the document. One frame
+ * of an empty header slot, exactly as the builder's save chip has always had.
+ */
+function Slot({ id, children }: { id: string; children: ReactNode }) {
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  useEffect(() => setNode(document.getElementById(id)), [id]);
+  return node ? createPortal(children, node) : null;
+}
+
+/**
  * THE CALENDAR: one metric, one month, one square per day.
  *
  * WHY IT IS ENTIRELY CLIENT-SIDE. Every day of every month this view can show
@@ -104,6 +122,7 @@ export function CalendarBoard({
   months,
   todayKey,
   selectedId,
+  hosted = false,
   onPick,
 }: {
   metrics: CalendarMetric[];
@@ -124,6 +143,13 @@ export function CalendarBoard({
    * silently sliding to a different metric's numbers under the view's name.
    */
   selectedId?: string | null;
+  /**
+   * WHETHER THE PAGE HAS PUT SLOTS IN ITS CHROME for this board's two control
+   * groups. The dashboard does; `/design` renders this component bare, so it
+   * keeps the self-contained island. A PROP rather than a probe of the DOM,
+   * because probing means one frame rendered in the wrong shape.
+   */
+  hosted?: boolean;
   /**
    * PERSIST THE CHOICE — a SERVER ACTION, not a callback.
    *
@@ -281,15 +307,13 @@ export function CalendarBoard({
     />
   ) : null;
 
-  return (
-    <>
-      {/* The control bar, in the island every other board in the product puts
-          its filters in: what you are looking at on the left, which month on
-          the right. The SHELL is deliberately the same string the activity and
-          flows bars use — one bar spelled three ways is the drift the kit page
-          exists to stop — and the character is inside it. */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-card p-2 shadow-card">
-        <div className="flex min-w-0 items-center gap-2">
+  /**
+   * WHAT YOU ARE LOOKING AT — the metric picker, which is this view's analogue
+   * of "New group" and "+ Add": the one control that changes what the board is
+   * showing.
+   */
+  const tools = (
+    <div className="flex min-w-0 items-center gap-2">
           {/* THE VIEW KIND'S CHIP. It began as an echo of the rail — that row
               filled orange when you were on the Calendar page — and the page is
               gone. The chip stays because the colour now carries the kind:
@@ -319,11 +343,19 @@ export function CalendarBoard({
             options={metrics.map((m) => ({ value: m.id, label: m.name, hint: m.flowName }))}
             onChange={pick}
           />
-          {metric?.status === "error" && <StatusPill tone="danger">Error</StatusPill>}
-          {metric?.status === "stale" && <StatusPill tone="warn">Refreshing soon</StatusPill>}
-        </div>
+      {metric?.status === "error" && <StatusPill tone="danger">Error</StatusPill>}
+      {metric?.status === "stale" && <StatusPill tone="warn">Refreshing soon</StatusPill>}
+    </div>
+  );
 
-        <div className="flex items-center gap-1.5">
+  /**
+   * WHICH MONTH — this view's analogue of the period track, and the reason it
+   * goes where the period track goes. Both answer "what span am I reading"; a
+   * calendar simply answers it in months because that is what the materializer
+   * stores.
+   */
+  const period = (
+    <div className="flex items-center gap-1.5">
           {/* THE STEPPER IS ONE OBJECT, NOT THREE CONTROLS IN A ROW. Two arrows
               and a label sitting loose on the bar read as three unrelated
               things; sunk into their own track they read as a single control
@@ -389,8 +421,37 @@ export function CalendarBoard({
           >
             This month
           </Button>
+    </div>
+  );
+
+  return (
+    <>
+      {/* THE CONTROLS GO INTO THE PAGE'S OWN CHROME, so a calendar tab looks
+          like every other tab rather than like a page that wandered in.
+          Every other view puts "what span am I reading" in the header beside the
+          title (the period track) and "what changes the board" on the tab row
+          (New group, + Add). This used to put both in an island of its own
+          BELOW that row — a third bar the other views do not have, which is
+          precisely the mismatch. Same two groups, moved to the two slots the
+          rest of the product already uses for them.
+          A PORTAL because the state lives here and the chrome is rendered by the
+          server page — the shape `SaveChip` already uses for the builder's top
+          bar. `hosted` is a prop rather than a probe so there is no frame in
+          which the wrong layout renders. */}
+      {hosted ? (
+        <>
+          <Slot id="calendar-tools">{tools}</Slot>
+          <Slot id="calendar-period">{period}</Slot>
+        </>
+      ) : (
+        /* NO CHROME TO PORTAL INTO — `/design` renders this component on its
+           own, and a kit page showing a calendar with no controls would be
+           documenting something that does not exist. It keeps the island. */
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-surface border border-border bg-card p-2 shadow-card">
+          {tools}
+          {period}
         </div>
-      </div>
+      )}
 
       {/* The month, in one line — and the as-of, because a calendar of stored
           numbers has to say when they were last true, exactly as a tile does.

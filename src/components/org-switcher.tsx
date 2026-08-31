@@ -1,6 +1,8 @@
-import { Check } from "lucide-react";
-import { switchOrgAction } from "@/app/actions";
+import { Check, Plus } from "lucide-react";
+import { createOrganizationAction, switchOrgAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { WorkspaceChip } from "@/components/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -37,17 +39,38 @@ type Org = { id: string; name: string };
  *  the two cannot drift into different heights or insets. */
 const ROW = "flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2 text-left text-sm";
 
-export function OrgSwitcher({ orgs, currentId }: { orgs: Org[]; currentId: string }) {
+export function OrgSwitcher({
+  orgs,
+  currentId,
+  canCreate = false,
+}: {
+  orgs: Org[];
+  currentId: string;
+  /**
+   * WHETHER TO OFFER A NEW ONE — false once this person has created their
+   * allowance (`workspaceCap`, three for now).
+   *
+   * A COURTESY, NOT THE GATE. `createOrganizationAction` counts again and
+   * refuses, because a server action is a public endpoint whatever the menu
+   * happens to be drawing. Hidden rather than disabled: `ViewTab` already
+   * states the rule — a control advertising something the product will refuse
+   * is worse than one that is not there.
+   */
+  canCreate?: boolean;
+}) {
   const current = orgs.find((o) => o.id === currentId);
   const currentName = current?.name ?? "Workspace";
 
   if (orgs.length <= 1) {
     return (
-      <p className={cn(ROW, "font-semibold text-foreground")}>
-        <WorkspaceChip name={currentName} className="size-6" />
-        <span className="min-w-0 flex-1 truncate">{currentName}</span>
-        <Check className="size-4 shrink-0 text-accent-foreground" aria-hidden />
-      </p>
+      <div className="space-y-0.5">
+        <p className={cn(ROW, "font-semibold text-foreground")}>
+          <WorkspaceChip name={currentName} className="size-6" />
+          <span className="min-w-0 flex-1 truncate">{currentName}</span>
+          <Check className="size-4 shrink-0 text-accent-foreground" aria-hidden />
+        </p>
+        {canCreate && <NewWorkspaceRow />}
+      </div>
     );
   }
 
@@ -86,6 +109,63 @@ export function OrgSwitcher({ orgs, currentId }: { orgs: Org[]; currentId: strin
           </form>
         ),
       )}
+      {canCreate && <NewWorkspaceRow />}
     </div>
+  );
+}
+
+/**
+ * MAKE ANOTHER ONE — the row under the list, because that is where somebody
+ * looking at their workspaces goes to add one.
+ *
+ * A `<details>` RATHER THAN A MODAL, and the reason is where it lives: this
+ * panel is itself a floating menu, and opening a dialog from inside one either
+ * closes the menu underneath it (so the list you were reading vanishes) or
+ * stacks two layers of overlay. The disclosure expands the row into a field in
+ * place, which keeps the workspace list visible while you name the new one.
+ *
+ * It also means the whole thing is a plain form post with no client boundary —
+ * the same property the switcher rows already have, and `createOrganizationAction`
+ * ends in a redirect, so there is no result to read.
+ */
+function NewWorkspaceRow() {
+  return (
+    <details className="group/new">
+      <summary
+        className={cn(
+          ROW,
+          "cursor-pointer list-none font-normal text-foreground transition-colors hover:bg-accent hover:text-accent-foreground [&::-webkit-details-marker]:hidden",
+        )}
+      >
+        {/* A DASHED SQUARE WHERE THE OTHER ROWS HAVE A FILLED CHIP — the
+            conventional "this one does not exist yet" mark, at exactly the size
+            of the chips above it so the column of glyphs stays a column. */}
+        <span
+          aria-hidden
+          className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-dashed border-border text-muted-foreground"
+        >
+          <Plus className="size-3.5" />
+        </span>
+        <span className="min-w-0 flex-1 truncate">New workspace</span>
+      </summary>
+      <form action={createOrganizationAction} className="mt-1 space-y-2 px-2 pb-1">
+        <Input
+          name="name"
+          required
+          maxLength={60}
+          placeholder="Workspace name"
+          aria-label="Workspace name"
+          className="h-9"
+        />
+        <SubmitButton size="sm" className="w-full" pendingLabel="Creating…">
+          Create workspace
+        </SubmitButton>
+        {/* WHAT IT DOES BEFORE IT DOES IT. Creating a workspace SWITCHES you
+            into it — `createOrganizationAction` ends in `switchToOrganization`,
+            which redirects — and being moved out of the workspace you were
+            reading is a surprise worth one line of warning. */}
+        <p className="text-xs text-muted-foreground">You&rsquo;ll be switched into it.</p>
+      </form>
+    </details>
   );
 }

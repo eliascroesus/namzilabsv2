@@ -79,7 +79,7 @@ export function TopBar({
   metricCount,
   unread = 1,
 }: {
-  account?: { initials: string; panel: ReactNode };
+  account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
   /**
    * The active workspace's own name. A DEFAULT rather than a required prop
    * because the frame's membership lookup can come back short, and a bar that
@@ -477,7 +477,20 @@ export function TopBar({
                 aria-label="Account"
                 className="bg-chrome-chip text-xs font-semibold text-brand-700 hover:bg-neutral-300 hover:text-brand-800 active:bg-neutral-400 data-[state=open]:bg-neutral-300"
               >
-                {account.initials}
+                {/* THE PICTURE IF THERE IS ONE, the initials if not — and the
+                    initials are not a placeholder for a missing image, they are
+                    the default. `<img>` rather than `next/image` because the
+                    URL is user-supplied on a blob host: the optimizer would
+                    need that hostname allow-listed in next.config, which fails
+                    CLOSED at runtime on a 28px image it can barely improve.
+                    `object-cover` so a non-square upload is cropped rather than
+                    squashed — the one thing that makes an avatar look broken. */}
+                {account.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={account.avatarUrl} alt="" className="size-full rounded-full object-cover" />
+                ) : (
+                  account.initials
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64 p-0">
