@@ -80,7 +80,10 @@ export const reconcileOne = inngest.createFunction(
     // per-TENANT cap so one org's many connections can't monopolize the pool.
     concurrency: [{ limit: 10 }, { key: "event.data.orgId", limit: 3 }],
     // Interactive lanes outrank the sweep: priority is seconds of queue boost.
-    priority: { run: "event.data.priority ?? 0" },
+    /* `event.data.priority`, not `?? 0` — CEL has no `??`, and that operator
+       failed the whole app's sync. See the long note in process-event.ts. The
+       dispatcher above is this event's only sender and always sets priority. */
+    priority: { run: "event.data.priority" },
     triggers: [{ event: "ingest/reconcile.requested" }],
   },
   async ({ event, step }) => {

@@ -33,7 +33,7 @@ describe("Inngest safety configuration is pinned", () => {
     // C.3: global worker cap + per-tenant fairness cap.
     expect(o.concurrency).toEqual([{ limit: 10 }, { key: "event.data.orgId", limit: 3 }]);
     // C.5: interactive lanes outrank the sweep.
-    expect(o.priority).toEqual({ run: "event.data.priority ?? 0" });
+    expect(o.priority).toEqual({ run: "event.data.priority" });
     expect(o.retries).toBe(3);
   });
 
@@ -41,7 +41,13 @@ describe("Inngest safety configuration is pinned", () => {
     const o = opts(processEvent);
     expect(o.id).toBe("process-inbound-event");
     expect(o.idempotency).toBe("event.data.rawEventId");
-    expect(o.concurrency).toEqual({ key: "event.data.orgId ?? ''", limit: 5 });
+    // Was `event.data.orgId ?? ''`. That literal was pinned here for months and
+    // this test faithfully protected it — while `??` made Inngest reject the
+    // whole app's sync, so eight of twelve functions never registered. Pinning a
+    // SPELLING proves only that the spelling has not changed;
+    // `inngest-expressions.test.ts` checks the grammar, which is the property
+    // that had to hold.
+    expect(o.concurrency).toEqual({ key: "event.data.orgId", limit: 5 });
     expect(o.retries).toBe(5);
   });
 
@@ -72,7 +78,7 @@ describe("Inngest safety configuration is pinned", () => {
     expect(o.id).toBe("run-flow-test");
     expect(o.retries).toBe(0); // retries would make the editor spinner lie
     expect(o.concurrency).toEqual([{ limit: 6 }, { key: "event.data.orgId", limit: 2 }]);
-    expect(o.priority).toEqual({ run: "event.data.priority ?? 180" });
+    expect(o.priority).toEqual({ run: "event.data.priority" });
   });
 
   /**

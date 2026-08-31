@@ -26,7 +26,25 @@ export const processEvent = inngest.createFunction(
     // C.3: one tenant's webhook storm can't monopolize the processing pool.
     // (Events sent before orgId was added share the empty key briefly — a
     // deploy-window degradation, not a correctness issue.)
-    concurrency: { key: "event.data.orgId ?? ''", limit: 5 },
+    /**
+     * `event.data.orgId`, NOT `event.data.orgId ?? ''`.
+     *
+     * INNGEST EXPRESSIONS ARE CEL, WHICH HAS NO `??`. That one operator was
+     * enough to make the app's ENTIRE SYNC fail to compile — and a rejected
+     * sync is not partial, it is total, so every function added after the last
+     * good sync silently never registered. Four of twelve were live for an
+     * unknown period: no backfills, no "Sync now", no storage retention, and
+     * no health scan (which lives in `prune-storage`, so the watchdog went down
+     * with the thing it watches).
+     *
+     * THE DEFAULT WAS DEFENDING AGAINST SOMETHING THAT CANNOT HAPPEN. This
+     * event has exactly ONE sender — the webhook route — and it has always set
+     * `orgId` (see the note beside the send). `tests/inngest-expressions.test.ts`
+     * pins both halves: the grammar of every expression, and the fact that every
+     * sender supplies the field its function's expression reads. A guarantee
+     * that is checked beats a fallback that hid the check.
+     */
+    concurrency: { key: "event.data.orgId", limit: 5 },
     triggers: [{ event: "ingest/raw.received" }],
     onFailure: async ({ error, event }) => {
       const original = event.data.event?.data as { rawEventId?: string } | undefined;

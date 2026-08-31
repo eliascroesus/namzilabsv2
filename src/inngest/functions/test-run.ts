@@ -17,7 +17,10 @@ export const runFlowTest = inngest.createFunction(
     // automatic retries would just make the editor spinner lie.
     retries: 0,
     concurrency: [{ limit: 6 }, { key: "event.data.orgId", limit: 2 }],
-    priority: { run: "event.data.priority ?? 180" },
+    /* `event.data.priority`, not `?? 180` — CEL has no `??`. See the note in
+       process-event.ts. `startNodeTestAction` is this event's only sender and
+       always sets priority: 180. */
+    priority: { run: "event.data.priority" },
     triggers: [{ event: "flow/test.requested" }],
     onFailure: async ({ event }) => {
       // Belt-and-braces: if the run itself died (OOM, crash), settle the row so
