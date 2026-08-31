@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { functions } from "@/inngest/functions";
+import { PLAN_MAX_CONCURRENCY } from "@/inngest/client";
 
 /**
  * EVERY INNGEST EXPRESSION IS CEL, AND CEL IS NOT JAVASCRIPT.
@@ -112,6 +113,65 @@ describe("every registered function's expressions are valid CEL", () => {
         expect(r, `${where} reads ${JSON.stringify(r)}, which Inngest cannot see when it schedules`).toMatch(
           /^(event\.(data|name|ts|id)[\w.]*|async\.[\w.]*)$/,
         );
+      }
+    }
+  });
+});
+
+/**
+ * NO FUNCTION MAY OUTRUN THE PLAN, for exactly the reason the CEL check exists.
+ *
+ * Inngest refuses to sync an app whose functions declare more concurrency than
+ * the account allows — and the refusal is TOTAL. `reconcile-one-connection`
+ * declared 10 against a plan limit of 5, so the app would not sync AT ALL, which
+ * is the same outage the `??` expressions caused arriving through a different
+ * door. `run-flow-test` was sitting at 6 behind it, ready to reject the next
+ * attempt after the first was fixed.
+ *
+ * Both facts — the ceiling, and every function obeying it — are checked here so
+ * the next one fails in CI rather than in the Resync dialog.
+ */
+describe("no function declares more concurrency than the plan allows", () => {
+  /** Every `limit` on every concurrency entry, global and per-key alike. */
+  const limits = functions.flatMap((fn) => {
+    const o = opts(fn);
+    const c = o.concurrency;
+    if (c == null) return [];
+    return (Array.isArray(c) ? c : [c]).map((e) => ({
+      id: String(o.id),
+      key: (e as { key?: string }).key ?? "(global)",
+      limit: Number((e as { limit: number }).limit),
+    }));
+  });
+
+  it("checks something", () => {
+    expect(limits.length).toBeGreaterThan(5);
+  });
+
+  it.each(limits)("$id / $key stays within the plan", ({ id, key, limit }) => {
+    expect(
+      limit,
+      `${id} declares concurrency ${limit} on ${key}, above the plan's ${PLAN_MAX_CONCURRENCY}. ` +
+        `Inngest rejects the WHOLE app sync for this, so every function stops registering. ` +
+        `Either lower it, or raise PLAN_MAX_CONCURRENCY in the same commit that upgrades the plan.`,
+    ).toBeLessThanOrEqual(PLAN_MAX_CONCURRENCY);
+  });
+
+  it("keeps a per-tenant cap under every global one, so no org can monopolise", () => {
+    /**
+     * The property that makes lowering the global cap free: for a single
+     * workspace the PER-KEY cap is what binds, so the global number could
+     * change without changing behaviour. That is only true while every
+     * multi-entry function actually has a key cap — if one loses it, the global
+     * limit becomes the tenant limit and one org can take the whole lane.
+     */
+    for (const fn of functions) {
+      const c = opts(fn).concurrency;
+      if (!Array.isArray(c) || c.length < 2) continue;
+      const keyed = c.filter((e) => (e as { key?: string }).key != null);
+      expect(keyed.length, `${String(opts(fn).id)} has a global cap but no per-tenant cap`).toBeGreaterThan(0);
+      for (const k of keyed) {
+        expect((k as { limit: number }).limit).toBeLessThanOrEqual(PLAN_MAX_CONCURRENCY);
       }
     }
   });

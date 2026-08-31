@@ -1,4 +1,4 @@
-import { inngest } from "../client";
+import { inngest, PLAN_MAX_CONCURRENCY } from "../client";
 import { getDb } from "@/db/client";
 import { reconcileConnection, reconcileChanged, dueConnectionsForSweep } from "@/ingestion/reconcile";
 import { expireAgedResults, markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
@@ -78,7 +78,10 @@ export const reconcileOne = inngest.createFunction(
     singleton: { key: "event.data.connectionId", mode: "skip" },
     // C.3: a global cap so a big fleet can't stampede providers/Neon, and a
     // per-TENANT cap so one org's many connections can't monopolize the pool.
-    concurrency: [{ limit: 10 }, { key: "event.data.orgId", limit: 3 }],
+    // The global one is the PLAN's ceiling — see PLAN_MAX_CONCURRENCY. It was
+    // 10, which Inngest rejects, and rejecting one function rejects the whole
+    // app. With a single workspace the per-org 3 binds first either way.
+    concurrency: [{ limit: PLAN_MAX_CONCURRENCY }, { key: "event.data.orgId", limit: 3 }],
     // Interactive lanes outrank the sweep: priority is seconds of queue boost.
     /* `event.data.priority`, not `?? 0` — CEL has no `??`, and that operator
        failed the whole app's sync. See the long note in process-event.ts. The

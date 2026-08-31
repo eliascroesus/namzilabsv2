@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { inngest } from "../client";
+import { inngest, PLAN_MAX_CONCURRENCY } from "../client";
 import { getDb } from "@/db/client";
 import { testRuns } from "@/db/schema";
 import { executeAndSettleTestRun } from "@/lib/flow/test-run";
@@ -16,7 +16,9 @@ export const runFlowTest = inngest.createFunction(
     // Interactive: a failed run settles the row as error and the user re-tests;
     // automatic retries would just make the editor spinner lie.
     retries: 0,
-    concurrency: [{ limit: 6 }, { key: "event.data.orgId", limit: 2 }],
+    // Global cap is the PLAN's ceiling (see PLAN_MAX_CONCURRENCY); it was 6,
+    // which Inngest rejects. The per-org 2 is what binds for one workspace.
+    concurrency: [{ limit: PLAN_MAX_CONCURRENCY }, { key: "event.data.orgId", limit: 2 }],
     /* `event.data.priority`, not `?? 180` — CEL has no `??`. See the note in
        process-event.ts. `startNodeTestAction` is this event's only sender and
        always sets priority: 180. */

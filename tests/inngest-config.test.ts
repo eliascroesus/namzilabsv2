@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { reconcileAll, reconcileOne } from "@/inngest/functions/reconcile";
+import { PLAN_MAX_CONCURRENCY } from "@/inngest/client";
 import { processEvent } from "@/inngest/functions/process-event";
 import { runFlowTest } from "@/inngest/functions/test-run";
 import { syncConnection, recomputeStaleFlows, materializeStale, runBackfill } from "@/inngest/functions/sync";
@@ -31,7 +32,10 @@ describe("Inngest safety configuration is pinned", () => {
     // Pileup guard: in-flight connection → new sweep events SKIPPED, not queued.
     expect(o.singleton).toEqual({ key: "event.data.connectionId", mode: "skip" });
     // C.3: global worker cap + per-tenant fairness cap.
-    expect(o.concurrency).toEqual([{ limit: 10 }, { key: "event.data.orgId", limit: 3 }]);
+    // Global cap was 10 — above the plan's 5, which made Inngest reject the
+    // WHOLE app sync. It is `PLAN_MAX_CONCURRENCY` now; the per-org 3 is what
+    // binds for a single workspace either way, so nothing observable changed.
+    expect(o.concurrency).toEqual([{ limit: PLAN_MAX_CONCURRENCY }, { key: "event.data.orgId", limit: 3 }]);
     // C.5: interactive lanes outrank the sweep.
     expect(o.priority).toEqual({ run: "event.data.priority" });
     expect(o.retries).toBe(3);
@@ -77,7 +81,7 @@ describe("Inngest safety configuration is pinned", () => {
     const o = opts(runFlowTest);
     expect(o.id).toBe("run-flow-test");
     expect(o.retries).toBe(0); // retries would make the editor spinner lie
-    expect(o.concurrency).toEqual([{ limit: 6 }, { key: "event.data.orgId", limit: 2 }]);
+    expect(o.concurrency).toEqual([{ limit: PLAN_MAX_CONCURRENCY }, { key: "event.data.orgId", limit: 2 }]);
     expect(o.priority).toEqual({ run: "event.data.priority" });
   });
 
