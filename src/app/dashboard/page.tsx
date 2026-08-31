@@ -754,13 +754,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           squares in, so it is the one control on this row that still acts. */}
       {sources.length > 0 && activeKind !== "calendar" && (
         <details className="group/src relative shrink-0">
-          {/* PILL, not `rounded-control`. It sits between New group and Refresh
-              all, both of which are `Button`s and therefore `rounded-full` from
-              the kit's own base — a single rounded rectangle in a row of three
-              pills reads as a control from a different set. h-9 is 36px, which
-              is `size="sm"`: the same height as the buttons either side of it,
-              stated here because a <summary> cannot be a Button. */}
-          <summary className="inline-flex h-8 cursor-pointer list-none items-center gap-1.5 whitespace-nowrap rounded-control border border-border bg-card px-3 text-xs font-medium text-foreground shadow-xs transition-colors duration-(--duration-fast) hover:bg-accent [&::-webkit-details-marker]:hidden">
+          {/* `Button`'s `default` GEOMETRY, HAND-COPIED, because a <summary>
+              cannot be a Button. h-8 / px-3 / text-sm / rounded-control — the
+              same four values `buttonVariants` emits — so this sits in the row
+              between "Add" and "Refresh all" at exactly their height and their
+              type size.
+              The note here used to argue for a PILL "because the buttons either
+              side are rounded-full from the kit's own base". They are not: the
+              kit's pressables are 8px rectangles now, and this row was the whole
+              reason to check — a single capsule among three rectangles is the
+              control from a different set the old note was worried about, just
+              the other way round. */}
+          <summary className="inline-flex h-8 cursor-pointer list-none items-center gap-1.5 whitespace-nowrap rounded-control border border-border bg-card px-3 text-sm font-medium text-foreground shadow-xs transition-colors duration-(--duration-fast) hover:bg-accent [&::-webkit-details-marker]:hidden">
             {boardSource && <SourceMark source={boardSource} />}
             {activeSourceLabel}
             <ChevronDown size={14} className="text-muted-foreground transition-transform group-open/src:rotate-180" />

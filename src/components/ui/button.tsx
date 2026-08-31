@@ -161,8 +161,23 @@ const buttonVariants = cva(
          * it is that every button in the product reads a step quieter than the
          * body text beside it, and the whole screen feels shrunk.
          */
+        /**
+         * `sm` IS 32px, WHICH IS `default`'s HEIGHT, AND THAT IS THE POINT.
+         *
+         * It was 28. Measured across a rendered page the app was running EIGHT
+         * control heights — 48, 40, 36, 32, 28, 26, 24, 18 — and 28-beside-32
+         * was the worst of them, because it is a near-miss: two buttons in one
+         * row, four pixels apart, which reads as a rendering fault rather than
+         * as a size choice. `sm` is used ~40 times and every one of those is a
+         * console control that should stand at the console's height.
+         *
+         * The two names survive because the CALL SITES mean different things by
+         * them and one of them will grow a real difference again (a dense table
+         * row is a genuine case). What is not allowed is them differing by four
+         * pixels with nothing to say about why.
+         */
         xs: "h-6 gap-1 px-2 text-xs [&_svg]:size-3.5",
-        sm: "h-7 gap-1.5 px-3 text-sm [&_svg]:size-4",
+        sm: "h-8 gap-1.5 px-3 text-sm [&_svg]:size-4",
         default: "h-8 px-3 text-sm [&_svg]:size-4",
         lg: "h-10 px-4 text-sm [&_svg]:size-4",
         icon: "size-8 [&_svg]:size-[18px]",

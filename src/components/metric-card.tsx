@@ -8,9 +8,14 @@ import { Card } from "@/components/ui/card";
  * WHY THIS FILE EXISTS. The dashboard rendered its numbers through THREE
  * components that had drifted into three different cards, sitting in one grid:
  *
- *   `FlowTile`    variant="tile"     p-6   12px CAPS muted title   tray
- *   `MetricTile`  variant="surface"  p-6   16px sentence-case title  "Drill in"
- *   `ChartFrame`  variant="tile"     p-4   12px CAPS muted title   footer line
+ *   `FlowTile`    variant="tile"     p-4   the micro-label voice   tray
+ *   `MetricTile`  variant="surface"  p-4   the micro-label voice   "Drill in"
+ *   `ChartFrame`  variant="tile"     p-4   the micro-label voice   footer line
+ *
+ * ALL THREE ARE 16px NOW. This tile ran `p-5` — twenty — against a kit whose
+ * card padding is sixteen and a page whose gutter is twenty-four. One tile
+ * padded four pixels wider than every other card on the same board is not a
+ * hierarchy, it is the near-miss that makes a row of tiles look hand-placed.
  *
  * `MetricTile`'s own comment claimed it was "kept in step with FlowTile's shape
  * on purpose" — it disagreed on the shell, the padding, the title recipe and
@@ -100,7 +105,7 @@ export function MetricCard({
           className="w-1 shrink-0"
           style={{ background: "var(--tile-edge, var(--border))" }}
         />
-        <div className="flex min-w-0 flex-1 flex-col p-5">
+        <div className="flex min-w-0 flex-1 flex-col p-4">
           <div className="flex min-h-0 flex-1 flex-col justify-center">
             <div className="flex items-start justify-between gap-3">
               {/* THE KIT'S MICRO-LABEL VOICE. A metric's name LABELS the figure

@@ -41,7 +41,7 @@ export function Chip({ className, active, count, children, ...props }: ChipProps
         // chip carries a source name or a metric name, which is a proper noun
         // the customer chose, and setting somebody's workspace or connector name
         // in caps is the product shouting a word it did not write.
-        "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-control px-2.5 text-xs font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+        "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control px-3 text-sm font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)",
         active
           ? // THE FILL IS THE BRAND: #00bc7d under #0f1011 ink at 7.70:1. Hover
             // walks UP the ramp on the same ladder the primary Button uses, so a

@@ -257,7 +257,10 @@ exemption. Both Figma exports set small numerals and chrome labels at 700;
   hue, and a count. The tint is 6% so a card on it still reads as an object; the
   1px inset ring at 14% is what turns a wash into a panel.
 - **Buttons** — one component, twelve variants, seven sizes, and **32px is the
-  default**. Every control in the product is 32: the date picker, the selects,
+  default**. It is also the only height the console uses: `sm` resolves to it,
+  fields follow it, chips match it, and the period track is 32 outside. The app
+  was running eight control heights before this was measured rather than
+  assumed, and 28-beside-32 was the one that read as a fault. Every control in the product is 32: the date picker, the selects,
   the segmented groups, the dense row. The ladder came down from 28/36/44/52,
   which was cut for a roomy light app and put a 44px button beside a 40px track
   beside a 24px title with nothing in the row standing on the same line.

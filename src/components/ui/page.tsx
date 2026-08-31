@@ -140,11 +140,11 @@ export const BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";
  * that inverted separately. There is one surface; a control is `--control`.
  */
 export const PERIOD_TRACK =
-  "inline-flex h-9 items-center gap-0.5 rounded-card border border-border bg-control p-0.5";
+  "inline-flex h-8 items-center gap-0.5 rounded-card border border-border bg-control p-0.5";
 
 /** One control inside that groove — a period link, a month arrow, "This month". */
 export const PERIOD_PILL =
-  "inline-flex h-7 shrink-0 items-center rounded-[calc(var(--radius-card)-3px)] px-3 text-sm font-medium transition-colors duration-(--duration-fast)";
+  "inline-flex h-7 shrink-0 items-center rounded-[calc(var(--radius-card)-2px)] px-3 text-sm font-medium transition-colors duration-(--duration-fast)";
 
 /**
  * Title row: optional back link, one h1 recipe, optional lede, actions on

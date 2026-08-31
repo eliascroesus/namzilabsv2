@@ -106,14 +106,18 @@ export function Input({ className, autoComplete, spellCheck, type, ...props }: R
    * attributes above cover the extensions, which honour nothing else.
    */
   const secret = type === "password";
-  // h-10 px-4 — the default Button's geometry exactly, because the two are
-  // almost always stacked (a field, then the submit under it) and two pills at
-  // 36 and 40 read as a mistake rather than a hierarchy. It was h-9 back when
-  // the default button was h-9 too; the button moved and this is it catching up.
+  // h-8 px-3 — the default Button's geometry EXACTLY, because the two are almost
+  // always stacked (a field, then the submit under it) and two controls four
+  // pixels apart read as a rendering fault rather than as a hierarchy.
+  //
+  // This has now followed the button down twice: h-9 when the button was h-9,
+  // h-10 when it was h-10, and h-8 now that the console's control height is 32.
+  // The note is kept as the record of WHY it follows rather than leads — a form
+  // is the one place the mismatch is unmissable.
   return (
     <input
       type={type}
-      className={cn(FIELD, "h-10 px-4", className)}
+      className={cn(FIELD, "h-8 px-3", className)}
       autoComplete={autoComplete ?? (secret ? "new-password" : "off")}
       spellCheck={spellCheck ?? false}
       {...(secret ? NO_AUTOFILL : {})}

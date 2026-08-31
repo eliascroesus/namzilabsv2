@@ -47,7 +47,7 @@ function SelectTrigger({
         // token already inverts with the theme, so one word does what two
         // dark-mode overrides were doing. `transition-colors`, not
         // `transition-[color,box-shadow]`: the hover moves the BORDER now.
-        "flex w-fit items-center justify-between gap-2 rounded-control border border-input bg-card px-4 py-2 text-sm whitespace-nowrap shadow-xs transition-colors duration-(--duration-fast) hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[placeholder]:text-muted-foreground data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
+        "flex w-fit items-center justify-between gap-2 rounded-control border border-input bg-control px-3 text-sm whitespace-nowrap shadow-xs transition-colors duration-(--duration-fast) hover:border-neutral-500 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[placeholder]:text-muted-foreground data-[size=default]:h-8 data-[size=sm]:h-7 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
         className
       )}
       {...props}
