@@ -43,7 +43,18 @@ const buttonVariants = cva(
   //
   // `transition-colors`, not `transition-all`: `all` animates the outline too,
   // so the focus ring grew into place a beat after the key was pressed.
-  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+    //
+  // `rounded-control`, NOT `rounded-full`, AND THE KIT'S SHAPE RULE INVERTED
+  // WITH IT. "Everything pressable is a full pill" was the rule, and it came
+  // from a brand sheet that pilled its buttons and chips. The reference this
+  // interface is now drawn from has no capsule anywhere except an avatar and a
+  // status dot: its buttons are 8px, its badges 4px, its selects and cards
+  // 10px. A pill among them reads as a control borrowed from another product,
+  // and it was also the shape that forced the one exception the old rule
+  // needed — a control that WRAPS cannot be a pill, because a full radius on a
+  // two-line box renders as a circle around the words. There is no exception
+  // now; every pressable thing is a rounded rectangle.
+  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-control font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -64,7 +75,7 @@ const buttonVariants = cva(
          * Black comes through the `foreground` ROLE, not a raw near-black fill:
          * it inverts with the theme, and the kit gate bans that literal.
          */
-        default: "bg-foreground text-background shadow-xs hover:bg-neutral-800 active:bg-neutral-700",
+        default: "border border-border bg-card text-foreground shadow-xs hover:bg-neutral-700 active:bg-neutral-700",
         /**
          * THE BRAND — the act the screen exists for, in yellow under near-black
          * ink at 11.24:1.
@@ -83,22 +94,25 @@ const buttonVariants = cva(
          * it toward the white behind it, so the label's contrast FELL at the one
          * moment the button was under a pointer.
          */
-        accent: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-700 active:bg-brand-800",
-        secondary: "border border-border bg-card text-foreground shadow-xs hover:bg-muted active:bg-neutral-200",
-        /** A MARKER wash carrying marker ink — the tint pair, not the brand's.
-         *  A yellow wash under yellow ink is the one combination the fill/stroke
-         *  split forbids: the ink would have to be near-black, at which point it
-         *  is not a tinted button, it is a pale one. */
-        soft: "bg-accent text-accent-foreground hover:bg-marker-100 active:bg-marker-200",
-        /** Outlined marker, for a secondary act in a branded flow. The border is
-         *  a LINE, so it is the marker's by construction. */
-        outlineAccent: "border border-marker-300 bg-transparent text-accent-foreground hover:bg-accent",
-        ghost: "text-muted-foreground hover:bg-muted hover:text-foreground active:bg-neutral-200",
-        destructive: "bg-destructive text-destructive-foreground shadow-xs hover:bg-danger-ink active:brightness-95",
-        success: "bg-success-soft text-success-ink hover:brightness-[0.97]",
+        accent: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-500 active:bg-brand-700",
+        /** The recessed twin of `default` — a control sitting ON a card, where
+         *  the card's own colour would give the button no edge to be found by. */
+        secondary: "border border-border bg-control text-foreground shadow-xs hover:bg-neutral-700 active:bg-neutral-700",
+        /** THE REFERENCE'S OWN BADGE-AS-BUTTON: a 10% brand wash inside a 20%
+         *  brand ring, carrying brand ink. On a light page this shape was
+         *  impossible in the brand — a yellow wash under yellow ink needs
+         *  near-black text, at which point it is not a tinted button but a pale
+         *  one — which is why this variant used to be the marker's violet. The
+         *  green is 8.88:1 on its own wash. */
+        soft: "bg-brand-soft text-marker ring-1 ring-inset ring-brand-soft-line hover:bg-brand-soft/70",
+        /** Outlined brand, for a secondary act in a branded flow. */
+        outlineAccent: "border border-brand-soft-line bg-transparent text-marker hover:bg-brand-soft",
+        ghost: "text-muted-foreground hover:bg-neutral-700 hover:text-foreground active:bg-neutral-700",
+        destructive: "bg-destructive text-destructive-foreground shadow-xs hover:brightness-110 active:brightness-95",
+        success: "bg-success-soft text-success-ink ring-1 ring-inset ring-brand-soft-line hover:bg-success-soft/70",
         destructiveGhost: "text-muted-foreground hover:bg-danger-soft hover:text-danger-ink",
-        destructiveOutline: "border border-red-200 bg-card text-danger-ink hover:bg-danger-soft/60",
-        link: "text-accent-foreground underline-offset-4 hover:underline",
+        destructiveOutline: "border border-red-200 bg-card text-danger-ink hover:bg-danger-soft",
+        link: "text-marker underline-offset-4 hover:underline",
       },
       size: {
         /**
@@ -118,12 +132,28 @@ const buttonVariants = cva(
          * product rule. So the geometry the tray actually needs is named here
          * once and the override is deleted.
          */
-        xs: "h-7 gap-1.5 px-2.5 text-xs [&_svg]:size-3.5",
-        sm: "h-9 px-3.5 text-sm [&_svg]:size-4",
-        default: "h-11 px-5 text-sm [&_svg]:size-[18px]",
-        lg: "h-13 px-7 text-md [&_svg]:size-5",
-        icon: "size-11 [&_svg]:size-[18px]",
-        iconSm: "size-9 [&_svg]:size-4",
+        /**
+         * EVERY RUNG CAME DOWN, AND `default` IS THE REFERENCE'S 32px.
+         *
+         * The ladder was 28 / 36 / 44 / 52, cut for a roomy light app. The
+         * reference draws EVERY control — its date picker, its selects, its
+         * segmented groups — at exactly 32, and that number is not decoration:
+         * the period track, the inputs and this button all have to line up in a
+         * page header, and 44 beside 32 is the near-miss that reads as two
+         * systems in one row.
+         *
+         * `lg` survives at 40 for the landing's hero and for a form that
+         * genuinely wants air. It is deliberately NOT 44: nothing else in the
+         * product is 44 any more, and a lone rung nobody else stands on is how
+         * the ladder grew a sixth step last time.
+         */
+        xs: "h-6 gap-1 px-2 text-xs [&_svg]:size-3.5",
+        sm: "h-7 gap-1.5 px-2.5 text-xs [&_svg]:size-3.5",
+        default: "h-8 px-3 text-xs [&_svg]:size-3.5",
+        lg: "h-10 px-4 text-sm [&_svg]:size-4",
+        icon: "size-8 [&_svg]:size-4",
+        iconSm: "size-7 [&_svg]:size-3.5",
+        iconXs: "size-6 [&_svg]:size-3.5",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

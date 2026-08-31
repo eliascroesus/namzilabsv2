@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 // you are IN rather than a thing you pressed: the border itself going violet
 // plus a soft halo says "typing lands here", where a detached outline ring says
 // "this is selected". Buttons want the second, fields the first.
-// `hover:border-neutral-300` gives a field the pointer feedback every other
+// `hover:border-neutral-500` gives a field the pointer feedback every other
 // control in the kit already had.
 //
 // `aria-invalid:border-destructive` because the message under a bad field was
@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 // the kit's, so an override emits BOTH classes and lets stylesheet order pick
 // the winner. Verified, not assumed.
 const FIELD_BASE =
-  "w-full border border-input bg-card text-sm text-foreground transition-colors duration-(--duration-fast) placeholder:text-muted-foreground hover:border-neutral-300 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/25 aria-invalid:border-destructive disabled:pointer-events-none disabled:opacity-50 disabled:bg-muted";
+  "w-full border border-input bg-control text-sm text-foreground transition-colors duration-(--duration-fast) placeholder:text-muted-foreground hover:border-neutral-500 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:opacity-50 disabled:bg-muted";
 
 /**
  * THE SHEET IS PILL-FIRST, so a single-line field is fully round — the same
@@ -135,7 +135,7 @@ export function Input({ className, autoComplete, spellCheck, type, ...props }: R
 export function Textarea({ className, autoComplete, ...props }: React.ComponentProps<"textarea">) {
   return (
     <textarea
-      className={cn(FIELD_BASE, "min-h-20 rounded-card px-4 py-2.5", className)}
+      className={cn(FIELD_BASE, "min-h-20 rounded-control px-3 py-2", className)}
       autoComplete={autoComplete ?? "off"}
       {...props}
     />
@@ -154,12 +154,12 @@ export function NativeSelect({ className, children, ...props }: React.ComponentP
           so the pill is inset by the same 16px on both sides. `pr-10` is that
           inset plus the icon: without it the longest option runs underneath
           the chevron instead of stopping short of it. */}
-      <select className={cn(FIELD, "h-10 appearance-none pl-4 pr-10")} {...props}>
+      <select className={cn(FIELD, "h-8 appearance-none pl-3 pr-8")} {...props}>
         {children}
       </select>
       <ChevronDown
         size={16}
-        className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
       />
     </span>
   );

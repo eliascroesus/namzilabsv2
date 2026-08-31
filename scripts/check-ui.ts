@@ -225,51 +225,28 @@ const RULES: Rule[] = [
    * had just introduced. It goes, rather than acquiring an allowlist entry for
    * every file that draws a select.
    */
-  {
-    name: "yellow-as-stroke",
-    why: "#eecf00 is 1.55:1 as a stroke or as text on white and 11.24:1 as a fill under #1a1a1a ink — the primary may only be FILLED; lines and coloured glyphs take --marker",
-    /**
-     * THE RULE THAT MAKES THE REBRAND HOLD — and the reason "yellow fills,
-     * violet draws" is a script rather than a sentence in DESIGN.md.
-     *
-     * `--primary` was violet at 7.19:1 on white, and it was doing two
-     * incompatible jobs without anyone having to notice: 36 sites filled with
-     * it, ~23 stroked or inked with it, and both looked right because a
-     * mid-tone violet is legible either way. Yellow is legible exactly one of
-     * those ways.
-     *
-     * The failure mode is the one this whole file exists for. `text-primary`
-     * and `border-primary` are legal classes pointing at a live token, so they
-     * COMPILE — Tailwind emits the rule, the build passes, and the link renders
-     * at 1.55:1 on white. That is not a dim colour, it is an absent one, and
-     * the only person who will ever catch it is someone looking at that exact
-     * hover state on that exact screen.
-     *
-     * So the split has two tokens and this is what keeps them apart: a filled
-     * object says `bg-primary` + `text-primary-foreground`, and every line and
-     * every coloured glyph says `border-marker`, `ring-marker`, `stroke-marker`,
-     * `fill-marker` or `text-marker-ink`.
-     *
-     * `bg-primary` is deliberately NOT in the alternation — it is the whole
-     * point of the token — and the negative lookahead is load-bearing for the
-     * same reason it is in the type-alias rule above: `\b` matches before a
-     * hyphen, so a bare `\btext-primary\b` would flag every
-     * `text-primary-foreground` in the app, and the rule against yellow ink
-     * would ban yellow's own ink. The optional `/\d+` tail is there to print
-     * the whole token in the report, since `border-primary/25` is the shape
-     * this drift usually arrives in.
-     */
-    find: (line) =>
-      line.match(/\b(?:text|border|ring|stroke|fill|divide|outline)-primary\b(?!-foreground)(?:\/\d+)?/)?.[0] ?? null,
-    // ONE EXEMPTION, AND IT IS A DIFFERENT SURFACE RATHER THAN A DIFFERENT
-    // OPINION. The measurement that forbids a yellow line is a measurement
-    // against a LIGHT ground; on the chrome band the same stroke is 8.77:1,
-    // which is past the 3:1 a non-text mark owes with room to spare. The band
-    // is the only place in the product that ground exists.
-    allow: {
-      "src/components/top-bar.tsx": "the metrics ring's arc, drawn on the #2e2e2e band where the brand strokes at 8.77:1 rather than 1.42:1",
-    },
-  },
+  /**
+   * `yellow-as-stroke` IS RETIRED, AND IT IS THE RULE THIS FILE WAS PROUDEST OF.
+   *
+   * It failed the build on `text-primary`, `border-primary`, `ring-primary`,
+   * `stroke-primary`, `fill-primary` and `divide-primary`, because #eecf00
+   * measures 1.55:1 as a stroke on white and 11.24:1 as a fill under near-black
+   * ink. Those are legal classes pointing at a live token, so they COMPILED —
+   * the build passed, and the link rendered at 1.55:1. That is not a dim
+   * colour, it is an absent one, and the only person who would ever catch it is
+   * someone looking at that exact hover state on that exact screen. A script
+   * was the only thing that could.
+   *
+   * The measurement it was built on is gone. `--primary` is #00bc7d and
+   * `--marker` is #00d492, both green, and on #0f1011 the stroke step is 9.83:1
+   * — past what a line owes AND past what body text owes. The split it enforced
+   * has nothing left to keep apart, and the exemption it carried (top-bar.tsx's
+   * ring arc, "the one surface where the brand strokes at 8.77:1") is now every
+   * surface in the product.
+   *
+   * The two tokens survive as a FILL step and a STROKE step of one ramp, which
+   * is an ordinary ramp rather than a rule needing a gate.
+   */
   {
     name: "retired accent-yellow",
     why: "--color-accent-yellow was deleted when yellow became the brand; the class still parses and compiles to NOTHING, so the object renders with no fill at all",

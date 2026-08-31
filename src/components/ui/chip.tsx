@@ -31,37 +31,46 @@ export function Chip({ className, active, count, children, ...props }: ChipProps
         // Focus comes from the shared rule in globals.css — see button.tsx.
         // `h-8` rather than vertical padding, so a chip and a `size="sm"`
         // Button in the same toolbar row are the same height by construction.
-        "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold uppercase tracking-wide transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+        // `h-7` rather than vertical padding, so a chip and a `size="sm"` Button
+        // in the same toolbar row are the same height by construction. It came
+        // down from 32 with the whole control ladder — see button.tsx.
+        //
+        // NOT UPPERCASE ANY MORE, and that is the one place a chip and a badge
+        // part company. The caps voice is for a LABEL — a status, a section
+        // name, a column header: strings you scan rather than read. A filter
+        // chip carries a source name or a metric name, which is a proper noun
+        // the customer chose, and setting somebody's workspace or connector name
+        // in caps is the product shouting a word it did not write.
+        "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-control px-2.5 text-xs font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)",
         active
-          ? // THE FILL IS THE BRAND, which is the one shape yellow is allowed to
-            // take: #eecf00 under near-black ink at 11.24:1. Hover walks DOWN
-            // the ramp on the same ladder the primary Button uses, so a selected
-            // chip and a primary button never answer the pointer differently —
-            // and on this hue that is not a preference. Brightening a yellow
-            // moves it toward the white behind it, so the label's contrast would
-            // FALL at the one moment the chip is under a pointer.
-            "bg-primary text-primary-foreground hover:bg-brand-700 active:bg-brand-800"
-          : // OFF-HOVER IS THE MARKER'S TINT, NOT THE GREY WASH. `--muted` and
-            // the app's page are both #f5f5f5 now, so `hover:bg-muted` on a chip
-            // row sitting on the page painted the background onto itself — an
-            // invisible hover on the only control in the row that has to say
-            // "you can pick me".
+          ? // THE FILL IS THE BRAND: #00bc7d under #0f1011 ink at 7.70:1. Hover
+            // walks UP the ramp on the same ladder the primary Button uses, so a
+            // selected chip and a primary button never answer the pointer
+            // differently. Up rather than down is the surface's doing — on a
+            // light page the brand had to darken under the pointer, because
+            // brightening it moved it toward the white behind it and the label's
+            // contrast fell at the moment of the press. On near-black, raised
+            // means lighter.
+            "bg-primary text-primary-foreground hover:bg-brand-500 active:bg-brand-700"
+          : // OFF-HOVER IS A RAISED STEP, NOT A TINT. It was the marker's violet
+            // wash, because on a light page `hover:bg-muted` and the page were
+            // the same #f5f5f5 — an invisible hover on the only control in the
+            // row that has to say "you can pick me".
             //
-            // It is deliberately NOT a wash of the yellow. A hover is a tint
-            // BEHIND ink and the ON state is a filled object carrying near-black;
-            // a pale yellow under yellow ink is the one combination the
-            // fill/stroke split forbids, and a pale yellow under near-black ink
-            // would just be a weaker copy of the selected state. So hovering
-            // says "this is pressable" in the marker's voice and selecting says
-            // "this is the one" in the brand's — two statements, spelled apart.
-            "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+            // On this surface coming forward IS the affordance, and it costs no
+            // colour at all: `neutral-700` is the same raised step the rail's
+            // rows, the menu's rows and the table's rows all use, so every
+            // hoverable thing in the product answers the pointer the same way.
+            // Selecting still says "this is the one" in the brand's voice —
+            // two statements, spelled apart, one of them now in greyscale.
+            "text-muted-foreground hover:bg-neutral-700 hover:text-foreground",
         className,
       )}
       {...props}
     >
       {children}
       {/* THE ACTIVE COUNT IS AN INVERTED PILL, not a translucent wash.
-          `bg-white/25` over the yellow composites to a pale cream, and a numeral
+          `bg-white/25` over the fill composites to a pale wash, and a numeral
           on that is under AA on the flows filter row where the counts ARE the
           information. Inverting keeps both states shaped like the same component
           and introduces no colour that is not already on the chip: the pill
@@ -85,7 +94,7 @@ export function Chip({ className, active, count, children, ...props }: ChipProps
         <span
           className={cn(
             "tnum rounded-full px-1.5 text-xs font-semibold",
-            active ? "bg-primary-foreground text-brand-600" : "bg-foreground/10 text-muted-foreground",
+            active ? "bg-primary-foreground text-primary" : "bg-foreground/10 text-muted-foreground",
           )}
         >
           {count}

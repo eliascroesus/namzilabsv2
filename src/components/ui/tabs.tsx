@@ -39,12 +39,16 @@ function Tabs({
  * and 4px there pushed the underline 4px clear of the text it underlines.
  */
 const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center rounded-control p-1 text-muted-foreground group-data-[orientation=horizontal]/tabs:h-9 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col data-[variant=line]:rounded-none data-[variant=line]:p-0",
+  "group/tabs-list inline-flex w-fit items-center justify-center rounded-control p-0.5 text-muted-foreground group-data-[orientation=horizontal]/tabs:h-8 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col data-[variant=line]:rounded-none data-[variant=line]:p-0",
   {
     variants: {
       variant: {
-        default: "bg-muted",
-        line: "gap-1 bg-transparent",
+        default: "border border-border bg-control",
+        // 24px BETWEEN TABS, which is the reference's own gap and is spent as
+        // `gap-6` rather than as padding inside each tab: the underline has to
+        // be the width of the WORD, not the width of the word plus its
+        // breathing room, or a two-character tab wears a rule twice its length.
+        line: "gap-6 bg-transparent",
       },
     },
     defaultVariants: {
@@ -115,24 +119,31 @@ function TabsTrigger({
         // second, thinner spelling here meant the tabs rang differently from
         // every other control in the product — the exact drift that rule
         // exists to end.
-        "relative inline-flex h-full flex-1 items-center justify-center gap-1.5 rounded-control border border-transparent px-3 py-1 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors duration-(--duration-fast) group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground disabled:pointer-events-none disabled:opacity-50 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-xs group-data-[variant=line]/tabs-list:data-[state=active]:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        // ACTIVE, segmented: the brand pill. Near-black on #eecf00 is 11.24:1,
-        // comfortably past AA for the 14px semibold label it carries.
-        "data-[state=active]:bg-primary data-[state=active]:font-semibold data-[state=active]:text-primary-foreground",
-        // ACTIVE, line: no fill at all, so the label takes the marker's INK step
-        // rather than the pill's yellow — a word on the page, not an object on
-        // it, and yellow has no step that may carry a word.
-        "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:text-accent-foreground group-data-[variant=line]/tabs-list:data-[state=active]:border-transparent",
+        "relative inline-flex h-full flex-1 items-center justify-center gap-1.5 rounded-control border border-transparent px-2.5 py-1 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors duration-(--duration-fast) group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground disabled:pointer-events-none disabled:opacity-50 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-xs group-data-[variant=line]/tabs-list:data-[state=active]:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        // ACTIVE, segmented: the brand fill. #0f1011 on #00bc7d is 7.70:1,
+        // comfortably past AA for the label it carries.
+        "data-[state=active]:bg-primary data-[state=active]:font-medium data-[state=active]:text-primary-foreground",
+        // ACTIVE, line: no fill, and the label goes WHITE rather than green.
+        //
+        // It was the marker's ink step, because a 2px violet rule at 4.41:1
+        // could not carry the state on its own and the coloured word was
+        // helping it. The rule is green at 9.83:1 now and carries it alone, so
+        // the label is free to do what the reference does — step up the ink ramp
+        // to white while the four beside it stay muted. That reads as SELECTED
+        // rather than as LINKED, which is what a coloured word says.
+        "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:text-white group-data-[variant=line]/tabs-list:data-[state=active]:border-transparent",
         // The line variant's mark, and the one class in this file the rebrand
         // moved. It was `after:bg-primary`, and `after:bg-foreground` before
         // that — a near-black underline said "current" in the same voice as the
         // body text around it, where a brand colour says it as the product.
         //
-        // A 2px rule is a STROKE, so the colour that says it is the marker's:
-        // the yellow that reads at 11.24:1 as a fill draws at 1.42:1 on the
-        // ground, and an indicator carrying state cannot be the one thing on the
-        // strip you cannot see. `--marker` in globals.css is the same
-        // value for the same reason, one layout up.
+        // A 2px rule is a STROKE, and it stays `--marker` through the rebrand
+        // for a reason that inverted underneath it. The yellow it replaced read
+        // 11.24:1 as a fill and 1.42:1 as a line on the ground, so an indicator
+        // carrying state was the one thing on the strip you could not see; the
+        // violet that fixed it managed 4.41:1. `--marker` is the green now at
+        // 9.83:1, which is the first value this rule has held that is legible
+        // without the weight change beside it doing half the work.
         "after:absolute after:bg-marker after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
         className
       )}

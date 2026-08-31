@@ -11,35 +11,56 @@ import { cn } from "@/lib/utils";
  * for meaning. Nothing transient deserves a colour.
  */
 const pillVariants = cva(/**
-   * THE SHEET'S CHIP: a full pill, ALL CAPS, tight tracking, 8px rhythm.
-   * Caps is the kit's own voice for a micro label — every chip and tab on the
-   * brand sheet is set that way, and at 12px it reads as a LABEL rather than
-   * as a very small sentence.
+   * 10px CAPS IN A 4px RECTANGLE, DOWN FROM 12px CAPS IN A FULL PILL.
+   *
+   * The caps survive: they are the kit's own voice for a micro label, and they
+   * are what lets a very small string read as a LABEL rather than as very small
+   * prose. Everything else changed to the reference's own badge, which is the
+   * one small object it draws more than any other — `text-2xs` (10px) at
+   * `--tracking-label`, `rounded-xs`, and 4px of vertical padding.
+   *
+   * THE PILL HAD TO GO because a capsule is now the shape of nothing else in
+   * the product: buttons are 8px, cards and selects are 10, and a full-radius
+   * status badge sitting in a table row was the last capsule on the screen. The
+   * caps and the tracking are what carry the label voice; the radius never was.
    */
-  "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide", {
+  "inline-flex shrink-0 items-center gap-1 rounded-xs px-1.5 py-0.5 text-2xs font-medium uppercase tracking-label", {
   variants: {
     tone: {
       /**
-       * THE SHEET'S DECORATIVE TONES. They say WHICH, never HOW IT IS GOING —
-       * success, warn and danger keep the job of meaning, so a decorative chip
-       * can never be mistaken for a warning. Ink is black on the light fills
-       * and white on the saturated ones, which is how the sheet sets them.
+       * THE DECORATIVE TONES. They say WHICH, never HOW IT IS GOING — success,
+       * warn and danger keep the job of meaning, so a decorative chip can never
+       * be mistaken for a warning.
        *
-       * `yellow` NOW DRAWS FROM THE BRAND rather than from a decorative token
-       * of its own. It was `bg-accent-yellow` — the old #faf63c neon — which
-       * stopped existing when yellow became the primary: two yellows four
-       * counts apart, one called "brand" and one called "accent", is a pair
-       * nobody could have kept in step and nobody could have told apart.
+       * THE INK IS THE GROUND, NOT WHITE. These three are saturated fills, and
+       * on a light app they carried white or near-black by eye. Re-cut for this
+       * surface they are all light enough that #0f1011 is the only ink that
+       * clears AA on them: white on the orange measures 2.3:1.
+       *
+       * `yellow` IS THE ODD ONE OUT and keeps its name on purpose. It pointed
+       * at `--primary` while the primary WAS yellow; the primary is green now,
+       * so a tone called `yellow` rendering green would be a badge lying about
+       * its own name. It takes the decorative orange — the nearest thing the
+       * set still holds — and the name is scheduled to go with the next sweep
+       * of its four call sites rather than silently mean something else here.
        */
-      yellow: "bg-primary text-primary-foreground",
-      orange: "bg-accent-orange text-white",
-      pink: "bg-accent-pink text-neutral-900",
-      peri: "bg-accent-peri text-white",
-      success: "bg-success-soft text-success-ink",
-      warn: "bg-warn-soft text-warn-ink",
-      danger: "bg-danger-soft text-danger-ink",
-      pending: "bg-muted text-muted-foreground",
-      brand: "bg-accent text-accent-foreground",
+      yellow: "bg-accent-orange text-neutral-950",
+      orange: "bg-accent-orange text-neutral-950",
+      pink: "bg-accent-pink text-neutral-950",
+      peri: "bg-accent-peri text-neutral-950",
+      /**
+       * THE STATE TRIOS, EACH INSIDE ITS OWN RING.
+       *
+       * A 10% wash on #1a1b1e is a very quiet object — quieter than the same
+       * wash was on white — so each one takes a 20% ring of its own colour,
+       * which is exactly what the reference does with its green badge. Without
+       * it a status pill in a table row reads as tinted text with no edge.
+       */
+      success: "bg-success-soft text-success-ink ring-1 ring-inset ring-brand-soft-line",
+      warn: "bg-warn-soft text-warn-ink ring-1 ring-inset ring-warn/25",
+      danger: "bg-danger-soft text-danger-ink ring-1 ring-inset ring-danger/25",
+      pending: "bg-neutral-700 text-muted-foreground",
+      brand: "bg-brand-soft text-marker ring-1 ring-inset ring-brand-soft-line",
     },
   },
   defaultVariants: { tone: "pending" },
@@ -68,7 +89,7 @@ export function Badge({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground",
+        "inline-flex shrink-0 items-center rounded-xs bg-neutral-700 px-1.5 py-0.5 text-2xs font-medium text-muted-foreground",
         className,
       )}
       {...props}

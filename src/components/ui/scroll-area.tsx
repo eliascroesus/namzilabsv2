@@ -64,7 +64,7 @@ function ScrollBar({
         // under the pointer. It was `bg-border` — neutral-200, a full step
         // lighter — so the one overlay-scrolled region in the product had a
         // fainter scrollbar than the sidebar beside it.
-        className="relative flex-1 rounded-full bg-neutral-300 transition-colors duration-(--duration-fast) hover:bg-neutral-400"
+        className="relative flex-1 rounded-full bg-neutral-500 transition-colors duration-(--duration-fast) hover:bg-neutral-400"
       />
     </ScrollAreaPrimitive.ScrollAreaScrollbar>
   )

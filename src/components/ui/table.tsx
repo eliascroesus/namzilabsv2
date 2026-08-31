@@ -22,7 +22,7 @@ export function TableShell({ className, ...props }: React.ComponentProps<"div">)
       // with rows in it. It used to sit a rung higher (`shadow-card`), so a
       // table and the card beside it floated at two different heights on one
       // page, which is the drift this kit keeps having to undo.
-      className={cn("overflow-x-auto rounded-surface border border-border bg-card shadow-xs", className)}
+      className={cn("overflow-x-auto rounded-card border border-border bg-card shadow-card", className)}
       {...props}
     />
   );
@@ -44,7 +44,7 @@ export function THead({ className, ...props }: React.ComponentProps<"thead">) {
         // The hairline is the other half: `TBody` divides BETWEEN rows, so the
         // head/body joint was the one unlined seam in the table and the first
         // row read as part of the header block.
-        "border-b border-border bg-muted text-xs uppercase tracking-wide text-muted-foreground",
+        "border-b border-border bg-control text-2xs uppercase tracking-label text-muted-foreground",
         className,
       )}
       {...props}
@@ -58,7 +58,7 @@ export function TH({ className, ...props }: React.ComponentProps<"th">) {
   // directly-declared UA value beats an INHERITED author one however specific
   // the ancestor rule is. Set on the thead alone, the caps rendered at 700 —
   // one notch heavier than every other micro label in the kit.
-  return <th className={cn("px-4 py-3 font-semibold", className)} {...props} />;
+  return <th className={cn("px-4 py-2.5 font-medium", className)} {...props} />;
 }
 
 export function TBody({ className, ...props }: React.ComponentProps<"tbody">) {
@@ -73,7 +73,7 @@ export function TR({ className, static: isStatic, ...props }: React.ComponentPro
         // `bg-muted`, not `bg-muted/40`: every table in the app sits on a white
         // card, and 40% of the recessed wash over white is #fbfbfb — a hover
         // state you cannot see is the same as not having one.
-        !isStatic && "transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted",
+        !isStatic && "transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-neutral-700",
         className,
       )}
       {...props}

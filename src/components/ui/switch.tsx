@@ -77,7 +77,7 @@ export function Switch({ className, checked, size = "default", disabled, ...prop
         // were the same value, so an unchecked switch on a bordered row read as
         // a hairline with a dot on it rather than as a control in its off
         // position. One step down the ramp is all it needs.
-        checked ? "bg-marker" : "bg-neutral-300",
+        checked ? "bg-marker" : "bg-neutral-500",
         disabled && "cursor-not-allowed opacity-50",
         className,
       )}

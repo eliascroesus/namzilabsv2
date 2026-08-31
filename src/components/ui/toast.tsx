@@ -7,25 +7,24 @@ import { cn } from "@/lib/utils";
  * THE TOAST — promoted from the flow canvas, where it was the only one in
  * the app while settings errors were a red paragraph on a five-second timer.
  *
- * THE LADDER'S RAISED RUNG, WEARING OFF-WHITE. `ink-800` is #434343 — the step
- * globals.css names for the rail's active row and, by name, for this surface —
- * reached through the ink ladder rather than through a role because this surface
- * must stay dark in BOTH themes: `bg-foreground` would flip the toast to a white
- * slab over a dark app, and the one thing floating above the working area should
- * not be the brightest object on the screen.
+ * THE LADDER'S RAISED RUNG. `neutral-700` is #222325 — one step above a card,
+ * which is the same step the rail's hover, a menu row and a table row all take.
+ * A floating surface should be the raised thing, not a different material.
  *
- * IT WAS `ink-900`, AND THAT RUNG MOVED UNDERNEATH IT. The ladder used to run
- * DOWNWARDS from a #0f0f0f band, so `ink-900` was #1a1a1a and this was the
- * darkest surface in the app. The band is charcoal now and the ladder was re-cut
- * ABOVE it — on #2e2e2e, raised means LIGHTER — which left `ink-900` as the
- * rail's hover step, a rung below where a floating surface belongs. `ink-800` is
- * 1.45:1 over the band, so the toast reads as sitting on top of the chrome
- * rather than sinking into it.
+ * THIS TOKEN HAS MOVED THREE TIMES AND THE REASON IS ALWAYS THE SAME LADDER
+ * BEING RE-CUT UNDER IT. It was `ink-900` when the ladder ran DOWN from a
+ * #0f0f0f band, then `ink-800` when the band went charcoal and the ladder was
+ * re-cut ABOVE it. Both of those spellings existed to keep this surface DARK in
+ * both themes — `bg-foreground` would have flipped the toast to a white slab
+ * over a dark app, and the one thing floating above the working area should not
+ * be the brightest object on the screen.
  *
- * Dark on purpose for the same reason it is dark on the sheet: it is the one
- * surface that sits OVER the work, and the ink ladder makes it read as chrome,
- * not content. Presentational — the caller owns timing and state; conditional
- * render is show/hide.
+ * There is one theme, so there is nothing to stay dark against and the whole
+ * `ink-*` ramp is retired. What is left is the ordinary raised step, which is
+ * what this always meant.
+ *
+ * Presentational — the caller owns timing and state; conditional render is
+ * show/hide.
  */
 export type ToastProps = {
   children: React.ReactNode;
@@ -56,16 +55,17 @@ export function Toast({ children, action, className }: ToastProps) {
           <button
             type="button"
             onClick={action.onClick}
-            // `focus-ring-light`: the shared focus outline is the MARKER's
-            // violet, which measures 2.86:1 on the toast's charcoal — under the
-            // 3:1 a focus indicator owes, on the single most important indicator
-            // in the product. The class swaps it for white without re-spelling
-            // the rest of the rule.
+            // NO RING OVERRIDE. This carried `focus-ring-light`, because the
+            // shared outline was the marker's violet at 2.86:1 on the toast's
+            // charcoal — under the 3:1 a focus indicator owes, on the single
+            // most important indicator in the product. `--ring` is the brand
+            // green now and measures 8.5:1 on this surface, so the white twin is
+            // retired and the product's one ring is the correct one here.
             //
             // The label is the sheet's micro voice — the same ALL CAPS as a chip
             // — because at this size on this surface it is a control, not a word
             // in the sentence beside it.
-            className="shrink-0 rounded-control px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/90 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-white/15 hover:text-white"
+            className="shrink-0 rounded-control px-2.5 py-1 text-2xs font-medium uppercase tracking-label text-white/90 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-white/15 hover:text-white"
           >
             {action.label}
           </button>
