@@ -1317,7 +1317,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             rendered by the BOARD components rather than by this page — a branch
             that forgot them would lose the tab strip and the `+`. */}
         {!emptyWorkspace && activeKind === "calendar" ? (
-          <div className="mt-4">
+          /**
+           * NO `mt-4` HERE, AND THAT ABSENCE IS THE WHOLE POINT.
+           *
+           * `PageHeader` already ends in `pb-4` — the 16px step this row is
+           * meant to sit at, and every page in the product gets it from there.
+           * A margin here adds a SECOND one, so the title block and the tab
+           * strip stand 32px apart and the top of the page reads as two
+           * unrelated bands rather than one head.
+           *
+           * `board-layout.tsx` carries that same note, because it had this
+           * exact bug and removed this exact class — and the calendar branch
+           * reintroduced it, which is what made switching from a Columns tab to
+           * a Calendar tab shift the whole row down. One owner for the
+           * distance, and it is the header. The sheet below keeps its own
+           * `mt-4`, which is this row's gap rather than the header's.
+           */
+          <div>
             {/* THE SAME ROW EVERY OTHER VIEW HAS: arrangement on the left,
                 what-changes-the-board and the actions on the right. The metric
                 picker lands in `#calendar-tools`, which is where a groups board

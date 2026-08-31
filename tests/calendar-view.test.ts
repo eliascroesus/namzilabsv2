@@ -113,6 +113,24 @@ describe("the board still has its furniture", () => {
     expect(branch.slice(0, 400)).toMatch(/key=\{activeView \?\? "default"\}/);
   });
 
+  it("adds no margin of its own above the control row", () => {
+    /**
+     * THE SAME BUG, TWICE. `board-layout.tsx` carries a note explaining that an
+     * `mt-4` here "added a second one, so the title block and the tabs stood
+     * 32px apart" — `PageHeader` already ends in `pb-4` and owns that distance
+     * for every page in the product. The calendar branch reintroduced the class
+     * anyway, which is what made switching from a Columns tab to a Calendar tab
+     * shift the whole row down by 16px.
+     *
+     * Pinned as the shape of the wrapper, because the two branches are only
+     * comparable when neither contributes a step of its own.
+     */
+    expect(page).toMatch(/activeKind === "calendar" \? \([\s\S]{0,1400}?<div>\s*\{\/\* THE SAME ROW/);
+    expect(page).not.toMatch(/activeKind === "calendar" \? \([\s\S]{0,1400}?<div className="mt-4">/);
+    // And the header still owns the gap, for both branches.
+    expect(readFileSync(join(root, "src/components/ui/page.tsx"), "utf8")).toMatch(/pb-4/);
+  });
+
   it("puts its own time control where every view puts one", () => {
     /**
      * NOT MERELY "hides the period pills", which is what this asserted first.
